@@ -92,6 +92,13 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         # (and triggers resize-script creation)
         if orig_width: del fig['layout']['width']
         if orig_height: del fig['layout']['height']
+        
+        #Special polar plot case - see below - add dummy width & height so
+        # we can find/replace them with variables in generated javascript.
+        if 'angularaxis' in fig['layout']:
+            fig['layout']['width'] = 123
+            fig['layout']['height'] = 123
+
     # END block added by EGN
 
     config = {}
@@ -104,106 +111,104 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         figure_or_data, config, validate,
         '100%', '100%', global_requirejs=global_requirejs) #EGN added global_requirejs argument & plumbing
 
-    resize_script = ''
-    if resizable: # EGN added this entire block
-        if aspect_ratio:
-            #'    var plotdiv = $("#{id}").closest(".pygsti-wsoutput-group");\n' Maybe use this element later,
-            #  instead of real plotdiv so that all plots resize at the same time -- but we'd need some way of
-            #  creating the JQueryUI resizable from the workspace group and not here, since doing it here would
-            #  create multiple resizable widgets on the same wsoutput-group element (one per plotly figure).
-            resize_script = (  #very similar to script below except for plotdiv -> el and Math.min call (TODO: COMBINE?)
-                '<script type="text/javascript">\n'
-                '    var plotdiv = $("#{id}");'
-                '    var box = null;'  #take as reference first parent with max-height or max-width set
-                '    plotdiv.parents().each(function(i,el) {{'
-    	        '      if(box == null && ($(el).css("max-height") != "none"'
-                '         || $(el).css("max-width") != "none")) {{ box=$(el) }} }});'
-                '    var w, h;'
-                '    if(box == null) {{' #just use original dimensions
-                '      plotdiv.css("width", {ow});'
-                '      plotdiv.css("height",{oh});'
-                '    }} else {{'
-                '      w = Math.min(box.width(),{ow})\n;' # w < max-width (just add *min*)
-                '      h = w / {ratio};\n' # but h may be > max-height
-                '      plotdiv.css("width", w);\n' # adjust plotdiv based (*same* as original height)
-                '      plotdiv.css("height",h);\n' # on box width
-                '      if(box.height() < h) {{\n' # (due to max-height restriction)
-                '        h = box.height();\n'
-                '        w = h * {ratio};\n'
-                '        plotdiv.css("width", w);\n' # adjust plotdiv based
-                '        plotdiv.css("height",h);\n' # on (max) box height
-                '      }}\n'
-                '     box.css("max-width","none");\n'  # so plot can be resized
-                '     box.css("max-height","none");\n' #  larger if desired
-                '    }}\n'
-                '    plotdiv.resizable({{\n'
-                '      aspectRatio: {ratio},\n'
-                '      resize: function( event, ui ) {{\n'
-                '        var plotdiv = document.getElementById("{id}");\n'
-                '        Plotly.Plots.resize(plotdiv); }}\n'
-                '    }});\n'
-                '$( document ).ready(function() {{\n'
-                '   Plotly.Plots.resize(document.getElementById("{id}"));\n'
-                '   console.log("Initial Resizing {id}");\n'
-                '}});</script>\n'
-            ).format(id=plotdivid, ratio=aspect_ratio, ow=orig_width, oh=orig_height)
-        else:
-            resize_script = (  #very similar to script below except for plotdiv -> el and Math.min call (TODO: COMBINE?)
-                '<script type="text/javascript">\n'
-                '    var el = $("#{id}").closest(".pygsti-wsoutput-group");\n'
-                '   el.resizable({{\n'
-                '     aspectRatio: {ratio},\n'
-                '     resize: function( event, ui ) {{\n'
-                '       var plotdiv = document.getElementById("{id}");\n'
-                '       Plotly.Plots.resize(plotdiv); }}\n'
-                '   }});\n'
-            ).format(id=plotdivid)
-        
-    elif autosize:
-    # OLD (original plotly) if width == '100%' or height == '100%':
-    # EGN note: don't allow %'s layout yet - assume they're all pixels
-        
-        #EGN adds aspect_ratio (width/height) argument & effect
-        if aspect_ratio is None: 
-            aspect_ratio_js = ""
-        else:
-            #Alter width & height of plotdiv based on size of "box" (reference div)
-            # Note that "box" div's width & height change dynamically and are unaltered.
-            aspect_ratio_js = (
-                '    var plotdiv = $("#{id}");'
-                '    var box = null;'  #take as reference first parent with max-height or max-width set
-                '    plotdiv.parents().each(function(i,el) {{'
-	        '      if(box == null && ($(el).css("max-height") != "none"'
-                '         || $(el).css("max-width") != "none")) {{ box=$(el) }} }});'
-                '    if(box == null) box = plotdiv.parent();'
-                '    var w = box.width();' # w < max-width
-                '    var h = w / {ratio};' # but h may be > max-height
-                '    plotdiv.css("width", w);' # adjust plotdiv based
-                '    plotdiv.css("height",h);' # on box width
-                '    if(box.height() < h) {{ ' # (due to max-height restriction)
-                '      h = box.height();'
-                '      w = h * {ratio};'
-                '      plotdiv.css("width", w);' # adjust plotdiv based
-                '      plotdiv.css("height",h);' # on (max) box height
-                '    }}'
-                '    console.log("Resize to " + w + ", " + h + " (ratio {ratio})");'
-                ).format(id=plotdivid, ratio=aspect_ratio)
+    #EGN added: reset removed elements to avoid corrupting dictionary downstream
+    if autosize or resizable:
+        if orig_width: fig['layout']['width'] = orig_width
+        if orig_height: fig['layout']['height'] = orig_height
 
+
+    #Below if/else block added by EGN
+    if 'angularaxis' in fig['layout']:
+        #Special case of polar plots: Plotly does *not* allow resizing of polar plots.
+        # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
+        #  in Plotly.relayout that short-circuit when "gd.frameworks.isPolar" is true).  So,
+        #  we just re-create the plot with a different size to mimic resizing.
+        resized_plot_html = plot_html.replace('"width": 123','"width": pw').replace('"height": 123','"height": ph')
+        iStart = resized_plot_html.index('<script type="text/javascript">') + len('<script type="text/javascript">')
+        resized_plot_js = resized_plot_html[iStart:-len('</script>')] #extract js
+        plotly_resize_js = (
+            'var plotlydiv = $("#{id}");\n'
+            'plotlydiv.children(".plotly").remove();\n'
+            'var pw = plotlydiv.width();\n'
+            'var ph = plotlydiv.height();\n'
+            '{resized}\n').format(id=plotdivid, resized=resized_plot_js)
+    else:
+        #the ususal plotly resize javascript
+        plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
+
+    resizeFn="resize_%s" % str(plotdivid).replace('-','') #EGN added
+
+    #EGN added
+    if global_requirejs:
+        requireJSbegin = "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {"
+        requireJSend = "});"
+    else:
+        requireJSbegin = requireJSend = ""
+
+    resize_script = ''
+    if resizable or autosize: # EGN added this entire block
+        #'    var plotdiv = $("#{id}").closest(".pygsti-wsoutput-group");\n' Maybe use this element later,
+        #  instead of real plotdiv so that all plots resize at the same time -- but we'd need some way of
+        #  creating the JQueryUI resizable from the workspace group and not here, since doing it here would
+        #  create multiple resizable widgets on the same wsoutput-group element (one per plotly figure).
+        aspect_val = aspect_ratio if aspect_ratio else "null"
+
+        if resizable: # add resizable widget that calls resize
+            aspect_option = ('aspectRatio: %g,\n' % aspect_ratio) if aspect_ratio else ""
+            resizable_js = (
+                '  var plotdiv = $("#{id}");'
+                '  var box = pex_get_container(plotdiv);'
+                '  if(box !== null) {{'
+                '     box.css("max-width","none");'
+                '     box.css("max-height","none");'
+                '  }}'
+                '  plotdiv.resizable({{\n'
+                '    {aspect_ratio_option}'
+                '    resize: function( event, ui ) {{\n'
+                '      {resizeFn}();' 
+                '      console.log("Resizable update on {id}");'
+                '    }}\n'
+                '  }});\n').format(id=plotdivid,
+                                   aspect_ratio_option=aspect_option,
+                                   resizeFn=resizeFn)
+        else: resizable_js = ''
+        
+            
+        if autosize: # resize when the window does
+            autosize_js = (
+                'window.addEventListener("resize", function(){{'
+                '    var plotdiv = $("#{id}");'
+                '    pex_update_size(plotdiv, null, null, null, {ratio});\n'
+                '    {resizeFn}(); console.log("Window resize on {id}"); }});'
+            ).format(id=plotdivid, ratio=aspect_val, resizeFn=resizeFn)
+        else: autosize_js = ''
+
+        
+        #Alter width & height of plotdiv based on size of "box" (reference div)
+        # Note that "box" div's width & height change dynamically and are unaltered.
         resize_script = (
-            '<script type="text/javascript">'
-            'function {resizeFn}() {{\n'
-            '  {aspectjs}\n'
-            '  Plotly.Plots.resize(document.getElementById("{id}"));\n'
-            '}}\n'
-            'window.addEventListener("resize", function(){{'
-            '  {resizeFn}(); }});'
-            '$( document ).ready(function() {{'
-            '  {resizeFn}();' #resize initially
-            '  console.log("Initial Resizing {id}");}});'
-            '</script>'
-        ).format(id=plotdivid,
-                 resizeFn="resize_%s" % str(plotdivid).replace('-',''),
-                 aspectjs=aspect_ratio_js)
+            '<script type="text/javascript">\n'
+            '  {requireJSbegin}\n'
+            '  function {resizeFn}() {{ {plotlyResizeJS} }}\n'
+            '  pex_update_size($("#{id}"), null, {ow}, {oh}, {ratio});\n' # set *initial* size of plotdiv
+            '  $(window).on("load", function() {{\n' # wait until size change is processed(?)
+            '     {resizeFn}();\n'  #initial resize - plotdiv size already set above
+            '     console.log("Initial Resizing {id} {ratio} {ow} {oh}:" + $("#{id}").width() + ", " + $("#{id}").height() );\n'
+            '  }});\n'
+            '  {resizableJS}\n'
+            '  {autosizeJS}\n'
+            '  {requireJSend}\n'
+            '</script>\n'
+        ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val,
+                 plotlyResizeJS=plotly_resize_js,
+                 ow=orig_width if orig_width else "null",
+                 oh=orig_height if orig_height else "null",
+                 resizableJS=resizable_js,
+                 autosizeJS=autosize_js,
+                 requireJSbegin=requireJSbegin,
+                 requireJSend=requireJSend)
+        
+
     
     if output_type == 'file':
         with open(filename, 'w') as f:
@@ -266,4 +271,5 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         else:
             #ORIGINAL Plotly: return plot_html
             return  '<div>' + plot_html + resize_script + "</div>" # EGN added
+            #return plot_html + resize_script # EGN added
 

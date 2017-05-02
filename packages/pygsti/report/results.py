@@ -228,31 +228,32 @@ class Results(object):
                 else: goparams['go0'] = v
 
             gstrStructs = _collections.OrderedDict()
-            try:
-                prepStrs = stateDict['gatestring_lists']['prep fiducials']
-                effectStrs = stateDict['gatestring_lists']['effect fiducials']
-                germs = stateDict['gatestring_lists']['germs']
-                aliases = stateDict['parameters'].get('gateLabelAliases',None)
-                fidPairs = stateDict['parameters'].get('fiducial pairs',None)
-                maxLengthList = stateDict['parameters']['max length list']
-                if maxLengthList[0] == 0:
-                    maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
-
-                structs = _const.make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
-                                                    prepStrs, effectStrs, germs, maxLengthList,
-                                                    fidPairs, truncScheme="whole germ powers",
-                                                    nest=True, keepFraction=1, keepSeed=None,
-                                                    includeLGST=True, gateLabelAliases=aliases)
-            except:
-                print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
-                structs = []
-                for lst in stateDict['gatestring_lists']['iteration']:
-                    unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
-                    unindexed_gss.add_unindexed(lst)
-                    structs.append(unindexed_gss)
-                    
-            gstrStructs['iteration'] = structs
-            gstrStructs['final'] = structs[-1]
+            #COMMENTED TO re-run gatestring reduction analysis - TODO: re un-comment these lines
+            #try:
+            #    prepStrs = stateDict['gatestring_lists']['prep fiducials']
+            #    effectStrs = stateDict['gatestring_lists']['effect fiducials']
+            #    germs = stateDict['gatestring_lists']['germs']
+            #    aliases = stateDict['parameters'].get('gateLabelAliases',None)
+            #    fidPairs = stateDict['parameters'].get('fiducial pairs',None)
+            #    maxLengthList = stateDict['parameters']['max length list']
+            #    if maxLengthList[0] == 0:
+            #        maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
+            #
+            #    structs = _const.make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
+            #                                        prepStrs, effectStrs, germs, maxLengthList,
+            #                                        fidPairs, truncScheme="whole germ powers",
+            #                                        nest=True, keepFraction=1, keepSeed=None,
+            #                                        includeLGST=True, gateLabelAliases=aliases)
+            #except:
+            #    print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
+            #    structs = []
+            #    for lst in stateDict['gatestring_lists']['iteration']:
+            #        unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
+            #        unindexed_gss.add_unindexed(lst)
+            #        structs.append(unindexed_gss)
+            #        
+            #gstrStructs['iteration'] = structs
+            #gstrStructs['final'] = structs[-1]
 
             gstrLists = _collections.OrderedDict()
             for k,v in stateDict['gatestring_lists'].items():
@@ -423,6 +424,6 @@ class Results(object):
         return self.confidence_regions[crkey]
 
 
-class ResultOptions:
+class ResultOptions(object):
     """ Unused.  Exists for sole purpose of loading old Results pickles """
     pass

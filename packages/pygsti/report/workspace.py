@@ -260,6 +260,21 @@ class Workspace(object):
 
         global _PYGSTI_WORKSPACE_INITIALIZED
 
+        def read_contents(filename): #taken from factory.py -- TODO: consolidate
+            contents = None
+            with open(filename) as f:
+                contents = f.read()
+                try: # to convert to unicode since we're using unicode literals below
+                    contents = contents.decode('utf-8')
+                except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+            return contents
+
+        cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
+                                 "templates","css")
+        jsPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
+                                 "templates","js")
+
+
         if not _PYGSTI_WORKSPACE_INITIALIZED:
             # The polling here is to ensure that plotly.js has already been loaded before
             # setting display alignment in order to avoid a race condition.
@@ -273,13 +288,15 @@ class Workspace(object):
                 }}, 250 );
                 </script>"""        
             _display(_HTML(script))
-    
+
+            #Load our custom plotly extension functions
+            script = '<script type="text/javascript"> %s </script>' % \
+                        read_contents(_os.path.join(jsPath,"pygsti_plotly_ex.js"))
+            _display(_HTML(script))
+
             # Load style sheets for displaying tables
-            cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                     "templates","css")
-            with open(_os.path.join(cssPath,"dataTable.css")) as f:
-                script = '<style>\n' + str(f.read()) + '</style>'
-                _display(_HTML(script))
+            script = '<style> %s </style>' % read_contents(_os.path.join(cssPath,"dataTable.css"))
+            _display(_HTML(script))
 
             #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
             jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
@@ -1036,6 +1053,7 @@ class WorkspaceOutput(object):
                 #DEBUG: handler_js += "  alert('%s: idToShow = ' + idToShow);\n" % ID
                 handler_js += "  $( '#%s' ).children().hide();\n" % ID
                 handler_js += "  $( '#' + idToShow ).show();\n"
+                handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
                 handler_js += "}\n"
                 handler_fns_js.append(handler_js)
 

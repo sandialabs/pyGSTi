@@ -24,6 +24,8 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
     printer = VerbosityPrinter.build_printer(verbosity)
     jsPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                             "templates","js")
+    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            "templates","css")
 
     def read_contents(filename):
         contents = None
@@ -57,9 +59,8 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         else:
             qtys['jqueryUILIB'] = '<script type="text/javascript"> %s </script>' % \
                                                read_contents(_os.path.join(jsPath,"jquery-ui.min.js"))
-            #TODO get inline jqueryUI
-            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-            qtys['jqueryUILIB'] += '\n<link rel="stylesheet" href="%s">' % jQueryUI_CSS
+            qtys['jqueryUILIB'] += '\n<style> %s </style>' % \
+                                   read_contents(_os.path.join(cssPath,"smoothness-jquery-ui.css"))
 
 
         
@@ -72,22 +73,59 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
 
 
     if 'mathjaxLIB' not in qtys:
-        if True: #connected:
-            src = ('<script type="text/javascript" '
-                   'src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" >'
-                   '</script> ')
-        #else:
-        #    src = '<script type="text/javascript"> %s </script>' % \
-        #                         read_contents(_os.path.join(jsPath,"MathJax.js"))
-        
-        qtys['mathjaxLIB'] = '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
+        assert(connected),"MathJax cannot be used unless connected=True."
+        src = ('<script type="text/javascript" '
+               'src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" >'
+               '</script> ')
+
+        #this *might* need to go at the very top of the HTML page to work
+        qtys['mathjaxLIB'] = \
+            ('<script>'
+             'var waitForPlotly = setInterval( function() {'
+             '    if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){'
+             '            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });'
+             '            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);'
+             '            clearInterval(waitForPlotly);'
+             '    }}, 250 );'
+             '</script>')
+
+        qtys['mathjaxLIB'] += '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
                              'tex2jax: {inlineMath: [["$","$"] ]} ' + \
                              '}); </script>' + src + \
                              '<style type="text/css"> ' + \
                              '.MathJax_MathML {text-indent: 0;} ' + \
                              '</style>'
         # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
-        
+
+    if 'katexLIB' not in qtys:
+        if connected:
+            src = ('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css">\n'
+                   '<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js"></script>\n'
+                   '<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js"></script>\n')
+        else:
+            src = '<style> %s </style>' % \
+                  read_contents(_os.path.join(cssPath,"katex.css"))
+            src += '<script type="text/javascript"> %s </script>' % \
+                                  read_contents(_os.path.join(jsPath,"katex.min.js"))
+            src += '<script type="text/javascript"> %s </script>' % \
+                                  read_contents(_os.path.join(jsPath,"auto-render.min.js"))
+
+        src += "\n"
+        src += ('<script>'
+                'document.addEventListener("DOMContentLoaded", function() {'
+                'renderMathInElement(document.body, { delimiters: ['
+                '{left: "$", right: "$", display: false},'
+                '{left: "$$", right: "$$", display: true},'
+                '] } ); });'
+                '</script>')
+        # removed so parens work:
+        # '{left: "\\[", right: "\\]", display: true},'
+        # '{left: "\\(", right: "\\)", display: false}'
+        qtys['katexLIB'] = src
+
+    if 'plotlyexLIB' not in qtys:
+        qtys['plotlyexLIB'] = '<script type="text/javascript"> %s </script>' % \
+                                  read_contents(_os.path.join(jsPath,"pygsti_plotly_ex.js"))
     
     #Add inline CSS
     if 'inlineCSS' not in qtys:

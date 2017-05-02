@@ -1,17 +1,11 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>%(title)s</title>
     <meta charset="UTF-8" />
 
-    <script>
-        var waitForPlotly = setInterval( function() {
-          if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){
-            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
-            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
-            clearInterval(waitForPlotly);
-          }}, 250 );
-    </script>
-
+    %(plotlyexLIB)s
+    
     %(jqueryLIB)s
     %(jqueryUILIB)s
 
@@ -136,7 +130,9 @@
 
     <!-- <link rel="stylesheet" href="fonts/Serif/cmun-serif.css"></link> -->
     
-    %(mathjaxLIB)s
+    <!-- XXX(mathjaxLIB)s -->
+    %(katexLIB)s
+
   </head>
   
   <body>
@@ -244,7 +240,7 @@
     <p>Table <a href="#bestGatesetSpamTable" class="table"></a> reports the estimated SPAM operations, and Table <a href="#bestGatesetGatesTable" class="table"></a> reports the logic gate operations.  The estimated SPAM gates ($\rho_0$ and $E_0$) are vectors in $\mathcal{B}(\mathcal{H})$, and the estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the Pauli basis.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table <a href="#bestGatesetSpamParametersTable" class="table"></a>.
 
       <!--\iftoggle{confidences}{
-      <p>Tables <a href="#bestGatesetSpamTable" class="table"></a> and <a href="#bestGatesetGatesTable" class="table"></a> report %(confidenceLevel)s%% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the log-likelihood (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional %(confidenceLevel)s%% confidence interval for the profile log-liklihood for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = %(confidenceLevel)s\\%%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches %(confidenceLevel)s%%).  If, instead, the interval corresponding to a projection of the %(confidenceLevel)s%% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = %(confidenceLevel)s\\%%$, where $n=%(confidenceIntervalNumNonGaugeParams)s$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by %(confidenceIntervalScaleFctr)s.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table <a href="#bestGatesetSpamParametersTable" class="table"></a> and those in the following section, we specify the %(confidenceLevel)s%% confidence intervals of derived quantities in using <em>value</em> $\pm$ <em>half-width</em> notation.  The derived-quantity confidence intervals in section <a href="#derivedQtySection" class="section"></a> are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).</p> -->
+      <p>Tables <a href="#bestGatesetSpamTable" class="table"></a> and <a href="#bestGatesetGatesTable" class="table"></a> report %(confidenceLevel)s%% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the log-likelihood (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional %(confidenceLevel)s%% confidence interval for the profile log-liklihood for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = %(confidenceLevel)s$\\%% (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches %(confidenceLevel)s%%).  If, instead, the interval corresponding to a projection of the %(confidenceLevel)s%% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = %(confidenceLevel)s$\\%%, where $n=%(confidenceIntervalNumNonGaugeParams)s$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by %(confidenceIntervalScaleFctr)s.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table <a href="#bestGatesetSpamParametersTable" class="table"></a> and those in the following section, we specify the %(confidenceLevel)s%% confidence intervals of derived quantities in using <em>value</em> $\pm$ <em>half-width</em> notation.  The derived-quantity confidence intervals in section <a href="#derivedQtySection" class="section"></a> are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).</p> -->
 
       <table id="bestGatesetSpamTable">
 	<caption><strong>The GST estimate of the SPAM operations</strong>.  Compare to Table <a href="#targetSpamTable" class="table"></a>.</caption>

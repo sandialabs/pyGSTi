@@ -1,4 +1,17 @@
-	
+
+.test {
+    color: red;
+    background-color: yellow;
+}
+
+.modebar {
+    display: none;
+}
+
+.katex {
+    font-size: 1em !important;
+}
+
 .dataTable td, .dataTable th {
 	/* appearance */
 	border: 2px solid #333;
@@ -9,8 +22,8 @@
 
 .dataTable {
         /* text */
-        /*font-family: "Computer Modern Serif","times new roman",serif;*/
-	'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: "Computer Modern Serif","times new roman",serif;
+	/*Helvetica, Arial, sans-serif;*/
 
 	/* no space between cells */
 	border-spacing: 0px;
@@ -20,7 +33,11 @@
 	width: auto;
 	margin: auto;
 	margin-top: 5px;
-	}
+        }
+
+/*.dataTable tr {
+    width: 20%;
+}*/
 
 .dataTable a {
 	/* link text */
@@ -33,19 +50,6 @@
 .dataTable tbody tr td {
 	/* appearance */
 	background-color: #ffffff;
-	background-image: -moz-linear-gradient(
-		top,
-		rgba(255,255,255,0.4) 0%,
-		rgba(255,255,255,0.2) 50%,
-		rgba(255,255,255,0.1) 51%,
-		rgba(255,255,255,0.0) 100%);
-	
-	background-image: -webkit-gradient(
-		linear, left top, left bottom,
-		color-stop(0%,rgba(255,255,255,0.4)),
-		color-stop(50%,rgba(255,255,255,0.2)),
-		color-stop(51%,rgba(255,255,255,0.1)),
-		color-stop(100%,rgba(255,255,255,0.0)));
 		
 	/* text */
 	color: #262c31;
@@ -64,19 +68,6 @@
 .dataTable tbody tr.odd td {
 	/* appearance */
 	background-color: #d6e0ef;
-	background-image: -moz-linear-gradient(
-		top,
-		rgba(255,255,255,0.4) 0%,
-		rgba(255,255,255,0.2) 50%,
-		rgba(255,255,255,0.1) 51%,
-		rgba(255,255,255,0.0) 100%);
-	
-	background-image: -webkit-gradient(
-		linear, left top, left bottom,
-		color-stop(0%,rgba(255,255,255,0.4)),
-		color-stop(50%,rgba(255,255,255,0.2)),
-		color-stop(51%,rgba(255,255,255,0.1)),
-		color-stop(100%,rgba(255,255,255,0.0)));
 	}
 
 .dataTable thead tr th,
@@ -90,26 +81,6 @@
 	font-weight: bold;
 	text-align: center;
 	}
-
-/* OLD
-background-color: #036;
-*/
-
-/* VERY OLD
-	background-image: -moz-linear-gradient(
-		top,
-		rgba(255,255,255,0.4) 0%,
-		rgba(255,255,255,0.2) 50%,
-		rgba(255,255,255,0.1) 51%,
-		rgba(255,255,255,0.0) 100%);
-	
-	background-image: -webkit-gradient(
-		linear, left top, left bottom,
-		color-stop(0%,rgba(255,255,255,0.4)),
-		color-stop(50%,rgba(255,255,255,0.2)),
-		color-stop(51%,rgba(255,255,255,0.1)),
-		color-stop(100%,rgba(255,255,255,0.0)));
-*/
 
 .dataTableHeading {
 	font-weight: bold;
@@ -136,10 +107,15 @@ background-color: #036;
 .pygsti-wsoutput-group {
 }
 
+/*.dataTable div {
+    max-height: 1000px;
+    max-width: 1000px;
+}*/
+
 /* maximum sizes for fluid report figures (enable if we use this)*/
 figure > div {
     max-height: 1000px;
-    max-width: 100%%;
+    max-width: 100%;
 }
 
 

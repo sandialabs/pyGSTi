@@ -340,7 +340,8 @@ def generate_boxplot(subMxs,
             if (isinstance(val,tuple) or isinstance(val,_objs.GateString)) \
                and all([_tools.isstr(el) for el in val]):
                 if len(val) == 0:
-                    formatted_vals.append(r"$\{\}$")
+                    #formatted_vals.append(r"$\{\}$")
+                    formatted_vals.append(r"{}")
                 else:
                     #formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
                     formatted_vals.append(str(val))
@@ -482,7 +483,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     return generate_boxplot(subMxs,
                             list(map(str,g.used_xvals())), list(map(str,g.used_yvals())),
                             list(map(str,g.minor_xvals())), list(map(str,g.minor_yvals())),
-                            "L","germ","rho_i","E_i", colormap,
+                            "L","germ","rho","E<sub>i</sub>", colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
 
@@ -548,9 +549,9 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
 
     if mxBasis is not None and mxBasisDims is not None:
         if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
-        xlabels=[("$%s$" % x) if len(x) else "" \
+        xlabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
-        ylabels=[("$%s$" % x) if len(x) else "" \
+        ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
         yextra += 1.5 if (mxBasisDims > 1) else 0
         xextra += 1.5 if (mxBasisDimsY > 1) else 0
@@ -646,15 +647,16 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
             range=[-0.5,len(ylabels)-0.5],
             ),
         shapes = gridlines,
-        annotations = annotations
-    )            
+        annotations = annotations,
+        margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
+    )
     return go.Figure(data=data, layout=layout)
 
 
 
 class BoxKeyPlot(WorkspacePlot):
     def __init__(self, ws, prepStrs, effectStrs,
-                 xlabel="$\\rho_i$", ylabel="$E_i$", scale=1.0):
+                 xlabel="rho<sub>i</sub>", ylabel="E<sub>i</sub>", scale=1.0):
         """
         Create a plot showing the layout of a single sub-block of a goodness-of-fit
         box plot (such as those produced by ColorBoxPlot)
@@ -684,7 +686,8 @@ class BoxKeyPlot(WorkspacePlot):
             for val in vals:
                 if isinstance(val, (tuple,_objs.GateString)) and all([_tools.isstr(el) for el in val]):
                     if len(val) == 0:
-                        formatted_vals.append(r"$\{\}$")
+                        #formatted_vals.append(r"$\{\}$")
+                        formatted_vals.append(r"{}")
                     else:
                         #formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
                         formatted_vals.append(str(val))

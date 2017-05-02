@@ -136,11 +136,13 @@ def latex_vector(v, brackets=False, precision=6,
                                   polarprecision=polarprecision,
                                   sciprecision=sciprecision) )
     if brackets:
-        return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        #return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
+        #        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
-        return "$ \\begin{array}{c}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{array} $\n"
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
 
 def latex_matrix(m, fontsize=None, brackets=False, precision=6,
@@ -186,12 +188,15 @@ def latex_matrix(m, fontsize=None, brackets=False, precision=6,
                              sciprecision=sciprecision) for el in m[r,:] ] ) )
 
     if brackets:
-        return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        #return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        #" \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
-        return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        " \\\\ \n".join(lines) + "\n \end{array} $\n"
-
+        #return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        #" \\\\ \n".join(lines) + "\n \end{array} $\n"            
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
 
 def latex_value(el, precision=6, polarprecision=3,

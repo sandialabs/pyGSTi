@@ -1,17 +1,11 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>%(title)s</title>
     <meta charset="UTF-8" />
 
-    <script>
-        var waitForPlotly = setInterval( function() {
-	  if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){
-            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
-            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
-            clearInterval(waitForPlotly);
-          }}, 250 );
-    </script>
-
+    %(plotlyexLIB)s
+    
     %(jqueryLIB)s
     %(jqueryUILIB)s
 
@@ -136,7 +130,9 @@
 
     <!-- <link rel="stylesheet" href="fonts/Serif/cmun-serif.css"></link> -->
     
-    %(mathjaxLIB)s
+    <!-- XXX(mathjaxLIB)s -->
+    %(katexLIB)s
+
   </head>
   
   <body>
@@ -224,7 +220,7 @@
       </table>
 
       <table id="bestGatesetGatesTable">
-	<caption><strong>The GST estimate of the logic gate operations</strong>.  Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-$1%%$ deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</caption>
+	<caption><strong>The GST estimate of the logic gate operations</strong>.  Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</caption>
 	%(bestGatesetGatesBoxTable)s
       </table>
 

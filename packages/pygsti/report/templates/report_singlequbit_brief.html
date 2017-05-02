@@ -1,17 +1,11 @@
+<!DOCTYPE html>
 <html>
   <head>
     <title>%(title)s</title>
     <meta charset="UTF-8" />
 
-    <script>
-      var waitForPlotly = setInterval( function() {
-          if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){
-            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
-            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
-            clearInterval(waitForPlotly);
-          }}, 250 );
-    </script>
-
+    %(plotlyexLIB)s
+    
     %(jqueryLIB)s
     %(jqueryUILIB)s
 
@@ -131,12 +125,13 @@
       h1, h2 h3, h4, h5, h6, body {
         font-family: "Computer Modern Serif", serif;
       }
-
     </style>
 
     <!-- <link rel="stylesheet" href="fonts/Serif/cmun-serif.css"></link> -->
     
-    %(mathjaxLIB)s
+    <!-- XXX(mathjaxLIB)s -->
+    %(katexLIB)s
+    
   </head>
   
   <body>
