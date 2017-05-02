@@ -293,7 +293,9 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename, showProgress=True, collisionAction="aggregate"):
+    def parse_datafile(self, filename, showProgress=True,
+                       collisionAction="aggregate",
+                       measurementGates=None):
         """
         Parse a data set file into a DataSet object.
 
@@ -310,6 +312,13 @@ class StdInputParser(object):
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" gate label to the
             duplicated gate sequence.
+
+        measurementGates : dict, optional
+            If not None, a dictrionary whose keys are user-defined "measurement
+            labels" and whose values are lists if gate labels.  The gate labels 
+            in each list define the set of gates which describe the the operation
+            that is performed contingent on a *specific outcome* of the measurement
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
 
         Returns
         -------
@@ -348,7 +357,8 @@ class StdInputParser(object):
 
         #Read data lines of data file
         dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
-                                comment="\n".join(preamble_comments))
+                                comment="\n".join(preamble_comments),
+                                measurementGates=measurementGates)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)

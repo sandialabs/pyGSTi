@@ -172,7 +172,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-         evalTree=None, countVecMx=None, poissonPicture=True,
+         evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
          check=False, gateLabelAliases=None):
     """
     The log-likelihood function.
@@ -216,6 +216,10 @@ def logl(gateset, dataset, gatestring_list=None,
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
 
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
+
     poissonPicture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
@@ -251,7 +255,8 @@ def logl(gateset, dataset, gatestring_list=None,
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
 
-    totalCntVec = _np.sum(countVecMx, axis=0)
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in ds_gatestring_list], 'd')
 
     #freqs = countVecMx / totalCntVec[None,:]
     #freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -298,8 +303,8 @@ def logl(gateset, dataset, gatestring_list=None,
 
 def logl_jacobian(gateset, dataset, gatestring_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                  evalTree=None, countVecMx=None, poissonPicture=True,
-                  check=False, gateLabelAliases=None):
+                  evalTree=None, countVecMx=None, totalCntVec=None,
+                  poissonPicture=True, check=False, gateLabelAliases=None):
     """
     The jacobian of the log-likelihood function.
 
@@ -342,6 +347,10 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
 
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
+
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
@@ -378,9 +387,11 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
 
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in gatestring_list], 'd')
+
     probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gatestring_list),nP), 'd' )
-    totalCntVec = _np.sum(countVecMx, axis=0)
 
     #freqs = cntVecMx / totalCntVec[None,:]
     #freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -647,7 +658,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
             evalSubTree.generate_gatestring_list(), gateLabelAliases)
         fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
                             ds_subtree_gatestring_list)
-        totalCntVec = _np.sum(cntVecMx, axis=0)
+        totalCntVec = _np.array( [dataset[s].total()
+                                  for s in ds_subtree_gatestring_list], 'd')
 
         #compute pos_probs separately
         gateset.bulk_fill_probs(probs, spam_lbl_rows, evalSubTree,
@@ -706,7 +718,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     return final_hessian # (N,N)
 
 
-def logl_max(dataset, gatestring_list=None, countVecMx=None,
+def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
              poissonPicture=True, check=False, gateLabelAliases=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
@@ -729,6 +741,10 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None,
         dataset counts for that spam label for each gate string in gatestring_list.
         Use fill_count_vecs(...) to generate this quantity when it is useful elsewhere
         (e.g. for logl(...) calls).
+
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
 
     poissonPicture : boolean, optional
         Whether the Poisson-picture maximum log-likelihood should be returned.
@@ -760,7 +776,9 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None,
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
 
-    totalCntVec = _np.sum(countVecMx, axis=0)
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in gatestring_list], 'd')
+        
     freqs = countVecMx / totalCntVec[None,:]
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
 

@@ -2283,9 +2283,9 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
     _tools.fill_count_vecs(cntVecMx, spam_lbl_rows, dataset, dsGateStringsToUse)
-    logL_upperbound = _tools.logl_max(dataset, dsGateStringsToUse, cntVecMx, poissonPicture) # The theoretical upper bound on the log(likelihood)
+    totalCntVec = _np.array( [dataset[gstr].total() for gstr in dsGateStringsToUse], 'd')
+    logL_upperbound = _tools.logl_max(dataset, dsGateStringsToUse, cntVecMx, totalCntVec, poissonPicture) # The theoretical upper bound on the log(likelihood)
 
-    totalCntVec = _np.sum(cntVecMx, axis=0)
     minusCntVecMx = -1.0 * cntVecMx
 
     freqs = cntVecMx / totalCntVec[None,:]
@@ -2789,9 +2789,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, poissonPicture, check, gateLabelAliases)
+            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, None, poissonPicture, check, gateLabelAliases)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, None, None, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
+                                  radius, None, None, None, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
