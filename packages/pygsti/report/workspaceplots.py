@@ -1056,7 +1056,7 @@ class GateMatrixPlot(WorkspacePlot):
 #    rel_evals10 = rel_evals**10
    
 class PolarEigenvaluePlot(WorkspacePlot):
-    def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=10,
+    def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=None,
                  centerText=None):
         """
         Creates a polar plot of one or more sets of eigenvalues (or any complex #s).
@@ -1105,16 +1105,18 @@ class PolarEigenvaluePlot(WorkspacePlot):
                                showarrow=False)
                 ))
 
+        #Note: plotly needs a plain lists for r and t, otherwise it
+        # produces javascript [ [a], [b], ... ] instead of [a, b, ...]  
         data = []
         for i,evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatter(
-                r = _np.absolute(evals),
-                t = _np.angle(evals) * (180.0/_np.pi),
+                r = list(_np.absolute(evals).flat), 
+                t = list(_np.angle(evals).flatten() * (180.0/_np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,
-                    size=90,
+                    size=45,
                     line=dict(
                         color='white'
                     ),
@@ -1130,13 +1132,13 @@ class PolarEigenvaluePlot(WorkspacePlot):
             if amp is not None:
                 amp_evals = evals**amp
                 trace = go.Scatter(
-                    r = _np.absolute(amp_evals),
-                    t = _np.angle(amp_evals) * (180.0/_np.pi),
+                    r = list(_np.absolute(amp_evals).flat),
+                    t = list(_np.angle(amp_evals).flatten() * (180.0/_np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
                         color=color,
-                        size=45,
+                        size=20,
                         line=dict(
                             color='white'
                         ),
@@ -1162,6 +1164,26 @@ class PolarEigenvaluePlot(WorkspacePlot):
             direction="counterclockwise",
             orientation=-90
         )
+
+        #HACK around plotly bug: Plotly somehow holds residual polar plot data
+        # which gets plotted unless new data overwrites it.  This residual data
+        # takes up 4 points of data for the first 3 data traces - so we make
+        # sure this data is filled in with undisplayed data here (because we
+        # don't want to see the residual data!).
+        for trace in data:
+            if len(trace['r']) < 4:
+                extra = 4-len(trace['r'])
+                trace['r'] += [1e3]*extra
+                trace['t'] += [0.0]*extra
+        while len(data) < 3:
+            data.append( go.Scatter(
+                r = [1e3]*4,
+                t = [0.0]*4,
+                name="Dummy",
+                mode='markers',
+                showlegend=False,
+                ))
+        assert(len(data) >= 3)
         
         return go.Figure(data=data, layout=layout)
 

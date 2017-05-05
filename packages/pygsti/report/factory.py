@@ -51,7 +51,7 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         
     if 'plotlyLIB' not in qtys:
         qtys['plotlyLIB'] = _ws.insert_resource(
-            connected, "https://cdn.plot.ly/plotly-latest.min.js","plotly-latest.js")
+            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-polarfixed.js")
 
     #if 'mathjaxLIB' not in qtys:
     #    assert(connected),"MathJax cannot be used unless connected=True."
@@ -504,7 +504,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(results.goparameters['go0'])
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable([gsTgt,gsFinal], ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("eigenvalues","barplot"))
-    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('polar','relpolar'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                        "boxes", errgen_type)
