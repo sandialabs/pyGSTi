@@ -656,7 +656,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
 
 class BoxKeyPlot(WorkspacePlot):
     def __init__(self, ws, prepStrs, effectStrs,
-                 xlabel="rho<sub>i</sub>", ylabel="E<sub>i</sub>", scale=1.0):
+                 xlabel="Preparation fiducial", ylabel="Measurement fiducial", scale=1.0):
         """
         Create a plot showing the layout of a single sub-block of a goodness-of-fit
         box plot (such as those produced by ColorBoxPlot)
@@ -694,10 +694,39 @@ class BoxKeyPlot(WorkspacePlot):
                 else:
                     formatted_vals.append(val)
             return formatted_vals
-        
+
+        nX = len(prepStrs)
+        nY = len(effectStrs)
+        trace = go.Heatmap(z=_np.zeros((nY,nX),'d'),
+                           colorscale=[ [0, 'white'], [1, 'black'] ],
+                           showscale=False, zmin=0,zmax=1,hoverinfo='none')
+        data = [trace]
+
+        gridlines = []
+    
+        # Vertical lines
+        for i in range(nX-1):
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': i+0.5, 'y0': -0.5,
+                    'x1': i+0.5, 'y1': nY-0.5,
+                    'line': {'color': 'black', 'width': 1},
+                } )
+            
+        #Horizontal lines
+        for i in range(nY-1):
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': -0.5, 'y0': i+0.5,
+                    'x1': nX-0.5, 'y1': i+0.5,
+                    'line': {'color': 'black', 'width': 1},
+                } )
+
         layout = go.Layout(
-            width=70*scale*(len(prepStrs)+1),
-            height=70*scale*(len(effectStrs)+1),
+            width = 40*(nX+1.5)*scale,
+            height = 40*(nY+1.5)*scale,
             xaxis=dict(
                 side="bottom",
                 showgrid=False,
@@ -708,9 +737,8 @@ class BoxKeyPlot(WorkspacePlot):
                 ticks="",
                 linewidth=2,
                 ticktext=val_filter(prepStrs),
-                tickvals=[i+0.5 for i in range(len(prepStrs))],
-                tickangle=90,
-               range=[0,len(prepStrs)]
+                tickvals=[i for i in range(len(prepStrs))],
+                tickangle=90
             ),
             yaxis=dict(
                 side="right",
@@ -722,22 +750,23 @@ class BoxKeyPlot(WorkspacePlot):
                 ticks="",
                 linewidth=2,
                 ticktext=list(reversed(val_filter(effectStrs))),
-                tickvals=[i+0.5 for i in range(len(effectStrs))],
-                range=[0,len(effectStrs)]
+                tickvals=[i for i in range(len(effectStrs))],
             ),
+            shapes = gridlines,
             annotations = [
                 go.Annotation(
                     x=0.5,
-                    y=1.1,
+                    y=1.2,
                     showarrow=False,
                     text=xlabel,
                     font={'size': 12*scale, 'color': "black"},
                     xref='paper',
                     yref='paper'),
                 go.Annotation(
-                    x=-0.1,
+                    x=-0.2,
                     y=0.5,
                     showarrow=False,
+                    textangle=-90,
                     text=ylabel,
                     font={'size': 12*scale, 'color': "black"},
                     xref='paper',
@@ -745,23 +774,36 @@ class BoxKeyPlot(WorkspacePlot):
                 )
             ]
         )
+        # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
+        return go.Figure(data=data, layout=layout)
 
-        xs = [i+0.5 for i in range(len(prepStrs))]
-        ys = [i+0.5 for i in range(len(effectStrs))]
-        allys = []
-        for y in ys: allys.extend( [y]*len(xs) )
-        allxs = xs*len(ys)
-        trace = go.Scatter(x=allxs, y=allys, mode="markers",
-                           marker=dict(
-                               size = 12,
-                               color = 'rgba(0,0,255,0.8)',
-                               line = dict(
-                                   width = 2,
-                               )),
-                           xaxis='x1', yaxis='y1', hoverinfo='none')
-                          
-        fig = go.Figure(data=[trace], layout=layout)
-        return fig
+
+
+
+
+
+        
+#        layout = go.Layout(
+#            width=70*scale*(len(prepStrs)+1),
+#            height=70*scale*(len(effectStrs)+1),
+#
+#
+#        xs = [i+0.5 for i in range(len(prepStrs))]
+#        ys = [i+0.5 for i in range(len(effectStrs))]
+#        allys = []
+#        for y in ys: allys.extend( [y]*len(xs) )
+#        allxs = xs*len(ys)
+#        trace = go.Scatter(x=allxs, y=allys, mode="markers",
+#                           marker=dict(
+#                               size = 12,
+#                               color = 'rgba(0,0,255,0.8)',
+#                               line = dict(
+#                                   width = 2,
+#                               )),
+#                           xaxis='x1', yaxis='y1', hoverinfo='none')
+#                          
+#        fig = go.Figure(data=[trace], layout=layout)
+#        return fig
 
 
     
