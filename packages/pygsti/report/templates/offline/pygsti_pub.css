@@ -23,7 +23,7 @@ body {
 .footnote {
   float: prince-column-footnote;
 }
-caption {
+.tablecaption {
   caption-side: top;
 }
 html {
@@ -99,12 +99,13 @@ q > q:before {
 q > q:after {
   content: "’";
 }
-table {
+.reportTable {
   width: 80%;
   /*margin: 1.667em 0 1em; */
   margin: auto; /*center tables*/
   margin-top: 10px; /*give space above table caption*/
   border-collapse: collapse;
+  text-align: center;
 }
 th,
 td {
@@ -112,7 +113,7 @@ td {
   border: 0.5px solid #000000;
   text-align: center;
 }
-caption {
+.tablecaption {
   margin: 0 0 4pt;
   font-weight: bold;
 }
@@ -218,10 +219,10 @@ h6.counter-reset {
  h6:not(.counter-skip):before {
   content: ""  counter(section, decimal) '.' counter(subsection, decimal) '.' counter(subsubsection, decimal) '.' counter(subsubsection, decimal) '.' counter(subsubsubsection, decimal) '.' counter(subsubsubsubsection, decimal) "";
 }
-table {
+.reportTable {
   counter-increment: table;
 }
-caption:before {
+.tablecaption:before {
   content: "Table " counter(table) ". ";
 }
 figure {

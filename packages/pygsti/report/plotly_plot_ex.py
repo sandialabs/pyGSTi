@@ -153,24 +153,47 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         #  create multiple resizable widgets on the same wsoutput-group element (one per plotly figure).
         aspect_val = aspect_ratio if aspect_ratio else "null"
 
-        if resizable: # add resizable widget that calls resize
-            aspect_option = ('aspectRatio: %g,\n' % aspect_ratio) if aspect_ratio else ""
+        if resizable: #bind a "resize" event to plotdiv for the container to call
             resizable_js = (
-                '  var plotdiv = $("#{id}");'
-                '  var box = pex_get_container(plotdiv);'
-                '  if(box !== null) {{'
-                '     box.css("max-width","none");'
-                '     box.css("max-height","none");'
-                '  }}'
-                '  plotdiv.resizable({{\n'
-                '    {aspect_ratio_option}'
-                '    resize: function( event, ui ) {{\n'
-                '      {resizeFn}();' 
-                '      console.log("Resizable update on {id}");'
-                '    }}\n'
-                '  }});\n').format(id=plotdivid,
-                                   aspect_ratio_option=aspect_option,
-                                   resizeFn=resizeFn)
+                '  $(document).ready(function() {{\n'
+                '     var plotdiv = $("#{id}");\n'
+                '     plotdiv.addClass("resizable-plot");\n'
+                '     plotdiv.on("resize", function(event, ui) {{\n'
+                '       pex_update_size($("#{id}"), null, null, null, {ratio});\n'
+                '       {resizeFn}();\n'
+                '       console.log("Resizable update on {id}");\n'
+                '     }});\n'
+                '  }});\n' ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val)
+        
+        #if resizable == True: # add resizable widget that calls resize
+        #    aspect_option = ('aspectRatio: %g,\n' % aspect_ratio) if aspect_ratio else ""
+        #    resizable_js = (
+        #        '  var plotdiv = $("#{id}");'
+        #        '  plotdiv.resizable({{\n'
+        #        '    {aspect_ratio_option}'
+        #        '    resize: function( event, ui ) {{\n'
+        #        '      {resizeFn}();' 
+        #        '      console.log("Resizable update on {id}");'
+        #        '    }}\n'
+        #        '  }});\n').format(id=plotdivid,
+        #                           aspect_ratio_option=aspect_option,
+        #                           resizeFn=resizeFn)
+
+        #        # '  var box = pex_get_container(plotdiv);'
+        #        # '  if(box !== null) {{'
+        #        # '     box.css("max-width","none");'
+        #        # '     box.css("max-height","none");'
+        #        # '  }}'
+        #
+        #    
+        #elif resizable: # (can also be an ID string of an already-build resizable widget)
+        #    resizable_js = (
+        #        '  $(document).ready(function() {{'
+        #        '  $("#{widgetID}").on("resize", function(event, ui) {{'
+        #        '      {resizeFn}();' 
+        #        '      console.log("Resizable update on {id}");'
+        #        '  }});\n }});\n' ).format(id=plotdivid, widgetID=resizable,
+        #                                   resizeFn=resizeFn)
         else: resizable_js = ''
         
             
@@ -190,11 +213,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '<script type="text/javascript">\n'
             '  {requireJSbegin}\n'
             '  function {resizeFn}() {{ {plotlyResizeJS} }}\n'
+            '  pex_init_container($("#{id}"), {ow}, {oh});\n'
             '  pex_update_size($("#{id}"), null, {ow}, {oh}, {ratio});\n' # set *initial* size of plotdiv
-            '  $(window).on("load", function() {{\n' # wait until size change is processed(?)
-            '     {resizeFn}();\n'  #initial resize - plotdiv size already set above
-            '     console.log("Initial Resizing {id} {ratio} {ow} {oh}:" + $("#{id}").width() + ", " + $("#{id}").height() );\n'
-            '  }});\n'
             '  {resizableJS}\n'
             '  {autosizeJS}\n'
             '  {requireJSend}\n'
@@ -207,6 +227,10 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                  autosizeJS=autosize_js,
                  requireJSbegin=requireJSbegin,
                  requireJSend=requireJSend)
+#            '  $(window).on("load", function() {{\n' # wait until size change is processed(?)
+#            '     {resizeFn}();\n'  #initial resize - plotdiv size already set above
+#            '     console.log("Initial Resizing {id} {ratio} {ow} {oh}:" + $("#{id}").width() + ", " + $("#{id}").height() );\n'
+#            '  }});\n'
         
 
     

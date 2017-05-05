@@ -270,17 +270,18 @@ class _HTMLFigureFormatter(_ParameterizedFormatter):
     '''
     def __init__(self):
         '''
-        Parameters
-        ---------
-        extension : string, optional. extension of the figure's image
-        formatstring : string, optional. Normally formatted with W, H, scratchDir, filename
+        Create a new HTMLFigureFormatter
         '''
-        super(_HTMLFigureFormatter, self).__init__(_no_format, [])
+        super(_HTMLFigureFormatter, self).__init__(_no_format, ['resizable','autosize'])
 
     # Override call method of Parameterized formatter
     def __call__(self, fig):
-        render_out = fig.render("html")
-        return "<script>\n %(js)s \n</script>\n %(html)s" % render_out
+        render_out = fig.render("html",
+                                resizable="handlers only" if self.specs['resizable'] else False,
+                                autosize=self.specs['autosize'])
+        return "<script>\n %(js)s \n</script>\n" % render_out + \
+            "%(html)s" % render_out
+    #OLD: <div class='relwrap'><div class='abswrap'> </div></div>
 
         
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to

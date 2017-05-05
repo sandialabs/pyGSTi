@@ -22,14 +22,17 @@ class ReportTable(object):
     def finish(self):
         pass #nothing to do currently
 
-    def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None, precision=6, polarprecision=3, sciprecision=0):
+    def render(self, fmt, longtables=False, tableID=None, tableclass=None,
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+               resizable=False, autosize=False):
 
         specs = {
             'scratchDir'     : scratchDir,
             'precision'      : precision,
             'polarprecision' : polarprecision,
-            'sciprecision'   : sciprecision
+            'sciprecision'   : sciprecision,
+            'resizable'      : resizable,
+            'autosize'       : autosize
             }
 
         # Create a formatSet, which contains rules for rendering lists
@@ -85,9 +88,12 @@ class ReportTable(object):
 
         elif fmt == "html":
 
+            html = ""
+            
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
-                html = self._customHeadings['html'] % {'tableclass': tableclass}
+                html += self._customHeadings['html'] % {'tableclass': tableclass,
+                                                       'tableid': tableID}
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
@@ -95,9 +101,11 @@ class ReportTable(object):
                                        self._headingFormatters, "html")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
-
-                html  = "<table class=%s><thead>" % tableclass
-                html += "<tr><th> %s </th></tr>" % \
+                
+                html += "<table"
+                if tableclass: html += ' class="%s"' % tableclass
+                if tableID: html += ' id="%s"' % tableID
+                html += "><thead><tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadings_formatted))
                 html += "</thead><tbody>"
 
@@ -115,6 +123,14 @@ class ReportTable(object):
                     html += "</tr>"
 
             html += "</tbody></table>"
+
+            #if resizable:
+            #    assert(tableID is not None),"Must specify a tableID if resizable==True!"
+            #    html += ('<script>'
+            #             '    $("#{tableID}").resizable();'
+            #             '</script>').format(tableID=tableID)
+
+
             return html
 
 

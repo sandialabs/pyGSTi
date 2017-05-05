@@ -18,7 +18,7 @@
     <!-- <link rel="stylesheet" type="text/css" href="css/screen.css" /> -->
     %(inlineCSS)s
 
-    <style>
+    <!-- <style>
 
       th {
         font-weight: normal;
@@ -76,9 +76,9 @@
         text-align: left;
       }
 
-    </style>
+    </style> -->
 
-    <style type="text/css">
+    <!-- <style type="text/css">
       @font-face {
         font-family: "Computer Modern";
         src: url('http://mirrors.ctan.org/fonts/cm-unicode/fonts/otf/cmunss.otf');
@@ -126,7 +126,7 @@
         font-family: "Computer Modern Serif", serif;
       }
 
-    </style>
+    </style> -->
 
     <!-- <link rel="stylesheet" href="fonts/Serif/cmun-serif.css"></link> -->
     
@@ -184,10 +184,10 @@
 
     <p>These Hilbert-Schmidt space representations require choosing a basis $\{M_i\}$ for $\mathcal{B}(\mathcal{H})$.  We use the <em>Pauli basis</em>, comprising the four $2\times2$ Pauli matrices (including the identity $1\!\mathrm{l}$) for $d=2$.  In $d>2$, we use the analogous Gell-Mann matrices as a basis.   The choice of this basis is what is meant when state preparations and measurements are written as vectors and gate operations are written as matrices in the <q>Pauli basis</q>.  Keep in mind that we want to use an orthonormal basis, so the basis matrices are normalized so that $\left\langle \left\langle M_i | M_j \right\rangle \right\rangle = \mathrm{Tr} M_i^\dagger M_j = \delta_{ij}$.  In $d=2$, this means that the basis matrices are $M_i = \frac{1}{\sqrt{2}}\sigma_i$.</p>
 
-    <table id='targetGatesetTable'>
-      <caption><strong>Target gate set: SPAM (state preparation and measurement) and logic gates</strong>.  The <strong>left</strong> table shows the <em>ideal</em> input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.  The <strong>right</strong> table shows the <em>ideal</em> (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).</caption>
+    <div id='targetGatesetTable' class='reportTable'>
+      <div class='tablecaption'><strong>Target gate set: SPAM (state preparation and measurement) and logic gates</strong>.  The <strong>left</strong> table shows the <em>ideal</em> input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.  The <strong>right</strong> table shows the <em>ideal</em> (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).</div>
       %(targetSpamBriefTable)s
-    </table>
+    </div>
 
     <h2>GST Input Data</h2>
     <p>The most important input to GST is a <em>dataset</em> -- a list of experimental counts or frequencies, each associated with a <em>gate sequences</em>.  Gate sequences are also referred to as <q>gate strings</q>.  Each gate sequence defines an experiment, in which you (1) initialize the device, (2) apply the operations specified by the gate sequence, and (3) measure and record the result (<q>plus</q> or <q>minus</q>).</p>
@@ -207,29 +207,29 @@
 
     <p> This table also contains one derived quantity, the spectrum of the largest <em>Gram matrix</em> that GST could extract from the data.  This is included here rather than in the analysis because it is not useful for predictive purposes, and therefore is not part of the estimate.  It serves, instead, to tell you something about the quality of the data.  More precisely, it tells you about the dimension of the state space that is explored by the fiducial sequences.  This should be $d^2$-dimensional [because the fiducials are intended to explore all of $\mathcal{B}(\mathcal{H})$], and therefore the spectrum listed in Table <a href="#datasetOverviewTable" class="table"></a> should (ideally) have exactly $d^2$ elements that are large and nonzero.  In practice, you should see $d^2$ large elements, and a rapid drop in magnitude thereafter.  If fewer than $d^2$ elements are large, then the fiducials were poorly chosen and are not exploring the state space effectively.  If more than $d^2$ are large, then the system is experiencing strong non-Markovian effects (e.g., strong coupling to environmental degrees of freedom) or it has a larger Hilbert space dimension than expected.</p>
 
-    <table id="fiducialListTable">
-      <caption><strong>Fiducial sequences</strong>.  A list of the preparation and measurement <q>fiducial</q> gate sequences. See discussion in text.</caption>
+    <div id="fiducialListTable" class='reportTable'>
+      <div class='tablecaption'><strong>Fiducial sequences</strong>.  A list of the preparation and measurement <q>fiducial</q> gate sequences. See discussion in text.</div>
       %(fiducialListTable)s
-    </table>
+    </div>
 
-    <table id="germListTable">
-      <caption><strong>Germ sequences</strong>.  A list of the <q>germ</q> gate sequences.  See discussion in text.</caption>
+    <div id="germListTable" class='reportTable'>
+      <div class='tablecaption'><strong>Germ sequences</strong>.  A list of the <q>germ</q> gate sequences.  See discussion in text.</div>
       %(germList2ColTable)s
-    </table>
+    </div>
 
-    <table id="datasetOverviewTable">
-      <caption><strong>General dataset properties</strong>.  See discussion in text.</caption>
+    <div id="datasetOverviewTable" class='reportTable'>
+      <div class='tablecaption'><strong>General dataset properties</strong>.  See discussion in text.</div>
       %(datasetOverviewTable)s
-    </table>
+    </div>
 
     <section id="secOutput">
     <h1>Output from GST</h1>
     <p>The primary output of GST is an estimated gate set.  This section presents the raw estimate, and then some useful derived quantities of the estimated gates, including comparisons to the target gates.  Some of these quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom.  Typically this is done to make the estimated gates and SPAM operations look as close to the ideal target gates as possible.  But tradeoffs can and almost always must be made regarding this optimization.  Table <a href="#bestGatesetGaugeParamsTable" class="table"></a> lists the relevant parameters used during the gauge optimization step which resulted in the estimates that follow.</p>
 
-    <table id="bestGatesetGaugeParamsTable">
-      <caption><strong>Gauge Optimization Details</strong>.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.</caption>
+    <div id="bestGatesetGaugeParamsTable" class='reportTable'>
+      <div class='tablecaption'><strong>Gauge Optimization Details</strong>.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.</div>
       %(bestGatesetGaugeOptParamsTable)s
-    </table>
+    </div>
 
     <h2>Raw GST estimates</h2>
     <p>Table <a href="#bestGatesetSpamTable" class="table"></a> reports the estimated SPAM operations, and Table <a href="#bestGatesetGatesTable" class="table"></a> reports the logic gate operations.  The estimated SPAM gates ($\rho_0$ and $E_0$) are vectors in $\mathcal{B}(\mathcal{H})$, and the estimated logic gates are superoperators represented as matrices acting on $\mathcal{B}(\mathcal{H})$, all in the Pauli basis.   By taking the dot product of state preparation and measurement vectors, estimated SPAM probabilites are computed in Table <a href="#bestGatesetSpamParametersTable" class="table"></a>.
@@ -237,20 +237,20 @@
       <!--\iftoggle{confidences}{
       <p>Tables <a href="#bestGatesetSpamTable" class="table"></a> and <a href="#bestGatesetGatesTable" class="table"></a> report %(confidenceLevel)s%% confidence intervals for each of the gate matrix and SPAM vector elements.  A confidence region is obtained by approximating the log-likelihood (see below) as being quadratic about its minimum, and determining the ellipsoid where this approximation equals a value, $C$, defined below.  For a given parameter (e.g. gate or SPAM vector element) $x$, a confidence interval is obtained by projecting the ellipsiodal region onto that $x$'s axis.  This computes a 1-dimensional %(confidenceLevel)s%% confidence interval for the profile log-liklihood for $x$, and for this reason the value of $C$ used above is chosen such that $\mathrm{CDF}[\chi^2_1](C) = %(confidenceLevel)s\\%%$ (that is, at the value $C$ the cumulative density function of a $\chi^2_1$ distribution reaches %(confidenceLevel)s%%).  If, instead, the interval corresponding to a projection of the %(confidenceLevel)s%% multi-dimensional confidence region (defined by $C$ s.t.~$\mathrm{CDF}[\chi^2_n](C) = %(confidenceLevel)s\\%%$, where $n=%(confidenceIntervalNumNonGaugeParams)s$ is the number of non-gauge gate set parameters) is desired, then the all the interval widths reported here should be multiplied by %(confidenceIntervalScaleFctr)s.  The resulting confidence interval is always symmetric about the estimated value, and we report the half-width of the intervals in the tables.  In table <a href="#bestGatesetSpamParametersTable" class="table"></a> and those in the following section, we specify the %(confidenceLevel)s%% confidence intervals of derived quantities in using <em>value</em> $\pm$ <em>half-width</em> notation.  The derived-quantity confidence intervals in section <a href="#derivedQtySection" class="section"></a> are computed by finding the minimum and maximum values of the linearization of the derived quantity (e.g.~fidelity).</p> -->
 
-      <table id="bestGatesetSpamTable">
-	<caption><strong>The GST estimate of the SPAM operations</strong>.  Compares the estimated SPAM operations to those desired (repeated from Table <a href="#targetGatesetTable"></a> for convenience.</caption>
+      <div id="bestGatesetSpamTable" class='reportTable'>
+	<div class='tablecaption'><strong>The GST estimate of the SPAM operations</strong>.  Compares the estimated SPAM operations to those desired (repeated from Table <a href="#targetGatesetTable"></a> for convenience.</div>
 	%(bestGatesetSpamBriefTable)s
-      </table>
+      </div>
       
-      <table id="bestGatesetSpamParametersTable">
-	<caption><strong>GST estimate of SPAM probabilities</strong>.  Computed by taking the dot products of vectors in Table <a href="#bestGatesetSpamTable" class="table"></a>.  The symbol $E_C$, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</caption>
+      <div id="bestGatesetSpamParametersTable" class='reportTable'>
+	<div class='tablecaption'><strong>GST estimate of SPAM probabilities</strong>.  Computed by taking the dot products of vectors in Table <a href="#bestGatesetSpamTable" class="table"></a>.  The symbol $E_C$, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</div>
 	%(bestGatesetSpamParametersTable)s
-      </table>
+      </div>
 
-      <table id="bestGatesetGatesTable">
-	<caption><strong>The GST estimate of the logic gate operations</strong>.  Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</caption>
+      <div id="bestGatesetGatesTable" class='reportTable'>
+	<div class='tablecaption'><strong>The GST estimate of the logic gate operations</strong>.  Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</div>
 	%(bestGatesetGatesBoxTable)s
-      </table>
+      </div>
 
     <h2 id="derivedQtySection">Derived quantities</h2>
     <p>Generally, the first thing that you want to know is <q>How far from ideal are the gates?</q>.  To answer this, the report tabulates several well-known definitions of distance.  Table <a href="#bestGatesetVsTargetTable" class="table"></a> lists the discrepancy from each estimated gate to its corresponding target, as measured by:</p>
@@ -263,20 +263,20 @@
 
     <p>It's also useful to know <em>how</em> the real gates (or, more precisely, GST's estimates of the real gates) differ from the targets.  There are several ways we could represent this, but the most useful involves an <em>error generator</em>.  These are also given in Table <a href="#bestGatesetVsTargetTable" class="table"></a>.  The final column of the table lists, for each gate, a Lindbladian superoperator $\mathbb{L}$.  It is defined by the equation %(errorgenformula)s, where $\hat{G}$ is the estimate and $G_{\mathrm{target}}$ is the ideal gate.  This Lindbladian would be zero if the gates were perfect, and its overall magnitude is approximately equal to the diamond distance (or Jamiolkowski trace distance) between the target gate and the estimate.</p>
 
-    <table id="bestGatesetVsTargetTable">
-      <caption><strong>Comparison of GST estimated gates to target gates</strong>.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</caption>
+    <div id="bestGatesetVsTargetTable" class='reportTable'>
+      <div class='tablecaption'><strong>Comparison of GST estimated gates to target gates</strong>.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</div>
       %(bestGatesetVsTargetTable)s
-    </table>
+    </div>
 
-    <table id="bestGatesetSpamVsTargetTable">
-      <caption><strong>Comparison of GST estimated SPAM to target SPAM</strong>.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</caption>
+    <div id="bestGatesetSpamVsTargetTable" class='reportTable'>
+      <div class='tablecaption'><strong>Comparison of GST estimated SPAM to target SPAM</strong>.  This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.</div>
       %(bestGatesetSpamVsTargetTable)s
-    </table>
+    </div>
 
-    <table id="bestGatesetErrGenTable">
-      <caption><strong>The GST estimate of the logic gate operation generators</strong>. A heat map of the <q>Error Generator</q> for each gate, which is the Lindbladian $\mathbb{L}$ that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all elements of these matrices is zero, the estimated gates match the target gates (Table <a href="#targetGatesetTable" class="table"></a>).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the <q>Hamiltonian generators</q> given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the <q>Stochastic generators</q> given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.</caption>
+    <div id="bestGatesetErrGenTable" class='reportTable'>
+      <div class='tablecaption'><strong>The GST estimate of the logic gate operation generators</strong>. A heat map of the <q>Error Generator</q> for each gate, which is the Lindbladian $\mathbb{L}$ that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all elements of these matrices is zero, the estimated gates match the target gates (Table <a href="#targetGatesetTable" class="table"></a>).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the <q>Hamiltonian generators</q> given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the <q>Stochastic generators</q> given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.</div>
       %(bestGatesetErrGenBoxTable)s
-    </table>
+    </div>
 
     <p>It's usually useful to understand <em>how</em> gates fail.  The error generators in Table <a href="#bestGatesetErrGenTable" class="table"></a> provide one view on this, but they are not necessarily intuitive.   For example, you might want to know whether your gate suffers depolarizing, dephasing, or over-rotation errors.  In Tables <a href="#bestGatesetEigenvalueTable" class="table"></a>, the eigenvalues of the estimated gates are shown and plotted on the complex disc (which can be helpful for visualizing the different types of errors, e.g., over- or under-rotation vs.~depolarization).</p>
     <!--
@@ -284,10 +284,10 @@ Table <a href="#bestGatesetRelativeEigenvalueTable" class="table"></a> shows the
  Table <a href="#bestGatesetPolarEigvalTable" class="table"></a> plots these eigenvalues on the complex disc, which can be helpful for visualizing the different types of errors (e.g.~over- or under-rotation vs.~depolarization). -->
     <!-- TODO: add hamiltonian generator projections figure? -->
 
-    <table id="bestGatesetEigenvalueTable">
-      <caption><strong>Eigenvalues of estimated gates</strong>.  The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.</caption>
+    <div id="bestGatesetEigenvalueTable" class='reportTable'>
+      <div class='tablecaption'><strong>Eigenvalues of estimated gates</strong>.  The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.</div>
       %(bestGatesetEvalTable)s
-    </table>
+    </div>
 
     <p>Finally, Table <a href="#bestGatesetChoiTable" class="table"></a> presents each estimated gate's <em>Choi matrix</em>, along with its spectrum.  The Choi matrix (sometimes ambiguously referred to as the <q>process matrix</q>) is an alternative way to describe a process.  We usually prefer the <q>superoperator representation</q>, which has the very useful property that the process matrix corresponding to applying $G_a$ and then $G_b$ is simply $G_bG_a$.  This is completely false for the Choi representation.  Nonetheless, the Choi representation is often useful, so we present it here -- but without a detailed discussion of its properties (see, e.g. the textbook by Nielsen and Chuang).</p>
 
@@ -295,10 +295,10 @@ Table <a href="#bestGatesetRelativeEigenvalueTable" class="table"></a> shows the
 
     <p>Additionally, the condition of <em>complete positivity</em> or CP (which all real quantum processes must satisfy) is simply the positivity of the Choi matrix.  Thus, negative eigenvalues in Table <a href="#bestGatesetChoiTable" class="table"></a> indicate that the estimate violates complete positivity.  If they are very small, they may simply indicate statistical fluctuations (unitary gates have $\chi$ matrices with zero eigenvalues, so any small fluctuation is likely to violate CP).  If they are large, they serve as a warning that (1) the model of CPTP maps is probably violated (usually because of non-Markovian behavior), and (2) this estimate may produce negative or greater-than-unity probabilities.  GST does <em>not</em> generally impose complete positivity (although it is an option), precisely because violation of CP is a warning flag for non-Markovian behavior (which is very common in experimental qubits).</p>
 
-    <table id="bestGatesetChoiTable">
-      <caption><strong>Choi matrix spectrum of the GST estimated gate set</strong>.  The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of <em>negative</em> values are plotted using \textcolor{red}{red} bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</caption>
+    <div id="bestGatesetChoiTable" class='reportTable'>
+      <div class='tablecaption'><strong>Choi matrix spectrum of the GST estimated gate set</strong>.  The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of <em>negative</em> values are plotted using \textcolor{red}{red} bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</div>
       %(bestGatesetChoiEvalTable)s
-    </table>
+    </div>
 
     </section>
     
@@ -347,11 +347,11 @@ Table <a href="#bestGatesetRelativeEigenvalueTable" class="table"></a> shows the
       <li>Experiments in which $2\Delta\log(\mathcal{L}) > 10k$ ($\bigstar$) have very significant non-Markovian noise, and the results in the previous section should be viewed very cautiously.</li>
     </ul>
 
-    <table id="progressTable">
-      <caption><strong>Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$</strong>.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.</caption>
+    <div id="progressTable" class='reportTable'>
+      <div class='tablecaption'><strong>Comparison between the computed and expected maximum $\log(\mathcal{L})$ for different values of $L$</strong>.  $N_S$ and $N_p$ are the number of gate strings and parameters, respectively.  The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST model (small is better) and is expected to lie within $[k-\sqrt{2k},k+\sqrt{2k}]$ where $k = N_s-N_p$. $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.</div>
       <!--$p$ is the p-value derived from a $\chi^2_k$ distribution.(For example, if $p=0.05$, then the probability of observing a $\chi^{2}$ value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
       %(progressTable)s
-    </table>
+    </div>
 
     <h2>Detailed likelihood analysis</h2>
     <p>The aggregated $2\Delta\log(\mathcal{L})$ numbers presented in Table <a href="#progressTable" class="table"></a> tell you how well the GST estimate fits the <em>entire</em> dataset.  If they are in line with theory ($2\Delta\log(\mathcal{L}) \approx k$), then there is little more to be said.  But if the best fit to the data is not good, we can debug it by identifying <em>which</em> experiments are inconsistent with the fit.</p>
@@ -381,15 +381,15 @@ Table <a href="#bestGatesetRelativeEigenvalueTable" class="table"></a> shows the
       <h1>System and pyGSTi parameters</h1>
       <p>This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.</p>
 
-      <table id="metadataTable">
-        <caption><strong>Listing of GST parameters and meta-data</strong>.  These parameters and related metadata describe how the GST computation was performed which led to this report.</caption>
+      <div id="metadataTable" class='reportTable'>
+        <div class='tablecaption'><strong>Listing of GST parameters and meta-data</strong>.  These parameters and related metadata describe how the GST computation was performed which led to this report.</div>
         %(metadataTable)s
-      </table>
+      </div>
 
-      <table id="softwareEnvTable">
-	<caption><strong>Listing of the software environment</strong>.  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimation.</caption>
+      <div id="softwareEnvTable" class='reportTable'>
+	<div class='tablecaption'><strong>Listing of the software environment</strong>.  Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimation.</div>
 	%(softwareEnvTable)s
-      </table>
+      </div>
       
     </section>
   </body>

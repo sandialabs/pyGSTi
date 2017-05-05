@@ -33,6 +33,8 @@
 	width: auto;
 	margin: auto;
 	margin-top: 5px;
+	max-width: 100%;
+	overflow: hidden;
         }
 
 /*.dataTable tr {
@@ -105,17 +107,29 @@
 }
 
 .pygsti-wsoutput-group {
+    display: inline-block; /* shrink to fit contents for resizable */
+    max-width: 100%; /* so we can set width as a "desired" width, constrained by parent width */
 }
 
-/*.dataTable div {
-    max-height: 1000px;
-    max-width: 1000px;
-}*/
-
-/* maximum sizes for fluid report figures (enable if we use this)*/
+/* maximum height for fluid report figures */
 figure > div {
     max-height: 1000px;
-    max-width: 100%;
 }
 
+.abswrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  text-align: left;
+}
 
+.relwrap {
+  position: relative;
+  left: 0; top:-0.51em;
+  /*height: inherit; from td*/
+}
+
+.plotContainingTD {
+    text-align: left !important;
+    vertical-align: top !important;
+}

@@ -104,6 +104,42 @@ def randomID():
     return str(int(10000*_random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
+#OLD: shouldn't need this anymore (TODO: REMOVE)
+#def read_contents(filename):
+#    contents = None
+#    with open(filename) as f:
+#        contents = f.read()
+#        try: # to convert to unicode since we use unicode literals
+#            contents = contents.decode('utf-8')
+#        except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+#    return contents
+
+def insert_resource(connected, online_url, offline_filename,
+                    integrity=None, crossorigin=None):
+    #offlinePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+    #                       "templates","offline")
+
+    if connected and online_url:
+        url = online_url
+    else:
+        assert(offline_filename), "Requires offline filename!"
+        url = "offline/" + offline_filename
+        
+    if url.endswith("js"):
+        
+        tag = '<script src="%s"' % url
+        if connected:
+            if integrity: tag += ' integrity="%s"' % integrity
+            if crossorigin: tag += ' crossorigin="%s"' % crossorigin
+        tag += '></script>'
+        return tag
+
+    elif url.endswith("css"):
+        return '<link rel="stylesheet" href="%s">' % url
+
+
+
+
 
 class Workspace(object):
     """
@@ -260,21 +296,6 @@ class Workspace(object):
 
         global _PYGSTI_WORKSPACE_INITIALIZED
 
-        def read_contents(filename): #taken from factory.py -- TODO: consolidate
-            contents = None
-            with open(filename) as f:
-                contents = f.read()
-                try: # to convert to unicode since we're using unicode literals below
-                    contents = contents.decode('utf-8')
-                except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
-            return contents
-
-        cssPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates","css")
-        jsPath = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates","js")
-
-
         if not _PYGSTI_WORKSPACE_INITIALIZED:
             # The polling here is to ensure that plotly.js has already been loaded before
             # setting display alignment in order to avoid a race condition.
@@ -289,44 +310,45 @@ class Workspace(object):
                 </script>"""        
             _display(_HTML(script))
 
-            #Load our custom plotly extension functions
-            script = '<script type="text/javascript"> %s </script>' % \
-                        read_contents(_os.path.join(jsPath,"pygsti_plotly_ex.js"))
-            _display(_HTML(script))
+            #Load our custom plotly extension functions            
+            _display(_HTML(insert_resource(connected,None,"pygsti_plotly_ex.js")))
 
             # Load style sheets for displaying tables
-            script = '<style> %s </style>' % read_contents(_os.path.join(cssPath,"dataTable.css"))
-            _display(_HTML(script))
+            _display(_HTML(insert_resource(connected,None,"dataTable.css")))
 
             #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
             jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-            _display(_HTML('<link rel="stylesheet" href="%s">' % jQueryUI_CSS))
+            _display(_HTML(insert_resource(connected,jQueryUI_CSS,"smoothness-jquery-ui.css")))
 
             #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
-            imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
+            if connected:
+                imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
+            else:
+                imgURL = "offline/images/ui-icons_222222_256x240.png"
             _display(_HTML("<style>\n" +
                            ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n" +
                            ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL +
                            "</style>"))
-    
-            # Update Mathjax config -- jupyter notebooks already have this so not needed
-            #script = '<script type="text/x-mathjax-config">\n' \
-            #        + '  MathJax.Hub.Config({ tex2jax: {inlineMath: [["$","$"], ["\\(","\\)"]]}\n' \
-            #        + '}); </script>' \
-            #        + '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
-            #_display(_HTML(script))
-    
+        
             #Tell require.js where jQueryUI is
-            script = """
-            <script>requirejs.config({paths: { 'jquery-UI': ['https://code.jquery.com/ui/1.12.1/jquery-ui.min']},});
-              require(['jquery-UI'],function(ui) {
-              window.jQueryUI=ui;});
-            </script>"""
+            if connected:
+                path = "https://code.jquery.com/ui/1.12.1/jquery-ui.min"
+            else:
+                path = "offline/jquery-ui.min"
+
+            script = (
+                "<script>"
+                "requirejs.config({{ "
+                "   paths: {{ 'jquery-UI': ['{path}']}},"
+                "}});"
+                "require(['jquery-UI'],function(ui) {{"
+                "  window.jQueryUI=ui; }});"
+                "</script>").format(path=path)
             _display(_HTML(script))
     
     
-            #MathJax (& jQuery) are already loaded in ipython notebooks
-            # '<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" ></script>'
+            #MathJax (& jQuery) are already loaded in ipython notebooks, so no need
+            # to include them here
             
             # Initialize Plotly libraries
             _plotly_offline.init_notebook_mode(connected)
@@ -1103,7 +1125,8 @@ class WorkspaceTable(WorkspaceOutput):
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
-    def render(self, typ, global_requirejs=False, precision=None):
+    def render(self, typ, global_requirejs=False, precision=None,
+               resizable=True, autosize=False):
         """
         Renders this object into the specifed format, specifically for
         embedding it within a larger document.
@@ -1128,6 +1151,15 @@ class WorkspaceTable(WorkspaceOutput):
             same value is taken for all precision types.  If None, then
             `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
 
+        resizable : bool, optional
+            Whether or not to place table inside a JQueryUI 
+            resizable widget (only applies when `typ == "html"`).
+
+        autosize : bool, optional
+            Whether elements within table should be resized when
+            the browser window is resized (only applies when
+            `typ == "html"`).
+
         Returns
         -------
         dict
@@ -1148,21 +1180,60 @@ class WorkspaceTable(WorkspaceOutput):
         
         if typ == "html":
             tableID = "table_" + randomID()
-
+            
             divHTML = []
             divIDs = []
             for i,table in enumerate(self.tables):
-                tableDivID = tableID + "_%d" % i
+                tableDivID = tableID + "_%d" % i                
                 table_html = "<div id='%s'>\n%s\n</div>\n" % (tableDivID,
-                                table.render("html", tableclass="dataTable",
+                                table.render("html", tableID=tableDivID + "_tbl",
+                                             tableclass="dataTable",
                                              precision=precDict['normal'],
                                              polarprecision=precDict['polar'],
-                                             sciprecision=precDict['sci']))
+                                             sciprecision=precDict['sci'],
+                                             resizable=resizable, autosize=autosize))
+
+
                 divHTML.append(table_html)
                 divIDs.append(tableDivID)
                 
-            return self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
+            ret = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
                                      self.switchboards, self.sbSwitchIndices)
+            if resizable:
+                ret['js'] += ( '  $(document).ready(function() {{'
+                               '    $("#{tableID}").resizable({{\n'
+                               '    autoHide: true,\n'
+                               '    resize: function( event, ui ) {{\n'
+                               '      ui.element.css("padding-bottom", "7px");' #weird jqueryUI hack: to compensate for handle(?)
+                               '      ui.element.css("max-width","none");' #remove max-width
+                               '      ui.element.css("max-height","none");' #remove max-height
+                               '      var w = ui.size.width;\n'
+                               '      var h = ui.size.height;\n'
+                               '      ui.element.find(".dataTable").css("width",w);'
+                               '      ui.element.find(".dataTable").css("height",h);'
+                               '      console.log("Resizable table update on {tableID}");'
+                               '    }},\n'
+                               '    stop: function( event, ui ) {{\n'
+                               '      var els = ui.element.find(".resizable-plot");'
+                               '      els.trigger("resize");'
+                               '      ui.element.find(".resizable-plot").trigger("resize");'
+                               '      var ws = ui.element.find(".dataTable").map('
+                               '                  function(){{ return $(this).width(); }}).get();'
+                               '      var hs = ui.element.find(".dataTable").map('
+                               '                  function(){{ return $(this).height(); }}).get();'
+                               '      ui.element.css("width", Math.max.apply(null, ws));'
+                               '      ui.element.css("height", Math.max.apply(null, hs));'
+                               '      console.log("Resizable STOP table update on {tableID}");'
+                               '    }}\n'
+                               '    }});\n'
+                               '    setTimeout( function(){{'  #TODO: figure out what load event to use
+                               '       $("#{tableID}").find(".resizable-plot").trigger("resize");'
+                               '    }}, 1000);'
+                               '}});').format(tableID=tableID)
+                #'      els.css("max-width","none");' #remove max-width
+                #'      els.css("max-height","none");' #remove max-height
+
+            return ret
         else:
             assert(len(self.tables) == 1), \
                 "Can only render %s format for a non-switched table" % typ
@@ -1201,9 +1272,9 @@ class WorkspacePlot(WorkspaceOutput):
             self.ws.switchedCompute(self.plotfn, *self.initargs)
 
         
-    def render(self, typ="html", global_requirejs=False):
+    def render(self, typ="html", global_requirejs=False, resizable=True, autosize=False):
         """
-        Renders this object into the specifed format, specifically for
+        Renders this plot into the specifed format, specifically for
         embedding it within a larger document.
 
         Parameters
@@ -1215,6 +1286,15 @@ class WorkspacePlot(WorkspaceOutput):
             Whether the table is going to be embedded in an environment
             with a globally defined RequireJS library.  If True, then
             rendered output will make use of RequireJS.
+
+        resizable : bool, optional
+            Whether or not to place plot inside a JQueryUI 
+            resizable widget (only applies when `typ == "html"`).
+
+        autosize : bool, optional
+            Whether this plot should be resized resized when
+            the browser window is resized (only applies when
+            `typ == "html"`).
 
         Returns
         -------
@@ -1238,11 +1318,28 @@ class WorkspacePlot(WorkspaceOutput):
             #use auto-sizing (fluid layout)
             fig_html = _plot_ex(fig, include_plotlyjs=False, output_type='div',
                                 show_link=False, global_requirejs=global_requirejs,
-                                autosize=False, resizable=True, lock_aspect_ratio=True)
-            divHTML.append(fig_html)
+                                autosize=autosize, resizable=resizable, lock_aspect_ratio=True)
+            divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             
-        return self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                 self.switchboards, self.sbSwitchIndices)
+        ret = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
+                                self.switchboards, self.sbSwitchIndices)
+
+        if resizable == True: #if == "handlers only" then don't make a widget
+            ret['js'] += ( '  $(document).ready(function() {{'
+                           '    $("#{plotID}").resizable({{\n'
+                           '    autoHide: true,\n'
+                           '    resize: function( event, ui ) {{\n'
+                           '      ui.element.css("max-width","none");' #remove max-width restriction
+                           '      ui.element.css("max-height","none");' #remove max-height restriction
+                           '      ui.element.find(".resizable-plot").trigger("resize");'
+                           '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
+                           '    }}\n'
+                           '    }});\n'
+                           '    setTimeout( function(){{'  #TODO: figure out what load event to use
+                           '       $("#{plotID}").find(".resizable-plot").trigger("resize");'
+                           '    }}, 1000);'
+                           '}});').format(plotID=plotID)
+        return ret
                 
                     

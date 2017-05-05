@@ -14,104 +14,73 @@ import webbrowser as _webbrowser
 
 from ..objects      import VerbosityPrinter
 from ..tools        import compattools as _compat
-from .workspace import Workspace as _Workspace
-from .workspace import WorkspaceTable as _WorkspaceTable
+from .              import workspace as _ws
 
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     inlineCSSnames=("dataTable.css","pygsti_pub.css","pygsti_screen.css"),
                     connected=True, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
-    jsPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                            "templates","js")
-    cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                            "templates","css")
-
-    def read_contents(filename):
-        contents = None
-        with open(filename) as f:
-            contents = f.read()
-            try: # to convert to unicode since we're using unicode literals below
-                contents = contents.decode('utf-8')
-            except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
-        return contents
-
             
     #Add inline or CDN javascript    
     if 'jqueryLIB' not in qtys:
-        if connected:
-            qtys['jqueryLIB'] = ('<script  '
-                                 'src="https://code.jquery.com/jquery-3.2.1.min.js"  '
-                                 'integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="  '
-                                 'crossorigin="anonymous"></script>')
-        else:
-            qtys['jqueryLIB'] = '<script type="text/javascript"> %s </script>' % \
-                                               read_contents(_os.path.join(jsPath,"jquery-3.2.1.min.js"))
-
+        qtys['jqueryLIB'] = _ws.insert_resource(
+            connected, "https://code.jquery.com/jquery-3.2.1.min.js", "jquery-3.2.1.min.js",
+            "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=",
+            "anonymous")
+        
     if 'jqueryUILIB' not in qtys:
-        if connected:
-            qtys['jqueryUILIB'] = ('<script   '
-                                   'src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"   '
-                                   'integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="   '
-                                   'crossorigin="anonymous"></script>')
-            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-            qtys['jqueryUILIB'] += '\n<link rel="stylesheet" href="%s">' % jQueryUI_CSS
-        else:
-            qtys['jqueryUILIB'] = '<script type="text/javascript"> %s </script>' % \
-                                               read_contents(_os.path.join(jsPath,"jquery-ui.min.js"))
-            qtys['jqueryUILIB'] += '\n<style> %s </style>' % \
-                                   read_contents(_os.path.join(cssPath,"smoothness-jquery-ui.css"))
-
-
+        qtys['jqueryUILIB'] = _ws.insert_resource(
+            connected, "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jquery-ui.min.js",
+            "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=",
+            "anonymous")
+        
+        qtys['jqueryUILIB'] += _ws.insert_resource(
+            connected, "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css",
+            "smoothness-jquery-ui.css")
         
     if 'plotlyLIB' not in qtys:
-        if connected:
-            qtys['plotlyLIB'] = '<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>'
-        else:
-            qtys['plotlyLIB'] = '<script type="text/javascript"> %s </script>' % \
-                                               read_contents(_os.path.join(jsPath,"plotly-latest.js"))
+        qtys['plotlyLIB'] = _ws.insert_resource(
+            connected, "https://cdn.plot.ly/plotly-latest.min.js","plotly-latest.js")
 
-
-    if 'mathjaxLIB' not in qtys:
-        assert(connected),"MathJax cannot be used unless connected=True."
-        src = ('<script type="text/javascript" '
-               'src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" >'
-               '</script> ')
-
-        #this *might* need to go at the very top of the HTML page to work
-        qtys['mathjaxLIB'] = \
-            ('<script>'
-             'var waitForPlotly = setInterval( function() {'
-             '    if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){'
-             '            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });'
-             '            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);'
-             '            clearInterval(waitForPlotly);'
-             '    }}, 250 );'
-             '</script>')
-
-        qtys['mathjaxLIB'] += '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
-                             'tex2jax: {inlineMath: [["$","$"] ]} ' + \
-                             '}); </script>' + src + \
-                             '<style type="text/css"> ' + \
-                             '.MathJax_MathML {text-indent: 0;} ' + \
-                             '</style>'
-        # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
+    #if 'mathjaxLIB' not in qtys:
+    #    assert(connected),"MathJax cannot be used unless connected=True."
+    #    src = _ws.insert_resource(
+    #        connected, "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML",
+    #        None)
+    #
+    #    #this *might* need to go at the very top of the HTML page to work
+    #    qtys['mathjaxLIB'] = ('<script>'
+    #         'var waitForPlotly = setInterval( function() {'
+    #         '    if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){'
+    #         '            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });'
+    #         '            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);'
+    #         '            clearInterval(waitForPlotly);'
+    #         '    }}, 250 );'
+    #         '</script>')
+    #
+    #    qtys['mathjaxLIB'] += '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
+    #                         'tex2jax: {inlineMath: [["$","$"] ]} ' + \
+    #                         '}); </script>' + src + \
+    #                         '<style type="text/css"> ' + \
+    #                         '.MathJax_MathML {text-indent: 0;} ' + \
+    #                         '</style>'
+    #    # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
 
     if 'katexLIB' not in qtys:
-        if connected:
-            src = ('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css">\n'
-                   '<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js"></script>\n'
-                   '<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js"></script>\n')
-        else:
-            src = '<style> %s </style>' % \
-                  read_contents(_os.path.join(cssPath,"katex.css"))
-            src += '<script type="text/javascript"> %s </script>' % \
-                                  read_contents(_os.path.join(jsPath,"katex.min.js"))
-            src += '<script type="text/javascript"> %s </script>' % \
-                                  read_contents(_os.path.join(jsPath,"auto-render.min.js"))
+        qtys['katexLIB'] = _ws.insert_resource(
+            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
+            "katex.css")
 
-        src += "\n"
-        src += ('<script>'
+        qtys['katexLIB'] += _ws.insert_resource(
+            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
+            "katex.min.js")
+        
+        qtys['katexLIB'] += _ws.insert_resource(
+            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
+            "auto-render.min.js")
+
+        qtys['katexLIB'] += ('\n<script>'
                 'document.addEventListener("DOMContentLoaded", function() {'
                 'renderMathInElement(document.body, { delimiters: ['
                 '{left: "$", right: "$", display: false},'
@@ -121,24 +90,14 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         # removed so parens work:
         # '{left: "\\[", right: "\\]", display: true},'
         # '{left: "\\(", right: "\\)", display: false}'
-        qtys['katexLIB'] = src
 
     if 'plotlyexLIB' not in qtys:
-        qtys['plotlyexLIB'] = '<script type="text/javascript"> %s </script>' % \
-                                  read_contents(_os.path.join(jsPath,"pygsti_plotly_ex.js"))
+        qtys['plotlyexLIB'] = _ws.insert_resource(connected, None, "pygsti_plotly_ex.js")
     
     #Add inline CSS
     if 'inlineCSS' not in qtys:
-        qtys['inlineCSS'] = ""
-        cssPath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                "templates","css")
-        for cssFile in inlineCSSnames:
-            with open(_os.path.join(cssPath,cssFile)) as f:
-                contents = f.read()
-                try: # to convert to unicode since we're using unicode literals below
-                    contents = contents.decode('utf-8')
-                except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
-                qtys['inlineCSS'] += '<style>\n%s</style>\n' % contents
+        qtys['inlineCSS'] = "\n".join( [_ws.insert_resource(connected, None, cssFile)
+                                        for cssFile in inlineCSSnames] )
 
     #Insert qtys into template file
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
@@ -159,11 +118,11 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
 
         else:
             #print("DB: rendering ",key)
-            if isinstance(val,_WorkspaceTable):
+            if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
-                out = val.render("html",precision=precision)
+                out = val.render("html", precision=precision, resizable=True, autosize=True)
             else:
-                out = val.render("html") # a dictionary of rendered portions
+                out = val.render("html", resizable=True, autosize=True) # a dictionary of rendered portions
             qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
 
     #Do actual fill -- everything needs to be unicode at this point.
@@ -284,7 +243,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     None
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
-    if ws is None: ws = _Workspace()
+    if ws is None: ws = _ws.Workspace()
 
     if title == "auto":
         title = "GST report for %s" % datasetLabel
@@ -459,7 +418,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     None
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
-    if ws is None: ws = _Workspace()
+    if ws is None: ws = _ws.Workspace()
         
     if title == "auto":
         title = "GST report for %s" % datasetLabel

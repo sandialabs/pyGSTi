@@ -958,11 +958,15 @@ class GateEigenvalueTable(WorkspaceTable):
         qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
 
         def format_evals(evals,evalsEB):
-            try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
-            except: evals = evals.reshape(evals.size, 1)
+            evals = evals.reshape(evals.size, 1)
             if evalsEB is not None:
-                try: evalsEB = evalsEB.reshape(evalsEB.size//2, 2)
-                except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
+                evalsEB = evalsEB.reshape(evalsEB.size, 1)
+            #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
+            #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+            #except: evals = evals.reshape(evals.size, 1)
+            #if evalsEB is not None:
+            #    try: evalsEB = evalsEB.reshape(evalsEB.size//2, 2)
+            #    except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
             return evals, evalsEB
     
         table = _ReportTable(colHeadings, formatters)            
@@ -1243,7 +1247,7 @@ class GatestringTable(WorkspaceTable):
             latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(colHeadings)-1,commonTitle)
             latex_head += "%s \\\\ \hline\n" % (" & ".join(colHeadings))
     
-            html_head = "<table class=%(tableclass)s><thead>"
+            html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
             html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(colHeadings)-1,commonTitle)
             html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
             html_head += "</thead><tbody>"
@@ -1357,7 +1361,7 @@ class GatesSingleMetricTable(WorkspaceTable):
                       "\\multicolumn{%d}{c|}{%s} \\\\ \cline{2-%d}\n" % (len(titles),niceNm,nCols)
         latex_head += " & " + " & ".join([mknice(t) for t in titles]) + "\\\\ \hline\n"
 
-        html_head = "<table class=%(tableclass)s><thead>"
+        html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
         html_head += '<tr><th rowspan="2"></th>' + \
                      '<th colspan="%d">%s</th></tr>\n' % (len(titles),niceNm)
         html_head += "<tr><th>" +  " </th><th> ".join([mknice(t) for t in titles]) + "</th></tr>\n"
