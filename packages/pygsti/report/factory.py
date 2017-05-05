@@ -19,7 +19,7 @@ from ..tools        import compattools as _compat
 from .              import workspace as _ws
 
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
-                    inlineCSSnames=("dataTable.css","pygsti_pub.css","pygsti_screen.css"),
+                    CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
                     connected=True, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
@@ -106,10 +106,10 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             connected, None, "pygsti_plotly_ex.js")
     
     #Add inline CSS
-    if 'inlineCSS' not in qtys:
-        qtys['inlineCSS'] = "\n".join( [_ws.insert_resource(
+    if 'CSS' not in qtys:
+        qtys['CSS'] = "\n".join( [_ws.insert_resource(
             connected, None, cssFile)
-                for cssFile in inlineCSSnames] )
+                for cssFile in CSSnames] )
 
     #Insert qtys into template file
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),

@@ -9,6 +9,7 @@
     padding-top: 1em;
   }
 }
+
 body {
   -webkit-column-count: 2;
   -moz-column-count: 2;
@@ -23,14 +24,11 @@ body {
 .footnote {
   float: prince-column-footnote;
 }
-.tablecaption {
-  caption-side: top;
-}
 html {
   font-size: 9pt;
 }
 body {
-  font-family: "Times New Roman", Times, serif;
+  font-family: "Computer Modern Serif", "Times New Roman", Times, serif;
   text-align: justify;
   hyphens: auto;
 }
@@ -43,7 +41,7 @@ h6 {
   -webkit-column-break-after: avoid;
   column-break-after: avoid;
   break-after: avoid;
-  font-family: "Times New Roman", Times, serif;
+  font-family: "Computer Modern Serif", "Times New Roman", Times, serif;
   font-weight: bold;
   hyphens: none;
 }
@@ -99,7 +97,15 @@ q > q:before {
 q > q:after {
   content: "’";
 }
-.reportTable {
+figure {
+  margin: 1.333em 0 2.333em;
+  text-align: center;
+}
+figcaption {
+  caption-side: bottom;
+  font-weight: bold;
+}
+figure.tbl {  /* figure that is a table */
   width: 80%;
   /*margin: 1.667em 0 1em; */
   margin: auto; /*center tables*/
@@ -113,17 +119,12 @@ td {
   border: 0.5px solid #000000;
   text-align: center;
 }
-.tablecaption {
+figure.tbl > figcaption {
+  caption-side: top;
   margin: 0 0 4pt;
   font-weight: bold;
 }
-figure {
-  margin: 1.333em 0 2.333em;
-  text-align: center;
-}
-figcaption {
-  font-weight: bold;
-}
+
 .footnote {
   margin-left: 0.333em;
   padding-left: 0.667em;
@@ -219,17 +220,17 @@ h6.counter-reset {
  h6:not(.counter-skip):before {
   content: ""  counter(section, decimal) '.' counter(subsection, decimal) '.' counter(subsubsection, decimal) '.' counter(subsubsection, decimal) '.' counter(subsubsubsection, decimal) '.' counter(subsubsubsubsection, decimal) "";
 }
-.reportTable {
-  counter-increment: table;
-}
-.tablecaption:before {
-  content: "Table " counter(table) ". ";
-}
 figure {
   counter-increment: figure;
 }
 figcaption:before {
   content: "Figure " counter(figure) ". ";
+}
+figure.tbl {
+  counter-increment: table;
+}
+figure.tbl > figcaption:before {
+  content: "Table " counter(table) ". ";
 }
 .footnote {
   counter-increment: footnote;
@@ -513,7 +514,36 @@ cite a {
   content: "Definition " counter(definition) ". ";
   font-style: italic;
 }
+
 @media screen {
+
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    min-width: 400px;
+    max-width: 1000px;
+    width: 80%;
+    margin: 3em auto 6em;
+    -webkit-column-count: 1;
+       -moz-column-count: 1;
+            column-count: 1;
+  }
+
+  p {
+    margin-bottom: 1em;
+  }
+
+  th, td {
+    border-width: 1px;
+  }
+
+
+  .title {
+    font-size: 2rem;
+  }
+
   .authors {
     -webkit-column-count: 3;
     -moz-column-count: 3;
@@ -522,4 +552,6 @@ cite a {
   .copyright {
     display: none;
   }
+
 }
+
