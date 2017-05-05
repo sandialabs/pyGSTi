@@ -1201,6 +1201,8 @@ class WorkspaceTable(WorkspaceOutput):
                                      self.switchboards, self.sbSwitchIndices)
             if resizable:
                 ret['js'] += ( '  $(document).ready(function() {{'
+                               '    $("#{tableID}").find("td").not(".plotContainingTD").each('
+                               '      function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
                                '    $("#{tableID}").resizable({{\n'
                                '    autoHide: true,\n'
                                '    resize: function( event, ui ) {{\n'
@@ -1215,8 +1217,9 @@ class WorkspaceTable(WorkspaceOutput):
                                '    }},\n'
                                '    stop: function( event, ui ) {{\n'
                                '      var els = ui.element.find(".resizable-plot");'
+                               '      els.css("max-width","none");' #remove max-width
+                               '      els.css("max-height","none");' #remove max-height                               
                                '      els.trigger("resize");'
-                               '      ui.element.find(".resizable-plot").trigger("resize");'
                                '      var ws = ui.element.find(".dataTable").map('
                                '                  function(){{ return $(this).width(); }}).get();'
                                '      var hs = ui.element.find(".dataTable").map('
@@ -1230,8 +1233,6 @@ class WorkspaceTable(WorkspaceOutput):
                                '       $("#{tableID}").find(".resizable-plot").trigger("resize");'
                                '    }}, 1000);'
                                '}});').format(tableID=tableID)
-                #'      els.css("max-width","none");' #remove max-width
-                #'      els.css("max-height","none");' #remove max-height
 
             return ret
         else:
@@ -1332,7 +1333,10 @@ class WorkspacePlot(WorkspaceOutput):
                            '    resize: function( event, ui ) {{\n'
                            '      ui.element.css("max-width","none");' #remove max-width restriction
                            '      ui.element.css("max-height","none");' #remove max-height restriction
-                           '      ui.element.find(".resizable-plot").trigger("resize");'
+                           '      var els = ui.element.find(".resizable-plot");'
+                           '      els.css("max-width","none");' #remove max-width
+                           '      els.css("max-height","none");' #remove max-height                               
+                           '      els.trigger("resize");'
                            '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
                            '    }}\n'
                            '    }});\n'
