@@ -116,9 +116,7 @@ def randomID():
 
 def insert_resource(connected, online_url, offline_filename,
                     integrity=None, crossorigin=None):
-    #offlinePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-    #                       "templates","offline")
-
+    
     if connected and online_url:
         url = online_url
     else:
@@ -136,6 +134,9 @@ def insert_resource(connected, online_url, offline_filename,
 
     elif url.endswith("css"):
         return '<link rel="stylesheet" href="%s">' % url
+    
+    else:
+        raise ValueError("Unknown resource type for %s" % url)
 
 
 

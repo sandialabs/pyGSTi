@@ -11,6 +11,8 @@ import sys as _sys
 import time as _time
 import collections as _collections
 import webbrowser as _webbrowser
+import shutil as _shutil
+import zipfile as _zipfile
 
 from ..objects      import VerbosityPrinter
 from ..tools        import compattools as _compat
@@ -21,6 +23,14 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
                     connected=True, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
+
+    #Copy offline directory into position if one isn't there already
+    outputDir = _os.path.dirname(outputFilename)
+    dest = _os.path.join(outputDir, "offline")
+    if not _os.path.exists(dest):
+        offlinePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                    "templates","offline")
+        _shutil.copytree(offlinePath, dest)        
             
     #Add inline or CDN javascript    
     if 'jqueryLIB' not in qtys:
@@ -92,12 +102,14 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         # '{left: "\\(", right: "\\)", display: false}'
 
     if 'plotlyexLIB' not in qtys:
-        qtys['plotlyexLIB'] = _ws.insert_resource(connected, None, "pygsti_plotly_ex.js")
+        qtys['plotlyexLIB'] = _ws.insert_resource(
+            connected, None, "pygsti_plotly_ex.js")
     
     #Add inline CSS
     if 'inlineCSS' not in qtys:
-        qtys['inlineCSS'] = "\n".join( [_ws.insert_resource(connected, None, cssFile)
-                                        for cssFile in inlineCSSnames] )
+        qtys['inlineCSS'] = "\n".join( [_ws.insert_resource(
+            connected, None, cssFile)
+                for cssFile in inlineCSSnames] )
 
     #Insert qtys into template file
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
@@ -151,6 +163,39 @@ def _errgen_formula(errgen_type):
         return "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
     else:
         return "???"
+
+def create_offline_zip(outputDir="."):
+    """ 
+    Creates a zip file containing the a directory ("offline") of files
+    need to display "offline" reports (generated with `connected=False`).  
+
+    For offline reports to display, the "offline" folder must be placed
+    in the same directory as the report's HTML file.  This function can
+    be used to easily obtain a copy of the offline folder for the purpose
+    of sharing offline reports with other people.  If you're just creating
+    your own offline reports using pyGSTi, the offline folder is
+    automatically copied into it's proper position - so you don't need 
+    to call this function.
+
+    Parameters
+    ----------
+    outputDir : str, optional
+        The directory in which "offline.zip" should be place.
+
+    Returns
+    -------
+    None
+    """
+    templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                "templates")
+
+    zipFName = _os.path.join(outputDir, "offline.zip")
+    zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)    
+    for root, dirs, files in _os.walk(_os.path.join(templatePath,"offline")):
+        for f in files:
+            fullPath = _os.path.join(root, f)
+            zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
+    zipHandle.close()
 
     
 
