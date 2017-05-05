@@ -20,7 +20,7 @@ from .              import workspace as _ws
 
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=True, verbosity=0):
+                    connected=False, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -204,7 +204,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
                                linlogPercentile=5, errgen_type="logTiG",
                                precision=None, brief=False,
                                comm=None, ws=None, auto_open=False,
-                               connected=True, verbosity=0):
+                               connected=False, verbosity=0):
 
     """
     Create a "full" single-qubit GST report.  This report gives a detailed and
@@ -381,7 +381,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logTiG",
                           precision=None, brief=False,
                           comm=None, ws=None, auto_open=False,
-                          connected=True, verbosity=0):
+                          connected=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
