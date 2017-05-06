@@ -1230,10 +1230,21 @@ class WorkspaceTable(WorkspaceOutput):
                                '      console.log("Resizable STOP table update on {tableID}");'
                                '    }}\n'
                                '    }});\n'
+                               '    console.log("Triggering creation of table {tableID} plots");\n'
+                               '    $("#{tableID}").find(".plotly-graph-div").trigger("create");\n'
                                '    //console.log("Triggering initial resize on table {tableID}");\n'
-                               '    $("#{tableID}").find(".resizable-plot").trigger("resize");\n'
+                               '    //$("#{tableID}").find(".resizable-plot").trigger("resize");\n'
+                               '}});').format(tableID=tableID)
+                
+            elif autosize:
+                #just need to trigger creation of plots (if autosize or resizable is True
+                # then plots are not created until externally triggered)
+                ret['js'] += ( '  $(document).ready(function() {{'
+                               '    console.log("Triggering creation of table {tableID} plots");\n'
+                               '    $("#{tableID}").find(".plotly-graph-div").trigger("create");\n'
                                '}});').format(tableID=tableID)
 
+                
             return ret
         else:
             assert(len(self.tables) == 1), \
@@ -1340,9 +1351,20 @@ class WorkspacePlot(WorkspaceOutput):
                            '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
                            '    }}\n'
                            '    }});\n'
+                           '    console.log("Triggering creation of plot {plotID} plots");\n'
+                           '    $("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
                            '    //console.log("Triggering initial resize on plot {plotID}");\n'
-                           '    $("#{plotID}").find(".resizable-plot").trigger("resize");\n'
+                           '    //$("#{plotID}").find(".resizable-plot").trigger("resize");\n'
                            '}});').format(plotID=plotID)
+        elif autosize:
+            #just need to trigger creation of plots (if autosize or resizable is True
+            # then plots are not created until externally triggered)
+            ret['js'] += ( '  $(document).ready(function() {{'
+                           '    console.log("Triggering creation of plot {plotID} plots");\n'
+                           '    $("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
+                           '}});').format(plotID=plotID)
+
+            
         return ret
                 
                     
