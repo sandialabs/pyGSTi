@@ -90,5 +90,5 @@ function pex_update_size(el, aspect_ratio) {
 	el.css("width", w);
         el.css("height",h);
     }
-    //console.log("pex_update_size to " + w + ", " + h + " (ratio " + aspect_ratio + ")");
+    //console.log("pex_update_size of " + el.prop('id') + " to " + w + ", " + h + " (ratio " + aspect_ratio + ")");
 }

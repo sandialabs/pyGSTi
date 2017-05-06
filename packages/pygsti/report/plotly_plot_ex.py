@@ -115,6 +115,12 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         if orig_width: fig['layout']['width'] = orig_width
         if orig_height: fig['layout']['height'] = orig_height
 
+    #EGN added: separate the HTML and JS in plot_html so we can insert
+    # initial-sizing JS between them.  NOTE: this is FRAGILE and depends
+    # on Plotly output (plot_html) being HTML followed by JS
+    i = plot_html.index('<script type="text/javascript">')
+    plot_js = plot_html[i:]
+    plot_html = plot_html[0:i]
 
     #Below if/else block added by EGN
     if 'angularaxis' in fig['layout']:
@@ -122,9 +128,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
         #  in Plotly.relayout that short-circuit when "gd.frameworks.isPolar" is true).  So,
         #  we just re-create the plot with a different size to mimic resizing.
-        resized_plot_html = plot_html.replace('"width": 123','"width": pw').replace('"height": 123','"height": ph')
-        iStart = resized_plot_html.index('<script type="text/javascript">') + len('<script type="text/javascript">')
-        resized_plot_js = resized_plot_html[iStart:-len('</script>')] #extract js
+        resized_plot_js = plot_js.replace('"width": 123','"width": pw').replace('"height": 123','"height": ph')
+        resized_plot_js = resized_plot_js[len('<script type="text/javascript">'):-len('</script>')] #extract js
         plotly_resize_js = (
             'var plotlydiv = $("#{id}");\n'
             'plotlydiv.children(".plotly").remove();\n'
@@ -144,6 +149,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     else:
         requireJSbegin = requireJSend = ""
 
+    init_script = ''
     resize_script = ''
     if resizable or autosize: # EGN added this entire block
         #'    var plotdiv = $("#{id}").closest(".pygsti-wsoutput-group");\n' Maybe use this element later,
@@ -152,17 +158,31 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         #  create multiple resizable widgets on the same wsoutput-group element (one per plotly figure).
         aspect_val = aspect_ratio if aspect_ratio else "null"
 
+        init_script = (
+            '<script type="text/javascript">\n'
+            '  {requireJSbegin}\n'
+            '  console.log("Setting initial size of {id}");\n'
+            '  pex_init_container($("#{id}"), {ow}, {oh});\n'
+            '  pex_update_size($("#{id}"), {ratio});\n' # set *initial* size of plotdiv
+            '  {requireJSend}\n'
+            '</script>\n'
+        ).format(id=plotdivid, ratio=aspect_val,
+                 ow=orig_width if orig_width else "null",
+                 oh=orig_height if orig_height else "null",
+                 requireJSbegin=requireJSbegin,
+                 requireJSend=requireJSend)        
+
+        #                '  $(document).ready(function() {{\n'
         if resizable: #bind a "resize" event to plotdiv for the container to call
             resizable_js = (
-                '  $(document).ready(function() {{\n'
                 '     var plotdiv = $("#{id}");\n'
                 '     plotdiv.addClass("resizable-plot");\n'
                 '     plotdiv.on("resize", function(event, ui) {{\n'
                 '       pex_update_size($("#{id}"), {ratio});\n'
                 '       {resizeFn}();\n'
-                '       console.log("Resizable update on {id}");\n'
-                '     }});\n'
-                '  }});\n' ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val)        
+                '       //console.log("Resized {id}");\n'
+                '     }});\n'  ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val)
+                #'  }});\n'
         else: resizable_js = ''
                     
         if autosize: # add a resize handler for the window resizing
@@ -175,7 +195,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 'function window_{resizeFn}(){{\n'
                 '    var plotdiv = $("#{id}");\n'
                 '    pex_update_size(plotdiv, {ratio});\n'
-                '    {resizeFn}(); console.log("Window resize on {id}");\n'
+                '    {resizeFn}();\n'
+                '    //console.log("Window resize on {id}");\n'
                 '}}'
             ).format(id=plotdivid, ratio=aspect_val, resizeFn=resizeFn)
         else: autosize_js = ''
@@ -187,16 +208,12 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '<script type="text/javascript">\n'
             '  {requireJSbegin}\n'
             '  function {resizeFn}() {{ {plotlyResizeJS} }}\n'
-            '  pex_init_container($("#{id}"), {ow}, {oh});\n'
-            '  pex_update_size($("#{id}"), {ratio});\n' # set *initial* size of plotdiv
             '  {resizableJS}\n'
             '  {autosizeJS}\n'
             '  {requireJSend}\n'
             '</script>\n'
-        ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val,
+        ).format(id=plotdivid, resizeFn=resizeFn,
                  plotlyResizeJS=plotly_resize_js,
-                 ow=orig_width if orig_width else "null",
-                 oh=orig_height if orig_height else "null",
                  resizableJS=resizable_js,
                  autosizeJS=autosize_js,
                  requireJSbegin=requireJSbegin,
@@ -236,6 +253,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 '<body>',
                 plotly_js_script,
                 plot_html,
+                init_script,  #EGN added
+                plot_js,      #EGN added
                 resize_script,
                 script,
                 '</body>',
@@ -256,10 +275,13 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 get_plotlyjs(),
                 '</script>',
                 plot_html,
+                init_script,  #EGN added
+                plot_js,      #EGN added
                 resize_script,  #EGN added
                 '</div>'
             ])
         else:
-            #ORIGINAL Plotly: return plot_html
-            return  '<div>' + plot_html + resize_script + "</div>" # EGN added
+            #ORIGINAL Plotly: return plot_html (would be + plot_js now)
+            return  '<div>' + plot_html + init_script + \
+                plot_js + resize_script + "</div>" # EGN added
 

@@ -1203,7 +1203,7 @@ class WorkspaceTable(WorkspaceOutput):
             if resizable:
                 ret['js'] += ( '  $(document).ready(function() {{'
                                '    $("#{tableID}").find("td").not(".plotContainingTD").each('
-                               '      function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
+                               '       function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
                                '    $("#{tableID}").resizable({{\n'
                                '    autoHide: true,\n'
                                '    resize: function( event, ui ) {{\n'
@@ -1230,9 +1230,8 @@ class WorkspaceTable(WorkspaceOutput):
                                '      console.log("Resizable STOP table update on {tableID}");'
                                '    }}\n'
                                '    }});\n'
-                               '    setTimeout( function(){{'  #TODO: figure out what load event to use
-                               '       $("#{tableID}").find(".resizable-plot").trigger("resize");'
-                               '    }}, 1000);'
+                               '    //console.log("Triggering initial resize on table {tableID}");\n'
+                               '    $("#{tableID}").find(".resizable-plot").trigger("resize");\n'
                                '}});').format(tableID=tableID)
 
             return ret
@@ -1341,9 +1340,8 @@ class WorkspacePlot(WorkspaceOutput):
                            '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
                            '    }}\n'
                            '    }});\n'
-                           '    setTimeout( function(){{'  #TODO: figure out what load event to use
-                           '       $("#{plotID}").find(".resizable-plot").trigger("resize");'
-                           '    }}, 1000);'
+                           '    //console.log("Triggering initial resize on plot {plotID}");\n'
+                           '    $("#{plotID}").find(".resizable-plot").trigger("resize");\n'
                            '}});').format(plotID=plotID)
         return ret
                 
