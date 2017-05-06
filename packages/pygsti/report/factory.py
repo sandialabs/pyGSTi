@@ -93,8 +93,8 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         qtys['katexLIB'] += ('\n<script>'
                 'document.addEventListener("DOMContentLoaded", function() {'
                 'renderMathInElement(document.body, { delimiters: ['
-                '{left: "$", right: "$", display: false},'
                 '{left: "$$", right: "$$", display: true},'
+                '{left: "$", right: "$", display: false},'
                 '] } ); });'
                 '</script>')
         # removed so parens work:
