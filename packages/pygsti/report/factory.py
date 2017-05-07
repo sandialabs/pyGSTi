@@ -30,7 +30,20 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
     if not _os.path.exists(dest):
         offlinePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                     "templates","offline")
-        _shutil.copytree(offlinePath, dest)        
+        _shutil.copytree(offlinePath, dest)
+
+    #Add favicon
+    if 'favicon' not in qtys:
+        if connected:
+            favpath = "https://raw.githubusercontent.com/pyGSTio/pyGSTi/gh-pages"
+        else:
+            favpath = "offline/images"
+            
+        qtys['favicon'] = (
+            '<link rel="icon" type="image/png" sizes="16x16" href="{fp}/favicon-16x16.png">\n'
+            '<link rel="icon" type="image/png" sizes="32x32" href="{fp}/favicon-32x32.png">\n'
+            '<link rel="icon" type="image/png" sizes="96x96" href="{fp}/favicon-96x96.png">\n'
+            ).format(fp=favpath)
             
     #Add inline or CDN javascript    
     if 'jqueryLIB' not in qtys:

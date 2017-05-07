@@ -1214,6 +1214,8 @@ class WorkspaceTable(WorkspaceOutput):
                                '      var h = ui.size.height;\n'
                                '      ui.element.find(".dataTable").css("width",w);'
                                '      ui.element.find(".dataTable").css("height",h);'
+                               '      ui.element.find(".plotContainingTD").addClass("containerAmidstResize");'
+                               '      ui.element.find(".plotContainingTD").css("height","");' # so can resize freely
                                '      console.log("Resizable table update on {tableID}");'
                                '    }},\n'
                                '    stop: function( event, ui ) {{\n'
@@ -1227,6 +1229,7 @@ class WorkspaceTable(WorkspaceOutput):
                                '                  function(){{ return $(this).height(); }}).get();'
                                '      ui.element.css("width", Math.max.apply(null, ws));'
                                '      ui.element.css("height", Math.max.apply(null, hs));'
+                               '      ui.element.find(".plotContainingTD").removeClass("containerAmidstResize");'
                                '      console.log("Resizable STOP table update on {tableID}");'
                                '    }}\n'
                                '    }});\n'
@@ -1344,10 +1347,14 @@ class WorkspacePlot(WorkspaceOutput):
                            '    resize: function( event, ui ) {{\n'
                            '      ui.element.css("max-width","none");' #remove max-width restriction
                            '      ui.element.css("max-height","none");' #remove max-height restriction
+                           '      ui.element.addClass("containerAmidstResize");'
+                           '    }},'
+                           '    stop: function( event, ui ) {{\n'
                            '      var els = ui.element.find(".resizable-plot");'
                            '      els.css("max-width","none");' #remove max-width
                            '      els.css("max-height","none");' #remove max-height                               
                            '      els.trigger("resize");'
+                           '      ui.element.removeClass("containerAmidstResize");'
                            '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
                            '    }}\n'
                            '    }});\n'
