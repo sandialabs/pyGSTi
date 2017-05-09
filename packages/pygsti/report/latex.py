@@ -246,7 +246,7 @@ def latex_value(el, precision=6, polarprecision=3,
         p = s.split('e')
         if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
-            s = p[0] + "\\e{" + ex + "}"
+            s = p[0] + "\\times 10^{" + ex + "}"
 
         #Strip superfluous endings
         if "." in s:
