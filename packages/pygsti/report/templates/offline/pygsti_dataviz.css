@@ -146,3 +146,37 @@ figure > div.pygsti-wsoutput-group {
 .containerAmidstResize div.plotly-graph-div {
     visibility: hidden;
 }
+
+.switch_container {
+    margin: 2px;
+}
+
+.switch_container span {
+    float: left;
+    font-size: 9pt;
+}
+
+.switch_container legend {
+    float: left;
+    padding: 5px;
+    font-size: 9pt;
+}
+
+.switch_container label {
+    float: left;
+    padding: 5px;
+    font-size: 9pt;
+}
+
+.switch_container .ui-slider {
+    width: 80%;
+    float: left;
+}
+
+.switch_container .ui-slider-handle {
+    font-size: 10pt;
+}
+
+fieldset {
+    border: 0px none;
+}

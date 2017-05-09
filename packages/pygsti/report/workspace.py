@@ -481,7 +481,7 @@ class Workspace(object):
             #  we need to and add result.
             key = call_key(fn, argVals) # cache by call key
             if key not in self.compCache:
-                #print("DB: computing with args = ", argsVals)
+                #print("DB: computing with args = ", argVals)
                 self.compCache[key] = fn(*argVals)
             result = self.compCache[key]
 
@@ -523,7 +523,7 @@ class Workspace(object):
             self.compCache[curkey] = fn(*valArgs)
             
         return self.compCache[curkey]
-
+        
     
 class Switchboard(_collections.OrderedDict):
     """
@@ -538,7 +538,7 @@ class Switchboard(_collections.OrderedDict):
     """
     
     def __init__(self, ws, switches, positions, types, initial_pos=None,
-                 descriptions=None, ID=None):
+                 descriptions=None, show="all", ID=None):
         """
         Create a new Switchboard.
 
@@ -552,13 +552,14 @@ class Switchboard(_collections.OrderedDict):
             Elements are lists of position labels, one per switch.
             Length must be equal to `len(switches)`.
 
-        types : list of {'buttons','dropdown','slider'}
+        types : list of {'buttons','dropdown','slider','numslider'}
             A list of switch-type strings specifying what type of switch
             each switch is.  
 
             - 'buttons': a set of toggle buttons
             - 'dropdown': a drop-down (or combo-box)
-            - 'slider': a horizontal slider
+            - 'slider': a horizontal slider (equally spaced items)
+            - 'numslider': a horizontal slider (spaced by numeric value)
 
         initial_pos : list or None (optional)
             A list of 0-based integer indices giving the initial
@@ -568,6 +569,12 @@ class Switchboard(_collections.OrderedDict):
         descriptions : list (optional)
             A string description for each of the `len(switches)` switches.
 
+        show : list (optional)
+            A list of boolean (one for each of the `len(switches)` switches)
+            indicating whether or not that switch should be rendered.  The
+            special values "all" and "none" show all or none of the switches,
+            respectively.
+            
         ID : str (optional) 
             A DOM identifier to use when rendering this Switchboard to HTML.
             Usually leaving this value as `None` is best, in which case a
@@ -590,6 +597,15 @@ class Switchboard(_collections.OrderedDict):
             self.initialPositions = _np.array(initial_pos,'i')
 
         self.descriptions = descriptions
+        
+        if show == "all":
+            self.show = [True]*len(switches)
+        elif show == "none":
+            self.show = [False]*len(switches)
+        else:
+            assert(len(show) == len(switches))
+            self.show = show
+
         self.widget = None
         super(Switchboard,self).__init__([])
 
@@ -641,16 +657,26 @@ class Switchboard(_collections.OrderedDict):
             `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
             and Javascript code, respectively.
         """
+        return self._render_base(typ, None, self.show)
+
+
+    def _render_base(self, typ, view_suffix, show):
+        """ 
+        Break off this implementation so SwitchboardViews can use.
+        """
         assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
-        for i,(name,ID,typ,posLbls,ipos) in enumerate(zip(self.switchNames,
-                                                          self.switchIDs,
-                                                          self.switchTypes,
-                                                          self.positionLabels,
-                                                          self.initialPositions)):
+        for i,(name,baseID,typ,posLbls,ipos,bShow) in enumerate(
+                zip(self.switchNames, self.switchIDs, self.switchTypes,
+                    self.positionLabels, self.initialPositions, show)):
+            
+            ID = (baseID + view_suffix) if view_suffix else baseID
+            style = "" if bShow else " style='display: none'"
+            
             if typ == "buttons":
-                html = "<fieldset id='%s'>\n" % ID
+                html  = "<div class='switch_container'%s>\n" % style
+                html += "<fieldset id='%s'>\n" % ID
                 if name:
                     html += "<legend>%s: </legend>\n" % name
                 for k,lbl in enumerate(posLbls):
@@ -658,11 +684,40 @@ class Switchboard(_collections.OrderedDict):
                     html += "<label for='%s-%d'>%s</label>\n" % (ID, k,lbl)
                     html += "<input type='radio' name='%s' id='%s-%d' value=%d%s>\n" \
                                           % (ID,ID,k,k,checked)
-                html += "</fieldset>\n"
+                html += "</fieldset></div>\n"
                 js = "  $('#%s > input').checkboxradio({ icon: false });" % ID
 
+                if view_suffix:
+                    js += "\n".join( (
+                        "function connect_%s_to_base(){" % ID,
+                        "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    $('#%s').on('change', function(event, ui) {" % baseID,
+                        "      var v = $(\"#%s > input[name='%s']:checked\").val();" % (baseID,baseID),
+                        "      var el = $(\"#%s > input[name='%s'][value=\" + v + \"]\");" % (ID,ID),
+                        "      if( el.is(':checked') == false ) { ",
+                        "        el.click();",
+                        "      }",
+                        "    });"
+                        "    $('#%s').on('change', function(event, ui) {" % ID,
+                        "      var v = $(\"#%s > input[name='%s']:checked\").val();" % (ID,ID),
+                        "      var el = $(\"#%s > input[name='%s'][value=\" + v + \"]\");" % (baseID,baseID),
+                        "      if( el.is(':checked') == false ) { ",
+                        "        el.click();",
+                        "      }",
+                        "    });",
+                        "    $('#%s').trigger('change');" % baseID,
+                        "  }",
+                        "  else {", #need to wait for base switch
+                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    console.log('%s base NOT initialized: Waiting...');" % ID,
+                        "  }",
+                        "};",
+                        "connect_%s_to_base();" % ID #start trying to connect
+                    ))
+
+
             elif typ == "dropdown":
-                html = "<div style='margin:2px'><fieldset>\n"
+                html = "<div class='switch_container'%s><fieldset>\n" % style
                 if name:
                     html += "<label for='%s'>%s</label>\n" % (ID,name)
                 html += "<select name='%s' id='%s'>\n" % (ID,ID)
@@ -671,15 +726,39 @@ class Switchboard(_collections.OrderedDict):
                     html += "<option value=%d%s>%s</option>\n" % (k,selected,lbl)
                 html += "</select>\n</fieldset></div>\n"
                 js = "  $('#%s').selectmenu();" % ID
-            
-            elif typ == "slider":
-                
-                def is_number(x):
-                    try: float(x)
-                    except: return False
-                    return True
 
-                if all([is_number(v) for v in posLbls]):
+                if view_suffix:
+                    js += "\n".join( (
+                        "function connect_%s_to_base(){" % ID,
+                        "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    $('#%s').on('selectmenuchange', function(event, ui) {" % baseID,
+                        "      var v = $('#%s').val();" % baseID,
+                        "      var el = $('#%s');" % ID,
+                        "      if( el.val() != v ) { ",
+                        "        el.val(v).selectmenu('refresh');",
+                        "      }",
+                        "    });"
+                        "    $('#%s').on('selectmenuchange', function(event, ui) {" % ID,
+                        "      var v = $('#%s').val();" % ID,
+                        "      var el = $('#%s');" % baseID,
+                        "      if( el.val() != v ) { ",
+                        "        el.val(v).selectmenu('refresh').trigger('selectmenuchange');",
+                        "      }",
+                        "    });",
+                        "    $('#%s').trigger('selectmenuchange');" % baseID,
+                        "    console.log('%s connected to base');\n" % ID,
+                        "  }",
+                        "  else {", #need to wait for base switch
+                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    console.log('%s base NOT initialized: Waiting...');" % ID,
+                        "  }",
+                        "};",
+                        "connect_%s_to_base();" % ID #start trying to connect
+                    ))
+            
+            elif typ == "slider" or typ == "numslider":
+                
+                if typ == "numslider":
                     float_vals = list(map(float,posLbls))
                     m,M = min(float_vals),max(float_vals)
                 else:
@@ -689,34 +768,48 @@ class Switchboard(_collections.OrderedDict):
                 ml = max(list(map(len,posLbls)))
                 w = 3.0 #1.0*ml
 
-                html = "<div id='%s-container' style='margin:2px'><fieldset>\n" % ID
+                html  = "<div id='%s-container' class='switch_container'%s>\n" \
+                                  % (ID,style)
+                html += "<fieldset>\n"
                 if name:
-                    html += "<label for='%s' style='float:left'>%s</label>\n" % (ID,name)
-                html += "<div name='%s' id='%s' style='width:80%%;float:left'>\n" % (ID,ID)
+                    html += "<label for='%s'>%s</label>\n" % (ID,name)
+                html += "<div name='%s' id='%s'>\n" % (ID,ID)
                 html += "<div id='%s-handle' class='ui-slider-handle'></div>" % ID
                 html += "</div>\n</fieldset></div>\n"
                 #                    "       $('#%s-container').css({'margin-top':'%fem'});" % (ID,1.7/2),
 
-                js  = "var %s_float_values = [" % ID + \
-                            ",".join(map(str,float_vals)) + "];\n"
-                js += "var %s_str_values = [" % ID + \
-                            ",".join(["'%s'" % s for s in posLbls]) + "];\n"
-                js += "window.%s_float_values = %s_float_values;\n" % (ID,ID) #declare globally
+                js = ""
+                if view_suffix is None:
+                    js  = "var %s_float_values = [" % ID + \
+                                ",".join(map(str,float_vals)) + "];\n"
+                    js += "var %s_str_values = [" % ID + \
+                                ",".join(["'%s'" % s for s in posLbls]) + "];\n"
+                    js += "window.%s_float_values = %s_float_values;\n" % (ID,ID) #ensure declared globally
+                    js += "window.%s_str_values = %s_str_values;\n" % (ID,ID) #ensure declared globally
 
-                #js += "\n".join( (
-                #    "  function %s_snapper(event, ui) {" % ID,
-                #    "        var includeLeft = event.keyCode != $.ui.keyCode.RIGHT;",
-                #    "        var includeRight = event.keyCode != $.ui.keyCode.LEFT;",
-                #    "        var iValue = findNearest(includeLeft, includeRight, ui.value);",
-                #    "        $('#%s').slider('value', %s_float_values[iValue]);" % (ID,ID),
-                #    "        $('#%s-handle').text(%s_str_values[iValue]);" % (ID,ID),
-                #    "        return false;"
-                #    "    }" ) )
+                    js += "\n".join( (
+                        "function findNearest_%s(includeLeft, includeRight, value) {" % ID,
+                        "  var nearest = null;",
+                        "  var diff = null;",
+                        "  for (var i = 0; i < %s_float_values.length; i++) {" % ID,
+                        "    if ((includeLeft && %s_float_values[i] <= value) ||" % ID,
+                        "        (includeRight && %s_float_values[i] >= value)) {" % ID,
+                        "      var newDiff = Math.abs(value - %s_float_values[i]);" % ID,
+                        "      if (diff == null || newDiff < diff) {",
+                        "        nearest = i;",
+                        "        diff = newDiff;",
+                        "      }",
+                        "    }",
+                        "  }",
+                        "  return nearest;",
+                        "}",
+                        "window.findNearest_%s = findNearest_%s;\n" % (ID,ID)))
                 
                 js += "\n".join( (
                     "  $('#%s').slider({" % ID,
                     "     orientation: 'horizontal', range: false,",
                     "     min: %f, max: %f, step: %f," % (m,M,(M-m)/100.0),
+                    "     value: %f," % float_vals[ipos],
                     "     create: function() {",
                     "       $('#%s-handle').text('%s');" % (ID,posLbls[ipos]),
                     "       $('#%s-handle').css({'width':'%fem','height':'%fem'});" % (ID,w,1.7),
@@ -727,34 +820,42 @@ class Switchboard(_collections.OrderedDict):
                     "     slide: function(event, ui) {",
                     "        var includeLeft = event.keyCode != $.ui.keyCode.RIGHT;",
                     "        var includeRight = event.keyCode != $.ui.keyCode.LEFT;",
-                    "        var iValue = findNearest(includeLeft, includeRight, ui.value);",
-                    "        $('#%s').slider('value', %s_float_values[iValue]);" % (ID,ID),
-                    "        $('#%s-handle').text(%s_str_values[iValue]);" % (ID,ID),
+                    "        var iValue = findNearest_%s(includeLeft, includeRight, ui.value);" % baseID,
+                    "        if($('#%s').slider('value') != %s_float_values[iValue]) {" % (ID,baseID),
+                    "          $('#%s-handle').text(%s_str_values[iValue]);" % (baseID,baseID),
+                    "          $('#%s').slider('value', %s_float_values[iValue]);" % (baseID,baseID),
+                    "        }"
                     "        return false;"
                     "    },",
-                    "  });" ))
-                # $("#price-amount").html('$' + slider.slider('values', 0) + ' - $' + slider.slider('values', 1)
+                    "  });",
+                ))
 
-                js += "\n".join( (
-                    "function findNearest(includeLeft, includeRight, value) {",
-                    "  var nearest = null;",
-                    "  var diff = null;",
-                    "  for (var i = 0; i < %s_float_values.length; i++) {" % ID,
-                    "    if ((includeLeft && %s_float_values[i] <= value) ||" % ID,
-                    "        (includeRight && %s_float_values[i] >= value)) {" % ID,
-                    "      var newDiff = Math.abs(value - %s_float_values[i]);" % ID,
-                    "      if (diff == null || newDiff < diff) {",
-                    "        nearest = i;",
-                    "        diff = newDiff;",
-                    "      }",
-                    "    }",
-                    "  }",
-                    "  return nearest;",
-                    "}",
-                    "window.findNearest_%s = findNearest;\n" % ID))
+                if view_suffix:
+                    # slide events always change *base* (non-view) slider (see above),
+                    # which causes a change event to fire.  Views handle this event
+                    # to update their own slider values.
+                    js += "\n".join( (
+                        "function connect_%s_to_base(){" % ID,
+                        "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    $('#%s').on('slidechange', function(event, ui) {" % baseID,
+                        "      $('#%s').slider('value', ui.value);" % ID,
+                        "      $('#%s-handle').text( $('#%s-handle').text() );" % (ID,baseID),
+                        "      });",
+                        "    var mock_ui = { value: $('#%s').slider('value') };" % baseID, #b/c handler uses ui.value
+                        "    $('#%s').trigger('slidechange', mock_ui);" % baseID,
+                        "  }",
+                        "  else {", #need to wait for base switch
+                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    console.log('%s base NOT initialized: Waiting...');" % ID,
+                        "  }",
+                        "};",
+                        "connect_%s_to_base();" % ID #start trying to connect
+                    ))
                 
             else:
                 raise ValueError("Unknown switch type: %s" % typ)
+
+            js += "$('#%s').addClass('initializedSwitch');\n" % ID
 
             switch_html.append(html)
             switch_js.append(js)
@@ -785,9 +886,11 @@ class Switchboard(_collections.OrderedDict):
             return "$('#%s').on('change', function() {" % ID
         elif typ == "dropdown":
             return "$('#%s').on('selectmenuchange', function() {" % ID
-        elif typ == "slider":
-            #return "$('#%s').on('slidechange', function() {" % ID #only when slider stops
-            return "$('#%s').on('slide', function() {" % ID #only when slider stops
+        elif typ == "slider" or typ == "numslider":
+            return "$('#%s').on('slidechange', function() {" % ID #only when slider stops
+            #return "$('#%s').on('slide', function() {" % ID # continuous on
+             # mouse move - but doesn't respond correctly to arrows, so seems
+             # better to use 'slidechange'
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
@@ -811,7 +914,7 @@ class Switchboard(_collections.OrderedDict):
             return "$(\"#%s > input[name='%s']:checked\").val()" % (ID,ID)
         elif typ == "dropdown":
             return "$('#%s').val()" % ID
-        elif typ == "slider":
+        elif typ == "slider" or typ == "numslider":
             #return "%s_float_values.indexOf($('#%s').slider('option', 'value'))" % (ID,ID)
             return "findNearest_%s(true,true,$('#%s').slider('option', 'value'))" % (ID,ID)
         else:
@@ -844,11 +947,123 @@ class Switchboard(_collections.OrderedDict):
         #self.widget.value = content
         _display(_HTML(content)) #self.widget)
 
+    def view(self, switches="all", idsuffix="auto"):
+        """
+        Return a view of this Switchboard.
+        
+        Parameters
+        ----------
+        switches : list, optional
+            The names of the switches to include in this view. The special
+            value "all" includes all of the switches in the view.
+
+        idsuffix : str, optional
+            A suffix to append to the DOM ID of this switchboard when
+            rendering the view.  If "auto", a random suffix is used.
+
+        Returns
+        -------
+        SwitchboardView
+        """
+        if switches == "all":
+            show = [True]*len(self.switchNames)
+        else:
+            show = [False]*len(self.switchNames)
+            for nm in switches:
+                show[self.switchNames.index(nm)] = True
+                
+        return SwitchboardView(self, idsuffix, show)
+
     def __getattr__(self, attr):
         if attr in self:
             return self[attr]
         return getattr(self.__dict__,attr)
 
+
+class SwitchboardView(object):
+    """
+    A duplicate or "view" of an existing switchboard which logically
+    represents the *same* set of switches.  Thus, when switches are
+    moved on the duplicate board, switches will move on the original
+    (and vice versa).
+    """
+
+    def __init__(self, switchboard, idsuffix="auto", show="all"):
+        """
+        Create a new SwitchboardView
+
+        Parameters
+        ----------
+        switchboard : Switchboard
+            The base switch board.
+
+        idsuffix : str, optional
+            A suffix to append to the DOM ID of this switchboard
+            when rendering the view.  If "auto", a random suffix
+            is used.
+                
+        show : list (optional)
+            A list of booleans indicating which switches should be rendered.
+            The special values "all" and "none" show all or none of the
+            switches, respectively.
+        """
+        if idsuffix == "auto":
+            self.idsuffix = "v" + randomID()
+        else:
+            self.idsuffix = idsuffix
+
+        if show == "all":
+            self.show = [True]*len(switchboard.switchNames)
+        elif show == "none":
+            self.show = [False]*len(switchboard.switchNames)
+        else:
+            assert(len(show) == len(switchboard.switchNames))
+            self.show = show
+
+        self.switchboard = switchboard
+
+    def render(self, typ="html"):
+        """
+        Render this Switchboard into the requested format.
+
+        The returned string(s) are intended to be used to embedded a 
+        visualization of this object within a larger document.
+
+        Parameters
+        ----------
+        typ : {"html"}
+            The format to render as.  Currently only HTML is supported.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings whose keys indicate which portion of
+            the embeddable output the value is.  Keys will vary for different
+            `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
+            and Javascript code, respectively.
+        """
+        return self.switchboard._render_base(typ, self.idsuffix, self.show)
+
+    def display(self):
+        """
+        Display this switchboard within an iPython notebook.
+
+        Calling this function requires that you are in an
+        iPython environment, and really only makes sense 
+        within a notebook.
+
+        Returns
+        -------
+        None
+        """
+        from IPython.display import display as _display
+        from IPython.display import HTML as _HTML
+
+        out = self.render("html")
+        content = "<script>\n" + \
+                  "require(['jquery','jquery-UI'],function($,ui) {" + \
+                  out['js'] + " });</script>" + out['html']
+        _display(_HTML(content))
         
 
 
@@ -1038,26 +1253,36 @@ class WorkspaceOutput(object):
 
         #build HTML as container div containing one or more plot divs
         # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
-        html = "<div id='%s' class='pygsti-wsoutput-group' style='display: hidden'>\n" % ID
+        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
         html += "\n".join(div_htmls) + "\n</div>\n"
 
         #build javascript to map switch positions to div_ids
-        #js  = "$(document).ready(function() {\n"
-        js  = "$( function() {\n"
-        js += "  var switchmap_%s = new Array();\n" % ID
+        js = "var switchmap_%s = new Array();\n" % ID
         for switchPositions, iDiv in switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             div_id = div_ids[iDiv]
             flatPositions = []
             for singleBoardSwitchPositions in switchPositions:
                 flatPositions.extend( singleBoardSwitchPositions )                
-            js += "  switchmap_%s[ [%s] ] = '%s';\n" % \
+            js += "switchmap_%s[ [%s] ] = '%s';\n" % \
                     (ID, ",".join(map(str,flatPositions)), div_id)
 
-        js += "  window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #make a *global* variable
+        js += "window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #ensure a *global* variable
         js += "\n"
 
-        
+
+        cnd = " && ".join([ "$('#switchbd%s_%d').hasClass('initializedSwitch')"
+                            % (sb.ID,switchIndex)
+                            for sb, switchInds in zip(switchboards, switchIndices)
+                            for switchIndex in switchInds ])
+        if len(cnd) == 0: cnd = "true"
+
+        #define fn to "connect" output object to switchboard, i.e.
+        #  register event handlers for relevant switches so output object updates
+        js += "function connect_%s_to_switches(){" % ID
+        js += "  if(%s) {" % cnd  # "if switches are ready"
+        # loop below adds event bindings to the body of this if-block
+                
         #build change event listener javascript
         handler_fns_js = []
         for sb, switchInds in zip(switchboards, switchIndices):
@@ -1073,21 +1298,31 @@ class WorkspaceOutput(object):
                     for switchIndex2 in switchInds2:
                         handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
                 handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
-                #DEBUG: handler_js += "  alert('%s: idToShow = ' + idToShow);\n" % ID
                 handler_js += "  $( '#%s' ).children().hide();\n" % ID
                 handler_js += "  $( '#' + idToShow ).show();\n"
                 handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
                 handler_js += "}\n"
                 handler_fns_js.append(handler_js)
 
-                # on document ready
-                js += "  " + sb.get_switch_change_handlerjs(switchIndex) + \
+                # part of if-block ensuring switches are ready (i.e. created)
+                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
                               "%s(); });\n" % fname
-                js += "  %s();\n" % fname # call function to update visibility
+                js += "    %s();\n" % fname # call function to update visibility
 
-        #once all visibility update are done, show parent container
-        js += "$( '#%s' ).show()\n" % ID
-        js += "});\n\n" # end on-ready handler
+        # end if-block
+        js += "    console.log('Switches initialized: %s handlers set');\n" % ID
+        js += "    $( '#%s' ).show()\n" % ID  #visibility updates are done: show parent container
+        js += "  }\n" #ends if-block
+        js += "  else {\n"  # switches aren't ready - so wait
+        js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
+        js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
+        js += "  }\n"
+        js += "};\n" #end of connect function
+        
+        #on-ready handler starts trying to connect to switches
+        js += "$(document).ready(function() {\n" #
+        js += "  connect_%s_to_switches();\n" % ID
+        js += "});\n\n"
         js += "\n".join(handler_fns_js)
 
         return {'html':html, 'js':js}
@@ -1202,8 +1437,13 @@ class WorkspaceTable(WorkspaceOutput):
                                      self.switchboards, self.sbSwitchIndices)
             if resizable:
                 ret['js'] += ( '  $(document).ready(function() {{'
-                               '    $("#{tableID}").find("td").not(".plotContainingTD").each('
-                               '       function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
+                               '    $("#{tableID}").children("div").each( function(k,div) {{'
+                               '      var was_visible = $(div).is(":visible");\n'
+                               '      $(div).show();\n'
+                               '      $(div).find("td").not(".plotContainingTD").each('
+                               '        function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
+                               '      if(!was_visible) {{ $(div).hide(); }}\n' #Table must be visible to compute widths correctly
+                               '    }});\n'
                                '    $("#{tableID}").resizable({{\n'
                                '    autoHide: true,\n'
                                '    resize: function( event, ui ) {{\n'
@@ -1219,7 +1459,7 @@ class WorkspaceTable(WorkspaceOutput):
                                '      console.log("Resizable table update on {tableID}");'
                                '    }},\n'
                                '    stop: function( event, ui ) {{\n'
-                               '      var els = ui.element.find(".resizable-plot");'
+                               '      var els = ui.element.find(".resizable-plot.pygsti-group-master");'
                                '      els.css("max-width","none");' #remove max-width
                                '      els.css("max-height","none");' #remove max-height                               
                                '      els.trigger("resize");'
@@ -1236,7 +1476,7 @@ class WorkspaceTable(WorkspaceOutput):
                                '    console.log("Triggering creation of table {tableID} plots");\n'
                                '    $("#{tableID}").find(".plotly-graph-div").trigger("create");\n'
                                '    //console.log("Triggering initial resize on table {tableID}");\n'
-                               '    //$("#{tableID}").find(".resizable-plot").trigger("resize");\n'
+                               '    //$("#{tableID}").find(".pygsti-group-master").trigger("resize");\n'
                                '}});').format(tableID=tableID)
                 
             elif autosize:
@@ -1327,13 +1567,25 @@ class WorkspacePlot(WorkspaceOutput):
             iEnd = html.index('"', iStart+8)
             return html[iStart+8:iEnd]
 
+        #pick "master" plot, whose resizing dictates the resizing of other plots,
+        # as the largest-height plot.
+        iMaster = None; maxH = 0;
+        for i,fig in enumerate(self.figs):
+            if 'height' in fig['layout']:
+                if fig['layout']['height'] > maxH:
+                    iMaster, maxH = i, fig['layout']['height'];
+        assert(iMaster is not None)
+          #maybe we'll deal with this case in the future by setting 
+          # master=None below, but it's unclear whether this will is needed.
+        
         divHTML = []
         divIDs = []
-        for fig in self.figs:
+        for i,fig in enumerate(self.figs):
             #use auto-sizing (fluid layout)
             fig_html = _plot_ex(fig, include_plotlyjs=False, output_type='div',
                                 show_link=False, global_requirejs=global_requirejs,
-                                autosize=autosize, resizable=resizable, lock_aspect_ratio=True)
+                                autosize=autosize, resizable=resizable,
+                                lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
             divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_html)
             divIDs.append(getPlotlyDivID(fig_html))
             
@@ -1350,7 +1602,7 @@ class WorkspacePlot(WorkspaceOutput):
                            '      ui.element.addClass("containerAmidstResize");'
                            '    }},'
                            '    stop: function( event, ui ) {{\n'
-                           '      var els = ui.element.find(".resizable-plot");'
+                           '      var els = ui.element.find(".resizable-plot.pygsti-group-master");'
                            '      els.css("max-width","none");' #remove max-width
                            '      els.css("max-height","none");' #remove max-height                               
                            '      els.trigger("resize");'
@@ -1359,17 +1611,16 @@ class WorkspacePlot(WorkspaceOutput):
                            '    }}\n'
                            '    }});\n'
                            '    console.log("Triggering creation of plot {plotID} plots");\n'
-                           '    $("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
-                           '    //console.log("Triggering initial resize on plot {plotID}");\n'
-                           '    //$("#{plotID}").find(".resizable-plot").trigger("resize");\n'
+                           '    $("#{plotID}").find(".pygsti-group-master").trigger("create");\n'
                            '}});').format(plotID=plotID)
         elif autosize:
             #just need to trigger creation of plots (if autosize or resizable is True
             # then plots are not created until externally triggered)
             ret['js'] += ( '  $(document).ready(function() {{'
                            '    console.log("Triggering creation of plot {plotID} plots");\n'
-                           '    $("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
+                           '    $("#{plotID}").find(".pygsti-group-master").trigger("create");\n'
                            '}});').format(plotID=plotID)
+            #                           '    //$("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
 
             
         return ret

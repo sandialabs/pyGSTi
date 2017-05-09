@@ -5,7 +5,8 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, output_type='file', include_plotlyjs=True,
             filename='temp-plot.html', auto_open=True, image=None,
             image_filename='plot_image', image_width=800, image_height=600,
-            global_requirejs=False, resizable=False, autosize=False, lock_aspect_ratio=False):
+            global_requirejs=False, resizable=False, autosize=False,
+            lock_aspect_ratio=False, master=True):
     """ Create a plotly graph locally as an HTML document or string.
 
     Example:
@@ -160,19 +161,23 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         resizeFn="resize_%s" % str(plotdivid).replace('-','') #EGN added    
         aspect_val = aspect_ratio if aspect_ratio else "null"
 
-        if resizable: #bind a "resize" event to plotdiv for the container to call
-            resizable_js = (
+        resizable_js = ''
+        autosize_js = ''
+
+        #bind a "resize" event to plotdiv for the container to call                
+        if resizable or (not master and autosize): 
+            resizable_js += (
                 '     var plotdiv = $("#{id}");\n'
                 '     plotdiv.addClass("resizable-plot");\n'
-                '     plotdiv.on("resize", function(event, ui) {{\n'
-                '       pex_update_size($("#{id}"), {ratio});\n'
-                '       {resizeFn}();\n'
+                '     plotdiv.on("resize", function(event,fracw,frach) {{\n'
+                '       {resizeFn}(fracw, frach);\n'
                 '       //console.log("Resized {id}");\n'
                 '     }});\n'
             ).format(id=plotdivid, resizeFn=resizeFn, ratio=aspect_val)
-        else: resizable_js = ''
-                    
-        if autosize: # add a resize handler for the window resizing
+
+            
+        # add a resize handler for the window resizing
+        if autosize and master: 
             autosize_js = (
                 'var timeout_{resizeFn};\n'
                 'window.addEventListener("resize",function() {{\n'
@@ -185,24 +190,30 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 '    var plotdiv = $("#{id}");\n'
                 '    var box = pex_get_container(plotdiv);\n'
                 '    box.removeClass("containerAmidstResize");'
-                '    pex_update_size(plotdiv, {ratio});\n'
                 '    {resizeFn}();\n'
                 '    //console.log("Window resize on {id}");\n'
                 '}}'
             ).format(id=plotdivid, ratio=aspect_val, resizeFn=resizeFn)
-        else: autosize_js = ''
+
+        
+        groupclass = "pygsti-group-master" if master else "pygsti-group-slave"
 
         full_script = (
             '<script type="text/javascript">\n'
             '  {requireJSbegin}\n'
             '  console.log("Setting initial size of {id}");\n'
+            '  $("#{id}").addClass("{groupclass}");\n'
             '  pex_init_container($("#{id}"), {ow}, {oh});\n'
-            '  function {createFn}() {{\n'
-            '     pex_update_size($("#{id}"), {ratio});\n' # set *initial* size of plotdiv
+            '  function {createFn}(wfrac, hfrac) {{\n'
+            '     pex_update_size($("#{id}"), {ratio}, wfrac, hfrac, {ow}, {oh});\n' # set *initial* size of plotdiv
+            '     pex_create_slaves($("#{id}"), {ow}, {oh});\n'
             '     {plotlyCreateJS} \n}}\n'
-            '  function {resizeFn}() {{ {plotlyResizeJS} }}\n'
-            '  $("#{id}").on("create", function(event, ui) {{\n' #always add create handler
-            '    {createFn}();\n'
+            '  function {resizeFn}(wfrac, hfrac) {{ \n'
+            '    pex_update_size($("#{id}"), {ratio}, wfrac, hfrac, {ow}, {oh});\n'
+            '    pex_resize_slaves($("#{id}"), {ow}, {oh});\n'
+            '    {plotlyResizeJS} \n}}\n'
+            '  $("#{id}").on("create", function(event, fracw, frach) {{\n' #always add create handler
+            '    {createFn}(fracw, frach);\n'
             '    console.log("Created {id}");\n'
             '  }});\n'
             '  {resizableJS}\n'
@@ -210,6 +221,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '  {requireJSend}\n'
             '</script>\n'
         ).format(id=plotdivid, ratio=aspect_val,
+                 groupclass=groupclass,
                  ow=orig_width if orig_width else "null",
                  oh=orig_height if orig_height else "null",
                  createFn=createFn,

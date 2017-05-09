@@ -44,7 +44,31 @@ function pex_init_container(el, natural_width, natural_height) {
 }
 
 
-function pex_update_size(el, aspect_ratio) {
+function pex_update_size(el, aspect_ratio, frac_width, frac_height, orig_width, orig_height) {
+
+    var	minfrac	= 0.0; //maybe adjust this later as a possible option?
+    if(el.hasClass("pygsti-group-slave")) {
+	//if(frac_width > 0 && frac_height > 0) {
+	//just set requested fractional widths and height
+        fw = Math.max(minfrac, frac_width);
+        fh = Math.max(minfrac, frac_height);
+        ow = parseFloat(orig_width);
+        oh = parseFloat(orig_height);
+        el.css("width", fw*ow);
+        el.css("height",fh*oh);
+        //console.log("SLAVE Updating orig (" + ow + "," + oh + ") => (" + (fw*ow) + "," + (fh*oh) + ") fracs = " + fw + "," + fh);
+        return;
+    }
+
+    
+    if(el.hasClass("pygsti-group-slave")) {
+        //if(frac_width > 0 && frac_height > 0) {
+	//just set requested fractional widths and height
+	el.css("width", w*orig_width);
+        el.css("height",h*orig_height);
+	return;
+    }	
+    
     //Overall strategy:
     // 1) container is expected to be setup such that its width will 
     //    automatically expand as desired (usually up to some "natural width").
@@ -92,3 +116,25 @@ function pex_update_size(el, aspect_ratio) {
     }
     //console.log("pex_update_size of " + el.prop('id') + " to " + w + ", " + h + " (ratio " + aspect_ratio + ")");
 }
+
+
+function pex_create_slaves(el, orig_width, orig_height) {
+    if(el.hasClass("pygsti-group-master")) {
+	var grp = el.closest(".pygsti-wsoutput-group");
+	var wfrac = parseFloat(el.css('width')) / orig_width;
+	var hfrac = parseFloat(el.css('height')) / orig_height;
+	grp.find(".pygsti-group-slave").trigger("create", [wfrac,hfrac]);
+	//console.log("Creating slaves with frac = " + wfrac + "," + hfrac + " (orig = " + orig_width + "," + orig_height + ")  (cur = " + parseFloat(el.css('width')) + "," + parseFloat(el.css('height')) + ")");
+    }
+}
+
+function pex_resize_slaves(el, orig_width, orig_height) {
+    if(el.hasClass("pygsti-group-master")) {
+	var grp = el.closest(".pygsti-wsoutput-group");
+	var wfrac = parseFloat(el.css('width')) / orig_width;
+	var hfrac = parseFloat(el.css('height')) / orig_height;
+	grp.find(".pygsti-group-slave").trigger("resize", [wfrac,hfrac]);
+	//console.log("Resizing slaves with frac = " + wfrac + "," + hfrac + " (orig = " + orig_width + "," + orig_height + ")  (cur = " + parseFloat(el.css('width')) + "," + parseFloat(el.css('height')) + ")");
+    }
+}
+

@@ -615,8 +615,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                 )
                 
     layout = go.Layout(
-        width = 50*(gateMatrix.shape[1]+xextra)*scale,
-        height = 50*(gateMatrix.shape[0]+yextra)*scale,
+        width = 30*(gateMatrix.shape[1]+xextra)*scale,
+        height = 30*(gateMatrix.shape[0]+yextra)*scale,
         xaxis=dict(
             side="top",
             title=xlabel,
