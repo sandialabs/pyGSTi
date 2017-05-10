@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import itertools as _itertools
 import collections as _collections
 import os as _os
+import shutil as _shutil
 import numpy as _np
 import uuid as _uuid
 import random as _random
@@ -104,23 +105,41 @@ def randomID():
     return str(int(10000*_random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
-#OLD: shouldn't need this anymore (TODO: REMOVE)
-#def read_contents(filename):
-#    contents = None
-#    with open(filename) as f:
-#        contents = f.read()
-#        try: # to convert to unicode since we use unicode literals
-#            contents = contents.decode('utf-8')
-#        except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
-#    return contents
+def read_contents(filename):
+    contents = None
+    with open(filename) as f:
+        contents = f.read()
+        try: # to convert to unicode since we use unicode literals
+            contents = contents.decode('utf-8')
+        except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+    return contents
 
 def insert_resource(connected, online_url, offline_filename,
                     integrity=None, crossorigin=None):
     
-    if connected and online_url:
-        url = online_url
+    if connected:
+        if online_url:
+            url = online_url
+        else:
+            #insert resource inline, since we don't want
+            # to depend on offline/ directory when connected=True
+            assert(offline_filename), \
+                "connected=True without `online_url` requires offline filename!"
+            absname = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                    "templates","offline",offline_filename)
+            
+            if offline_filename.endswith("js"):
+                return '<script type="text/javascript">\n' + \
+                    read_contents(absname) + "</script>\n"
+            
+            elif offline_filename.endswith("css"):
+                return '<style>\n' + read_contents(absname) + "</style>\n"
+            
+            else:
+                raise ValueError("Unknown resource type for %s" % offline_filename)
+            
     else:
-        assert(offline_filename), "Requires offline filename!"
+        assert(offline_filename), "connected=False requires offline filename"
         url = "offline/" + offline_filename
         
     if url.endswith("js"):
@@ -139,7 +158,25 @@ def insert_resource(connected, online_url, offline_filename,
         raise ValueError("Unknown resource type for %s" % url)
 
 
+def rsync_offline_dir(outputDir):
+    #Copy offline directory into outputDir updating any outdated files
+    destDir = _os.path.join(outputDir, "offline")
+    offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                               "templates","offline")
+    if not _os.path.exists(destDir):
+        _shutil.copytree(offlineDir, destDir)
+        
+    else:
+        for dirpath, dirnames, filenames in _os.walk(offlineDir):
+            for nm in filenames:
+                srcnm = _os.path.join(dirpath, nm)
+                relnm = _os.path.relpath(srcnm, offlineDir)
+                destnm = _os.path.join(destDir, relnm)
 
+                if not _os.path.isfile(destnm) or \
+                    (_os.path.getmtime(destnm) < _os.path.getmtime(srcnm)):
+                    _shutil.copyfile(srcnm, destnm)
+                    #print("COPYING to %s" % destnm)
 
 
 class Workspace(object):
@@ -298,6 +335,17 @@ class Workspace(object):
         global _PYGSTI_WORKSPACE_INITIALIZED
 
         if not _PYGSTI_WORKSPACE_INITIALIZED:
+
+            if not connected:
+                rsync_offline_dir(_os.getcwd())
+
+            #If offline, add JS to head that will load local requireJS and/or
+            # jQuery if needed (jupyter-exported html files always use CDN
+            # for these).
+            if not connected:
+                script = "<script src='offline/jupyterlibload.js'><\/script>"
+                _display(_HTML(script))
+            
             # The polling here is to ensure that plotly.js has already been loaded before
             # setting display alignment in order to avoid a race condition.
             script = """
@@ -315,7 +363,7 @@ class Workspace(object):
             _display(_HTML(insert_resource(connected,None,"pygsti_plotly_ex.js")))
 
             # Load style sheets for displaying tables
-            _display(_HTML(insert_resource(connected,None,"dataTable.css")))
+            _display(_HTML(insert_resource(connected,None,"pygsti_dataviz.css")))
 
             #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
             jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
@@ -331,25 +379,49 @@ class Workspace(object):
                            ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL +
                            "</style>"))
         
+            
+            # Note: within a jupyter notebook, the requireJS base path appears
+            # to be "/static", so just setting the path to "offline/myfile"
+            # would attempt to load "/static/offline/myfile.js" which points
+            # somewhere like .../site-packages/notebook/static/offline/myfile".
+            # So:
+            # - when in a notebook, the path needs to be "../files" followed
+            # by the notebook's path, which we can obtain via the notebook JS
+            # object.
+            # - when *not* in a notebook, the requireJS base defaults to the
+            # current page, so just using "offline/myfile" works fine then.
+
             #Tell require.js where jQueryUI is
             if connected:
                 path = "https://code.jquery.com/ui/1.12.1/jquery-ui.min"
             else:
                 path = "offline/jquery-ui.min"
-
+                
             script = (
                 "<script>"
+                "var pth;"
+                "if(typeof IPython !== 'undefined') {{"
+                "  var nb = IPython.notebook;"
+                "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
+                "  pth = '../files' + nb.base_url + relpath + '{path}';"
+                "  console.log('IPYTHON DETECTED - using path ' + pth);"
+                "}}"
+                "else {{"
+                "  pth = '{path}';"
+                "  console.log('NO IPYTHON DETECTED - using path ' + pth);"
+                "}}"
                 "requirejs.config({{ "
-                "   paths: {{ 'jquery-UI': ['{path}']}},"
+                "   paths: {{ 'jquery-UI': [pth]}},"
                 "}});"
-                "require(['jquery-UI'],function(ui) {{"
-                "  window.jQueryUI=ui; }});"
+                "require(['jquery', 'jquery-UI'],function($,ui) {{"
+                "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
                 "</script>").format(path=path)
             _display(_HTML(script))
     
     
             #MathJax (& jQuery) are already loaded in ipython notebooks, so no need
-            # to include them here
+            # to include them here.  In the future, we could try to pull in a *local*
+            # copy of mathjax when connected=False, but don't worry about this for now.
             
             # Initialize Plotly libraries
             _plotly_offline.init_notebook_mode(connected)

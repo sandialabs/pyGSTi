@@ -11,7 +11,6 @@ import sys as _sys
 import time as _time
 import collections as _collections
 import webbrowser as _webbrowser
-import shutil as _shutil
 import zipfile as _zipfile
 
 from ..objects      import VerbosityPrinter
@@ -24,13 +23,10 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
-    #Copy offline directory into position if one isn't there already
-    outputDir = _os.path.dirname(outputFilename)
-    dest = _os.path.join(outputDir, "offline")
-    if not _os.path.exists(dest):
-        offlinePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                    "templates","offline")
-        _shutil.copytree(offlinePath, dest)
+    #Copy offline directory into position
+    if not connected:
+        outputDir = _os.path.dirname(outputFilename)
+        _ws.rsync_offline_dir(outputDir)
 
     #Add favicon
     if 'favicon' not in qtys:
