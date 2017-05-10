@@ -267,7 +267,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     if gauge_group is None:
         gauge_group = gateset.default_gauge_group
         if gauge_group is None:
-            #don't do any gauge optimization (assum trivial gauge group)
+            #don't do any gauge optimization (assume trivial gauge group)
+            _warnings.warn("No gauge group specified, so no gauge optimization performed.")
             if returnAll:
                 return None, None, gateset.copy() 
             else: return gateset.copy()
