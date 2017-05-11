@@ -83,12 +83,13 @@ class ReportTable(object):
                        latex += " \\\\ \hline\n"
 
             latex += "\end{%s}\n" % table
-            return latex
+            return { 'latex': latex }
 
 
         elif fmt == "html":
 
             html = ""
+            js = ""
             
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
@@ -114,6 +115,11 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     html += "<tr>"
                     for formatted_cell in formatted_rowData:
+                        if isinstance(formatted_cell,dict):
+                            #cell contains javascript along with html
+                            js += formatted_cell['js'] + '\n'
+                            formatted_cell = formatted_cell['html']
+
                         if formatted_cell is None:
                             pass #don't add anything -- not even td tags (this
                                  # allows signals *not* to include a cell)
@@ -124,14 +130,7 @@ class ReportTable(object):
 
             html += "</tbody></table>"
 
-            #if resizable:
-            #    assert(tableID is not None),"Must specify a tableID if resizable==True!"
-            #    html += ('<script>'
-            #             '    $("#{tableID}").resizable();'
-            #             '</script>').format(tableID=tableID)
-
-
-            return html
+            return { 'html': html, 'js': js }
 
 
         elif fmt == 'text':
@@ -156,7 +155,7 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     text['row data'].append( formatted_rowData )
 
-            return text
+            return {'text': text }
 
 
         elif fmt == "ppt":
@@ -181,7 +180,7 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 
-            return ppt
+            return {'ppt': ppt}
 
 
         #elif fmt in ('iplotly','plotly'):

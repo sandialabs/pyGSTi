@@ -109,6 +109,7 @@
 .pygsti-wsoutput-group {
     display: inline-block; /* shrink to fit contents for resizable */
     max-width: 100%; /* so we can set width as a "desired" width, constrained by parent width */
+    vertical-align: top; /* so divs in table cells align to TD properly */
 }
 
 /* maximum height for fluid report figures */
@@ -126,7 +127,7 @@ figure > div.pygsti-wsoutput-group {
 
 .relwrap {
   position: relative;
-  left: 0; top:-0.51em;
+  left: 0; top:0 /*-0.51em;*/
   /*height: inherit; from td*/
 }
 

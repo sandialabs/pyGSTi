@@ -279,8 +279,9 @@ class _HTMLFigureFormatter(_ParameterizedFormatter):
         render_out = fig.render("html",
                                 resizable="handlers only" if self.specs['resizable'] else False,
                                 autosize=self.specs['autosize'])
-        return "<script>\n %(js)s \n</script>\n" % render_out + \
-            "%(html)s" % render_out
+        return render_out #a dictionary with 'html' and 'js' keys
+        #return "<script>\n %(js)s \n</script>\n" % render_out + \
+        #    "%(html)s" % render_out
     #OLD: <div class='relwrap'><div class='abswrap'> </div></div>
 
         

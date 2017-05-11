@@ -391,37 +391,91 @@ class Workspace(object):
             # - when *not* in a notebook, the requireJS base defaults to the
             # current page, so just using "offline/myfile" works fine then.
 
-            #Tell require.js where jQueryUI is
+            #Tell require.js where jQueryUI and Katex are
             if connected:
-                path = "https://code.jquery.com/ui/1.12.1/jquery-ui.min"
+                script = (
+                    "<script>"
+                    "console.log('ONLINE - using CDN paths');"
+                    "requirejs.config({{ "
+                    "   paths: {{ 'jquery-UI': ['{jqueryui}'],"
+                    "             'katex': ['{katex}'],"
+                    "             'autorender': ['{auto}'] }},"
+                    "}});"
+                    "require(['jquery', 'jquery-UI'],function($,ui) {{"
+                    "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
+                    "require(['katex', 'autorender'],function(katex,auto) {{"
+                    "  window.katex=katex; console.log('Katex loaded'); }});"
+                    "</script>"
+                ).format(jqueryui="https://code.jquery.com/ui/1.12.1/jquery-ui.min",
+                         katex="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
+                         auto="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js")
+
             else:
-                path = "offline/jquery-ui.min"
-                
-            script = (
-                "<script>"
-                "var pth;"
-                "if(typeof IPython !== 'undefined') {{"
-                "  var nb = IPython.notebook;"
-                "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
-                "  pth = '../files' + nb.base_url + relpath + '{path}';"
-                "  console.log('IPYTHON DETECTED - using path ' + pth);"
-                "}}"
-                "else {{"
-                "  pth = '{path}';"
-                "  console.log('NO IPYTHON DETECTED - using path ' + pth);"
-                "}}"
-                "requirejs.config({{ "
-                "   paths: {{ 'jquery-UI': [pth]}},"
-                "}});"
-                "require(['jquery', 'jquery-UI'],function($,ui) {{"
-                "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
-                "</script>").format(path=path)
+                script = (
+                    "<script>"
+                    "var pth;"
+                    "if(typeof IPython !== 'undefined') {{"
+                    "  var nb = IPython.notebook;"
+                    "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
+                    "  jqueryui_pth = '../files' + nb.base_url + relpath + '{jqueryui}';"
+                    "  katex_pth = '../files' + nb.base_url + relpath + '{katex}';"
+                    "  auto_pth = '../files' + nb.base_url + relpath + '{auto}';"
+                    "  console.log('IPYTHON DETECTED - using path ' + jqueryui_pth);"
+                    "}}"
+                    "else {{"
+                    "  jqueryui_pth = '{jqueryui}';"
+                    "  katex_pth = '{katex}';"
+                    "  auto_pth = '{auto}';"
+                    "  console.log('NO IPYTHON DETECTED - using path ' + jqueryui_pth);"
+                    "}}"
+                    "requirejs.config({{ "
+                    "   paths: {{ 'jquery-UI': [jqueryui_pth], 'katex': [katex_pth], 'autorender': [auto_pth] }},"
+                    "}});"
+                    "require(['jquery', 'jquery-UI'],function($,ui) {{"
+                    "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
+                    "require(['katex', 'autorender'],function(katex,auto) {{"
+                    "  window.katex=katex; console.log('Katex loaded'); }});"
+                    "</script>"
+                ).format(jqueryui="offline/jquery-ui.min",
+                         katex="offline/katex.min",
+                         auto="offline/auto-render.min")
             _display(_HTML(script))
     
     
             #MathJax (& jQuery) are already loaded in ipython notebooks, so no need
             # to include them here.  In the future, we could try to pull in a *local*
             # copy of mathjax when connected=False, but don't worry about this for now.
+
+            ##Initialize Katex as a fallback if MathJax is unavailable (offline)
+            _display(_HTML(insert_resource(
+                connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
+                "katex.css")))
+
+            #_display(_HTML(insert_resource(
+            #    connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
+            #    "katex.min.js")))
+            #
+            #_display(_HTML(insert_resource(
+            #    connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
+            #    "auto-render.min.js")))
+            #
+            _display(_HTML(
+                ("\n<script>"
+                 "require(['jquery','katex','autorender'],function($,katex,renderMathInElement) {\n"
+                 "  var mathjaxTimer = setInterval( function() {\n"
+                 "    if(document.readyState === 'complete' || document.readyState === 'loaded') {\n"
+                 "        clearInterval(mathjaxTimer);\n"
+                 "        if(typeof MathJax === 'undefined') {\n"
+                 "          console.log('MATHJAX not found - attempting to typeset with Katex');\n"
+                 "          renderMathInElement(document.body, { delimiters: [\n"
+                 "             {left: '$$', right: '$$', display: true},\n"
+                 "             {left: '$', right: '$', display: false},\n"
+                 "             ] } );\n"
+                 "        }\n"
+                 "    } //end readyState check \n"
+                 "  }, 500); //end setInterval \n"
+                 "});\n"
+                 '</script>')))
             
             # Initialize Plotly libraries
             _plotly_offline.init_notebook_mode(connected)
@@ -1270,7 +1324,7 @@ class WorkspaceOutput(object):
         out = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
         #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         content = "<script>\n" + \
-                  "require(['jquery','jquery-UI'],function($,ui) {" + \
+                  "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
         #self.widget.value = content
@@ -1436,7 +1490,7 @@ class WorkspaceTable(WorkspaceOutput):
     def render(self, typ, global_requirejs=False, precision=None,
                resizable=True, autosize=False):
         """
-        Renders this object into the specifed format, specifically for
+        Renders this table into the specifed format, specifically for
         embedding it within a larger document.
 
         Parameters
@@ -1491,75 +1545,41 @@ class WorkspaceTable(WorkspaceOutput):
             
             divHTML = []
             divIDs = []
+            divJS = []
             for i,table in enumerate(self.tables):
-                tableDivID = tableID + "_%d" % i                
-                table_html = "<div id='%s'>\n%s\n</div>\n" % (tableDivID,
-                                table.render("html", tableID=tableDivID + "_tbl",
-                                             tableclass="dataTable",
-                                             precision=precDict['normal'],
-                                             polarprecision=precDict['polar'],
-                                             sciprecision=precDict['sci'],
-                                             resizable=resizable, autosize=autosize))
+                tableDivID = tableID + "_%d" % i
+                table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                                          tableclass="dataTable",
+                                          precision=precDict['normal'],
+                                          polarprecision=precDict['polar'],
+                                          sciprecision=precDict['sci'],
+                                          resizable=resizable, autosize=autosize)
 
-
-                divHTML.append(table_html)
+                divHTML.append("<div id='%s'>\n%s\n</div>\n" %
+                               (tableDivID,table_dict['html']))
+                divJS.append(table_dict['js'])
                 divIDs.append(tableDivID)
                 
-            ret = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
+            base = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
                                      self.switchboards, self.sbSwitchIndices)
-            if resizable:
-                ret['js'] += ( '  $(document).ready(function() {{'
-                               '    $("#{tableID}").children("div").each( function(k,div) {{'
-                               '      var was_visible = $(div).is(":visible");\n'
-                               '      $(div).show();\n'
-                               '      $(div).find("td").not(".plotContainingTD").each('
-                               '        function(i,el){{  $(el).css("width", $(el).width()); }});\n' #lock down initial widths of non-plot cells
-                               '      if(!was_visible) {{ $(div).hide(); }}\n' #Table must be visible to compute widths correctly
-                               '    }});\n'
-                               '    $("#{tableID}").resizable({{\n'
-                               '    autoHide: true,\n'
-                               '    resize: function( event, ui ) {{\n'
-                               '      ui.element.css("padding-bottom", "7px");' #weird jqueryUI hack: to compensate for handle(?)
-                               '      ui.element.css("max-width","none");' #remove max-width
-                               '      ui.element.css("max-height","none");' #remove max-height
-                               '      var w = ui.size.width;\n'
-                               '      var h = ui.size.height;\n'
-                               '      ui.element.find(".dataTable").css("width",w);'
-                               '      ui.element.find(".dataTable").css("height",h);'
-                               '      ui.element.find(".plotContainingTD").addClass("containerAmidstResize");'
-                               '      ui.element.find(".plotContainingTD").css("height","");' # so can resize freely
-                               '      console.log("Resizable table update on {tableID}");'
-                               '    }},\n'
-                               '    stop: function( event, ui ) {{\n'
-                               '      var els = ui.element.find(".resizable-plot.pygsti-group-master");'
-                               '      els.css("max-width","none");' #remove max-width
-                               '      els.css("max-height","none");' #remove max-height                               
-                               '      els.trigger("resize");'
-                               '      var ws = ui.element.find(".dataTable").map('
-                               '                  function(){{ return $(this).width(); }}).get();'
-                               '      var hs = ui.element.find(".dataTable").map('
-                               '                  function(){{ return $(this).height(); }}).get();'
-                               '      ui.element.css("width", Math.max.apply(null, ws));'
-                               '      ui.element.css("height", Math.max.apply(null, hs));'
-                               '      ui.element.find(".plotContainingTD").removeClass("containerAmidstResize");'
-                               '      console.log("Resizable STOP table update on {tableID}");'
-                               '    }}\n'
-                               '    }});\n'
-                               '    console.log("Triggering creation of table {tableID} plots");\n'
-                               '    $("#{tableID}").find(".plotly-graph-div").trigger("create");\n'
-                               '    //console.log("Triggering initial resize on table {tableID}");\n'
-                               '    //$("#{tableID}").find(".pygsti-group-master").trigger("resize");\n'
-                               '}});').format(tableID=tableID)
-                
-            elif autosize:
-                #just need to trigger creation of plots (if autosize or resizable is True
-                # then plots are not created until externally triggered)
-                ret['js'] += ( '  $(document).ready(function() {{'
-                               '    console.log("Triggering creation of table {tableID} plots");\n'
-                               '    $("#{tableID}").find(".plotly-graph-div").trigger("create");\n'
-                               '}});').format(tableID=tableID)
+            ret = { 'html': base['html'], 'js': '' }
 
-                
+            if global_requirejs:
+                ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+            ret['js'] += '  $(document).ready(function() {\n'
+            ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+            
+            if resizable:
+                ret['js'] += 'make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+            if autosize:
+                ret['js'] += 'make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+            if resizable or autosize:
+                ret['js'] += 'trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
+
+            ret['js'] += '}); //end on-ready handler\n'
+            if global_requirejs:
+                ret['js'] += '}); //end require block\n'
+
             return ret
         else:
             assert(len(self.tables) == 1), \
@@ -1652,49 +1672,46 @@ class WorkspacePlot(WorkspaceOutput):
         
         divHTML = []
         divIDs = []
+        divJS = []
         for i,fig in enumerate(self.figs):
             #use auto-sizing (fluid layout)
-            fig_html = _plot_ex(fig, include_plotlyjs=False, output_type='div',
-                                show_link=False, global_requirejs=global_requirejs,
+            fig_dict = _plot_ex(fig, show_link=False,
                                 autosize=autosize, resizable=resizable,
                                 lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
-            divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_html)
-            divIDs.append(getPlotlyDivID(fig_html))
+            divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
+            divJS.append( fig_dict['js'] )
+            divIDs.append(getPlotlyDivID(fig_dict['html']))
             
-        ret = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                self.switchboards, self.sbSwitchIndices)
+        base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
+                                self.switchboards, self.sbSwitchIndices)        
+        ret = { 'html': base['html'], 'js': '' }
 
-        if resizable == True: #if == "handlers only" then don't make a widget
-            ret['js'] += ( '  $(document).ready(function() {{'
-                           '    $("#{plotID}").resizable({{\n'
-                           '    autoHide: true,\n'
-                           '    resize: function( event, ui ) {{\n'
-                           '      ui.element.css("max-width","none");' #remove max-width restriction
-                           '      ui.element.css("max-height","none");' #remove max-height restriction
-                           '      ui.element.addClass("containerAmidstResize");'
-                           '    }},'
-                           '    stop: function( event, ui ) {{\n'
-                           '      var els = ui.element.find(".resizable-plot.pygsti-group-master");'
-                           '      els.css("max-width","none");' #remove max-width
-                           '      els.css("max-height","none");' #remove max-height                               
-                           '      els.trigger("resize");'
-                           '      ui.element.removeClass("containerAmidstResize");'
-                           '      console.log("Resizable plot update on {plotID}: " + ui.size.width + "," + ui.size.height);'
-                           '    }}\n'
-                           '    }});\n'
-                           '    console.log("Triggering creation of plot {plotID} plots");\n'
-                           '    $("#{plotID}").find(".pygsti-group-master").trigger("create");\n'
-                           '}});').format(plotID=plotID)
-        elif autosize:
-            #just need to trigger creation of plots (if autosize or resizable is True
-            # then plots are not created until externally triggered)
-            ret['js'] += ( '  $(document).ready(function() {{'
-                           '    console.log("Triggering creation of plot {plotID} plots");\n'
-                           '    $("#{plotID}").find(".pygsti-group-master").trigger("create");\n'
-                           '}});').format(plotID=plotID)
-            #                           '    //$("#{plotID}").find(".plotly-graph-div").trigger("create");\n'
+        # "handlers only" mode is when plot is embedded in something
+        #  larger (e.g. a table) that takes responsibility for putting
+        #  the JS in an on-ready handler and initializing and creating
+        #  the plots.
+        handlersOnly = bool(resizable == "handlers only")
 
-            
+        
+        if not handlersOnly:
+            if global_requirejs:
+                ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+            ret['js'] += '  $(document).ready(function() {\n'
+        ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+
+        if not handlersOnly:
+            if resizable: # make a resizable widget
+                ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
+            if autosize: # add window resize handler
+                ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
+            if (autosize or resizable): #trigger init & create of plots
+                ret['js'] += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotID)
+
+        if not handlersOnly:
+            ret['js'] += '}); //end on-ready handler\n'
+            if global_requirejs:
+                ret['js'] += '}); //end require block\n'
+                        
         return ret
                 
                     
