@@ -1084,6 +1084,8 @@ class Switchboard(_collections.OrderedDict):
         switches : list, optional
             The names of the switches to include in this view. The special
             value "all" includes all of the switches in the view.
+            Alternatively, this can be an array of boolean values, one
+            for each switch.
 
         idsuffix : str, optional
             A suffix to append to the DOM ID of this switchboard when
@@ -1095,6 +1097,9 @@ class Switchboard(_collections.OrderedDict):
         """
         if switches == "all":
             show = [True]*len(self.switchNames)
+        elif all([isinstance(b,bool) for b in switches]):
+            assert(len(switches) == len(self.switchNames))
+            show = switches
         else:
             show = [False]*len(self.switchNames)
             for nm in switches:

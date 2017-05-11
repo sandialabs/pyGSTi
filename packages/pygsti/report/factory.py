@@ -347,7 +347,10 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         else:
             assert(Ls == res.gatestring_structs['final'].Ls), \
                 "Runs must have the same max-L values"
-    
+            
+    multiGO = bool(len(gauge_opt_labels) > 1)
+    multiL = bool(len(Ls) > 1)
+            
     switchBd = ws.Switchboard(
         ["Run","G-Opt","max(L)"],
         [run_labels, gauge_opt_labels, list(map(str,Ls))],
@@ -410,8 +413,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
 
-    goView = ["Run","G-Opt"] if multirun else ["G-Opt"]
-    maxLView = ["Run","max(L)"] if multirun else ["max(L)"]
+    goView = [multirun,multiGO,False]
+    maxLView = [multirun,False,multiL]
     qtys['topSwitchboard'] = switchBd
     qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
     qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
@@ -625,6 +628,9 @@ def create_general_report(results, filename, confidenceLevel=None,
             assert(Ls == res.gatestring_structs['final'].Ls), \
                 "Runs must have the same max-L values"
 
+    multiGO = bool(len(gauge_opt_labels) > 1)
+    multiL = bool(len(Ls) > 1)
+    
     switchBd = ws.Switchboard(
         ["Run","G-Opt","max(L)"],
         [run_labels, gauge_opt_labels, list(map(str,Ls))],
@@ -691,8 +697,8 @@ def create_general_report(results, filename, confidenceLevel=None,
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
             qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
 
-    goView = ["Run","G-Opt"] if multirun else ["G-Opt"]
-    maxLView = ["Run","max(L)"] if multirun else ["max(L)"]
+    goView = [multirun,multiGO,False]
+    maxLView = [multirun,False,multiL]
     qtys['topSwitchboard'] = switchBd
     qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
     qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
