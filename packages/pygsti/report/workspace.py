@@ -53,6 +53,8 @@ def digest(obj):
             for k in sorted(keys):
                 add(md5,k)
                 add(md5,v[k])
+        elif isinstance(v, SwitchValue):
+            md5.update(v.base.tostring()) #don't recurse to parent switchboard
         else:
             #print("Encoding type: ",str(type(v)))
             attribs = list(sorted(dir(v)))

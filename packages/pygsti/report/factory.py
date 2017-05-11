@@ -417,8 +417,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
     qtys['goSwitchboard3'] = switchBd.view(goView,"v3")
     qtys['goSwitchboard4'] = switchBd.view(goView,"v4")
-    qtys['maxLSwitchboard1']  = switchBd.view(maxLView,"v5")
-    qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v6")
+    qtys['goSwitchboard5'] = switchBd.view(goView,"v5")    
+    qtys['maxLSwitchboard1']  = switchBd.view(maxLView,"v6")
+    qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v7")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -503,9 +504,13 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     Parameters
     ----------
-    results : Results
-        A set of GST results, typically obtained from running
-        :func:`do_long_sequence_gst`.
+    results : Results or dictionary-like
+        Either a single Results object (which represents the set of results from
+        a single GST estimation run, and typically obtained from running
+        :func:`do_long_sequence_gst`) or a dictionary of such objects, representing 
+        multiple GST runs to be compared.  (Usually multiple runs will be for the 
+        same underlying dataset.)  The keys of this dictionary are used to label the
+        runs.set of GST results, 
 
     filename : string, optional
        The output filename where the report file(s) will be saved.
@@ -591,72 +596,165 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
         
-    if confidenceLevel is not None:
-        cri = results.get_confidence_region("go0","final",confidenceLevel, comm=comm)
-        qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
-        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
-    else: cri = None
-
 
     # Generate Tables
     printer.log("*** Generating tables ***")
 
-    gsTgt = results.gatesets['target']
-    gsFinal = results.gatesets['go0']
-    ds = results.dataset
-    prepStrs = results.gatestring_lists['prep fiducials']
-    effectStrs = results.gatestring_lists['effect fiducials']
-    germs = results.gatestring_lists['germs']
+    #Create master switchboard
+    if isinstance(results, dict):
+        results_dict = results
+        multirun = True
+    else:
+        results_dict = {"unique": results}
+        multirun = False
+    results = None #for safety
+
+    #TODO: consolidate this logic with that of the single report
+    run_labels = list(results_dict.keys())
+    gauge_opt_labels = None;  Ls = None
+    for res in results_dict.values():
+        if gauge_opt_labels is None:
+            gauge_opt_labels = list(res.goparameters.keys())
+        else:
+            assert(gauge_opt_labels == list(res.goparameters.keys())), \
+                "Runs must have the same gauge optimization labels"
+            
+        if Ls is None:
+            Ls = res.gatestring_structs['final'].Ls
+        else:
+            assert(Ls == res.gatestring_structs['final'].Ls), \
+                "Runs must have the same max-L values"
+
+    switchBd = ws.Switchboard(
+        ["Run","G-Opt","max(L)"],
+        [run_labels, gauge_opt_labels, list(map(str,Ls))],
+        ["dropdown", "buttons", "slider"], [0,0,len(Ls)-1],
+        show=[multirun,False,False]
+    )
+
+    switchBd.add("gsTarget",(0,))
+    switchBd.add("ds",(0,))
+    switchBd.add("prepStrs",(0,))
+    switchBd.add("effectStrs",(0,))
+    switchBd.add("strs",(0,))
+    switchBd.add("germs",(0,))
+    switchBd.add("params",(0,))
+    switchBd.add("objective",(0,))
+    switchBd.add("mpc",(0,))
+    
+    switchBd.add("gsFinal",(0,1))
+    switchBd.add("gsTargetAndFinal",(0,1))
+    switchBd.add("goparams",(0,1))
+    switchBd.add("gsL",(0,2))
+    switchBd.add("gss",(0,2))
+    switchBd.add("gsAllL",(0,))
+    switchBd.add("gssAllL",(0,))
+
+    if confidenceLevel is not None:
+        switchBd.add("cri",(0,2))
+
+    for i,lbl in enumerate(run_labels):
+        res = results_dict[lbl]
+        switchBd.ds[i] = res.dataset
+
+        switchBd.prepStrs[i] = res.gatestring_lists['prep fiducials']
+        switchBd.effectStrs[i] = res.gatestring_lists['effect fiducials']
+        switchBd.strs[i] = (res.gatestring_lists['prep fiducials'],
+                            res.gatestring_lists['effect fiducials'])
+        switchBd.germs[i] = res.gatestring_lists['germs']
+        switchBd.params[i] = res.parameters
+        switchBd.objective[i] = res.parameters['objective']
+        if res.parameters['objective'] == "logl":
+            switchBd.mpc[i] = res.parameters['minProbClip']
+        else:
+            switchBd.mpc[i] = res.parameters['minProbClipForWeighting']
+        
+        switchBd.gsTarget[i] = res.gatesets['target']
+        switchBd.gsFinal[i,:] = [ res.gatesets[lbl] for lbl in gauge_opt_labels ]
+        switchBd.gsTargetAndFinal[i,:] = \
+                    [ [res.gatesets['target'], res.gatesets[lbl]]
+                      for lbl in gauge_opt_labels ]
+        switchBd.goparams[i,:] = [ res.goparameters[lbl] for lbl in gauge_opt_labels]
+
+        switchBd.gsL[i,:] = res.gatesets['iteration estimates']
+        switchBd.gss[i,:] = res.gatestring_structs['iteration']
+
+        switchBd.gssAllL[i] = res.gatestring_structs['iteration']
+        switchBd.gsAllL[i] = res.gatesets['iteration estimates']
+
+        if confidenceLevel is not None:
+            #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
+            switchBd.cri[i,:] = [ res.get_confidence_region(
+                lbl,"final", confidenceLevel, comm=comm) for lbl in gauge_opt_labels]
+
+            #TODO: make plain text fields which update based on switchboards?
+            qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
+            qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
+
+    goView = ["Run","G-Opt"] if multirun else ["G-Opt"]
+    maxLView = ["Run","max(L)"] if multirun else ["max(L)"]
+    qtys['topSwitchboard'] = switchBd
+    qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
+    qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
+    qtys['goSwitchboard3'] = switchBd.view(goView,"v3")
+    qtys['goSwitchboard4'] = switchBd.view(goView,"v4")
+    qtys['goSwitchboard5'] = switchBd.view(goView,"v5")    
+    qtys['maxLSwitchboard1']  = switchBd.view(maxLView,"v6")
+    #qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v7") #unused
+
+    gsTgt = switchBd.gsTarget
+    ds = switchBd.ds
+    prepStrs = switchBd.prepStrs
+    effectStrs = switchBd.effectStrs
+    germs = switchBd.germs
+    strs = switchBd.strs
 
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, (prepStrs,effectStrs))
-    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable([gsTgt, gsFinal], ['Target','Estimated'],
+    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
+
+    gsFinal = switchBd.gsFinal
+    cri = switchBd.cri if (confidenceLevel is not None) else None
+    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
+                                                     ['Target','Estimated'],
                                                      cri, includeHSVec=False)
     qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(results.goparameters['go0'])
-    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable([gsTgt,gsFinal], ['Target','Estimated'], "boxes", cri)
+    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
+    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+                                                     ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('polar','relpolar'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                        "boxes", errgen_type)
-    qtys['metadataTable'] = ws.MetadataTable(gsFinal, results.parameters)
+    qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
     qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     #Ls and Germs specific
-    qtys['fiducialListTable'] = ws.GatestringTable((prepStrs,effectStrs),
-                                                   ["Prep.","Measure"], commonTitle="Fiducials")
+    gss = switchBd.gss
+    gsL = switchBd.gsL
+    qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
     qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
     qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
     qtys['progressTable'] = ws.FitComparisonTable(
-        results.parameters['max length list'],
-            results.gatestring_structs['iteration'],
-        results.gatesets['iteration estimates'],
-        ds, results.parameters['objective'], 'L')
+        Ls, switchBd.gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
-        
-    gss = results.gatestring_structs['final']
-    if results.parameters['objective'] == "logl":
-        mpc = results.parameters['minProbClip']
-    else:
-        mpc = results.parameters['minProbClipForWeighting']
-        
+                
     qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
     qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
-        results.parameters['objective'], gss, ds, gsFinal,
+        switchBd.objective, gss, ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=mpc, sumUp=True)
+        minProbClipForWeighting=switchBd.mpc, sumUp=True)
     
     #Not pagniated currently... just set to same full plot
     qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
-        results.parameters['objective'], gss, ds, gsFinal,
+        switchBd.objective, gss, ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=mpc)   
+        minProbClipForWeighting=switchBd.mpc)   
 
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")

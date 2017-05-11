@@ -45,6 +45,7 @@
 
     <figure id="bestEstimateColorBoxPlot">
       %(bestEstimateColorBoxPlotPages)s
+      %(maxLSwitchboard1)s
       <figcaption><strong>$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset</strong>.   Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most %(linlg_pcntle)s%% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.</figcaption>
     </figure>
 
@@ -58,6 +59,7 @@
     <figure class='tbl' id="bestGatesetGaugeParamsTable">
       <figcaption><strong>Gauge Optimization Details</strong>.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.</figcaption>
       %(bestGatesetGaugeOptParamsTable)s
+      %(goSwitchboard1)s
     </figure>
 
     <h2 id="derivedQtySection">Derived quantities</h2>
@@ -75,16 +77,19 @@
     <figure class='tbl' id="bestGatesetErrGenTable">
       <figcaption><strong>The GST estimate of the logic gate operation generators</strong>. A heat map of the <q>Error Generator</q> for each gate, which is the Lindbladian $\mathbb{L}$ that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all elements of these matrices is zero, the estimated gates match the target gates (Table <a href="#targetGatesetTable" class="table"></a>).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the <q>Hamiltonian generators</q> given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the <q>Stochastic generators</q> given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.</figcaption>
       %(bestGatesetErrGenBoxTable)s
+      %(goSwitchboard2)s
     </figure>
 
     <figure class='tbl' id="bestGatesetEigenvalueTable">
       <figcaption><strong>Eigenvalues of estimated gates</strong>.  The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.</figcaption>
       %(bestGatesetEvalTable)s
+      %(goSwitchboard3)s
     </figure>
 
     <figure class='tbl' id="bestGatesetChoiTable">
       <figcaption><strong>Choi matrix spectrum of the GST estimated gate set</strong>.  The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of <em>negative</em> values are plotted using \textcolor{red}{red} bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</figcaption>
       %(bestGatesetChoiEvalTable)s
+      %(goSwitchboard4)s
     </figure>
 
 
@@ -103,6 +108,7 @@
       <figure class='tbl' id="bestGatesetGatesTable">
 	<figcaption><strong>The GST estimate of the logic gate operations</strong>.  Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</figcaption>
 	%(bestGatesetGatesBoxTable)s
+	%(goSwitchboard5)s
       </figure>
 
     
@@ -112,6 +118,7 @@
     <section id="secInput">
     <h1>Input Summary</h1>
     <p>For reference, here is information about the input target gate set and dataset.</p>
+    %(topSwitchboard)s
 
     <figure class='tbl' id='targetGatesetTable'>
       <figcaption><strong>Target gate set: SPAM (state preparation and measurement) and logic gates</strong>.  The <strong>left</strong> table shows the <em>ideal</em> input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.  The <strong>right</strong> table shows the <em>ideal</em> (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a $d^2\times d^2$ <em>superoperator</em> that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).</figcaption>

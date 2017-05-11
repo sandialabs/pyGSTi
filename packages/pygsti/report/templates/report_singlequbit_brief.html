@@ -40,6 +40,7 @@
 
     <figure id="bestEstimateColorBoxPlot">
       %(bestEstimateColorBoxPlot)s
+      %(maxLSwitchboard1)s
       <figcaption><strong>$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset</strong>.   Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most %(linlg_pcntle)s%% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.</figcaption>
     </figure>
 
@@ -52,6 +53,7 @@
     <figure class='tbl' id="bestGatesetGaugeParamsTable">
       <figcaption><strong>Gauge Optimization Details</strong>.  A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.</figcaption>
       %(bestGatesetGaugeOptParamsTable)s
+      %(goSwitchboard1)s
     </figure>
 
     <h2 id="derivedQtySection">Derived quantities</h2>
@@ -60,6 +62,7 @@
       <figcaption><strong>Comparison of GST estimated gates to target gates</strong>.  This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.  The second table lists the <q>Error Generator</q> for each gate, which is the Lindbladian $\mathbb{L}$ that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s.</figcaption>
       %(bestGatesetVsTargetTable)s
       %(bestGatesetErrorGenTable)s
+      %(goSwitchboard2)s
     </figure>
 
     <figure class='tbl' id="bestGatesetDecompTable">
@@ -70,6 +73,7 @@
     <figure class='tbl' id="bestGatesetChoiTable">
       <figcaption><strong>Choi matrix representation of the GST estimated gate set</strong>.  This table lists Choi representations of the estimated gates, and their eigenvalues.  Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</figcaption>
       %(bestGatesetChoiTable)s
+      %(goSwitchboard3)s
      </figure>
 
 
@@ -88,6 +92,7 @@
       <figure class='tbl' id="bestGatesetGatesTable">
 	<figcaption><strong>The GST estimate of the logic gate operations</strong>.  Compare to Table <a href="#targetGatesTable" class="table"></a>.</figcaption>
 	%(bestGatesetGatesTable)s
+	%(goSwitchboard4)s
       </figure>
 
     </section>
@@ -96,6 +101,7 @@
     <section id="secInput">
       <h1>Input Summary</h1>
       <p>For reference, here is information about the input target gate set and dataset.</p>
+      %(topSwitchboard)s
 
     <figure class='tbl' id='targetSpamTable'>
       <figcaption><strong>Target gate set: SPAM (state preparation and measurement) gates</strong>.  These are the <em>ideal</em> input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here both as $d\times d$ matrices, and in <q>vectorized</q> form as $d^2$-dimensional vectors in $\mathcal{B}(\mathcal{H})$.  See Table <a href="#bestGatesetSpamTable" class="table"></a> for GST estimates of the actual $\rho_0$ and $E_0$ implemented in this experiment.</figcaption>
