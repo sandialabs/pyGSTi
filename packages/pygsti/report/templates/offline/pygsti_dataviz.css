@@ -1,7 +1,19 @@
 
-.test {
+.successmsg {
+    color: green;
+    font-weight: bold;
+    font-style: normal;
+}
+
+.successmsg2 {
+    color: green;
+    font-weight: normal;
+    font-style: normal;
+}
+
+.failmsg {
     color: red;
-    background-color: yellow;
+    font-style: italic;
 }
 
 .modebar {
