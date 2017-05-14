@@ -19,9 +19,7 @@ import hashlib as _hashlib
 
 from ..tools import compattools as _compat
 
-import plotly.offline as _plotly_offline
-from .plotly_plot_ex import plot_ex as _plot_ex # a slightly modified offline.plot function
-from plotly.offline.offline import get_plotlyjs as _get_plotlyjs
+from . import plotly_plot_ex as _plotly_ex
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
@@ -336,153 +334,170 @@ class Workspace(object):
 
         global _PYGSTI_WORKSPACE_INITIALIZED
 
-        if not _PYGSTI_WORKSPACE_INITIALIZED:
-
-            if not connected:
-                rsync_offline_dir(_os.getcwd())
-
-            #If offline, add JS to head that will load local requireJS and/or
-            # jQuery if needed (jupyter-exported html files always use CDN
-            # for these).
-            if not connected:
-                script = "<script src='offline/jupyterlibload.js'><\/script>"
-                _display(_HTML(script))
-            
-            # The polling here is to ensure that plotly.js has already been loaded before
-            # setting display alignment in order to avoid a race condition.
-            script = """
-                <script>
-                var waitForPlotly = setInterval( function() {
-                if( typeof(window.Plotly) !== "undefined" ){
-                    MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });
-                    MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);
-                    clearInterval(waitForPlotly);
-                }}, 250 );
-                </script>"""        
-            _display(_HTML(script))
-
-            #Load our custom plotly extension functions            
-            _display(_HTML(insert_resource(connected,None,"pygsti_plotly_ex.js")))
-
-            # Load style sheets for displaying tables
-            _display(_HTML(insert_resource(connected,None,"pygsti_dataviz.css")))
-
-            #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
-            jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-            _display(_HTML(insert_resource(connected,jQueryUI_CSS,"smoothness-jquery-ui.css")))
-
-            #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
-            if connected:
-                imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
-            else:
-                imgURL = "offline/images/ui-icons_222222_256x240.png"
-            _display(_HTML("<style>\n" +
-                           ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n" +
-                           ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL +
-                           "</style>"))
+        script = ""
         
-            
-            # Note: within a jupyter notebook, the requireJS base path appears
-            # to be "/static", so just setting the path to "offline/myfile"
-            # would attempt to load "/static/offline/myfile.js" which points
-            # somewhere like .../site-packages/notebook/static/offline/myfile".
-            # So:
-            # - when in a notebook, the path needs to be "../files" followed
-            # by the notebook's path, which we can obtain via the notebook JS
-            # object.
-            # - when *not* in a notebook, the requireJS base defaults to the
-            # current page, so just using "offline/myfile" works fine then.
+        if not connected:
+            rsync_offline_dir(_os.getcwd())
 
-            #Tell require.js where jQueryUI and Katex are
-            if connected:
-                script = (
-                    "<script>"
-                    "console.log('ONLINE - using CDN paths');"
-                    "requirejs.config({{ "
-                    "   paths: {{ 'jquery-UI': ['{jqueryui}'],"
-                    "             'katex': ['{katex}'],"
-                    "             'autorender': ['{auto}'] }},"
-                    "}});"
-                    "require(['jquery', 'jquery-UI'],function($,ui) {{"
-                    "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
-                    "require(['katex', 'autorender'],function(katex,auto) {{"
-                    "  window.katex=katex; console.log('Katex loaded'); }});"
-                    "</script>"
-                ).format(jqueryui="https://code.jquery.com/ui/1.12.1/jquery-ui.min",
-                         katex="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
-                         auto="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js")
+        #If offline, add JS to head that will load local requireJS and/or
+        # jQuery if needed (jupyter-exported html files always use CDN
+        # for these).
+        if not connected:
+            script += "<script src='offline/jupyterlibload.js'></script>\n"
+        
+        #Load our custom plotly extension functions            
+        script += insert_resource(connected,None,"pygsti_plotly_ex.js")
 
-            else:
-                script = (
-                    "<script>"
-                    "var pth;"
-                    "if(typeof IPython !== 'undefined') {{"
-                    "  var nb = IPython.notebook;"
-                    "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
-                    "  jqueryui_pth = '../files' + nb.base_url + relpath + '{jqueryui}';"
-                    "  katex_pth = '../files' + nb.base_url + relpath + '{katex}';"
-                    "  auto_pth = '../files' + nb.base_url + relpath + '{auto}';"
-                    "  console.log('IPYTHON DETECTED - using path ' + jqueryui_pth);"
-                    "}}"
-                    "else {{"
-                    "  jqueryui_pth = '{jqueryui}';"
-                    "  katex_pth = '{katex}';"
-                    "  auto_pth = '{auto}';"
-                    "  console.log('NO IPYTHON DETECTED - using path ' + jqueryui_pth);"
-                    "}}"
-                    "requirejs.config({{ "
-                    "   paths: {{ 'jquery-UI': [jqueryui_pth], 'katex': [katex_pth], 'autorender': [auto_pth] }},"
-                    "}});"
-                    "require(['jquery', 'jquery-UI'],function($,ui) {{"
-                    "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
-                    "require(['katex', 'autorender'],function(katex,auto) {{"
-                    "  window.katex=katex; console.log('Katex loaded'); }});"
-                    "</script>"
-                ).format(jqueryui="offline/jquery-ui.min",
-                         katex="offline/katex.min",
-                         auto="offline/auto-render.min")
-            _display(_HTML(script))
-    
-    
-            #MathJax (& jQuery) are already loaded in ipython notebooks, so no need
-            # to include them here.  In the future, we could try to pull in a *local*
-            # copy of mathjax when connected=False, but don't worry about this for now.
+        # Load style sheets for displaying tables
+        script += insert_resource(connected,None,"pygsti_dataviz.css")
 
-            ##Initialize Katex as a fallback if MathJax is unavailable (offline)
-            _display(_HTML(insert_resource(
-                connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
-                "katex.css")))
+        #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
+        jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
+        script += insert_resource(connected,jQueryUI_CSS,"smoothness-jquery-ui.css")
 
-            #_display(_HTML(insert_resource(
-            #    connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
-            #    "katex.min.js")))
-            #
-            #_display(_HTML(insert_resource(
-            #    connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
-            #    "auto-render.min.js")))
-            #
-            _display(_HTML(
-                ("\n<script>"
-                 "require(['jquery','katex','autorender'],function($,katex,renderMathInElement) {\n"
-                 "  var mathjaxTimer = setInterval( function() {\n"
-                 "    if(document.readyState === 'complete' || document.readyState === 'loaded') {\n"
-                 "        clearInterval(mathjaxTimer);\n"
-                 "        if(typeof MathJax === 'undefined') {\n"
-                 "          console.log('MATHJAX not found - attempting to typeset with Katex');\n"
-                 "          renderMathInElement(document.body, { delimiters: [\n"
-                 "             {left: '$$', right: '$$', display: true},\n"
-                 "             {left: '$', right: '$', display: false},\n"
-                 "             ] } );\n"
-                 "        }\n"
-                 "    } //end readyState check \n"
-                 "  }, 500); //end setInterval \n"
-                 "});\n"
-                 '</script>')))
-            
-            # Initialize Plotly libraries
-            _plotly_offline.init_notebook_mode(connected)
-            
-            _PYGSTI_WORKSPACE_INITIALIZED = True
+        #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
+        if connected:
+            imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
+        else:
+            imgURL = "offline/images/ui-icons_222222_256x240.png"
+        script += "<style>\n" + \
+                  ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n" + \
+                  ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL + \
+                  "</style>"
+        
+        # Note: within a jupyter notebook, the requireJS base path appears
+        # to be "/static", so just setting the path to "offline/myfile"
+        # would attempt to load "/static/offline/myfile.js" which points
+        # somewhere like .../site-packages/notebook/static/offline/myfile".
+        # So:
+        # - when in a notebook, the path needs to be "../files" followed
+        # by the notebook's path, which we can obtain via the notebook JS
+        # object.
+        # - when *not* in a notebook, the requireJS base defaults to the
+        # current page, so just using "offline/myfile" works fine then.
+
+        #Tell require.js where jQueryUI and Katex are
+        if connected:
+            reqscript = (
+                "<script>"
+                "console.log('ONLINE - using CDN paths');"
+                "requirejs.config({{ "
+                "   paths: {{ 'jquery-UI': ['{jqueryui}'],"
+                "             'katex': ['{katex}'],"
+                "             'autorender': ['{auto}'] }},"
+                "}});"
+                "require(['jquery', 'jquery-UI'],function($,ui) {{"
+                "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
+                "require(['katex', 'autorender'],function(katex,auto) {{"
+                "  window.katex=katex; console.log('Katex loaded'); }});"
+                "</script>"
+            ).format(jqueryui="https://code.jquery.com/ui/1.12.1/jquery-ui.min",
+                     katex="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
+                     auto="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js")
+
+        else:
+            reqscript = (
+                "<script>"
+                "var pth;"
+                "if(typeof IPython !== 'undefined') {{"
+                "  var nb = IPython.notebook;"
+                "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
+                "  jqueryui_pth = '../files' + nb.base_url + relpath + '{jqueryui}';"
+                "  katex_pth = '../files' + nb.base_url + relpath + '{katex}';"
+                "  auto_pth = '../files' + nb.base_url + relpath + '{auto}';"
+                "  console.log('IPYTHON DETECTED - using path ' + jqueryui_pth);"
+                "}}"
+                "else {{"
+                "  jqueryui_pth = '{jqueryui}';"
+                "  katex_pth = '{katex}';"
+                "  auto_pth = '{auto}';"
+                "  console.log('NO IPYTHON DETECTED - using path ' + jqueryui_pth);"
+                "}}"
+                "requirejs.config({{ "
+                "   paths: {{ 'jquery-UI': [jqueryui_pth], 'katex': [katex_pth], 'autorender': [auto_pth] }},"
+                "}});"
+                "require(['jquery', 'jquery-UI'],function($,ui) {{"
+                "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
+                "require(['katex', 'autorender'],function(katex,auto) {{"
+                "  window.katex=katex; console.log('Katex loaded'); }});"
+                "</script>"
+            ).format(jqueryui="offline/jquery-ui.min",
+                     katex="offline/katex.min",
+                     auto="offline/auto-render.min")
+        script += reqscript
+
+        
+        #Initialize Katex as a fallback if MathJax is unavailable (offline), OR,
+        # if MathJax is loaded, wait for plotly to load before rendering SVG text
+        # so math shows up properly in plots (maybe we could just use a require
+        # statement for this instead of polling?)
+        script += insert_resource(
+            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
+            "katex.css")
+
+        script += (
+            "\n<script>"
+            "require(['jquery','katex','autorender'],function($,katex,renderMathInElement) {\n"
+            "  var mathjaxTimer = setInterval( function() {\n"
+            "    if(document.readyState === 'complete' || document.readyState === 'loaded') {\n"
+            "        clearInterval(mathjaxTimer);\n"
+            "        if(typeof MathJax === 'undefined') {\n"
+            "          console.log('MATHJAX not found - attempting to typeset with Katex');\n"
+            "          renderMathInElement(document.body, { delimiters: [\n"
+            "             {left: '$$', right: '$$', display: true},\n"
+            "             {left: '$', right: '$', display: false},\n"
+            "             ] } );\n"
+            "        }\n"
+            "        else { //Mathjax is alive - wait for plotly\n"
+            "            var waitForPlotly = setInterval( function() {\n"
+            "              if( typeof(window.Plotly) !== 'undefined' ){\n"
+            "                MathJax.Hub.Config({ SVG: { font: 'STIX-Web' }, displayAlign: 'center' });\n"
+            "                MathJax.Hub.Queue(['setRenderer', MathJax.Hub, 'SVG']);\n"
+            "                clearInterval(waitForPlotly);\n"
+            "              }\n"
+            "            }, 500 );\n"
+            "        }\n"
+            "    } //end readyState check \n"
+            "  }, 500); //end setInterval \n"
+            "});\n"
+            '</script>\n')
+        
+        # Initialize Plotly libraries
+        script += _plotly_ex.init_notebook_mode_ex(connected)
+
+        # Perform check to see what has been loaded
+        script += (
+            "<div id='notebook_load_status'>Loaded: </div>\n"
+            "<script type='text/javascript'>\n"
+            "  require(['jquery'],function($) {"
+            "     var txt = $('#notebook_load_status').text();\n"
+            "     $('#notebook_load_status').text(txt + 'JQ ');\n"
+            "     });\n"
+            "  require(['jquery', 'jquery-UI'],function($,ui) {"
+            "     if( typeof($('#notebook_load_status').resizable) !== 'undefined') {\n"
+            "       var txt = $('#notebook_load_status').text();\n"
+            "       $('#notebook_load_status').text(txt + 'UI ');\n"
+            "     } });\n"
+            "  require(['jquery', 'plotly'],function($,Plotly) {"
+            "     if( typeof(Plotly.newPlot) !== 'undefined') {\n"
+            "       var txt = $('#notebook_load_status').text();\n"
+            "       $('#notebook_load_status').text(txt + 'PLY ');\n"
+            "     } });\n"
+            "  require(['jquery'],function($) {"
+            "     $(document).ready( function() {\n"
+            "       if( typeof MathJax !== 'undefined') {\n"
+            "         var txt = $('#notebook_load_status').text();\n"
+            "         $('#notebook_load_status').text(txt + 'MJX ');\n"
+            "     } }); });\n"
+            "  require(['jquery', 'katex', 'autorender'],function($,katex,auto) {"
+            "       var txt = $('#notebook_load_status').text();\n"
+            "       $('#notebook_load_status').text(txt + 'KTX ');\n"
+            "     });\n"
+            "</script>\n")
+
+        _display(_HTML(script)) #single call to display keeps things simple
+        
+        _PYGSTI_WORKSPACE_INITIALIZED = True
 
         self._register_components(autodisplay)
         return
@@ -1682,9 +1697,10 @@ class WorkspacePlot(WorkspaceOutput):
         divJS = []
         for i,fig in enumerate(self.figs):
             #use auto-sizing (fluid layout)
-            fig_dict = _plot_ex(fig, show_link=False,
-                                autosize=autosize, resizable=resizable,
-                                lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
+            fig_dict = _plotly_ex.plot_ex(
+                fig, show_link=False,
+                autosize=autosize, resizable=resizable,
+                lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
             divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
             divJS.append( fig_dict['js'] )
             divIDs.append(getPlotlyDivID(fig_dict['html']))

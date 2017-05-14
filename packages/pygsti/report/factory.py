@@ -60,7 +60,7 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         
     if 'plotlyLIB' not in qtys:
         qtys['plotlyLIB'] = _ws.insert_resource(
-            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-polarfixed.js")
+            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-polarfixed.min.js")
 
     #if 'mathjaxLIB' not in qtys:
     #    assert(connected),"MathJax cannot be used unless connected=True."

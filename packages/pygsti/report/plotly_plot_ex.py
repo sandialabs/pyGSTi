@@ -1,5 +1,9 @@
+import os as _os
 from plotly import tools as _plotlytools
 from plotly.offline.offline import _plot_html
+from plotly.offline.offline import get_plotlyjs
+from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
+from pkg_resources import resource_string
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, autosize=False,
@@ -137,3 +141,64 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     return {'html': plot_html, 'js': full_script }
         
 
+def init_notebook_mode_ex(connected=False):
+    """ 
+    A copy of init_notebook_mode in plotly.offline except this version
+    loads the pyGSTi-customized plotly library when connected=False
+    (which contains fixes relevant to pyGSTi plots).
+    """
+    global __PLOTLY_OFFLINE_INITIALIZED
+
+    if connected:
+        # Inject plotly.js into the output cell                                 
+        script_inject = (
+            ''
+            '<script>'
+            'requirejs.config({'
+            'paths: { '
+            # Note we omit the extension .js because require will include it.   
+            '\'plotly\': [\'https://cdn.plot.ly/plotly-latest.min\']},'
+            '});'
+            'if(!window.Plotly) {{'
+            'require([\'plotly\'],'
+            'function(plotly) {window.Plotly=plotly;});'
+            '}}'
+            '</script>'
+        )
+    else:
+        # Inject plotly.js into the output cell                                 
+        script_inject = (
+            ''
+            '<script type=\'text/javascript\'>'
+            'if(!window.Plotly){{'
+            'define(\'plotly\', function(require, exports, module) {{'
+            '{script}'
+            '}});'
+            'require([\'plotly\'], function(Plotly) {{'
+            'window.Plotly = Plotly;'
+            '}});'
+            '}}'
+            '</script>'
+            '').format(script=get_plotlyjs_ex())  #EGN changed to _ex
+
+    #ORIG: ipython_display.display(ipython_display.HTML(script_inject))
+    __PLOTLY_OFFLINE_INITIALIZED = True
+    return script_inject #EGN: just return so we can combine with other HTML
+
+def get_plotlyjs_ex():
+    """ Gets the custom pyGSTi version of plotly """
+    path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                         "templates","offline", "plotly-polarfixed.min.js") # "plotly-polarfixed.js"
+
+    #EGN this block mocks-up resource_string to also work when using a
+    # local package... could look into whether this is unecessary if we
+    # just do a "pip -e pygsti" install instead of install_locally.py...
+    with open(path) as f:
+        plotlyjs = f.read()
+        try: # to convert to unicode since we use unicode literals
+            plotlyjs = plotlyjs.decode('utf-8')
+        except AttributeError:
+            pass #Python3 case when unicode is read in natively (no need to decode)
+    
+    #ORIG plotlyjs = resource_string('plotly', path).decode('utf-8')
+    return plotlyjs
