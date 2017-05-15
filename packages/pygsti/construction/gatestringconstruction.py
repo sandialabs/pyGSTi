@@ -521,6 +521,35 @@ def gatestring_list( listOfGateLabelTuplesOrStrings ):
     return ret
 
 
+def translate_gatestring(gatestring, aliasDict):
+    """
+    Creates a new GateString object from an existing one by replacing
+    gate labels in `gatestring` by (possibly multiple) new labels according
+    to `aliasDict`.
+
+    Parameters
+    ----------
+    gatestring : GateString
+        The gate string to use as the base for find & replace
+        operations.
+
+    aliasDict : dict
+        A dictionary whose keys are single gate labels and whose values are 
+        lists or tuples of the new gate labels that should replace that key.
+        If `aliasDict is None` then `gatestring` is returned.
+
+    Returns
+    -------
+    GateString
+    """
+    if aliasDict is None:
+        return gatestring
+    else:
+        return _gs.GateString(tuple(_itertools.chain(
+            *[aliasDict.get(lbl,lbl) for lbl in gatestring])))
+
+
+
 def translate_gatestring_list(gatestringList, aliasDict):
     """
     Creates a new list of GateString objects from an existing one by replacing
@@ -536,15 +565,19 @@ def translate_gatestring_list(gatestringList, aliasDict):
     aliasDict : dict
         A dictionary whose keys are single gate labels and whose values are 
         lists or tuples of the new gate labels that should replace that key.
+        If `aliasDict is None` then `gatestringList` is returned.
 
     Returns
     -------
     list of GateStrings
     """
-    new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
-                *[aliasDict.get(lbl,lbl) for lbl in gs])))
-                        for gs in gatestringList ]
-    return new_gatestrings
+    if aliasDict is None:
+        return gatestringList
+    else:
+        new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
+            *[aliasDict.get(lbl,lbl) for lbl in gs])))
+                            for gs in gatestringList ]
+        return new_gatestrings
 
 
 def compose_alias_dicts(aliasDict1, aliasDict2):
