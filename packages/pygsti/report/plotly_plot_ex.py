@@ -1,3 +1,11 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+""" Extends Plolty python library for additional needed functionality."""
+
 import os as _os
 from plotly import tools as _plotlytools
 from plotly.offline.offline import _plot_html
