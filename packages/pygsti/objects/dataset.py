@@ -273,7 +273,6 @@ class DataSet(object):
             self.measurementLabels = None
             self.totals = None
 
-
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
 
@@ -772,6 +771,7 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
+            self.file_origin = fileOrFilename
         else:
             f = fileOrFilename
 

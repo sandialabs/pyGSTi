@@ -15,6 +15,7 @@ import collections as _collections
 from ..tools import gatetools as _gt
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
+from ..tools import compattools as _compat
 from .profiler import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
@@ -99,7 +100,7 @@ class GateCalc(object):
         probabilities such that all SPAM label probabilities
         sum exactly to 1.0.
         """
-        if not isinstance(label,str): return False #b/c label could be a custom (rho,E) pair
+        if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
         return bool(self.spamdefs[label] == (self._remainderLabel, self._remainderLabel))
 
     def _get_remainder_row_index(self, spam_label_rows):

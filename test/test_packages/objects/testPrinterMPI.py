@@ -1,5 +1,5 @@
 from pygsti.objects.verbosityprinter import *
-from mpi4py                          import MPI
+#unneeded: from mpi4py                          import MPI
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 import unittest, os
@@ -12,7 +12,6 @@ class mock_comm():
         return self.rank
 
 class TestPrinterMPI(BaseTestCase):
-
     def test_mpi(self):
         comm    = mock_comm(0)
         print(('Running test on process %s' % comm.Get_rank()))

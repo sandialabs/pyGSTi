@@ -151,10 +151,8 @@ class TestDriversMethods(DriversTestCase):
                                 advancedOptions={'truncScheme': ts})
 
         #create a report...
-        result.create_full_report_pdf(filename=temp_files + "/full_report_FPR.pdf",
-                                      debugAidsAppendix=False, gaugeOptAppendix=False,
-                                      pixelPlotAppendix=False, whackamoleAppendix=False,
-                                      verbosity=2)
+        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_FPR.html",
+                                                 verbosity=2)
         #import os
         #print("LOG DEBUG")
         #os.system("cat " + temp_files + "/full_report_FPR.log")
@@ -167,37 +165,30 @@ class TestDriversMethods(DriversTestCase):
 
         #Without fixed initial fiducial pairs
         fidPairs = None
-        reducedLists = pygsti.construction.make_lsgst_lists(
+        reducedLists = pygsti.construction.make_lsgst_structs(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        result = pygsti.do_long_sequence_gst(
-                                ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, fidPairs=None, lsgstLists=reducedLists,
-                                advancedOptions={'truncScheme': ts}) #self.runSilent(
+        result = pygsti.do_long_sequence_gst_base(
+            ds, std.gs_target, reducedLists,
+            advancedOptions={'truncScheme': ts}) #self.runSilent(
 
         #create a report...
-        result.create_full_report_pdf(filename=temp_files + "/full_report_RFPR.pdf",
-                                      debugAidsAppendix=False, gaugeOptAppendix=False,
-                                      pixelPlotAppendix=False, whackamoleAppendix=False,
-                                      verbosity=2)
-
+        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_RFPR.html",
+                                                 verbosity=2)
 
         #With fixed initial fiducial pairs
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=0)
-        reducedLists = pygsti.construction.make_lsgst_lists(
+        reducedLists = pygsti.construction.make_lsgst_structs(
             std.gs_target.gates.keys(), std.fiducials, std.fiducials, std.germs,
             maxLens, fidPairs, ts, keepFraction=0.5, keepSeed=1234)
-        result2 = self.runSilent(pygsti.do_long_sequence_gst,
-                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                 std.germs, maxLens, fidPairs=None, lsgstLists=reducedLists,
+        result2 = self.runSilent(pygsti.do_long_sequence_gst_base,
+                                 ds, std.gs_target, reducedLists,
                                  advancedOptions={'truncScheme': ts})
 
         #create a report...
-        result2.create_full_report_pdf(filename=temp_files + "/full_report_RFPR2.pdf",
-                                      debugAidsAppendix=False, gaugeOptAppendix=False,
-                                      pixelPlotAppendix=False, whackamoleAppendix=False,
-                                      verbosity=2)
+        pygsti.report.create_single_qubit_report(result2, temp_files + "/full_report_RFPR2.html",
+                                                 verbosity=2)
 
 
     def test_longSequenceGST_parameterizedGates(self):
@@ -213,7 +204,7 @@ class TestDriversMethods(DriversTestCase):
                                                       parameterization="linear")
 
         maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
+        result = pygsti.do_long_sequence_gst( #self.runSilent(
                                 ds, gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens,
                                 advancedOptions={'truncScheme': ts, 'tolerance':1e-4} )
@@ -222,10 +213,9 @@ class TestDriversMethods(DriversTestCase):
                                 # very small changes (~0.0001) to the total chi^2.
 
         #create a report...
-        result.create_full_report_pdf(filename=temp_files + "/full_report_LPGates.pdf",
-                                      debugAidsAppendix=False, gaugeOptAppendix=False,
-                                      pixelPlotAppendix=False, whackamoleAppendix=False,
-                                      verbosity=2)
+        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_LPGates.html",
+                                                 verbosity=2)
+                
 
 
     def test_longSequenceGST_wMapCalc(self):
@@ -305,11 +295,11 @@ class TestDriversMethods(DriversTestCase):
                        bootgs_p, std.gs_target, gateMetric = 'frobenius',
                        spamMetric = 'frobenius', plot=False)
 
-        #Test plotting -- seems to work.
-        self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
-                       bootgs_p, std.gs_target,
-                       gateMetric = 'frobenius', spamMetric = 'frobenius',
-                       plot=True)
+        ##Test plotting -- removed b/c plotting was removed w/matplotlib removal
+        #self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
+        #               bootgs_p, std.gs_target,
+        #               gateMetric = 'frobenius', spamMetric = 'frobenius',
+        #               plot=True)
 
 
         #Test utility functions -- just make sure they run for now...

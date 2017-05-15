@@ -383,7 +383,6 @@ class Profiler(object):
         self.__dict__.update(stateDict)
         self.comm = None # initialize to None upon unpickling
 
-        
 
 
 class DummyProfiler(object):
@@ -408,5 +407,4 @@ class DummyProfiler(object):
     def mem_check(self, name,printme=None):
         """Stub function that does nothing"""
         pass
-
     
