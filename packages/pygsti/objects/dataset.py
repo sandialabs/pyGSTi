@@ -191,7 +191,7 @@ class DataSet(object):
 
         measurementGates : dict, optional
             If not None, a dictrionary whose keys are user-defined "measurement
-            labels" and whose values are lists if gate labels.  The gate labels 
+            labels" and whose values are lists of gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
             labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
