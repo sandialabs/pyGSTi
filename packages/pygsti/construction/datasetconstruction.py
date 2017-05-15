@@ -154,6 +154,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             assert(1.-TOL <= sum(all_ps.values()) <= 1.+TOL)
                 
         if nSamples is None and dsGen is not None:
+            trans_s0 = _gstrc.translate_gatestring(s0, aliasDict)
             N = dsGen[trans_s0].total() #use the number of samples from the generating dataset
              #Note: total() accounts for other intermediate-measurment branches automatically
         else:
