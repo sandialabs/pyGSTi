@@ -8,11 +8,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import collections as _collections
 import itertools   as _itertools
+import warnings    as _warnings
 
 from ..             import construction         as _const
 from ..             import objects              as _objs
 from ..algorithms   import gaugeopt_to_target   as _gaugeopt_to_target
 from ..tools        import listtools            as _lt
+
+#A flag to enable fast-loading of old results files (should
+# only be changed by experts)
+__SHORTCUT_OLD_RESULTS_LOAD = False
 
 class Results(object):
     """
@@ -228,32 +233,32 @@ class Results(object):
                 else: goparams['go0'] = v
 
             gstrStructs = _collections.OrderedDict()
-            #COMMENTED TO re-run gatestring reduction analysis - TODO: re un-comment these lines
-            #try:
-            #    prepStrs = stateDict['gatestring_lists']['prep fiducials']
-            #    effectStrs = stateDict['gatestring_lists']['effect fiducials']
-            #    germs = stateDict['gatestring_lists']['germs']
-            #    aliases = stateDict['parameters'].get('gateLabelAliases',None)
-            #    fidPairs = stateDict['parameters'].get('fiducial pairs',None)
-            #    maxLengthList = stateDict['parameters']['max length list']
-            #    if maxLengthList[0] == 0:
-            #        maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
-            #
-            #    structs = _const.make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
-            #                                        prepStrs, effectStrs, germs, maxLengthList,
-            #                                        fidPairs, truncScheme="whole germ powers",
-            #                                        nest=True, keepFraction=1, keepSeed=None,
-            #                                        includeLGST=True, gateLabelAliases=aliases)
-            #except:
-            #    print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
-            #    structs = []
-            #    for lst in stateDict['gatestring_lists']['iteration']:
-            #        unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
-            #        unindexed_gss.add_unindexed(lst)
-            #        structs.append(unindexed_gss)
-            #        
-            #gstrStructs['iteration'] = structs
-            #gstrStructs['final'] = structs[-1]
+            if __SHORTCUT_OLD_RESULTS_LOAD == False:
+                try:
+                    prepStrs = stateDict['gatestring_lists']['prep fiducials']
+                    effectStrs = stateDict['gatestring_lists']['effect fiducials']
+                    germs = stateDict['gatestring_lists']['germs']
+                    aliases = stateDict['parameters'].get('gateLabelAliases',None)
+                    fidPairs = stateDict['parameters'].get('fiducial pairs',None)
+                    maxLengthList = stateDict['parameters']['max length list']
+                    if maxLengthList[0] == 0:
+                        maxLengthList = maxLengthList[1:] #Fine; includeLGST is always True below
+                
+                    structs = _const.make_lsgst_structs(stateDict['gatesets']['target'].gates.keys(),
+                                                        prepStrs, effectStrs, germs, maxLengthList,
+                                                        fidPairs, truncScheme="whole germ powers",
+                                                        nest=True, keepFraction=1, keepSeed=None,
+                                                        includeLGST=True, gateLabelAliases=aliases)
+                except:
+                    print("Warning: Ls & germs structure not found.  Loading unstructured Results.")
+                    structs = []
+                    for lst in stateDict['gatestring_lists']['iteration']:
+                        unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
+                        unindexed_gss.add_unindexed(lst)
+                        structs.append(unindexed_gss)
+                        
+                gstrStructs['iteration'] = structs
+                gstrStructs['final'] = structs[-1]
 
             gstrLists = _collections.OrderedDict()
             for k,v in stateDict['gatestring_lists'].items():
@@ -423,7 +428,78 @@ class Results(object):
             
         return self.confidence_regions[crkey]
 
+    #OLD Methods for generating reports which have been removed - show alert
+    # message directing users to new factory functions
+    def create_full_report_pdf(self, confidenceLevel=None, filename="auto",
+                               title="auto", datasetLabel="auto", suffix="",
+                               debugAidsAppendix=False, gaugeOptAppendix=False,
+                               pixelPlotAppendix=False, whackamoleAppendix=False,
+                               pureDataAppendix=False,  m=0, M=10, tips=False,
+                               verbosity=0, comm=None):
+        _warnings.warn(
+            ('create_full_report_pdf(...) has been removed from pyGSTi.\n'
+             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
+             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_single_qubit_report(...)\n'))
+
+    def create_brief_report_pdf(self, confidenceLevel=None,
+                                filename="auto", title="auto", datasetLabel="auto",
+                                suffix="", m=0, M=10, tips=False, verbosity=0,
+                                comm=None):
+        _warnings.warn(
+            ('create_brief_report_pdf(...) has been removed from pyGSTi.\n'
+             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
+             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_single_qubit_report(..., brief=True)\n'))
+
+    def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
+                                title="auto", datasetLabel="auto", suffix="",
+                                debugAidsAppendix=False,
+                                pixelPlotAppendix=False, whackamoleAppendix=False,
+                                m=0, M=10, verbosity=0, comm=None):
+        _warnings.warn(
+            ('create_presentation_pdf(...) has been removed from pyGSTi.\n'
+             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
+             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  Beamer presentations have been removed.  Please try using\n'
+             '  pygsti.report.create_single_qubit_report(...)\n'))
+
+    def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
+                            title="auto", datasetLabel="auto", suffix="",
+                            debugAidsAppendix=False,
+                            pixelPlotAppendix=False, whackamoleAppendix=False,
+                            m=0, M=10, verbosity=0, pptTables=False, comm=None):
+        _warnings.warn(
+            ('create_presentation_ppt(...) has been removed from pyGSTi.\n'
+             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
+             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  Powerpoint presentations have been removed.  Please try using\n'
+             '  pygsti.report.create_single_qubit_report(...)\n'))
+
+    def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
+                                  title="auto", datasetLabel="auto", suffix="",
+                                  tips=False, verbosity=0, comm=None,
+                                  showAppendix=False):
+        _warnings.warn(
+            ('create_general_report_pdf(...) has been removed from pyGSTi.\n'
+             '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
+             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_general_report(...)\n'))
 
 class ResultOptions(object):
     """ Unused.  Exists for sole purpose of loading old Results pickles """
     pass
+
+#Define empty ResultCache class in resultcache module to enable loading old Results pickles
+import sys as _sys
+class dummy_ResultCache(object): pass
+class dummy_resultcache_module(object):
+    def __init__(self):
+        self.ResultCache = dummy_ResultCache
+_sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
