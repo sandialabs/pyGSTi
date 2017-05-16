@@ -410,8 +410,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
                 lbl,"final", confidenceLevel, comm=comm) for lbl in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
-            qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
-            qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
+            qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
+            qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0].nNonGaugeParams
 
     goView = [multirun,multiGO,False]
     maxLView = [multirun,False,multiL]
@@ -694,8 +694,8 @@ def create_general_report(results, filename, confidenceLevel=None,
                 lbl,"final", confidenceLevel, comm=comm) for lbl in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
-            qtys['confidenceIntervalScaleFctr'] = "%.3g" % cri.intervalScaling
-            qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % cri.nNonGaugeParams
+            qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
+            qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0].nNonGaugeParams
 
     goView = [multirun,multiGO,False]
     maxLView = [multirun,False,multiL]
