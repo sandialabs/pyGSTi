@@ -2,9 +2,9 @@
 from __future__ import division, print_function
 import numpy as np
 from scipy import stats
-from matplotlib import pyplot
+#from matplotlib import pyplot
 import scipy
-from . import plotting
+#from . import plotting
 from .. import objects
 from .. import construction
 
@@ -73,56 +73,62 @@ class data_comparator():
         self.pVals0 = str(len(self.pVals)-np.count_nonzero(self.pVals))
         self.dof = dof
         self.num_strs = len(self.pVals)
+        
     def worst_strings(self,number):
         worst_strings = np.array(self.pVals_and_strings,dtype='object')
         worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
         return worst_strings
+    
     def hist_p_plot(self,bins=np.logspace(-10,0,50),frequency=True,log=True,datasetnames=['DS0','DS1'],filename=''):
-        if frequency:
-            weights = np.ones(self.pVals.shape) / len(self.pVals)
-            hist_data = pyplot.hist(self.pVals,bins=bins,log=log,weights = weights)
-            pyplot.plot(bins,scipy.stats.chi2.pdf(scipy.stats.chi2.isf(bins,self.dof),self.dof),'--',linewidth=4,label='No-change prediction')
-            pyplot.ylabel('Relative frequency')
-        else:
-            hist_data = pyplot.hist(self.pVals,bins=bins,log=log)
-            pyplot.plot(bins,hist_data[0][-1]*scipy.stats.chi2.pdf(scipy.stats.chi2.isf(bins,self.dof),self.dof),'--',linewidth=4,label='No-change prediction')
-            pyplot.ylabel('Number of occurrences')            
-        pyplot.legend()
-        if log:
-            pyplot.gca().set_xscale('log')
-        pyplot.xlabel('p-value')
-        title = 'p-value histogram for experimental coins;'
-        if self.gate_exclusions:
-            title += ' '+str(self.gate_exclusions)+' excluded'
-            if self.gate_inclusions:
-                title += ';'
-        if self.gate_inclusions:
-            title += ' '+str(self.gate_inclusions)+' included'
-        title += '\nComparing datasets '+str(datasetnames)
-        title += ' p=0 '+str(self.pVals0)+' times; '+str(len(self.pVals))+' total sequences'
-        pyplot.title(title)
-        if filename:
-            pyplot.savefig(filename)
+        #if frequency:
+        #    weights = np.ones(self.pVals.shape) / len(self.pVals)
+        #    hist_data = pyplot.hist(self.pVals,bins=bins,log=log,weights = weights)
+        #    pyplot.plot(bins,scipy.stats.chi2.pdf(scipy.stats.chi2.isf(bins,self.dof),self.dof),'--',linewidth=4,label='No-change prediction')
+        #    pyplot.ylabel('Relative frequency')
+        #else:
+        #    hist_data = pyplot.hist(self.pVals,bins=bins,log=log)
+        #    pyplot.plot(bins,hist_data[0][-1]*scipy.stats.chi2.pdf(scipy.stats.chi2.isf(bins,self.dof),self.dof),'--',linewidth=4,label='No-change prediction')
+        #    pyplot.ylabel('Number of occurrences')            
+        #pyplot.legend()
+        #if log:
+        #    pyplot.gca().set_xscale('log')
+        #pyplot.xlabel('p-value')
+        #title = 'p-value histogram for experimental coins;'
+        #if self.gate_exclusions:
+        #    title += ' '+str(self.gate_exclusions)+' excluded'
+        #    if self.gate_inclusions:
+        #        title += ';'
+        #if self.gate_inclusions:
+        #    title += ' '+str(self.gate_inclusions)+' included'
+        #title += '\nComparing datasets '+str(datasetnames)
+        #title += ' p=0 '+str(self.pVals0)+' times; '+str(len(self.pVals))+' total sequences'
+        #pyplot.title(title)
+        #if filename:
+        #    pyplot.savefig(filename)
+        pass #TODO: update to plotly
+    
     def hist_logl_plot(self,bins=None,ylim=None,log=False,datasetnames=['DS0','DS1'],filename=''):
-        if bins is None:
-            bins = len(self.llrVals)
-        pyplot.hist(self.llrVals,bins=bins,log=log,cumulative=True,normed=True,histtype='step')
-        if log:
-            pyplot.gca().set_xscale('log')
-        pyplot.xlabel('log-likelihood')
-        pyplot.ylabel('Cumulative frequency')
-        title = 'Cumulative log-likelihood ratio histogram for experimental coins;'
-        if self.gate_exclusions:
-            title += ' '+str(self.gate_exclusions)+' excluded'
-            if self.gate_inclusions:
-                title += ';'
-        if self.gate_inclusions:
-            title += ' '+str(self.gate_inclusions)+' included'
-        title += '\nComparing datasets '+str(datasetnames)
-        title += ' p=0 '+str(self.pVals0)+' times; '+str(len(self.pVals))+' total sequences'
-        pyplot.title(title)
-        if filename:
-            pyplot.savefig(filename)
+        #if bins is None:
+        #    bins = len(self.llrVals)
+        #pyplot.hist(self.llrVals,bins=bins,log=log,cumulative=True,normed=True,histtype='step')
+        #if log:
+        #    pyplot.gca().set_xscale('log')
+        #pyplot.xlabel('log-likelihood')
+        #pyplot.ylabel('Cumulative frequency')
+        #title = 'Cumulative log-likelihood ratio histogram for experimental coins;'
+        #if self.gate_exclusions:
+        #    title += ' '+str(self.gate_exclusions)+' excluded'
+        #    if self.gate_inclusions:
+        #        title += ';'
+        #if self.gate_inclusions:
+        #    title += ' '+str(self.gate_inclusions)+' included'
+        #title += '\nComparing datasets '+str(datasetnames)
+        #title += ' p=0 '+str(self.pVals0)+' times; '+str(len(self.pVals))+' total sequences'
+        #pyplot.title(title)
+        #if filename:
+        #    pyplot.savefig(filename)
+        pass #TODO: update to plotly
+        
     def box_plot(self,germs,prep_fids,effect_fids,max_lengths,linlg_pcntle,prec,title_text,save_to=None): 
         prepStrs, effectStrs = prep_fids, effect_fids
         xvals = max_lengths
@@ -139,9 +145,12 @@ class data_comparator():
                     seq = f2 + gateStr + f1
                     mx[i,j] = llrVals_and_strings_dict[seq]
             return mx
-        xvals,yvals,subMxs,n_boxes,dof = plotting._computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,False)
-        stdcmap = plotting.StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
-        plotting.generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, "L","germs", prec=prec, title=title_text, save_to=save_to)
+
+        #TODO: update to plotly
+        #xvals,yvals,subMxs,n_boxes,dof = plotting._computeSubMxs(xvals,yvals,xy_gatestring_dict,mx_fn,False)
+        #stdcmap = plotting.StdColormapFactory('linlog', n_boxes=n_boxes, linlg_pcntle=linlg_pcntle, dof=dof)
+        #plotting.generate_boxplot( xvals, yvals, xy_gatestring_dict, subMxs, stdcmap, "L","germs", prec=prec, title=title_text, save_to=save_to)
+        
     def report(self,confidence_level=0.95):
         single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
         number_of_single_thresh_violators = np.sum(np.where(self.llrVals>single_string_thresh,1,0))
