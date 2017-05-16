@@ -10,7 +10,7 @@ class FormatterBaseTestCase(BaseTestCase):
         self.roundedNum   = 1.82     # Two digits after decimal
 
         latexString = '\\begin{tabular}[l]{|c|}\n\hline\n%s \\\\ \hline\n\end{tabular}\n'
-        htmlString  = '<table class=pygstiTbl><thead><tr><th> %s </th></tr></thead><tbody></tbody></table>'
+        htmlString  = '<table><thead><tr><th> %s </th></tr></thead><tbody></tbody></table>'
 
         self.precise   = {
             'html'  : htmlString  % self.arbitraryNum,
@@ -24,7 +24,7 @@ class FormatterBaseTestCase(BaseTestCase):
         headings   = [heading]
         formatters = [formatter]
         table      = ReportTable(headings, formatters)
-        return table.render(formattype, **kwargs)
+        return table.render(formattype, **kwargs)[formattype]
 
 import pygsti.report.formatter as formatter
 from pygsti.report.table import ReportTable
@@ -53,11 +53,11 @@ class GenericFormatterTests(FormatterBaseTestCase):
 
     def test_string_return(self):
         self.assertEqual(self.render_pair('remainder', 'Effect', 'html'),
-                         '<table class=pygstiTbl><thead><tr><th> E<sub>C</sub> </th></tr></thead><tbody></tbody></table>')
+                         '<table><thead><tr><th> E<sub>C</sub> </th></tr></thead><tbody></tbody></table>')
 
     def test_string_replace(self):
         self.assertEqual(self.render_pair('rho0', 'Rho', 'html'),
-                         '<table class=pygstiTbl><thead><tr><th> &rho;<sub>0</sub> </th></tr></thead><tbody></tbody></table>')
+                         '<table><thead><tr><th> &rho;<sub>0</sub> </th></tr></thead><tbody></tbody></table>')
 
     def test_no_format(self):
         self.assertEqual(formatter._no_format('x'), 'x')
