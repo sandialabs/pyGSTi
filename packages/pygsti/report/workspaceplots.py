@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Classes corresponding to plots within a Workspace context."""
 
 import numpy             as _np
+import scipy             as _scipy
 import os                as _os
 import warnings          as _warnings
 
@@ -811,7 +812,7 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None, scale=1.0):
+                 directGSTgatesets=None, dscomparator=None, scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -820,7 +821,7 @@ class ColorBoxPlot(WorkspacePlot):
     
         Parameters
         ----------
-        plottype : {"chi2","logl","blank","errorrate","directchi2","directlogl"}
+        plottype : {"chi2","logl","blank","errorrate","directchi2","directlogl","dscmp"}
             Specifies the type of plot. "errorate", "directchi2" and
             "directlogl" require that `directGSTgatesets` be set.
 
@@ -869,6 +870,9 @@ class ColorBoxPlot(WorkspacePlot):
             types.  Keys are gate strings and values are corresponding gate
             sets (see `plottype` above).        
 
+        dscomparator : DataComparator, optional
+            The data set comparator used to produce the "dscmp" plot type.
+
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
         """
@@ -876,12 +880,12 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets, scale)
+                                          directGSTgatesets, dscomparator, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets, scale):
+                directGSTgatesets, dscomparator, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -902,7 +906,7 @@ class ColorBoxPlot(WorkspacePlot):
             elif typ == "logl":
                 precomp=True
                 colormapType = "linlog"
-                linlog_color = "green"
+                linlog_color = "red"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
@@ -927,7 +931,7 @@ class ColorBoxPlot(WorkspacePlot):
             elif typ == "directchi2":
                 precomp=False
                 colormapType = "linlog"
-                linlog_color = "blue"
+                linlog_color = "yellow"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.direct_chi2_matrix(
@@ -946,6 +950,16 @@ class ColorBoxPlot(WorkspacePlot):
                         directGSTgatesets.get(plaq.base,None),
                         minProbClipForWeighting)
 
+            elif typ == "dscmp":
+                precomp=False
+                colormapType = "linlog"
+                linlog_color = "green"
+                assert(dscomparator is not None), \
+                    "Must specify `dscomparator` argument to create `dscmp` plot!"
+
+                def mx_fn(plaq,x,y):
+                    return _ph.dscompare_llr_matrices(plaq, dscomparator)                
+                
             else:
                 raise ValueError("Invalid plot type: %s" % typ)
 
@@ -1382,6 +1396,135 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         
         return go.Figure(data=data, layout=layout)
 
+
+
+class DatasetComparisonPlot(WorkspacePlot):
+    def __init__(self, ws, dsc, nbins=50, frequency=True,
+                  log=True, display='pvalue', scale=1.0):
+        super(DatasetComparisonPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
+                                                   log, display, scale)
+        
+    def _create(self, dsc, nbins, frequency, log, display, scale):
+        if display == 'llr' and nbins is None:
+            nbins = len(dsc.llrVals)
+
+        TOL=1e-10
+        pVals = dsc.pVals.astype('d')
+        pVals_nz = _np.array([x for x in pVals if abs(x)>TOL])
+        pVals0 = (len(pVals)-len(pVals_nz)) if log else dsc.pVals0
+        llrVals = dsc.llrVals.astype('d')
+        
+        if log:
+            minval = _np.floor(_np.log10(min(pVals_nz)))
+            maxval = _np.ceil(_np.log10(max(pVals_nz)))
+            thres = (maxval-minval)/(nbins-1) * (nbins-2)
+            lastBinCount = (_np.log10(pVals_nz)>thres).sum()
+             #Kenny: why use this as a normalization?  Is this correct?
+        else:
+            minval = min(pVals)
+            maxval = max(pVals)
+            thres = (maxval-minval)/(nbins-1) * (nbins-2)
+            lastBinCount = (pVals>thres).sum()
+
+        if display == 'pvalue':
+            norm = 'probability' if frequency else 'count'
+            vals = _np.log10(pVals_nz) if log else pVals
+            cumulative = dict(enabled=False)
+            barcolor = '#43C6DB' #turquoise
+        elif display == 'llr':
+            norm = 'probability'
+            vals = _np.log10(llrVals) if log else llrVals
+            cumulative = dict(enabled=True)
+            barcolor = '#FFD801' #rubber ducky yellow
+        else:
+            raise ValueError("Invalid display value: %s" % display)
+
+        histTrace = go.Histogram(
+            x=vals, histnorm=norm,
+            autobinx=False,
+            xbins=dict(
+                start=minval,
+                end=maxval,
+                size=(maxval-minval)/(nbins-1)
+            ),
+            cumulative=cumulative,
+            marker=dict(color=barcolor),
+            opacity=0.75,
+            showlegend=False,
+        )
+
+        if display == 'pvalue':
+            bin_edges = _np.linspace(minval,maxval,nbins)
+            linear_bin_edges = 10**(bin_edges) if log else bin_edges
+            M = 1.0 if frequency else lastBinCount
+            
+            noChangeTrace = go.Scatter(
+                x=bin_edges,
+                y=M*_scipy.stats.chi2.pdf(
+                    _scipy.stats.chi2.isf(linear_bin_edges,dsc.dof)
+                                          ,dsc.dof),
+                mode="lines",
+                marker=dict(
+                    color = 'rgba(0,0,255,0.8)',
+                    line = dict(
+                        width = 2,
+                    )),
+                name='No-change prediction'
+            )
+    
+            data = [histTrace, noChangeTrace]
+            xlabel = 'p-value'
+            ylabel = "Relative frequency" if frequency else "Number of occurrences"        
+            title = 'p-value histogram for experimental coins;'
+            
+        elif display == 'llr':
+            data = [histTrace]
+            xlabel = 'log-likelihood'
+            ylabel = 'Cumulative frequency'
+            title = 'Cumulative log-likelihood ratio histogram for experimental coins;'
+
+        if log:
+            minInt = int(_np.floor(minval))
+            maxInt = int(_np.ceil(maxval))
+            xaxis_dict = dict(
+                title=xlabel,
+                tickvals=list(range(minInt,maxInt+1)),
+                ticktext=["10<sup>%d</sup>" % i for i in range(minInt,maxInt+1)]
+            )
+        else:
+            xaxis_dict = dict(title=xlabel) #auto-tick labels
+
+
+        datasetnames = dsc.DS_names
+        if dsc.gate_exclusions:
+            title += ' '+str(dsc.gate_exclusions)+' excluded'
+            if dsc.gate_inclusions:
+                title += ';'
+        if dsc.gate_inclusions:
+            title += ' '+str(dsc.gate_inclusions)+' included'
+        title += '<br>Comparing datasets '+str(datasetnames)
+        title += ' p=0 '+str(pVals0)+' times; '+str(len(dsc.pVals))+' total sequences'
+
+        layout = go.Layout(
+            width=700*scale,
+            height=400*scale,
+            title=title,
+            font=dict(size=10),
+            xaxis=xaxis_dict,
+            yaxis=dict(
+                title=ylabel,
+                type='log' if log else 'linear',
+                #tickformat='g',
+                exponentformat='power',
+            ),
+            bargap=0,
+            bargroupgap=0,
+            legend=dict(orientation="h")
+        )
+
+        return go.Figure(data=data, layout=layout)
+    
+    
 
 #Histograms??
 #TODO: histogram

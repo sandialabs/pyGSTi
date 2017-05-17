@@ -606,3 +606,33 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
     freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels
+
+
+
+def dscompare_llr_matrices(gsplaq, dscomparator):
+    """
+    Computes matrix of log-likelihood-ratios comparting the 
+    datasets of `dscomparator`.
+
+    Parameters
+    ----------
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
+
+    dscomparator : DataComparator
+        The object specifying that data to be compared.
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        log-likelihood-ratio values corresponding to the gate sequences
+        where a base gateString is sandwiched between the each prep-fiducial and
+        effect-fiducial pair.
+    """
+    llrVals_and_strings_dict = dict(dscomparator.llrVals_and_strings)
+    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for i,j,gstr in gsplaq:
+        ret[i,j] = llrVals_and_strings_dict[gstr]
+    return ret

@@ -39,6 +39,7 @@ from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
 from .profiler import Profiler
 from .profiler import DummyProfiler
+from .datacomparator import DataComparator
 
 from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
     DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup
