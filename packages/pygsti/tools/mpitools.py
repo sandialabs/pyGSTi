@@ -10,6 +10,7 @@ import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
 from . import slicetools as _slct
+from . import compattools as _compat
 
 def distribute_indices(indices, comm, allow_split_comm=True):
     """ 
@@ -365,7 +366,7 @@ def gather_slices(slices, slice_owners,
     my_rank = comm.Get_rank()
     arIndx = [ slice(None,None) ] * arToFill.ndim
 
-    axes = (axes,) if isinstance(axes,int) else axes
+    axes = (axes,) if _compat.isint(axes) else axes
 
     max_indices = [None]*len(axes)
     if max_buffer_size is not None: #no maximum of buffer size
@@ -470,7 +471,7 @@ def gather_slices_by_owner(slicesIOwn, arToFill,
     my_rank = comm.Get_rank()
     arIndx = [ slice(None,None) ] * arToFill.ndim
 
-    axes = (axes,) if isinstance(axes,int) else axes
+    axes = (axes,) if _compat.isint(axes) else axes
 
     max_indices = [None]*len(axes)
     if max_buffer_size is not None: #no maximum of buffer size

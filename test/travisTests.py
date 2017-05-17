@@ -24,15 +24,14 @@ if doReportA == 'True':
 # All other reports tests
 elif doReportB == 'True':
     tests = ['report/%s' % filename for filename in [
-    'testAnalysis.py',
     'testEBFormatters.py',
     'testMetrics.py',
     'testPrecisionFormatter.py',
-    'testEBFormatters.py',
     'testFormatter.py',
-    'testFigureFormatter.py',
-    'testPlotting.py',
+    'testWorkspace.py',
     'testTable.py']]
+    # Removed: 'testAnalysis.py',
+    # Removed: 'testFigureFormatter.py',
 
 elif doDrivers == 'True':
     tests = ['drivers']

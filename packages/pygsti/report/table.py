@@ -22,14 +22,17 @@ class ReportTable(object):
     def finish(self):
         pass #nothing to do currently
 
-    def render(self, fmt, longtables=False, tableclass='pygstiTbl',
-               scratchDir=None, precision=6, polarprecision=3, sciprecision=0):
+    def render(self, fmt, longtables=False, tableID=None, tableclass=None,
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+               resizable=False, autosize=False):
 
         specs = {
             'scratchDir'     : scratchDir,
             'precision'      : precision,
             'polarprecision' : polarprecision,
-            'sciprecision'   : sciprecision
+            'sciprecision'   : sciprecision,
+            'resizable'      : resizable,
+            'autosize'       : autosize
             }
 
         # Create a formatSet, which contains rules for rendering lists
@@ -80,14 +83,18 @@ class ReportTable(object):
                        latex += " \\\\ \hline\n"
 
             latex += "\end{%s}\n" % table
-            return latex
+            return { 'latex': latex }
 
 
         elif fmt == "html":
 
+            html = ""
+            js = ""
+            
             if self._customHeadings is not None \
                     and "html" in self._customHeadings:
-                html = self._customHeadings['html']
+                html += self._customHeadings['html'] % {'tableclass': tableclass,
+                                                       'tableid': tableID}
             else:
                 if self._headingFormatters is not None:
                     colHeadings_formatted = \
@@ -95,20 +102,35 @@ class ReportTable(object):
                                        self._headingFormatters, "html")
                 else: #headingFormatters is None => headings is dict w/formats
                     colHeadings_formatted = self._headings['html']
-
-                html  = "<table class=%s><thead>" % tableclass
-                html += "<tr><th> %s </th></tr>" % \
+                
+                html += "<table"
+                if tableclass: html += ' class="%s"' % tableclass
+                if tableID: html += ' id="%s"' % tableID
+                html += "><thead><tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadings_formatted))
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
                 formatted_rowData = formatSet.formatList(rowData, formatters, "html")
                 if len(formatted_rowData) > 0:
-                    html += "<tr><td>" + \
-                        "</td><td>".join(formatted_rowData) + "</td></tr>\n"
+                    html += "<tr>"
+                    for formatted_cell in formatted_rowData:
+                        if isinstance(formatted_cell,dict):
+                            #cell contains javascript along with html
+                            js += formatted_cell['js'] + '\n'
+                            formatted_cell = formatted_cell['html']
+
+                        if formatted_cell is None:
+                            pass #don't add anything -- not even td tags (this
+                                 # allows signals *not* to include a cell)
+                        elif formatted_cell.startswith("<td"):
+                            html += formatted_cell #assume format includes td tags
+                        else: html += "<td>" + formatted_cell + "</td>"
+                    html += "</tr>"
 
             html += "</tbody></table>"
-            return html
+
+            return { 'html': html, 'js': js }
 
 
         elif fmt == 'text':
@@ -133,7 +155,7 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     text['row data'].append( formatted_rowData )
 
-            return text
+            return {'text': text }
 
 
         elif fmt == "ppt":
@@ -158,8 +180,41 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     ppt['row data'].append( formatted_rowData )
 
-            return ppt
+            return {'ppt': ppt}
 
+
+        #elif fmt in ('iplotly','plotly'):
+        #    from plotly.offline import plot, iplot
+        #    import plotly.figure_factory as ff
+        #
+        #    #in future, make a dataframe and display that? (maybe couldn't handle matrices in cells?)
+        #    if self._customHeadings is not None \
+        #            and 'plotly' in self._customHeadings:
+        #        raise ValueError("custom headers unsupported for plotly format")
+        #
+        #    if self._headingFormatters is not None:
+        #        colHeadings_formatted = \
+        #            formatSet.formatList(self._headings,
+        #                           self._headingFormatters, 'latex')
+        #    else: #headingFormatters is None => headings is dict w/formats
+        #        colHeadings_formatted = self._headings['text']
+        #
+        #    data_matrix = []
+        #    data_matrix.append( colHeadings_formatted )
+        #
+        #    for rowData,formatters in self._rows:
+        #        formatted_rowData = formatSet.formatList(rowData, formatters, 'latex')
+        #        print(formatted_rowData)
+        #        if len(formatted_rowData) > 0:
+        #            data_matrix.append( formatted_rowData )
+        #
+        #    plotly_table = ff.create_table(data_matrix)
+        #    if fmt == "iplotly":
+        #        iplot(plotly_table)
+        #    else:
+        #        plot(plotly_table)
+        #    return plotly_table #TODO: what to return? plotly JSON?
+        
         else:
             raise ValueError("Unknown format: %s" % fmt)
 

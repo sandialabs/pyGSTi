@@ -13,6 +13,7 @@ import warnings as _warnings
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
 from . import basistools as _bt
+from . import compattools as _compat
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -1120,11 +1121,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
     
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    if isinstance(ham_basis,str) or isinstance(ham_basis,unicode):
+    if _compat.isstr(ham_basis):
         hamBasisMxs = _bt.basis_matrices(ham_basis, d)
     else: hamBasisMxs = ham_basis
         
-    if isinstance(other_basis,str) or isinstance(other_basis,unicode):
+    if _compat.isstr(other_basis):
         otherBasisMxs = _bt.basis_matrices(other_basis, d)
     else: otherBasisMxs = other_basis
     
@@ -1254,3 +1255,146 @@ def rotation_gate_mx(r,mxBasis="gm"):
     else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
 
     return ret
+
+
+
+def project_gateset(gateset, targetGateset,
+                    projectiontypes=('H','S','H+S','LND'),
+                    genType="logG-logT"):
+    """
+    Construct one or more new gatesets by projecting the error generator of
+    `gateset` onto some sub-space then reconstructing.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set whose error generator should be projected.
+
+    targetGateset : GateSet
+        The set of target (ideal) gates.
+
+    projectiontypes : tuple of {'H','S','H+S','LND','LNDCP'}
+        Which projections to use.  The length of this tuple gives the
+        number of `GateSet` objects returned.  Allowed values are:
+
+        - 'H' = Hamiltonian errors
+        - 'S' = Stochastic Pauli-channel errors
+        - 'H+S' = both of the above error types
+        - 'LND' = errgen projected to a normal (CPTP) Lindbladian
+        - 'LNDF' = errgen projected to an unrestricted (full) Lindbladian
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    Returns
+    -------
+    projected_gatesets : list of GateSets
+       Elements are projected versions of `gateset` corresponding to
+       the elements of `projectiontypes`.
+
+    Nps : list of parameter counts
+       Integer parameter counts for each gate set in `projected_gatesets`.
+       Useful for computing the expected log-likelihood or chi2.
+    """
+    
+    gateLabels = list(gateset.gates.keys())  # gate labels
+    basisNm = gateset.get_basis_name()
+    basisDims = gateset.get_basis_dimension()
+    
+    if basisNm != targetGateset.get_basis_name():
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                         % (basisNm, targetGateset.get_basis_name()))
+    
+    # Note: set to "full" parameterization so we can set the gates below
+    #  regardless of what parameterization the original gateset had.
+    gsDict = {}; NpDict = {}
+    for p in projectiontypes:
+        gsDict[p] = gateset.copy()
+        gsDict[p].set_all_parameterizations("full")
+        NpDict[p] = 0
+
+        
+    errgens = [ error_generator(gateset.gates[gl],
+                                targetGateset.gates[gl], genType)
+                for gl in gateLabels ]
+
+    for gl,errgen in zip(gateLabels,errgens):
+        if ('H' in projectiontypes) or ('H+S' in projectiontypes):
+            hamProj, hamGens = std_errgen_projections(
+                errgen, "hamiltonian", basisNm, basisNm, True)
+            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            ham_error_gen = _bt.change_basis(ham_error_gen,"std",basisNm)
+            
+        if ('S' in projectiontypes) or ('H+S' in projectiontypes):
+            stoProj, stoGens = std_errgen_projections(
+                errgen, "stochastic", basisNm, basisNm, True)
+            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            sto_error_gen = _bt.change_basis(sto_error_gen,"std",basisNm)
+            
+        if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
+            HProj, OProj, HGens, OGens = \
+                lindblad_errgen_projections(
+                    errgen, basisNm, basisNm, basisNm, normalize=False,
+                    return_generators=True)
+            #Note: return values *can* be None if an empty/None basis is given
+            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+                            _np.einsum('ij,ijkl', OProj, OGens)
+            lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basisNm)
+
+        if 'H' in projectiontypes:
+            gsDict['H'].gates[gl] = gate_from_error_generator(
+                ham_error_gen, targetGate, genType)
+            NpDict['H'] += len(hamProj)
+            
+        if 'S' in projectiontypes:
+            gsDict['S'].gates[gl]  = gate_from_error_generator(
+                sto_error_gen, targetGate, genType)
+            NpDict['S'] += len(stoProj)
+
+        if 'H+S' in projectiontypes:
+            gsDict['H+S'].gates[gl] = gate_from_error_generator(
+                ham_error_gen+sto_error_gen, targetGate, genType)
+            NpDict['H+S'] += len(hamProj) + len(stoProj)
+
+        if 'LNDF' in projectiontypes:
+            gsDict['LNDF'].gates[gl] = gate_from_error_generator(
+                lnd_error_gen, targetGate, genType)
+            NpDict['LNDF'] += HProj.size + OProj.size
+
+        if 'LND' in projectiontypes:
+            evals,U = _np.linalg.eig(OProj)
+            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
+            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
+              #OProj_cp is now a pos-def matrix
+            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+                               _np.einsum('ij,ijkl', OProj_cp, OGens)
+            lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basisNm)
+
+            gsDict['LND'].gates[gl] = gate_from_error_generator(
+                lnd_error_gen_cp, targetGate, genType)
+            NpDict['LND'] += HProj.size + OProj.size
+
+        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
+        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
+        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens)
+        #  # (only negative stochastic projections OK)
+        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
+        #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
+        #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+
+
+    #DEBUG!!!
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsDict['LND']))
+    
+    #Check for CPTP where expected
+    #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
+    #assert(_tools.sum_of_negative_choi_evals(gsDict['LND']) < 1e-6)
+
+    #Collect and return requrested results:
+    ret_gs = [ gsDict[p] for p in projectiontypes ]
+    ret_Nps = [ NpDict[p] for p in projectiontypes ]
+    return ret_gs, ret_Nps

@@ -10,6 +10,7 @@ import numpy.random as _rndm
 import itertools as _itertools
 import warnings as _warnings
 from ..tools import listtools as _lt
+from ..objects import LsGermsStructure as _LsGermsStructure
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc
 
@@ -133,7 +134,7 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         _ssc.build_spam_specs(prepStrs = prepStrs,
                               effectStrs = effectStrs),
         gateLabels)
-    
+
     if keepFraction < 1.0:
         rndm = _rndm.RandomState(keepSeed) # ok if seed is None
         nPairs = len(prepStrs)*len(effectStrs)
@@ -208,6 +209,218 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
 
     #print "%d LSGST sets w/lengths" % len(lsgst_listOfLists),map(len,lsgst_listOfLists)
     return lsgst_listOfLists
+
+
+def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+                       fidPairs=None, truncScheme="whole germ powers", nest=True,
+                       keepFraction=1, keepSeed=None, includeLGST=True,
+                       gateLabelAliases=None):
+    """
+    Create a set of gate string structures for LSGST.
+
+    Constructs a series (a list) of gate string structures used by long-sequence
+    GST (LSGST) algorithms.  If `includeLGST == True` then the starting
+    structure contains the LGST strings, otherwise the starting structure is
+    empty.  For each nonzero element of maxLengthList, call it L, a set of
+    gate strings is created with the form:
+
+    Case: truncScheme == 'whole germ powers':
+      prepStr + pygsti.construction.repeat_with_max_length(germ,L) + effectStr
+
+    Case: truncScheme == 'truncated germ powers':
+      prepStr + pygsti.construction.repeat_and_truncate(germ,L) + effectStr
+
+    Case: truncScheme == 'length as exponent':
+      prepStr + germ^L + effectStr
+
+    If nest == True, the above set is iteratively *added* (w/duplicates
+    removed) to the current gate string structure to form a final structure for
+    the given L.  This results in successively larger structures, each of which
+    contains all the elements of previous-L structures.  If nest == False then
+    the above set *is* the final structure for the given L.
+
+    Parameters
+    ----------
+    gateLabels : list or tuple
+        List of gate labels to determine needed LGST strings.  Only relevant
+        when `includeLGST == True`.
+
+    prepStrs : list of GateStrings
+        List of the preparation fiducial gate strings, which follow state
+        preparation.
+
+    effectStrs : list of GateStrings
+        List of the measurement fiducial gate strings, which precede
+        measurement.
+
+    germList : list of GateStrings
+        List of the germ gate strings.
+
+    maxLengthList : list of ints
+        List of maximum lengths. A zero value in this list has special 
+        meaning, and corresponds to the LGST sequences.
+
+    fidPairs : list of 2-tuples or dict, optional
+        Specifies a subset of all fiducial string pairs (prepStr, effectStr)
+        to be used in the gate string lists.  If a list, each element of 
+        fidPairs is a (iPrepStr, iEffectStr) 2-tuple of integers, each 
+        indexing a string within prepStrs and effectStrs, respectively, so 
+        that prepStr = prepStrs[iPrepStr] and effectStr = 
+        effectStrs[iEffectStr].  If a dictionary, keys are germs (elements
+        of germList) and values are lists of 2-tuples specifying the pairs
+        to use for that germ.
+
+    truncScheme : str, optional
+        Truncation scheme used to interpret what the list of maximum lengths
+        means. If unsure, leave as default. Allowed values are:
+
+        - 'whole germ powers' -- germs are repeated an integer number of
+          times such that the length is less than or equal to the max.
+        - 'truncated germ powers' -- repeated germ string is truncated
+          to be exactly equal to the max (partial germ at end is ok).
+        - 'length as exponent' -- max. length is instead interpreted
+          as the germ exponent (the number of germ repetitions).
+
+    nest : boolean, optional
+        If True, the returned gate string lists are "nested", meaning
+        that each successive list of gate strings contains all the gate
+        strings found in previous lists (and usually some additional
+        new ones).  If False, then the returned string list for maximum
+        length == L contains *only* those gate strings specified in the
+        description above, and *not* those for previous values of L.
+
+    keepFraction : float, optional
+        The fraction of fiducial pairs selected for each germ-power base
+        string.  The default includes all fiducial pairs.  Note that
+        for each germ-power the selected pairs are *different* random
+        sets of all possible pairs (unlike fidPairs, which specifies the
+        *same* fiducial pairs for *all* same-germ base strings).  If
+        fidPairs is used in conjuction with keepFraction, the pairs
+        specified by fidPairs are always selected, and any additional
+        pairs are randomly selected.
+
+    keepSeed : int, optional
+        The seed used for random fiducial pair selection (only relevant
+        when keepFraction < 1).
+
+    includeLGST : boolean, optional
+        If true, then the starting list (only applicable when
+        `nest == True`) is the list of LGST strings rather than the 
+        empty list.  This means that when `nest == True`, the LGST 
+        sequences will be included in all the lists.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset.  This information is stored within the returned gate string
+        structures.  Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
+
+    Returns
+    -------
+    list of LsGermsStructure objects
+        The i-th object corresponds to a gate string list containing repeated
+        germs limited to length maxLengthList[i].  If nest == True, then
+        repeated germs limited to previous max-lengths are also included.
+        Note that a "0" maximum-length corresponds to the LGST strings.
+    """
+
+    if nest == True and includeLGST == True and maxLengthList[0] == 0:
+        _warnings.warn("Setting the first element of a max-length list to zero"
+                       + " to ensure the inclusion of LGST sequences has been"
+                       + " replaced by the `includeLGST` parameter which"
+                       + " defaults to `True`.  Thus, in most cases, you can"
+                       + " simply remove the leading 0 and start your"
+                       + " max-length list at 1 now."
+                       + "")
+    
+    lgst_list = _gsc.list_lgst_gatestrings(
+        _ssc.build_spam_specs(prepStrs = prepStrs,
+                              effectStrs = effectStrs),
+        gateLabels)
+
+    allPossiblePairs = list(_itertools.product(range(len(prepStrs)),
+                                               range(len(effectStrs))))
+
+    if keepFraction < 1.0:
+        rndm = _rndm.RandomState(keepSeed) # ok if seed is None
+        nPairs = len(prepStrs)*len(effectStrs)
+        nPairsToKeep = int(round(float(keepFraction) * nPairs))
+    else: rndm = None
+
+    if isinstance(fidPairs, dict) or hasattr(fidPairs, "keys"):
+        fidPairDict = fidPairs #assume a dict of per-germ pairs
+    else:
+        if fidPairs is not None:   #assume fidPairs is a list
+            fidPairDict = { germ:fidPairs for germ in germList }
+        else:
+            fidPairDict = None
+    
+    truncFn = _getTruncFunction(truncScheme)
+
+    #running structure of all strings so far (LGST strings or empty)
+    running_gss = _LsGermsStructure([],germList,prepStrs,
+                                    effectStrs,gateLabelAliases)
+    if includeLGST:
+        running_gss.add_unindexed(lgst_list)
+    
+    lsgst_listOfStructs = [ ] # list of gate string structures to return
+
+    for maxLen in maxLengthList:
+
+        if nest: #add to running_gss and copy at end
+            gss = running_gss #don't copy (yet)
+            gss.Ls.append(maxLen)
+        else: #create a new gss for just this maxLen
+            gss = _LsGermsStructure([maxLen],germList,prepStrs,
+                                    effectStrs,gateLabelAliases)
+        if maxLen == 0:
+            #Special LGST case
+            gss.add_unindexed(lgst_list)
+        else:
+            #Typical case of germs repeated to maxLen using Rfn
+            for germ in germList:
+                germ_power = truncFn(germ,maxLen)
+                
+                if rndm is None:
+                    if fidPairDict is not None:
+                        fiducialPairsThisIter = fidPairDict[germ]
+                    else:
+                        fiducialPairsThisIter = allPossiblePairs
+    
+                elif fidPairDict is not None:
+                    pair_indx_tups = fidPairDict[germ]
+                    remainingPairs = [ (i,j)
+                                       for i in range(len(prepStrs))
+                                       for j in range(len(effectStrs))
+                                       if (i,j) not in pair_indx_tups ]
+                    nPairsRemaining = len(remainingPairs)
+                    nPairsToChoose = nPairsToKeep-len(pair_indx_tups)
+                    nPairsToChoose = max(0,min(nPairsToChoose,nPairsRemaining))
+                    assert(0 <= nPairsToChoose <= nPairsRemaining)
+                    # FUTURE: issue warnings when clipping nPairsToChoose?
+    
+                    fiducialPairsThisIter = fidPairDict[germ] + \
+                        [ remainingPairs[k] for k in
+                          sorted(rndm.choice(nPairsRemaining,nPairsToChoose,
+                                             replace=False))]
+    
+                else: # rndm is not None and fidPairDict is None
+                    assert(nPairsToKeep <= nPairs) # keepFraction must be <= 1.0
+                    fiducialPairsThisIter = \
+                        [ allPossiblePairs[k] for k in
+                          sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
+
+                gss.add_plaquette(germ_power, maxLen, germ, fiducialPairsThisIter)
+
+        if nest: gss = gss.copy() #pinch off a copy of running_gss
+        gss.done_adding_strings()
+        lsgst_listOfStructs.append( gss )
+
+    for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
+        assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
+    return lsgst_listOfStructs
 
 
 def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,

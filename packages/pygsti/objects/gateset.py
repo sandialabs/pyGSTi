@@ -19,6 +19,7 @@ from ..tools import basistools as _bt
 from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
+from ..tools import compattools as _compat
 
 from . import evaltree as _evaltree
 from . import gate as _gate
@@ -115,6 +116,7 @@ class GateSet(object):
         #self._calcClass = _GateMapCalc
 
         super(GateSet, self).__init__()
+
 
     @property
     def povm_identity(self):
@@ -2786,7 +2788,7 @@ class GateSet(object):
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or isinstance(rotate,int) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(isinstance(rotate,float) or _compat.isint(rotate) or len(rotate) == dim-1), "Invalid 'rotate' argument"
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].rotate(rotate, myBasis)
 
