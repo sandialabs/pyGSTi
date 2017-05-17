@@ -302,6 +302,7 @@ class Workspace(object):
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
         self.DatasetComparisonPlot = makefactory(_wp.DatasetComparisonPlot)
+        self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 
         
     def init_notebook_mode(self, connected=False, autodisplay=False):
