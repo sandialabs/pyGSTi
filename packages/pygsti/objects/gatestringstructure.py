@@ -338,6 +338,7 @@ class LsGermsStructure(GatestringStructure):
         if fidpairs is None:
             fidpairs = list(_itertools.product(range(len(self.prepStrs)),
                                                range(len(self.effectStrs))))
+
         elements = [ (j,i,self.prepStrs[i] + baseStr + self.effectStrs[j])
                      for i,j in fidpairs ] #note preps are *cols* not rows
         

@@ -137,7 +137,7 @@ class LinlogColormap(Colormap):
                 # and the call to greater(...) below will always be True.
                 # To avoid the False-branch getting div-by-zero errors, set:
                 log10_norm_trans = 1.0 # because it's never used.
-                
+
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
                                         lin_norm_value/(2*norm_trans),
                                         (log10_norm_trans -

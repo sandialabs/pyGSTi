@@ -968,8 +968,8 @@ class ColorBoxPlot(WorkspacePlot):
 
             subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
-            if len(subMxs) > 0:
-                dataMax = max( [ (_np.max(mx) if (mx is not None) else 0)
+            if len(subMxs) > 0:                
+                dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                  for subMxRow in subMxs for mx in subMxRow] )
             else: dataMax = 0
 

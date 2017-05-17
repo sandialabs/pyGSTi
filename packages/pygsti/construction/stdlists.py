@@ -134,7 +134,7 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
         _ssc.build_spam_specs(prepStrs = prepStrs,
                               effectStrs = effectStrs),
         gateLabels)
-    
+
     if keepFraction < 1.0:
         rndm = _rndm.RandomState(keepSeed) # ok if seed is None
         nPairs = len(prepStrs)*len(effectStrs)
@@ -384,7 +384,10 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
                 germ_power = truncFn(germ,maxLen)
                 
                 if rndm is None:
-                    fiducialPairsThisIter = allPossiblePairs
+                    if fidPairDict is not None:
+                        fiducialPairsThisIter = fidPairDict[germ]
+                    else:
+                        fiducialPairsThisIter = allPossiblePairs
     
                 elif fidPairDict is not None:
                     pair_indx_tups = fidPairDict[germ]
