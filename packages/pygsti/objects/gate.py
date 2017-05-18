@@ -13,6 +13,7 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
+from ..tools import jamiolkowski as _jt
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
@@ -67,7 +68,7 @@ def optimize_gate(gateToOptimize, targetGate):
     #      _mt.frobeniusnorm(gateToOptimize-targetMatrix))
 
 
-def compose(gate1, gate2, parameterization="auto"):
+def compose(gate1, gate2, basis, parameterization="auto"):
     """
     Returns a new Gate that is the composition of gate1 and gate2.
 
@@ -83,6 +84,11 @@ def compose(gate1, gate2, parameterization="auto"):
 
     gate2 : Gate
         Gate to compose as right term of matrix product (applied first).
+
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret the gate matrices.
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
 
     parameterization : {"auto","full","TP","linear","static"}, optional
         The parameterization of the resulting gates.  The default, "auto",
@@ -121,15 +127,15 @@ def compose(gate1, gate2, parameterization="auto"):
         paramType = parameterization #user-specified final parameterization
 
     #Convert to paramType as necessary
-    cgate1 = convert(gate1, paramType)
-    cgate2 = convert(gate2, paramType)
+    cgate1 = convert(gate1, paramType, basis)
+    cgate2 = convert(gate2, paramType, basis)
 
     # cgate1 and cgate2 are the same type, so can invoke the gate's compose method
     return cgate1.compose(cgate2)
 
 
 
-def convert(gate, toType):
+def convert(gate, toType, basis):
     """
     Convert gate to a new type of parameterization, potentially creating
     a new Gate object.  Raises ValueError for invalid conversions.
@@ -139,8 +145,13 @@ def convert(gate, toType):
     gate : Gate
         Gate to convert
 
-    toType : {"full","TP","linear","static"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static"}
         The type of parameterizaton to convert to.
+
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret the gate matrix.
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
 
     Returns
     -------
@@ -171,6 +182,35 @@ def convert(gate, toType):
         else:
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
+
+    elif toType in ("CPTP","H+S","S"):
+        RANK_TOL = 1e-6        
+        J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
+        if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+            unitary_pre = gate # when 'gate' is unitary
+        else: unitary_pre = None
+
+        nQubits = _np.log2(gate.dim)/2.0
+        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+        
+        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+        ham_basis = proj_basis if toType in ("CPTP","H+S") else None
+        nonham_basis = proj_basis
+        nonham_diagonal_only = bool(toType in ("H+S","S") )
+        cptp=True
+        truncate=True
+
+        if isinstance(gate, LindbladParameterizedGate) and \
+           _np.linalg.norm(gate.unitary_prefactor-unitary_pre) < 1e-6 \
+           and ham_basis==gate.ham_basis and nonham_basis==gate.other_basis \
+           and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
+           and basis==gate.matrix_basis:
+            return gate #no conversion necessary
+        else:
+            return LindbladParameterizedGate(
+                gate, unitary_pre, ham_basis, nonham_basis, cptp,
+                nonham_diagonal_only, truncate, basis)
+        
 
     elif toType == "static":
         if isinstance(gate, StaticGate):

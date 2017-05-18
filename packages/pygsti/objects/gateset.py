@@ -458,19 +458,21 @@ class GateSet(object):
 
         Parameters
         ----------
-        parameterization_type : {"full", "TP", "static"}
+        parameterization_type : {"full", "TP", "CPTP", "H+S", "S", "static"}
             The gate and SPAM vector parameterization type:
 
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','static'))
-        etyp = "full" if typ == "TP" else typ #EVecs never "TP"
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
+        rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+        etyp = "static" if typ == "static" else "full"
+        basis = self.get_basis_name()
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ)
+            self.gates[lbl] = _gate.convert(gate, typ, basis)
 
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, typ)
+            self.preps[lbl] = _sv.convert(vec, rtyp)
 
         for lbl,vec in self.effects.items():
             self.effects[lbl] = _sv.convert(vec, etyp)
@@ -479,7 +481,9 @@ class GateSet(object):
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
         elif typ == 'TP': 
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
-        elif typ == 'static': 
+        elif typ == 'CPTP':
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim)
+        else: # typ in ('static','H+S','S')
             self.default_gauge_group = None
         
         #Note: self.povm_identity should *always* be fully
