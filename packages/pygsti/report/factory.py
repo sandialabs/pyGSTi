@@ -228,13 +228,10 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     Parameters
     ----------
-    results : Results or dictionary-like
-        Either a single Results object (which represents the set of results from
-        a single GST estimation run, and typically obtained from running
-        :func:`do_long_sequence_gst`) or a dictionary of such objects, representing 
-        multiple GST runs to be compared.  (Usually multiple runs will be for the 
-        same underlying dataset.)  The keys of this dictionary are used to label the
-        runs.set of GST results, 
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running 
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`.
 
     filename : string, optional
        The output filename where the report file(s) will be saved.
@@ -325,45 +322,28 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     #Create master switchboard
-    if isinstance(results, dict):
-        results_dict = results
-        multirun = True
-    else:
-        results_dict = {"unique": results}
-        multirun = False
-    results = None #for safety
-        
-    run_labels = list(results_dict.keys())
-    gauge_opt_labels = None;  Ls = None
-    for res in results_dict.values():
+    run_labels = list(results.estimates.keys())
+    Ls = results.gatestring_structs['final'].Ls
+    gauge_opt_labels = None
+    for est in results.estimates.values():
         if gauge_opt_labels is None:
-            gauge_opt_labels = list(res.goparameters.keys())
+            gauge_opt_labels = list(est.goparameters.keys())
         else:
-            assert(gauge_opt_labels == list(res.goparameters.keys())), \
+            assert(gauge_opt_labels == list(est.goparameters.keys())), \
                 "Runs must have the same gauge optimization labels"
-            
-        if Ls is None:
-            Ls = res.gatestring_structs['final'].Ls
-        else:
-            assert(Ls == res.gatestring_structs['final'].Ls), \
-                "Runs must have the same max-L values"
-            
+
+    multirun = bool(len(run_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
             
     switchBd = ws.Switchboard(
-        ["Run","G-Opt","max(L)"],
+        ["Estimate","G-Opt","max(L)"],
         [run_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown", "buttons", "slider"], [0,0,len(Ls)-1],
         show=[multirun,False,False]
     )
 
     switchBd.add("gsTarget",(0,))
-    switchBd.add("ds",(0,))
-    switchBd.add("prepStrs",(0,))
-    switchBd.add("effectStrs",(0,))
-    switchBd.add("strs",(0,))
-    switchBd.add("germs",(0,))
     switchBd.add("params",(0,))
     switchBd.add("objective",(0,))
     switchBd.add("mpc",(0,))
@@ -371,43 +351,33 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     switchBd.add("gsFinal",(0,1))
     switchBd.add("goparams",(0,1))
     switchBd.add("gsL",(0,2))
-    switchBd.add("gss",(0,2))
+    switchBd.add("gss",(2,))
     switchBd.add("gsAllL",(0,))
-    switchBd.add("gssAllL",(0,))
 
     if confidenceLevel is not None:
         switchBd.add("cri",(0,2))
-    
-    for i,lbl in enumerate(run_labels):
-        res = results_dict[lbl]
-        switchBd.ds[i] = res.dataset
-
-        switchBd.prepStrs[i] = res.gatestring_lists['prep fiducials']
-        switchBd.effectStrs[i] = res.gatestring_lists['effect fiducials']
-        switchBd.strs[i] = (res.gatestring_lists['prep fiducials'],
-                            res.gatestring_lists['effect fiducials'])
-        switchBd.germs[i] = res.gatestring_lists['germs']
-        switchBd.params[i] = res.parameters
-        switchBd.objective[i] = res.parameters['objective']
-        if res.parameters['objective'] == "logl":
-            switchBd.mpc[i] = res.parameters['minProbClip']
-        else:
-            switchBd.mpc[i] = res.parameters['minProbClipForWeighting']
         
-        switchBd.gsTarget[i] = res.gatesets['target']
-        switchBd.gsFinal[i,:] = [ res.gatesets[lbl] for lbl in gauge_opt_labels ]
-        switchBd.goparams[i,:] = [ res.goparameters[lbl] for lbl in gauge_opt_labels]
+    switchBd.gss[:] = results.gatestring_structs['iteration']
+        
+    for i,(lbl,est) in enumerate(results.estimates.items()):
+        switchBd.params[i] = est.parameters
+        switchBd.objective[i] = est.parameters['objective']
+        if est.parameters['objective'] == "logl":
+            switchBd.mpc[i] = est.parameters['minProbClip']
+        else:
+            switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
+        
+        switchBd.gsTarget[i] = est.gatesets['target']
+        switchBd.gsFinal[i,:] = [ est.gatesets[lbl] for lbl in gauge_opt_labels ]
+        switchBd.goparams[i,:] = [ est.goparameters[lbl] for lbl in gauge_opt_labels]
 
-        switchBd.gsL[i,:] = res.gatesets['iteration estimates']
-        switchBd.gss[i,:] = res.gatestring_structs['iteration']
-
-        switchBd.gssAllL[i] = res.gatestring_structs['iteration']
-        switchBd.gsAllL[i] = res.gatesets['iteration estimates']
+        switchBd.gsL[i,:] = est.gatesets['iteration estimates']
+        switchBd.gsAllL[i] = est.gatesets['iteration estimates']
 
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-            switchBd.cri[i,:] = [ res.get_confidence_region(
-                lbl,"final", confidenceLevel, comm=comm) for lbl in gauge_opt_labels]
+            switchBd.cri[i,:] = [ results.get_confidence_region(
+                lbl, golbl, "final", confidenceLevel, comm=comm) for golbl in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -424,12 +394,12 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['maxLSwitchboard1']  = switchBd.view(maxLView,"v6")
     qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v7")
 
-    gsTgt = switchBd.gsTarget
-    ds = switchBd.ds
-    prepStrs = switchBd.prepStrs
-    effectStrs = switchBd.effectStrs
-    germs = switchBd.germs
-    strs = switchBd.strs
+    gsTgt = switchBd.gsTarget    
+    ds = results.dataset
+    prepStrs = results.gatestring_lists['prep fiducials']
+    effectStrs = results.gatestring_lists['effect fiducials']
+    germs = results.gatestring_lists['germs']
+    strs = (prepStrs, effectStrs)
 
     #Target/fixed outputs
     qtys['targetSpamTable'] = ws.SpamTable(gsTgt)
@@ -454,12 +424,13 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     # Ls and germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
+    gssAllL = results.gatestring_structs['iteration']
     qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
     qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
     qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     qtys['germListTable'] = ws.GatestringTable(germs, "Germ")
     qtys['progressTable'] = ws.FitComparisonTable(
-        Ls, switchBd.gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
+        Ls, gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
 
     # Generate plots
     printer.log("*** Generating plots ***")
@@ -507,13 +478,10 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     Parameters
     ----------
-    results : Results or dictionary-like
-        Either a single Results object (which represents the set of results from
-        a single GST estimation run, and typically obtained from running
-        :func:`do_long_sequence_gst`) or a dictionary of such objects, representing 
-        multiple GST runs to be compared.  (Usually multiple runs will be for the 
-        same underlying dataset.)  The keys of this dictionary are used to label the
-        runs.set of GST results, 
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running 
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`.
 
     filename : string, optional
        The output filename where the report file(s) will be saved.
@@ -604,46 +572,28 @@ def create_general_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     #Create master switchboard
-    if isinstance(results, dict):
-        results_dict = results
-        multirun = True
-    else:
-        results_dict = {"unique": results}
-        multirun = False
-    results = None #for safety
-
-    #TODO: consolidate this logic with that of the single report
-    run_labels = list(results_dict.keys())
-    gauge_opt_labels = None;  Ls = None
-    for res in results_dict.values():
+    run_labels = list(results.estimates.keys())
+    Ls = results.gatestring_structs['final'].Ls
+    gauge_opt_labels = None
+    for est in results.estimates.values():
         if gauge_opt_labels is None:
-            gauge_opt_labels = list(res.goparameters.keys())
+            gauge_opt_labels = list(est.goparameters.keys())
         else:
-            assert(gauge_opt_labels == list(res.goparameters.keys())), \
+            assert(gauge_opt_labels == list(est.goparameters.keys())), \
                 "Runs must have the same gauge optimization labels"
-            
-        if Ls is None:
-            Ls = res.gatestring_structs['final'].Ls
-        else:
-            assert(Ls == res.gatestring_structs['final'].Ls), \
-                "Runs must have the same max-L values"
 
+    multirun = bool(len(run_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
     
     switchBd = ws.Switchboard(
-        ["Run","G-Opt","max(L)"],
+        ["Estimate","G-Opt","max(L)"],
         [run_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown", "buttons", "slider"], [0,0,len(Ls)-1],
         show=[multirun,False,False]
     )
 
     switchBd.add("gsTarget",(0,))
-    switchBd.add("ds",(0,))
-    switchBd.add("prepStrs",(0,))
-    switchBd.add("effectStrs",(0,))
-    switchBd.add("strs",(0,))
-    switchBd.add("germs",(0,))
     switchBd.add("params",(0,))
     switchBd.add("objective",(0,))
     switchBd.add("mpc",(0,))
@@ -652,46 +602,36 @@ def create_general_report(results, filename, confidenceLevel=None,
     switchBd.add("gsTargetAndFinal",(0,1))
     switchBd.add("goparams",(0,1))
     switchBd.add("gsL",(0,2))
-    switchBd.add("gss",(0,2))
+    switchBd.add("gss",(2,))
     switchBd.add("gsAllL",(0,))
-    switchBd.add("gssAllL",(0,))
 
     if confidenceLevel is not None:
         switchBd.add("cri",(0,2))
 
-    for i,lbl in enumerate(run_labels):
-        res = results_dict[lbl]
-        switchBd.ds[i] = res.dataset
+    switchBd.gss[:] = results.gatestring_structs['iteration']
 
-        switchBd.prepStrs[i] = res.gatestring_lists['prep fiducials']
-        switchBd.effectStrs[i] = res.gatestring_lists['effect fiducials']
-        switchBd.strs[i] = (res.gatestring_lists['prep fiducials'],
-                            res.gatestring_lists['effect fiducials'])
-        switchBd.germs[i] = res.gatestring_lists['germs']
-        switchBd.params[i] = res.parameters
-        switchBd.objective[i] = res.parameters['objective']
-        if res.parameters['objective'] == "logl":
-            switchBd.mpc[i] = res.parameters['minProbClip']
+    for i,(lbl,est) in enumerate(results.estimates.items()):
+        switchBd.params[i] = est.parameters
+        switchBd.objective[i] = est.parameters['objective']
+        if est.parameters['objective'] == "logl":
+            switchBd.mpc[i] = est.parameters['minProbClip']
         else:
-            switchBd.mpc[i] = res.parameters['minProbClipForWeighting']
+            switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
         
-        switchBd.gsTarget[i] = res.gatesets['target']
-        switchBd.gsFinal[i,:] = [ res.gatesets[lbl] for lbl in gauge_opt_labels ]
+        switchBd.gsTarget[i] = est.gatesets['target']
+        switchBd.gsFinal[i,:] = [ est.gatesets[lbl] for lbl in gauge_opt_labels ]
         switchBd.gsTargetAndFinal[i,:] = \
-                    [ [res.gatesets['target'], res.gatesets[lbl]]
+                    [ [est.gatesets['target'], est.gatesets[lbl]]
                       for lbl in gauge_opt_labels ]
-        switchBd.goparams[i,:] = [ res.goparameters[lbl] for lbl in gauge_opt_labels]
+        switchBd.goparams[i,:] = [ est.goparameters[lbl] for lbl in gauge_opt_labels]
 
-        switchBd.gsL[i,:] = res.gatesets['iteration estimates']
-        switchBd.gss[i,:] = res.gatestring_structs['iteration']
-
-        switchBd.gssAllL[i] = res.gatestring_structs['iteration']
-        switchBd.gsAllL[i] = res.gatesets['iteration estimates']
+        switchBd.gsL[i,:] = est.gatesets['iteration estimates']
+        switchBd.gsAllL[i] = est.gatesets['iteration estimates']
 
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-            switchBd.cri[i,:] = [ res.get_confidence_region(
-                lbl,"final", confidenceLevel, comm=comm) for lbl in gauge_opt_labels]
+            switchBd.cri[i,:] = [ results.get_confidence_region(
+                lbl, golbl, "final", confidenceLevel, comm=comm) for golbl in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -709,11 +649,11 @@ def create_general_report(results, filename, confidenceLevel=None,
     #qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v7") #unused
 
     gsTgt = switchBd.gsTarget
-    ds = switchBd.ds
-    prepStrs = switchBd.prepStrs
-    effectStrs = switchBd.effectStrs
-    germs = switchBd.germs
-    strs = switchBd.strs
+    ds = results.dataset
+    prepStrs = results.gatestring_lists['prep fiducials']
+    effectStrs = results.gatestring_lists['effect fiducials']
+    germs = results.gatestring_lists['germs']
+    strs = (prepStrs, effectStrs)
 
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
@@ -740,12 +680,13 @@ def create_general_report(results, filename, confidenceLevel=None,
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
+    gssAllL = results.gatestring_structs['iteration']
     qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
     qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
     qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
     qtys['progressTable'] = ws.FitComparisonTable(
-        Ls, switchBd.gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
+        Ls, gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
