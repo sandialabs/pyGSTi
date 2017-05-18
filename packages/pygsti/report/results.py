@@ -19,56 +19,23 @@ from ..tools        import listtools            as _lt
 # only be changed by experts)
 __SHORTCUT_OLD_RESULTS_LOAD = False
 
-class Results(object):
+class Estimate(object):
     """
-    Encapsulates a set of GST results.
+    A class encapsulating the `GateSet` objects related to 
+    a single GST estimate up-to-gauge freedoms. 
 
-    A Results object is a container which associates a single `DataSet` and a
-    dictionary of input "parameters" with a set of output `GateSet` and 
-    `ConfidenceRegion` objects.
-
-    Typically, these quantities are related to the input & output of a single
-    GST calculation performed by a high-level driver routine like
-    :func:`do_long_sequence_gst`.  A `Results` can also, however, be used 
-    generally as a way of associating some arbitrary set of parameters with
-    a set of gate sets and/or confidence regions.
+    Thus, this class holds the "iteration" `GateSet`s leading up to a
+    final `GateSet`, and then different gauge optimizations of the final
+    set.
     """
-
-    def __init__(self):
+    
+    def __init__(self, targetGateset=None, seedGateset=None,
+                 gatesetsByIter=None, parameters=None):
         """
-        Initialize an empty Results object.
-        """
-
-        #Dictionaries of inputs & outputs
-        self.dataset = None
-        self.parameters = _collections.OrderedDict()
-        self.goparameters = _collections.OrderedDict()
-        self.gatestring_lists = _collections.OrderedDict()
-        self.gatestring_structs = _collections.OrderedDict()
-        self.gatesets = _collections.OrderedDict()
-        self.confidence_regions = _collections.OrderedDict()
-          #usually, setting a confidence_region key similar or the same
-          # as a gatesets key is useful
-
-
-    def init_Ls_and_germs(self, objective, dataset, targetGateset,
-                          seedGateset, gatesetsByIter,
-                          gateStringStructsByIter):
-        """
-        Initialize this Results object from the inputs and outputs of
-        an iterative GST method based on gate string lists containing
-        germs repeated up to a maximum-L value that increases with
-        iteration.
+        Initialize an empty Estimate object.
 
         Parameters
         ----------
-        objective : {'chi2', 'logl'}
-            Whether gateset was obtained by minimizing chi^2 or
-            maximizing the log-likelihood.
-
-        dataset : DataSet
-            The dataset used when optimizing the objective.
-
         targetGateset : GateSet
             The target gateset used when optimizing the objective.
 
@@ -81,64 +48,29 @@ class Results(object):
             The estimated gateset at each GST iteration. Typically these are the
             estimated gate sets *before* any gauge optimization is performed.
 
-        gateStringStructsByIter : list of lists or LsGermsStructs
-            The gate string list or structure used at each iteration.
-            If the gate sequences are unstructured, you can just pass
-            lists of `GateString` objects instead (but this will limit
-            the amount of data visualization you can perform later).
-
-        Returns
-        -------
-        None
+        parameters : dict
+            A dictionary of parameters associated with how these gate sets
+            were obtained.
         """
-
-        assert(len(gateStringStructsByIter) == len(gatesetsByIter))
+        self.parameters = _collections.OrderedDict()
+        self.goparameters = _collections.OrderedDict()
+        self.gatesets = _collections.OrderedDict()
 
         #Set gatesets
-        self.gatesets['target'] = targetGateset
-        self.gatesets['seed'] = seedGateset
-        self.gatesets['iteration estimates'] = gatesetsByIter
-        self.gatesets['final iteration estimate'] = gatesetsByIter[-1]
+        if targetGateset: self.gatesets['target'] = targetGateset
+        if seedGateset: self.gatesets['seed'] = seedGateset
+        if gatesetsByIter:
+            self.gatesets['iteration estimates'] = gatesetsByIter
+            self.gatesets['final iteration estimate'] = gatesetsByIter[-1]
 
-        #Set gatestring structures
-        self.gatestring_structs['iteration'] = []
-        for gss in gateStringStructsByIter:
-            if isinstance(gss, _objs.LsGermsStructure):
-                self.gatestring_structs['iteration'].append(gss)
-            else: #assume gss is a raw list of GateStrings
-                unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
-                unindexed_gss.add_unindexed(gss)
-                self.gatestring_structs['iteration'].append(unindexed_gss)
+        #Set parameters
+        if isinstance(parameters, _collections.OrderedDict):
+            self.parameters = parameters
+        elif parameters is not None:
+            for key in sorted(list(parameters.keys())):
+                self.parameters[key] = parameters[key]
+
                 
-        self.gatestring_structs['final'] = \
-                self.gatestring_structs['iteration'][-1]
-
-        #Extract raw gatestring lists from structs
-        self.gatestring_lists['iteration'] = \
-                [ gss.allstrs for gss in self.gatestring_structs['iteration'] ]
-        self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
-        self.gatestring_lists['all'] = _lt.remove_duplicates(
-            list(_itertools.chain(*self.gatestring_lists['iteration'])) )
-        
-        running_lst = []; delta_lsts = []
-        for lst in self.gatestring_lists['iteration']:
-            delta_lst = [ x for x in lst if (x not in running_lst) ]
-            delta_lsts.append(delta_lst); running_lst.extend(delta_lst) 
-        self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
-
-        self.dataset = dataset
-        self.parameters['objective'] = objective
-
-        #Set "Ls and germs" info: gives particular structure
-        # to the gateStringLists used to obtain estimates
-        finalStruct = self.gatestring_structs['final']
-        self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
-        self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
-        self.gatestring_lists['germs'] = finalStruct.germs
-        self.parameters['max length list'] = finalStruct.Ls
-        
-
-
     def add_gaugeoptimized(self, goparams, gateset=None, label=None):
         """
         Adds a gauge-optimized GateSet (computing it if needed) to this object.
@@ -202,16 +134,209 @@ class Results(object):
         self.gatesets[label] = gateset
         self.goparameters[label] = ordered_goparams
 
+    def copy(self):
+        """ Creates a copy of this Results object. """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
+        cpy = Estimate()
+        cpy.parameters = self.parameters.copy()
+        cpy.goparameters = self.goparameters.copy()
+        cpy.gatesets = self.gatesets.copy()
+        return cpy
+
+    def __str__(self):
+        s  = "----------------------------------------------------------\n"
+        s += "---------------- pyGSTi Estimate Object ------------------\n"
+        s += "----------------------------------------------------------\n"
+        s += "\n"
+        s += "How to access my contents:\n\n"
+        s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
+        s += "\n"        
+        s += " .parameters   -- a dictionary of simulation parameters:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
+        s += "\n"
+        s += " .goparameters   -- a dictionary of gauge-optimization parameter dictionaries:\n"
+        s += " ---------------------------------------------------------\n"
+        s += "  " + "\n  ".join(list(self.goparameters.keys())) + "\n"
+        s += "\n"
+        return s
+        
+
+        
+
+class Results(object):
+    """
+    Encapsulates a set of related GST estimates.
+
+    A Results object is a container which associates a single `DataSet` and a
+    structured set of gate sequences (usually the experiments contained in the
+    data set) with a set of estimates.  Each estimate (`Estimate` object) contains
+    gate sets as well as parameters used to generate those inputs.  Associated
+    `ConfidenceRegion` objects, because they are associated with a set of gate
+    sequences, are held in the `Results` object but are associated with estimates.
+
+    Typically, each `Estimate` is related to the input & output of a single
+    GST calculation performed by a high-level driver routine like
+    :func:`do_long_sequence_gst`.
+    """
+
+    def __init__(self):
+        """
+        Initialize an empty Results object.
+        """
+
+        #Dictionaries of inputs & outputs
+        self.dataset = None
+        self.gatestring_lists = _collections.OrderedDict()
+        self.gatestring_structs = _collections.OrderedDict()
+        self.estimates = _collections.OrderedDict()
+        self.confidence_regions = _collections.OrderedDict()
+
+    def init_dataset(self, dataset):
+        """
+        Initialize the (single) dataset of this `Results` object.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The dataset used to construct the estimates found in this
+            `Results` object.
+
+        Returns
+        -------
+        None
+        """
+        if self.dataset is not None:
+            _warnings.warn(("Re-initializing the dataset of a Results object!"
+                            "  Usually you don't want to do this."))
+        self.dataset = dataset
+
+        
+    def init_gatestrings(self, structsByIter):
+        """
+        Initialize the common set gate sequences used to form the 
+        estimates of this Results object.
+
+        There is one such set per GST iteration (if a non-iterative
+        GST method was used, this is treated as a single iteration).
+
+        Parameters
+        ----------
+        structsByIter : list
+            The gate strings used at each iteration. Ideally, elements are
+            `LsGermsStruct` objects, which contain the structure needed to 
+            create color box plots in reports.  Elements may also be 
+            unstructured lists of gate sequences (but this may limit
+            the amount of data visualization one can perform later).
+
+        Returns
+        -------
+        None
+        """
+        if len(self.gatestring_structs) > 0:
+            _warnings.warn(("Re-initializing the gate sequences of a Results"
+                            " object!  Usually you don't want to do this."))
+        
+        #Set gatestring structures
+        self.gatestring_structs['iteration'] = []
+        for gss in structsByIter:
+            if isinstance(gss, _objs.LsGermsStructure):
+                self.gatestring_structs['iteration'].append(gss)
+            elif isinstance(gss, list):
+                unindexed_gss = _objs.LsGermsStructure([],[],[],[],None)
+                unindexed_gss.add_unindexed(gss)
+                self.gatestring_structs['iteration'].append(unindexed_gss)
+            else:
+                raise ValueError("Unknown type of gate string specifier: %s"
+                                 % str(type(gss)))
+                
+        self.gatestring_structs['final'] = \
+                self.gatestring_structs['iteration'][-1]
+
+        #Extract raw gatestring lists from structs
+        self.gatestring_lists['iteration'] = \
+                [ gss.allstrs for gss in self.gatestring_structs['iteration'] ]
+        self.gatestring_lists['final'] = self.gatestring_lists['iteration'][-1]
+        self.gatestring_lists['all'] = _lt.remove_duplicates(
+            list(_itertools.chain(*self.gatestring_lists['iteration'])) )
+        
+        running_lst = []; delta_lsts = []
+        for lst in self.gatestring_lists['iteration']:
+            delta_lst = [ x for x in lst if (x not in running_lst) ]
+            delta_lsts.append(delta_lst); running_lst.extend(delta_lst) 
+        self.gatestring_lists['iteration delta'] = delta_lsts # *added* at each iteration
+
+        #Set "Ls and germs" info: gives particular structure
+        # to the gateStringLists used to obtain estimates
+        finalStruct = self.gatestring_structs['final']
+        self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
+        self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
+        self.gatestring_lists['germs'] = finalStruct.germs
+
+        
+    def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
+                     parameters, estimate_key='default'):
+        """
+        Add a set of `GateSet` estimates to this `Results` object.
+
+        Parameters
+        ----------
+        targetGateset : GateSet
+            The target gateset used when optimizing the objective.
+
+        seedGateset : GateSet
+            The initial gateset used to seed the iterative part
+            of the objective optimization.  Typically this is
+            obtained via LGST.
+
+        gatesetsByIter : list of GateSets
+            The estimated gateset at each GST iteration. Typically these are the
+            estimated gate sets *before* any gauge optimization is performed.
+
+        parameters : dict
+            A dictionary of parameters associated with how this estimate
+            was obtained.
+
+        estimate_key : str, optional
+            The key or label used to identify this estimate.
+
+        Returns
+        -------
+        None
+        """
+        if self.dataset is None:
+            raise ValueError(("The data set must be initialized"
+                              "*before* adding estimates"))
+
+        if 'iteration' not in self.gatestring_structs:
+            raise ValueError(("Gate sequences must be initialized"
+                              "*before* adding estimates"))
+
+        assert(len(self.gatestring_structs['iteration']) == len(gatesetsByIter))
+
+        if estimate_key in self.estimates:
+            _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                           + " of this Results object!  Usually you don't"
+                           + " want to do this.")
+
+        self.estimates[estimate_key] = Estimate(targetGateset, seedGateset,
+                                                gatesetsByIter, parameters)
+
+        #Set gate sequence related parameters inherited from Results
+        self.estimates[estimate_key].parameters['max length list'] = \
+                                        self.gatestring_structs['final'].Ls
+
 
     def copy(self):
         """ Creates a copy of this Results object. """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()
-        cpy.parameters = self.parameters.copy()
-        cpy.goparameters = self.goparameters.copy()
         cpy.gatestring_lists = self.gatestring_lists.copy()
         cpy.gatestring_structs = self.gatestring_structs.copy()
-        cpy.gatesets = self.gatesets.copy()
+        cpy.estimates = self.estimates.copy()
         cpy.confidence_regions = self.confidence_regions.copy()
         return cpy
 
@@ -272,15 +397,18 @@ class Results(object):
                     gatesets['iteration estimates'] = v
                 else: gatesets[k] = v
             gatesets['final iteration estimate'] = gatesets['iteration estimates'][-1]
+
+            estimate = Estimate(gatesets['target'], gatesets['seed'],
+                                gatesets['iteration estimates'], params)
+            if 'go0' in gatesets:
+                estimate.add_gaugeoptimized(goparams.get('go0',{}), gatesets['go0'])
                 
             filteredDict = {
                 'dataset': stateDict['dataset'],
-                'parameters': params,
-                'goparameters': goparams,
                 'gatestring_lists': gstrLists,
                 'gatestring_structs': gstrStructs,
-                'gatesets': gatesets,
-                'confidence_regions' : _collections.OrderedDict() #don't convert
+                'estimates': _collections.OrderedDict( [('default',estimate)] ),
+                'confidence_regions': _collections.OrderedDict() #don't convert
             }
             self.__dict__.update(filteredDict)
         else:
@@ -294,10 +422,6 @@ class Results(object):
         s += "\n"
         s += "How to access my contents:\n\n"
         s += " .dataset    -- the DataSet used to generate these results\n\n"
-        s += " .gatesets   -- a dictionary of GateSet objects w/keys:\n"
-        s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.gatesets.keys())) + "\n"
-        s += "\n"
         s += " .gatestring_lists   -- a dict of GateString lists w/keys:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.gatestring_lists.keys())) + "\n"
@@ -306,20 +430,16 @@ class Results(object):
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.gatestring_structs.keys())) + "\n"
         s += "\n"
-        s += " .parameters   -- a dictionary of simulation parameters:\n"
+        s += " .estimates   -- a dictionary of Estimate objects:\n"
         s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
-        s += "\n"
-        s += " .goparameters   -- a dictionary of gauge-optimization parameter dictionaries:\n"
-        s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.goparameters.keys())) + "\n"
+        s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
         s += "\n"
         return s
 
 
-    def get_confidence_region(self, gateset_key="go0", gatestrings_key="final",
-                              confidenceLevel=95, label=None, forcecreate=False,
-                              comm=None):
+    def get_confidence_region(self, estimate_key="default", gateset_key="go0",
+                              gatestrings_key="final", confidenceLevel=95,
+                              label=None, forcecreate=False, comm=None):
         """
         Get the ConfidenceRegion object associated with a given gate set and
         confidence level.
@@ -359,8 +479,8 @@ class Results(object):
 
         label : str, optional
             The label to give this confidence region.  If None, then
-            `gateset_key + "." + gatestrings_key + "." + str(confidenceLevel)`
-            is taken to be the label.
+            `estimate_key + "." + gateset_key + "." + gatestrings_key
+            + "." + str(confidenceLevel)` is taken to be the label.
 
         forcecreate : bool, optional
             If True, then a new region will always be created, even if one
@@ -380,18 +500,20 @@ class Results(object):
             return None
 
         crkey = label if (label is not None) else \
-                gateset_key + "." + gatestrings_key + "." + str(confidenceLevel)
-        gateset = self.gatesets[gateset_key]
-        if gatestrings_key in self.gatestring_structs:
-            gatestrings = self.gatestring_structs[gatestrings_key].allstrs
-            aliases = self.gatestring_structs[gatestrings_key].aliases
-        elif gatestrings_key in self.gatestring_lists:
-            gatestrings = self.gatestring_lists[gatestrings_key]
-            aliases = None
-        else: raise ValueError("key '%s' not found in " % gatestrings_key +
-                               "gatestring_structs or gatestring_lists")
+                estimate_key + "." + gateset_key + "." + gatestrings_key \
+                + "." + str(confidenceLevel)
         
         if forcecreate or (crkey not in self.confidence_regions):
+            
+            gateset = self.estimates[estimate_key].gatesets[gateset_key]
+            if gatestrings_key in self.gatestring_structs:
+                gatestrings = self.gatestring_structs[gatestrings_key].allstrs
+                aliases = self.gatestring_structs[gatestrings_key].aliases
+            elif gatestrings_key in self.gatestring_lists:
+                gatestrings = self.gatestring_lists[gatestrings_key]
+                aliases = None
+            else: raise ValueError("key '%s' not found in " % gatestrings_key +
+                                   "gatestring_structs or gatestring_lists")
 
             #Negative confidence levels ==> non-Markovian error bars
             if confidenceLevel < 0:
@@ -401,28 +523,30 @@ class Results(object):
                 actual_confidenceLevel = confidenceLevel
                 regionType = "std"
 
-            if self.parameters['objective'] == "logl":
+            params = self.estimates[estimate_key].parameters
+            objective = params.get('objective',"logl")
+            if objective == "logl":
                 cr = _const.logl_confidence_region(
                     gateset, self.dataset, actual_confidenceLevel, gatestrings,
-                    self.parameters.get('probClipInterval',(-1e6,1e6)),
-                    self.parameters.get('minProbClip',1e-4),
-                    self.parameters.get('radius',1e-4),
-                    self.parameters.get('hessianProjection','optimal gate CIs'),
-                    regionType, comm, self.parameters.get('memLimit',None),
-                    self.parameters.get('cptpPenaltyFactor',0.0),
-                    self.parameters.get('distributeMethod','deriv'),
+                    params.get('probClipInterval',(-1e6,1e6)),
+                    params.get('minProbClip',1e-4),
+                    params.get('radius',1e-4),
+                    params.get('hessianProjection','optimal gate CIs'),
+                    regionType, comm, params.get('memLimit',None),
+                    params.get('cptpPenaltyFactor',0.0),
+                    params.get('distributeMethod','deriv'),
                     aliases)
-            elif self.parameters['objective'] == "chi2":
+            elif objective == "chi2":
                 cr = _const.chi2_confidence_region(
                     gateset, self.dataset, actual_confidenceLevel, gatestrings,
-                    self.parameters.get('probClipInterval',(-1e6,1e6)),
-                    self.parameters.get('minProbClipForWeighting',1e-4),
-                    self.parameters.get('hessianProjection','optimal gate CIs'),
-                    regionType, comm, self.parameters.get('memLimit',None),
+                    params.get('probClipInterval',(-1e6,1e6)),
+                    params.get('minProbClipForWeighting',1e-4),
+                    params.get('hessianProjection','optimal gate CIs'),
+                    regionType, comm, params.get('memLimit',None),
                     aliases)
             else:
                 raise ValueError("Invalid objective given in essential" +
-                                 " info: %s" % self.parameters['objective'])
+                                 " info: %s" % objective)
 
             self.confidence_regions[crkey] = cr
             

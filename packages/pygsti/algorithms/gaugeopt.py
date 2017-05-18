@@ -122,6 +122,13 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     mxBasis = gateset.get_basis_name()
     basisDim = gateset.get_basis_dimension()
 
+    #Use the target gateset's basis if gateset's is unknown
+    # (as it can often be if it's just come from an logl opt,
+    #  since from_vector will clear any basis info)
+    if mxBasis == "unknown" and targetGateset is not None: 
+        mxBasis = targetGateset.get_basis_name()
+        basisDim = targetGateset.get_basis_dimension()
+
     def objective_fn(gs):
         ret = 0
 
