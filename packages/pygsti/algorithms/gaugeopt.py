@@ -127,7 +127,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
 
         if CPpenalty != 0:
             gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
-            s = _tools.sum_of_negative_choi_evals(gs,itemWeights)
+            s = _tools.sum_of_negative_choi_evals(gs, weights=None)
+              # we desire *uniform* weights (don't specify itemWeights here)
             ret += CPpenalty * s
 
         if TPpenalty != 0:
@@ -140,8 +141,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                 ret += TPpenalty * abs(rhoVecFirstEl - rhoVec[0])
 
         if validSpamPenalty != 0:
-            sp =  sum( [ _tools.prep_penalty(rhoVec) for rhoVec in gs.preps.values() ] )
-            sp += sum( [ _tools.effect_penalty(EVec) for EVec   in gs.effects.values() ] )
+            sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in gs.preps.values() ] )
+            sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in gs.effects.values() ] )
             ret += validSpamPenalty*sp
 
         if targetGateset is not None:
