@@ -23,7 +23,6 @@ from ..tools import compattools as _compat
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gaugeOptParams=None,
-                         objective="logl", fidPairs=None,
                          advancedOptions=None, comm=None, memLimit=None,
                          verbosity=2):
     """
@@ -87,22 +86,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
-    objective : {'chi2', 'logl'}, optional
-        Specifies which final objective function is used: the chi-squared or
-        the log-likelihood.
-
-    fidPairs : list of 2-tuples or dict, optional
-        Specifies a subset of all prepStr,effectStr string pairs to be used in
-        this analysis.  If `fidPairs` is a list, each element of `fidPairs` is a
-        ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
-        the state preparation and measurement fiducial strings respectively. If
-        `fidPairs` is a dict, then the keys must be germ strings and values are
-        lists of 2-tuples as in the previous case.
-
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
         and values include:
+        - objective = {'chi2', 'logl'}
         - gateLabels = list of strings
         - gsWeights = dict or None
         - starting point = "LGST" (default) or  "target" or GateSet
@@ -221,30 +209,28 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         startingPt = advancedOptions.get('starting point',"LGST")
     else:
         startingPt = advancedOptions.get('starting point',"target")
-    truncScheme = advancedOptions.get('truncScheme',"whole germ powers")
 
     #Construct gate sequences
     gateLabels = advancedOptions.get(
         'gateLabels', list(gs_target.gates.keys()))
-    nest = advancedOptions.get('nestedGateStringLists',True)
-    aliases = advancedOptions.get('gateLabelAliases',None)
-    includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
     lsgstLists = _construction.stdlists.make_lsgst_structs(
-        gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
-        truncScheme, nest, 1, includeLGST, aliases)
+        gateLabels, prepStrs, effectStrs, germs, maxLengths,
+        truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
+        nest = advancedOptions.get('nestedGateStringLists',True),
+        includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
+        gateLabelAliases = advancedOptions.get('gateLabelAliases',None) )
     
     assert(len(maxLengths) == len(lsgstLists))
     
     return do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
-                              lsgstLists, gaugeOptParams, objective,
-                              advancedOptions, comm, memLimit, verbosity)
-
+                                     lsgstLists, gaugeOptParams,
+                                     advancedOptions, comm, memLimit, verbosity)
 
 
 
 
 def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
-                              lsgstLists, gaugeOptParams=None, objective="logl",
+                              lsgstLists, gaugeOptParams=None,
                               advancedOptions=None, comm=None, memLimit=None,
                               verbosity=2):
     """
@@ -279,10 +265,6 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         *can* be set, but is specified internally when it isn't.  If `None`,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
-
-    objective : {'chi2', 'logl'}, optional
-        Specifies which final objective function is used: the chi-squared or
-        the log-likelihood.
 
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
@@ -434,6 +416,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     aliases = advancedOptions.get('gateLabelAliases',aliases)
     
     #Run Long-sequence GST on data
+    objective = advancedOptions.get('objective', 'logl')
+    
     if objective == "chi2":
         gs_lsgst_list = _alg.do_iterative_mc2gst(
             ds, gs_start, rawLists,
@@ -476,7 +460,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
           alwaysPerformMLE=advancedOptions.get('alwaysPerformMLE',False)
         )
     else:
-        raise ValueError("Invalid longSequenceObjective: %s" % objective)
+        raise ValueError("Invalid objective: %s" % objective)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
