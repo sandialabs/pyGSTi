@@ -16,6 +16,17 @@
     font-style: italic;
 }
 
+.errorbar {
+    color: #0000A0;
+}
+th .errorbar {
+    color: #ADD8E6;
+}
+
+.nmerrorbar {
+    color: red;
+}
+
 .modebar {
     display: none;
 }

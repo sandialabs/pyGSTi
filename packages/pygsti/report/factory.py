@@ -171,6 +171,21 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         _webbrowser.open(url)
 
 
+def _fit_nsigma(obj, ds, gs, gss, mpc):
+    """ Get the number of sigmas of model violation """
+    if obj == "chi2":
+        fitQty = _tools.chi2( ds, gs, gss.allstrs,
+                              minProbClipForWeighting=mpc,
+                              gateLabelAliases=gss.aliases)
+    elif obj == "logl":
+        logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
+        logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
+        fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL            
+    Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
+    Np = gs.num_params() #don't bother with non-gauge only here
+    k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+    return (fitQty-k)/_np.sqrt(2*k)
+
         
 def _errgen_formula(errgen_type):
     if errgen_type == "logTiG":
@@ -378,6 +393,19 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
+
+            #Check whether we should use non-Markovian error bars:
+            # If fit is bad, check if any reduced fits were computed
+            # that we can use with in-model error bars.  If not, use
+            # experimental non-markovian error bars.
+            nSigma = _fit_nsigma(est.parameters['objective'], results.dataset,
+                                 est.gatesets['final iteration estimate'],
+                                 results.gatestring_structs['final'],
+                                 est.parameters['minProbClipForWeighting'])
+            
+            if nSigma > 100: #HARDCODED arbitrary threshold
+                confidenceLevel = -abs(confidenceLevel)
+
             switchBd.cri[i,:] = [ results.get_confidence_region(
                 lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
 
@@ -569,26 +597,6 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
 
-    #Check whether we should use non-Markovian error bars:
-    # If fit is bad, check if any reduced fits were computed
-    # that we can use with in-model error bars.  If not, use
-    # experimental non-markovian error bars.
-
-    def fit_nsigma(obj, ds, gs, gss, mpc):
-        if obj == "chi2":
-            fitQty = _tools.chi2( ds, gs, gss.allstrs,
-                                  minProbClipForWeighting=mpc,
-                                  gateLabelAliases=gss.aliases)
-        elif obj == "logl":
-            logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
-            logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
-            fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL            
-        Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
-        Np = gs.num_params() #don't bother with non-gauge only here
-        k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
-        return (fitQty-k)/_np.sqrt(2*k)
-        
-
     # Generate Tables
     printer.log("*** Generating tables ***")
 
@@ -651,12 +659,19 @@ def create_general_report(results, filename, confidenceLevel=None,
 
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-            nSigma = fit_nsigma(est.parameters['objective'], results.dataset,
-                                est.gatesets['final iteration estimate'],
-                                results.gatestring_structs['final'],
-                                est.parameters['minProbClipForWeighting'])
-            #print("DEBUG: nSigma = ",nSigma)
+
+            #Check whether we should use non-Markovian error bars:
+            # If fit is bad, check if any reduced fits were computed
+            # that we can use with in-model error bars.  If not, use
+            # experimental non-markovian error bars.
+            nSigma = _fit_nsigma(est.parameters['objective'], results.dataset,
+                                 est.gatesets['final iteration estimate'],
+                                 results.gatestring_structs['final'],
+                                 est.parameters['minProbClipForWeighting'])
             
+            if nSigma > 100: #HARDCODED arbitrary threshold
+                confidenceLevel = -abs(confidenceLevel)
+                
             switchBd.cri[i,:] = [ results.get_confidence_region(
                 lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
 

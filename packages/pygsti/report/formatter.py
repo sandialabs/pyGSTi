@@ -439,6 +439,11 @@ def _fmtCnv_html(x):
     x = x.replace("REPLACEWITHSTARCODE", '&#9733;') #replace new marker with HTML code
     return str(x)
 
+def _fmtCnv_html_eb(x):
+    return '<span class="errorbar">' + _fmtCnv_html(x) + '</span>'
+def _fmtCnv_html_nmeb(x):
+    return '<span class="nmerrorbar">' + _fmtCnv_html(x) + '</span>'
+
 def _fmtCnv_latex(x):
     x = x.replace("\\", "\\textbackslash")
     x = x.replace('%','\\%')
@@ -456,6 +461,18 @@ def _fmtCnv_latex(x):
 
 FormatSet.formatDict['Conversion'] = {
     'html'  : _fmtCnv_html,
+    'latex' : _fmtCnv_latex,
+    'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
+    'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+
+FormatSet.formatDict['EBConversion'] = {
+    'html'  : _fmtCnv_html_eb,
+    'latex' : _fmtCnv_latex,
+    'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
+    'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+
+FormatSet.formatDict['NMEBConversion'] = {
+    'html'  : _fmtCnv_html_nmeb,
     'latex' : _fmtCnv_latex,
     'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
     'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
@@ -478,7 +495,10 @@ class _EBFormatter(object):
         else:
             return self.formatstringB % self.f(t[0])
 
-_EB_html  = _EBFormatter(_PrecisionFormatter(html))
+_EB_html  = _EBFormatter(_PrecisionFormatter(html),
+                         '%s <span class="errorbar">+/- %s</span>')
+_EB_html2  = _EBFormatter(_PrecisionFormatter(html),
+                         '%s <span class="nmerrorbar">+/- %s</span>')
 _EB_latex = _EBFormatter(_PrecisionFormatter(latex_value),
                        '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
 _EB_text  = lambda t : {'value' : t[0], 'errbar' : t[1]}
@@ -489,11 +509,21 @@ FormatSet.formatDict['ErrorBars'] = {
     'latex' : _EB_latex,
     'text'  : _EB_text,
     'ppt'   : _EB_ppt }
+FormatSet.formatDict['NMErrorBars'] = {
+    'html'  : _EB_html2,
+    'latex' : _EB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _EB_ppt }
 
 _VEB_latex = _EBFormatter(_PrecisionFormatter(latex), '%s $\pm$ %s')
 
 FormatSet.formatDict['VecErrorBars'] = {
     'html'  : _EB_html,
+    'latex' : _VEB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _EB_ppt}
+FormatSet.formatDict['NMVecErrorBars'] = {
+    'html'  : _EB_html2,
     'latex' : _VEB_latex,
     'text'  : _EB_text,
     'ppt'   : _EB_ppt}
@@ -508,7 +538,9 @@ _PiEB_latex = _PiEBFormatter(_PrecisionFormatter(latex),
                            '$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $',
                            '%s$\\pi$')
 def _pi_eb_template(f):
-    return _EBFormatter(_PrecisionFormatter(html), '(%s +/- %s)&pi')
+    return _EBFormatter(_PrecisionFormatter(html), '(%s <span class="errorbar">+/- %s</span>)&pi')
+def _pi_eb_template2(f):
+    return _EBFormatter(_PrecisionFormatter(html), '(%s <span class="nmerrorbar">+/- %s</span>)&pi')
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 FormatSet.formatDict['PiErrorBars'] = {
@@ -516,6 +548,13 @@ FormatSet.formatDict['PiErrorBars'] = {
     'latex' : _PiEB_latex,
     'text'  : _EB_text,
     'ppt'   : _pi_eb_template(ppt)}
+
+FormatSet.formatDict['NMPiErrorBars'] = {
+    'html'  : _pi_eb_template2(html),
+    'latex' : _PiEB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _pi_eb_template(ppt)}
+
 
 FormatSet.formatDict['GateString'] = {
     'html'  : lambda s : '.'.join(s) if s is not None else '',
