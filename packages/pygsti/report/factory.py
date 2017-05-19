@@ -13,6 +13,7 @@ import numpy as _np
 import collections as _collections
 import webbrowser as _webbrowser
 import zipfile as _zipfile
+from scipy.stats import chi2 as _chi2
 
 from ..objects      import VerbosityPrinter
 from ..tools        import compattools as _compat
@@ -185,6 +186,41 @@ def _fit_nsigma(obj, ds, gs, gss, mpc):
     Np = gs.num_params() #don't bother with non-gauge only here
     k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
     return (fitQty-k)/_np.sqrt(2*k)
+
+def _rescale_data_to_fit_model(obj, ds, gs, gss, mpc, pc):
+
+    assert(obj in ('chi2','logl')),"Invalid objective!"    
+    probs_precomp_dict = _ph._computeProbabilities(gss, gss, ds)
+    
+    fitFn = _ph.chi2_matrix if obj == "chi2" else _ph.logl_matrix
+    expected = (len(ds.get_spam_labels())-1) # == "k"
+    dof_per_box = 1; nboxes = len(gss.allstrs)                               
+    threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+
+    scaled_dataset = ds.copy_nonstatic()
+
+    subMxs = []
+    for y in gss.used_yvals():
+        subMxs.append( [] )
+        for x in gss.used_xvals():
+            plaq = gss.get_plaquette(x,y)
+            fitQty = fitFn(plaq, ds, gs, mpc, probs_precomp_dict)
+            scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
+            
+            for i,j,gstr in plaq:
+                if fitQty[i,j] <= threshold:
+                    scalingMx[i,j] = 0.0
+                else:
+                    scalingMx[i,j] = fitQty[i,j]/expected
+                    scaled_dataset[gstr].scale(scalingMx[i,j])
+
+            #build up a subMxs list-of-lists as a plotting
+            # function does, so we can easily plot the scaling
+            # factors in a color box plot.
+            subMxs[-1].append(scalingMx)
+
+    scaled_dataset.done_adding_data()
+    return subMxs, scaled_dataset
 
         
 def _errgen_formula(errgen_type):
@@ -405,6 +441,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
             
             if nSigma > 100: #HARDCODED arbitrary threshold
                 confidenceLevel = -abs(confidenceLevel)
+                #TODO: use _rescale_data_to_fit_model here to scale down dataset?
+                #  or should this be done prior to reporting (?)
+                # then show via new "submatrices" arg to ColorBoxPlot
 
             switchBd.cri[i,:] = [ results.get_confidence_region(
                 lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]

@@ -814,7 +814,7 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None, dscomparator=None, scale=1.0):
+                 directGSTgatesets=None, dscomparator=None, submatrices=None, scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -875,6 +875,12 @@ class ColorBoxPlot(WorkspacePlot):
         dscomparator : DataComparator, optional
             The data set comparator used to produce the "dscmp" plot type.
 
+        submatrices : dict, optional
+            A dictionary whose keys correspond to other potential plot
+            types and whose values are each a list-of-lists of the sub
+            matrices to plot, corresponding to the used x and y values
+            of `gss`.
+
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
         """
@@ -882,12 +888,12 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets, dscomparator, scale)
+                                          directGSTgatesets, dscomparator, submatrices, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets, dscomparator, scale):
+                directGSTgatesets, dscomparator, submatrices, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -961,14 +967,22 @@ class ColorBoxPlot(WorkspacePlot):
 
                 def mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
-                
+
+            elif (submatrices is not None) and typ in submatrices:
+                precomp = False
+                colormapType = "seq" #maybe let user specify this?
+            
             else:
                 raise ValueError("Invalid plot type: %s" % typ)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
                 probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
 
-            subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+            if (submatrices is not None) and typ in submatrices:
+                subMxs = submatrices[typ] # "custom" type -- all mxs precomputed by user
+            else:
+                subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+            
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
