@@ -545,8 +545,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
         return round(trunc_x, e) #round to truncation point just to be sure
 
-    xextra = 0. if ylabel is None else 1.5
-    yextra = 0. if xlabel is None else 1.5
+    xextra = 2.25 if ylabel is None else 2.5
+    yextra = 2.25 if xlabel is None else 2.5
 
     if mxBasis is not None and mxBasisDims is not None:
         if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
@@ -554,8 +554,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        yextra += 1.5 if (mxBasisDims > 1) else 0
-        xextra += 1.5 if (mxBasisDimsY > 1) else 0
+        yextra += 0.5 if (mxBasisDims > 1) else 0
+        xextra += 0.5 if (mxBasisDimsY > 1) else 0
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
@@ -651,6 +651,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         annotations = annotations,
         margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
     )
+    #print("DEBUG width = ",40*(gateMatrix.shape[1]+xextra)*scale)
+    #print("DEBUG height = ",40*(gateMatrix.shape[0]+yextra)*scale)
     return go.Figure(data=data, layout=layout)
 
 

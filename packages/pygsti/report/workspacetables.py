@@ -271,23 +271,27 @@ class GatesTable(WorkspaceTable):
                 if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
+                    basisNm = gatesets[-1].get_basis_name()
+                    basisDims = gatesets[-1].get_basis_dimension()
                     intervalMx = intervalVec.reshape(gate_dim,gate_dim)
                 elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
+                    basisNm = gatesets[-1].get_basis_name()
+                    basisDims = gatesets[-1].get_basis_dimension()
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
-                    intervalMx = intervalVec # we don't know how best to reshape
-                                             # vector of parameter intervals, so don't
+                    # we don't know how best to reshape
+                    # vector of parameter intervals, so just don't unless needed for boxes
+                    intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
+                    basisNm = basisDims = None #we don't know how to label the params
 
                 if display_as == "numbers":
                     row_data.append(intervalMx)
                     row_formatters.append('Brackets')
                     
                 elif display_as == "boxes":
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
