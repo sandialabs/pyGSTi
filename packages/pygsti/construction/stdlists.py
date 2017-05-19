@@ -11,11 +11,12 @@ import itertools as _itertools
 import warnings as _warnings
 from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
+from ..objects import GateSet as _GateSet
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc
 
 
-def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                      fidPairs=None, truncScheme="whole germ powers", nest=True,
                      keepFraction=1, keepSeed=None, includeLGST=True):
     """
@@ -44,9 +45,10 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
 
     Parameters
     ----------
-    gateLabels : list or tuple
-        List of gate labels to determine needed LGST strings.  Only relevant
-        when `includeLGST == True`.
+    gateLabelSrc : list or GateSet
+        List of gate labels to determine needed LGST strings.  If a GateSet,
+        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
         List of the preparation fiducial gate strings, which follow state
@@ -129,7 +131,11 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
                        + " simply remove the leading 0 and start your"
                        + " max-length list at 1 now."
                        + "")
-    
+
+    if isinstance(gateLabelSrc, _GateSet):
+        gateLabels = list(gateLabelSrc.gates.keys())
+    else: gateLabels = gateLabelSrc
+        
     lgst_list = _gsc.list_lgst_gatestrings(
         _ssc.build_spam_specs(prepStrs = prepStrs,
                               effectStrs = effectStrs),
@@ -211,7 +217,7 @@ def make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
     return lsgst_listOfLists
 
 
-def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList,
+def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                        fidPairs=None, truncScheme="whole germ powers", nest=True,
                        keepFraction=1, keepSeed=None, includeLGST=True,
                        gateLabelAliases=None):
@@ -241,9 +247,10 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
 
     Parameters
     ----------
-    gateLabels : list or tuple
-        List of gate labels to determine needed LGST strings.  Only relevant
-        when `includeLGST == True`.
+    gateLabelSrc : list or GateSet
+        List of gate labels to determine needed LGST strings.  If a GateSet,
+        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
         List of the preparation fiducial gate strings, which follow state
@@ -334,7 +341,11 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
                        + " simply remove the leading 0 and start your"
                        + " max-length list at 1 now."
                        + "")
-    
+
+    if isinstance(gateLabelSrc, _GateSet):
+        gateLabels = list(gateLabelSrc.gates.keys())
+    else: gateLabels = gateLabelSrc
+
     lgst_list = _gsc.list_lgst_gatestrings(
         _ssc.build_spam_specs(prepStrs = prepStrs,
                               effectStrs = effectStrs),
@@ -423,7 +434,7 @@ def make_lsgst_structs(gateLabels, prepStrs, effectStrs, germList, maxLengthList
     return lsgst_listOfStructs
 
 
-def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,
+def make_lsgst_experiment_list(gateLabelSrc, prepStrs, effectStrs, germList,
                                maxLengthList, fidPairs=None,
                                truncScheme="whole germ powers", keepFraction=1,
                                keepSeed=None, includeLGST=True):
@@ -441,9 +452,10 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,
 
     Parameters
     ----------
-    gateLabels : list or tuple
-        List of gate labels to determine needed LGST strings.  Only relevant
-        when `includeLGST == True`.
+    gateLabelSrc : list or GateSet
+        List of gate labels to determine needed LGST strings.  If a GateSet,
+        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
         List of the preparation fiducial gate strings, which follow state
@@ -504,13 +516,13 @@ def make_lsgst_experiment_list(gateLabels, prepStrs, effectStrs, germList,
     list of GateStrings
     """
     nest = True # => the final list contains all of the strings
-    return make_lsgst_lists(gateLabels, prepStrs, effectStrs, germList,
+    return make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList,
                             maxLengthList, fidPairs, truncScheme, nest,
                             keepFraction, keepSeed, includeLGST)[-1]
 
 
 
-def make_elgst_lists(gateLabels, germList, maxLengthList,
+def make_elgst_lists(gateLabelSrc, germList, maxLengthList,
                      truncScheme="whole germ powers", nest=True,
                      includeLGST=True):
     """
@@ -539,8 +551,10 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
 
     Parameters
     ----------
-    gateLabels : list or tuple
-        List of gate labels. Only relevant when `includeLGST == True`.
+    gateLabelSrc : list or GateSet
+        List of gate labels to determine needed LGST strings.  If a GateSet,
+        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        relevant when `includeLGST == True`.
 
     germList : list of GateStrings
         List of the germ gate strings.
@@ -585,6 +599,10 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
+    if isinstance(gateLabelSrc, _GateSet):
+        gateLabels = list(gateLabelSrc.gates.keys())
+    else: gateLabels = gateLabelSrc
+
     singleGates = _gsc.gatestring_list([(g,) for g in gateLabels])
 
     #running list of all strings so far (length-1 strs or empty)
@@ -611,7 +629,7 @@ def make_elgst_lists(gateLabels, germList, maxLengthList,
     return elgst_listOfLists
 
 
-def make_elgst_experiment_list(gateLabels, germList, maxLengthList,
+def make_elgst_experiment_list(gateLabelSrc, germList, maxLengthList,
                                truncScheme="whole germ powers",
                                includeLGST=True):
     """
@@ -628,8 +646,10 @@ def make_elgst_experiment_list(gateLabels, germList, maxLengthList,
 
     Parameters
     ----------
-    gateLabels : list or tuple
-        List of gate labels. Only relevant when `includeLGST == True`.
+    gateLabelSrc : list or GateSet
+        List of gate labels to determine needed LGST strings.  If a GateSet,
+        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        relevant when `includeLGST == True`.
 
     germList : list of GateStrings
         List of the germ gate strings.
@@ -661,7 +681,7 @@ def make_elgst_experiment_list(gateLabels, germList, maxLengthList,
 
     #When nest == True the final list contains all of the strings
     nest = True
-    return make_elgst_lists(gateLabels, germList,
+    return make_elgst_lists(gateLabelSrc, germList,
                             maxLengthList, truncScheme, nest,
                             includeLGST)[-1]
 
