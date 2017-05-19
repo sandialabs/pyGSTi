@@ -9,12 +9,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os  as _os
 import sys as _sys
 import time as _time
+import numpy as _np
 import collections as _collections
 import webbrowser as _webbrowser
 import zipfile as _zipfile
 
 from ..objects      import VerbosityPrinter
 from ..tools        import compattools as _compat
+from ..             import tools as _tools
 from .              import workspace as _ws
 
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
@@ -355,7 +357,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     switchBd.add("gsAllL",(0,))
 
     if confidenceLevel is not None:
-        switchBd.add("cri",(0,2))
+        switchBd.add("cri",(0,1))
         
     switchBd.gss[:] = results.gatestring_structs['iteration']
         
@@ -368,8 +370,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
             switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
         
         switchBd.gsTarget[i] = est.gatesets['target']
-        switchBd.gsFinal[i,:] = [ est.gatesets[lbl] for lbl in gauge_opt_labels ]
-        switchBd.goparams[i,:] = [ est.goparameters[lbl] for lbl in gauge_opt_labels]
+        switchBd.gsFinal[i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
+        switchBd.goparams[i,:] = [ est.goparameters[l] for l in gauge_opt_labels]
 
         switchBd.gsL[i,:] = est.gatesets['iteration estimates']
         switchBd.gsAllL[i] = est.gatesets['iteration estimates']
@@ -377,7 +379,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
             switchBd.cri[i,:] = [ results.get_confidence_region(
-                lbl, golbl, "final", confidenceLevel, comm=comm) for golbl in gauge_opt_labels]
+                lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -566,6 +568,25 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
+
+    #Check whether we should use non-Markovian error bars:
+    # If fit is bad, check if any reduced fits were computed
+    # that we can use with in-model error bars.  If not, use
+    # experimental non-markovian error bars.
+
+    def fit_nsigma(obj, ds, gs, gss, mpc):
+        if obj == "chi2":
+            fitQty = _tools.chi2( ds, gs, gss.allstrs,
+                                  minProbClipForWeighting=mpc,
+                                  gateLabelAliases=gss.aliases)
+        elif obj == "logl":
+            logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL            
+        Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
+        Np = gs.num_params() #don't bother with non-gauge only here
+        k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+        return (fitQty-k)/_np.sqrt(2*k)
         
 
     # Generate Tables
@@ -606,7 +627,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     switchBd.add("gsAllL",(0,))
 
     if confidenceLevel is not None:
-        switchBd.add("cri",(0,2))
+        switchBd.add("cri",(0,1))
 
     switchBd.gss[:] = results.gatestring_structs['iteration']
 
@@ -619,19 +640,25 @@ def create_general_report(results, filename, confidenceLevel=None,
             switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
         
         switchBd.gsTarget[i] = est.gatesets['target']
-        switchBd.gsFinal[i,:] = [ est.gatesets[lbl] for lbl in gauge_opt_labels ]
+        switchBd.gsFinal[i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
         switchBd.gsTargetAndFinal[i,:] = \
-                    [ [est.gatesets['target'], est.gatesets[lbl]]
-                      for lbl in gauge_opt_labels ]
-        switchBd.goparams[i,:] = [ est.goparameters[lbl] for lbl in gauge_opt_labels]
+                    [ [est.gatesets['target'], est.gatesets[l]]
+                      for l in gauge_opt_labels ]
+        switchBd.goparams[i,:] = [ est.goparameters[l] for l in gauge_opt_labels]
 
         switchBd.gsL[i,:] = est.gatesets['iteration estimates']
         switchBd.gsAllL[i] = est.gatesets['iteration estimates']
 
         if confidenceLevel is not None:
             #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
+            nSigma = fit_nsigma(est.parameters['objective'], results.dataset,
+                                est.gatesets['final iteration estimate'],
+                                results.gatestring_structs['final'],
+                                est.parameters['minProbClipForWeighting'])
+            #print("DEBUG: nSigma = ",nSigma)
+            
             switchBd.cri[i,:] = [ results.get_confidence_region(
-                lbl, golbl, "final", confidenceLevel, comm=comm) for golbl in gauge_opt_labels]
+                lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -661,10 +688,11 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
+    qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'],
                                                      cri, includeHSVec=False)
-    qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
+
     qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
