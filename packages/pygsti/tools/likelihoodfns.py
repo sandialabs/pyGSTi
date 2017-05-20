@@ -849,7 +849,7 @@ def forbidden_prob(gateset, dataset):
 
     return forbidden_prob
 
-def prep_penalty(rhoVec):
+def prep_penalty(rhoVec, basis):
     """
     Penalty assigned to a state preparation (rho) vector rhoVec.  State
       preparation density matrices must be positive semidefinite
@@ -861,21 +861,26 @@ def prep_penalty(rhoVec):
     rhoVec : numpy array
         rho vector array of shape (N,1) for some N.
 
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret rhoVec
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
+
     Returns
     -------
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.gmvec_to_stdmx(_np.asarray(rhoVec))
+    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec),basis)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
-    nQubits = _np.log2(len(rhoVec)) / 2
-    tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(2))**nQubits) # tensor of n I(2x2)/sqrt(2) has trace sqrt(2)**n
+    tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
+      # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
-    #print "Trace Penalty = ",tracePenalty  #DEBUG
+    #print "Trace Penalty = ",tracePenalty  #DEBUG    
     return sumOfNeg +  tracePenalty
 
-def effect_penalty(EVec):
+def effect_penalty(EVec, basis):
     """
     Penalty assigned to a POVM effect vector EVec. Effects
       must have eigenvalues between 0 and 1.  A positive return
@@ -887,12 +892,17 @@ def effect_penalty(EVec):
     EVec : numpy array
          effect vector array of shape (N,1) for some N.
 
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret EVec
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
+
     Returns
     -------
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.gmvec_to_stdmx(_np.asarray(EVec))
+    EMx = _bt.vec_to_stdmx(_np.asarray(EVec),basis)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -925,8 +935,9 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        ret += sum([ prep_penalty(r) for r in list(gateset.preps.values()) ])
-        ret += sum([ effect_penalty(e) for e in list(gateset.effects.values()) ])
+        b = gateset.get_basis_name()
+        ret += sum([ prep_penalty(r,b) for r in list(gateset.preps.values()) ])
+        ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
     return ret
 
 

@@ -41,11 +41,10 @@ setup(name='pyGSTi',
       author_email='pygsti@sandia.gov',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.construction', 'pygsti.drivers', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
-      package_data={'pygsti.report': ['templates/*.tex', 'templates/*.pptx']},
-      requires=['numpy','scipy','matplotlib','pyparsing'],
+      package_data={'pygsti.report': ['templates/*.html', 'templates/css/*.css']},
+      requires=['numpy','scipy','plotly','pyparsing'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
-           'powerpoint file generation': ['python-pptx'],
            'nose testing' : ['nose'],
            'image comparison' : ['Pillow'],
            'accurate memory profiling' : ['psutil']

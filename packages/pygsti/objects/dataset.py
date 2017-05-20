@@ -101,6 +101,14 @@ class DataSetRow(object):
             self.dataset.totals[self.totalKey] += count - old_count
         self.rowData[ self.dataset.slIndex[spamlabel] ] = count
 
+    def scale(self, factor):
+        """ Scales all the counts of this row by the given factor """
+        for spamLabel in self.dataset.slIndex.keys():
+            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
+            if self.totalKey is not None:
+                self.dataset.totals[self.totalKey] += factor*count - old_count
+            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*count
+
     def as_dict(self):
         """ Returns the (spamlabel,count) pairs as a dictionary."""
         return dict( list(zip(list(self.dataset.slIndex.keys()),self.rowData)) )
@@ -191,7 +199,7 @@ class DataSet(object):
 
         measurementGates : dict, optional
             If not None, a dictrionary whose keys are user-defined "measurement
-            labels" and whose values are lists if gate labels.  The gate labels 
+            labels" and whose values are lists of gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
             labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
@@ -272,7 +280,6 @@ class DataSet(object):
             self.measurementGates = None
             self.measurementLabels = None
             self.totals = None
-
 
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
@@ -772,6 +779,7 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
+            self.file_origin = fileOrFilename
         else:
             f = fileOrFilename
 
