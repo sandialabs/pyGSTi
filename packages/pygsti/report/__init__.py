@@ -12,5 +12,5 @@ from .generation import *
 from .plotting import *
 from .reportables import *
 from .results import Results
-from .datasetcomparisons import *
+from .datasetcomparison import *
 #from .datasetcomparisons import *
