@@ -103,11 +103,11 @@ class DataSetRow(object):
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
-        for spamLabel in self.dataset.slIndex.keys():
+        for spamlabel in self.dataset.slIndex.keys():
             old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
             if self.totalKey is not None:
-                self.dataset.totals[self.totalKey] += factor*count - old_count
-            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*count
+                self.dataset.totals[self.totalKey] += factor*old_count - old_count
+            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*old_count
 
     def as_dict(self):
         """ Returns the (spamlabel,count) pairs as a dictionary."""
