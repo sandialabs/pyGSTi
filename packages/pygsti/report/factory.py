@@ -20,9 +20,73 @@ from ..tools        import compattools as _compat
 from ..             import tools as _tools
 from .              import workspace as _ws
 
+
+def _read_and_preprocess_template(templateFilename, toggles):
+    template = ''
+    with open(templateFilename, 'r') as templatefile:
+        template = templatefile.read()
+        
+    try: # convert to unicode if Python2 
+        template = template.decode('utf-8')
+    except AttributeError: pass #Python3 case
+
+    if toggles is None:
+        toggles = {}
+        
+    def preprocess(txt):
+        try: i = txt.index("#iftoggle(")
+        except ValueError: i = None
+
+        try: k = txt.index("#elsetoggle")
+        except ValueError: k = None
+
+        try: j = txt.index("#endtoggle")
+        except ValueError: j = None
+
+        if i is None:
+            return txt #no iftoggle, so no further processing to do
+            
+        if (k is not None and k < i) or (j is not None and j < i):
+            return txt # else/end appears *before* if - so don't process the if
+
+        #Process the #iftoggle
+        off = len("#iftoggle(")
+        end = txt[i+off:].index(')')
+        toggleName = txt[i+off:i+off+end]
+        pre_text = txt[0:i]  #text before our #iftoggle
+        post_text = preprocess(txt[i+off+end+1:]) #text after
+        
+        if_text = ""
+        else_text = ""
+
+        #Process #elsetoggle
+        try: k = post_text.index("#elsetoggle") # index in (new) *post_text*
+        except ValueError: k = None
+        if k is not None: # if-block ends at #else
+            if_text = post_text[0:k]
+            post_text = preprocess(post_text[k+len("#elsetoggle"):])
+
+        #Process #endtoggle
+        try: j = post_text.index("#endtoggle") # index in (new) *post_text*
+        except ValueError: j = None
+        assert(j is not None), "#iftoggle(%s) without corresponding #endtoggle" % toggleName
+        
+        if k is None: # if-block ends at #end
+            if_text = post_text[0:j]
+        else: # if-block already captured; else-block ends at #end
+            else_text = post_text[0:j]
+        post_text = post_text[j+len("#endtoggle"):]
+                
+        if toggles[toggleName]:
+            return pre_text + if_text + post_text
+        else:
+            return pre_text + else_text + post_text
+    
+    return preprocess(template)
+
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, verbosity=0):
+                    connected=False, toggles=None, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -127,15 +191,8 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                       "templates", templateFilename )
 
-    template = ''
-    with open(templateFilename, 'r') as templatefile:
-        template = templatefile.read()
-        
-    try: # convert to unicode if Python2 
-        template = template.decode('utf-8')
-    except AttributeError: pass #Python3 case
+    template = _read_and_preprocess_template(templateFilename, toggles)
 
-    
     qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
     for key,val in qtys.items():
         if _compat.isstr(val):
@@ -313,7 +370,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     if title == "auto":
         title = "GST report for %s" % datasetLabel
-    
+
+    toggles = {}
+        
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -372,11 +431,11 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     #Determine when to get gatestring weight (scaling) values and show via
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
-    bShowScale = False
+    toggles["ShowScaling"] = False
     for i,(lbl,est) in enumerate(results.estimates.items()):
         weights = est.parameters.get("weights",None)
         if weights is not None and len(weights) > 0:
-            bShowScale = True
+            toggles["ShowScaling"] = True
     
     for i,(lbl,est) in enumerate(results.estimates.items()):
         switchBd.params[i] = est.parameters
@@ -490,7 +549,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
     template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
     _merge_template(qtys, template, filename, auto_open, precision,
-                    connected=connected, verbosity=printer)
+                    connected=connected, toggles=toggles, verbosity=printer)
 
     
 
@@ -592,6 +651,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     if title == "auto":
         title = "GST report for %s" % datasetLabel
 
+    toggles = {}
+
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -644,7 +705,17 @@ def create_general_report(results, filename, confidenceLevel=None,
     if confidenceLevel is not None:
         switchBd.add("cri",(0,1))
 
+    gssFinal = results.gatestring_structs['final']
     switchBd.gss[:] = results.gatestring_structs['iteration']
+
+    #Determine when to get gatestring weight (scaling) values and show via
+    # ColorBoxPlots below by checking whether any estimate has "weights"
+    # parameter (a dict) with > 0 entries.
+    toggles["ShowScaling"] = False
+    for i,(lbl,est) in enumerate(results.estimates.items()):
+        weights = est.parameters.get("weights",None)
+        if weights is not None and len(weights) > 0:
+            toggles["ShowScaling"] = True
 
     for i,(lbl,est) in enumerate(results.estimates.items()):
         switchBd.params[i] = est.parameters
@@ -759,8 +830,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
     template = "report_general_brief.html" if brief else "report_general.html"
-    _merge_template(qtys, template, filename, auto_open,
-                    precision, connected=connected, verbosity=printer)
+    _merge_template(qtys, template, filename, auto_open, precision,
+                    connected=connected, toggles=toggles, verbosity=printer)
 
 
 
@@ -852,3 +923,5 @@ def create_general_report(results, filename, confidenceLevel=None,
 #        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
 #        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
+
+    
