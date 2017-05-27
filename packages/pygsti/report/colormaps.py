@@ -206,12 +206,14 @@ class DivergingColormap(Colormap):
         
 
 class SequentialColormap(Colormap):
-    def __init__(self, vmin, vmax, color="greys" ):
+    def __init__(self, vmin, vmax, color="whiteToBlack"):
         hmin = vmin
         hmax = vmax
 
-        if color == "greys": # white -> black
+        if color == "whiteToBlack":
             rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
+        elif color == "blackToWhite":
+            rgb_colors = [ [0, (0.0,0.0,0.0)], [1.0, (1.,1.,1.)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 

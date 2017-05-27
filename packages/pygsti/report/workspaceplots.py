@@ -970,7 +970,10 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif (submatrices is not None) and typ in submatrices:
                 precomp = False
-                colormapType = "seq" #maybe let user specify this?
+                if typ + ".colormap" in submatrices:
+                    colormapType = submatrices[typ + ".colormap"]
+                else:
+                    colormapType = "seq"
             
             else:
                 raise ValueError("Invalid plot type: %s" % typ)
@@ -996,13 +999,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType == "trivial":
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
 
-            elif colormapType == "seq":
+            elif colormapType in ("seq","revseq"):
                 max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                                 for ix in range(len(gss.used_xvals()))
                                 for iy in range(len(gss.used_yvals())) ])
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
-                colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs)
-
+                color = "whiteToBlack" if colormapType == "seq" else "blackToWhite"
+                colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
+                
             else: assert(False) #invalid colormapType was set above
             
             newfig = gatestring_color_boxplot(gss, subMxs, colormap,
