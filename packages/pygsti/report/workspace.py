@@ -623,6 +623,7 @@ class Workspace(object):
             key = call_key(fn, argVals) # cache by call key
             if key not in self.compCache:
                 #print("DB: computing with args = ", argVals)
+                #print("DB: computing with arg types = ", [type(x) for x in argVals])
                 self.compCache[key] = fn(*argVals)
             result = self.compCache[key]
 
