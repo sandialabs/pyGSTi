@@ -1,4 +1,10 @@
 
+.notapplicable {
+    color: DarkSlateBlue;
+    font-weight: bold;
+    font-size: 20pt;
+}    
+
 .successmsg {
     color: green;
     font-weight: bold;

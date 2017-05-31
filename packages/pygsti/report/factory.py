@@ -237,6 +237,21 @@ def _errgen_formula(errgen_type):
     else:
         return "???"
 
+def _add_new_labels(running_lbls, current_lbls):
+    """ 
+    Simple routine to add current-labels to a list of
+    running-labels without introducing duplicates and
+    preserving order as best we can.
+    """
+    if running_lbls is None:
+        return current_lbls
+    elif running_lbls != current_lbls:
+        for lbl in current_lbls:
+            if lbl not in running_lbls:
+                running_lbls.append(lbl)
+    return running_lbls
+
+
 def create_offline_zip(outputDir="."):
     """ 
     Creates a zip file containing the a directory ("offline") of files
@@ -270,7 +285,147 @@ def create_offline_zip(outputDir="."):
             zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
     zipHandle.close()
 
+def _set_toggles(results_dict):
+    #Determine when to get gatestring weight (scaling) values and show via
+    # ColorBoxPlots below by checking whether any estimate has "weights"
+    # parameter (a dict) with > 0 entries.
+    toggles = {}
     
+    toggles["ShowScaling"] = False
+    for res in results_dict.values():
+        for i,(lbl,est) in enumerate(res.estimates.items()):
+            weights = est.parameters.get("weights",None)
+            if weights is not None and len(weights) > 0:
+                toggles["ShowScaling"] = True
+
+    return toggles
+    
+def _create_master_switchboard(ws, results_dict, confidenceLevel,
+                               nmthreshold, comm):
+    """
+    Creates the "master switchboard" used by several of the reports
+    """
+    
+    dataset_labels = list(results_dict.keys())
+    est_labels = None
+    gauge_opt_labels = None
+    Ls = None        
+
+    for results in results_dict.values():
+        est_labels = _add_new_labels(est_labels, list(results.estimates.keys()))
+        Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)    
+        for est in results.estimates.values():
+            gauge_opt_labels = _add_new_labels(gauge_opt_labels,
+                                               list(est.goparameters.keys()))            
+
+    Ls = list(sorted(Ls)) #make sure Ls are sorted in increasing order
+    
+    multidataset = bool(len(dataset_labels) > 1)
+    multiest = bool(len(est_labels) > 1)
+    multiGO = bool(len(gauge_opt_labels) > 1)
+    multiL = bool(len(Ls) > 1)
+            
+    switchBd = ws.Switchboard(
+        ["Dataset","Estimate","G-Opt","max(L)"],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
+        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
+        show=[multidataset,multiest,False,False]
+    )
+
+    switchBd.add("ds",(0,))
+    switchBd.add("prepStrs",(0,))
+    switchBd.add("effectStrs",(0,))
+    switchBd.add("strs",(0,))
+    switchBd.add("germs",(0,))
+
+    switchBd.add("eff_ds",(0,1))    
+    switchBd.add("scaledSubMxsDict",(0,1))
+    switchBd.add("gsTarget",(0,1))
+    switchBd.add("params",(0,1))
+    switchBd.add("objective",(0,1))
+    switchBd.add("mpc",(0,1))
+
+    switchBd.add("gsFinalIter",(0,1))
+    switchBd.add("gsFinal",(0,1,2))
+    switchBd.add("gsTargetAndFinal",(0,1,2)) #general only!
+    switchBd.add("goparams",(0,1,2))
+    switchBd.add("gsL",(0,1,3))
+    switchBd.add("gss",(0,3))
+    switchBd.add("gssFinal",(0,))
+    switchBd.add("gsAllL",(0,1))
+    switchBd.add("gssAllL",(0,))
+
+    if confidenceLevel is not None:
+        switchBd.add("cri",(0,1,2))
+
+    for d,dslbl in enumerate(dataset_labels):
+        results = results_dict[dslbl]
+        
+        switchBd.ds[d] = results.dataset
+        switchBd.prepStrs[d] = results.gatestring_lists['prep fiducials']
+        switchBd.effectStrs[d] = results.gatestring_lists['effect fiducials']
+        switchBd.strs[d] = (results.gatestring_lists['prep fiducials'],
+                            results.gatestring_lists['effect fiducials'])
+        switchBd.germs[d] = results.gatestring_lists['germs']
+
+        switchBd.gssFinal[d] = results.gatestring_structs['final']
+        for iL,L in enumerate(Ls): #allow different results to have different Ls
+            if L in results.gatestring_structs['final'].Ls:
+                k = results.gatestring_structs['final'].Ls.index(L)
+                switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
+        #OLD switchBd.gss[d,:] = results.gatestring_structs['iteration']
+        switchBd.gssAllL[d] = results.gatestring_structs['iteration']
+
+        for i,lbl in enumerate(est_labels):
+            est = results.estimates.get(lbl,None)
+            if est is None: continue
+
+            switchBd.params[d,i] = est.parameters
+            switchBd.objective[d,i] = est.parameters['objective']
+            if est.parameters['objective'] == "logl":
+                switchBd.mpc[d,i] = est.parameters['minProbClip']
+            else:
+                switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
+
+            NA = ws.NotApplicable()
+            effds, scale_subMxs = est.get_effective_dataset(True)
+            switchBd.eff_ds[d,i] = effds
+            switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
+            switchBd.gsTarget[d,i] = est.gatesets['target']
+            switchBd.gsFinalIter[d,i] = est.gatesets['final iteration estimate']
+            switchBd.gsFinal[d,i,:] = [ est.gatesets.get(l,NA) for l in gauge_opt_labels ]
+            switchBd.gsTargetAndFinal[d,i,:] = \
+                        [ [est.gatesets['target'], est.gatesets.get(l,NA)]
+                          for l in gauge_opt_labels ]
+            switchBd.goparams[d,i,:] = [ est.goparameters.get(l,NA) for l in gauge_opt_labels]
+
+            for iL,L in enumerate(Ls): #allow different results to have different Ls
+                if L in results.gatestring_structs['final'].Ls:
+                    k = results.gatestring_structs['final'].Ls.index(L)
+                    switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
+            #OLD switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
+            switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
+        
+            if confidenceLevel is not None:
+                #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
+        
+                #Check whether we should use non-Markovian error bars:
+                # If fit is bad, check if any reduced fits were computed
+                # that we can use with in-model error bars.  If not, use
+                # experimental non-markovian error bars.
+                if est.misfit_sigma() > nmthreshold:
+                    est_confidenceLevel = -abs(confidenceLevel)
+                else: est_confidenceLevel = confidenceLevel
+
+                for il,l in enumerate(gauge_opt_labels):
+                    if l in est.gatesets:
+                        switchBd.cri[d,i,il] = est.get_confidence_region(
+                            est_confidenceLevel, l, "final", comm=comm)
+                    else: switchBd.cri[d,i,il] = NA
+                    
+    return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
+
+
 
 def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
@@ -375,14 +530,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     if title == "auto":
         title = "GST report for %s" % datasetLabel
-
-    if isinstance(results, dict):
-        results_dict = results
-    else:
-        results_dict = {"unique": results}
-    results = None #for safety
     
-    toggles = {}
+    results_dict = results if isinstance(results, dict) else {"unique": results}
+    toggles = _set_toggles(results_dict)
         
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
@@ -397,129 +547,19 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     #Create master switchboard
-    dataset_labels = list(results_dict.keys())
-    est_labels = None
-    gauge_opt_labels = None
-    Ls = None
+    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
+            _create_master_switchboard(ws, results_dict,
+                                       confidenceLevel, nmthreshold, comm)
 
-    for results in results_dict.values():
-        if est_labels is None:
-            est_labels = list(results.estimates.keys())
-        else:
-            assert(est_labels == list(results.estimates.keys())), \
-                "Results must have the same estimate labels"
-
-        if Ls is None:
-            Ls = results.gatestring_structs['final'].Ls
-        else:
-            assert(Ls == results.gatestring_structs['final'].Ls), \
-                "Results must have the same max-L values"
-    
-        for est in results.estimates.values():
-            if gauge_opt_labels is None:
-                gauge_opt_labels = list(est.goparameters.keys())
-            else:
-                assert(gauge_opt_labels == list(est.goparameters.keys())), \
-                    "Estimates must have the same gauge optimization labels"
+    if confidenceLevel is not None:
+        #TODO: make plain text fields which update based on switchboards?
+        qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0,0].intervalScaling
+        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0,0].nNonGaugeParams
 
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
-            
-    switchBd = ws.Switchboard(
-        ["Dataset","Estimate","G-Opt","max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
-        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
-        show=[multidataset,multiest,False,False]
-    )
-
-    switchBd.add("ds",(0,))
-    switchBd.add("prepStrs",(0,))
-    switchBd.add("effectStrs",(0,))
-    switchBd.add("strs",(0,))
-    switchBd.add("germs",(0,))
-
-    switchBd.add("eff_ds",(0,1))    
-    switchBd.add("scaledSubMxsDict",(0,1))
-    switchBd.add("gsTarget",(0,1))
-    switchBd.add("params",(0,1))
-    switchBd.add("objective",(0,1))
-    switchBd.add("mpc",(0,1))
-
-    switchBd.add("gsFinalIter",(0,1))
-    switchBd.add("gsFinal",(0,1,2))
-    switchBd.add("goparams",(0,1,2))
-    switchBd.add("gsL",(0,1,3))
-    switchBd.add("gss",(0,3))
-    switchBd.add("gssFinal",(0,))
-    switchBd.add("gsAllL",(0,1))
-    switchBd.add("gssAllL",(0,))
-
-    if confidenceLevel is not None:
-        switchBd.add("cri",(0,1,2))
-    
-    #Determine when to get gatestring weight (scaling) values and show via
-    # ColorBoxPlots below by checking whether any estimate has "weights"
-    # parameter (a dict) with > 0 entries.
-    toggles["ShowScaling"] = False
-    for res in results_dict.values():
-        for i,(lbl,est) in enumerate(res.estimates.items()):
-            weights = est.parameters.get("weights",None)
-            if weights is not None and len(weights) > 0:
-                toggles["ShowScaling"] = True
-
-
-    for d,dslbl in enumerate(dataset_labels):
-        results = results_dict[dslbl]
-        
-        switchBd.ds[d] = results.dataset
-        switchBd.prepStrs[d] = results.gatestring_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.gatestring_lists['effect fiducials']
-        switchBd.strs[d] = (results.gatestring_lists['prep fiducials'],
-                            results.gatestring_lists['effect fiducials'])
-        switchBd.germs[d] = results.gatestring_lists['germs']
-
-        switchBd.gssFinal[d] = results.gatestring_structs['final']
-        switchBd.gss[d,:] = results.gatestring_structs['iteration']
-        switchBd.gssAllL[d] = results.gatestring_structs['iteration']
-
-        for i,(lbl,est) in enumerate(results.estimates.items()):
-            switchBd.params[d,i] = est.parameters
-            switchBd.objective[d,i] = est.parameters['objective']
-            if est.parameters['objective'] == "logl":
-                switchBd.mpc[d,i] = est.parameters['minProbClip']
-            else:
-                switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
-    
-            effds, scale_subMxs = est.get_effective_dataset(True)
-            switchBd.eff_ds[d,i] = effds
-            switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
-            switchBd.gsTarget[d,i] = est.gatesets['target']
-            switchBd.gsFinalIter[d,i] = est.gatesets['final iteration estimate']
-            switchBd.gsFinal[d,i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
-            switchBd.goparams[d,i,:] = [ est.goparameters[l] for l in gauge_opt_labels]
-            
-            switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
-            switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
-    
-            if confidenceLevel is not None:
-                #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-    
-                #Check whether we should use non-Markovian error bars:
-                # If fit is bad, check if any reduced fits were computed
-                # that we can use with in-model error bars.  If not, use
-                # experimental non-markovian error bars.
-                if est.misfit_sigma() > nmthreshold:
-                    est_confidenceLevel = -abs(confidenceLevel)
-                else: est_confidenceLevel = confidenceLevel
-    
-                switchBd.cri[d,i,:] = [ est.get_confidence_region(
-                    est_confidenceLevel, l, "final", comm=comm) for l in gauge_opt_labels]
-    
-                #TODO: make plain text fields which update based on switchboards?
-                qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0,0].intervalScaling
-                qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0,0].nNonGaugeParams
 
     goView = [multidataset,multiest,multiGO,False]
     maxLView = [multidataset,multiest,False,multiL]
@@ -732,13 +772,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     if title == "auto":
         title = "GST report for %s" % datasetLabel
 
-    if isinstance(results, dict):
-        results_dict = results
-    else:
-        results_dict = {"unique": results}
-    results = None #for safety
-
-    toggles = {}
+    results_dict = results if isinstance(results, dict) else {"unique": results}
+    toggles = _set_toggles(results_dict)
 
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
@@ -753,132 +788,19 @@ def create_general_report(results, filename, confidenceLevel=None,
     printer.log("*** Generating tables ***")
 
     #Create master switchboard
-    dataset_labels = list(results_dict.keys())
-    est_labels = None
-    gauge_opt_labels = None
-    Ls = None
+    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
+            _create_master_switchboard(ws, results_dict,
+                                       confidenceLevel, nmthreshold, comm)
 
-    for results in results_dict.values():
-        if est_labels is None:
-            est_labels = list(results.estimates.keys())
-        else:
-            assert(est_labels == list(results.estimates.keys())), \
-                "Results must have the same estimate labels"
-
-        if Ls is None:
-            Ls = results.gatestring_structs['final'].Ls
-        else:
-            assert(Ls == results.gatestring_structs['final'].Ls), \
-                "Results must have the same max-L values"
-    
-        for est in results.estimates.values():
-            if gauge_opt_labels is None:
-                gauge_opt_labels = list(est.goparameters.keys())
-            else:
-                assert(gauge_opt_labels == list(est.goparameters.keys())), \
-                    "Estimates must have the same gauge optimization labels"
+    if confidenceLevel is not None:
+        #TODO: make plain text fields which update based on switchboards?
+        qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0,0].intervalScaling
+        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0,0].nNonGaugeParams
 
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
-
-    switchBd = ws.Switchboard(
-        ["Dataset","Estimate","G-Opt","max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
-        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
-        show=[multidataset,multiest,False,False]
-    )
-
-    switchBd.add("ds",(0,))
-    switchBd.add("prepStrs",(0,))
-    switchBd.add("effectStrs",(0,))
-    switchBd.add("strs",(0,))
-    switchBd.add("germs",(0,))
-
-    switchBd.add("eff_ds",(0,1))    
-    switchBd.add("scaledSubMxsDict",(0,1))
-    switchBd.add("gsTarget",(0,1))
-    switchBd.add("params",(0,1))
-    switchBd.add("objective",(0,1))
-    switchBd.add("mpc",(0,1))
-
-    switchBd.add("gsFinalIter",(0,1))
-    switchBd.add("gsFinal",(0,1,2))
-    switchBd.add("gsTargetAndFinal",(0,1,2))
-    switchBd.add("goparams",(0,1,2))
-    switchBd.add("gsL",(0,1,3))
-    switchBd.add("gss",(0,3))
-    switchBd.add("gssFinal",(0,))
-    switchBd.add("gsAllL",(0,1))
-    switchBd.add("gssAllL",(0,))
-
-    if confidenceLevel is not None:
-        switchBd.add("cri",(0,1,2))
-
-    #Determine when to get gatestring weight (scaling) values and show via
-    # ColorBoxPlots below by checking whether any estimate has "weights"
-    # parameter (a dict) with > 0 entries.
-    toggles["ShowScaling"] = False
-    for res in results_dict.values():
-        for i,(lbl,est) in enumerate(res.estimates.items()):
-            weights = est.parameters.get("weights",None)
-            if weights is not None and len(weights) > 0:
-                toggles["ShowScaling"] = True
-
-    for d,dslbl in enumerate(dataset_labels):
-        results = results_dict[dslbl]
-
-        switchBd.ds[d] = results.dataset
-        switchBd.prepStrs[d] = results.gatestring_lists['prep fiducials']
-        switchBd.effectStrs[d] = results.gatestring_lists['effect fiducials']
-        switchBd.strs[d] = (results.gatestring_lists['prep fiducials'],
-                            results.gatestring_lists['effect fiducials'])
-        switchBd.germs[d] = results.gatestring_lists['germs']
-
-        switchBd.gssFinal[d] = results.gatestring_structs['final']
-        switchBd.gss[d,:] = results.gatestring_structs['iteration']
-        switchBd.gssAllL[d] = results.gatestring_structs['iteration']
-
-        for i,(lbl,est) in enumerate(results.estimates.items()):
-            switchBd.params[d,i] = est.parameters
-            switchBd.objective[d,i] = est.parameters['objective']
-            if est.parameters['objective'] == "logl":
-                switchBd.mpc[d,i] = est.parameters['minProbClip']
-            else:
-                switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
-    
-            effds, scale_subMxs = est.get_effective_dataset(True)
-            switchBd.eff_ds[d,i] = effds
-            switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
-            switchBd.gsTarget[d,i] = est.gatesets['target']
-            switchBd.gsFinalIter[d,i] = est.gatesets['final iteration estimate']
-            switchBd.gsFinal[d,i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
-            switchBd.gsTargetAndFinal[d,i,:] = \
-                        [ [est.gatesets['target'], est.gatesets[l]]
-                          for l in gauge_opt_labels ]
-            switchBd.goparams[d,i,:] = [ est.goparameters[l] for l in gauge_opt_labels]
-    
-            switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
-            switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
-    
-            if confidenceLevel is not None:
-                #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-    
-                #Check whether we should use non-Markovian error bars:
-                # If fit is bad, check if any reduced fits were computed
-                # that we can use with in-model error bars.  If not, use
-                # experimental non-markovian error bars.
-                if est.misfit_sigma() > nmthreshold:
-                    est_confidenceLevel = -abs(confidenceLevel)
-                else: est_confidenceLevel = confidenceLevel
-    
-                switchBd.cri[d,i,:] = [ est.get_confidence_region(
-                    est_confidenceLevel, l, "final", comm=comm) for l in gauge_opt_labels]
-    
-                #TODO: make plain text fields which update based on switchboards?
-                qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0,0].intervalScaling
-                qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0,0].nNonGaugeParams
 
     goView = [multidataset,multiest,multiGO,False]
     maxLView = [multidataset,multiest,False,multiL]
