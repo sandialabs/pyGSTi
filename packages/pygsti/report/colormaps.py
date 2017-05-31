@@ -12,6 +12,7 @@ from scipy.stats import chi2 as _chi2
 def _vnorm(x, vmin, vmax):
     #Perform linear mapping from [vmin,vmax] to [0,1]
     # (which is just a *part* of the full mapping performed)
+    if _np.isclose(vmin,vmax): return _np.ma.zeros(x.shape,'d')
     return _np.clip( (x-vmin)/ (vmax-vmin), 0.0, 1.0)
 
 
