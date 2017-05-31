@@ -531,8 +531,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
 
+    #Perform extra analysis if a bad fit was obtained
     badFitThreshold = advancedOptions.get('badFitThreshold',20)
-    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold: #HARDCODED arbitrary threshold
+    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
         if onBadFit in ("scale data","scale data and reopt") \
            and parameters['weights'] is None:
@@ -598,19 +599,6 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         else:
             raise ValueError("Invalid onBadFit value: %s" % onBadFit)
             
-
-    #Do final gauge optimization to *final* iteration result only
-    if gaugeOptParams != False:
-        gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
-        if "targetGateset" not in gaugeOptParams:
-            gaugeOptParams["targetGateset"] = gs_target
-
-        go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
-
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
-
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     return ret
 
@@ -718,7 +706,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                        printer-1)
             
             #Gauge optimize to a variety of spam weights
-            for vSpam in [0]: #,1
+            for vSpam in [0]: #,1 DEBUG
                 for spamWt in [1e-4]: #,1e-2,1e-1
                     ret.estimates[parameterization].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
