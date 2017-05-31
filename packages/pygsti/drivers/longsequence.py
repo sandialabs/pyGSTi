@@ -706,8 +706,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                        printer-1)
             
             #Gauge optimize to a variety of spam weights
-            for vSpam in [0]: #,1 DEBUG
-                for spamWt in [1e-4]: #,1e-2,1e-1
+            for vSpam in [0,1]:
+                for spamWt in [1e-4,1e-2,1e-1]:
                     ret.estimates[parameterization].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
                          'validSpamPenalty': vSpam},
