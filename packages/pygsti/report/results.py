@@ -9,11 +9,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools   as _itertools
 import warnings    as _warnings
+import numpy       as _np
 
 from ..             import construction         as _const
 from ..             import objects              as _objs
 from ..algorithms   import gaugeopt_to_target   as _gaugeopt_to_target
 from ..tools        import listtools            as _lt
+from ..             import tools                as _tools
 
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
@@ -29,13 +31,17 @@ class Estimate(object):
     set.
     """
     
-    def __init__(self, targetGateset=None, seedGateset=None,
+    def __init__(self, parent, targetGateset=None, seedGateset=None,
                  gatesetsByIter=None, parameters=None):
         """
         Initialize an empty Estimate object.
 
         Parameters
         ----------
+        parent : Results
+            The parent Results object containing the dataset and
+            gate string structure used for this Estimate.
+
         targetGateset : GateSet
             The target gateset used when optimizing the objective.
 
@@ -52,9 +58,11 @@ class Estimate(object):
             A dictionary of parameters associated with how these gate sets
             were obtained.
         """
+        self.parent = parent
         self.parameters = _collections.OrderedDict()
         self.goparameters = _collections.OrderedDict()
         self.gatesets = _collections.OrderedDict()
+        self.confidence_regions = _collections.OrderedDict()
 
         #Set gatesets
         if targetGateset: self.gatesets['target'] = targetGateset
@@ -134,6 +142,241 @@ class Estimate(object):
         self.gatesets[label] = gateset
         self.goparameters[label] = ordered_goparams
 
+        
+    def get_confidence_region(self, confidenceLevel=95,
+                              gateset_key="final iteration estimate",
+                              gatestrings_key="final", 
+                              label=None, forcecreate=False, comm=None):
+        """
+        Get the ConfidenceRegion object associated with a given gate set and
+        confidence level.
+
+        If such a region already exists within this Estimate object's 
+        `confidence_regions` dictionary (dictated by `label`) then it will be
+        returned instead of creating a region (unless `forcecreate == True`).
+        If a new region is constructed it will automatically be added to this
+        object's `confidence_regions` dictionary with the key `label`.
+
+        This function is essentailly a wrapper which maps values from the
+        `parameters` dictionary of this object to the arguments of 
+        :func:`logl_confidence_region` or :func:`chi2_confidence_region`
+        based on the value of `parameters['objective']`.  Namely, the values of
+        'objective', 'probClipInterval', 'minProbClip', 'minProbClipForWeighting',
+        'radius', 'hessianProjection', 'memlimit', 'cptpPentaltyFactor', and 
+        'distributeMethod' are used. If you find yourself having to set values
+        in the `parameters` dictionary *just* to call this function, you should
+        probably be calling one of the aforementioned functions directly instead
+        of this one.
+
+        Parameters
+        ----------
+        confidenceLevel : int, optional
+            The confidence level (between 0 and 100) for normal confidence
+            regions or a *negative* integer (between -1 and -100) for 
+            "non-Markovian error bar" regions.
+
+        gateset_key : str, optional
+            The key in `self.gatesets` of the `GateSet` to retrieve or create
+            a `ConfidenceRegion` for.
+
+        gatestrings_key : str, optional
+            The key in parent `Result` object's `gatestring_structs` (attempted
+            first) or `gatestring_lists` (attempted second) member specifying
+            the list of gatestrings to create create a `ConfidenceRegion` for.
+
+        label : str, optional
+            The label to give this confidence region.  If None, then
+            `gateset_key + "." + gatestrings_key + "." + str(confidenceLevel)`
+            is taken to be the label.
+
+        forcecreate : bool, optional
+            If True, then a new region will always be created, even if one
+            already exists.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        Returns
+        -------
+        ConfidenceRegion or None
+            returns None if `confidenceLevel` is None.
+        """
+
+        if confidenceLevel is None:
+            return None
+
+        crkey = label if (label is not None) else \
+                gateset_key + "." + gatestrings_key \
+                + "." + str(confidenceLevel)
+        
+        if forcecreate or (crkey not in self.confidence_regions):
+            
+            gateset = self.gatesets[gateset_key]
+            p = self.parent
+            if gatestrings_key in p.gatestring_structs:
+                gatestrings = p.gatestring_structs[gatestrings_key].allstrs
+                aliases = p.gatestring_structs[gatestrings_key].aliases
+            elif gatestrings_key in p.gatestring_lists:
+                gatestrings = p.gatestring_lists[gatestrings_key]
+                aliases = None
+            else: raise ValueError("key '%s' not found in " % gatestrings_key +
+                                   "gatestring_structs or gatestring_lists")
+
+            #Negative confidence levels ==> non-Markovian error bars
+            if confidenceLevel < 0:
+                actual_confidenceLevel = -confidenceLevel
+                regionType = "non-markovian"
+            else:
+                actual_confidenceLevel = confidenceLevel
+                regionType = "std"
+
+            ds = self.get_effective_dataset()
+            params = self.parameters
+            objective = params.get('objective',"logl")
+            if objective == "logl":
+                cr = _const.logl_confidence_region(
+                    gateset, ds, actual_confidenceLevel, gatestrings,
+                    params.get('probClipInterval',(-1e6,1e6)),
+                    params.get('minProbClip',1e-4),
+                    params.get('radius',1e-4),
+                    params.get('hessianProjection','optimal gate CIs'),
+                    regionType, comm, params.get('memLimit',None),
+                    params.get('cptpPenaltyFactor',0.0),
+                    params.get('distributeMethod','deriv'),
+                    aliases)
+            elif objective == "chi2":
+                cr = _const.chi2_confidence_region(
+                    gateset, ds, actual_confidenceLevel, gatestrings,
+                    params.get('probClipInterval',(-1e6,1e6)),
+                    params.get('minProbClipForWeighting',1e-4),
+                    params.get('hessianProjection','optimal gate CIs'),
+                    regionType, comm, params.get('memLimit',None),
+                    aliases)
+            else:
+                raise ValueError("Invalid objective given in essential" +
+                                 " info: %s" % objective)
+
+            self.confidence_regions[crkey] = cr
+            
+        return self.confidence_regions[crkey]
+
+
+    def get_effective_dataset(self, return_subMxs=False):
+        """
+        Generate a `DataSet` containing the effective counts as dictated by
+        the "weights" parameter, which specifies a dict of gate string weights.
+
+        This function rescales the actual data contained in this Estimate's
+        parent `Results` object according to the estimate's "weights" parameter.
+        The scaled data set is returned, along with (optionall) a list-of-lists
+        of matrices containing the scaling values which can be easily plotted
+        via a `ColorBoxPlot`.
+
+        Parameters
+        ----------
+        return_subMxs : boolean
+            If true, also return a list-of-lists of matrices containing the
+            scaling values, as described above.
+
+        Returns
+        -------
+        ds : DataSet
+            The "effective" (scaled) data set.
+
+        subMxs : list-of-lists
+            Only returned if `return_subMxs == True`.  Contains the
+            scale values (see above).
+        """
+        p = self.parent
+        gss = p.gatestring_structs['final'] #FUTURE: overrideable?
+        weights = self.parameters.get("weights",None)
+        
+        if weights is not None:
+            #TODO: REMOVE
+            #obj = params.get('objective',None)
+            #assert(obj in ('chi2','logl')),"Invalid objective!"
+            #fitFn = _ph.chi2_matrix if obj == "chi2" else _ph.logl_matrix
+            #            
+            #gss = p.gatestring_structs['final'] #FUTURE: overrideable?
+            #probs_precomp_dict = _ph._computeProbabilities(gss, gss, p.dataset)
+            #expected = (len(p.dataset.get_spam_labels())-1) # == "k"
+            #dof_per_box = 1; nboxes = len(gss.allstrs)                               
+            #threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+
+            scaled_dataset = p.dataset.copy_nonstatic()
+
+            subMxs = []
+            for y in gss.used_yvals():
+                subMxs.append( [] )
+                for x in gss.used_xvals():
+                    plaq = gss.get_plaquette(x,y)
+                    scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
+                    
+                    for i,j,gstr in plaq:
+                        scalingMx[i,j] = weights.get(gstr,1.0)
+                        if scalingMx[i,j] != 1.0:
+                            scaled_dataset[gstr].scale(scalingMx[i,j])
+
+                    #build up a subMxs list-of-lists as a plotting
+                    # function does, so we can easily plot the scaling
+                    # factors in a color box plot.
+                    subMxs[-1].append(scalingMx)
+
+            scaled_dataset.done_adding_data()
+            if return_subMxs:
+                return scaled_dataset, subMxs
+            else: return scaled_dataset
+            
+        else: #no weights specified - just return original dataset (no scaling)
+            
+            if return_subMxs: #then need to create subMxs with all 1's
+                subMxs = []
+                for y in gss.used_yvals():
+                    subMxs.append( [] )
+                    for x in gss.used_xvals():
+                        plaq = gss.get_plaquette(x,y)
+                        scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
+                        for i,j,gstr in plaq:
+                            scalingMx[i,j] = 1.0
+                        subMxs[-1].append( scalingMx )
+                return p.dataset, subMxs #copy dataset?
+            else:
+                return p.dataset
+
+    def misfit_sigma(self):
+        """
+        Returns the number of standard deviations (sigma) of model violation.
+
+        Returns
+        -------
+        float
+        """
+        p = self.parent
+        obj = self.parameters.get('objective',None)
+        assert(obj in ('chi2','logl')),"Invalid objective!"
+
+        gs = self.gatesets['final iteration estimate'] #FUTURE: overrideable?
+        gss = p.gatestring_structs['final'] #FUTURE: overrideable?
+        mpc = self.parameters.get('minProbClipForWeighting',1e-4)
+        ds = self.get_effective_dataset()
+        
+        if obj == "chi2":
+            fitQty = _tools.chi2( ds, gs, gss.allstrs,
+                                  minProbClipForWeighting=mpc,
+                                  gateLabelAliases=gss.aliases)
+        elif obj == "logl":
+            logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+            
+        Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
+        Np = gs.num_params() #don't bother with non-gauge only here [FUTURE: add option for this?]
+        k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+        return (fitQty-k)/_np.sqrt(2*k)
+
+
+
     def copy(self):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
@@ -141,6 +384,7 @@ class Estimate(object):
         cpy.parameters = self.parameters.copy()
         cpy.goparameters = self.goparameters.copy()
         cpy.gatesets = self.gatesets.copy()
+        cpy.confidence_regions = self.confidence_regions.copy()
         return cpy
 
     def __str__(self):
@@ -162,6 +406,16 @@ class Estimate(object):
         s += "  " + "\n  ".join(list(self.goparameters.keys())) + "\n"
         s += "\n"
         return s
+    
+    def __getstate__(self):
+        # don't pickle parent (will create circular reference)
+        to_pickle = self.__dict__.copy()
+        del to_pickle['parent'] 
+        return  to_pickle
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        self.parent = None # initialize to None upon unpickling
         
 
         
@@ -192,7 +446,7 @@ class Results(object):
         self.gatestring_lists = _collections.OrderedDict()
         self.gatestring_structs = _collections.OrderedDict()
         self.estimates = _collections.OrderedDict()
-        self.confidence_regions = _collections.OrderedDict()
+
 
     def init_dataset(self, dataset):
         """
@@ -321,7 +575,7 @@ class Results(object):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
 
-        self.estimates[estimate_key] = Estimate(targetGateset, seedGateset,
+        self.estimates[estimate_key] = Estimate(self, targetGateset, seedGateset,
                                                 gatesetsByIter, parameters)
 
         #Set gate sequence related parameters inherited from Results
@@ -337,7 +591,6 @@ class Results(object):
         cpy.gatestring_lists = self.gatestring_lists.copy()
         cpy.gatestring_structs = self.gatestring_structs.copy()
         cpy.estimates = self.estimates.copy()
-        cpy.confidence_regions = self.confidence_regions.copy()
         return cpy
 
 
@@ -408,12 +661,14 @@ class Results(object):
                 'gatestring_lists': gstrLists,
                 'gatestring_structs': gstrStructs,
                 'estimates': _collections.OrderedDict( [('default',estimate)] ),
-                'confidence_regions': _collections.OrderedDict() #don't convert
             }
             self.__dict__.update(filteredDict)
         else:
             #unpickle normally
             self.__dict__.update(stateDict)
+            for est in self.estimates.values():
+                est.set_parent(self)
+                
 
     def __str__(self):
         s  = "----------------------------------------------------------\n"
@@ -436,121 +691,6 @@ class Results(object):
         s += "\n"
         return s
 
-
-    def get_confidence_region(self, estimate_key="default", gateset_key="go0",
-                              gatestrings_key="final", confidenceLevel=95,
-                              label=None, forcecreate=False, comm=None):
-        """
-        Get the ConfidenceRegion object associated with a given gate set and
-        confidence level.
-
-        If such a region already exists within this Result object's 
-        `confidence_regions` dictionary (dictated by `label`) then it will be
-        returned instead of creating a region (unless `forcecreate == True`).
-        If a new region is constructed it will automatically be added to this
-        object's `confidence_regions` dictionary with the key `label`.
-
-        This function is essentailly a wrapper which maps values from the
-        `parameters` dictionary of this object to the arguments of 
-        :func:`logl_confidence_region` or :func:`chi2_confidence_region`
-        based on the value of `parameters['objective']`.  Namely, the values of
-        'objective', 'probClipInterval', 'minProbClip', 'minProbClipForWeighting',
-        'radius', 'hessianProjection', 'memlimit', 'cptpPentaltyFactor', and 
-        'distributeMethod' are used. If you find yourself having to set values
-        in the `parameters` dictionary *just* to call this function, you should
-        probably be calling one of the aforementioned functions directly instead
-        of this one.
-
-        Parameters
-        ----------
-        gateset_key : str, optional
-            The key in `self.gatesets` of the `GateSet` to retrieve or create
-            a `ConfidenceRegion` for.
-
-        gatestrings_key : str, optional
-            The key in `self.gatestring_structs` (attempted first) or 
-            `self.gatestring_lists` (attempted second) specifying the list
-            of gatestrings to create create a `ConfidenceRegion` for.
-
-        confidenceLevel : int, optional
-            The confidence level (between 0 and 100) for normal confidence
-            regions or a *negative* integer (between -1 and -100) for 
-            "non-Markovian error bar" regions.
-
-        label : str, optional
-            The label to give this confidence region.  If None, then
-            `estimate_key + "." + gateset_key + "." + gatestrings_key
-            + "." + str(confidenceLevel)` is taken to be the label.
-
-        forcecreate : bool, optional
-            If True, then a new region will always be created, even if one
-            already exists.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not None, an MPI communicator for distributing the computation
-            across multiple processors.
-
-        Returns
-        -------
-        ConfidenceRegion or None
-            returns None if `confidenceLevel` is None.
-        """
-
-        if confidenceLevel is None:
-            return None
-
-        crkey = label if (label is not None) else \
-                estimate_key + "." + gateset_key + "." + gatestrings_key \
-                + "." + str(confidenceLevel)
-        
-        if forcecreate or (crkey not in self.confidence_regions):
-            
-            gateset = self.estimates[estimate_key].gatesets[gateset_key]
-            if gatestrings_key in self.gatestring_structs:
-                gatestrings = self.gatestring_structs[gatestrings_key].allstrs
-                aliases = self.gatestring_structs[gatestrings_key].aliases
-            elif gatestrings_key in self.gatestring_lists:
-                gatestrings = self.gatestring_lists[gatestrings_key]
-                aliases = None
-            else: raise ValueError("key '%s' not found in " % gatestrings_key +
-                                   "gatestring_structs or gatestring_lists")
-
-            #Negative confidence levels ==> non-Markovian error bars
-            if confidenceLevel < 0:
-                actual_confidenceLevel = -confidenceLevel
-                regionType = "non-markovian"
-            else:
-                actual_confidenceLevel = confidenceLevel
-                regionType = "std"
-
-            params = self.estimates[estimate_key].parameters
-            objective = params.get('objective',"logl")
-            if objective == "logl":
-                cr = _const.logl_confidence_region(
-                    gateset, self.dataset, actual_confidenceLevel, gatestrings,
-                    params.get('probClipInterval',(-1e6,1e6)),
-                    params.get('minProbClip',1e-4),
-                    params.get('radius',1e-4),
-                    params.get('hessianProjection','optimal gate CIs'),
-                    regionType, comm, params.get('memLimit',None),
-                    params.get('cptpPenaltyFactor',0.0),
-                    params.get('distributeMethod','deriv'),
-                    aliases)
-            elif objective == "chi2":
-                cr = _const.chi2_confidence_region(
-                    gateset, self.dataset, actual_confidenceLevel, gatestrings,
-                    params.get('probClipInterval',(-1e6,1e6)),
-                    params.get('minProbClipForWeighting',1e-4),
-                    params.get('hessianProjection','optimal gate CIs'),
-                    regionType, comm, params.get('memLimit',None),
-                    aliases)
-            else:
-                raise ValueError("Invalid objective given in essential" +
-                                 " info: %s" % objective)
-
-            self.confidence_regions[crkey] = cr
-            
-        return self.confidence_regions[crkey]
 
     #OLD Methods for generating reports which have been removed - show alert
     # message directing users to new factory functions

@@ -20,9 +20,73 @@ from ..tools        import compattools as _compat
 from ..             import tools as _tools
 from .              import workspace as _ws
 
+
+def _read_and_preprocess_template(templateFilename, toggles):
+    template = ''
+    with open(templateFilename, 'r') as templatefile:
+        template = templatefile.read()
+        
+    try: # convert to unicode if Python2 
+        template = template.decode('utf-8')
+    except AttributeError: pass #Python3 case
+
+    if toggles is None:
+        toggles = {}
+        
+    def preprocess(txt):
+        try: i = txt.index("#iftoggle(")
+        except ValueError: i = None
+
+        try: k = txt.index("#elsetoggle")
+        except ValueError: k = None
+
+        try: j = txt.index("#endtoggle")
+        except ValueError: j = None
+
+        if i is None:
+            return txt #no iftoggle, so no further processing to do
+            
+        if (k is not None and k < i) or (j is not None and j < i):
+            return txt # else/end appears *before* if - so don't process the if
+
+        #Process the #iftoggle
+        off = len("#iftoggle(")
+        end = txt[i+off:].index(')')
+        toggleName = txt[i+off:i+off+end]
+        pre_text = txt[0:i]  #text before our #iftoggle
+        post_text = preprocess(txt[i+off+end+1:]) #text after
+        
+        if_text = ""
+        else_text = ""
+
+        #Process #elsetoggle
+        try: k = post_text.index("#elsetoggle") # index in (new) *post_text*
+        except ValueError: k = None
+        if k is not None: # if-block ends at #else
+            if_text = post_text[0:k]
+            post_text = preprocess(post_text[k+len("#elsetoggle"):])
+
+        #Process #endtoggle
+        try: j = post_text.index("#endtoggle") # index in (new) *post_text*
+        except ValueError: j = None
+        assert(j is not None), "#iftoggle(%s) without corresponding #endtoggle" % toggleName
+        
+        if k is None: # if-block ends at #end
+            if_text = post_text[0:j]
+        else: # if-block already captured; else-block ends at #end
+            else_text = post_text[0:j]
+        post_text = post_text[j+len("#endtoggle"):]
+                
+        if toggles[toggleName]:
+            return pre_text + if_text + post_text
+        else:
+            return pre_text + else_text + post_text
+    
+    return preprocess(template)
+
 def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, verbosity=0):
+                    connected=False, toggles=None, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -127,15 +191,8 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                       "templates", templateFilename )
 
-    template = ''
-    with open(templateFilename, 'r') as templatefile:
-        template = templatefile.read()
-        
-    try: # convert to unicode if Python2 
-        template = template.decode('utf-8')
-    except AttributeError: pass #Python3 case
+    template = _read_and_preprocess_template(templateFilename, toggles)
 
-    
     qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
     for key,val in qtys.items():
         if _compat.isstr(val):
@@ -170,58 +227,6 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
         url = 'file://' + _os.path.abspath(outputFilename)
         printer.log("Opening %s..." % outputFilename)
         _webbrowser.open(url)
-
-
-def _fit_nsigma(obj, ds, gs, gss, mpc):
-    """ Get the number of sigmas of model violation """
-    if obj == "chi2":
-        fitQty = _tools.chi2( ds, gs, gss.allstrs,
-                              minProbClipForWeighting=mpc,
-                              gateLabelAliases=gss.aliases)
-    elif obj == "logl":
-        logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
-        logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
-        fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL            
-    Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
-    Np = gs.num_params() #don't bother with non-gauge only here
-    k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
-    return (fitQty-k)/_np.sqrt(2*k)
-
-def _rescale_data_to_fit_model(obj, ds, gs, gss, mpc, pc):
-
-    assert(obj in ('chi2','logl')),"Invalid objective!"    
-    probs_precomp_dict = _ph._computeProbabilities(gss, gss, ds)
-    
-    fitFn = _ph.chi2_matrix if obj == "chi2" else _ph.logl_matrix
-    expected = (len(ds.get_spam_labels())-1) # == "k"
-    dof_per_box = 1; nboxes = len(gss.allstrs)                               
-    threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
-
-    scaled_dataset = ds.copy_nonstatic()
-
-    subMxs = []
-    for y in gss.used_yvals():
-        subMxs.append( [] )
-        for x in gss.used_xvals():
-            plaq = gss.get_plaquette(x,y)
-            fitQty = fitFn(plaq, ds, gs, mpc, probs_precomp_dict)
-            scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
-            
-            for i,j,gstr in plaq:
-                if fitQty[i,j] <= threshold:
-                    scalingMx[i,j] = 0.0
-                else:
-                    scalingMx[i,j] = fitQty[i,j]/expected
-                    scaled_dataset[gstr].scale(scalingMx[i,j])
-
-            #build up a subMxs list-of-lists as a plotting
-            # function does, so we can easily plot the scaling
-            # factors in a color box plot.
-            subMxs[-1].append(scalingMx)
-
-    scaled_dataset.done_adding_data()
-    return subMxs, scaled_dataset
-
         
 def _errgen_formula(errgen_type):
     if errgen_type == "logTiG":
@@ -269,7 +274,7 @@ def create_offline_zip(outputDir="."):
 def create_single_qubit_report(results, filename, confidenceLevel=None,
                                title="auto", datasetLabel="$\\mathcal{D}$",
                                linlogPercentile=5, errgen_type="logTiG",
-                               precision=None, brief=False,
+                               nmthreshold=50, precision=None, brief=False,
                                comm=None, ws=None, auto_open=False,
                                connected=False, verbosity=0):
 
@@ -307,11 +312,16 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         expected chi2 distribution is shown in a linear grayscale, and the 
         top `linlogPercentile` is shown on a logarithmic colored scale.
 
-    errgen_type: {"logG-logT", "logTiG"}
+    errgen_type : {"logG-logT", "logTiG"}
       The type of error generator to compute.  Allowed values are:
       
       - "logG-logT" : errgen = log(gate) - log(target_gate)
       - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    nmthreshold : float, optional
+        The threshold, in units of standard deviations, that triggers the
+        usage of non-Markovian error bars.  If None, then non-Markovian
+        error bars are never computed.
 
     precision : int or dict, optional
         The amount of precision to display.  A dictionary with keys
@@ -360,7 +370,9 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     if title == "auto":
         title = "GST report for %s" % datasetLabel
-    
+
+    toggles = {}
+        
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -396,11 +408,14 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
         show=[multirun,False,False]
     )
 
+    switchBd.add("eff_ds",(0,))    
+    switchBd.add("scaledSubMxsDict",(0,))
     switchBd.add("gsTarget",(0,))
     switchBd.add("params",(0,))
     switchBd.add("objective",(0,))
     switchBd.add("mpc",(0,))
-    
+
+    switchBd.add("gsFinalIter",(0,))
     switchBd.add("gsFinal",(0,1))
     switchBd.add("goparams",(0,1))
     switchBd.add("gsL",(0,2))
@@ -409,9 +424,19 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     if confidenceLevel is not None:
         switchBd.add("cri",(0,1))
-        
+
+    gssFinal = results.gatestring_structs['final']
     switchBd.gss[:] = results.gatestring_structs['iteration']
-        
+
+    #Determine when to get gatestring weight (scaling) values and show via
+    # ColorBoxPlots below by checking whether any estimate has "weights"
+    # parameter (a dict) with > 0 entries.
+    toggles["ShowScaling"] = False
+    for i,(lbl,est) in enumerate(results.estimates.items()):
+        weights = est.parameters.get("weights",None)
+        if weights is not None and len(weights) > 0:
+            toggles["ShowScaling"] = True
+    
     for i,(lbl,est) in enumerate(results.estimates.items()):
         switchBd.params[i] = est.parameters
         switchBd.objective[i] = est.parameters['objective']
@@ -419,8 +444,12 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
             switchBd.mpc[i] = est.parameters['minProbClip']
         else:
             switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
-        
+
+        effds, scale_subMxs = est.get_effective_dataset(True)
+        switchBd.eff_ds[i] = effds
+        switchBd.scaledSubMxsDict[i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
         switchBd.gsTarget[i] = est.gatesets['target']
+        switchBd.gsFinalIter[i] = est.gatesets['final iteration estimate']
         switchBd.gsFinal[i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
         switchBd.goparams[i,:] = [ est.goparameters[l] for l in gauge_opt_labels]
 
@@ -434,19 +463,12 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
             # If fit is bad, check if any reduced fits were computed
             # that we can use with in-model error bars.  If not, use
             # experimental non-markovian error bars.
-            nSigma = _fit_nsigma(est.parameters['objective'], results.dataset,
-                                 est.gatesets['final iteration estimate'],
-                                 results.gatestring_structs['final'],
-                                 est.parameters['minProbClipForWeighting'])
-            
-            if nSigma > 100: #HARDCODED arbitrary threshold
-                confidenceLevel = -abs(confidenceLevel)
-                #TODO: use _rescale_data_to_fit_model here to scale down dataset?
-                #  or should this be done prior to reporting (?)
-                # then show via new "submatrices" arg to ColorBoxPlot
+            if est.misfit_sigma() > nmthreshold:
+                est_confidenceLevel = -abs(confidenceLevel)
+            else: est_confidenceLevel = confidenceLevel
 
-            switchBd.cri[i,:] = [ results.get_confidence_region(
-                lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
+            switchBd.cri[i,:] = [ est.get_confidence_region(
+                est_confidenceLevel, l, "final", comm=comm) for l in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -465,6 +487,7 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
 
     gsTgt = switchBd.gsTarget    
     ds = results.dataset
+    eff_ds = switchBd.eff_ds
     prepStrs = results.gatestring_lists['prep fiducials']
     effectStrs = results.gatestring_lists['effect fiducials']
     germs = results.gatestring_lists['germs']
@@ -499,28 +522,24 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     qtys['germListTable'] = ws.GatestringTable(germs, "Germ")
     qtys['progressTable'] = ws.FitComparisonTable(
-        Ls, gssAllL, switchBd.gsAllL, ds, switchBd.objective, 'L')
+        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
 
     # Generate plots
     printer.log("*** Generating plots ***")
 
     qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)
     
-    #qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-    #    results.parameters['objective'], gss, ds, gsFinal,
-    #    linlg_pcntle=float(linlogPercentile) / 100,
-    #    minProbClipForWeighting=mpc)
     qtys['bestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, ds, gsL, 
+        switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc)
+
+    qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+        "scaling", gssFinal, eff_ds, switchBd.gsFinalIter,
+        submatrices=switchBd.scaledSubMxsDict)
     
-    #qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-    #    results.parameters['objective'], gss, ds, gsFinal,
-    #    linlg_pcntle=float(linlogPercentile) / 100,
-    #    minProbClipForWeighting=mpc, invert=True)
     qtys['invertedBestEstimateColorBoxPlot'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, ds, gsL, 
+        switchBd.objective, gss, eff_ds, gsL, 
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, invert=True)
     
@@ -530,14 +549,14 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
     template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
     _merge_template(qtys, template, filename, auto_open, precision,
-                    connected=connected, verbosity=printer)
+                    connected=connected, toggles=toggles, verbosity=printer)
 
     
 
 def create_general_report(results, filename, confidenceLevel=None,
                           title="auto", datasetLabel="$\\mathcal{D}$",
                           linlogPercentile=5, errgen_type="logTiG",
-                          precision=None, brief=False,
+                          nmthreshold=50, precision=None, brief=False,
                           comm=None, ws=None, auto_open=False,
                           connected=False, verbosity=0):
     """
@@ -579,6 +598,11 @@ def create_general_report(results, filename, confidenceLevel=None,
         - "logG-logT" : errgen = log(gate) - log(target_gate)
         - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
 
+    nmthreshold : float, optional
+        The threshold, in units of standard deviations, that triggers the
+        usage of non-Markovian error bars.  If None, then non-Markovian
+        error bars are never computed.
+
     precision : int or dict, optional
         The amount of precision to display.  A dictionary with keys
         "polar", "sci", and "normal" can separately specify the 
@@ -627,6 +651,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     if title == "auto":
         title = "GST report for %s" % datasetLabel
 
+    toggles = {}
+
     qtys = {} # stores strings to be inserted into report template
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -661,11 +687,14 @@ def create_general_report(results, filename, confidenceLevel=None,
         show=[multirun,False,False]
     )
 
+    switchBd.add("eff_ds",(0,))    
+    switchBd.add("scaledSubMxsDict",(0,))
     switchBd.add("gsTarget",(0,))
     switchBd.add("params",(0,))
     switchBd.add("objective",(0,))
     switchBd.add("mpc",(0,))
-    
+
+    switchBd.add("gsFinalIter",(0,))
     switchBd.add("gsFinal",(0,1))
     switchBd.add("gsTargetAndFinal",(0,1))
     switchBd.add("goparams",(0,1))
@@ -676,7 +705,17 @@ def create_general_report(results, filename, confidenceLevel=None,
     if confidenceLevel is not None:
         switchBd.add("cri",(0,1))
 
+    gssFinal = results.gatestring_structs['final']
     switchBd.gss[:] = results.gatestring_structs['iteration']
+
+    #Determine when to get gatestring weight (scaling) values and show via
+    # ColorBoxPlots below by checking whether any estimate has "weights"
+    # parameter (a dict) with > 0 entries.
+    toggles["ShowScaling"] = False
+    for i,(lbl,est) in enumerate(results.estimates.items()):
+        weights = est.parameters.get("weights",None)
+        if weights is not None and len(weights) > 0:
+            toggles["ShowScaling"] = True
 
     for i,(lbl,est) in enumerate(results.estimates.items()):
         switchBd.params[i] = est.parameters
@@ -685,7 +724,10 @@ def create_general_report(results, filename, confidenceLevel=None,
             switchBd.mpc[i] = est.parameters['minProbClip']
         else:
             switchBd.mpc[i] = est.parameters['minProbClipForWeighting']
-        
+
+        effds, scale_subMxs = est.get_effective_dataset(True)
+        switchBd.eff_ds[i] = effds
+        switchBd.scaledSubMxsDict[i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
         switchBd.gsTarget[i] = est.gatesets['target']
         switchBd.gsFinal[i,:] = [ est.gatesets[l] for l in gauge_opt_labels ]
         switchBd.gsTargetAndFinal[i,:] = \
@@ -703,16 +745,12 @@ def create_general_report(results, filename, confidenceLevel=None,
             # If fit is bad, check if any reduced fits were computed
             # that we can use with in-model error bars.  If not, use
             # experimental non-markovian error bars.
-            nSigma = _fit_nsigma(est.parameters['objective'], results.dataset,
-                                 est.gatesets['final iteration estimate'],
-                                 results.gatestring_structs['final'],
-                                 est.parameters['minProbClipForWeighting'])
-            
-            if nSigma > 100: #HARDCODED arbitrary threshold
-                confidenceLevel = -abs(confidenceLevel)
-                
-            switchBd.cri[i,:] = [ results.get_confidence_region(
-                lbl, l, "final", confidenceLevel, comm=comm) for l in gauge_opt_labels]
+            if est.misfit_sigma() > nmthreshold:
+                est_confidenceLevel = -abs(confidenceLevel)
+            else: est_confidenceLevel = confidenceLevel
+
+            switchBd.cri[i,:] = [ est.get_confidence_region(
+                est_confidenceLevel, l, "final", comm=comm) for l in gauge_opt_labels]
 
             #TODO: make plain text fields which update based on switchboards?
             qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0].intervalScaling
@@ -778,6 +816,10 @@ def create_general_report(results, filename, confidenceLevel=None,
         switchBd.objective, gss, ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, sumUp=True)
+
+    qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+        "scaling", gssFinal, eff_ds, switchBd.gsFinalIter,
+        submatrices=switchBd.scaledSubMxsDict)
     
     #Not pagniated currently... just set to same full plot
     qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
@@ -788,8 +830,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     # 3) populate template latex file => report latex file
     printer.log("*** Merging into template file ***")
     template = "report_general_brief.html" if brief else "report_general.html"
-    _merge_template(qtys, template, filename, auto_open,
-                    precision, connected=connected, verbosity=printer)
+    _merge_template(qtys, template, filename, auto_open, precision,
+                    connected=connected, toggles=toggles, verbosity=printer)
 
 
 
@@ -881,3 +923,5 @@ def create_general_report(results, filename, confidenceLevel=None,
 #        gatesets = (gateset, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
 #        gatesetTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)
+
+    

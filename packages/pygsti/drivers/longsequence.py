@@ -12,12 +12,14 @@ import numpy as _np
 import sys as _sys
 import time as _time
 import collections as _collections
+from scipy.stats import chi2 as _chi2
 
 from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import objects as _objs
 from .. import io as _io
+from .. import tools as _tools
 from ..tools import compattools as _compat
 
 
@@ -460,6 +462,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
           distributeMethod=advancedOptions.get(
                 'distributeMethod',"deriv"),
           check=advancedOptions.get('check',False),
+          gatestringWeightsDict=advancedOptions.get('gsWeights',None),
           gateLabelAliases=aliases,
           alwaysPerformMLE=advancedOptions.get('alwaysPerformMLE',False)
         )
@@ -515,6 +518,86 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     #add estimate to Results
     estlbl = advancedOptions.get('estimateLabel','default')
     ret.add_estimate(gs_target, gs_start, gs_lsgst_list, parameters, estlbl)
+
+    #Do final gauge optimization to *final* iteration result only
+    if gaugeOptParams != False:
+        gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+        if "targetGateset" not in gaugeOptParams:
+            gaugeOptParams["targetGateset"] = gs_target
+
+        go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
+        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+
+        tNxt = _time.time()
+        profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
+
+    badFitThreshold = advancedOptions.get('badFitThreshold',20)
+    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold: #HARDCODED arbitrary threshold
+        onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
+        if onBadFit in ("scale data","scale data and reopt") \
+           and parameters['weights'] is None:
+        
+            expected = (len(ds.get_spam_labels())-1) # == "k"
+            dof_per_box = 1; nboxes = len(rawLists[-1])
+            pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
+            threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+    
+            if objective == "chi2":
+                fitQty = _tools.chi2_terms(ds, gs_lsgst_list[-1], rawLists[-1],
+                                           advancedOptions.get('minProbClipForWeighting',1e-4),
+                                           advancedOptions.get('probClipInterval',(-1e6,1e6)),
+                                           False, False, memLimit,
+                                           advancedOptions.get('gateLabelAliases',None))
+            else:
+                maxLogL = _tools.logl_max_terms(ds, rawLists[-1],
+                                                gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
+                                         advancedOptions.get('minProbClip',1e-4),
+                                         advancedOptions.get('probClipInterval',(-1e6,1e6)),
+                                         advancedOptions.get('radius',1e-4),
+                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                fitQty = 2*(maxLogL - logL)
+                
+            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels
+            gsWeights = {}
+            for i,gstr in enumerate(rawLists[-1]):
+                if fitQty[i] > threshold:
+                    gsWeights[gstr] = expected/fitQty[i] #scaling factor
+    
+            scale_params = parameters.copy()
+            scale_params['weights'] = gsWeights
+
+            if onBadFit == "scale data and reopt":
+                raise NotImplementedError("This option isn't implemented yet!")
+                # Need to re-run final iteration of GST with weights computed above,
+                # and just keep (?) old estimates of all prior iterations (or use "blank"
+                # sentinel once this is supported).
+                
+            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".dscl")
+
+            #Do final gauge optimization to data-scaled estimate also
+            if gaugeOptParams != False:
+                gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+                #if onBadFit == "scale data and reopt": # then will need to re-gauge-opt too, like:
+                #    if "targetGateset" not in gaugeOptParams:
+                #        gaugeOptParams["targetGateset"] = gs_target
+                #
+                #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
+                #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                #    
+                #    tNxt = _time.time()
+                #    profiler.add_time('do_long_sequence_gst: dscl gauge optimization',tRef); tRef=tNxt
+                #else:
+                
+                # add same gauge-optimized result as above
+                ret.estimates[estlbl + ".dscl"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+
+
+        elif onBadFit == "do nothing":
+            pass
+        else:
+            raise ValueError("Invalid onBadFit value: %s" % onBadFit)
+            
 
     #Do final gauge optimization to *final* iteration result only
     if gaugeOptParams != False:
@@ -635,11 +718,18 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                        printer-1)
             
             #Gauge optimize to a variety of spam weights
-            for vSpam in [0,1]:
-                for spamWt in [1e-4,1e-2,1e-1]:
+            for vSpam in [0]: #,1
+                for spamWt in [1e-4]: #,1e-2,1e-1
                     ret.estimates[parameterization].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
                          'validSpamPenalty': vSpam},
                         None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
+
+                    #Gauge optimize data-scaled estimate also
+                    if parameterization + ".dscl" in ret.estimates:
+                        ret.estimates[parameterization + ".dscl"].add_gaugeoptimized(
+                            {'itemWeights': {'gates':1, 'spam':spamWt},
+                             'validSpamPenalty': vSpam},
+                            None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
 
     return ret
