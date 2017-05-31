@@ -837,7 +837,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:
-            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis )
+            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis, basis)
 
     return gateInFinalBasis # a Gate object
 

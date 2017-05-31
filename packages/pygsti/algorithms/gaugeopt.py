@@ -478,8 +478,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
                 if s > 1e-8: return cpPenalty #*(1.0+s) #1e-8 should match TOL in contract to CP routines
 
             if spamPenalty != 0:
-                sp =  sum( [ _tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ] )
-                sp += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
+                sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in list(gs.preps.values()) ] )
+                sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in list(gs.effects.values()) ] )
                 if sp > 1e-8: return spamPenalty #*(1.0+sp) #1e-8 should match TOL in contract to CP routines
 
 
@@ -566,8 +566,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             #print "DB: diff from best = ", frobeniusnorm(bestGaugeMx - matM) #DEBUG
             cpPenalty = sum( cpPenalties )
 
-            spamPenalty =  sum( [ _tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ] )
-            spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
+            spamPenalty =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in list(gs.preps.values()) ] )
+            spamPenalty += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in list(gs.effects.values()) ] )
 
             #OLD
             #tpPenalty = 0
@@ -656,8 +656,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             cpPenalties = _tools.sums_of_negative_choi_evals(gs)
             cpPenalty = sum( cpPenalties )
 
-            spamPenalty =  sum( [ _tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ] )
-            spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
+            spamPenalty =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in list(gs.preps.values()) ] )
+            spamPenalty += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in list(gs.effects.values()) ] )
 
             targetPenalty = targetFactor * gs.frobeniusdist(
                 targetGateset, None, gateWeight, spamWeight, itemWeights)
@@ -681,8 +681,8 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             gs = gateset.copy(); gs.transform(ggEl); d=0
             for gateLabel in gs.gates:
                 d += _tools.frobeniusdist(gs.gates[gateLabel],complDepolGate)
-            spamPenalty  = sum( [ _tools.prep_penalty(rhoVec) for rhoVec in list(gs.preps.values()) ] )
-            spamPenalty += sum( [ _tools.effect_penalty(EVec)     for EVec   in list(gs.effects.values()) ] )
+            spamPenalty  = sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in list(gs.preps.values()) ] )
+            spamPenalty += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in list(gs.effects.values()) ] )
             return d + spamPenalty
 
     else: raise ValueError("Invalid toGetTo passed to optimize_gauge: %s" % toGetTo)

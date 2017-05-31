@@ -210,7 +210,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
                 datasetList[run], targetGateSet,
                 fiducialPrep, fiducialMeasure, germs, maxLengths,
                 verbosity=verbosity)
-        gatesetList.append(results.gatesets['go0'])
+        gatesetList.append(results.estimates['default'].gatesets['go0'])
 
     if not returnData:
         return gatesetList

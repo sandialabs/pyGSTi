@@ -3018,8 +3018,10 @@ class GateSet(object):
         -------
         None
         """
+        mxBasis = self.get_basis_name()
         print(self)
         print("\n")
+        print("Basis = ",mxBasis)
         print("Choi Matrices:")
         for (label,gate) in self.gates.items():
             print(("Choi(%s) in pauli basis = \n" % label,
@@ -3029,9 +3031,9 @@ class GateSet(object):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
-        prep_penalty = sum( [ _lf.prep_penalty(rhoVec)
+        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,mxBasis)
                                 for rhoVec in list(self.preps.values()) ] )
-        effect_penalty   = sum( [ _lf.effect_penalty(EVec)
+        effect_penalty   = sum( [ _lf.effect_penalty(EVec,mxBasis)
                                 for EVec in list(self.effects.values()) ] )
         print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
         print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))
