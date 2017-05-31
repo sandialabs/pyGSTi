@@ -416,6 +416,12 @@ class Estimate(object):
     def __setstate__(self, stateDict):
         self.__dict__.update(stateDict)
         self.parent = None # initialize to None upon unpickling
+
+    def set_parent(self, parent):
+        """
+        Sets the parent Results object of this Estimate.
+        """
+        self.parent = parent
         
 
         
