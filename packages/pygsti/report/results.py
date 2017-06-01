@@ -310,7 +310,7 @@ class Estimate(object):
             for y in gss.used_yvals():
                 subMxs.append( [] )
                 for x in gss.used_xvals():
-                    plaq = gss.get_plaquette(x,y)
+                    plaq = gss.get_plaquette(x,y).expand_aliases()
                     scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
                     
                     for i,j,gstr in plaq:

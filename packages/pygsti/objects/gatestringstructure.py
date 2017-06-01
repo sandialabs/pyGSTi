@@ -65,7 +65,7 @@ class GatestringPlaquette(object):
         new_elements = []
         for i,j,s in self.elements:
             s2 = s if (self.aliases is None) else \
-                 _tools.find_replace_tuple(s,self.aliases)
+                 _lt.find_replace_tuple(s,self.aliases)
             
             if dsFilter is None or s2 in dsFilter:
                 new_elements.append((i,j,s2))
