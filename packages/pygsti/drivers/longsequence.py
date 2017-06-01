@@ -12,18 +12,20 @@ import numpy as _np
 import sys as _sys
 import time as _time
 import collections as _collections
+from scipy.stats import chi2 as _chi2
 
 from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import objects as _objs
 from .. import io as _io
+from .. import tools as _tools
 from ..tools import compattools as _compat
+
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gaugeOptParams=None,
-                         objective="logl", fidPairs=None,
                          advancedOptions=None, comm=None, memLimit=None,
                          verbosity=2):
     """
@@ -87,22 +89,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
 
-    objective : {'chi2', 'logl'}, optional
-        Specifies which final objective function is used: the chi-squared or
-        the log-likelihood.
-
-    fidPairs : list of 2-tuples or dict, optional
-        Specifies a subset of all prepStr,effectStr string pairs to be used in
-        this analysis.  If `fidPairs` is a list, each element of `fidPairs` is a
-        ``(iRhoStr, iEStr)`` 2-tuple of integers, which index a string within
-        the state preparation and measurement fiducial strings respectively. If
-        `fidPairs` is a dict, then the keys must be germ strings and values are
-        lists of 2-tuples as in the previous case.
-
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
         and values include:
+        - objective = {'chi2', 'logl'}
         - gateLabels = list of strings
         - gsWeights = dict or None
         - starting point = "LGST" (default) or  "target" or GateSet
@@ -125,6 +116,9 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - alwaysPerformMLE = bool (default = False)
         - truncScheme = "whole germ powers" (default) or "truncated germ powers"
                         or "length as exponent"
+        - appendTo = Results (default = None)
+        - estimateLabel = str (default = "default")
+
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
@@ -221,30 +215,28 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         startingPt = advancedOptions.get('starting point',"LGST")
     else:
         startingPt = advancedOptions.get('starting point',"target")
-    truncScheme = advancedOptions.get('truncScheme',"whole germ powers")
 
     #Construct gate sequences
     gateLabels = advancedOptions.get(
         'gateLabels', list(gs_target.gates.keys()))
-    nest = advancedOptions.get('nestedGateStringLists',True)
-    aliases = advancedOptions.get('gateLabelAliases',None)
-    includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST")
     lsgstLists = _construction.stdlists.make_lsgst_structs(
-        gateLabels, prepStrs, effectStrs, germs, maxLengths, fidPairs,
-        truncScheme, nest, 1, includeLGST, aliases)
+        gateLabels, prepStrs, effectStrs, germs, maxLengths,
+        truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
+        nest = advancedOptions.get('nestedGateStringLists',True),
+        includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
+        gateLabelAliases = advancedOptions.get('gateLabelAliases',None) )
     
     assert(len(maxLengths) == len(lsgstLists))
     
     return do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
-                              lsgstLists, gaugeOptParams, objective,
-                              advancedOptions, comm, memLimit, verbosity)
-
+                                     lsgstLists, gaugeOptParams,
+                                     advancedOptions, comm, memLimit, verbosity)
 
 
 
 
 def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
-                              lsgstLists, gaugeOptParams=None, objective="logl",
+                              lsgstLists, gaugeOptParams=None,
                               advancedOptions=None, comm=None, memLimit=None,
                               verbosity=2):
     """
@@ -279,10 +271,6 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         *can* be set, but is specified internally when it isn't.  If `None`,
         then the dictionary `{'itemWeights': {'gates':1.0, 'spam':0.001}}`
         is used.  If `False`, then then *no* gauge optimization is performed.
-
-    objective : {'chi2', 'logl'}, optional
-        Specifies which final objective function is used: the chi-squared or
-        the log-likelihood.
 
     advancedOptions : dict, optional
         Specifies advanced options most of which deal with numerical details of
@@ -434,6 +422,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     aliases = advancedOptions.get('gateLabelAliases',aliases)
     
     #Run Long-sequence GST on data
+    objective = advancedOptions.get('objective', 'logl')
+    
     if objective == "chi2":
         gs_lsgst_list = _alg.do_iterative_mc2gst(
             ds, gs_start, rawLists,
@@ -472,65 +462,262 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
           distributeMethod=advancedOptions.get(
                 'distributeMethod',"deriv"),
           check=advancedOptions.get('check',False),
+          gatestringWeightsDict=advancedOptions.get('gsWeights',None),
           gateLabelAliases=aliases,
           alwaysPerformMLE=advancedOptions.get('alwaysPerformMLE',False)
         )
     else:
-        raise ValueError("Invalid longSequenceObjective: %s" % objective)
+        raise ValueError("Invalid objective: %s" % objective)
 
     tNxt = _time.time()
     profiler.add_time('do_long_sequence_gst: total long-seq. opt.',tRef); tRef=tNxt
 
-    ret = _report.Results()
-    ret.init_Ls_and_germs(objective, ds, gs_target,
-                          gs_start, gs_lsgst_list,
-                          lsgstLists)
+    #Get or Create the Resuts object we'll ultimately return
+    ret = advancedOptions.get('appendTo',None)
+    if ret is None:
+        ret = _report.Results()
+        ret.init_dataset(ds)
+        ret.init_gatestrings(lsgstLists)
+    else:
+        assert(ret.dataset is ds), "DataSet inconsistency: cannot append!"
+        assert(len(lsgstLists) == len(ret.gatestring_structs['iteration'])), \
+            "Iteration count inconsistency: cannot append!"
+
+      #set parameters
+    parameters = _collections.OrderedDict()
+    parameters['objective'] = objective
+    parameters['defaultDirectory'] = default_dir
+    parameters['defaultBasename'] = default_base
+    parameters['memLimit'] = memLimit
+    parameters['starting point'] = startingPt
+    parameters['profiler'] = profiler
+
+      #from advanced options
+    parameters['minProbClip'] = \
+        advancedOptions.get('minProbClip',1e-4)
+    parameters['minProbClipForWeighting'] = \
+        advancedOptions.get('minProbClipForWeighting',1e-4)
+    parameters['probClipInterval'] = \
+        advancedOptions.get('probClipInterval',(-1e6,1e6))
+    parameters['radius'] = advancedOptions.get('radius',1e-4)
+    parameters['weights'] = advancedOptions.get('gsWeights',None)
+    parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
+    parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
+    parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
+    parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
+    parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
+    parameters['maxIterations'] = advancedOptions.get('maxIterations',100000)
+    parameters['useFreqWeightedChiSq'] = advancedOptions.get('useFreqWeightedChiSq',False)
+    parameters['nestedGateStringLists'] = advancedOptions.get('nestedGateStringLists',True)
+    parameters['profile'] = advancedOptions.get('profile',1)
+    parameters['check'] = advancedOptions.get('check',False)
+    parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
+    parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
+    parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
+        
+    #add estimate to Results
+    estlbl = advancedOptions.get('estimateLabel','default')
+    ret.add_estimate(gs_target, gs_start, gs_lsgst_list, parameters, estlbl)
 
     #Do final gauge optimization to *final* iteration result only
-    go_gs_lsgst_list = gs_lsgst_list
     if gaugeOptParams != False:
         gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
 
         go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-        ret.add_gaugeoptimized(gaugeOptParams, go_gs_final)
+        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
 
-                   
-      #set parameters
-    ret.parameters['defaultDirectory'] = default_dir
-    ret.parameters['defaultBasename'] = default_base
-    ret.parameters['memLimit'] = memLimit
-    ret.parameters['starting point'] = startingPt
-    ret.parameters['profiler'] = profiler
+    #Perform extra analysis if a bad fit was obtained
+    badFitThreshold = advancedOptions.get('badFitThreshold',20)
+    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
+        onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
+        if onBadFit in ("scale data","scale data and reopt") \
+           and parameters['weights'] is None:
+        
+            expected = (len(ds.get_spam_labels())-1) # == "k"
+            dof_per_box = 1; nboxes = len(rawLists[-1])
+            pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
+            threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+    
+            if objective == "chi2":
+                fitQty = _tools.chi2_terms(ds, gs_lsgst_list[-1], rawLists[-1],
+                                           advancedOptions.get('minProbClipForWeighting',1e-4),
+                                           advancedOptions.get('probClipInterval',(-1e6,1e6)),
+                                           False, False, memLimit,
+                                           advancedOptions.get('gateLabelAliases',None))
+            else:
+                maxLogL = _tools.logl_max_terms(ds, rawLists[-1],
+                                                gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
+                                         advancedOptions.get('minProbClip',1e-4),
+                                         advancedOptions.get('probClipInterval',(-1e6,1e6)),
+                                         advancedOptions.get('radius',1e-4),
+                                         gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                fitQty = 2*(maxLogL - logL)
+                
+            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels
+            gsWeights = {}
+            for i,gstr in enumerate(rawLists[-1]):
+                if fitQty[i] > threshold:
+                    gsWeights[gstr] = expected/fitQty[i] #scaling factor
+    
+            scale_params = parameters.copy()
+            scale_params['weights'] = gsWeights
 
-      #from advanced options
-    ret.parameters['minProbClip'] = \
-        advancedOptions.get('minProbClip',1e-4)
-    ret.parameters['minProbClipForWeighting'] = \
-        advancedOptions.get('minProbClipForWeighting',1e-4)
-    ret.parameters['probClipInterval'] = \
-        advancedOptions.get('probClipInterval',(-1e6,1e6))
-    ret.parameters['radius'] = advancedOptions.get('radius',1e-4)
-    ret.parameters['weights'] = advancedOptions.get('gsWeights',None)
-    ret.parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
-    ret.parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
-    ret.parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
-    ret.parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
-    ret.parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
-    ret.parameters['maxIterations'] = advancedOptions.get('maxIterations',100000)
-    ret.parameters['useFreqWeightedChiSq'] = advancedOptions.get('useFreqWeightedChiSq',False)
-    ret.parameters['nestedGateStringLists'] = advancedOptions.get('nestedGateStringLists',True)
-    ret.parameters['profile'] = advancedOptions.get('profile',1)
-    ret.parameters['check'] = advancedOptions.get('check',False)
-    ret.parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
-    ret.parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
-    ret.parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
+            if onBadFit == "scale data and reopt":
+                raise NotImplementedError("This option isn't implemented yet!")
+                # Need to re-run final iteration of GST with weights computed above,
+                # and just keep (?) old estimates of all prior iterations (or use "blank"
+                # sentinel once this is supported).
+                
+            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".dscl")
+
+            #Do final gauge optimization to data-scaled estimate also
+            if gaugeOptParams != False:
+                gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+                #if onBadFit == "scale data and reopt": # then will need to re-gauge-opt too, like:
+                #    if "targetGateset" not in gaugeOptParams:
+                #        gaugeOptParams["targetGateset"] = gs_target
+                #
+                #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
+                #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                #    
+                #    tNxt = _time.time()
+                #    profiler.add_time('do_long_sequence_gst: dscl gauge optimization',tRef); tRef=tNxt
+                #else:
+                
+                # add same gauge-optimized result as above
+                ret.estimates[estlbl + ".dscl"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+
+
+        elif onBadFit == "do nothing":
+            pass
+        else:
+            raise ValueError("Invalid onBadFit value: %s" % onBadFit)
             
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
+    return ret
 
-    assert( len(lsgstLists) == len(go_gs_lsgst_list) )
+
+
+
+def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
+                       prepStrsListOrFilename, effectStrsListOrFilename,
+                       germsListOrFilename, maxLengths, modes="TP,CPTP",
+                       comm=None, memLimit=None, verbosity=2):
+
+    """
+    Perform end-to-end GST analysis using standard practices.
+
+    This routines is an even higher-level driver than 
+    :func:`do_long_sequence_gst`.  It performs bottled, typically-useful,
+    runs of long sequence GST on a dataset.  This essentially boils down
+    to running :func:`do_long_sequence_gst` one or more times using different
+    gate set parameterizations, and performing commonly-useful gauge
+    optimizations, based only on the high-level `modes` argument.
+
+    Parameters
+    ----------
+    dataFilenameOrSet : DataSet or string
+        The data set object to use for the analysis, specified either directly
+        or by the filename of a dataset file (in text format).
+
+    targetGateFilenameOrSet : GateSet or string
+        The target gate set, specified either directly or by the filename of a
+        gateset file (text format).
+
+    prepStrsListOrFilename : (list of GateStrings) or string
+        The state preparation fiducial gate strings, specified either directly
+        or by the filename of a gate string list file (text format).
+
+    effectStrsListOrFilename : (list of GateStrings) or string or None
+        The measurement fiducial gate strings, specified either directly or by
+        the filename of a gate string list file (text format).  If ``None``,
+        then use the same strings as specified by prepStrsListOrFilename.
+
+    germsListOrFilename : (list of GateStrings) or string
+        The germ gate strings, specified either directly or by the filename of a
+        gate string list file (text format).
+
+    maxLengths : list of ints
+        List of integers, one per LSGST iteration, which set truncation lengths
+        for repeated germ strings.  The list of gate strings for the i-th LSGST
+        iteration includes the repeated germs truncated to the L-values *up to*
+        and including the i-th one.
+
+    modes : str, optional
+        A comma-separated list of modes which dictate what types of analyses
+        are performed.  Currently, these correspond to different types of 
+        parameterizations/constraints to apply to the estimated gate set.
+        The default value is usually fine.  Allowed values are:
+
+        - "full" : full (completely unconstrained)
+        - "TP"   : TP-constrained
+        - "CPTP" : Lindbladian CPTP-constrained
+        - "H+S"  : Only Hamiltonian + Stochastic errors allowd (CPTP)
+        - "S"    : Only Stochastic errors allowd (CPTP)
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    memLimit : int or None, optional
+        A rough memory limit in bytes which restricts the amount of memory 
+        used (per core when run on multi-CPUs).
+
+    verbosity : int, optional
+       The 'verbosity' option is an integer specifying the level of 
+       detail printed to stdout during the calculation.
+
+    Returns
+    -------
+    Results
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    
+    #Get/load target gateset
+    if _compat.isstr(targetGateFilenameOrSet):
+        gs_target = _io.load_gateset(targetGateFilenameOrSet)
+    else:
+        gs_target = targetGateFilenameOrSet #assume a GateSet object
+
+    #Get/load dataset
+    if _compat.isstr(dataFilenameOrSet):
+        ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+    else:
+        ds = dataFilenameOrSet #assume a Dataset object
+
+    ret = None
+    modes = modes.split(",")
+    with printer.progress_logging(1):
+        for i,mode in enumerate(modes):
+            printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
+            parameterization = mode #for now, 1-1 correspondence
+            tgt = gs_target.copy(); tgt.set_all_parameterizations(parameterization)
+            advanced = {'appendTo': ret, 'estimateLabel': parameterization }
+            
+            ret = do_long_sequence_gst(ds, tgt, prepStrsListOrFilename,
+                                       effectStrsListOrFilename, germsListOrFilename,
+                                       maxLengths, False, advanced, comm, memLimit,
+                                       printer-1)
+            
+            #Gauge optimize to a variety of spam weights
+            for vSpam in [0,1]:
+                for spamWt in [1e-4,1e-2,1e-1]:
+                    ret.estimates[parameterization].add_gaugeoptimized(
+                        {'itemWeights': {'gates':1, 'spam':spamWt},
+                         'validSpamPenalty': vSpam},
+                        None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
+
+                    #Gauge optimize data-scaled estimate also
+                    if parameterization + ".dscl" in ret.estimates:
+                        ret.estimates[parameterization + ".dscl"].add_gaugeoptimized(
+                            {'itemWeights': {'gates':1, 'spam':spamWt},
+                             'validSpamPenalty': vSpam},
+                            None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
+
     return ret

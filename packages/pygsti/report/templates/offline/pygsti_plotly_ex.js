@@ -115,7 +115,14 @@ function trigger_wstable_plot_creation(id) {
 	    if(padding == "") { padding = 0; }
 	    else { padding = parseFloat(padding); }
             $(td).css("height", max_height(plots)+2*padding);
-	});	
+	});
+
+	//5) It's possible that the plot div (wstable) has
+        //   a max-height set.  This won't confine the table
+        //   at all (since it's not a block element), so we
+        //   should remove it (it would useful for plots,
+        //   but not tables).
+	wstable.css("max-height","none");
     });
     //Create table plots after typesetting is done and non-plot TDs are fixed
     // (note: table must be visible to compute widths correctly)

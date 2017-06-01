@@ -62,8 +62,8 @@ class TestDriversMethods(DriversTestCase):
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, objective="chi2",
-                                advancedOptions={'truncScheme': ts})
+                                std.germs, maxLens, 
+                                advancedOptions={'truncScheme': ts, 'objective': "chi2"})
 
 
         #Try using files instead of objects
@@ -94,8 +94,8 @@ class TestDriversMethods(DriversTestCase):
         with self.assertRaises(ValueError):
             self.runSilent(pygsti.do_long_sequence_gst,
                            ds, std.gs_target, std.fiducials, None,
-                           std.germs, maxLens, objective="FooBar",
-                           advancedOptions={'truncScheme': ts}) #bad objective
+                           std.germs, maxLens, 
+                           advancedOptions={'truncScheme': ts, 'objective': "FooBar"}) #bad objective
 
 
 
@@ -110,8 +110,8 @@ class TestDriversMethods(DriversTestCase):
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, objective="chi2", 
-            advancedOptions={'truncScheme': ts})
+            std.germs, maxLens, 
+            advancedOptions={'truncScheme': ts, 'objective': "chi2"})
 
         #result = self.runSilent(pygsti.do_long_sequence_gst,
         #    ds, std.gs_target, std.fiducials, std.fiducials,
@@ -128,8 +128,8 @@ class TestDriversMethods(DriversTestCase):
 
         result = self.runSilent(pygsti.do_long_sequence_gst,
             ds, std.gs_target, std.fiducials, std.fiducials,
-            std.germs, maxLens, objective="chi2",
-            advancedOptions={'truncScheme': ts})
+            std.germs, maxLens,
+            advancedOptions={'truncScheme': ts, 'objective': "chi2"})
 
         #result = self.runSilent(pygsti.do_long_sequence_gst,
         #    ds, std.gs_target, std.fiducials, std.fiducials,
@@ -140,14 +140,17 @@ class TestDriversMethods(DriversTestCase):
     def test_longSequenceGST_fiducialPairReduction(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
         ts = "whole germ powers"
+        maxLens = self.maxLens
 
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
             std.gs_target, std.fiducials, std.fiducials, std.germs, verbosity=0)
 
-        maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
-                                ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, fidPairs=fidPairs,
+        gfprStructs = pygsti.construction.make_lsgst_structs(
+            std.gs_target, std.fiducials, std.fiducials, std.germs, maxLens,
+            fidPairs=fidPairs)
+    
+        result = self.runSilent(pygsti.do_long_sequence_gst_base,
+                                ds, std.gs_target, gfprStructs,
                                 advancedOptions={'truncScheme': ts})
 
         #create a report...

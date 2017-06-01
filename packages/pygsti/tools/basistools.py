@@ -1632,9 +1632,9 @@ def vec_to_stdmx(v, basis):
     v : numpy array
         The vector
 
-    basis : {"std", "gm", "pp"}
+    basis : {"std", "gm", "pp", "qt"}
         The abbreviation for the basis used to interpret v ("gm" = Gell-Mann,
-        "pp" = Pauli-product, "std" = matrix unit, or standard).
+        "pp" = Pauli-product, "std" = matrix unit, "qt" = qutrit, or standard).
 
     Returns
     -------

@@ -254,6 +254,17 @@
       <figcaption><strong>$2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset</strong>.   Each pixel represents a single experiment (gate sequence), and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray are typical. Red squares represent statistically significant evidence for model violation (non-Markovianity), and should appear with probability at most %(linlg_pcntle)s%% if the data really are Markovian. Square blocks of pixels correspond to base sequences (arranged vertically by germ and horizontally by length); each pixel within a block corresponds to a specific choice of pre- and post-fiducial sequences.  See text for further details.</figcaption>
     </figure>
 
+    #iftoggle(ShowScaling)
+    
+    <figure id="dataScalingColorBoxPlot">
+      %(dataScalingColorBoxPlot)s
+      <figcaption><strong>Data scaling factor for every individual experiment in the dataset</strong>.   Each pixel represents a single experiment (gate sequence), and its color indicates the amount of scaling that was applied to the original data counts when computing the log-likelihood or $\chi^2$ for this estimate.  Values of 1.0 indicate all of the original data was used, whereas numbers between 0 and 1 indicate that the data counts for the experiement were artificially decreased (usually to improve the fit).</figcaption>
+    </figure>
+
+    #elsetoggle
+    <p>Note: data-scaling color box figure is not shown because none of the estimates in this report have scaled data.</p>
+    #endtoggle
+    
     <p>Figure <a href="#invertedBestEstimateColorBoxPlot" class="figure"></a> shows exactly the same $\log(\mathcal{L})$ analysis as Figure <a href="#bestEstimateColorBoxPlot" class="figure"></a>, but arranged differently.  Here, blocks (not square) all correspond to a single fiducial pair (e.g., pre- and post-fiducial), and pixels within a block correspond to different base sequences.  This can be useful for diagnosing a single bad fiducial sequence.</p>
 
     <figure id="invertedBestEstimateColorBoxPlot">
@@ -262,6 +273,23 @@
       <figcaption><strong>$2\Delta\log(\mathcal{L})$ contributions for each experiment, arranged differently.</strong>  This figure shows the same data as Figure <a href="#bestEstimateColorBoxPlot" class="figure"></a>, but arranged differently.  Each block now corresponds to a particular pair of fiducial sequences, while pixels within the block correspond to different base sequences sandwiched between those fiducials.</figcaption>
     </figure>
 
+    #iftoggle(CompareDatasets)
+    
+    <p>Since there are multiple data sets in this report, it may be useful to compare them.  The plots below show how likely it is that the data from the selected sets were generated from the same underlying gates.  This analysis is completely independent of GST's numerical estimation protocols: it simply compares the counts obtained for the same gate sequence in different data sets.  For each sequence, a p-value is assigned by treating the data counts as coin flips and comparing two models: 1) the <q>single-distribution</q> model, which adds the counts together and compares their frequency to a single multinomial distribution, and 2) the <q>separate</q> model which separately fits each set of data counts to an independent distribution.</p>
+
+    <figure id="dsComparisonHistogram">
+      %(dsComparisonHistogram)s
+      %(dscmpSwitchboard)s
+      <figcaption><strong>Histogram of p-values comparing two data sets.</strong>  Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.</figcaption>
+    </figure>
+
+    <figure id="dsComparisonBoxPlot">
+      %(dsComparisonBoxPlot)s
+      <figcaption><strong>Per-sequence p-values comparing two data sets.</strong>  In a similar fashion to other color box plots, this plot shows the p-value of each gate sequence corresponding to how consistent that sequences counts are between the two selected data sets.</figcaption>
+    </figure>
+
+    #endtoggle
+      
     <!-- End Ls and Germs only section -->
 
     </section>

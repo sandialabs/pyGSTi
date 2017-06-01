@@ -885,4 +885,8 @@ def read_gateset(filename):
     if len(remainder_spam_label) > 0:
         gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
 
+    #Add default gauge group -- the full group because
+    # we add FullyParameterizedGates above.
+    gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
+
     return gs

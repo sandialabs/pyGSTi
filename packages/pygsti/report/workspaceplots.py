@@ -545,8 +545,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
         return round(trunc_x, e) #round to truncation point just to be sure
 
-    xextra = 0. if ylabel is None else 1.5
-    yextra = 0. if xlabel is None else 1.5
+    xextra = 2.25 if ylabel is None else 2.5
+    yextra = 2.25 if xlabel is None else 2.5
 
     if mxBasis is not None and mxBasisDims is not None:
         if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
@@ -554,8 +554,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        yextra += 1.5 if (mxBasisDims > 1) else 0
-        xextra += 1.5 if (mxBasisDimsY > 1) else 0
+        yextra += 0.5 if (mxBasisDims > 1) else 0
+        xextra += 0.5 if (mxBasisDimsY > 1) else 0
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
@@ -651,6 +651,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         annotations = annotations,
         margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
     )
+    #print("DEBUG width = ",40*(gateMatrix.shape[1]+xextra)*scale)
+    #print("DEBUG height = ",40*(gateMatrix.shape[0]+yextra)*scale)
     return go.Figure(data=data, layout=layout)
 
 
@@ -812,7 +814,7 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None, dscomparator=None, scale=1.0):
+                 directGSTgatesets=None, dscomparator=None, submatrices=None, scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -873,6 +875,12 @@ class ColorBoxPlot(WorkspacePlot):
         dscomparator : DataComparator, optional
             The data set comparator used to produce the "dscmp" plot type.
 
+        submatrices : dict, optional
+            A dictionary whose keys correspond to other potential plot
+            types and whose values are each a list-of-lists of the sub
+            matrices to plot, corresponding to the used x and y values
+            of `gss`.
+
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
         """
@@ -880,12 +888,12 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets, dscomparator, scale)
+                                          directGSTgatesets, dscomparator, submatrices, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets, dscomparator, scale):
+                directGSTgatesets, dscomparator, submatrices, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -959,14 +967,25 @@ class ColorBoxPlot(WorkspacePlot):
 
                 def mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
-                
+
+            elif (submatrices is not None) and typ in submatrices:
+                precomp = False
+                if typ + ".colormap" in submatrices:
+                    colormapType = submatrices[typ + ".colormap"]
+                else:
+                    colormapType = "seq"
+            
             else:
                 raise ValueError("Invalid plot type: %s" % typ)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
                 probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
 
-            subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+            if (submatrices is not None) and typ in submatrices:
+                subMxs = submatrices[typ] # "custom" type -- all mxs precomputed by user
+            else:
+                subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+            
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
@@ -980,13 +999,14 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType == "trivial":
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
 
-            elif colormapType == "seq":
+            elif colormapType in ("seq","revseq"):
                 max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                                 for ix in range(len(gss.used_xvals()))
                                 for iy in range(len(gss.used_yvals())) ])
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
-                colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs)
-
+                color = "whiteToBlack" if colormapType == "seq" else "blackToWhite"
+                colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
+                
             else: assert(False) #invalid colormapType was set above
             
             newfig = gatestring_color_boxplot(gss, subMxs, colormap,

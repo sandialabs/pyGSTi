@@ -161,6 +161,7 @@ class ConfidenceRegion(object):
         # Get constants C such that xT*Hessian*x = C gives contour for the desired confidence region.
         #  C1 == Single DOF case: constant for a single-DOF likelihood, (or a profile likelihood in our case)
         #  Ck == Total DOF case: constant for a region of the likelihood as a function of *all non-gauge* gateset parameters
+        self.nonMarkRadiusSq = nonMarkRadiusSq
         if nonMarkRadiusSq == 0.0: #use == to test for *exact* zero floating pt value as herald
             C1 = _stats.chi2.ppf(confidenceLevel/100.0, 1)
             Ck = _stats.chi2.ppf(confidenceLevel/100.0, self.nNonGaugeParams)

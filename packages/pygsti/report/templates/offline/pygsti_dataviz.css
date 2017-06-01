@@ -1,4 +1,10 @@
 
+.notapplicable {
+    color: DarkSlateBlue;
+    font-weight: bold;
+    font-size: 20pt;
+}    
+
 .successmsg {
     color: green;
     font-weight: bold;
@@ -14,6 +20,17 @@
 .failmsg {
     color: red;
     font-style: italic;
+}
+
+.errorbar {
+    color: #0000A0;
+}
+th .errorbar {
+    color: #ADD8E6;
+}
+
+.nmerrorbar {
+    color: red;
 }
 
 .modebar {

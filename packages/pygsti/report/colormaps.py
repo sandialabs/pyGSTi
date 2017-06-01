@@ -12,6 +12,7 @@ from scipy.stats import chi2 as _chi2
 def _vnorm(x, vmin, vmax):
     #Perform linear mapping from [vmin,vmax] to [0,1]
     # (which is just a *part* of the full mapping performed)
+    if _np.isclose(vmin,vmax): return _np.ma.zeros(x.shape,'d')
     return _np.clip( (x-vmin)/ (vmax-vmin), 0.0, 1.0)
 
 
@@ -206,12 +207,14 @@ class DivergingColormap(Colormap):
         
 
 class SequentialColormap(Colormap):
-    def __init__(self, vmin, vmax, color="greys" ):
+    def __init__(self, vmin, vmax, color="whiteToBlack"):
         hmin = vmin
         hmax = vmax
 
-        if color == "greys": # white -> black
+        if color == "whiteToBlack":
             rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
+        elif color == "blackToWhite":
+            rgb_colors = [ [0, (0.0,0.0,0.0)], [1.0, (1.,1.,1.)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 

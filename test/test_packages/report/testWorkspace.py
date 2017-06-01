@@ -11,9 +11,9 @@ class TestWorkspace(ReportBaseCase):
     def setUp(self):
         super(TestWorkspace, self).setUp()
 
-        self.tgt = self.results.gatesets['target']
+        self.tgt = self.results.estimates['default'].gatesets['target']
         self.ds = self.results.dataset
-        self.gs = self.results.gatesets['go0']
+        self.gs = self.results.estimates['default'].gatesets['go0']
         self.gss = self.results.gatestring_structs['final']
 
     def test_notebook_mode(self):
@@ -48,7 +48,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )
         tbls.append( w.DataSetOverviewTable(self.ds, self.tgt, maxLengthList=self.gss.Ls) )
         tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
-                                          self.results.gatesets['iteration estimates'], self.ds,) )
+                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
 
         prepStrs = self.results.gatestring_lists['prep fiducials']
         effectStrs = self.results.gatestring_lists['effect fiducials']
@@ -68,8 +68,8 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.StandardErrgenTable(4, "hamiltonian", "gm") )
         tbls.append( w.StandardErrgenTable(4, "stochastic", "gm") )
         
-        tbls.append( w.GaugeOptParamsTable(self.results.goparameters['go0']) )
-        tbls.append( w.MetadataTable(self.gs, self.results.parameters ) )
+        tbls.append( w.GaugeOptParamsTable(self.results.estimates['default'].goparameters['go0']) )
+        tbls.append( w.MetadataTable(self.gs, self.results.estimates['default'].parameters ) )
         tbls.append( w.SoftwareEnvTable() )
 
         #Now test table rendering in html

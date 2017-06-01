@@ -20,6 +20,12 @@ from .table import ReportTable as _ReportTable
 from .workspace import WorkspaceTable
 from . import workspaceplots as _wp
 
+def _getEBFmt(typ, confidenceRegionInfo):
+    if (confidenceRegionInfo is not None and
+        confidenceRegionInfo.nonMarkRadiusSq > 0):
+        return 'NM' + typ
+    else: return typ
+
 class BlankTable(WorkspaceTable):
     def __init__(self, ws):
         """A completely blank placeholder table."""
@@ -83,8 +89,9 @@ class SpamTable(WorkspaceTable):
             formatters.append( None )
             
             if confidenceRegionInfo is not None:
+                Conversion = _getEBFmt('EBConversion', confidenceRegionInfo)
                 colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
-                formatters.append( 'Conversion' )
+                formatters.append( Conversion )
 
                 
         table = _ReportTable(colHeadings, formatters)
@@ -161,6 +168,7 @@ class SpamParametersTable(WorkspaceTable):
         super(SpamParametersTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
 
     def _create(self, gateset, confidenceRegionInfo):
+        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
         colHeadings = [''] + list(gateset.get_effect_labels())
         formatters  = [None] + [ 'Effect' ]*len(gateset.get_effect_labels())
     
@@ -169,7 +177,7 @@ class SpamParametersTable(WorkspaceTable):
         spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
         DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
     
-        formatters      = [ 'Rho' ] + [ 'ErrorBars' ]*len(gateset.get_effect_labels()) #for rows below
+        formatters      = [ 'Rho' ] + [ ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
     
         for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
             rowData = [prepLabel]
@@ -240,8 +248,9 @@ class GatesTable(WorkspaceTable):
 
         if confidenceRegionInfo is not None:
             #Only use confidence region for the *final* gateset.
+            Conversion = _getEBFmt('EBConversion', confidenceRegionInfo)
             colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
-            formatters.append('Conversion')
+            formatters.append(Conversion)
     
         table = _ReportTable(colHeadings, formatters)
 
@@ -271,23 +280,27 @@ class GatesTable(WorkspaceTable):
                 if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
+                    basisNm = gatesets[-1].get_basis_name()
+                    basisDims = gatesets[-1].get_basis_dimension()
                     intervalMx = intervalVec.reshape(gate_dim,gate_dim)
                 elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
+                    basisNm = gatesets[-1].get_basis_name()
+                    basisDims = gatesets[-1].get_basis_dimension()
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
-                    intervalMx = intervalVec # we don't know how best to reshape
-                                             # vector of parameter intervals, so don't
+                    # we don't know how best to reshape
+                    # vector of parameter intervals, so just don't unless needed for boxes
+                    intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
+                    basisNm = basisDims = None #we don't know how to label the params
 
                 if display_as == "numbers":
                     row_data.append(intervalMx)
                     row_formatters.append('Brackets')
                     
                 elif display_as == "boxes":
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
@@ -345,6 +358,7 @@ class ChoiTable(WorkspaceTable):
             gatesets = [gatesets]
 
         gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
+        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
 
         if titles is None:
             titles = ['']*len(gatesets)
@@ -413,7 +427,7 @@ class ChoiTable(WorkspaceTable):
                             try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
                             except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
                             row_data.append( (evals,evalsEB) )
-                            row_formatters.append('VecErrorBars')
+                            row_formatters.append(VecErrorBars)
                             
                 elif disp == "barplot":
                     for gateset in gatesets:
@@ -468,10 +482,12 @@ class GatesVsTargetTable(WorkspaceTable):
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
         qtys            = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
+        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
+
     
         table = _ReportTable(colHeadings, formatters)
     
-        formatters = [None] + [ 'ErrorBars' ]*len(qtyNames)
+        formatters = [None] + [ ErrorBars ]*len(qtyNames)
     
         for gl in gateLabels:
             if confidenceRegionInfo is None:
@@ -514,12 +530,13 @@ class SpamVsTargetTable(WorkspaceTable):
     
         colHeadings  = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
         formatters   = (None,'Conversion','Conversion')
+        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
     
         table = _ReportTable(colHeadings, formatters)
     
         qtyNames = ('state infidelity','trace dist')
     
-        formatters = [ 'Rho' ] + [ 'ErrorBars' ]*len(qtyNames)
+        formatters = [ 'Rho' ] + [ ErrorBars ]*len(qtyNames)
         qtys_to_compute = [ '%s prep %s' % (l,qty) for qty in qtyNames for l in prepLabels ]
         qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
@@ -530,7 +547,7 @@ class SpamVsTargetTable(WorkspaceTable):
                 rowData = [l] + [ qtys['%s prep %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
             table.addrow(rowData, formatters)
     
-        formatters = [ 'Effect' ] + [ 'ErrorBars' ]*len(qtyNames)
+        formatters = [ 'Effect' ] + [ ErrorBars ]*len(qtyNames)
         qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
         qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
@@ -728,10 +745,11 @@ class RotationAxisVsTargetTable(WorkspaceTable):
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
         qtys            = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
+        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
     
         table = _ReportTable(colHeadings, formatters)
     
-        formatters = [None] + [ 'PiErrorBars' ]*len(qtyNames)
+        formatters = [None] + [ PiErrorBars ]*len(qtyNames)
     
         for gl in gateLabels:
             if confidenceRegionInfo is None:
@@ -783,10 +801,13 @@ class GateDecompTable(WorkspaceTable):
                        'axis of rotation',
                        'decay of diagonal rotation terms',
                        'decay of off diagonal rotation terms')
+
+        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
+        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
     
         table = _ReportTable(colHeadings, formatters)
     
-        formatters = (None, 'VecErrorBars', 'Normal', 'Normal', 'ErrorBars', 'ErrorBars')
+        formatters = (None, VecErrorBars, 'Normal', 'Normal', ErrorBars, ErrorBars)
 
         for gl in gateLabels:
             decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
@@ -844,6 +865,8 @@ class RotationAxisTable(WorkspaceTable):
         colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
         nCols = len(colHeadings)
         formatters = [None] * nCols
+
+        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
     
         table = "tabular"
         latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
@@ -854,7 +877,7 @@ class RotationAxisTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head} )
     
-        formatters = [None, 'PiErrorBars'] + [ 'PiErrorBars' ] * len(gateLabels)
+        formatters = [None, PiErrorBars] + [ PiErrorBars ] * len(gateLabels)
     
         rotnAxisAngles, rotnAxisAnglesEB = qtys['Gateset Axis Angles'].get_value_and_err_bar()
         rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
@@ -935,6 +958,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidenceRegionInfo, display):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
+        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
 
         colHeadings = ['Gate']
         for disp in display:
@@ -988,12 +1012,12 @@ class GateEigenvalueTable(WorkspaceTable):
                 if disp == "evals":
                     evals,evalsEB = format_evals(evals,evalsEB)
                     row_data.append( (evals,evalsEB) )
-                    row_formatters.append( 'VecErrorBars' )
+                    row_formatters.append( VecErrorBars )
 
                 elif disp == "rel" and targetGateset is not None:
                     rel_evals,_ = format_evals(rel_evals,None)
                     row_data.append( (rel_evals,None) )
-                    row_formatters.append( 'VecErrorBars' )
+                    row_formatters.append( VecErrorBars)
 
                 elif disp == "polar":
                     if targetGateset is None:

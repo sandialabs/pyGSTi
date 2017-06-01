@@ -260,6 +260,7 @@ class Workspace(object):
         makefactory = lambda cls: self._makefactory(cls,autodisplay)
 
         self.Switchboard = makefactory(Switchboard)
+        self.NotApplicable = makefactory(NotApplicable)
 
         #Tables
           # Gate sequences
@@ -513,6 +514,11 @@ class Workspace(object):
         SwitchValue.  This routine is primarily used internally for the
         computation of tables and plots.
 
+        if any of the arguments is an instance of `NotApplicable` then `fn`
+        is *not* evaluated and the instance is returned as the evaluation
+        result.  If multiple arguments are `NotApplicable` instances, the
+        first is used as the result.
+
         Parameters
         ----------
         fn : function
@@ -617,14 +623,21 @@ class Workspace(object):
             #next, fill in the non-switched arguments
             for j,arg in nonSwitchedArgs:
                 argVals[j] = arg
-                
-            # argVals now contains all the arguments, so call the function if
-            #  we need to and add result.
-            key = call_key(fn, argVals) # cache by call key
-            if key not in self.compCache:
-                #print("DB: computing with args = ", argVals)
-                self.compCache[key] = fn(*argVals)
-            result = self.compCache[key]
+
+            #if any argument is a NotApplicable object, just use it as the
+            # result. Otherwise, compute the result or pull it from cache.
+            for v in argVals:
+                if isinstance(v,NotApplicable):
+                    key="NA"; result = v; break
+            else:
+                # argVals now contains all the arguments, so call the function if
+                #  we need to and add result.
+                key = call_key(fn, argVals) # cache by call key
+                if key not in self.compCache:
+                    #print("DB: computing with args = ", argVals)
+                    #print("DB: computing with arg types = ", [type(x) for x in argVals])
+                    self.compCache[key] = fn(*argVals)
+                result = self.compCache[key]
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
@@ -664,7 +677,7 @@ class Workspace(object):
             self.compCache[curkey] = fn(*valArgs)
             
         return self.compCache[curkey]
-        
+    
     
 class Switchboard(_collections.OrderedDict):
     """
@@ -1255,6 +1268,8 @@ class SwitchValue(object):
         
         shape = [len(self.parent.positionLabels[i]) for i in dependencies]
         self.base = _np.empty(shape, dtype=_np.object)
+        index_all = (slice(None,None),)*len(shape)
+        self.base[index_all] = NotApplicable(self.ws)
 
     #Access to underlying ndarray
     def __getitem__( self, key ):
@@ -1474,6 +1489,45 @@ class WorkspaceOutput(object):
         return {'html':html, 'js':js}
 
 
+class NotApplicable(WorkspaceOutput):
+    """
+    Class signifying that an given set of arguments is not applicable
+    to a function being evaluated.
+    """
+    def __init__(self, ws):
+        """
+        Create a new NotApplicable object.
+        """
+        super(NotApplicable, self).__init__(ws)
+
+    def render(self, typ="html", ID=None):
+        """
+        Renders this object into the specifed format, specifically for
+        embedding it within a larger document.
+
+        Parameters
+        ----------
+        typ : str
+            The format to render as.  Currently `"html"` is widely supported
+            and `"latex"` is supported for tables.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings whose keys indicate which portion of
+            the embeddable output the value is.  Keys will vary for different
+            `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
+            and Javascript code, respectively.
+        """
+        if ID is None: ID=randomID()
+        
+        if typ == "html":
+            return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js':"" }
+
+        elif typ == "latex":
+            return {'latex': "Not applicable" }
+        else:
+            raise ValueError("NotApplicable render type not supported: %s" % typ)
 
     
 class WorkspaceTable(WorkspaceOutput):
@@ -1568,12 +1622,16 @@ class WorkspaceTable(WorkspaceOutput):
             divJS = []
             for i,table in enumerate(self.tables):
                 tableDivID = tableID + "_%d" % i
-                table_dict = table.render("html", tableID=tableDivID + "_tbl",
-                                          tableclass="dataTable",
-                                          precision=precDict['normal'],
-                                          polarprecision=precDict['polar'],
-                                          sciprecision=precDict['sci'],
-                                          resizable=resizable, autosize=autosize)
+                if isinstance(table,NotApplicable):
+                    table_dict = table.render("html",tableDivID)
+                else:
+                    table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                                              tableclass="dataTable",
+                                              precision=precDict['normal'],
+                                              polarprecision=precDict['polar'],
+                                              sciprecision=precDict['sci'],
+                                              resizable=resizable, autosize=autosize)
+                
 
                 divHTML.append("<div id='%s'>\n%s\n</div>\n" %
                                (tableDivID,table_dict['html']))
@@ -1683,6 +1741,7 @@ class WorkspacePlot(WorkspaceOutput):
         # as the largest-height plot.
         iMaster = None; maxH = 0;
         for i,fig in enumerate(self.figs):
+            if isinstance(fig,NotApplicable): continue
             if 'height' in fig['layout']:
                 if fig['layout']['height'] > maxH:
                     iMaster, maxH = i, fig['layout']['height'];
@@ -1694,14 +1753,20 @@ class WorkspacePlot(WorkspaceOutput):
         divIDs = []
         divJS = []
         for i,fig in enumerate(self.figs):
-            #use auto-sizing (fluid layout)
-            fig_dict = _plotly_ex.plot_ex(
-                fig, show_link=False,
-                autosize=autosize, resizable=resizable,
-                lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
+            if isinstance(fig,NotApplicable):
+                NAid = randomID()
+                fig_dict = fig.render(typ, NAid)
+                divIDs.append(NAid)
+            else:
+                #use auto-sizing (fluid layout)
+                fig_dict = _plotly_ex.plot_ex(
+                    fig, show_link=False,
+                    autosize=autosize, resizable=resizable,
+                    lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
+                divIDs.append(getPlotlyDivID(fig_dict['html']))
+                
             divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
             divJS.append( fig_dict['js'] )
-            divIDs.append(getPlotlyDivID(fig_dict['html']))
             
         base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
                                 self.switchboards, self.sbSwitchIndices)        
