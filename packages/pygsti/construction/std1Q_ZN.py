@@ -18,14 +18,14 @@ gs_target = _setc.build_gateset([2],[('Q0',)], ['Gz','Gn'],
                                 effectLabels=["E0"], effectExpressions=["1"],
                                 spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
 
-prepFiducials = _strc.gatestring_list([(),
+prepStrs = _strc.gatestring_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),
                                        ('Gn','Gn','Gn',),
                                        ('Gn','Gz','Gn','Gn','Gn')]) # for 1Q MUB
 
-measFiducials = _strc.gatestring_list([(),
+effectStrs = _strc.gatestring_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),

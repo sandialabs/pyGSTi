@@ -23,10 +23,10 @@ class EBFormatterTest(FormatterBaseTestCase):
         formatters)
 
     def test_EB_formatter(self):
-        self.assertEqual(self.ebPrecise1,   self.ebtable1.render('latex', precision=6))
-        self.assertEqual(self.ebPrecise2,   self.ebtable2.render('latex', precision=6))
-        self.assertEqual(self.ebImprecise1, self.ebtable1.render('latex', precision=2))
-        self.assertEqual(self.ebImprecise2, self.ebtable2.render('latex', precision=2))
+        self.assertEqual(self.ebPrecise1,   self.ebtable1.render('latex', precision=6)['latex'])
+        self.assertEqual(self.ebPrecise2,   self.ebtable2.render('latex', precision=6)['latex'])
+        self.assertEqual(self.ebImprecise1, self.ebtable1.render('latex', precision=2)['latex'])
+        self.assertEqual(self.ebImprecise2, self.ebtable2.render('latex', precision=2)['latex'])
 
 class PiEBFormatterTest(FormatterBaseTestCase):
 
@@ -48,10 +48,10 @@ class PiEBFormatterTest(FormatterBaseTestCase):
         formatters)
 
     def test_PiEB_formatter(self):
-        self.assertEqual(self.piPrecise1,   self.piebtable1.render('latex', precision=6))
-        self.assertEqual(self.piPrecise2,   self.piebtable2.render('latex', precision=6))
-        self.assertEqual(self.piImprecise1, self.piebtable1.render('latex', precision=2))
-        self.assertEqual(self.piImprecise2, self.piebtable2.render('latex', precision=2))
+        self.assertEqual(self.piPrecise1,   self.piebtable1.render('latex', precision=6)['latex'])
+        self.assertEqual(self.piPrecise2,   self.piebtable2.render('latex', precision=6)['latex'])
+        self.assertEqual(self.piImprecise1, self.piebtable1.render('latex', precision=2)['latex'])
+        self.assertEqual(self.piImprecise2, self.piebtable2.render('latex', precision=2)['latex'])
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

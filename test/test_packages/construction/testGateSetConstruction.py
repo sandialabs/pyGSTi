@@ -759,82 +759,82 @@ SPAMLABEL minus = rho remainder
 
 
         #Test compositions (and conversions)
-        c = pygsti.obj.compose(gate_full, gate_full, "full")
+        c = pygsti.obj.compose(gate_full, gate_full, "gm", "full")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_full) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_full, gate_tp)
+        c = pygsti.obj.compose(gate_full, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_tp) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_full, gate_static)
+        c = pygsti.obj.compose(gate_full, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_static) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_full, gate_linear)
+        c = pygsti.obj.compose(gate_full, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_full,gate_linear) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
 
-        c = pygsti.obj.compose(gate_linear, gate_full)
+        c = pygsti.obj.compose(gate_linear, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_full) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_linear, gate_tp)
+        c = pygsti.obj.compose(gate_linear, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_tp) )
         self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
 
-        c = pygsti.obj.compose(gate_linear, gate_static)
+        c = pygsti.obj.compose(gate_linear, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_static) )
         self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_linear, gate_linear)
+        c = pygsti.obj.compose(gate_linear, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_linear,gate_linear) )
         self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
 
 
-        c = pygsti.obj.compose(gate_tp, gate_full)
+        c = pygsti.obj.compose(gate_tp, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_full) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_tp, gate_tp)
+        c = pygsti.obj.compose(gate_tp, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_tp) )
         self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
 
-        c = pygsti.obj.compose(gate_tp, gate_static)
+        c = pygsti.obj.compose(gate_tp, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_static) )
         self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
 
-        c = pygsti.obj.compose(gate_tp, gate_linear)
+        c = pygsti.obj.compose(gate_tp, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_tp,gate_linear) )
         self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
 
 
-        c = pygsti.obj.compose(gate_static, gate_full)
+        c = pygsti.obj.compose(gate_static, gate_full, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_full) )
         self.assertEqual(type(c), pygsti.obj.FullyParameterizedGate)
 
-        c = pygsti.obj.compose(gate_static, gate_tp)
+        c = pygsti.obj.compose(gate_static, gate_tp, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_tp) )
         self.assertEqual(type(c), pygsti.obj.TPParameterizedGate)
 
-        c = pygsti.obj.compose(gate_static, gate_static)
+        c = pygsti.obj.compose(gate_static, gate_static, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_static) )
         self.assertEqual(type(c), pygsti.obj.StaticGate)
 
-        c = pygsti.obj.compose(gate_static, gate_linear)
+        c = pygsti.obj.compose(gate_static, gate_linear, "gm")
         self.assertArraysAlmostEqual(c, np.dot(gate_static,gate_linear) )
         self.assertEqual(type(c), pygsti.obj.LinearlyParameterizedGate)
 
         #Test specific conversions that don't get tested by compose
-        conv = pygsti.obj.gate.convert(gate_tp, "full")
-        conv = pygsti.obj.gate.convert(gate_tp, "TP")
-        conv = pygsti.obj.gate.convert(gate_static, "static")
+        conv = pygsti.obj.gate.convert(gate_tp, "full", "gm")
+        conv = pygsti.obj.gate.convert(gate_tp, "TP", "gm")
+        conv = pygsti.obj.gate.convert(gate_static, "static", "gm")
 
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "linear") #unallowed
+            pygsti.obj.gate.convert(gate_full, "linear", "gm") #unallowed
         with self.assertRaises(ValueError):
-            pygsti.obj.gate.convert(gate_full, "foobar")
+            pygsti.obj.gate.convert(gate_full, "foobar", "gm")
 
 
         #Test element access/setting

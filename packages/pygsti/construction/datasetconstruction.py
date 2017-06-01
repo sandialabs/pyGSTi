@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import numpy.random as _rndm
 import warnings as _warnings
+import collections as _collections
+import itertools as _itertools
 
 from ..objects import gatestring as _gs
 from ..objects import dataset as _ds
@@ -16,7 +18,8 @@ from . import gatestringconstruction as _gstrc
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
-                       aliasDict=None, collisionAction="aggregate"):
+                       aliasDict=None, collisionAction="aggregate",
+                       measurementGates=None):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -74,22 +77,34 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         Determines how duplicate gate sequences are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
+    measurementGates : dict, optional
+        If not None, a dictrionary whose keys are user-defined "measurement
+        labels" and whose values are lists of gate labels.  The gate labels 
+        in each list define the set of gates which describe the the operation
+        that is performed contingent on a *specific outcome* of the measurement
+        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+
+
     Returns
     -------
     DataSet
        A static data set filled with counts for the specified gate strings.
 
     """
+    TOL = 1e-10
+    
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset #dataset
         gsGen = None
         dataset = _ds.DataSet( spamLabels=dsGen.get_spam_labels(),
-                               collisionAction=collisionAction)
+                               collisionAction=collisionAction,
+                               measurementGates=measurementGates)
     else:
         gsGen = gatesetOrDataset #dataset
         dsGen = None
         dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels(),
-                               collisionAction=collisionAction )
+                               collisionAction=collisionAction,
+                               measurementGates=measurementGates)
 
     if sampleError in ("binomial","multinomial"):
         if randState is None:
@@ -97,85 +112,96 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         else:
             rndm = randState
 
-    if aliasDict is not None:
-        translated_list = _gstrc.translate_gatestring_list(
-                                      gatestring_list, aliasDict)
-    else: translated_list = gatestring_list
 
-    for k,(s,trans_s) in enumerate(zip(gatestring_list,translated_list)):
+    for k,s0 in enumerate(gatestring_list):
 
-        if gsGen:
-            ps = gsGen.probs(trans_s) 
-              # a dictionary of probabilities; keys = spam labels
+        all_ps = _collections.OrderedDict() #holds probs for *all* intermediate measuement branches
+        for s in expand_intermediate_measurements(s0, measurementGates):
+            trans_s = _gstrc.translate_gatestring(s, aliasDict)
+            if gsGen:
+                ps = gsGen.probs(trans_s) 
+                  # a dictionary of probabilities; keys = spam labels
 
-            if sampleError in ("binomial","multinomial"):
-                #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                TOL = 1e-10
-                for sl in ps: 
-                    if ps[sl] < 0:
-                        if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                        ps[sl] = 0.0
-                    elif ps[sl] > 1: 
-                        if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
-                        ps[sl] = 1.0
+                if sampleError in ("binomial","multinomial"):
+                    #Adjust to probabilities if needed (and warn if not close to in-bounds)
+                    for sl in ps: 
+                        if ps[sl] < 0:
+                            if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                            ps[sl] = 0.0
+                        elif ps[sl] > 1: 
+                            if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                            ps[sl] = 1.0
+            else:
+                ps = { sl: dsGen[trans_s].fraction(sl) 
+                       for sl in dsGen.get_spam_labels() }
                 
-                psum = sum(ps.values())
-                if psum > 1:
-                    if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
-                    extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
-                    for sl in ps:
-                        if extra_p > 0:
-                            x = min(ps[sl],extra_p)
-                            ps[sl] -= x; extra_p -= x
-                        else: break
-                    
-                assert(-TOL <= sum(ps.values()) <= 1.+TOL)
-        else:
-            ps = { sl: dsGen[trans_s].fraction(sl) 
-                   for sl in dsGen.get_spam_labels() }
+            for sl in sorted(list(ps.keys())):
+                all_ps[(s,sl)] = ps[sl] #add to all_ps
 
+        if gsGen and sampleError in ("binomial","multinomial"):
+            #Check that sum ~= 1 (and nudge if needed) since binomial and
+            #  multinomial random calls assume this.
+            psum = sum(all_ps.values())
+            if psum > 1:
+                if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
+                extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
+                for lbl in all_ps:
+                    if extra_p > 0:
+                        x = min(all_ps[lbl],extra_p)
+                        all_ps[lbl] -= x; extra_p -= x
+                    else: break
+            #TODO: add adjustment if psum < 1?
+            assert(1.-TOL <= sum(all_ps.values()) <= 1.+TOL)
+                
         if nSamples is None and dsGen is not None:
-            N = dsGen[trans_s].total() #use the number of samples from the generating dataset
+            trans_s0 = _gstrc.translate_gatestring(s0, aliasDict)
+            N = dsGen[trans_s0].total() #use the number of samples from the generating dataset
+             #Note: total() accounts for other intermediate-measurment branches automatically
         else:
             try:
                 N = nSamples[k] #try to treat nSamples as a list
             except:
                 N = nSamples #if not indexable, nSamples should be a single number
-
+    
         #Weight the number of samples according to a WeightedGateString
         if isinstance(s, _gs.WeightedGateString):
             nWeightedSamples = int(round(s.weight * N))
         else:
             nWeightedSamples = N
 
-        counts = { }
+        counts = _collections.defaultdict(dict)
+        labels = list(all_ps.keys()) # "label" == (gatestring, spamLabel)
         if sampleError == "binomial":
-            assert(len(list(ps.keys())) == 2)
-            spamLabel1, spamLabel2 = sorted(list(ps.keys())); p1 = ps[spamLabel1]
-            counts[spamLabel1] = rndm.binomial(nWeightedSamples, p1) #numpy.clip(p1,0,1) )
-            counts[spamLabel2] = nWeightedSamples - counts[spamLabel1]
+            assert(len(labels) == 2)
+            gstr0,sl0 = labels[0]
+            gstr1,sl1 = labels[1]
+            counts[gstr0][sl0] = rndm.binomial(nWeightedSamples, all_ps[labels[0]])
+            counts[gstr1][sl1] = nWeightedSamples - counts[gstr0][sl0]
+            
         elif sampleError == "multinomial":
-            #nOutcomes = len(list(ps.keys()))
-            spamLabels = list(ps.keys())
             countsArray = rndm.multinomial(nWeightedSamples,
-                    [ps[sl] for sl in spamLabels], size=1)
-            for i,spamLabel in enumerate(spamLabels):
-                counts[spamLabel] = countsArray[0,i]
+                    list(all_ps.values()), size=1)
+            for i,(gstr,sl) in enumerate(labels):
+                counts[gstr][sl] = countsArray[0,i]
+                
         else:
-            for (spamLabel,p) in ps.items():
+            for (gstr,spamLabel),p in all_ps.items():
                 pc = _np.clip(p,0,1)
                 if sampleError == "none":
-                    counts[spamLabel] = float(nWeightedSamples * pc)
+                    counts[gstr][spamLabel] = float(nWeightedSamples * pc)
                 elif sampleError == "round":
-                    counts[spamLabel] = int(round(nWeightedSamples*pc))
+                    counts[gstr][spamLabel] = int(round(nWeightedSamples*pc))
                 else: raise ValueError("Invalid sample error parameter: '%s'  Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError)
 
-        dataset.add_count_dict(s, counts)
+        for s in expand_intermediate_measurements(s0, measurementGates):
+            dataset.add_count_dict(s, counts[s])
     dataset.done_adding_data()
     return dataset
-    
+
+
 def merge_outcomes(dataset,label_merge_dict):
-    """Creates a DataSet which merges certain outcomes in input DataSet;
+    """
+    Creates a DataSet which merges certain outcomes in input DataSet;
     used, for example, to aggregate a 2-qubit 4-outcome DataSet into a 1-qubit 2-outcome
     DataSet.
     
@@ -212,3 +238,49 @@ def merge_outcomes(dataset,label_merge_dict):
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset
+
+
+
+
+def expand_intermediate_measurements(gatestring, measurementGates):
+    """
+    Gets an iterator over the intermediate-measurement branches of `gatestring`.
+
+    When `gatestring` contains "measurement labels" (given by the keys of 
+    `measurementGates`) there exist multiple "intermediate-measurement
+    branches", each defined/constructed by replacing every measurement
+    label by one of its "measurement gates" (given by one of the elements
+    of the list-valued values of `measurementGates`).  The returned iterator
+    loops over all such branches.  
+
+    If `gatestring` does *not* contain any measurement labels, or if
+    `measurementGates` is None, then the iterator just loops over the single
+    string, `gatestring`.
+
+    Parameters
+    ----------
+    gatestring : GateString
+        The "base" gate sequence which may or may not contain measurement
+        labels.
+
+    measurementGates : dict
+        If not None, a dictrionary whose keys are user-defined "measurement
+        labels" and whose values are lists of "measurement gate" labels.  The
+        labels in each list define the set of gates which describe the the
+        operation that is performed contingent on a *specific outcome* of the
+        measurement labelled by the key.  
+        For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+
+    Returns
+    -------
+    iterator
+    """
+    if measurementGates is None or len(gatestring) == 0:
+        yield gatestring
+        return
+    
+    gateLabelsByPos = [ measurementGates.get(lbl,[lbl]) for lbl in gatestring ]
+    for gatelabels in _itertools.product(*gateLabelsByPos):
+        yield _gs.GateString(tuple(gatelabels))
+
+    

@@ -6,9 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Functions for generating bootstrapped error bars """
 import numpy as _np
-import matplotlib as _mpl
-from .longsequence import do_long_sequence_gst as _do_long_sequence_gst
-
+#import matplotlib as _mpl #REMOVED
+from . import longsequence as _longseq
 from .. import objects as _obj
 from .. import algorithms as _alg
 from .. import tools as _tools
@@ -203,10 +202,15 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
     print("Creating GateSets: ")
     for run in range(numGateSets):
         print("Running MLGST Iteration %d " % run)
-        results = _do_long_sequence_gst(
-            datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
-            germs, maxLengths, lsgstLists=lsgstLists, verbosity=verbosity)
-        gatesetList.append(results.gatesets['final estimate'])
+        if lsgstLists is not None:
+            results = _longseq.do_long_sequence_gst_base(
+                datasetList[run], targetGateSet, lsgstLists, verbosity=verbosity)
+        else:
+            results = _longseq.do_long_sequence_gst(
+                datasetList[run], targetGateSet,
+                fiducialPrep, fiducialMeasure, germs, maxLengths,
+                verbosity=verbosity)
+        gatesetList.append(results.estimates['default'].gatesets['go0'])
 
     if not returnData:
         return gatesetList
@@ -289,21 +293,22 @@ def gauge_optimize_gs_list(gsList, targetGateset,
         gateMean.append(_np.mean(gsStdevVecGates))
 
     if plot:
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMean,'b-o')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMin,'b--+')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMax,'b--x')
-
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMean,'r-o')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMin,'r--+')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMax,'r--x')
-
-        _mpl.pyplot.xlabel('SPAM weight in gauge optimization')
-        _mpl.pyplot.ylabel('Per element error bar size')
-        _mpl.pyplot.title('Per element error bar size vs. ${\\tt spamWeight}$')
-        _mpl.pyplot.xlim(1e-4,1)
-        _mpl.pyplot.legend(['SPAM-mean','SPAM-min','SPAM-max',
-                            'gates-mean','gates-min','gates-max'],
-                           bbox_to_anchor=(1.4, 1.))
+        raise NotImplementedError("plot removed b/c matplotlib support dropped")
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMean,'b-o')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMin,'b--+')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMax,'b--x')
+        #
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMean,'r-o')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMin,'r--+')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMax,'r--x')
+        #
+        #_mpl.pyplot.xlabel('SPAM weight in gauge optimization')
+        #_mpl.pyplot.ylabel('Per element error bar size')
+        #_mpl.pyplot.title('Per element error bar size vs. ${\\tt spamWeight}$')
+        #_mpl.pyplot.xlim(1e-4,1)
+        #_mpl.pyplot.legend(['SPAM-mean','SPAM-min','SPAM-max',
+        #                    'gates-mean','gates-min','gates-max'],
+        #                   bbox_to_anchor=(1.4, 1.))
 
     # gateTimesSPAMMean = _np.array(SPAMMean) * _np.array(gateMean)
 

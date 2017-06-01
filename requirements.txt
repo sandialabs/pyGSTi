@@ -3,4 +3,4 @@
 ###### Each line is an argument list for "pip install" ######
 numpy
 scipy
-matplotlib
+plotly

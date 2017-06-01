@@ -20,6 +20,8 @@ import numbers as _numbers
 import re      as _re
 import os      as _os
 
+from plotly.offline import plot as _plot
+
 def _give_specs(formatter, specs):
     '''
     Pass parameters down to a formatter
@@ -261,6 +263,28 @@ class _PrecisionFormatter(_ParameterizedFormatter):
                                                  defaults, formatstring)
 
 
+#Special formatter added for now for new HTML reports
+class _HTMLFigureFormatter(_ParameterizedFormatter):
+    '''
+    Helper class that utilizes a scratchDir variable to render figures
+    '''
+    def __init__(self):
+        '''
+        Create a new HTMLFigureFormatter
+        '''
+        super(_HTMLFigureFormatter, self).__init__(_no_format, ['resizable','autosize'])
+
+    # Override call method of Parameterized formatter
+    def __call__(self, fig):
+        render_out = fig.render("html",
+                                resizable="handlers only" if self.specs['resizable'] else False,
+                                autosize=self.specs['autosize'])
+        return render_out #a dictionary with 'html' and 'js' keys
+        #return "<script>\n %(js)s \n</script>\n" % render_out + \
+        #    "%(html)s" % render_out
+    #OLD: <div class='relwrap'><div class='abswrap'> </div></div>
+
+        
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
 class _FigureFormatter(_ParameterizedFormatter):
     '''
@@ -411,9 +435,14 @@ def _fmtCnv_html(x):
     x = x.replace("\\", "&#92"); #backslash
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
     x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
-    x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
-    x = x.replace(b"REPLACEWITHSTARCODE", b'&#9733;') #replace new marker with HTML code
-    return x
+    #x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
+    x = x.replace("REPLACEWITHSTARCODE", '&#9733;') #replace new marker with HTML code
+    return str(x)
+
+def _fmtCnv_html_eb(x):
+    return '<span class="errorbar">' + _fmtCnv_html(x) + '</span>'
+def _fmtCnv_html_nmeb(x):
+    return '<span class="nmerrorbar">' + _fmtCnv_html(x) + '</span>'
 
 def _fmtCnv_latex(x):
     x = x.replace("\\", "\\textbackslash")
@@ -436,6 +465,18 @@ FormatSet.formatDict['Conversion'] = {
     'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
     'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
 
+FormatSet.formatDict['EBConversion'] = {
+    'html'  : _fmtCnv_html_eb,
+    'latex' : _fmtCnv_latex,
+    'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
+    'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+
+FormatSet.formatDict['NMEBConversion'] = {
+    'html'  : _fmtCnv_html_nmeb,
+    'latex' : _fmtCnv_latex,
+    'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
+    'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
+
 _eb_exists = lambda t : t[1] is not None
 
 class _EBFormatter(object):
@@ -454,7 +495,10 @@ class _EBFormatter(object):
         else:
             return self.formatstringB % self.f(t[0])
 
-_EB_html  = _EBFormatter(_PrecisionFormatter(html))
+_EB_html  = _EBFormatter(_PrecisionFormatter(html),
+                         '%s <span class="errorbar">+/- %s</span>')
+_EB_html2  = _EBFormatter(_PrecisionFormatter(html),
+                         '%s <span class="nmerrorbar">+/- %s</span>')
 _EB_latex = _EBFormatter(_PrecisionFormatter(latex_value),
                        '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
 _EB_text  = lambda t : {'value' : t[0], 'errbar' : t[1]}
@@ -465,11 +509,21 @@ FormatSet.formatDict['ErrorBars'] = {
     'latex' : _EB_latex,
     'text'  : _EB_text,
     'ppt'   : _EB_ppt }
+FormatSet.formatDict['NMErrorBars'] = {
+    'html'  : _EB_html2,
+    'latex' : _EB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _EB_ppt }
 
 _VEB_latex = _EBFormatter(_PrecisionFormatter(latex), '%s $\pm$ %s')
 
 FormatSet.formatDict['VecErrorBars'] = {
     'html'  : _EB_html,
+    'latex' : _VEB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _EB_ppt}
+FormatSet.formatDict['NMVecErrorBars'] = {
+    'html'  : _EB_html2,
     'latex' : _VEB_latex,
     'text'  : _EB_text,
     'ppt'   : _EB_ppt}
@@ -484,7 +538,9 @@ _PiEB_latex = _PiEBFormatter(_PrecisionFormatter(latex),
                            '$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $',
                            '%s$\\pi$')
 def _pi_eb_template(f):
-    return _EBFormatter(_PrecisionFormatter(html), '(%s +/- %s)&pi')
+    return _EBFormatter(_PrecisionFormatter(html), '(%s <span class="errorbar">+/- %s</span>)&pi')
+def _pi_eb_template2(f):
+    return _EBFormatter(_PrecisionFormatter(html), '(%s <span class="nmerrorbar">+/- %s</span>)&pi')
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 FormatSet.formatDict['PiErrorBars'] = {
@@ -492,6 +548,13 @@ FormatSet.formatDict['PiErrorBars'] = {
     'latex' : _PiEB_latex,
     'text'  : _EB_text,
     'ppt'   : _pi_eb_template(ppt)}
+
+FormatSet.formatDict['NMPiErrorBars'] = {
+    'html'  : _pi_eb_template2(html),
+    'latex' : _PiEB_latex,
+    'text'  : _EB_text,
+    'ppt'   : _pi_eb_template(ppt)}
+
 
 FormatSet.formatDict['GateString'] = {
     'html'  : lambda s : '.'.join(s) if s is not None else '',
@@ -511,8 +574,7 @@ FormatSet.formatDict['Pre'] = {
 
 
 FormatSet.formatDict['Figure'] = {
-    'html'  : _FigureFormatter(formatstring="<img width='%.2f' height='%.2f' src='%s/%s'>",
-                               extension='.png'),
+    'html'  : _HTMLFigureFormatter(),
     'latex' : _FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
                                extension='.pdf'),
     'text'  : lambda figInfo : figInfo[0],
@@ -528,15 +590,16 @@ FormatSet.formatDict['Bold'] = {
 
 #Multi-row and multi-column formatting (with "Conversion" type inner formatting)
 FormatSet.formatDict['MultiRow'] = {
-    'html'  : _TupleFormatter(_fmtCnv_html),
+    'html'  : _TupleFormatter(_fmtCnv_html, formatstring='<td rowspan="{l1}">{l0}</td>'),
     'latex' : _TupleFormatter(_fmtCnv_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}'),
     'text'  : _TupleFormatter(_Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')])),
     'ppt'   : _TupleFormatter(_Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')]))}
 
 
 def _empty_str(l): return ""
+def _return_None(l): return None #signals no <td></td> in HTML
 FormatSet.formatDict['SpannedRow'] = {
-    'html'  : _fmtCnv_html,
+    'html'  : _return_None,
     'latex' : _empty_str,
     'text'  : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', ' ')]),
     'ppt'   : _Formatter(stringreplacers=[('<STAR>', '*'), ('|', '\n')])}
@@ -546,7 +609,7 @@ def _repeat_no_format(label_tuple):
     return ["%s" % label]*reps
 
 FormatSet.formatDict['MultiCol'] = {
-    'html'  : _repeat_no_format,
+    'html'  : _TupleFormatter(_fmtCnv_html, formatstring='<td colspan="{l1}">{l0}</td>'),
     'latex' : _TupleFormatter(_fmtCnv_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}'),
     'text'  : _repeat_no_format,
     'ppt'   : _repeat_no_format}

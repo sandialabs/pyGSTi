@@ -12,14 +12,7 @@ HtmlUtil has for HTML conversion.
 import numpy as _np
 import cmath
 from .. import objects as _objs
-
-#Define basestring in python3 so unicode
-# strings can be tested for in python2 using
-# python2's built-in basestring type.
-# When removing __future__ imports, remove
-# this and change basestring => str below.
-try:  basestring
-except NameError: basestring = str
+from ..tools import compattools as _compat
 
 
 def latex(x, brackets=False, precision=6,
@@ -66,7 +59,7 @@ def latex(x, brackets=False, precision=6,
         return latex_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
         return latex_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-    elif isinstance(x,basestring):
+    elif _compat.isstr(x):
         return latex_escaped(x)
     else:
         print("Warning: %s not specifically converted to latex" % str(type(x)))
@@ -143,11 +136,13 @@ def latex_vector(v, brackets=False, precision=6,
                                   polarprecision=polarprecision,
                                   sciprecision=sciprecision) )
     if brackets:
-        return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        #return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
+        #        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
-        return "$ \\begin{array}{c}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{array} $\n"
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
 
 def latex_matrix(m, fontsize=None, brackets=False, precision=6,
@@ -193,12 +188,15 @@ def latex_matrix(m, fontsize=None, brackets=False, precision=6,
                              sciprecision=sciprecision) for el in m[r,:] ] ) )
 
     if brackets:
-        return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        #return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        #" \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
-        return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        " \\\\ \n".join(lines) + "\n \end{array} $\n"
-
+        #return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
+        #" \\\\ \n".join(lines) + "\n \end{array} $\n"            
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
 
 def latex_value(el, precision=6, polarprecision=3,
@@ -248,7 +246,7 @@ def latex_value(el, precision=6, polarprecision=3,
         p = s.split('e')
         if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
-            s = p[0] + "\\e{" + ex + "}"
+            s = p[0] + "\\times 10^{" + ex + "}"
 
         #Strip superfluous endings
         if "." in s:
@@ -256,7 +254,7 @@ def latex_value(el, precision=6, polarprecision=3,
             if s.endswith("."): s = s[:-1]
         return s
 
-    if isinstance(el,basestring):
+    if _compat.isstr(el):
         return el
     if type(el) in (int,_np.int64):
         return "%d" % el

@@ -13,6 +13,7 @@ import numpy as _np
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
+from ..tools import compattools as _compat
 from .protectedarray import ProtectedArray as _ProtectedArray
 
 
@@ -537,7 +538,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float) or isinstance(amount,int):
+        if isinstance(amount,float) or _compat.isint(amount):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)
@@ -748,7 +749,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float) or isinstance(amount,int):
+        if isinstance(amount,float) or _compat.isint(amount):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)

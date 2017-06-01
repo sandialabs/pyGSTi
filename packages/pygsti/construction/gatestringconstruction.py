@@ -11,6 +11,7 @@ import numpy as _np
 import numpy.random as _rndm
 
 from ..tools import listtools as _lt
+from ..tools import compattools as _compat
 from ..objects import gatestring as _gs
 from .spamspecconstruction import get_spam_strs as _get_spam_strs
 
@@ -91,7 +92,7 @@ def create_gatestring_list(*args,**kwargs):
                 gateStr = result
             elif isinstance(result,list) or isinstance(result,tuple):
                 gateStr = _gs.GateString(result)
-            elif isinstance(result,str):
+            elif _compat.isstr(result):
                 gateStr = _gs.GateString(None, result)
             lst.append(gateStr)
 
@@ -514,11 +515,40 @@ def gatestring_list( listOfGateLabelTuplesOrStrings ):
             ret.append(x)
         elif isinstance(x,tuple) or isinstance(x,list):
             ret.append( _gs.GateString(x) )
-        elif isinstance(x,str):
+        elif _compat.isstr(x):
             ret.append( _gs.GateString(None, x) )
         else:
             raise ValueError("Cannot convert type %s into a GateString" % str(type(x)))
     return ret
+
+
+def translate_gatestring(gatestring, aliasDict):
+    """
+    Creates a new GateString object from an existing one by replacing
+    gate labels in `gatestring` by (possibly multiple) new labels according
+    to `aliasDict`.
+
+    Parameters
+    ----------
+    gatestring : GateString
+        The gate string to use as the base for find & replace
+        operations.
+
+    aliasDict : dict
+        A dictionary whose keys are single gate labels and whose values are 
+        lists or tuples of the new gate labels that should replace that key.
+        If `aliasDict is None` then `gatestring` is returned.
+
+    Returns
+    -------
+    GateString
+    """
+    if aliasDict is None:
+        return gatestring
+    else:
+        return _gs.GateString(tuple(_itertools.chain(
+            *[aliasDict.get(lbl,lbl) for lbl in gatestring])))
+
 
 
 def translate_gatestring_list(gatestringList, aliasDict):
@@ -536,15 +566,19 @@ def translate_gatestring_list(gatestringList, aliasDict):
     aliasDict : dict
         A dictionary whose keys are single gate labels and whose values are 
         lists or tuples of the new gate labels that should replace that key.
+        If `aliasDict is None` then `gatestringList` is returned.
 
     Returns
     -------
     list of GateStrings
     """
-    new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
-                *[aliasDict.get(lbl,lbl) for lbl in gs])))
-                        for gs in gatestringList ]
-    return new_gatestrings
+    if aliasDict is None:
+        return gatestringList
+    else:
+        new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
+            *[aliasDict.get(lbl,lbl) for lbl in gs])))
+                            for gs in gatestringList ]
+        return new_gatestrings
 
 
 def compose_alias_dicts(aliasDict1, aliasDict2):
