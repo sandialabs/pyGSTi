@@ -702,6 +702,22 @@ def seb_lower(y,m,delta,order='zeroth'):
        
     return lower
 
+def unitarity(channel,d=2):
+    """
+    Returns the unitarity of a channel calculated using the equation
+    u(C) = Tr( C_u^{\dagger} C_u ) / (d^2  - 1), where:
+    
+    C_u is the unital submatrix of C. This is the matrix obtained
+    when the top row, and left hand column is removed from C when
+    C is written in the Pauli Transfer basis.
+    
+    This is proven from the definition of unitarity in Prop 1 of
+    ``Estimating the Coherence of noise'' by Wallman et al.
+    """
+    unital = channel[1:d**2,1:d**2]
+    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
+    return u
+
 def column_basis_vector(i,dim):
     """
     Returns the ith standard basis vector in dimension dim.
