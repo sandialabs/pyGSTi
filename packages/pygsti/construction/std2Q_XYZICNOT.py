@@ -46,7 +46,6 @@ effectStrs = _strc.gatestring_list(
      ('Gxi','Gix'), ('Gxi','Giy'), 
      ('Gyi','Gix'), ('Gyi','Giy')] )
 
-#TODO: germs
 germs = _strc.gatestring_list( [
         ('Gii',),
         ('Gxi',),
