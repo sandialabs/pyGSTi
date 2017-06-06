@@ -80,7 +80,7 @@ class Profiler(object):
            
         start_time : float
            The starting time used to compute the elapsed, i.e. the value 
-           `time.time()-start_time`, which is added to the named timer.
+           `time.perf_counter()-start_time`, which is added to the named timer.
 
         prefix : int, optional
            Prefix to the timer name the current stack depth and this number
@@ -102,7 +102,7 @@ class Profiler(object):
             finally:
                 stack = None #make sure frames get cleaned up properly
 
-        val = _time.time() - start_time
+        val = _time.perf_counter() - start_time
         if name in self.timers:
             self.timers[name] += val
         else:
@@ -187,7 +187,7 @@ class Profiler(object):
                 stack = None #make sure frames get cleaned up properly
 
         usage = _get_mem_usage()
-        timestamp = _time.time()
+        timestamp = _time.perf_counter()
         if name in self.mem_checkpoints:
             self.mem_checkpoints[name].append( (timestamp,usage) )
         else:
