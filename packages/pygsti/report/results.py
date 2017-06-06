@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools   as _itertools
 import warnings    as _warnings
+import time        as _time
 import numpy       as _np
 
 from ..             import construction         as _const
@@ -232,6 +233,17 @@ class Estimate(object):
                 regionType = "std"
 
             ds = self.get_effective_dataset()
+
+            #Check for long hessian computation on a single proc
+            if comm is None and gateset.dim > 4 and len(gatestrings) > 100:
+                _warnings.warn(("Confidence region computations for systems"
+                                "larger than 1 qubit on a single processor"
+                                "may take a long time (many hours).  You might"
+                                "not want to do this, so I'm going to sleep for"
+                                "10s to give you a chance to kill me before"
+                                "I start intensive computation."))
+                _time.sleep(10)
+            
             params = self.parameters
             objective = params.get('objective',"logl")
             if objective == "logl":
