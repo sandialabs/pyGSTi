@@ -1878,7 +1878,7 @@ def single_qubit_gate(hx, hy, hz, noise=0):
     return _np.dot(D, unitary_to_pauligate_1q( _spl.expm(ex) ))
 
 
-def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0):
+def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0, ii=0):
     """
     Construct the single-qubit gate matrix.
 
@@ -1932,6 +1932,9 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
     zz : float, optional
         Coefficient of ZZ matrix in exponent.
 
+    ii : float, optional
+        Coefficient of II matrix in exponent.
+
     Returns
     -------
     numpy array
@@ -1939,7 +1942,7 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
         density matrix expressed as a vector in the
         Pauli-Product basis.
     """
-    ex = _np.zeros( (4,4), 'complex' )
+    ex = ii * _np.identity(4, 'complex' )
     ex += ix * sigmaix
     ex += iy * sigmaiy
     ex += iz * sigmaiz
