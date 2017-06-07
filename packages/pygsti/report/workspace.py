@@ -1799,5 +1799,3 @@ class WorkspacePlot(WorkspaceOutput):
                 ret['js'] += '}); //end require block\n'
                         
         return ret
-                
-                    

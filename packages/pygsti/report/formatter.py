@@ -44,13 +44,6 @@ def _give_specs(formatter, specs):
     if hasattr(formatter, 'specs'):
         for spec in formatter.specs:
             if spec not in specs or specs[spec] is None:
-                '''
-                This should make the ValueError thrown by
-                  _ParameterizedFormatter redundant
-                This also means that even though specs will be set after
-                the first call to table.render(),
-                they will need to be provided again in subsequent calls
-                '''
                 raise ValueError(
                         ('The spec %s was not supplied to ' % spec) +
                         ('FormatSet, but is needed by an active formatter'))
@@ -598,6 +591,7 @@ FormatSet.formatDict['MultiRow'] = {
 
 def _empty_str(l): return ""
 def _return_None(l): return None #signals no <td></td> in HTML
+
 FormatSet.formatDict['SpannedRow'] = {
     'html'  : _return_None,
     'latex' : _empty_str,
