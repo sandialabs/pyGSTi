@@ -313,7 +313,8 @@ class LsGermsStructure(GatestringStructure):
 
     def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
         """
-        TODO: docstring
+        A future capability: truncate this gate string structure to a
+        subset of its current strings.
         """
         raise NotImplementedError("future capability")
 
