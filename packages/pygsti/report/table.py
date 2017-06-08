@@ -39,7 +39,6 @@ class ReportTable(object):
         formatSet =  _FormatSet(specs)
 
         if fmt == "latex":
-
             table = "longtable" if longtables else "tabular"
             if self._customHeadings is not None \
                     and "latex" in self._customHeadings:
@@ -133,56 +132,6 @@ class ReportTable(object):
             return { 'html': html, 'js': js }
 
 
-        elif fmt == 'text':
-
-            if self._customHeadings is not None \
-                    and 'text' in self._customHeadings:
-                raise ValueError("custom headers unsupported for text format")
-
-            if self._headingFormatters is not None:
-                colHeadings_formatted = \
-                    formatSet.formatList(self._headings,
-                                   self._headingFormatters, 'text')
-            else: #headingFormatters is None => headings is dict w/formats
-                colHeadings_formatted = self._headings['text']
-
-            text = { 'column names': colHeadings_formatted,
-                   'row data': [] }
-
-            for rowData,formatters in self._rows:
-                print(rowData)
-                formatted_rowData = formatSet.formatList(rowData, formatters, 'text')
-                if len(formatted_rowData) > 0:
-                    text['row data'].append( formatted_rowData )
-
-            return {'text': text }
-
-
-        elif fmt == "ppt":
-
-            if self._customHeadings is not None \
-                    and "ppt" in self._customHeadings:
-                raise ValueError("custom headers unsupported for " +
-                                 "powerpoint format")
-
-            if self._headingFormatters is not None:
-                colHeadings_formatted = \
-                    formatSet.formatList(self._headings,
-                                   self._headingFormatters, "ppt")
-            else: #headingFormatters is None => headings is dict w/formats
-                colHeadings_formatted = self._headings['ppt']
-
-            ppt = { 'column names': colHeadings_formatted,
-                    'row data' : [] }
-
-            for rowData,formatters in self._rows:
-                formatted_rowData = formatSet.formatList(rowData, formatters, "ppt")
-                if len(formatted_rowData) > 0:
-                    ppt['row data'].append( formatted_rowData )
-
-            return {'ppt': ppt}
-
-
         #elif fmt in ('iplotly','plotly'):
         #    from plotly.offline import plot, iplot
         #    import plotly.figure_factory as ff
@@ -216,8 +165,7 @@ class ReportTable(object):
         #    return plotly_table #TODO: what to return? plotly JSON?
         
         else:
-            raise ValueError("Unknown format: %s" % fmt)
-
+            raise NotImplementedError('%s format option is not currently supported')
 
     def __str__(self):
 

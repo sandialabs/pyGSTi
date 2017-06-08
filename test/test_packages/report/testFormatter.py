@@ -74,10 +74,6 @@ class GenericFormatterTests(FormatterBaseTestCase):
                                                           formatter.FormatSet.formatDict['Precision']['html'],
                                                           formatter.FormatSet.formatDict['Precision']['html'])
 
-    def test_pi_text_formatter(self):
-        self.assertEqual(formatter._pi_text('--'), '--')
-        self.assertAlmostEqual(formatter._pi_text(0.0022), 0.0069115038379, 3)
-
     def test_conversion_formatters(self):
         self.assertEqual(formatter._fmtCnv_html('|<STAR>'), ' &#9733;')
         self.assertEqual(formatter._fmtCnv_latex('%% # half-width 1/2 Diamond Check <STAR>'),
