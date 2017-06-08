@@ -65,6 +65,14 @@ class ReportableQty(object):
             return str(self.value) + " +/- " + str(self.errbar)
         else: return str(self.value)
 
+    def __getitem__(self, q):
+        if q == 0:
+            return self.value
+        elif q == 1:
+            return self.errbar
+        else:
+            raise KeyError('Reportable quantity has no element: [{}]'.format(q))
+
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
