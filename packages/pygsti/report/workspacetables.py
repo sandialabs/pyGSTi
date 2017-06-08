@@ -20,6 +20,12 @@ from .table import ReportTable as _ReportTable
 from .workspace import WorkspaceTable
 from . import workspaceplots as _wp
 
+def _getEBFmt(typ, confidenceRegionInfo):
+    if (confidenceRegionInfo is not None and
+        confidenceRegionInfo.nonMarkRadiusSq > 0):
+        return 'NM' + typ
+    else: return typ
+
 class BlankTable(WorkspaceTable):
     def __init__(self, ws):
         """A completely blank placeholder table."""
