@@ -60,7 +60,7 @@ class GenericFormatterTests(FormatterBaseTestCase):
                          '<table><thead><tr><th> &rho;<sub>0</sub> </th></tr></thead><tbody></tbody></table>')
 
     def test_no_format(self):
-        self.assertEqual(formatter._no_format('x'), 'x')
+        self.assertEqual(formatter.no_format('x'), 'x')
 
     def test_branching_formatter(self):
         branchingFormatter = formatter._BranchingFormatter(lambda l : l == 'rho',
@@ -84,13 +84,6 @@ class GenericFormatterTests(FormatterBaseTestCase):
                '$\%\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\Diamond$ \checkmark \\bigstar$')
         self.assertEqual(formatter._fmtCnv_latex('x|y'), '\\begin{tabular}{c}x\\\\y\end{tabular}')
 
-
-
-
-
-
-
-
 if __name__ == '__main__':
     import unittest
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=1)
