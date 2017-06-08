@@ -14,7 +14,7 @@ import cmath
 from .. import objects as _objs
 from ..tools import compattools as _compat
 from .latex import latex_vector, latex_matrix
-
+from .reportables import ReportableQty as _ReportableQty
 
 def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     """
@@ -44,6 +44,7 @@ def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     string
         html string for x.
     """
+
     if isinstance(x,_np.ndarray) or \
        isinstance(x,_objs.Gate) or \
        isinstance(x,_objs.SPAMVec):

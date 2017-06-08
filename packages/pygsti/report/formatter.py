@@ -227,7 +227,6 @@ FormatSet.formatDict['NMPiErrorBars'] = {
     'html'  : _pi_eb_template2(html),
     'latex' : _PiEB_latex}
 
-
 FormatSet.formatDict['GateString'] = {
     'html'  : lambda s : '.'.join(s) if s is not None else '',
     'latex' : lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))}

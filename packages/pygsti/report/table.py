@@ -1,6 +1,7 @@
-from __future__  import division, print_function, absolute_import, unicode_literals
-from .formatter  import FormatSet   as _FormatSet
-from collections import OrderedDict as _OrderedDict
+from __future__   import division, print_function, absolute_import, unicode_literals
+from .formatter   import FormatSet     as _FormatSet
+from .reportables import ReportableQty as _ReportableQty
+from collections  import OrderedDict   as _OrderedDict
 import re as _re
 
 class ReportTable(object):
@@ -15,9 +16,8 @@ class ReportTable(object):
         else: #headingFormatters is None => headings is dict w/formats
             self._columnNames = self._headings['text'] #use text heading
 
-
     def addrow(self, rowData, formatters):
-        self._rows.append((rowData, formatters))
+        self._rows.append(([_ReportableQty.from_val(item) for item in rowData], formatters))
 
     def finish(self):
         pass #nothing to do currently
@@ -124,7 +124,7 @@ class ReportTable(object):
                                  # allows signals *not* to include a cell)
                         elif formatted_cell.startswith("<td"):
                             html += formatted_cell #assume format includes td tags
-                        else: html += "<td>" + formatted_cell + "</td>"
+                        else: html += "<td>" + str(formatted_cell) + "</td>"
                     html += "</tr>"
 
             html += "</tbody></table>"

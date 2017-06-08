@@ -42,6 +42,37 @@ class ReportableQty(object):
         self.value = value
         self.errbar = errbar
 
+    @staticmethod
+    def from_val(value):
+        '''
+        Convert Table values into ReportableQtys or leave them be if they are well-formed types
+        Well-formed types include:
+            strings
+            figures
+            ReportableQtys
+        A tuple will be converted to a ReportableQty 
+          holding the first field as a value and second field as an error bar
+        Anything else will be converted to a ReportableQty with no error bars
+        '''
+        '''
+        if any([isinstance(value, ReportableQty),
+                isinstance(value, str), 
+                hasattr(value, 'render')]):
+            return value
+        el
+        '''
+        if isinstance(value, tuple):
+            assert len(value) == 2, 'Tuple does not have two fields'
+            return ReportableQty(value[0], value[1])
+        else:
+            return value
+
+    def __getattr__(self, name):
+        return getattr(self.value, name)
+
+    def has_eb(self):
+        return self.errbar is not None
+
     def get_value(self):
         """
         Returns the quantity's value
@@ -65,12 +96,27 @@ class ReportableQty(object):
             return str(self.value) + " +/- " + str(self.errbar)
         else: return str(self.value)
 
-    def __getitem__(self, q):
-        if q == 0:
-            return self.value
-        elif q == 1:
-            return self.errbar
+    def __int__(self):
+        if self.errbar is not None:
+            raise ValueError('Reportable Quantity with Error bar Cannot be converted to int')
         else:
+            return int(self.value)
+
+    def __float__(self):
+        if self.errbar is not None:
+            raise ValueError('Reportable Quantity with Error bar Cannot be converted to int')
+        else:
+            return float(self.value)
+
+
+    def __getitem__(self, q):
+        if self.errbar is None:
+            return self.value[q]
+        else:
+            if q == 0:
+                return self.value
+            elif q == 1:
+                return self.errbar
             raise KeyError('Reportable quantity has no element: [{}]'.format(q))
 
 

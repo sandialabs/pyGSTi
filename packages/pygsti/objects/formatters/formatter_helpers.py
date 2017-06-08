@@ -1,5 +1,5 @@
 def no_format(s):
-    return s
+    return str(s)
 
 def give_specs(formatter, specs):
     '''

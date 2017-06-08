@@ -43,6 +43,7 @@ class Formatter(object):
         --------
         formatted label : string
         '''
+        label = str(label)
         # Exit early if string matches stringreturn
         if self.stringreturn is not None and self.stringreturn[0] == label:
             return self.stringreturn[1]
