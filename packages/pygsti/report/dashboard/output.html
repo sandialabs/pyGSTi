@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html><head>
+  <title>black_white</title>
+  <meta name="description" content="website description">
+  <meta name="keywords" content="website keywords, website keywords">
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link rel="stylesheet" type="text/css" href="template.css" title="style">
+<script>
+function show(shown, hidden) {
+  document.getElementById(shown).style.display='block';
+  document.getElementById(hidden).style.display='none';
+  return false;
+}
+
+function toggle(shown, hidden) {
+    var x = document.getElementsByClassName(shown);
+    var i;
+    for (i = 0; i < x.length; i++) {
+            x[i].style.display='block';
+    } 
+    x = document.getElementsByClassName(hidden);
+    for (i = 0; i < x.length; i++) {
+            x[i].style.display='none';
+    } 
+}
+
+</script>
+</head>
+
+<body>
+  <div class="top">
+    <a href="#" onclick="return toggle('A','B');">A</a>
+    <a href="#" onclick="return toggle('B','A');">B</a>
+  </div>
+<div class="left" id="left">
+  <div class="A">
+    a-options
+  </div>
+  <div class="B" style="display:none">
+    b-options
+  </div>
+</div>
+<div class="right">
+    <div class="A">
+    A
+    </div>
+    <div class="B" style="display:none">
+    B
+    </div>
+</div>
+</body>
+</html>
+

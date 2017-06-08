@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html><head>
+  <title>black_white</title>
+<script>
+function show(shown, hidden) {
+  document.getElementById(shown).style.display='block';
+  document.getElementById(hidden).style.display='none';
+  return false;
+}
+</script>
+</head>
+<body>
+  <div id="Page1">
+    <a href="#" onclick="return show('Page2','Page1');">Show page 2</a>
+    <br>
+    Content of page 1
+  </div>
+
+  <div id="Page2" style="display:none">
+    <a href="#" onclick="return show('Page1','Page2');">Show page 1</a>
+    <br>
+    Content of page 2
+  </div>
+
+</body>
+</html>

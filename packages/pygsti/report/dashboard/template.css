@@ -1,0 +1,26 @@
+.top a {
+    float: left;
+    display: block;
+    color: #f2f2f2;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+}
+.top {
+    position:absolute;
+    left:0; right:0;
+    height: 46px;
+    background-color: #333;
+}
+.left {
+    position:absolute;
+    left:0; top:54px; bottom: 0;
+    width: 128px;
+    background-color: #595959;
+    padding: 14px 0 0 16px;
+}
+.right{
+    position: absolute;
+    left:144px; top:92px; right:0; bottom:0;
+    padding: 0 16px;
+}
