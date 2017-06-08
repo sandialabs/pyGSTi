@@ -89,17 +89,11 @@ class SpamTable(WorkspaceTable):
             formatters.append( None )
             
             if confidenceRegionInfo is not None:
+                Conversion = _getEBFmt('EBConversion', confidenceRegionInfo)
                 colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
-                formatters.append( 'Conversion' )
+                formatters.append( Conversion )
 
                 
-        table = _ReportTable(colHeadings, formatters)
-    
-        for lbl in rhoLabels:
-            rowData = [lbl]; rowFormatters = ['Rho']
-
-            for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
         table = _ReportTable(colHeadings, formatters)
     
         for lbl in rhoLabels:
@@ -1631,6 +1625,30 @@ class MetadataTable(WorkspaceTable):
         # even through it doesn't contribute to the gate set parameters (a special case)
         #if gateset.povm_identity is not None:
         #    vec = gateset.povm_identity
+        #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+        #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+        #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+        #    else: paramTyp = "unknown"
+        #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
+    
+        for gl,gate in gateset.gates.items():
+            if isinstance(gate, _objs.StaticGate): paramTyp = "static"
+            elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"
+            elif isinstance(gate, _objs.TPParameterizedGate): paramTyp = "TP"
+            elif isinstance(gate, _objs.LinearlyParameterizedGate): paramTyp = "linear"
+            elif isinstance(gate, _objs.EigenvalueParameterizedGate): paramTyp = "eigenvalue"
+            elif isinstance(gate, _objs.LindbladParameterizedGate):
+                paramTyp = "Lindblad"
+                if gate.cptp: paramTyp += " CPTP "
+                paramTyp += "(%d, %d params)" % (gate.ham_basis_size, gate.other_basis_size)
+            else: paramTyp = "unknown"
+            table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
+            
+        
+        table.finish()
+        return table
+    
+    
 #    def get_software_environment_table():
 class SoftwareEnvTable(WorkspaceTable):
     def __init__(self, ws):
