@@ -10,7 +10,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from .html  import html,  html_value
 from .latex import latex, latex_value
-from .ppt   import ppt,   ppt_value
 
 from ..objects.formatters import *
 

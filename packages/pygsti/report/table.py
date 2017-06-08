@@ -177,7 +177,7 @@ class ReportTable(object):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
 
-        self.render('text')
+        #self.render('text')
         col_widths = [0]*len(self._columnNames)
         row_lines = [0]*len(self._rows)
         header_lines = 0

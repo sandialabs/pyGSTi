@@ -1164,22 +1164,14 @@ class FitComparisonTable(WorkspaceTable):
                           '$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                 'html': (Xlabel,'&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
-                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                'text': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
-                'ppt': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
-            }
+                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating')}
         elif objective == "logl":
             colHeadings = {
                 'latex': (Xlabel,'$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
                           '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                 'html': (Xlabel,'2&Delta;(log L)','k','2&Delta;(log L)-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
-                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                'text': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
-                         'N_{sigma}','N_s','N_p', 'Rating'),
-                'ppt': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
-                        'N_{sigma}','N_s','N_p', 'Rating')
-            }
+                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating')}
         else:
             raise ValueError("Invalid `objective` argument: %s" % objective)
 
@@ -1697,7 +1689,7 @@ class SoftwareEnvTable(WorkspaceTable):
         table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
     
         packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
-                    'pptx','nose','PIL','psutil']
+                    'nose','PIL','psutil']
         for pkg in packages:
             table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))
     
