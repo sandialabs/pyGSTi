@@ -63,14 +63,14 @@ class GenericFormatterTests(FormatterBaseTestCase):
         self.assertEqual(formatter.no_format('x'), 'x')
 
     def test_branching_formatter(self):
-        branchingFormatter = formatter._BranchingFormatter(lambda l : l == 'rho',
+        branchingFormatter = formatter.BranchingFormatter(lambda l : l == 'rho',
                                                           formatter.FormatSet.formatDict['Rho']['html'],
                                                           formatter.FormatSet.formatDict['Effect']['html'])
         self.assertEqual(branchingFormatter('rho'), '&rho;')
         self.assertEqual(branchingFormatter('not rho'), 'not rho')
 
         # Ensure specs get passed down
-        branchingFormatter = formatter._BranchingFormatter(lambda l : True,
+        branchingFormatter = formatter.BranchingFormatter(lambda l : True,
                                                           formatter.FormatSet.formatDict['Precision']['html'],
                                                           formatter.FormatSet.formatDict['Precision']['html'])
 

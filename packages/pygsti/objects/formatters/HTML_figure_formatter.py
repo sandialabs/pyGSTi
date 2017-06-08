@@ -1,8 +1,8 @@
-from .formatting_helpers import *
-from .parameterized_formatter import _ParameterizedFormatter
+from .formatter_helpers import *
+from .parameterized_formatter import ParameterizedFormatter
 
 #Special formatter added for now for new HTML reports
-class _HTMLFigureFormatter(_ParameterizedFormatter):
+class HTMLFigureFormatter(ParameterizedFormatter):
     '''
     Helper class that utilizes a scratchDir variable to render figures
     '''
@@ -10,7 +10,7 @@ class _HTMLFigureFormatter(_ParameterizedFormatter):
         '''
         Create a new HTMLFigureFormatter
         '''
-        super(_HTMLFigureFormatter, self).__init__(no_format, ['resizable','autosize'])
+        super(HTMLFigureFormatter, self).__init__(no_format, ['resizable','autosize'])
 
     # Override call method of Parameterized formatter
     def __call__(self, fig):

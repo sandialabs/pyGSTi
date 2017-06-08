@@ -1,8 +1,8 @@
-from .formatting_helpers import *
-from .parameterized_formatter import _ParameterizedFormatter
+from .formatter_helpers import *
+from .parameterized_formatter import ParameterizedFormatter
  
 # Formatter class that requires a scratchDirectory from an instance of FormatSet for saving figures to
-class _FigureFormatter(_ParameterizedFormatter):
+class FigureFormatter(ParameterizedFormatter):
     '''
     Helper class that utilizes a scratchDir variable to render figures
     '''
@@ -13,7 +13,7 @@ class _FigureFormatter(_ParameterizedFormatter):
         extension : string, optional. extension of the figure's image
         formatstring : string, optional. Normally formatted with W, H, scratchDir, filename
         '''
-        super(_FigureFormatter, self).__init__(no_format, ['scratchDir'])
+        super(FigureFormatter, self).__init__(no_format, ['scratchDir'])
         self.extension    = extension
         self.formatstring = formatstring
 

@@ -1,7 +1,7 @@
-class _TupleFormatter(object):
+class TupleFormatter(object):
     '''
     Callable class that can replace a formatter function, similar to
-    _Formatter, but expects a tuple as input instead of a single string.
+    Formatter, but expects a tuple as input instead of a single string.
 
     Only defines __init__ and __call__ methods
     '''
@@ -34,7 +34,7 @@ class _TupleFormatter(object):
         --------
         formatted label : string
         '''
-        label = label_tuple[0] #process first element of tuple as _Formatter
+        label = label_tuple[0] #process first element of tuple as Formatter
 
         if self.label_formatter is not None:
             label = self.label_formatter(label)

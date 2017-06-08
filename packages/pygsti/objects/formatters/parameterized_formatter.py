@@ -1,16 +1,16 @@
 from inspect import getargspec as _getargspec
 
-# Helper function to _ParameterizedFormatter
+# Helper function to ParameterizedFormatter
 def _has_argname(argname, function):
     return argname in _getargspec(function).args
 
 # Gives arguments to formatters
-class _ParameterizedFormatter(object):
+class ParameterizedFormatter(object):
     '''
     Class that will pass down specs (arguments) to functions that need them
 
-    For example, a precision-parameterized latex formatter without the help of the _PrecisionFormatter might look like this:
-    formatter = _ParameterizedFormatter(latex, ['precision', 'polarprecision', 'sciprecision'])
+    For example, a precision-parameterized latex formatter without the help of the PrecisionFormatter might look like this:
+    formatter = ParameterizedFormatter(latex, ['precision', 'polarprecision', 'sciprecision'])
     Which, when used with a FormatSet, would have arguments to table.render() passed down to the latex() function
     '''
     def __init__(self, custom, neededSpecs, defaults={}, formatstring='%s'):

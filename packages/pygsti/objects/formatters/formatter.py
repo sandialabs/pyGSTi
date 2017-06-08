@@ -1,6 +1,6 @@
 import re as _re
 
-class _Formatter(object):
+class Formatter(object):
     '''
     Callable class that can replace a formatter function.
 
