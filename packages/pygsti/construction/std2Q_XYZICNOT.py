@@ -173,23 +173,13 @@ germs = _strc.gatestring_list( [
 
 #Construct the target gateset
 gs_target = _setc.build_gateset(
-    [4], [('Q0','Q1')],['Gii', 'Gix','Giy','Giz','Gxi','Gyi','Gzi'],
+    [4], [('Q0','Q1')],['Gii', 'Gix','Giy','Giz','Gxi','Gyi','Gzi','Gcnot'],
     [  "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "I(Q0):Z(pi/2,Q1)",
-       "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "Z(pi/2,Q0):I(Q1)"],
+       "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "Z(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     prepLabels=['rho0'], prepExpressions=["0"],
     effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
     spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
               'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")
-
-#CNOT gate
-_Ucnot = _np.array( [[1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 0, 1],
-                    [0, 0, 1, 0]], 'd')
-_cnotMx = _gt.unitary_to_process_mx(_Ucnot)
-gs_target.gates['Gcnot'] = _bt.std_to_pp(_cnotMx)
-
-
 
 
 specs16x10 = _spamc.build_spam_specs(
