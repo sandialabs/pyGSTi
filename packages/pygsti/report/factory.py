@@ -244,7 +244,7 @@ def _add_new_labels(running_lbls, current_lbls):
     preserving order as best we can.
     """
     if running_lbls is None:
-        return current_lbls
+        return current_lbls[:] #copy!
     elif running_lbls != current_lbls:
         for lbl in current_lbls:
             if lbl not in running_lbls:
