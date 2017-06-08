@@ -19,23 +19,48 @@ from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
 from collections import OrderedDict as _OrderedDict
 
-
-def create_random_rb_clifford_string(m, clifford_group, 
-                                     seed=None, randState=None):
+def create_random_gatestring(m, group_or_gateset, inverse = True,
+                             interleaved = None, seed=None,
+                             group_inverse_only = False,
+                             compilation = None,
+                             generated_group = None,
+                             gateset_to_group_labels = None,
+                             randState=None):
+    # For "generator RB" need to add a subset sampling option. This would create
+    # random sequences of only a sub-set of the gates/elements, but with the inverse
+    # whatever it needs to be. Can write a wrapper around this to then compile the inverse
+    # into another gateset. Could also add a sub-set sampling option which picks sequences
+    # of length m+1 that compile to the identity. The easiest way to do this would be to
+    # just reject sequences that don't compose to I, but there are possibly more efficient
+    # ways.
     """
-    Generate a random RB clifford sequence.
+    Makes a random RB sequence.
     
     Parameters
     ----------
     m : int
-        Sequence length is m+1 (because m Cliffords are chosen at random,
-        then one additional Clifford is selected to invert the sequence).
+        The number of random gates in the sequence.
 
-    clifford_group : MatrixGroup
-        Which Clifford group to use.
-    
+    group_or_gateset : GateSet or MatrixGroup
+        Which GateSet of MatrixGroup to create the random sequence for. If
+        inverse is true and this is a GateSet, the GateSet gates must form
+        a group (so in this case it requires the *target gateset* rather than 
+        a noisy gateset). When inverse is true, the MatrixGroup for the gateset 
+        is generated. Therefore, if inverse is true and the function is called 
+        multiple times, it will be much faster if the MatrixGroup is provided.
+        
+    inverse: Bool, optional
+        If true, the random sequence is followed by its inverse gate. The gateset
+        must form a group if this is true. If it is true then the sequence
+        returned is length m+1 (2m+1) if interleaved is False (True).
+        
+    interleaved: Str, optional
+        If not None, then a gatelabel string. When a gatelabel string is provided,
+        every random gate is followed by this gate. So the returned sequence is of
+        length 2m+1 (2m) if inverse is True (False).
+            
     seed : int, optional
-        Seed for the random number generator.
+        Seed for random number generator; optional.
 
     randState : numpy.random.RandomState, optional
         A RandomState object to generate samples from. Can be useful to set
@@ -45,44 +70,116 @@ def create_random_rb_clifford_string(m, clifford_group,
     
     Returns
     -------
-    clifford_string : list
-        Random Clifford sequence of length m+1.  For ideal Cliffords, the
-        sequence implements the identity operation.
-    """
+    Gatestring
+        The random gate string of length:
+        m if inverse = False, interleaved = None
+        m + 1 if inverse = True, interleaved = None
+        2m if inverse = False, interleaved not None
+        2m + 1 if inverse = True, interleaved not None
+
+    """   
+    assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
+                   'product'), 'group_or_gateset must be a MatrixGroup of Gateset'    
+    group = None
+    gateset = None
+    if hasattr(group_or_gateset, 'gates'):
+        gateset = group_or_gateset
+    if hasattr(group_or_gateset, 'product'):
+        group = group_or_gateset
+        
     if randState is None:
         rndm = _rndm.RandomState(seed) # ok if seed is None
     else:
         rndm = randState
+        
+    if (inverse) and (not group_inverse_only):
+        if gateset:
+            group = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
+                                  group_or_gateset.gates.keys() )
+                      
+        rndm_indices = rndm.randint(0,len(group),m)
+        if interleaved:
+            interleaved_index = group.label_indices[interleaved]
+            interleaved_indices = interleaved_index*_np.ones((m,2),int)
+            interleaved_indices[:,0] = rndm_indices
+            rndm_indices = interleaved_indices.flatten()
+        
+        random_string = [ group.labels[i] for i in rndm_indices ]    
+        effective_gate = group.product(random_string)
+        inv = group.get_inv(effective_gate)
+        random_string.append( inv )
+        
+    if (inverse) and (group_inverse_only):
+        assert (gateset is not None), "gateset_or_group should be a GateSet!"
+        assert (compilation is not None), "Compilation of group elements to gateset needs to be specified!"
+        assert (generated_group is not None), "Generated group needs to be specified!"        
+        if gateset_to_group_labels is None:
+            gateset_to_group_labels = {}
+            for gate in gateset.gates.keys():
+                assert(gate in generated_group.labels), "gateset labels are not in \
+                the generated group! Specify a gateset_to_group_labels dictionary." 
+                gateset_to_group_labels = {'gate':'gate'}
+        else:
+            for gate in gateset.gates.keys():
+                assert(gate in gateset_to_group_labels.keys()), "gateset to group labels \
+                are invalid!"              
+                assert(gateset_to_group_labels[gate] in generated_group.labels), "gateset to group labels \
+                are invalid!"              
+                
+        rndm_indices = rndm.randint(0,len(gateset.gates.keys()),m)
+        if interleaved:
+                interleaved_index = gateset.gates.keys().index(interleaved)
+                interleaved_indices = interleaved_index*_np.ones((m,2),int)
+                interleaved_indices[:,0] = rndm_indices
+                rndm_indices = interleaved_indices.flatten()
+        random_string = [ gateset.gates.keys()[i] for i in rndm_indices ] 
+        random_string_group = [ gateset_to_group_labels[gateset.gates.keys()[i]] for i in rndm_indices ] 
+        print(random_string)
+        inversion_group_element = generated_group.get_inv(generated_group.product(random_string_group))
+        inversion_sequence = compilation[inversion_group_element]
+        print(inversion_sequence)
+        random_string.extend(inversion_sequence)
+        print(random_string)
+        
+    if not inverse:
+        if gateset:
+            rndm_indices = rndm.randint(0,len(gateset.gates.keys()),m)
+            if interleaved:
+                interleaved_index = gateset.gates.keys().index(interleaved)
+                interleaved_indices = interleaved_index*_np.ones((m,2),int)
+                interleaved_indices[:,0] = rndm_indices
+                rndm_indices = interleaved_indices.flatten()           
+            random_string = [gateset.gates.keys()[i] for i in rndm_indices ]
+            
+        else:
+            rndm_indices = rndm.randint(0,len(group),m)
+            if interleaved:
+                interleaved_index = group.label_indices[interleaved]
+                interleaved_indices = interleaved_index*_np.ones((m,2),int)
+                interleaved_indices[:,0] = rndm_indices
+                rndm_indices = interleaved_indices.flatten()
+            random_string = [ group.labels[i] for i in rndm_indices ] 
+            
+    return _objs.GateString(random_string)
 
-    rndm_indices = rndm.randint(0,len(clifford_group),m)
-    cliff_lbl_string = [ clifford_group.labels[i] for i in rndm_indices ]    
-    effective_cliff_lbl = clifford_group.product(cliff_lbl_string)
-    cliff_inv = clifford_group.get_inv(effective_cliff_lbl)
-    cliff_lbl_string.append( cliff_inv )
-    return _objs.GateString(cliff_lbl_string)
-
-
-def list_random_rb_clifford_strings(m_min, m_max, Delta_m, clifford_group,
-                                    K_m_sched, alias_maps=None, seed=None,
-                                    randState=None):
+def create_random_gatestrings(m_list, K_m, group_or_gateset, inverse=True, 
+                              interleaved = None, alias_maps=None, seed=None, 
+                              randState=None):
     """
     Makes a list of random RB sequences.
     
     Parameters
     ----------
-    m_min : integer
-        Smallest desired Clifford sequence length.
-    
-    m_max : integer
-        Largest desired Clifford sequence length.
-    
-    Delta_m : integer
-        Desired Clifford sequence length increment.
+    m_list : list or array of ints
+        The set of lengths for the random sequences (with the total
+        number of Cliffords in each sequence given by m_list + 1). Minimal
+        allowed length is therefore 1 (a random CLifford followed by its 
+        inverse).
 
     clifford_group : MatrixGroup
         Which Clifford group to use.
 
-    K_m_sched : int or dict
+    K_m : int or dict
         If an integer, the fixed number of Clifford sequences to be sampled at
         each length m.  If a dictionary, then a mapping from Clifford
         sequence length m to number of Cliffords to be sampled at that length.
@@ -118,35 +215,70 @@ def list_random_rb_clifford_strings(m_min, m_max, Delta_m, clifford_group,
         rndm = _rndm.RandomState(seed) # ok if seed is None
     else:
         rndm = randState
+        
+    assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
+           'product'), 'group_or_gateset must be a MatrixGroup of Gateset'
+    
+    
+    if inverse:
+        if hasattr(group_or_gateset, 'gates'):
+            group_or_gateset = _rbobjs.MatrixGroup(group_or_gateset.gates.values(),
+                                  group_or_gateset.gates.keys())
+    if isinstance(K_m,int):
+        K_m_dict = {m : K_m for m in m_list }
+    else: K_m_dict = K_m
+    assert hasattr(K_m_dict, 'keys'),'K_m must be a dict or int!'
 
-    if isinstance(K_m_sched,int):
-        K_m_sched_dict = {m : K_m_sched 
-                          for m in range(m_min, m_max+1,Delta_m) }
-    else: K_m_sched_dict = K_m_sched
-    assert hasattr(K_m_sched_dict, 'keys'),'K_m_sched must be a dict or int!'
-
-    string_lists = {'clifford': []} # GateStrings with Clifford-group labels
+    string_lists = {'uncompiled': []} # GateStrings with uncompiled labels
     if alias_maps is not None:
         for gstyp in alias_maps.keys(): string_lists[gstyp] = []
 
-    for m in range(m_min,m_max+1,Delta_m):
-        K_m = K_m_sched_dict[m]
-        strs_for_this_m = [ create_random_rb_clifford_string(
-            m,clifford_group,randState=rndm) for i in range(K_m) ]
-        string_lists['clifford'].append(strs_for_this_m)
+    for m in m_list:
+        K = K_m_dict[m]
+        strs_for_this_m = [ create_random_gatestring(m, group_or_gateset,
+            inverse=inverse,interleaved=interleaved,randState=rndm) for i in range(K) ]
+        string_lists['uncompiled'].append(strs_for_this_m)
         if alias_maps is not None:
             for gstyp,alias_map in alias_maps.items(): 
                 string_lists[gstyp].append(
                     _cnst.translate_gatestring_list(strs_for_this_m,alias_map))
 
     if alias_maps is None:
-        return string_lists['clifford'] #only list of lists is clifford one
+        return string_lists['uncompiled'] #only list of lists is uncompiled one
     else:
         return string_lists #note we also return this if alias_maps == {}
 
+def create_random_interleaved_gatestrings(m_list, K_m, group_or_gateset, interleaved_list,
+                                          inverse=True, alias_maps=None):
+    
+    # Currently no random number generator seed allowed, as needs to have different seed for each
+    # call of create_random_gatestrings().
+    all_random_string_lists = {}
+    alias_maps_mod = {} if (alias_maps is None) else alias_maps      
+    random_string_lists = create_random_gatestrings(m_list, K_m, 
+                          group_or_gateset,inverse,interleaved = None, 
+                          alias_maps = alias_maps_mod,)
 
-def write_empty_rb_files(filename, m_min, m_max, Delta_m, clifford_group, K_m,
-                         alias_maps=None, seed=None, randState=None):
+    if alias_maps is None: 
+        all_random_string_lists['baseline'] = random_string_lists['uncompiled']
+    else:
+        all_random_string_lists['baseline'] = random_string_lists
+        
+    for interleaved in interleaved_list:
+        random_string_lists = \
+                       create_random_gatestrings(m_list, K_m, group_or_gateset,inverse,
+                                  interleaved = interleaved, alias_maps = alias_maps_mod)
+
+        if alias_maps is None: 
+            all_random_string_lists[interleaved] = random_string_lists['uncompiled']
+        else:
+            all_random_string_lists[interleaved] = random_string_lists
+            
+        return all_random_string_lists          
+
+def write_empty_rb_files(filename, m_list, K_m, group_or_gateset, 
+                         inverse=True, interleaved_list=None, alias_maps=None, 
+                         seed=None, randState=None):
     """
     A wrapper for list_random_rb_clifford_strings which also writes output
     to disk.
@@ -215,37 +347,66 @@ def write_empty_rb_files(filename, m_min, m_max, Delta_m, clifford_group, K_m,
         `alias_maps` is None, then just the list-of-lists corresponding to the 
         clifford gate labels is returned.
     """
+    base_filename = filename
+    if interleaved_list is not None:
+        base_filename = filename+'_baseline' 
+        
     # line below ensures random_string_lists is *always* a dictionary
     alias_maps_mod = {} if (alias_maps is None) else alias_maps      
     random_string_lists = \
-        list_random_rb_clifford_strings(m_min, m_max, Delta_m, clifford_group,
-                                        K_m, alias_maps_mod, seed, randState)
-    #always write cliffords to empty dataset (in future have this be an arg?)
-    _io.write_empty_dataset(
-        filename+'.txt', list(
-            _itertools.chain(*random_string_lists['clifford'])))
+        create_random_gatestrings(m_list, K_m, group_or_gateset,inverse,
+                                  interleaved = None, alias_maps = alias_maps_mod, 
+                                  seed=seed, randState=randState)
+    #always write uncompiled gates to empty dataset (in future have this be an arg?)
+    _io.write_empty_dataset(base_filename+'.txt', list(
+            _itertools.chain(*random_string_lists['uncompiled'])))
     for gstyp,strLists in random_string_lists.items():
-        _io.write_gatestring_list(filename +'_%s.txt' % gstyp,
+        _io.write_gatestring_list(base_filename +'_%s.txt' % gstyp,
                                   list(_itertools.chain(*strLists)))
-    if alias_maps is None: 
-        return random_string_lists['clifford'] 
-          #mimic list_random_rb_clifford_strings return value
-    else: return random_string_lists
+        
+    if interleaved_list is None:
+        if alias_maps is None: 
+            return random_string_lists['uncompiled'] 
+            #mimic list_random_rb_clifford_strings return value
+        else: return random_string_lists
+        
+    else:
+        all_random_string_lists = {}
+        if alias_maps is None: 
+            all_random_string_lists['baseline'] = random_string_lists['uncompiled']
+        else:
+            all_random_string_lists['baseline'] = random_string_lists
+        
+        for interleaved in interleaved_list:
+            # No seed allowed here currently, as currently no way to make it different to
+            # the seed for the baseline decay
+            filename_interleaved = filename+'_interleaved_'+interleaved
+            random_string_lists = \
+                       create_random_gatestrings(m_list, K_m, group_or_gateset,inverse,
+                                  interleaved = interleaved, alias_maps = alias_maps_mod)
+            _io.write_empty_dataset(filename_interleaved+'.txt', list(
+                _itertools.chain(*random_string_lists['uncompiled'])))
+            for gstyp,strLists in random_string_lists.items():
+                _io.write_gatestring_list(filename_interleaved +'_%s.txt' % gstyp,
+                                  list(_itertools.chain(*strLists)))
+                
+            if alias_maps is None: 
+                all_random_string_lists[interleaved] = random_string_lists['uncompiled']
+            else:
+                all_random_string_lists[interleaved] = random_string_lists
+            
+        return all_random_string_lists   
 
-
-def do_randomized_benchmarking(dataset, clifford_gatestrings,
+def do_randomized_benchmarking(dataset, gatestrings,
+                               fit = 'standard',
                                success_spamlabel = 'plus',
+                               fit_parameters_dict = None,
+                               dim = 2, 
                                weight_data = False,
+                               pre_avg = True,
                                infinite_data = False,
-                               one_freq_adjust=False,
-                               dim = 2, pre_avg=True, 
-                               clifford_to_primitive = None,
-                               clifford_to_canonical = None, 
-                               canonical_to_primitive = None,
-                               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, 
-                               C0= 0.0, f_bnd=[0.,1.], 
-                               A_bnd=[0.,1.], ApB_bnd=[0.,1.],
-                               C_bnd=[-1.,1.]):
+                               one_freq_adjust=False):
+    
     """
     Computes randomized benchmarking (RB) parameters (but not error bars).
 
@@ -254,7 +415,7 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
     dataset : DataSet
         The data to extract counts from.
 
-    clifford_gatestrings : list of GateStrings
+    gatestrings : list of GateStrings
         The complete list of RB sequences in terms of Clifford operations,
         i.e., the labels in each `GateString` denote a Clifford operation.
 
@@ -341,29 +502,26 @@ def do_randomized_benchmarking(dataset, clifford_gatestrings,
        information about the inputs to the analysis.  This object can be used
        to compute error bars on the RB values.
     """
-    alias_maps = {}
-    if clifford_to_canonical is not None:
-        alias_maps['canonical'] = clifford_to_canonical
-        if canonical_to_primitive is not None:
-            alias_maps['primitive'] = _cnst.compose_alias_dicts(
-                clifford_to_canonical, canonical_to_primitive)
+#   alias_maps = {}
+#    if clifford_to_canonical is not None:
+#        alias_maps['canonical'] = clifford_to_canonical
+#        if canonical_to_primitive is not None:
+#            alias_maps['primitive'] = _cnst.compose_alias_dicts(
+#                clifford_to_canonical, canonical_to_primitive)
     
-    if clifford_to_primitive is not None:
-        assert (canonical_to_primitive is None), \
-            "primitive gates specified via clifford_to_primitive AND " + \
-            "canonical_to_primitive!"
-        alias_maps['primitive'] = clifford_to_primitive
+#    if clifford_to_primitive is not None:
+#        assert (canonical_to_primitive is None), \
+#            "primitive gates specified via clifford_to_primitive AND " + \
+#            "canonical_to_primitive!"
+#        alias_maps['primitive'] = clifford_to_primitive
 
-    return do_rb_base(dataset, clifford_gatestrings, "clifford", weight_data, infinite_data,
-                      one_freq_adjust, alias_maps, success_spamlabel, dim, pre_avg, f0, 
-                      A0, ApB0, C0, f_bnd, A_bnd, ApB_bnd, C_bnd)
+    return do_rb_base(dataset, gatestrings, fit, fit_parameters_dict,
+                      success_spamlabel, dim, weight_data, 
+                      pre_avg, infinite_data, one_freq_adjust)
 
-
-def do_rb_base(dataset, base_gatestrings, basename, weight_data=False, 
-               infinite_data=False, one_freq_adjust=False, alias_maps=None,
-               success_spamlabel = 'plus', dim = 2, pre_avg=True,
-               f0 = 0.98, A0 = 0.5, ApB0 = 1.0, C0= 0.0, f_bnd=[0.,1.], 
-               A_bnd=[0.,1.], ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
+def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None, 
+               success_spamlabel = 'plus', dim = 2, weight_data=False,pre_avg=True,
+               infinite_data=False, one_freq_adjust=False):
     """
     Core Randomized Benchmarking compute function.
 
@@ -380,10 +538,6 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
         The complete list of RB sequences in terms of "base" operations,
         defined as being the ones that occur in the keys of `dataset`.
 
-    basename : str
-        A name given to the "base" gate-label-set, which ultimately determines
-        under what key they are stored in the returned results object.
-
     weight_data : bool, optional
         Whether or not to compute and use weights for each data point for the fit 
         procedures.  Default is False; only works when pre_avg = True.
@@ -394,13 +548,6 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
 
     one_freq_adjust : bool, optional
         TODO: argument description
-
-    alias_maps : dict of dicts, optional
-        If not None, a dictionary whose keys name other (non-"base") 
-        gate-label-sets, and whose values are "alias" dictionaries 
-        which map the "base" labels to those of the named gate-label-set.
-        RB values for each of these gate-label-sets will be present in the 
-        returned results object.
 
     success_spamlabel : str, optional
         The spam label which denotes the *expected* outcome of preparing,
@@ -470,7 +617,7 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
         preavg_Ns =       [ avgs[L][2] for L in Ls ] 
         return preavg_lengths, preavg_psuccess, preavg_Ns
 
-    def fit(xdata,ydata,one_freq_dict=None,weights=None):
+    def do_fit(xdata,ydata,fit='standard',fit_parameters_dict=None,one_freq_dict=None,weights=None):
         xdata = _np.asarray(xdata) - 1 #discount Clifford-inverse
         ydata = _np.asarray(ydata)
         if weights is None:
@@ -578,13 +725,13 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
 #                        correction_2 += K * _np.log((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))#+1e-10)
 ##                        correction_2 += ((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))**K
                     else:
-                        print((n_0 - 1) / (N - 1))
-                        print(n_0 / (N-1))
-                        print("F="+str(F))
-                        print("A="+str(A))
-                        print("Bs="+str(Bs))
-                        print("f="+str(f))
-                        print("m="+str(m))
+                        #print((n_0 - 1) / (N - 1))
+                        #print(n_0 / (N-1))
+                        #print("F="+str(F))
+                        #print("A="+str(A))
+                        #print("Bs="+str(Bs))
+                        #print("f="+str(f))
+                        #print("m="+str(m))
                         raise ValueError("F does not fall within any physical bounds for m="+str(m)+"!")
 #                return total_0 - correction_1 + correction_2
                 return total_0 - correction_2
@@ -649,79 +796,93 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
 #                        correction_2 += K * _np.log((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))#+1e-10)
 ##                        correction_2 += ((1-F) * (n_0**n_0 * (N-n_0-1)**(N-n_0-1))/((N-1)**(N-1)))**K
                     else:
-                        print((n_0 - 1) / (N - 1))
-                        print(n_0 / (N-1))
-                        print("F="+str(F))
-                        print("A="+str(A))
-                        print("Bs="+str(Bs))
-                        print("f="+str(f))
-                        print("m="+str(m))
+                        #print((n_0 - 1) / (N - 1))
+                        #print(n_0 / (N-1))
+                        #print("F="+str(F))
+                        #print("A="+str(A))
+                        #print("Bs="+str(Bs))
+                        #print("f="+str(f))
+                        #print("m="+str(m))
                         raise ValueError("F does not fall within any physical bounds for m="+str(m)+"!")
 #                return total_0 - correction_1 + correction_2
                 return total_0 - correction_2
+
         def obj_func_1d(f):
             A = 0.5
             Bs = 1.
-#            print("f="+str(f))
             return obj_func_full([A,Bs,f])
-
-#        print('xdata:')
-#        print(xdata)
-#        print('ydata:')
-#        print(ydata)
-#        print('weights:')
-#        print(weights)
-
-        initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
-                                 bounds=[(0.,1.)])
-        f0b = initial_soln.x[0]
-        p0 = [A0,ApB0,f0b] 
-        final_soln = _minimize(obj_func_full,p0, method='L-BFGS-B',
-                               bounds=[A_bnd,ApB_bnd,f_bnd])
-        A,Bs,f = final_soln.x
         
-        p0 = [A,Bs,C0,f]        
-        final_soln_1storder = _minimize(obj_func_1st_order_full, p0, 
+        if fit_parameters_dict is None:
+            fit_parameters_dict = {}        
+        if  fit == 'standard' or fit =='first order':
+            if 'f0' not in fit_parameters_dict.keys():
+                fit_parameters_dict['f0'] = 0.99
+            if 'f_bnd' not in fit_parameters_dict.keys():
+                fit_parameters_dict['f_bnd'] = [0.,1.]              
+            if 'A0' not in fit_parameters_dict.keys():
+                fit_parameters_dict['A0'] = 0.5
+            if 'A_bnd' not in fit_parameters_dict.keys():
+                fit_parameters_dict['A_bnd'] = [None,None]            
+            if 'ApB0' not in fit_parameters_dict.keys():
+                fit_parameters_dict['ApB0'] = 1.0             
+            if 'ApB_bnd' not in fit_parameters_dict.keys():
+                fit_parameters_dict['ApB_bnd'] = [None,None]
+        if  fit == 'first order': 
+            if 'C0' not in fit_parameters_dict.keys():
+                fit_parameters_dict['C0'] = 0.0
+            if 'C_bnd' not in fit_parameters_dict.keys():
+                fit_parameters_dict['C_bnd'] = [None,None]
+        
+        if fit == 'standard' or fit == 'first order':
+            f0 = fit_parameters_dict['f0']
+            initial_soln = _minimize(obj_func_1d,f0, method='L-BFGS-B',
+                                     bounds=[(0.,1.)])
+            f0b = initial_soln.x[0]
+            A0 = fit_parameters_dict['A0']
+            ApB0 = fit_parameters_dict['ApB0']
+            f_bnd =  fit_parameters_dict['f_bnd']
+            A_bnd = fit_parameters_dict['A_bnd']
+            ApB_bnd = fit_parameters_dict['ApB_bnd']
+            
+            p0 = [A0,ApB0,f0b] 
+            final_soln_standard = _minimize(obj_func_full,p0, method='L-BFGS-B',
+                               bounds=[A_bnd,ApB_bnd,f_bnd])
+            A,Bs,f = final_soln_standard.x
+            results_dict = {'A': A,'B': Bs-A,'f': f,'r': _rbutils.p_to_r(f,dim)}
+            if fit == 'first order':
+                C0 = fit_parameters_dict['C0']
+                C_bnd = fit_parameters_dict['C_bnd']
+                p0 = [A,Bs,C0,f]        
+                final_soln_1storder = _minimize(obj_func_1st_order_full, p0, 
                                method='L-BFGS-B',
                                bounds=[A_bnd,ApB_bnd,C_bnd,f_bnd])
         
-        A1,B1s,C1,f1 = final_soln_1storder.x
-        
-#        if A > 0.6 or A1 > 0.6 or A < 0.4 or A1 < 0.4:
-#            print("Warning: Asymptotic fit parameter is not within [0.4,0.6].")
-                       
-#        if C1 > 0.1 or C1 < -0.1:
-#            print("Warning: Additional parameter in first order fit is significantly non-zero")
-            
-        return {'A': A,'B': Bs-A,'f': f,'r': _rbutils.p_to_r(f,dim),
-                'A1': A1, 'B1': B1s-A1, 'C1': C1,
-                'f1': f1, 'r1': _rbutils.p_to_r(f1,dim)}
-
-    result_dicts = {}
+                A,Bs,C,f = final_soln_1storder.x
+                results_dict = {'A': A,'B': Bs-A, 'C':C, 
+                                'f': f,'r': _rbutils.p_to_r(f,dim)}
+                
+        return results_dict
 
     #Note: assumes dataset contains gate strings which use *base* labels
-    base_lengths = list(map(len,base_gatestrings))
-    occ_indices = _tools.compute_occurance_indices(base_gatestrings)
+    base_lengths = list(map(len,gatestrings))
+    occ_indices = _tools.compute_occurance_indices(gatestrings)
     Ns = [ dataset.get_row(seq,k).total() 
-           for seq,k in zip(base_gatestrings,occ_indices) ]
-#    print(base_gatestrings)
-#    print(occ_indices)
-#    print(success_spamlabel)
+           for seq,k in zip(gatestrings,occ_indices) ]
     successes = [ dataset.get_row(seq,k).fraction(success_spamlabel) 
-                  for seq,k in zip(base_gatestrings,occ_indices) ] 
+                  for seq,k in zip(gatestrings,occ_indices) ] 
 
     if pre_avg:
         base_lengths,base_successes,base_Ns = \
             preavg_by_length(base_lengths,successes,Ns)
         if weight_data : 
-#            mkn_dict = _rbutils.dataset_to_mkn_dict(dataset,base_gatestrings,success_spamlabel)
+#            mkn_dict = _rbutils.dataset_to_mkn_dict(dataset,gatestrings,success_spamlabel)
 #            weight_dict = _rbutils.mkn_dict_to_weighted_delta_f1_hat_dict(mkn_dict)
             if infinite_data == True:
                 use_frequencies = True
             else:
                 use_frequencies = False
-            summary_dict = _rbutils.dataset_to_summary_dict(dataset,base_gatestrings,success_spamlabel,use_frequencies)
-#            weight_dict = _rbutils.mkn_dict_to_delta_f1_squared_dict(mkn_dict)
+            summary_dict = _rbutils.dataset_to_summary_dict(dataset,gatestrings,success_spamlabel,use_frequencies)
+#           weight_dict = _rbutils.mkn_dict_to_delta_f1_squared_dict(mkn_dict)
             weight_dict = _rbutils.summary_dict_to_delta_f1_squared_dict(summary_dict, infinite_data)
             weights = _np.array(map(lambda x : weight_dict[x],base_lengths))
             if _np.count_nonzero(weights) != len(weights):
@@ -739,35 +900,37 @@ def do_rb_base(dataset, base_gatestrings, basename, weight_data=False,
         base_lengths,base_successes,base_Ns = base_lengths,successes,Ns
         weights = None
         one_freq_dict = None
-    base_results = fit(base_lengths, base_successes, one_freq_dict, weights)
-    base_results.update({'gatestrings': base_gatestrings,
+    results = do_fit(base_lengths, base_successes,fit,fit_parameters_dict,one_freq_dict, weights)
+    results.update({'gatestrings': gatestrings,
                           'lengths': base_lengths,
                           'successes': base_successes,
                           'counts': base_Ns })
-    result_dicts[basename] = base_results
+#    result_dicts[basename] = base_results
     
-    for gstyp,alias_map in alias_maps.items():
-        if alias_map is None: continue #skip when map is None
+#    for gstyp,alias_map in alias_maps.items():
+#        if alias_map is None: continue #skip when map is None
+#
+#        gstyp_gatestrings = _cnst.translate_gatestring_list(
+#            gatestrings, alias_map)
+#        gstyp_lengths = list(map(len,gstyp_gatestrings))
+#
+#        if pre_avg:
+#            gstyp_lengths,gstyp_successes,gstyp_Ns = \
+#                preavg_by_length(gstyp_lengths,successes,Ns)
+#        else:
+#            gstyp_lengths,gstyp_successes,gstyp_Ns = gstyp_lengths,successes,Ns
+#        gstyp_results = fit(gstyp_lengths, gstyp_successes, one_freq_dict, weights)
+#        gstyp_results.update({'gatestrings': gstyp_gatestrings,
+#                              'lengths': gstyp_lengths,
+#                              'successes': gstyp_successes,
+#                              'counts': gstyp_Ns })
+#        result_dicts[gstyp] = gstyp_results
 
-        gstyp_gatestrings = _cnst.translate_gatestring_list(
-            base_gatestrings, alias_map)
-        gstyp_lengths = list(map(len,gstyp_gatestrings))
+    results = _rbobjs.RBResults(dataset, results=results, fit=fit, success_spamlabel=success_spamlabel,
+                                fit_parameters_dict=fit_parameters_dict, dim=dim, 
+                                weight_data=weight_data, pre_avg=pre_avg, 
+                                infinite_data=infinite_data, one_freq_adjust=one_freq_adjust)
 
-        if pre_avg:
-            gstyp_lengths,gstyp_successes,gstyp_Ns = \
-                preavg_by_length(gstyp_lengths,successes,Ns)
-        else:
-            gstyp_lengths,gstyp_successes,gstyp_Ns = gstyp_lengths,successes,Ns
-        gstyp_results = fit(gstyp_lengths, gstyp_successes, one_freq_dict, weights)
-        gstyp_results.update({'gatestrings': gstyp_gatestrings,
-                              'lengths': gstyp_lengths,
-                              'successes': gstyp_successes,
-                              'counts': gstyp_Ns })
-        result_dicts[gstyp] = gstyp_results
-
-    results = _rbobjs.RBResults(dataset, result_dicts, basename, weight_data,
-                                infinite_data, one_freq_adjust, alias_maps,
-                                success_spamlabel,dim, pre_avg, f0,A0,ApB0,C0)
     return results
 
 

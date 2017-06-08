@@ -1546,8 +1546,8 @@ class DatasetComparisonPlot(WorkspacePlot):
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
-    def __init__(self, ws, rbR, gstyp='clifford',xlim=None, ylim=None,
-                 fitting='standard', Magesan_zeroth=False, Magesan_first=False,
+    def __init__(self, ws, rbR,xlim=None, ylim=None,
+                 fit='standard', Magesan_zeroth=False, Magesan_first=False,
                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
                  gs_target=False,group=False, norm='1to1', legend=True,
@@ -1637,12 +1637,12 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 #         loc : str, optional
 #            Specifies the location of the legend.
         super(RandomizedBenchmarkingPlot,self).__init__(
-            ws, self._create, rbR, gstyp, xlim, ylim, fitting, Magesan_zeroth,
+            ws, self._create, rbR, xlim, ylim, fit, Magesan_zeroth,
             Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
             Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group, norm,
             legend, title, scale)
         
-    def _create(self, rbR, gstyp, xlim, ylim, fitting, Magesan_zeroth,
+    def _create(self, rbR, xlim, ylim, fit, Magesan_zeroth,
                 Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
                 Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
                 norm, legend, title, scale):
@@ -1651,23 +1651,18 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         #TODO: maybe move the computational/fitting part of this function
         #  back to the RBResults object to reduce the logic (and dependence
         #  on rbutils) here.
-        
-        if gstyp not in rbR.dicts:
-            raise ValueError("%s data not found!" % gstyp)
-
+ 
         #newplot = _plt.figure(figsize=(8, 4))
         #newplotgca = newplot.gca()
 
         # Note: minus one to get xdata that discounts final Clifford-inverse
-        xdata = _np.asarray(rbR.dicts[gstyp]['lengths']) - 1
-        ydata = _np.asarray(rbR.dicts[gstyp]['successes'])
-        A = rbR.dicts[gstyp]['A']
-        B = rbR.dicts[gstyp]['B']
-        f = rbR.dicts[gstyp]['f']
-        A1 = rbR.dicts[gstyp]['A1']
-        B1 = rbR.dicts[gstyp]['B1']
-        C1 = rbR.dicts[gstyp]['C1']
-        f1 = rbR.dicts[gstyp]['f1']
+        xdata = _np.asarray(rbR.results['lengths']) - 1
+        ydata = _np.asarray(rbR.results['successes'])
+        A = rbR.results['A']
+        B = rbR.results['B']
+        f = rbR.results['f']
+        if fit == 'first order':
+            C = rbR.dicts[gstyp]['C1']
         pre_avg = rbR.pre_avg
         
         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
@@ -1676,18 +1671,6 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         if (Magesan_first_SEB is True) and (Magesan_first is False):
             print("As Magesan_first_SEB is True, Setting Magesan_first to True\n")
             Magesan_first = True
-            
-        if gstyp != 'clifford':
-            if (Magesan_zeroth is True) or (Magesan_zeroth is True):
-                print("Magesan Analytical deacays curves for Cliffords only." +
-                "Setting all analytic parameters to False.")
-                Magesan_zeroth=False
-                Magesan_first=False
-            if (exact_decay is True) or (L_matrix_decay is True):  
-                print("Exact and L matrix decay curves for Cliffords only." +
-                "Setting all analytic parameters to False.")
-                exact_decay=False
-                L_matrix_decay=False
                 
         if (Magesan_zeroth is True) or (Magesan_first is True):
             if (gs is False) or (gs_target is False):
@@ -1722,12 +1705,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
                 _rbutils.L_matrix_ASPs(gs,gs_target,max(xdata),m_min=1,m_step=1,d=rbR.d,
                                              success_spamlabel=rbR.success_spamlabel)
-                
-        if gstyp!='clifford':
-            xlabel = '{0} sequence length'.format(gstyp.capitalize())
-        
-        if gstyp=='clifford':
-            xlabel = 'Sequence length'
+
+        xlabel = 'Sequence length'
 
         #OLD cmap = _plt.cm.get_cmap('Set1')
         
@@ -1742,14 +1721,10 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             name = 'Averaged RB data' if pre_avg else 'RB data',
         ))
         
-        if fitting=='standard' or fitting=='first order':
+        if fit=='standard' or fit=='first order':
             fit_label_1='Fit'
             fit_label_2='Fit'
             color2 = "black"
-        if fitting=='all':
-            fit_label_1='Fit (Std)'
-            fit_label_2='Fit (1st order)'
-            color2 = "red"
 
         theory_color2 = "green"
         theory_fill2 = "rgba(0,128,0,0.1)"
@@ -1757,7 +1732,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             theory_color2 = "magenta"
             theory_fill2 = "rgba(255,0,255,0.1)"
                     
-        if fitting=='standard' or fitting=='all':
+        if fit=='standard':
             data.append( go.Scatter(
                 x = _np.arange(max(xdata)),
                 y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A,B,f),
@@ -1767,7 +1742,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                 showlegend=legend,
             ))
           
-        if fitting=='first order' or fitting=='all':
+        if fit=='first order':
             data.append( go.Scatter(
                 x = _np.arange(max(xdata)),
                 y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1,B1,C1,f1),
