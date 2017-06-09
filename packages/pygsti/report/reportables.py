@@ -54,18 +54,12 @@ class ReportableQty(object):
           holding the first field as a value and second field as an error bar
         Anything else will be converted to a ReportableQty with no error bars
         '''
-        '''
-        if any([isinstance(value, ReportableQty),
-                isinstance(value, str), 
-                hasattr(value, 'render')]):
-            return value
-        el
-        '''
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have two fields'
             return ReportableQty(value[0], value[1])
         else:
-            return value
+            #return value
+            return ReportableQty(value)
 
     def __getattr__(self, name):
         return getattr(self.value, name)

@@ -57,7 +57,8 @@ def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
         if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
         raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
     elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
+        return '<span title="test">{}</span>'.format(
+            html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision))
     elif type(x) in (list,tuple):
         return html_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
     elif _compat.isstr(x):
