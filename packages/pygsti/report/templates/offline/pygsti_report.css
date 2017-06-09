@@ -9,6 +9,32 @@
     padding-top: 1em;
   }
 }
+.top a {
+    float: left;
+    display: block;
+    color: #f2f2f2;
+    text-align: center;
+    padding: 1vh 1.5vw;
+    text-decoration: none;
+}
+.top {
+    position:absolute;
+    left:0; right:0; top:0;
+    height: 5vh;
+    background-color: #333;
+}
+.left {
+    position:absolute;
+    left:0; top:5vh; bottom: 0;
+    width: 10vw;
+    background-color:#cccccc; 
+    padding: 1vh 1vw;
+}
+.right{
+    position: absolute;
+    left:10vw; top:5vh; right:0; bottom:0;
+    padding: 3vh 3vw;
+}
 
 body {
   -webkit-column-count: 2;
@@ -25,7 +51,7 @@ body {
   float: prince-column-footnote;
 }
 html {
-  font-size: 9pt;
+  //font-size: 9pt;
 }
 body {
   font-family: "Computer Modern Serif", "Times New Roman", Times, serif;
@@ -157,7 +183,7 @@ cite a {
   text-decoration: none;
 }
 a[href^="#"] {
-  color: inherit;
+  //color: inherit;
   text-decoration: none;
 }
 @page {
@@ -244,12 +270,14 @@ figure.tbl > figcaption:before {
 a[href^="#"] {
   content: target-counter(attr(href, url), reference);
 }
+/*
 a[href^="#"]:before {
   content: "[";
 }
 a[href^="#"]:after {
   content: "]";
 }
+*/
 a[href^="#"].section {
   content: target-counter(attr(href, url), section);
 }
