@@ -14,7 +14,8 @@ class ReportTable(object):
         if self._headingFormatters is not None:
             self._columnNames = self._headings
         else: #headingFormatters is None => headings is dict w/formats
-            self._columnNames = self._headings['text'] #use text heading
+            #print(self._headings)
+            self._columnNames = self._headings['html'] #use html heading by default 
 
     def addrow(self, rowData, formatters):
         self._rows.append(([_ReportableQty.from_val(item) for item in rowData], formatters))

@@ -664,7 +664,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     printer.log("*** Merging into template file ***")
     #print("DB inserting choi:\n",qtys['bestGatesetChoiTable'].render("html"))
     #print("DB inserting decomp:\n",qtys['bestGatesetDecompTable'].render("html"))
-    template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
+    #template = "report_singlequbit_brief.html" if brief else "report_singlequbit.html"
+    template = 'test.html'
     _merge_template(qtys, template, filename, auto_open, precision,
                     connected=connected, toggles=toggles, verbosity=printer)
 
@@ -906,7 +907,8 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     # 3) populate template html file => report html file
     printer.log("*** Merging into template file ***")
-    template = "report_general_brief.html" if brief else "report_general.html"
+    #template = "report_general_brief.html" if brief else "report_general.html"
+    template = 'test.html'
     _merge_template(qtys, template, filename, auto_open, precision,
                     connected=connected, toggles=toggles, verbosity=printer)
 
