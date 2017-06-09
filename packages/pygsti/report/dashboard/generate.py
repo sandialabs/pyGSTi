@@ -9,11 +9,14 @@ def main():
     templatefile = 'template.html'
     outputfile   = 'output.html'
     showfile     = 'show.js'
+    bodyfile     = 'body.html'
 
     template = readfile(templatefile)
     showscript = readfile(showfile)
 
-    dashboard = template.format(top='TOP', abody='A', bbody='B', aleft='a-options', bleft='b-options', showscript=showscript)
+    body =readfile(bodyfile)
+
+    dashboard = template.format(top='TOP', abody=body, bbody='B', aleft='a-options', bleft='b-options', showscript=showscript)
 
     with open(outputfile, 'w') as outfile:
         outfile.write(dashboard)

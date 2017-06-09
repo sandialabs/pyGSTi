@@ -3,24 +3,24 @@
     display: block;
     color: #f2f2f2;
     text-align: center;
-    padding: 14px 16px;
+    padding: 1vh 1.5vw;
     text-decoration: none;
 }
 .top {
     position:absolute;
-    left:0; right:0;
-    height: 46px;
+    left:0; right:0; top:0;
+    height: 5vh;
     background-color: #333;
 }
 .left {
     position:absolute;
-    left:0; top:54px; bottom: 0;
-    width: 128px;
-    background-color: #595959;
-    padding: 14px 0 0 16px;
+    left:0; top:5vh; bottom: 0;
+    width: 10vw;
+    background-color:#cccccc; 
+    padding: 1vh 1vw;
 }
 .right{
     position: absolute;
-    left:144px; top:92px; right:0; bottom:0;
-    padding: 0 16px;
+    left:10vw; top:5vh; right:0; bottom:0;
+    padding: 3vh 3vw;
 }
