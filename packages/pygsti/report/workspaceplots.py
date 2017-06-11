@@ -491,7 +491,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
 
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                              mxBasisDimsY=None, xlabel=None, ylabel=None,
-                             boxLabels=False, prec=0, scale=1.0):
+                             boxLabels=False, colorbar=None, prec=0, scale=1.0):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -518,8 +518,11 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
       Axis labels for the plot.
 
     boxLabels : bool, optional
-        Whether box labels are displayed.  If False, then a colorbar is
-        displayed to the right of the box plot.
+        Whether box labels are displayed.
+
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `boxLabels == False`.
 
     prec : int or {'compact','compacthp'}, optional
         Precision for box labels.  Only relevant when boxLabels == True. Allowed
@@ -561,12 +564,13 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
+    colorbar = colorbar if (colorbar is not None) else (not boxLabels)
     
     flipped_mx = _np.flipud(gateMatrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
                        colorscale=colormap.get_colorscale(),
-                       showscale=(not boxLabels), zmin=colormap.hmin,
+                       showscale=colorbar, zmin=colormap.hmin,
                        zmax=colormap.hmax, hoverinfo='z')
     data = [trace]
     
@@ -616,8 +620,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                 )
                 
     layout = go.Layout(
-        width = 40*(gateMatrix.shape[1]+xextra)*scale,
-        height = 40*(gateMatrix.shape[0]+yextra)*scale,
+        width = 35*(gateMatrix.shape[1]+xextra)*scale,
+        height = 35*(gateMatrix.shape[0]+yextra)*scale,
         xaxis=dict(
             side="top",
             title=xlabel,
@@ -1058,7 +1062,8 @@ class GateMatrixPlot(WorkspacePlot):
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
                  mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
-                 boxLabels=False, prec=0, mxBasisDimsY=None, scale=1.0):
+                 boxLabels=False, colorbar=None, prec=0, mxBasisDimsY=None,
+                 scale=1.0):
         """
         Creates a color box plot of a gate matrix using a diverging color map.
     
@@ -1089,10 +1094,13 @@ class GateMatrixPlot(WorkspacePlot):
     
         ylabel : str, optional
           A y-axis label for the plot.
-        
+    
         boxLabels : bool, optional
-            Whether box labels are displayed.  If False, then a colorbar is
-            displayed to the right of the box plot.
+          Whether box labels are displayed.
+
+        colorbar : bool optional
+          Whether to display a color bar to the right of the box plot.  If None,
+          then a colorbar is displayed when `boxLabels == False`.
     
         prec : int or {'compact','compacthp'}, optional
             Precision for box labels.  Only relevant when boxLabels == True. Allowed
@@ -1113,15 +1121,15 @@ class GateMatrixPlot(WorkspacePlot):
         """
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
                                             mxBasis, mxBasisDims, xlabel, ylabel,
-                                            boxLabels, prec, mxBasisDimsY, scale)
+                                            boxLabels, colorbar, prec, mxBasisDimsY, scale)
           
     def _create(self, gateMatrix, m, M, 
                 mxBasis, mxBasisDims, xlabel, ylabel,
-                boxLabels, prec, mxBasisDimsY, scale):
+                boxLabels, colorbar, prec, mxBasisDimsY, scale):
         
         return gatematrix_color_boxplot(
             gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
-            xlabel, ylabel, boxLabels, prec, scale)
+            xlabel, ylabel, boxLabels, colorbar, prec, scale)
 
 
 
@@ -1267,7 +1275,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
 
 class ProjectionsBoxPlot(WorkspacePlot):
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
-                 boxLabels=False, prec="compacthp", scale=1.0):
+                 boxLabels=False, colorbar=None, prec="compacthp", scale=1.0):
         """
         Creates a color box plot displaying projections.
 
@@ -1293,10 +1301,13 @@ class ProjectionsBoxPlot(WorkspacePlot):
         m,M : float, optional
           Color scale min and max values, respectivey.  If None, then computed
           automatically from the data range.
-    
+
         boxLabels : bool, optional
-            Whether box labels are displayed.  If False, then a colorbar is
-            displayed to the right of the box plot.
+          Whether box labels are displayed.
+
+        colorbar : bool optional
+          Whether to display a color bar to the right of the box plot.  If None,
+          then a colorbar is displayed when `boxLabels == False`.
     
         prec : int or {'compact','compacthp'}, optional
             Precision for box labels.  Only relevant when boxLabels == True. Allowed
@@ -1312,11 +1323,11 @@ class ProjectionsBoxPlot(WorkspacePlot):
         """
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
                                                  projection_basis, m, M,
-                                                 boxLabels, prec, scale)
+                                                 boxLabels, colorbar, prec, scale)
         
     def _create(self, projections,
                 projection_basis, m, M,
-                boxLabels, prec, scale):
+                boxLabels, colorbar, prec, scale):
 
         absMax = _np.max(_np.abs(projections))
         if m is None: m = -absMax
@@ -1345,7 +1356,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
     
         return gatematrix_color_boxplot(
             projections, m, M, projection_basis, xd, yd,
-            xlabel, ylabel, boxLabels, prec,  scale)
+            xlabel, ylabel, boxLabels, colorbar, prec,  scale)
 
 
 

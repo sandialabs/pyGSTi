@@ -268,6 +268,7 @@ class GatesTable(WorkspaceTable):
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
+                                             colorbar=False,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
                     row_data.append( fig )
@@ -302,6 +303,7 @@ class GatesTable(WorkspaceTable):
                     
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                             colorbar=False,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
                     row_data.append( fig )
