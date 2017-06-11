@@ -181,6 +181,10 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
     if 'plotlyexLIB' not in qtys:
         qtys['plotlyexLIB'] = _ws.insert_resource(
             connected, None, "pygsti_plotly_ex.js")
+
+    if 'dashboardLIB' not in qtys:
+        qtys['dashboardLIB'] = _ws.insert_resource(
+            connected, None, "pygsti_dashboard.js")
     
     #Add inline CSS
     if 'CSS' not in qtys:
@@ -329,7 +333,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         ["Dataset","Estimate","G-Opt","max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
-        show=[multidataset,multiest,False,False]
+        show=[multidataset,multiest,False,False] # "global" switches only
     )
 
     switchBd.add("ds",(0,))
@@ -802,14 +806,16 @@ def create_general_report(results, filename, confidenceLevel=None,
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
 
-    goView = [multidataset,multiest,multiGO,False]
-    maxLView = [multidataset,multiest,False,multiL]
+    #goView = [multidataset,multiest,multiGO,False]
+    #maxLView = [multidataset,multiest,False,multiL]
+    goView = [False,False,multiGO,False]
+    maxLView = [False,False,False,multiL]
     qtys['topSwitchboard'] = switchBd
     qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
     qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
-    qtys['goSwitchboard3'] = switchBd.view(goView,"v3")
-    qtys['goSwitchboard4'] = switchBd.view(goView,"v4")
-    qtys['goSwitchboard5'] = switchBd.view(goView,"v5")    
+    #qtys['goSwitchboard3'] = switchBd.view(goView,"v3")
+    #qtys['goSwitchboard4'] = switchBd.view(goView,"v4")
+    #qtys['goSwitchboard5'] = switchBd.view(goView,"v5")    
     qtys['maxLSwitchboard1']  = switchBd.view(maxLView,"v6")
     #qtys['maxLSwitchboard2'] = switchBd.view(maxLView,"v7") #unused
 
@@ -824,6 +830,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
     qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
+    qtys['datasetOverviewTable_sum'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
@@ -837,8 +844,11 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('polar','relpolar'))
+    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','polar'))
+    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','relpolar'))
+    #qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('polar','relpolar'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                        "boxes", errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
@@ -854,6 +864,9 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
     qtys['progressTable'] = ws.FitComparisonTable(
         Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    qtys['progressTable_sum'] = ws.FitComparisonTable(
+        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+        
     
     # Generate plots
     printer.log("*** Generating plots ***")
@@ -906,9 +919,11 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     # 3) populate template html file => report html file
     printer.log("*** Merging into template file ***")
-    template = "report_general_brief.html" if brief else "report_general.html"
+    #template = "report_general_brief.html" if brief else "report_general.html"
+    template = "report_dashboard.html"
     _merge_template(qtys, template, filename, auto_open, precision,
-                    connected=connected, toggles=toggles, verbosity=printer)
+                    connected=connected, toggles=toggles, verbosity=printer,
+                    CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
 
 
 

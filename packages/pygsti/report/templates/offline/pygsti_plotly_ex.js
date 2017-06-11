@@ -87,6 +87,12 @@ function trigger_wstable_plot_creation(id) {
 	// We go through individual tables one-by-one, making each visible if
 	// needed so that .width() and .height() will work correctly.  Also lock
 	// down the heights of header (th) cells.
+	var tab = wstable.closest(".tabcontent")
+	var parent_was_visible = true;
+	if(tab.length > 0 && !tab.is(":visible")) {
+	    parent_was_visible = false;
+	    tab.show();
+	}
         wstable.children("div").each( function(k,div) {
             var was_visible = $(div).is(":visible");
             $(div).show();
@@ -96,6 +102,7 @@ function trigger_wstable_plot_creation(id) {
 		function(i,el){ $(el).css("height", $(el).height()); });
             if(!was_visible) { $(div).hide(); }
         });
+	if(!parent_was_visible) { tab.hide(); } 
 
 	//3) create the plots.  Each plot will look at its container's (TD's)
 	//   size and size itself based on this.  If there's not enough width
@@ -267,6 +274,24 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
     // if no container: don't do any resizing
     if(box == null) { return;  }
 
+    // Note: for box.width() and .height() to work below (and therefore for
+    //  all the processing to work correctly), the element at hand needs to
+    //  be *visible* -- if it's not, a table cell (for instance) will have
+    //  the width given by CSS and not the computed width give the table's
+    //  total width.
+    var tab = el.closest(".tabcontent")
+    var val_container = el.closest(".single_switched_value")
+    var in_invisible_tab = false;
+    var in_invisible_val = false;
+    if(tab.length > 0 && !tab.is(":visible")) {
+	in_invisible_tab = true;
+	tab.show();
+    }
+    if(val_container.length > 0 && !val_container.is(":visible")) {
+	in_invisible_val = true;
+	val_container.show();
+    }
+    
     var w = box.width(); var h = box.height();    
     if(aspect_ratio == null) {
 	// then just match container dimensions exactly
@@ -295,7 +320,10 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
 	el.css("width", w-padding);
         el.css("height",h-padding);
     }
-    //console.log("pex_update_size of " + el.prop('id') + " to " + w + ", " + h + " (ratio " + aspect_ratio + ")" + " boxh = " + box.height() + " max-height = " + box.css("max-height"));
+    
+    if(in_invisible_tab) { tab.hide(); }
+    if(in_invisible_val) { val_container.hide(); } 
+    //console.log("pex_update_size of " + el.prop('id') + " to " + w + ", " + h + " (ratio " + aspect_ratio + ")" + " boxh = " + box.height() + " max-height = " + box.css("max-height") + " container(" + box.prop('id') + ").width() = " + box.width());
 }
 
 

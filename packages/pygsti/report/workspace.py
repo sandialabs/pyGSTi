@@ -1633,7 +1633,7 @@ class WorkspaceTable(WorkspaceOutput):
                                               resizable=resizable, autosize=autosize)
                 
 
-                divHTML.append("<div id='%s'>\n%s\n</div>\n" %
+                divHTML.append("<div class='single_switched_value' id='%s'>\n%s\n</div>\n" %
                                (tableDivID,table_dict['html']))
                 divJS.append(table_dict['js'])
                 divIDs.append(tableDivID)
@@ -1764,8 +1764,8 @@ class WorkspacePlot(WorkspaceOutput):
                     autosize=autosize, resizable=resizable,
                     lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
                 divIDs.append(getPlotlyDivID(fig_dict['html']))
-                
-            divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
+
+            divHTML.append("<div class='relwrap single_switched_value'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
             divJS.append( fig_dict['js'] )
             
         base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
