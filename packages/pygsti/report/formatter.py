@@ -1,4 +1,18 @@
 import re as _re
+from copy import deepcopy
+
+from inspect import getargspec as _getargspec
+
+# Helper function to ParameterizedFormatter
+def _has_argname(argname, function):
+    return argname in _getargspec(function).args
+
+def _pass_down(specs, custom, label):
+    kwargs = dict()
+    for k, v in specs.items():
+        if _has_argname(k, custom):
+            kwargs[k] = v
+    return custom(label, **kwargs)
 
 class Formatter(object):
     '''
@@ -10,7 +24,8 @@ class Formatter(object):
             stringreplacers=None, 
             regexreplace=None,
             formatstring='{}',
-            stringreturn=None):
+            stringreturn=None,
+            defaults=None):
         '''
         Parameters
         ----------
@@ -33,8 +48,12 @@ class Formatter(object):
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
         self.stringreturn    = stringreturn
+        if defaults is None:
+            self.defaults = dict()
+        else:
+            self.defaults = defaults
 
-    def render(self, item, specs):
+    def __call__(self, item, specs):
         '''
         Formatting function template
 
@@ -46,8 +65,14 @@ class Formatter(object):
         --------
         formatted item : string
         '''
-        if custom is not None:
-            item = custom(item, specs)
+        if len(self.defaults) > 0:
+            specs = deepcopy(specs) # Modifying other dictionaries would be rude
+            specs.update(self.defaults)
+
+        if self.custom is not None:
+            # Temporary pass down of args using argspec TODO: REPLACEME with comment below (after changing html.py and latex.py)
+            item = _pass_down(specs, custom, item)
+            #item = self.custom(item, specs)
         item = str(item)
         # Exit early if string matches stringreturn
         if self.stringreturn is not None and self.stringreturn[0] == item:

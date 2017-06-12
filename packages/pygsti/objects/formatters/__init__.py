@@ -1,7 +1,4 @@
-from .formatter               import Formatter
 from .tuple_formatter         import TupleFormatter
-from .parameterized_formatter import ParameterizedFormatter
-from .precision_formatter     import PrecisionFormatter
 from .HTML_figure_formatter   import HTMLFigureFormatter
 from .figure_formatter        import FigureFormatter
 from .eb_formatter            import EBFormatter

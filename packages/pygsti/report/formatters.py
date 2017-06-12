@@ -12,7 +12,7 @@ from .html  import html,  html_value
 from .latex import latex, latex_value
 
 from ..objects.formatters import *
-from .formatter import Formatter as NewFormatter
+from .formatter import Formatter
 
 import cgi     as _cgi
 import numpy   as _np
@@ -35,7 +35,7 @@ class FormatSet():
 
     __init__: (specs): Specs is a dictionary of the form { 'setting'(kwarg) : value }
                        Ex: { 'precision' : 6, 'polarprecision' : 3, 'sciprecision' : 0 }
-                       given to ParameterizedFormatters that need them
+                       given to Formatters that need them
 
     formatList : Given a list of items and formatters and a target format, returns formatted items
     '''
@@ -95,28 +95,28 @@ FormatSet.formatDict['Effect'] = {
 
 # Normal replacements
 FormatSet.formatDict['Normal'] = {
-    'html'  : PrecisionFormatter(html),
-    'latex' : PrecisionFormatter(latex)}
+    'html'  : Formatter(html),
+    'latex' : Formatter(latex)}
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 FormatSet.formatDict['Rounded'] = {
-    'html'  : ParameterizedFormatter(html_value,  ['polarprecision'], {'precision' : 2, 'sciprecision': 0}),
-    'latex' : ParameterizedFormatter(latex_value, ['polarprecision'], {'precision' : 2, 'sciprecision': 0})}
+    'html'  : Formatter(html_value,  defaults={'precision' : 2, 'sciprecision': 0}),
+    'latex' : Formatter(latex_value, defaults={'precision' : 2, 'sciprecision': 0})}
 
 # Similar to the above two formatdicts,
 # but recieves precision during table.render(), which is sent as kwarg to html_value, for example
 FormatSet.formatDict['Precision'] = {
-    'html'  : PrecisionFormatter(html_value),
-    'latex' : PrecisionFormatter(latex_value)}
+    'html'  : Formatter(html_value),
+    'latex' : Formatter(latex_value)}
 
 # 'small' formating - make text smaller
 FormatSet.formatDict['Small'] = {
-    'html'  : PrecisionFormatter(html),
-    'latex' : PrecisionFormatter(latex, formatstring='\\small%s')}
+    'html'  : Formatter(html),
+    'latex' : Formatter(latex, formatstring='\\small%s')}
 
 # 'small' formating - make text smaller
 FormatSet.formatDict['Verbatim'] = {
-    'html'  : PrecisionFormatter(html),
+    'html'  : Formatter(html),
     'latex' : Formatter(formatstring='\\spverb!%s!')}
 
 #############################################
@@ -133,13 +133,13 @@ def _pi_template(b):
 
 # Pi formatters
 FormatSet.formatDict['Pi'] = {
-    'html'  : _pi_template(PrecisionFormatter(html,  formatstring='%s&pi;')),
-    'latex' : _pi_template(PrecisionFormatter(latex, formatstring='%s$\\pi$'))}
+    'html'  : _pi_template(Formatter(html,  formatstring='%s&pi;')),
+    'latex' : _pi_template(Formatter(latex, formatstring='%s$\\pi$'))}
 
-# Bracket Formatters
+# BracketFormatters
 FormatSet.formatDict['Brackets'] = {
-    'html'  : PrecisionFormatter(html,  defaults={'brackets' : True}),
-    'latex' : PrecisionFormatter(latex, defaults={'brackets' : True})}
+    'html'  : Formatter(html,  defaults={'brackets' : True}),
+    'latex' : Formatter(latex, defaults={'brackets' : True})}
 
 ##################################################################################
 # 'conversion' formatting: catch all for find/replacing specially formatted text #
@@ -190,11 +190,11 @@ FormatSet.formatDict['NMEBConversion'] = {
     'latex' : _fmtCnv_latex}
 
 
-_EB_html  = EBFormatter(PrecisionFormatter(html),
+_EB_html  = EBFormatter(Formatter(html),
                          '%s <span class="errorbar">+/- %s</span>')
-_EB_html2  = EBFormatter(PrecisionFormatter(html),
+_EB_html2  = EBFormatter(Formatter(html),
                          '%s <span class="nmerrorbar">+/- %s</span>')
-_EB_latex = EBFormatter(PrecisionFormatter(latex_value),
+_EB_latex = EBFormatter(Formatter(latex_value),
                        '$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
 
 FormatSet.formatDict['ErrorBars'] = {
@@ -204,7 +204,7 @@ FormatSet.formatDict['NMErrorBars'] = {
     'html'  : _EB_html2,
     'latex' : _EB_latex}
 
-_VEB_latex = EBFormatter(PrecisionFormatter(latex), '%s $\pm$ %s')
+_VEB_latex = EBFormatter(Formatter(latex), '%s $\pm$ %s')
 
 FormatSet.formatDict['VecErrorBars'] = {
     'html'  : _EB_html,
@@ -214,13 +214,13 @@ FormatSet.formatDict['NMVecErrorBars'] = {
     'latex' : _VEB_latex}
 
 
-_PiEB_latex = PiEBFormatter(PrecisionFormatter(latex),
+_PiEB_latex = PiEBFormatter(Formatter(latex),
                            '$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $',
                            '%s$\\pi$')
 def _pi_eb_template(f):
-    return EBFormatter(PrecisionFormatter(html), '(%s <span class="errorbar">+/- %s</span>)&pi')
+    return EBFormatter(Formatter(html), '(%s <span class="errorbar">+/- %s</span>)&pi')
 def _pi_eb_template2(f):
-    return EBFormatter(PrecisionFormatter(html), '(%s <span class="nmerrorbar">+/- %s</span>)&pi')
+    return EBFormatter(Formatter(html), '(%s <span class="nmerrorbar">+/- %s</span>)&pi')
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
 FormatSet.formatDict['PiErrorBars'] = {
@@ -253,8 +253,8 @@ FormatSet.formatDict['Figure'] = {
 
 # Bold formatting
 FormatSet.formatDict['Bold'] = {
-    'html'  : PrecisionFormatter(html, formatstring='<b>%s</b>'),
-    'latex' : PrecisionFormatter(latex, formatstring='\\textbf{%s}')}
+    'html'  : Formatter(html, formatstring='<b>%s</b>'),
+    'latex' : Formatter(latex, formatstring='\\textbf{%s}')}
 
 
 '''
