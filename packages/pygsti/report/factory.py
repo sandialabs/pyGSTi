@@ -399,7 +399,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsFinalIter[d,i] = est.gatesets['final iteration estimate']
             switchBd.gsFinal[d,i,:] = [ est.gatesets.get(l,NA) for l in gauge_opt_labels ]
             switchBd.gsTargetAndFinal[d,i,:] = \
-                        [ [est.gatesets['target'], est.gatesets.get(l,NA)]
+                        [ [est.gatesets['target'], est.gatesets[l]] if (l in est.gatesets) else NA
                           for l in gauge_opt_labels ]
             switchBd.goparams[d,i,:] = [ est.goparameters.get(l,NA) for l in gauge_opt_labels]
 

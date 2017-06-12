@@ -53,6 +53,10 @@ def digest(obj):
                 add(md5,v[k])
         elif isinstance(v, SwitchValue):
             md5.update(v.base.tostring()) #don't recurse to parent switchboard
+        elif v is None:
+            md5.update("NONE".encode('utf-8'))
+        elif isinstance(v,NotApplicable):
+            md5.update("NOTAPPLICABLE".encode('utf-8'))
         else:
             #print("Encoding type: ",str(type(v)))
             attribs = list(sorted(dir(v)))
