@@ -1,3 +1,9 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
 import re as _re
 from copy import deepcopy
 
@@ -8,11 +14,14 @@ def _has_argname(argname, function):
     return argname in _getargspec(function).args
 
 def _pass_down(specs, custom, label):
-    kwargs = dict()
-    for k, v in specs.items():
-        if _has_argname(k, custom):
-            kwargs[k] = v
-    return custom(label, **kwargs)
+    if _has_argname('specs', custom):
+        return custom(label, specs)
+    else:
+        kwargs = dict()
+        for k, v in specs.items():
+            if _has_argname(k, custom):
+                kwargs[k] = v
+        return custom(label, **kwargs)
 
 class Formatter(object):
     '''
@@ -71,8 +80,13 @@ class Formatter(object):
 
         if self.custom is not None:
             # Temporary pass down of args using argspec TODO: REPLACEME with comment below (after changing html.py and latex.py)
-            item = _pass_down(specs, custom, item)
+            item = _pass_down(specs, self.custom, item)
             #item = self.custom(item, specs)
+            
+        # Special case for HTML Plots that are returned as dictionaries 
+        if isinstance(item, dict) and 'html' in item and 'js' in item:
+            return item
+
         item = str(item)
         # Exit early if string matches stringreturn
         if self.stringreturn is not None and self.stringreturn[0] == item:

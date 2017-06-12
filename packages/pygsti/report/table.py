@@ -115,7 +115,6 @@ class ReportTable(object):
                 html += "<table"
                 if tableclass: html += ' class="%s"' % tableclass
                 if tableID: html += ' id="%s"' % tableID
-                print(colHeadings_formatted)
                 html += "><thead><tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadings_formatted))
                 html += "</thead><tbody>"

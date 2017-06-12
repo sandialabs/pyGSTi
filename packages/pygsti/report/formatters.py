@@ -12,7 +12,6 @@ from .html  import html,  html_value
 from .latex import latex, latex_value
 
 from ..objects.formatters import *
-from .formatter import Formatter
 
 import cgi     as _cgi
 import numpy   as _np
@@ -147,7 +146,7 @@ FormatSet.formatDict['Brackets'] = {
 
 # These two formatters are more complex, justifying individual functions:
 
-def _fmtCnv_html(x):
+def _fmtCnv_html(x, _):
     x = str(x)
     x = x.replace("\\", "&#92"); #backslash
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
@@ -156,12 +155,12 @@ def _fmtCnv_html(x):
     x = x.replace("REPLACEWITHSTARCODE", '&#9733;') #replace new marker with HTML code
     return str(x)
 
-def _fmtCnv_html_eb(x):
+def _fmtCnv_html_eb(x, _):
     return '<span class="errorbar">' + _fmtCnv_html(x) + '</span>'
-def _fmtCnv_html_nmeb(x):
+def _fmtCnv_html_nmeb(x, _):
     return '<span class="nmerrorbar">' + _fmtCnv_html(x) + '</span>'
 
-def _fmtCnv_latex(x):
+def _fmtCnv_latex(x, _):
     x = str(x)
     x = x.replace("\\", "\\textbackslash")
     x = x.replace('%','\\%')
@@ -245,11 +244,25 @@ FormatSet.formatDict['Pre'] = {
     'latex'  : _pre_fmt_template('latex')}
 '''
 
+def html_figure(fig, specs):
+    render_out = fig.render("html",
+                            resizable="handlers only" if specs['resizable'] else False,
+                            autosize=specs['autosize'])
+    return render_out #a dictionary with 'html' and 'js' keys
+
+def latex_figure(figInfo, specs):
+    extension    = '.pdf' 
+    formatstring = "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}"
+    fig, name, W, H = figInfo
+    scratchDir = specs['scratchDir']
+    if len(scratchDir) > 0: #empty scratchDir signals not to output figure
+        fig.save_to(_os.path.join(scratchDir, name + self.extension))
+    return formatstring % (W, H, scratchDir,
+                           name + self.extension)
 
 FormatSet.formatDict['Figure'] = {
-    'html'  : HTMLFigureFormatter(),
-    'latex' : FigureFormatter(formatstring="\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}",
-                               extension='.pdf')}
+    'html'  : Formatter(html_figure),
+    'latex' : Formatter(latex_figure)}
 
 # Bold formatting
 FormatSet.formatDict['Bold'] = {
