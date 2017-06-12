@@ -11,13 +11,16 @@ test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
 hooks/etc/permissions.yml
 *comm_output*.txt
+**offline/
+**tutorial_files
 
 # Test Metadata #
 #################
 test/output/*
 test/output/pylint/*
 test/output/individual_coverage/*/*
-test/test_packages/.noseids # Used in running failed tests
+test/test_packages/.noseids
+test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 
 # Compiled source #
 ###################
