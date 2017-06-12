@@ -5,11 +5,20 @@ from collections  import OrderedDict   as _OrderedDict
 import re as _re
 
 class ReportTable(object):
-    def __init__(self, colHeadings, formatters, customHeader=None):
-        self._headings          = colHeadings
+    def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
         self._headingFormatters = formatters
+
+        if colHeadingLabels is None:
+            colHeadingLabels = colHeadings
+        if self._headingFormatters is not None:
+            self._headings = [_ReportableQty(item, tooltip=label) for item, label in zip(
+                colHeadings,
+                colHeadingLabels)]
+        else:
+            self._headings = colHeadings
         self._customHeadings    = customHeader
         self._rows              = []
+
 
         if self._headingFormatters is not None:
             self._columnNames = self._headings
@@ -106,6 +115,7 @@ class ReportTable(object):
                 html += "<table"
                 if tableclass: html += ' class="%s"' % tableclass
                 if tableID: html += ' id="%s"' % tableID
+                print(colHeadings_formatted)
                 html += "><thead><tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadings_formatted))
                 html += "</thead><tbody>"

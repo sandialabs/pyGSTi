@@ -63,7 +63,7 @@ class FormatSet():
             else:
                 if item is None:
                     raise ValueError("Unformatted None in formatList")
-                formatted_items.append( item )
+                formatted_items.append(str(item))
 
         return formatted_items
 
@@ -145,6 +145,7 @@ FormatSet.formatDict['Brackets'] = {
 # These two formatters are more complex, justifying individual functions:
 
 def _fmtCnv_html(x):
+    x = str(x)
     x = x.replace("\\", "&#92"); #backslash
     x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
     x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
@@ -158,6 +159,7 @@ def _fmtCnv_html_nmeb(x):
     return '<span class="nmerrorbar">' + _fmtCnv_html(x) + '</span>'
 
 def _fmtCnv_latex(x):
+    x = str(x)
     x = x.replace("\\", "\\textbackslash")
     x = x.replace('%','\\%')
     x = x.replace('#','\\#')

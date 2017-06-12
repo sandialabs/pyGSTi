@@ -26,7 +26,7 @@ class ReportableQty(object):
     primarily for use in reports.
     """
 
-    def __init__(self, value, errbar=None):
+    def __init__(self, value, errbar=None, tooltip=None):
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -39,8 +39,9 @@ class ReportableQty(object):
         errbar : anything
            The error bar(s) to store
         """
-        self.value = value
-        self.errbar = errbar
+        self.value   = value
+        self.errbar  = errbar
+        self.tooltip = tooltip
 
     @staticmethod
     def from_val(value):
@@ -56,10 +57,9 @@ class ReportableQty(object):
         '''
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have two fields'
-            return ReportableQty(value[0], value[1])
+            return ReportableQty(value[0], value[1], tooltip='test')
         else:
-            #return value
-            return ReportableQty(value)
+            return ReportableQty(value, tooltip='test')
 
     def __getattr__(self, name):
         return getattr(self.value, name)
@@ -86,24 +86,10 @@ class ReportableQty(object):
         return self.value, self.errbar
 
     def __str__(self):
-        if self.errbar is not None:
-            return str(self.value) + " +/- " + str(self.errbar)
-        else: return str(self.value)
-
-    def __int__(self):
-        if self.errbar is not None:
-            raise ValueError('Reportable Quantity with Error bar Cannot be converted to int')
-        else:
-            return int(self.value)
-
-    def __float__(self):
-        if self.errbar is not None:
-            raise ValueError('Reportable Quantity with Error bar Cannot be converted to int')
-        else:
-            return float(self.value)
-
+        return self.render_with(str)
 
     def __getitem__(self, q):
+        raise ValueError('Stop using getitem with reportableqty')
         if self.errbar is None:
             return self.value[q]
         else:
@@ -113,6 +99,15 @@ class ReportableQty(object):
                 return self.errbar
             raise KeyError('Reportable quantity has no element: [{}]'.format(q))
 
+    def render_with(self, f):
+        if self.errbar is not None:
+            rendered = f(self.value) + " +/- " + f(self.errbar)
+        else: 
+            rendered = f(self.value)
+        if self.tooltip is not None:
+            return '<span title="{}">{}</span>'.format(self.tooltip, rendered)
+        else:
+            return rendered
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol

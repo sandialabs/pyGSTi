@@ -44,6 +44,8 @@ def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
     string
         html string for x.
     """
+    if isinstance(x, _ReportableQty):
+        return x.render_with(html)
 
     if isinstance(x,_np.ndarray) or \
        isinstance(x,_objs.Gate) or \

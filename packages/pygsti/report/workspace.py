@@ -1620,7 +1620,7 @@ class WorkspaceTable(WorkspaceOutput):
             divHTML = []
             divIDs = []
             divJS = []
-            for i,table in enumerate(self.tables):
+            for i, table in enumerate(self.tables):
                 tableDivID = tableID + "_%d" % i
                 if isinstance(table,NotApplicable):
                     table_dict = table.render("html",tableDivID)
