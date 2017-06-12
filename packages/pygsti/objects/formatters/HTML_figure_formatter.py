@@ -13,7 +13,7 @@ class HTMLFigureFormatter(ParameterizedFormatter):
         super(HTMLFigureFormatter, self).__init__(no_format, ['resizable','autosize'])
 
     # Override call method of Parameterized formatter
-    def __call__(self, fig):
+    def __call__(self, fig, specs):
         render_out = fig.render("html",
                                 resizable="handlers only" if self.specs['resizable'] else False,
                                 autosize=self.specs['autosize'])

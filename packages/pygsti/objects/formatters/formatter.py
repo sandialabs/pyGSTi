@@ -31,7 +31,7 @@ class Formatter(object):
         self.formatstring    = formatstring
         self.stringreturn    = stringreturn
 
-    def __call__(self, label):
+    def __call__(self, label, specs):
         '''
         Formatting function template
 

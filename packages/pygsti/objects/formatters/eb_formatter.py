@@ -8,7 +8,7 @@ class EBFormatter(object):
         self.formatstringA = formatstringA
         self.formatstringB = formatstringB
 
-    def __call__(self, t):
+    def __call__(self, t, specs):
         if hasattr(self.f, 'specs'):
             give_specs(self.f, self.specs)
         if t.has_eb():

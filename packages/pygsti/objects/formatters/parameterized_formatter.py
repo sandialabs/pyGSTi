@@ -19,7 +19,7 @@ class ParameterizedFormatter(object):
         self.defaults     = defaults
         self.formatstring = formatstring
 
-    def __call__(self, label):
+    def render(self, label, _):
         # If the formatter is being called, we know that the needed specs have successfully been supplied by FormatSet
         self.defaults.update(self.specs)
         # Supply arguments to the custom formatter (if it needs them)

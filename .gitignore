@@ -21,7 +21,7 @@ test/output/pylint/*
 test/output/individual_coverage/*/*
 test/test_packages/.noseids
 test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
-packages/pygsti/report/dashboard/tutorial_files
+**tutorial_files
 
 # Compiled source #
 ###################

@@ -26,7 +26,7 @@ class FormatterBaseTestCase(BaseTestCase):
         table      = ReportTable(headings, formatters)
         return table.render(formattype, **kwargs)[formattype]
 
-import pygsti.report.formatter as formatter
+import pygsti.report.formatters as formatter
 from pygsti.report.table import ReportTable
 
 class GenericFormatterTests(FormatterBaseTestCase):

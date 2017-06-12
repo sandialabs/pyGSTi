@@ -21,7 +21,7 @@ class TupleFormatter(object):
         self.formatstring    = formatstring
         self.label_formatter = label_formatter
 
-    def __call__(self, label_tuple):
+    def __call__(self, label_tuple, specs):
         '''
         Formatting function template
 

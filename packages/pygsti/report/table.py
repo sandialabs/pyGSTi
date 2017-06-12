@@ -1,5 +1,5 @@
 from __future__   import division, print_function, absolute_import, unicode_literals
-from .formatter   import FormatSet     as _FormatSet
+from .formatters  import FormatSet     as _FormatSet
 from .reportables import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
 import re as _re

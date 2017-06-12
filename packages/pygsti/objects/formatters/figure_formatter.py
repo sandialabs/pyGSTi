@@ -18,7 +18,7 @@ class FigureFormatter(ParameterizedFormatter):
         self.formatstring = formatstring
 
     # Override call method of Parameterized formatter
-    def __call__(self, figInfo):
+    def __call__(self, figInfo, specs):
         fig, name, W, H = figInfo
         scratchDir = self.specs['scratchDir']
         if len(scratchDir) > 0: #empty scratchDir signals not to output figure
