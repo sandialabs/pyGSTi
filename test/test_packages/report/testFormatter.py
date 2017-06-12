@@ -35,10 +35,10 @@ class GenericFormatterTests(FormatterBaseTestCase):
 
     def test_none_formatter(self):
         formatter.FormatSet.formatDict['BadFormat'] = {
-            'latex' : lambda l : None,
-            'html'  : lambda l : None,
-            'text'  : lambda l : None,
-            'ppt'   : lambda l : None,
+            'latex' : lambda l, s : None,
+            'html'  : lambda l, s : None,
+            'text'  : lambda l, s : None,
+            'ppt'   : lambda l, s : None,
             }
 
         with self.assertRaises(ValueError):
@@ -61,18 +61,6 @@ class GenericFormatterTests(FormatterBaseTestCase):
 
     def test_no_format(self):
         self.assertEqual(formatter.no_format('x'), 'x')
-
-    def test_branching_formatter(self):
-        branchingFormatter = formatter.BranchingFormatter(lambda l : l == 'rho',
-                                                          formatter.FormatSet.formatDict['Rho']['html'],
-                                                          formatter.FormatSet.formatDict['Effect']['html'])
-        self.assertEqual(branchingFormatter('rho'), '&rho;')
-        self.assertEqual(branchingFormatter('not rho'), 'not rho')
-
-        # Ensure specs get passed down
-        branchingFormatter = formatter.BranchingFormatter(lambda l : True,
-                                                          formatter.FormatSet.formatDict['Precision']['html'],
-                                                          formatter.FormatSet.formatDict['Precision']['html'])
 
     def test_conversion_formatters(self):
         self.assertEqual(formatter._fmtCnv_html('|<STAR>'), ' &#9733;')

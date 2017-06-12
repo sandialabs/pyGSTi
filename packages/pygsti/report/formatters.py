@@ -60,9 +60,10 @@ class FormatSet():
                 else:
                     formatted_items.append(formatted_item)
             else:
-                if item is None:
+                if item.get_value() is not None:
+                    formatted_items.append(str(item))
+                else:
                     raise ValueError("Unformatted None in formatList")
-                formatted_items.append(str(item))
 
         return formatted_items
 
@@ -231,8 +232,8 @@ FormatSet.formatDict['NMPiErrorBars'] = {
     'latex' : _PiEB_latex}
 
 FormatSet.formatDict['GateString'] = {
-    'html'  : lambda s : '.'.join(s) if s is not None else '',
-    'latex' : lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))}
+    'html'  : lambda s, _: '.'.join(s) if s is not None else '',
+    'latex' : lambda s, _: ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))}
 
 '''
 # 'pre' formatting, where the user gives the data in separate formats

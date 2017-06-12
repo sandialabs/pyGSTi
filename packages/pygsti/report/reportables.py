@@ -57,9 +57,9 @@ class ReportableQty(object):
         '''
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have two fields'
-            return ReportableQty(value[0], value[1], tooltip='test')
+            return ReportableQty(value[0], value[1], tooltip=None)
         else:
-            return ReportableQty(value, tooltip='test')
+            return ReportableQty(value, tooltip=None)
 
     def __getattr__(self, name):
         return getattr(self.value, name)
@@ -104,10 +104,13 @@ class ReportableQty(object):
             rendered = f(self.value) + " +/- " + f(self.errbar)
         else: 
             rendered = f(self.value)
+        return rendered
+        '''
         if self.tooltip is not None:
             return '<span title="{}">{}</span>'.format(self.tooltip, rendered)
         else:
             return rendered
+        '''
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
