@@ -10,6 +10,7 @@ import numpy             as _np
 import scipy             as _scipy
 import os                as _os
 import warnings          as _warnings
+import collections       as _collections
 
 from .. import algorithms   as _alg
 from .. import tools        as _tools
@@ -277,8 +278,13 @@ def generate_boxplot(subMxs,
           int >= 0 = fixed precision given by int
           int <  0 = number of significant figures given by -int
 
-    hoverInfo : bool, optional
-        Whether to incude interactive hover labels.
+    hoverInfo : bool or function, optional
+        If a boolean, indicates whether to include interactive hover labels. If
+        a function, then must take arguments `(val, iy, ix, iiy, iix)` if 
+        `sumUp == False` or `(val, iy, ix)` if `sumUp == True` and return a 
+        label string, where `val` is the box value, `ix` and `iy` index
+        `xlabels` and `ylabels`, and `iix` and `iiy` index `inner_xlabels`
+        and `inner_ylabels`.
 
     sumUp : bool, optional
         False displays each matrix element as it's own color box
@@ -292,6 +298,7 @@ def generate_boxplot(subMxs,
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
+
 
     Returns
     -------
@@ -364,11 +371,13 @@ def generate_boxplot(subMxs,
     if sumUp:
         subMxSums = _np.array( [ [ sum_up_mx(subMxs[iy][ix]) for ix in range(nXs) ] for iy in range(nYs) ], 'd' )
 
-        if hoverInfo:
+        if hoverInfo == True:
             def hoverLabelFn(val,i,j):
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]), val)
+        elif callable(hoverInfo):
+            hoverLabelFn = hoverInfo
         else: hoverLabelFn = None
 
         boxLabelSize = 8*scale if boxLabels else 0
@@ -381,14 +390,16 @@ def generate_boxplot(subMxs,
                              height=80*(nYs+3)*scale)
 
     else: #not summing up
-                
-        if hoverInfo:
+
+        if hoverInfo == True:
             def hoverLabelFn(val,i,j,ii,jj):
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]),
                      inner_xlabel,str(inner_xlabels[jj]),
                      inner_ylabel,str(inner_ylabels[ii]), val)
+        elif callable(hoverInfo):
+            hoverLabelFn = hoverInfo
         else: hoverLabelFn = None
 
         boxLabelSize = 8*scale if boxLabels else 0
@@ -427,7 +438,7 @@ def generate_boxplot(subMxs,
 
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
-                             sumUp=False,invert=False,scale=1.0):
+                             sumUp=False,invert=False,scale=1.0,addl_hover_subMxs=None):
     """
     A wrapper around :func:`generate_boxplot` for creating color box plots
     when the structure of the gate strings is contained in  a
@@ -476,11 +487,71 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
 
+    addl_hover_subMxs : dict, optional
+        If not None, a dictionary whose values are lists-of-lists in the same
+        format as `subMxs` which specify additional values to add to the 
+        hover-info of the corresponding boxes.  The keys of this dictionary
+        are used as labels within the hover-info text.
+
     Returns
     -------
     plotly.Figure
     """
     g = gatestring_structure
+    xvals = g.used_xvals()
+    yvals = g.used_yvals()
+    inner_xvals = g.minor_xvals()
+    inner_yvals = g.minor_yvals()
+
+    # Note: invert == True case not handled yet, and the below hover label
+    # routines assume L,germ structure in particular
+    if hoverInfo and invert == False and isinstance(g, _objs.LsGermsStructure):
+        if sumUp:
+            def hoverLabelFn(val,iy,ix):
+                if _np.isnan(val): return ""
+                L,germ = xvals[ix],tuple(yvals[iy])
+                baseStr = g.get_plaquette(L,germ,False).base
+                reps = len(baseStr) // len(germ)
+                guess = germ * reps
+                if baseStr == guess:
+                    if len(baseStr) == 0:
+                        txt = "{}"
+                    else:
+                        txt = "(%s)<sup>%d</sup>" % (str(germ),reps)
+                else:
+                    txt = "L: %s<br>germ: %s" % (str(L),str(germ))
+                
+                txt += "<br>val: %g" % val
+                for lbl,addl_subMxs in addl_hover_subMxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
+                return txt
+                    
+        else:
+            def hoverLabelFn(val,iy,ix,iiy,iix):
+                if _np.isnan(val): return ""
+
+                L,germ = xvals[ix],yvals[iy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                baseStr = g.get_plaquette(L,germ,False).base
+                reps = len(baseStr) // len(germ)
+                guess = germ * reps
+                if baseStr == guess:
+                    if len(baseStr) == 0:
+                        txt = "%s+{}+%s" % (str(rhofid),str(efid))
+                    else:
+                        txt = "%s+(%s)<sup>%d</sup>+%s" % (
+                            str(rhofid),str(germ),reps,str(efid))
+                else:
+                    txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
+                          % (str(L),str(germ),str(rhofid),str(efid))
+                txt += ("<br>val: %g" % val)
+                for lbl,addl_subMxs in addl_hover_subMxs.items():
+                    N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N-1-iiy][iix]))
+                return txt
+
+        hoverInfo = hoverLabelFn #generate_boxplot can handle this
+        
     return generate_boxplot(subMxs,
                             list(map(str,g.used_xvals())), list(map(str,g.used_yvals())),
                             list(map(str,g.minor_xvals())), list(map(str,g.minor_yvals())),
@@ -902,6 +973,59 @@ class ColorBoxPlot(WorkspacePlot):
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
+        addl_hover_info_fns = _collections.OrderedDict()
+
+
+        # Begin "Additional sub-matrix" functions for adding more info to hover text
+        def list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
+            mxs = mxs_with_leading_spam_dim
+            list_mx = _np.empty( (mxs.shape[1],mxs.shape[2]), dtype=_np.object)
+            for i in range(mxs.shape[1]):
+                for j in range(mxs.shape[2]):
+                    list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else (fmt % x) for x in mxs[:,i,j]])
+            return list_mx
+
+        def addl_mx_fn_sl(plaq,x,y):
+            spamlabels = gateset.get_spam_labels()
+            slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
+            slmx[:,:] = ", ".join(spamlabels)
+            return slmx
+
+        def addl_mx_fn_p(plaq,x,y):
+            spamlabels = gateset.get_spam_labels()
+            probMxs = _ph.probability_matrices( plaq, gateset, spamlabels,
+                                            probs_precomp_dict)
+            return list_spam_dimension(probMxs, "%.5g")
+
+        def addl_mx_fn_f(plaq,x,y):
+            spamlabels = gateset.get_spam_labels()
+            plaq_ds = plaq.expand_aliases(dataset)
+            freqMxs = _ph.frequency_matrices( plaq_ds, dataset, spamlabels)
+            return list_spam_dimension(freqMxs, "%.5g")
+
+        def addl_mx_fn_cnt(plaq,x,y):
+            plaq_ds = plaq.expand_aliases(dataset)
+            cntMxs = _ph.total_count_matrix(plaq_ds, dataset)
+            return cntMxs
+
+            # Could do this to get counts for all spam labels
+            #spamlabels = gateset.get_spam_labels()
+            #cntMxs  = _ph.count_matrices( plaq_ds, dataset, spamlabels)
+            #return list_spam_dimension(cntMxs, "%d")
+
+        #DEBUG: for checking
+        #def addl_mx_fn_chk(plaq,x,y):
+        #    gsplaq_ds = plaq.expand_aliases(dataset)
+        #    spamlabels = gateset.get_spam_labels()
+        #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
+        #    probMxs = _ph.probability_matrices( plaq, gateset, spamlabels,
+        #                                    probs_precomp_dict)
+        #    freqMxs = _ph.frequency_matrices(   gsplaq_ds, dataset, spamlabels)
+        #    logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, 1e-4)
+        #    return logLMxs.sum(axis=0) # sum over spam labels
+
+            
+        # End "Additional sub-matrix" functions
 
         if _tools.isstr(plottypes):
             plottypes = [plottypes]
@@ -915,6 +1039,12 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(plaq,x,y):
                     return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
+
+                addl_hover_info_fns['outcm'] = addl_mx_fn_sl
+                addl_hover_info_fns['p'] = addl_mx_fn_p
+                addl_hover_info_fns['f'] = addl_mx_fn_f
+                addl_hover_info_fns['total cnts'] = addl_mx_fn_cnt
+
             elif typ == "logl":
                 precomp=True
                 colormapType = "linlog"
@@ -923,6 +1053,12 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(plaq,x,y):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
+
+                addl_hover_info_fns['outcm'] = addl_mx_fn_sl
+                addl_hover_info_fns['p'] = addl_mx_fn_p
+                addl_hover_info_fns['f'] = addl_mx_fn_f
+                addl_hover_info_fns['total cnts'] = addl_mx_fn_cnt
+                #DEBUG: addl_hover_info_fns['chk'] = addl_mx_fn_chk
 
             elif typ == "blank":
                 precomp=False
@@ -989,6 +1125,14 @@ class ColorBoxPlot(WorkspacePlot):
                 subMxs = submatrices[typ] # "custom" type -- all mxs precomputed by user
             else:
                 subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+
+            addl_hover_info = _collections.OrderedDict()
+            for lbl,addl_mx_fn in addl_hover_info_fns.items():
+                if (submatrices is not None) and lbl in submatrices:
+                    addl_subMxs = submatrices[lbl] #ever useful?
+                else:
+                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn,sumUp)
+                addl_hover_info[lbl] = addl_subMxs
             
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
             if len(subMxs) > 0:                
@@ -1016,7 +1160,7 @@ class ColorBoxPlot(WorkspacePlot):
             newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                               False, boxLabels, prec,
                                               hoverInfo, sumUp, invert,
-                                              scale)
+                                              scale, addl_hover_info)
             if fig is None:
                 fig = newfig
             else:
