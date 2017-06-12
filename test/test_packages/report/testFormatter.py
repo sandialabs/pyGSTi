@@ -63,10 +63,10 @@ class GenericFormatterTests(FormatterBaseTestCase):
         self.assertEqual(formatter.no_format('x'), 'x')
 
     def test_conversion_formatters(self):
-        self.assertEqual(formatter._fmtCnv_html('|<STAR>'), ' &#9733;')
-        self.assertEqual(formatter._fmtCnv_latex('%% # half-width 1/2 Diamond Check <STAR>'),
+        self.assertEqual(formatter.convert_html('|<STAR>', {}), ' &#9733;')
+        self.assertEqual(formatter.convert_latex('%% # half-width 1/2 Diamond Check <STAR>', {}),
                '$\%\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\Diamond$ \checkmark \\bigstar$')
-        self.assertEqual(formatter._fmtCnv_latex('x|y'), '\\begin{tabular}{c}x\\\\y\end{tabular}')
+        self.assertEqual(formatter.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\end{tabular}')
 
 if __name__ == '__main__':
     import unittest

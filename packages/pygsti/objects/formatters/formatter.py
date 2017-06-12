@@ -14,7 +14,7 @@ def _has_argname(argname, function):
     return argname in _getargspec(function).args
 
 def _pass_down(specs, custom, label):
-    if _has_argname('specs', custom):
+    if isinstance(custom, Formatter) or _has_argname('specs', custom):
         return custom(label, specs)
     else:
         kwargs = dict()
@@ -107,4 +107,3 @@ class Formatter(object):
                 item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
         # Additional formatting, ex ${}$ or <i>{}</i>
         return self.formatstring.format(item)
-

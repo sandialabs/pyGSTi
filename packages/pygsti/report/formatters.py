@@ -146,29 +146,22 @@ FormatSet.formatDict['Brackets'] = {
 
 # These two formatters are more complex, justifying individual functions:
 
-def _fmtCnv_html(x, _):
-    x = str(x)
-    x = x.replace("\\", "&#92"); #backslash
-    x = x.replace("|"," ") #remove pipes=>newlines, since html wraps table text automatically
-    x = x.replace("<STAR>","REPLACEWITHSTARCODE") #b/c cgi.escape would mangle <STAR> marker
-    #x = _cgi.escape(x).encode("ascii","xmlcharrefreplace")
-    x = x.replace("REPLACEWITHSTARCODE", '&#9733;') #replace new marker with HTML code
-    return str(x)
+convert_html = Formatter(stringreplacers=[
+    ('\\', '&#92'),
+    ('|', ' '),
+    ('<STAR>', '&#9733;')])
 
-def _fmtCnv_html_eb(x, _):
-    return '<span class="errorbar">' + _fmtCnv_html(x) + '</span>'
-def _fmtCnv_html_nmeb(x, _):
-    return '<span class="nmerrorbar">' + _fmtCnv_html(x) + '</span>'
+pre_convert_latex = Formatter(stringreplacers=[
+    ("\\", "\\textbackslash"),
+    ('%','\\%'),
+    ('#','\\#'),
+    ("half-width", "$\\nicefrac{1}{2}$-width"),
+    ("1/2", "$\\nicefrac{1}{2}$"),
+    ("Diamond","$\\Diamond$"),
+    ("Check","\\checkmark")])
 
-def _fmtCnv_latex(x, _):
-    x = str(x)
-    x = x.replace("\\", "\\textbackslash")
-    x = x.replace('%','\\%')
-    x = x.replace('#','\\#')
-    x = x.replace("half-width", "$\\nicefrac{1}{2}$-width")
-    x = x.replace("1/2", "$\\nicefrac{1}{2}$")
-    x = x.replace("Diamond","$\\Diamond$")
-    x = x.replace("Check","\\checkmark")
+def special_convert_latex(x):
+    x = pre_convert_latex(str(x), {})
     if "<STAR>" in x: #assume <STAR> never has $ around it already
         x = "$" + x.replace("<STAR>","\\bigstar") + "$"
     if "|" in x:
@@ -176,17 +169,19 @@ def _fmtCnv_latex(x, _):
     else:
         return x
 
+convert_latex = Formatter(special_convert_latex)
+
 FormatSet.formatDict['Conversion'] = {
-    'html'  : _fmtCnv_html,
-    'latex' : _fmtCnv_latex}
+    'html'  : Formatter(convert_html),
+    'latex' : Formatter(convert_latex)}
 
 FormatSet.formatDict['EBConversion'] = {
-    'html'  : _fmtCnv_html_eb,
-    'latex' : _fmtCnv_latex}
+    'html'  : Formatter(Formatter(convert_html, formatstring='<span class="errorbar">{}</span>')),
+    'latex' : Formatter(convert_latex)}
 
 FormatSet.formatDict['NMEBConversion'] = {
-    'html'  : _fmtCnv_html_nmeb,
-    'latex' : _fmtCnv_latex}
+    'html'  : Formatter(Formatter(convert_html, formatstring='<span class="nmerrorbar">{}</span>')),
+    'latex' : Formatter(convert_latex)}
 
 
 _EB_html  = EBFormatter(Formatter(html),
@@ -231,8 +226,8 @@ FormatSet.formatDict['NMPiErrorBars'] = {
     'latex' : _PiEB_latex}
 
 FormatSet.formatDict['GateString'] = {
-    'html'  : lambda s, _: '.'.join(s) if s is not None else '',
-    'latex' : lambda s, _: ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s]))}
+    'html'  : Formatter(lambda s : '.'.join(s) if s is not None else ''),
+    'latex' : Formatter(lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])))}
 
 '''
 # 'pre' formatting, where the user gives the data in separate formats
@@ -273,28 +268,23 @@ FormatSet.formatDict['Bold'] = {
 '''
 #Multi-row and multi-column formatting (with "Conversion" type inner formatting)
 FormatSet.formatDict['MultiRow'] = {
-    'html'  : TupleFormatter(_fmtCnv_html, formatstring='<td rowspan="{l1}">{l0}</td>'),
-    'latex' : TupleFormatter(_fmtCnv_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}')}
-'''
-
+    'html'  : TupleFormatter(convert_html, formatstring='<td rowspan="{l1}">{l0}</td>'),
+    'latex' : TupleFormatter(convert_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}')}
 
 def _empty_str(l): return ""
 def _return_None(l): return None #signals no <td></td> in HTML
 
-'''
 FormatSet.formatDict['SpannedRow'] = {
     'html'  : _return_None,
     'latex' : _empty_str}
-'''
 
 def _repeatno_format(label_tuple): 
     label, reps = label_tuple
     return ["%s" % label]*reps
 
-'''
 FormatSet.formatDict['MultiCol'] = {
-    'html'  : TupleFormatter(_fmtCnv_html, formatstring='<td colspan="{l1}">{l0}</td>'),
-    'latex' : TupleFormatter(_fmtCnv_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}')}
+    'html'  : TupleFormatter(convert_html, formatstring='<td colspan="{l1}">{l0}</td>'),
+    'latex' : TupleFormatter(convert_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}')}
 '''
 
 
