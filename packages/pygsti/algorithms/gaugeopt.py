@@ -13,6 +13,91 @@ from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
 
+def create_objective_fn(gateset, targetGateset, itemWeights=None,
+                       CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
+                       gatesMetric="frobenius", spamMetric="frobenius"):
+
+    if itemWeights is None: itemWeights = {}
+    gateWeight = itemWeights.get('gates',1.0)
+    spamWeight = itemWeights.get('spam',1.0)
+    mxBasis = gateset.get_basis_name()
+    basisDim = gateset.get_basis_dimension()
+
+    #Use the target gateset's basis if gateset's is unknown
+    # (as it can often be if it's just come from an logl opt,
+    #  since from_vector will clear any basis info)
+    if mxBasis == "unknown" and targetGateset is not None: 
+        mxBasis = targetGateset.get_basis_name()
+        basisDim = targetGateset.get_basis_dimension()
+    
+    def objective_fn(gs):
+        ret = 0
+
+        if CPpenalty != 0:
+            gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+            s = _tools.sum_of_negative_choi_evals(gs, weights=None)
+              # we desire *uniform* weights (don't specify itemWeights here)
+            ret += CPpenalty * s
+
+        if TPpenalty != 0:
+            rhoVecFirstEl = 1.0 / (gs.dim**0.25)  # note: sqrt(gateDim) gives linear dim of density mx
+            for gate in gs.gates.values():
+                ret += TPpenalty * abs(1.0-gate[0,0])
+                for k in range(1,gate.shape[1]):
+                    ret += TPpenalty * abs(gate[0,k])
+            for rhoVec in gs.preps.values():
+                ret += TPpenalty * abs(rhoVecFirstEl - rhoVec[0])
+
+        if validSpamPenalty != 0:
+            sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in gs.preps.values() ] )
+            sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in gs.effects.values() ] )
+            ret += validSpamPenalty*sp
+
+        if targetGateset is not None:
+            if gatesMetric == "frobenius":
+                if spamMetric == "frobenius":
+                    ret += gs.frobeniusdist(targetGateset, None, gateWeight,
+                                            spamWeight, itemWeights)
+                else:
+                    ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
+    
+            elif gatesMetric == "fidelity":
+                for gateLbl in gs.gates:
+                    wt = itemWeights.get(gateLbl, gateWeight)
+                    ret += wt * (1.0 - _tools.process_fidelity(
+                            targetGateset.gates[gateLbl], gs.gates[gateLbl]))**2
+    
+            elif gatesMetric == "tracedist":
+                    for gateLbl in gs.gates:
+                        wt = itemWeights.get(gateLbl, gateWeight)
+                        ret += gateWeight * _tools.jtracedist(
+                            targetGateset.gates[gateLbl], gs.gates[gateLbl])
+    
+            else: raise ValueError("Invalid gatesMetric: %s" % gatesMetric)
+    
+            if spamMetric == "frobenius":
+                pass #added in special case above to match normalization in frobeniusdist
+                #ret += gs.frobeniusdist(targetGateset,None,0,spamWeight,itemWeights)
+    
+            elif spamMetric == "fidelity":
+                for spamlabel in gs.get_spam_labels():
+                    wt = itemWeights.get(spamlabel, spamWeight)
+                    ret += wt * (1.0 - _tools.process_fidelity(
+                            targetGateset.get_spamgate(spamlabel),
+                            gs.get_spamgate(spamlabel)))**2
+    
+            elif spamMetric == "tracedist":
+                for spamlabel in gs.get_spam_labels():
+                    wt = itemWeights.get(spamlabel, spamWeight)
+                    ret += wt * _tools.jtracedist(
+                        targetGateset.get_spamgate(spamlabel),
+                        gs.get_spamgate(spamlabel))
+    
+            else: raise ValueError("Invalid spamMetric: %s" % spamMetric)
+
+        return ret
+    return objective_fn
+
 def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                        CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
                        gatesMetric="frobenius", spamMetric="frobenius",
@@ -116,85 +201,11 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       final gauge-transformed gateset.
     """
 
-    if itemWeights is None: itemWeights = {}
-    gateWeight = itemWeights.get('gates',1.0)
-    spamWeight = itemWeights.get('spam',1.0)
-    mxBasis = gateset.get_basis_name()
-    basisDim = gateset.get_basis_dimension()
-
-    #Use the target gateset's basis if gateset's is unknown
-    # (as it can often be if it's just come from an logl opt,
-    #  since from_vector will clear any basis info)
-    if mxBasis == "unknown" and targetGateset is not None: 
-        mxBasis = targetGateset.get_basis_name()
-        basisDim = targetGateset.get_basis_dimension()
-
-    def objective_fn(gs):
-        ret = 0
-
-        if CPpenalty != 0:
-            gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
-            s = _tools.sum_of_negative_choi_evals(gs, weights=None)
-              # we desire *uniform* weights (don't specify itemWeights here)
-            ret += CPpenalty * s
-
-        if TPpenalty != 0:
-            rhoVecFirstEl = 1.0 / (gs.dim**0.25)  # note: sqrt(gateDim) gives linear dim of density mx
-            for gate in gs.gates.values():
-                ret += TPpenalty * abs(1.0-gate[0,0])
-                for k in range(1,gate.shape[1]):
-                    ret += TPpenalty * abs(gate[0,k])
-            for rhoVec in gs.preps.values():
-                ret += TPpenalty * abs(rhoVecFirstEl - rhoVec[0])
-
-        if validSpamPenalty != 0:
-            sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in gs.preps.values() ] )
-            sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in gs.effects.values() ] )
-            ret += validSpamPenalty*sp
-
-        if targetGateset is not None:
-            if gatesMetric == "frobenius":
-                if spamMetric == "frobenius":
-                    ret += gs.frobeniusdist(targetGateset, None, gateWeight,
-                                            spamWeight, itemWeights)
-                else:
-                    ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
-    
-            elif gatesMetric == "fidelity":
-                for gateLbl in gs.gates:
-                    wt = itemWeights.get(gateLbl, gateWeight)
-                    ret += wt * (1.0 - _tools.process_fidelity(
-                            targetGateset.gates[gateLbl], gs.gates[gateLbl]))**2
-    
-            elif gatesMetric == "tracedist":
-                    for gateLbl in gs.gates:
-                        wt = itemWeights.get(gateLbl, gateWeight)
-                        ret += gateWeight * _tools.jtracedist(
-                            targetGateset.gates[gateLbl], gs.gates[gateLbl])
-    
-            else: raise ValueError("Invalid gatesMetric: %s" % gatesMetric)
-    
-            if spamMetric == "frobenius":
-                pass #added in special case above to match normalization in frobeniusdist
-                #ret += gs.frobeniusdist(targetGateset,None,0,spamWeight,itemWeights)
-    
-            elif spamMetric == "fidelity":
-                for spamlabel in gs.get_spam_labels():
-                    wt = itemWeights.get(spamlabel, spamWeight)
-                    ret += wt * (1.0 - _tools.process_fidelity(
-                            targetGateset.get_spamgate(spamlabel),
-                            gs.get_spamgate(spamlabel)))**2
-    
-            elif spamMetric == "tracedist":
-                for spamlabel in gs.get_spam_labels():
-                    wt = itemWeights.get(spamlabel, spamWeight)
-                    ret += wt * _tools.jtracedist(
-                        targetGateset.get_spamgate(spamlabel),
-                        gs.get_spamgate(spamlabel))
-    
-            else: raise ValueError("Invalid spamMetric: %s" % spamMetric)
-
-        return ret
+    objective_fn = _create_objective_fn(gateset, targetGateset,
+            itemWeights, 
+            CPpenalty, TPpenalty, 
+            validSpamPenalty, gatesMetric, 
+            spamMetric)
     
     result = gaugeopt_custom(gateset, objective_fn, gauge_group,
                  method, maxiter, maxfev, tol, returnAll, verbosity)
