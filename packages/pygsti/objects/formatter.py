@@ -7,15 +7,6 @@
 import re as _re
 from copy import deepcopy
 
-from inspect import getargspec as _getargspec
-
-# Helper function to ParameterizedFormatter
-def _has_argname(argname, function):
-    return argname in _getargspec(function).args
-
-def _pass_down(specs, custom, label):
-    return custom(label, specs)
-
 class Formatter(object):
     '''
     Class defining the formatting rules for an object
@@ -25,7 +16,8 @@ class Formatter(object):
             custom=None, 
             stringreplacers=None, 
             regexreplace=None,
-            formatstring='{}',
+            formatstring='%s',
+            ebstring='%s +/- %s',
             stringreturn=None,
             defaults=None):
         '''
@@ -49,6 +41,7 @@ class Formatter(object):
         self.stringreplacers = stringreplacers
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
+        self.ebstring        = ebstring
         self.stringreturn    = stringreturn
         if defaults is None:
             self.defaults = dict()
@@ -67,25 +60,29 @@ class Formatter(object):
         --------
         formatted item : string
         '''
+        if hasattr(item, 'has_eb'): # Check isinstance(item, ReportableQTY without importing ReportableQty)
+            # If values are replaced with dashes or empty, leave them be
+            s = str(item.get_value())
+            if s == '--' or s == '':
+                return s
+            # Format with ebstring if error bars present
+            if item.has_eb():
+                return self.ebstring % (self(item.get_value(), specs), self(item.get_err_bar(), specs))
+            # Otherwise use value only
+            else:
+                return self(item.get_value(), specs)
+
         if len(self.defaults) > 0:
             specs = deepcopy(specs) # Modifying other dictionaries would be rude
             specs.update(self.defaults)
 
         if self.custom is not None:
-            # Temporary pass down of args using argspec TODO: REPLACEME with comment below (after changing html.py and latex.py)
-            item = _pass_down(specs, self.custom, item)
-            #item = self.custom(item, specs)
-            
-        # Special case for HTML Plots that are returned as dictionaries 
-        if isinstance(item, dict) and 'html' in item and 'js' in item:
-            return item
+            item = self.custom(item, specs)
 
         item = str(item)
         # Exit early if string matches stringreturn
         if self.stringreturn is not None and self.stringreturn[0] == item:
             return self.stringreturn[1]
-            #Changed by EGN: no need to format string here, but do need to
-            # check for equality above
 
         # Below is the standard formatter case:
         # Replace all occurances of certain substrings
@@ -99,4 +96,4 @@ class Formatter(object):
                 grouped = result.group(1)
                 item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
         # Additional formatting, ex ${}$ or <i>{}</i>
-        return self.formatstring.format(item)
+        return self.formatstring % item

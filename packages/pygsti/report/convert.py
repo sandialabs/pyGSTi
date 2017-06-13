@@ -14,7 +14,16 @@ from .. import objects as _objs
 from ..tools import compattools as _compat
 from .reportables import ReportableQty as _ReportableQty
 
+'''
+This module defines type-differentiation for low level formatting types
+Its main function, convert, takes any item x, a specs dictionary, and a format (ie 'html')
+and returns a formatted version of x using the format
+'''
+
 def functions_in(module):
+    '''
+    Create a dictionary of the functions in a module
+    '''
     return { name : f for name, f in module.__dict__.items() if callable(f)}
 
 formatDict = {
@@ -22,6 +31,9 @@ formatDict = {
         'latex' : functions_in(latex)}
 
 def calc_dim(x):
+    '''
+    Calculate the dimension of some matrix-like type
+    '''
     d = 0
     for l in x.shape:
         if l > 1: d += 1
@@ -29,6 +41,7 @@ def calc_dim(x):
 
 def item_type(x):
     """
+    Differentiate an item's type
 
     Parameters
     ----------
@@ -60,6 +73,9 @@ def item_type(x):
         return 'raw'
 
 def convert(x, specs, fmt):
+    '''
+    Convert any item to a format
+    '''
     t = item_type(x)
     if t == 'raw':
         print('WARNING: {} not explicitly converted to {}'.format(x, fmt))
@@ -69,6 +85,6 @@ def convert(x, specs, fmt):
         return formatDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
     return formatDict[fmt][t](x, specs)
 
-def sub_convert(fmt):
+def converter(fmt):
     return functools.partial(convert, fmt=fmt)
 
