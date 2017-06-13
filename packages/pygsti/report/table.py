@@ -34,6 +34,15 @@ class ReportTable(object):
     def finish(self):
         pass #nothing to do currently
 
+    def get_col_headings(self, fmt, formatSet):
+        if self._headingFormatters is not None:
+            return formatSet.formatList(
+                                     self._headings,
+                                     self._headingFormatters, fmt)
+        else: #headingFormatters is None => headings is dict w/formats
+            # TODO: More elegant distinction between dict of formats and given formatted labels
+            return ['<span title="{}">{}</span>'.format(item, item) for item in self._headings[fmt]]
+
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
@@ -60,17 +69,12 @@ class ReportTable(object):
                     and "latex" in self._customHeadings:
                 latex = self._customHeadings['latex']
             else:
-                if self._headingFormatters is not None:
-                    colHeadings_formatted = formatSet.formatList(
-                                             self._headings,
-                                             self._headingFormatters, "latex")
-                else: #headingFormatters is None => headings is dict w/formats
-                    colHeadings_formatted = self._headings['latex']
+                colHeadingsFormatted = self.get_col_headings('latex', formatSet)
 
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
-                    (table, "|c" * len(colHeadings_formatted) + "|")
+                    (table, "|c" * len(colHeadingsFormatted) + "|")
                 latex += ("%s \\\\ \hline\n"
-                          % (" & ".join(colHeadings_formatted)))
+                          % (" & ".join(colHeadingsFormatted)))
 
             for rowData, formatters in self._rows:
                 formatted_rowData = formatSet.formatList(rowData, formatters,
@@ -111,18 +115,13 @@ class ReportTable(object):
                 html += self._customHeadings['html'] % {'tableclass': tableclass,
                                                        'tableid': tableID}
             else:
-                if self._headingFormatters is not None:
-                    colHeadings_formatted = \
-                        formatSet.formatList(self._headings,
-                                       self._headingFormatters, "html")
-                else: #headingFormatters is None => headings is dict w/formats
-                    colHeadings_formatted = self._headings['html']
+                colHeadingsFormatted = self.get_col_headings('html', formatSet)
                 
                 html += "<table"
                 if tableclass: html += ' class="%s"' % tableclass
                 if tableID: html += ' id="%s"' % tableID
                 html += "><thead><tr><th> %s </th></tr>" % \
-                    (" </th><th> ".join(colHeadings_formatted))
+                    (" </th><th> ".join(colHeadingsFormatted))
                 html += "</thead><tbody>"
 
             for rowData,formatters in self._rows:
@@ -158,14 +157,14 @@ class ReportTable(object):
         #        raise ValueError("custom headers unsupported for plotly format")
         #
         #    if self._headingFormatters is not None:
-        #        colHeadings_formatted = \
+        #        colHeadingsFormatted = \
         #            formatSet.formatList(self._headings,
         #                           self._headingFormatters, 'latex')
         #    else: #headingFormatters is None => headings is dict w/formats
-        #        colHeadings_formatted = self._headings['text']
+        #        colHeadingsFormatted = self._headings['text']
         #
         #    data_matrix = []
-        #    data_matrix.append( colHeadings_formatted )
+        #    data_matrix.append( colHeadingsFormatted )
         #
         #    for rowData,formatters in self._rows:
         #        formatted_rowData = formatSet.formatList(rowData, formatters, 'latex')
