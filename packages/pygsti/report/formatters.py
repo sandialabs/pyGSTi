@@ -12,7 +12,7 @@ from .convert import converter
 html  = converter('html')  # Retrieve low-level formatters
 latex = converter('latex')
 
-from ..objects.formatter import Formatter
+from .formatter import Formatter
 
 import cgi     as _cgi
 import numpy   as _np
@@ -193,8 +193,8 @@ def latex_figure(figInfo, specs):
                            name + self.extension)
 
 FormatSet.formatDict['Figure'] = {
-    'html'  : Formatter(html_figure),
-    'latex' : Formatter(latex_figure)}
+    'html'  : html_figure,
+    'latex' : latex_figure}
 
 # Bold formatting
 FormatSet.formatDict['Bold'] = {

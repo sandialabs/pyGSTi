@@ -1,4 +1,11 @@
-from __future__   import division, print_function, absolute_import, unicode_literals
+from __future__ import division, print_function, absolute_import, unicode_literals
+
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
 from .formatters  import FormatSet     as _FormatSet
 from .reportables import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
@@ -6,25 +13,20 @@ import re as _re
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
+        self._customHeadings    = customHeader
+        self._rows              = []
         self._headingFormatters = formatters
 
-        if colHeadingLabels is None:
-            colHeadingLabels = colHeadings
         if self._headingFormatters is not None:
+            if colHeadingLabels is None:
+                colHeadingLabels = colHeadings
             self._headings = [_ReportableQty(item, tooltip=label) for item, label in zip(
                 colHeadings,
                 colHeadingLabels)]
+            self._columnNames = self._headings
         else:
             self._headings = colHeadings
-        self._customHeadings    = customHeader
-        self._rows              = []
-
-
-        if self._headingFormatters is not None:
-            self._columnNames = self._headings
-        else: #headingFormatters is None => headings is dict w/formats
-            #print(self._headings)
-            self._columnNames = self._headings['html'] #use html heading by default 
+            self._columnNames = self._headings['html']
 
     def addrow(self, rowData, formatters):
         self._rows.append(([_ReportableQty.from_val(item) for item in rowData], formatters))
@@ -128,7 +130,7 @@ class ReportTable(object):
                 if len(formatted_rowData) > 0:
                     html += "<tr>"
                     for formatted_cell in formatted_rowData:
-                        if isinstance(formatted_cell,dict):
+                        if isinstance(formatted_cell, dict):
                             #cell contains javascript along with html
                             js += formatted_cell['js'] + '\n'
                             formatted_cell = formatted_cell['html']

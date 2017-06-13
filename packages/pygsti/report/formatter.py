@@ -7,6 +7,10 @@
 import re as _re
 from copy import deepcopy
 
+from functools import partial
+
+from .reportableqty import ReportableQty as _ReportableQty
+
 class Formatter(object):
     '''
     Class defining the formatting rules for an object
@@ -33,16 +37,15 @@ class Formatter(object):
 
         formatstring : string (optional) Outer formatting for after both replacements have been made
 
-        stringreturn : tuple (string, string) Replaces first string with second and
-                         returns early if the first string exists,
-                         otherwise does nothing
+        stringreturn : tuple (string, string)
+            return the second string if the label is equal to the first
         '''
         self.custom          = custom
         self.stringreplacers = stringreplacers
+        self.stringreturn    = stringreturn
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
         self.ebstring        = ebstring
-        self.stringreturn    = stringreturn
         if defaults is None:
             self.defaults = dict()
         else:
@@ -60,7 +63,10 @@ class Formatter(object):
         --------
         formatted item : string
         '''
-        if hasattr(item, 'has_eb'): # Check isinstance(item, ReportableQTY without importing ReportableQty)
+        specs = deepcopy(specs) # Modifying other dictionaries would be rude
+        specs.update(self.defaults)
+
+        if isinstance(item, _ReportableQty):
             # If values are replaced with dashes or empty, leave them be
             s = str(item.get_value())
             if s == '--' or s == '':
@@ -68,20 +74,13 @@ class Formatter(object):
             # Format with ebstring if error bars present
             if item.has_eb():
                 return self.ebstring % (self(item.get_value(), specs), self(item.get_err_bar(), specs))
-            # Otherwise use value only
             else:
-                return self(item.get_value(), specs)
-
-        if len(self.defaults) > 0:
-            specs = deepcopy(specs) # Modifying other dictionaries would be rude
-            specs.update(self.defaults)
-
-        if self.custom is not None:
+                return item.render_with(partial(self, specs=specs))
+        elif self.custom is not None:
             item = self.custom(item, specs)
 
         item = str(item)
-        # Exit early if string matches stringreturn
-        if self.stringreturn is not None and self.stringreturn[0] == item:
+        if self.stringreturn is not None and item == self.stringreturn[0]:
             return self.stringreturn[1]
 
         # Below is the standard formatter case:
