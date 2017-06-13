@@ -1,6 +1,8 @@
 
 $(document).ready(function() {
 
+    window.plotman = new PlotManager();
+    
     document.getElementById("defaultOpen").click();
     
     $("body").on("mousemove",function(event) {
@@ -15,7 +17,7 @@ $(document).ready(function() {
     
     $(".pygsti-wsoutput-group").each( function() {
 	$(this).on('click', function() {
-	    $(this).siblings("figcaption").toggle();});
+	    $(this).siblings("figcaption").children("span.captiondetail").toggle();});
     });
     
     var elSelector		= '.header',

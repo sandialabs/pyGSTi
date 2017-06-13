@@ -355,3 +355,44 @@ function pex_resize_slaves(el, orig_width, orig_height) {
     }
 }
 
+
+function PlotManager(){
+    this.queue = [];
+    this.labelqueue = [];
+    this.busy = false;
+    this.processor = null;
+}
+
+PlotManager.prototype.run = function(){
+    console.log("PLOTMANAGER: starting run queue execution");
+    
+    if (this.processor !== null) {
+	clearInterval(processor);
+    }
+    $("#status").show();
+    this.processor = setInterval(function(pm) {
+	if (!pm.busy) {
+	    pm.busy = true;
+	    if (pm.queue.length){
+		var label = pm.labelqueue.pop();
+		var callback = pm.queue.pop();
+		$("#status").text(label + " (" + pm.queue.length + " remaining)");
+		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
+		callback();
+	    }
+	    pm.busy = false;
+	}
+	if (pm.queue.length <= 0) {
+	    console.log("PLOTMANAGER: queue empty!");
+            clearInterval(pm.processor);
+	    pm.processor = null;
+            $("#status").hide();
+	}
+    }, 100, this); //pass this as "pm" argument to function
+}
+
+PlotManager.prototype.enqueue = function(callback, label, autostart=true){
+    this.queue.push(callback);
+    this.labelqueue.push(label);
+    if(autostart && this.processor === null) { this.run(); } // in case queue hasn't started
+}

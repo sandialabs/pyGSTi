@@ -354,6 +354,7 @@ class Workspace(object):
         
         #Load our custom plotly extension functions            
         script += insert_resource(connected,None,"pygsti_plotly_ex.js")
+        script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
         # Load style sheets for displaying tables
         script += insert_resource(connected,None,"pygsti_dataviz.css")
@@ -1647,8 +1648,16 @@ class WorkspaceTable(WorkspaceOutput):
             ret = { 'html': base['html'], 'js': '' }
 
             if global_requirejs:
-                ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+                ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
             ret['js'] += '  $(document).ready(function() {\n'
+
+            #FUTURE: make rendering conditional on whether a flag is set (for rendering math)
+            ret['js'] += ('  plotman.enqueue(function() {{ \n'
+                          '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                          '             {{left: "$$", right: "$$", display: true}},\n'
+                          '             {{left: "$", right: "$", display: false}},\n'
+                          '             ] }} ); }}, "Rendering math in {tableID}" );\n').format(tableID=tableID)
+
             ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
             
             if resizable:

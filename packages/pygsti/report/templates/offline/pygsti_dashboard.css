@@ -73,9 +73,11 @@ figure {
 figcaption {
   caption-side: bottom;
   font-weight: bold;
-  display: none; /* displayed by clicking on fig/table */
   -webkit-animation: fadeEffect 1s;
   animation: fadeEffect 1s; /* Fading effect takes 1 second */
+}
+figcaption > span.captiondetail {
+    display: none; /* displayed by clicking on fig/table */
 }
 
 figure.tbl {  /* figure that is a table */
@@ -485,4 +487,27 @@ div.sidenav a.active {
     -webkit-transform: translateY( -100% );
     -ms-transform: translateY( -100% );
     transform: translateY( -100% );
+}
+
+.captiontitle {
+    font-weight: bold;
+}
+
+.captiondetail {
+    font-weight: normal;
+}
+
+#status {
+    color: #777;
+    background:#ccc;
+    border-top:solid 2px #888;
+    bottom:0;
+    left:0;
+    margin:0;
+    padding:0;
+    position:fixed;
+    width:100%;
+    margin:0;
+    padding:3px;
+    text-align:center;
 }

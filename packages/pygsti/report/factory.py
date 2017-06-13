@@ -167,13 +167,39 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
             "auto-render.min.js")
 
-        qtys['katexLIB'] += ('\n<script>'
-                'document.addEventListener("DOMContentLoaded", function() {'
-                'renderMathInElement(document.body, { delimiters: ['
-                '{left: "$$", right: "$$", display: true},'
-                '{left: "$", right: "$", display: false},'
-                '] } ); });'
-                '</script>')
+
+        qtys['katexLIB'] += (
+            '\n<script>'
+            'document.addEventListener("DOMContentLoaded", function() {'
+            '  $("#status").show();\n'
+            '  $("#status").text("Rendering body math");\n'
+            '  $(".math").each(function() {\n'
+            '    console.log("Rendering KateX");\n'
+            '    var texTxt = $(this).text();\n'
+            '    el = $(this).get(0);\n'
+            '    if(el.tagName == "DIV"){\n'
+            '       addDisp = "\\displaystyle";\n'
+            '    } else {\n'
+            '    addDisp = "";\n'
+            '    }\n'
+            '    try {\n'
+            '      katex.render(addDisp+texTxt, el);\n'
+            '    }\n'
+            '    catch(err) {\n'
+            '      $(this).html("<span class=\'err\'>"+err);\n'
+            '    }\n'
+            '  });\n'
+            '});\n'
+            '</script>' )
+
+#OLD: auto-render entire document
+#        qtys['katexLIB'] += ('\n<script>'
+#                'document.addEventListener("DOMContentLoaded", function() {'
+#                'renderMathInElement(document.body, { delimiters: ['
+#                '{left: "$$", right: "$$", display: true},'
+#                '{left: "$", right: "$", display: false},'
+#                '] } ); });'
+#                '</script>')
         # removed so parens work:
         # '{left: "\\[", right: "\\]", display: true},'
         # '{left: "\\(", right: "\\)", display: false}'
