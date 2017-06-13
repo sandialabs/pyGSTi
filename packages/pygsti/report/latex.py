@@ -14,95 +14,28 @@ import cmath
 from .. import objects as _objs
 from ..tools import compattools as _compat
 
-
-def latex(x, brackets=False, precision=6,
-          polarprecision=3, sciprecision=0):
-    """
-    Convert a numpy array, number, or string to latex.
-
-    Parameters
-    ----------
-    x : anything
-        Value to convert into latex.
-
-    brackets : bool, optional
-        Whether to include brackets in the output for array-type variables.
-
-    precision : int, optional
-        Rounding for normal numbers
-
-    polarprecision : int, optional
-        Rounding for polars
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
-
-    Returns
-    -------
-    string
-        latex string for x.
-    """
-    if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.Gate) or \
-       isinstance(x,_objs.SPAMVec):
-        d = 0
-        for l in x.shape:
-            if l > 1: d += 1
-        x = _np.squeeze(x)
-        if d == 0: return latex_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        if d == 1: return latex_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        if d == 2: return latex_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        raise ValueError("I don't know how to render a rank %d numpy array as latex" % d)
-    elif type(x) in (list,tuple):
-        return latex_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-    elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return latex_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-    elif _compat.isstr(x):
-        return latex_escaped(x)
-    else:
-        print("Warning: %s not specifically converted to latex" % str(type(x)))
-        return str(x)
-
-
-def latex_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
+def list(l, specs):
     """
     Convert a python list to latex tabular column.
 
     Parameters
     ----------
     l : list
-        list to convert into latex.
+        list to convert into latex. sub-items pre formatted
 
-    brackets : bool, optional
-        Whether to include brackets in the output for array-type variables.
-
-    precision : int, optional
-        Rounding for normal numbers
-
-    polarprecision : int, optional
-        Rounding for polars
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
     string
         latex string for l.
     """
-    lines = [ ]
-    for el in l:
-        lines.append( latex(el, brackets, precision, polarprecision, sciprecision) )
     return "\\begin{tabular}{c}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{tabular}\n"
+                " \\\\ \n".join(l) + "\n \end{tabular}\n"
 
 
-def latex_vector(v, brackets=False, precision=6,
-                 polarprecision=3, sciprecision=0):
+def vector(v, specs):
     """
     Convert a 1D numpy array to latex.
 
@@ -111,19 +44,8 @@ def latex_vector(v, brackets=False, precision=6,
     v : numpy array
         1D array to convert into latex.
 
-    brackets : bool, optional
-        Whether to include brackets in the output latex.
-
-    precision : int, optional
-        Rounding for normal numbers
-
-    polarprecision : int, optional
-        Rounding for polars
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
@@ -132,12 +54,8 @@ def latex_vector(v, brackets=False, precision=6,
     """
     lines = [ ]
     for el in v:
-        lines.append( latex_value(el, precision=precision,
-                                  polarprecision=polarprecision,
-                                  sciprecision=sciprecision) )
-    if brackets:
-        #return "$ \\left(\\!\\!\\begin{array}{c}\n" + \
-        #        " \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+        lines.append( value(el, specs) )
+    if specs['brackets']:
         return "$ \\begin{pmatrix}\n" + \
                 " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
@@ -145,8 +63,7 @@ def latex_vector(v, brackets=False, precision=6,
                 " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
 
-def latex_matrix(m, fontsize=None, brackets=False, precision=6,
-                 polarprecision=3, sciprecision=0):
+def matrix(m, specs):
     """
     Convert a 2D numpy array to latex.
 
@@ -155,52 +72,33 @@ def latex_matrix(m, fontsize=None, brackets=False, precision=6,
     m : numpy array
         2D array to convert into latex.
 
-    fontsize : int, optional
-        If not None, the fontsize.
-
-    brackets : bool, optional
-        Whether to include brackets in the output latex.
-
-    precision : int, optional
-        Rounding for normal numbers
-
-    polarprecision : int, optional
-        Rounding for polars
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
     string
         latex string for m.
     """
-    lines = [ ]; prefix = ""
+    lines    = [ ]
+    prefix   = ""
+    fontsize = specs['fontsize']
+
     if fontsize is not None:
         prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize*1.2)
 
     for r in range(m.shape[0]):
         lines.append( " & ".join(
-                [latex_value(el, precision=precision,
-                             polarprecision=polarprecision, 
-                             sciprecision=sciprecision) for el in m[r,:] ] ) )
+                [value(el, specs) for el in m[r,:] ] ) )
 
-    if brackets:
-        #return prefix + "$ \\left(\\!\\!\\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        #" \\\\ \n".join(lines) + "\n \end{array}\\!\\!\\right) $\n"
+    if specs['brackets']:
         return prefix + "$ \\begin{pmatrix}\n"  + \
         " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
     else:
-        #return prefix + "$ \\begin{array}{%s}\n" % ("c" * m.shape[1]) + \
-        #" \\\\ \n".join(lines) + "\n \end{array} $\n"            
         return prefix + "$ \\begin{pmatrix}\n"  + \
         " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
 
-
-def latex_value(el, precision=6, polarprecision=3,
-                sciprecision=0, complexAsPolar=True):
+def value(el, specs):
     """
     Convert a floating point or complex value to latex.
 
@@ -209,20 +107,8 @@ def latex_value(el, precision=6, polarprecision=3,
     el : float or complex
         Value to convert into latex.
 
-    precision : int, optional
-        Rounding for normal numbers
-
-    polarprecision : int, optional
-        Rounding for polars
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
-    complexAsPolar : bool, optional
-        Whether to output complex values in polar form.  If False, usual
-        a+ib form is used.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
@@ -231,6 +117,11 @@ def latex_value(el, precision=6, polarprecision=3,
     """
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
+
+    precision      = specs['precision']
+    sciprecision   = specs['sciprecision']
+    polarprecision = specs['polarprecision']
+    complexAsPolar = specs['complexAsPolar']
 
     def render(x):
         if abs(x) < 5*10**(-(precision+1)):
@@ -278,18 +169,12 @@ def latex_value(el, precision=6, polarprecision=3,
             else:
                 s = "0"
     except:
-        #try:
-        #    if abs(el) > TOL: #throws error if el is not a number
-        #        s = "%s" % render(el.real)
-        #    else:
-        #        s = "0"
-        #except:
         s = str(el)
 
     return s
 
 
-def latex_escaped(txt):
+def escaped(txt, specs):
     """
     Escape txt so it is latex safe.
 
@@ -297,6 +182,9 @@ def latex_escaped(txt):
     ----------
     txt : string
         value to escape
+
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------

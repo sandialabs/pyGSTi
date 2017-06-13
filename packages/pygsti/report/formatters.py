@@ -8,8 +8,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 """ Functions for generating report tables in different formats """
 
-from .html  import html,  html_value
-from .latex import latex, latex_value
+from .convert import convert, sub_convert
+
+html = sub_convert('html')
+from .html import value as html_value
+latex = sub_convert('latex')
+from .latex import value as latex_value
 
 from ..objects.formatters import *
 
@@ -158,14 +162,16 @@ pre_convert_latex = Formatter(stringreplacers=[
     ("half-width", "$\\nicefrac{1}{2}$-width"),
     ("1/2", "$\\nicefrac{1}{2}$"),
     ("Diamond","$\\Diamond$"),
-    ("Check","\\checkmark")])
+    ("Check","\\checkmark"),
+    ('|', '\\\\'),
+    ('<STAR>', '\\bigstar')])
 
-def special_convert_latex(x):
+def special_convert_latex(x, specs):
     x = pre_convert_latex(str(x), {})
-    if "<STAR>" in x: #assume <STAR> never has $ around it already
-        x = "$" + x.replace("<STAR>","\\bigstar") + "$"
-    if "|" in x:
-        return '\\begin{tabular}{c}' + '\\\\'.join(x.split("|")) + '\\end{tabular}'
+    if '\\bigstar' in x:
+        x = '${}$'.format(x)
+    if "\\\\" in x:
+        return '\\begin{tabular}{c}' + x + '\\end{tabular}'
     else:
         return x
 

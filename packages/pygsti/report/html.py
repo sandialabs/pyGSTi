@@ -13,85 +13,21 @@ import numpy as _np
 import cmath
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from .latex import latex_vector, latex_matrix
+from .latex import vector as latex_vector
+from .latex import matrix as latex_matrix
 from .reportables import ReportableQty as _ReportableQty
 
-def html(x, brackets=False, precision=6, polarprecision=3, sciprecision=0):
-    """
-    Convert a numpy array, number, or string to html.
-
-    Parameters
-    ----------
-    x : anything
-        Value to convert into HTML.
-
-    brackets : bool, optional
-        Whether to include brackets in the output for array-type variables.
-
-    precision : int, optional
-        Precision with which to round el.
-
-    polarprecision : int, optional
-        Precision with which to round polars.
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
-
-    Returns
-    -------
-    string
-        html string for x.
-    """
-    if isinstance(x, _ReportableQty):
-        return x.render_with(html)
-
-    if isinstance(x,_np.ndarray) or \
-       isinstance(x,_objs.Gate) or \
-       isinstance(x,_objs.SPAMVec):
-        d = 0
-        for l in x.shape:
-            if l > 1: d += 1
-        x = _np.squeeze(x)
-        if d == 0: return html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        if d == 1: return html_vector(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        if d == 2: return html_matrix(x, brackets=brackets, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-        raise ValueError("I don't know how to render a rank %d numpy array as html" % d)
-    elif type(x) in (float,int,complex,_np.float64,_np.int64):
-        return '<span title="test">{}</span>'.format(
-            html_value(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision))
-    elif type(x) in (list,tuple):
-        return html_list(x, precision=precision, polarprecision=polarprecision, sciprecision=sciprecision)
-    elif _compat.isstr(x):
-        return html_escaped(x)
-    else:
-        print("Warning: %s not specifically converted to html" % str(type(x)))
-        return str(x)
-
-
-def html_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
+def list(l, specs):
     """
     Convert a list to html.
 
     Parameters
     ----------
     l : list
-        list to convert into HTML.
+        list to convert into HTML. sub-items pre formatted
 
-    brackets : bool, optional
-        Whether to include brackets in the output html.
-
-    precision : int, optional
-        Precision with which to round el.
-
-    polarprecision : int, optional
-        Precision with which to round polars.
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
@@ -99,18 +35,9 @@ def html_list(l, brackets=False, precision=6, polarprecision=3, sciprecision=0):
         html string for l.
     """
 
-    lines = [ ]
-    for el in l:
-        lines.append( html(el, brackets, precision=precision,
-                           polarprecision=polarprecision, sciprecision=sciprecision) )
-    return "<br>".join(lines)
-    #return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-    #    + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' \
-    #    + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" + '</tr></table></div>\n'
+    return "<br>".join(l)
 
-
-def html_vector(v, brackets=False, precision=6,
-                polarprecision=3, sciprecision=0):
+def vector(v, specs):
     """
     Convert a 1D numpy array to html.
 
@@ -119,44 +46,17 @@ def html_vector(v, brackets=False, precision=6,
     v : numpy array
         1D array to convert into HTML.
 
-    brackets : bool, optional
-        Whether to include brackets in the output html.
-
-    precision : int, optional
-        Precision with which to round el.
-
-    polarprecision : int, optional
-        Precision with which to round polars.
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
     string
         html string for v.
     """
-    return latex_vector(v, brackets, precision,
-                        polarprecision, sciprecision)
-    
-    #for el in v:
-    #    lines.append( html_value(el, precision=precision,
-    #                             polarprecision=polarprecision,
-    #                             sciprecision=sciprecision) )
-    #if brackets:
-    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
-    #           + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
-    #           + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
-    #else:
-    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-    #           + '<table cellpadding="0" cellspacing="0" class="matrix"><tr><td>' + "</td></t><tr><td>".join(lines) + "</td></tr></table></td>" \
-    #           + '</tr></table></div>\n'
+    return latex_vector(v, specs)
 
-
-def html_matrix(m, fontsize=None, brackets=False, precision=6,
-                polarprecision=3, sciprecision=0):
+def matrix(m, specs):
     """
     Convert a 2D numpy array to html.
 
@@ -165,52 +65,17 @@ def html_matrix(m, fontsize=None, brackets=False, precision=6,
     m : numpy array
         2D array to convert into HTML.
 
-    fontsize : int, optional
-        If not None, the fontsize.
-
-    brackets : bool, optional
-        Whether to include brackets in the output html.
-
-    precision : int, optional
-        Precision with which to round el.
-
-    polarprecision : int, optional
-        Precision with which to round polars.
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
     string
         html string for m.
     """
-    return latex_matrix(m, fontsize, brackets, precision,
-                        polarprecision, sciprecision)
-    #lines = [ ]; prefix = ""
-    #if fontsize is not None:
-    #    prefix += "" #unsupported currently
-    #
-    #for r in range(m.shape[0]):
-    #    lines.append( "<tr><td>" + " </td><td> ".join(
-    #            [html_value(el, precision=precision,
-    #                        polarprecision=polarprecision,
-    #                        sciprecision=sciprecision) for el in m[r,:] ] ) + "</td></tr>" )
-    #
-    #if brackets:
-    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td class="lbrak">&nbsp;</td><td>' \
-    #           + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
-    #           + '<td class="rbrak">&nbsp;</td></tr></table></div>\n'
-    #else:
-    #    return '<div class=math><table cellpadding="0" cellspacing="0" class=matrixbrak> <tr><td>' \
-    #           + '<table cellpadding="0" cellspacing="0" class="matrix">' + "\n".join(lines) + "</table></td>" \
-    #           + '</tr></table></div>\n'
+    return latex_matrix(m, specs)
 
-
-def html_value(el, precision=6, polarprecision=3,
-               sciprecision=0, complexAsPolar=True):
+def value(el, specs):
     """
     Convert a floating point or complex value to html.
 
@@ -219,20 +84,8 @@ def html_value(el, precision=6, polarprecision=3,
     el : float or complex
         Value to convert into HTML.
 
-    precision : int, optional
-        Precision with which to round el.
-
-    polarprecision : int, optional
-        Precision with which to round polars.
-
-    sciprecision : int, optional
-        Precision with which to el when precision
-        requires use of scientific notation.
-
-    complexAsPolar : bool, optional
-        Whether to output complex values in polar form.  If False, usual
-        a+ib form is used.
-
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------
@@ -242,6 +95,11 @@ def html_value(el, precision=6, polarprecision=3,
 
     # ROUND = digits to round values to
     TOL = 1e-9  #tolerance for printing zero values
+
+    precision      = specs['precision']
+    sciprecision   = specs['sciprecision']
+    polarprecision = specs['polarprecision']
+    complexAsPolar = specs['complexAsPolar']
 
     def render(x):
         if abs(x) < 5*10**(-(precision+1)):
@@ -289,18 +147,12 @@ def html_value(el, precision=6, polarprecision=3,
             else:
                 s = "0"
     except:
-        #try:
-        #    if abs(el) > TOL: #throw exception if el is not a number
-        #        s = "%s" % render(el.real)
-        #    else:
-        #        s = "0"
-        #except:
         s = str(el)
 
     return s
 
 
-def html_escaped(txt):
+def escaped(txt, specs):
     """
     Escape txt so it is html safe.
 
@@ -308,6 +160,9 @@ def html_escaped(txt):
     ----------
     txt : string
         value to escape
+        
+    specs : dictionary
+        Dictionary of user-specified and default parameters to formatting
 
     Returns
     -------

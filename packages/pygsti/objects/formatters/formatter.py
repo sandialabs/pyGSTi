@@ -14,14 +14,7 @@ def _has_argname(argname, function):
     return argname in _getargspec(function).args
 
 def _pass_down(specs, custom, label):
-    if isinstance(custom, Formatter) or _has_argname('specs', custom):
-        return custom(label, specs)
-    else:
-        kwargs = dict()
-        for k, v in specs.items():
-            if _has_argname(k, custom):
-                kwargs[k] = v
-        return custom(label, **kwargs)
+    return custom(label, specs)
 
 class Formatter(object):
     '''

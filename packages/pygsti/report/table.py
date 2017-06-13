@@ -34,7 +34,8 @@ class ReportTable(object):
 
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
-               resizable=False, autosize=False):
+               resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
+               brackets=False):
 
         specs = {
             'scratchDir'     : scratchDir,
@@ -42,7 +43,10 @@ class ReportTable(object):
             'polarprecision' : polarprecision,
             'sciprecision'   : sciprecision,
             'resizable'      : resizable,
-            'autosize'       : autosize
+            'autosize'       : autosize,
+            'fontsize'       : fontsize,
+            'complexAsPolar' : complexAsPolar,
+            'brackets'       : brackets
             }
 
         # Create a formatSet, which contains rules for rendering lists
