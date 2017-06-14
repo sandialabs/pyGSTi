@@ -6,7 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .formatters  import FormatSet     as _FormatSet
+from .row         import Row
+from .formatters  import formatDict    as _formatDict
 from .reportables import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
 import re as _re
@@ -25,30 +26,30 @@ class ReportTable(object):
                 colHeadingLabels)]
             self._columnNames = self._headings
         else:
-            self._headings = colHeadings
+            self._headings    = colHeadings
             self._columnNames = self._headings['html']
 
-    def addrow(self, rowData, formatters):
-        self._rows.append(([_ReportableQty.from_val(item) for item in rowData], formatters))
+    def addrow(self, rowData, formatters=None, labels=None):
+        data = [_ReportableQty.from_val(item) for item in rowData]
+        self._rows.append(Row(data, formatters, labels))
 
     def finish(self):
         pass #nothing to do currently
 
-    def get_col_headings(self, fmt, formatSet):
+    def get_col_headings(self, fmt, spec):
         if self._headingFormatters is not None:
-            return formatSet.formatList(
-                                     self._headings,
-                                     self._headingFormatters, fmt)
+            row = Row(self._headings, self._headingFormatters)
+            return row.render(fmt, spec)
         else: #headingFormatters is None => headings is dict w/formats
-            # TODO: More elegant distinction between dict of formats and given formatted labels
-            return ['<span title="{}">{}</span>'.format(item, item) for item in self._headings[fmt]]
+            return self._headings[fmt]
+
 
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
                brackets=False):
 
-        specs = {
+        spec = {
             'scratchDir'     : scratchDir,
             'precision'      : precision,
             'polarprecision' : polarprecision,
@@ -57,11 +58,7 @@ class ReportTable(object):
             'autosize'       : autosize,
             'fontsize'       : fontsize,
             'complexAsPolar' : complexAsPolar,
-            'brackets'       : brackets
-            }
-
-        # Create a formatSet, which contains rules for rendering lists
-        formatSet =  _FormatSet(specs)
+            'brackets'       : brackets}
 
         if fmt == "latex":
             table = "longtable" if longtables else "tabular"
@@ -69,16 +66,15 @@ class ReportTable(object):
                     and "latex" in self._customHeadings:
                 latex = self._customHeadings['latex']
             else:
-                colHeadingsFormatted = self.get_col_headings('latex', formatSet)
+                colHeadingsFormatted = self.get_col_headings('latex', spec)
 
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
                     (table, "|c" * len(colHeadingsFormatted) + "|")
                 latex += ("%s \\\\ \hline\n"
                           % (" & ".join(colHeadingsFormatted)))
 
-            for rowData, formatters in self._rows:
-                formatted_rowData = formatSet.formatList(rowData, formatters,
-                                                          "latex")
+            for row in self._rows:
+                formatted_rowData = row.render('latex', spec)
                 if len(formatted_rowData) > 0:
                     latex += " & ".join(formatted_rowData)
 
@@ -115,7 +111,7 @@ class ReportTable(object):
                 html += self._customHeadings['html'] % {'tableclass': tableclass,
                                                        'tableid': tableID}
             else:
-                colHeadingsFormatted = self.get_col_headings('html', formatSet)
+                colHeadingsFormatted = self.get_col_headings('html', spec)
                 
                 html += "<table"
                 if tableclass: html += ' class="%s"' % tableclass
@@ -123,9 +119,8 @@ class ReportTable(object):
                 html += "><thead><tr><th> %s </th></tr>" % \
                     (" </th><th> ".join(colHeadingsFormatted))
                 html += "</thead><tbody>"
-
-            for rowData,formatters in self._rows:
-                formatted_rowData = formatSet.formatList(rowData, formatters, "html")
+            for row in self._rows:
+                formatted_rowData = row.render('html', spec)
                 if len(formatted_rowData) > 0:
                     html += "<tr>"
                     for formatted_cell in formatted_rowData:
@@ -146,39 +141,6 @@ class ReportTable(object):
 
             return { 'html': html, 'js': js }
 
-
-        #elif fmt in ('iplotly','plotly'):
-        #    from plotly.offline import plot, iplot
-        #    import plotly.figure_factory as ff
-        #
-        #    #in future, make a dataframe and display that? (maybe couldn't handle matrices in cells?)
-        #    if self._customHeadings is not None \
-        #            and 'plotly' in self._customHeadings:
-        #        raise ValueError("custom headers unsupported for plotly format")
-        #
-        #    if self._headingFormatters is not None:
-        #        colHeadingsFormatted = \
-        #            formatSet.formatList(self._headings,
-        #                           self._headingFormatters, 'latex')
-        #    else: #headingFormatters is None => headings is dict w/formats
-        #        colHeadingsFormatted = self._headings['text']
-        #
-        #    data_matrix = []
-        #    data_matrix.append( colHeadingsFormatted )
-        #
-        #    for rowData,formatters in self._rows:
-        #        formatted_rowData = formatSet.formatList(rowData, formatters, 'latex')
-        #        print(formatted_rowData)
-        #        if len(formatted_rowData) > 0:
-        #            data_matrix.append( formatted_rowData )
-        #
-        #    plotly_table = ff.create_table(data_matrix)
-        #    if fmt == "iplotly":
-        #        iplot(plotly_table)
-        #    else:
-        #        plot(plotly_table)
-        #    return plotly_table #TODO: what to return? plotly JSON?
-        
         else:
             raise NotImplementedError('%s format option is not currently supported')
 
@@ -200,8 +162,9 @@ class ReportTable(object):
         for i,nm in enumerate(self._columnNames):
             col_widths[i] = max( strlen(nm), col_widths[i] )
             header_lines = max(header_lines, nlines(nm))
-        for k,(d,_) in enumerate(self._rows):
-            for i,el in enumerate(d):
+        for k,row in enumerate(self._rows):
+            for i,el in enumerate(row.cells):
+                el = el.data.get_value()
                 col_widths[i] = max( strlen(el), col_widths[i] )
                 row_lines[k] = max(row_lines[k], nlines(el))
 
@@ -217,9 +180,10 @@ class ReportTable(object):
             s += "|\n"
         s += row_separator
 
-        for rowIndex,(rowEls,_) in enumerate(self._rows):
+        for rowIndex, row in enumerate(self._rows):
             for k in range(row_lines[rowIndex]):
-                for i,el in enumerate(rowEls):
+                for i, el in enumerate(row.cells):
+                    el = el.data.get_value()
                     s += "|  %*s  " % (col_widths[i],getline(el,k))
                 s += "|\n"
             s += row_separator
@@ -235,8 +199,9 @@ class ReportTable(object):
 
     def __getitem__(self, key):
         """Indexes the first column rowdata"""
-        for row_data,_ in self._rows:
-            if len(row_data) > 0 and row_data[0] == key:
+        for row in self._rows:
+            row_data = row.cells
+            if len(row_data) > 0 and row_data[0].data.get_value() == key:
                 return _OrderedDict( zip(self._columnNames,row_data) )
         raise KeyError("%s not found as a first-column value" % key)
 
@@ -251,7 +216,7 @@ class ReportTable(object):
         Return a list of the first element of each row, which can be
         used for indexing.
         """
-        return [ d[0] for (d,f) in self._rows if len(d) > 0 ]
+        return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
 
     def has_key(self, key):
         return key in list(self.keys())
@@ -260,14 +225,15 @@ class ReportTable(object):
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
-            for row_data,_ in self._rows:
-                if len(row_data) > 0 and row_data[0] == key:
+            for row in self._rows:
+                row_data = row.cells
+                if len(row_data) > 0 and row_data[0].data.get_value() == key:
                     return row_data
             raise KeyError("%s not found as a first-column value" % key)
 
         elif index is not None:
             if 0 <= index < len(self):
-                return self._rows[index][0]
+                return self._rows[index].cells
             else:
                 raise ValueError("Index %d is out of bounds" % index)
 
@@ -281,12 +247,12 @@ class ReportTable(object):
                 raise ValueError("Cannot specify *both* key and index")
             if key in self._columnNames:
                 iCol = self._columnNames.index(key)
-                return [ d[iCol] for (d,f) in self._rows ] #if len(d)>iCol
+                return [ row.cells[iCol] for row in self._rows ] #if len(d)>iCol
             raise KeyError("%s is not a column name." % key)
 
         elif index is not None:
             if 0 <= index < len(self._columnNames):
-                return [ d[index] for (d,f) in self._rows ] #if len(d)>iCol
+                return [ row.cells[index] for row in self._rows ] #if len(d)>iCol
             else:
                 raise ValueError("Index %d is out of bounds" % index)
 

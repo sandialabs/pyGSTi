@@ -34,7 +34,7 @@ class GenericFormatterTests(FormatterBaseTestCase):
         super(GenericFormatterTests, self).setUp()
 
     def test_none_formatter(self):
-        formatter.FormatSet.formatDict['BadFormat'] = {
+        formatter.formatDict['BadFormat'] = {
             'latex' : lambda l, s : None,
             'html'  : lambda l, s : None,
             'text'  : lambda l, s : None,

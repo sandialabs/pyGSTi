@@ -22,8 +22,6 @@ import os      as _os
 
 from plotly.offline import plot as _plot
 
-from .formatset import FormatSet
-
 def no_format(label):
     return label
 
@@ -31,17 +29,19 @@ def no_format(label):
 #                          Formatting functions                              #
 ##############################################################################
 
+formatDict = dict()
+
 # 'rho' (state prep) formatting
 # Replace rho with &rho;
 # Numbers following 'rho' -> subscripts
-FormatSet.formatDict['Rho'] = {
+formatDict['Rho'] = {
     'html'  : Formatter(stringreplacers=[('rho', '&rho;')],
                          regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
     'latex' : Formatter(stringreplacers=[('rho', '\\rho')],
                          regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='${}$')}
 
 # 'E' (POVM) effect formatting
-FormatSet.formatDict['Effect'] = {
+formatDict['Effect'] = {
     # If label == 'remainder', return E sub C
     # Otherwise, match regex and replace with subscript
     'html'  : Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),
@@ -50,28 +50,28 @@ FormatSet.formatDict['Effect'] = {
                          regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$')}
 
 # Normal replacements
-FormatSet.formatDict['Normal'] = {
+formatDict['Normal'] = {
     'html'  : Formatter(html),
     'latex' : Formatter(latex)}
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
-FormatSet.formatDict['Rounded'] = {
+formatDict['Rounded'] = {
     'html'  : Formatter(html,  defaults={'precision' : 2, 'sciprecision': 0}),
     'latex' : Formatter(latex, defaults={'precision' : 2, 'sciprecision': 0})}
 
 # Similar to the above two formatdicts,
 # but recieves precision during table.render(), which is sent as kwarg to html, for example
-FormatSet.formatDict['Precision'] = {
+formatDict['Precision'] = {
     'html'  : Formatter(html),
     'latex' : Formatter(latex)}
 
 # 'small' formating - make text smaller
-FormatSet.formatDict['Small'] = {
+formatDict['Small'] = {
     'html'  : Formatter(html),
     'latex' : Formatter(latex, formatstring='\\small%s')}
 
 # 'small' formating - make text smaller
-FormatSet.formatDict['Verbatim'] = {
+formatDict['Verbatim'] = {
     'html'  : Formatter(html),
     'latex' : Formatter(formatstring='\\spverb!%s!')}
 
@@ -89,12 +89,12 @@ def _pi_template(b):
     return formatter
 
 # Pi formatters
-FormatSet.formatDict['Pi'] = {
+formatDict['Pi'] = {
     'html'  : _pi_template(Formatter(html,  formatstring='%s&pi;')),
     'latex' : _pi_template(Formatter(latex, formatstring='%s$\\pi$'))}
 
 # BracketFormatters
-FormatSet.formatDict['Brackets'] = {
+formatDict['Brackets'] = {
     'html'  : Formatter(html,  defaults={'brackets' : True}),
     'latex' : Formatter(latex, defaults={'brackets' : True})}
 
@@ -129,15 +129,15 @@ def special_convert_latex(x, specs):
 
 convert_latex = Formatter(special_convert_latex)
 
-FormatSet.formatDict['Conversion'] = {
+formatDict['Conversion'] = {
     'html'  : Formatter(convert_html),
     'latex' : Formatter(convert_latex)}
 
-FormatSet.formatDict['EBConversion'] = {
+formatDict['EBConversion'] = {
     'html'  : Formatter(convert_html, formatstring='<span class="errorbar">{}</span>'),
     'latex' : Formatter(convert_latex)}
 
-FormatSet.formatDict['NMEBConversion'] = {
+formatDict['NMEBConversion'] = {
     'html'  : Formatter(convert_html, formatstring='<span class="nmerrorbar">{}</span>'),
     'latex' : Formatter(convert_latex)}
 
@@ -145,34 +145,34 @@ EB_html   = Formatter(html, ebstring='%s <span class="errorbar">+/- %s</span>')
 NMEB_html = Formatter(html, ebstring='%s <span class="nmerrorbar">+/- %s</span>')
 EB_latex  = Formatter(latex, ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
 
-FormatSet.formatDict['ErrorBars'] = {
+formatDict['ErrorBars'] = {
     'html'  : EB_html,
     'latex' : EB_latex}
-FormatSet.formatDict['NMErrorBars'] = {
+formatDict['NMErrorBars'] = {
     'html'  : NMEB_html,
     'latex' : EB_latex}
 
 VEB_latex = Formatter(latex, ebstring='%s $\pm$ %s')
 
-FormatSet.formatDict['VecErrorBars'] = {
+formatDict['VecErrorBars'] = {
     'html'  : EB_html,
     'latex' : VEB_latex}
-FormatSet.formatDict['NMVecErrorBars'] = {
+formatDict['NMVecErrorBars'] = {
     'html'  : NMEB_html,
     'latex' : VEB_latex}
 
 PiEB_latex = Formatter(latex, ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $', formatstring='%s$\\pi$')
 
 # 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-FormatSet.formatDict['PiErrorBars'] = {
+formatDict['PiErrorBars'] = {
     'html'  : Formatter(html, ebstring='(%s <span class="errorbar">+/- %s</span>)&pi'),
     'latex' : PiEB_latex}
 
-FormatSet.formatDict['NMPiErrorBars'] = {
+formatDict['NMPiErrorBars'] = {
     'html'  : Formatter(html, ebstring='(%s <span class="nmerrorbar">+/- %s</span>)&pi'),
     'latex' : PiEB_latex}
 
-FormatSet.formatDict['GateString'] = {
+formatDict['GateString'] = {
     'html'  : Formatter(lambda s : '.'.join(s) if s is not None else ''),
     'latex' : Formatter(lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])))}
 
@@ -192,17 +192,17 @@ def latex_figure(figInfo, specs):
     return formatstring % (W, H, scratchDir,
                            name + self.extension)
 
-FormatSet.formatDict['Figure'] = {
+formatDict['Figure'] = {
     'html'  : html_figure,
     'latex' : latex_figure}
 
 # Bold formatting
-FormatSet.formatDict['Bold'] = {
+formatDict['Bold'] = {
     'html'  : Formatter(html, formatstring='<b>%s</b>'),
     'latex' : Formatter(latex, formatstring='\\textbf{%s}')}
 
 #Special formatting for Hamiltonian and Stochastic gateset types
-FormatSet.formatDict['GatesetType'] = {
+formatDict['GatesetType'] = {
     'html'  : no_format,
     'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}
 
@@ -211,19 +211,19 @@ FormatSet.formatDict['GatesetType'] = {
 def _pre_fmt_template(formatname):
     return lambda label : label[formatname]
 
-FormatSet.formatDict['Pre'] = {
+formatDict['Pre'] = {
     'html'   : _pre_fmt_template('html'),
     'latex'  : _pre_fmt_template('latex')}
 
 #Multi-row and multi-column formatting (with "Conversion" type inner formatting)
-FormatSet.formatDict['MultiRow'] = {
+formatDict['MultiRow'] = {
     'html'  : TupleFormatter(convert_html, formatstring='<td rowspan="{l1}">{l0}</td>'),
     'latex' : TupleFormatter(convert_latex, formatstring='\\multirow{{{l1}}}{{*}}{{{l0}}}')}
 
 def _empty_str(l): return ""
 def _return_None(l): return None #signals no <td></td> in HTML
 
-FormatSet.formatDict['SpannedRow'] = {
+formatDict['SpannedRow'] = {
     'html'  : _return_None,
     'latex' : _empty_str}
 
@@ -231,7 +231,7 @@ def _repeatno_format(label_tuple):
     label, reps = label_tuple
     return ["%s" % label]*reps
 
-FormatSet.formatDict['MultiCol'] = {
+formatDict['MultiCol'] = {
     'html'  : TupleFormatter(convert_html, formatstring='<td colspan="{l1}">{l0}</td>'),
     'latex' : TupleFormatter(convert_latex, formatstring='\\multicolumn{{{l1}}}{{c|}}{{{l0}}}')}
 '''

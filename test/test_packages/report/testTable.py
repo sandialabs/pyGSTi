@@ -37,7 +37,7 @@ class TestTable(BaseTestCase):
 
         table = ReportTable(['1.0'], ['Normal'])
         table.addrow(['1.0'], ['Normal'])
-        table.render('text')
+        table.render('html')
 
         self.assertTrue(table.has_key('1.0'))
 
@@ -84,11 +84,6 @@ class TestTable(BaseTestCase):
         with self.assertRaises(ValueError):
             table.col(key='foobar',index=1) #cannot specify key and index
 
-        with self.assertRaises(ValueError):
-            table.render(fmt="foobar") #invalid format
-
-
-
     # For supported custom headers
     def run_format(self, fmt):
         self.custom_headings(fmt)
@@ -109,14 +104,8 @@ class TestTable(BaseTestCase):
     def test_latex(self):
         self.run_format('latex')
 
-    def test_ppt(self):
-        self.run_unsupported_custom_headers('ppt')
-
-    def test_text(self):
-        self.run_unsupported_custom_headers('text')
-
     def test_unknown_format(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             self.run_format('aksdjjfa')
 
 
