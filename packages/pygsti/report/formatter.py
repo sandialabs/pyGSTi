@@ -89,11 +89,7 @@ class Formatter(object):
             s = str(item.get_value())
             if s == '--' or s == '':
                 return s
-            # Format with ebstring if error bars present
-            if item.has_eb():
-                return item.render_with(partial(self, specs=specs), self.ebstring)
-            else:
-                return item.render_with(partial(self, specs=specs))
+            return item.render_with(self, specs, self.ebstring)
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
         elif self.custom is not None: 
@@ -115,5 +111,6 @@ class Formatter(object):
             if result is not None:
                 grouped = result.group(1)
                 item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
+        formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
-        return self.formatstring % item
+        return formatstring % item

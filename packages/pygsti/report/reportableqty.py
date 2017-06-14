@@ -65,9 +65,13 @@ class ReportableQty(object):
         """
         return self.value, self.errbar
 
-    def render_with(self, f, ebstring='%s +/- %s'):
+    def render_with(self, f, specs=None, ebstring='%s +/- %s'):
+        if specs is None:
+            specs = dict()
         if self.errbar is not None:
-            rendered = ebstring % (f(self.value), f(self.errbar))
+            specs['formatstring'] = '%s' # Don't recursively apply format strings to inside error bars
+            rendered = ebstring % (f(self.value,  specs), 
+                                   f(self.errbar, specs))
         else: 
-            rendered = f(self.value)
+            rendered = f(self.value, specs)
         return rendered

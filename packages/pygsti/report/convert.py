@@ -79,6 +79,7 @@ def convert(x, specs, fmt):
     t = item_type(x)
     if t == 'raw':
         print('WARNING: {} not explicitly converted to {}'.format(x, fmt))
+        return str(x)
     if t == 'reportable':
         return x.render_with(lambda a : convert(a, specs, fmt))
     if t == 'list':

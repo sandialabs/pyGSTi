@@ -10,14 +10,14 @@ class FormatterBaseTestCase(BaseTestCase):
         self.roundedNum   = 1.82     # Two digits after decimal
 
         latexString = '\\begin{tabular}[l]{|c|}\n\hline\n%s \\\\ \hline\n\end{tabular}\n'
-        htmlString  = '<table><thead><tr><th> %s </th></tr></thead><tbody></tbody></table>'
+        htmlString  = '<table><thead><tr><th> <span title="%s">%s</span> </th></tr></thead><tbody></tbody></table>'
 
         self.precise   = {
-            'html'  : htmlString  % self.arbitraryNum,
+            'html'  : htmlString  % (self.arbitraryNum, self.arbitraryNum),
             'latex' : latexString % self.arbitraryNum}
 
         self.imprecise = {
-            'html'  : htmlString  % self.roundedNum,
+            'html'  : htmlString  % (self.arbitraryNum, self.roundedNum),
             'latex' : latexString % self.roundedNum}
 
     def render_pair(self, heading, formatter, formattype='latex', **kwargs):
