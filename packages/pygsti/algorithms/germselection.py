@@ -412,9 +412,8 @@ def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
     twirledDerivDaggerDeriv = _np.zeros((nGerms, vec_gateset_dim, vec_gateset_dim),
                                         dtype=_np.complex)
     for i in range(nGerms):
-        twirledDerivDaggerDeriv[i, :, :] = _np.tensordot(_np.conjugate(twirledDeriv)[i, :, :],
-                                                         twirledDeriv[i, :, :],
-                                                         axes=(0,0))
+        twirledDerivDaggerDeriv[i, :, :] = _np.dot(
+            twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
     return twirledDerivDaggerDeriv
 
 
