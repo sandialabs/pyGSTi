@@ -93,7 +93,7 @@ def cell(data, label, spec):
     -------
     string
     '''
-    if label is None:
+    if isinstance(data, dict) or label is None:
         return data
     return '<span title="{}">{}</span>'.format(label, data)
 
