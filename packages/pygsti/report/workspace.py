@@ -286,8 +286,9 @@ class Workspace(object):
 
           # Specific to 1Q gates
         self.GateDecompTable = makefactory(_wt.GateDecompTable)
-        self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
-        self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
+        self.old_GateDecompTable = makefactory(_wt.old_GateDecompTable)
+        #self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
+        #self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
 
           # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
