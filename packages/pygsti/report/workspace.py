@@ -306,6 +306,8 @@ class Workspace(object):
         self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot)
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
+        self.GramMatrixBarPlot = makefactory(_wp.GramMatrixBarPlot)
+        self.FitComparisonBarPlot = makefactory(_wp.FitComparisonBarPlot)
         self.DatasetComparisonPlot = makefactory(_wp.DatasetComparisonPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 

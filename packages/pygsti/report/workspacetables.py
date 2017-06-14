@@ -1048,8 +1048,7 @@ class GateEigenvalueTable(WorkspaceTable):
 #    def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
 #                                   maxLengthList=None):
 class DataSetOverviewTable(WorkspaceTable):
-    def __init__(self, ws, dataset, target, maxlen=10,
-                 fixedLists=None, maxLengthList=None):
+    def __init__(self, ws, dataset, maxLengthList=None):
         """
         Create a table that gives a summary of the properties of `dataset`.
     
@@ -1057,21 +1056,7 @@ class DataSetOverviewTable(WorkspaceTable):
         ----------
         dataset : DataSet
             The DataSet
-    
-        target : GateSet
-            A target gateset which is used for it's mapping of SPAM labels to
-            SPAM specifiers and for Gram matrix comparision.
-    
-        maxlen : integer, optional
-            The maximum length string used when searching for the
-            maximal (best) Gram matrix.  It's useful to make this
-            at least twice the maximum length fiducial sequence.
-    
-        fixedLists : (prepStrs, effectStrs), optional
-            2-tuple of gate string lists, specifying the preparation and
-            measurement fiducials to use when constructing the Gram matrix,
-            and thereby bypassing the search for such lists.
-    
+        
         maxLengthList : list of ints, optional
             A list of the maximum lengths used, if available.
     
@@ -1079,18 +1064,12 @@ class DataSetOverviewTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(DataSetOverviewTable,self).__init__(ws, self._create, dataset, target,
-                                                  maxlen, fixedLists, maxLengthList)
+        super(DataSetOverviewTable,self).__init__(ws, self._create, dataset, maxLengthList)
     
-    def _create(self, dataset, target,
-                maxlen, fixedLists, maxLengthList):
+    def _create(self, dataset, maxLengthList):
     
         colHeadings = ('Quantity','Value')
         formatters = (None,None)
-        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
-        svals = _np.sort(_np.abs(svals)).reshape(-1,1)
-        target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
-        svals_2col = _np.concatenate( (svals,target_svals), axis=1 )
     
         table = _ReportTable(colHeadings, formatters)
     
@@ -1102,8 +1081,7 @@ class DataSetOverviewTable(WorkspaceTable):
         table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
         table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
-        table.addrow(("Gram singular values| (right column gives the values|when using the target gate set)",
-                      svals_2col), ('Conversion','Small'))
+
         if maxLengthList is not None:
             table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
         if hasattr(dataset,'comment') and dataset.comment is not None:

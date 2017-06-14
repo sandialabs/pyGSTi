@@ -701,7 +701,8 @@ def create_single_qubit_report(results, filename, confidenceLevel=None,
     
 
 def create_general_report(results, filename, confidenceLevel=None,
-                          title="auto", datasetLabel="$\\mathcal{D}$",
+                          title="auto",
+                          datasetLabel="<span class='math'>\\mathcal{D}</span>",
                           linlogPercentile=5, errgen_type="logTiG",
                           nmthreshold=50, precision=None, brief=False,
                           comm=None, ws=None, auto_open=False,
@@ -855,8 +856,7 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
-    qtys['datasetOverviewTable_sum'] = ws.DataSetOverviewTable(ds, gsTgt, 10, strs)
+    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
@@ -889,13 +889,14 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
     qtys['progressTable'] = ws.FitComparisonTable(
-        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
-    qtys['progressTable_sum'] = ws.FitComparisonTable(
-        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
-        
+        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')        
     
     # Generate plots
     printer.log("*** Generating plots ***")
+
+    qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
+    qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
+        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
                 
     qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
     qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
@@ -912,6 +913,11 @@ def create_general_report(results, filename, confidenceLevel=None,
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc)
+
+    qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
 
     if multidataset:
         #initialize a new "dataset comparison switchboard"

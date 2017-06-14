@@ -559,6 +559,158 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                             colorbar, boxLabels, prec, hoverInfo,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
 
+def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
+                             colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
+                             sumUp=False,ylabel="",scale=1.0,addl_hover_subMxs=None):
+    """
+    Similar to :func:`gatestring_color_boxplot` except a scatter plot is created.
+
+    Parameters
+    ----------
+    gatestring_structure : GatestringStructure
+        Specifies a set of gate sequences along with their outer and inner x,y
+        structure, e.g. fiducials, germs, and maximum lengths.
+
+    subMxs : list
+        A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
+        or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
+        indicate elements should not be displayed.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    colorbar : bool, optional
+        Whether or not to show the color scale bar.
+
+    boxLabels : bool, optional
+        Whether to display static value-labels over each box.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Allowed values are:
+          'compact' = round to nearest whole number using at most 3 characters
+          'compacthp' = show as much precision as possible using at most 3 characters
+          int >= 0 = fixed precision given by int
+          int <  0 = number of significant figures given by -int
+
+    hoverInfo : bool, optional
+        Whether to incude interactive hover labels.
+
+    sumUp : bool, optional
+        False displays each matrix element as it's own color box
+        True sums the elements of each (x,y) matrix and displays
+        a single color box for the sum.
+
+    ylabel : str, optional
+        The y-axis label to use.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    addl_hover_subMxs : dict, optional
+        If not None, a dictionary whose values are lists-of-lists in the same
+        format as `subMxs` which specify additional values to add to the 
+        hover-info of the corresponding boxes.  The keys of this dictionary
+        are used as labels within the hover-info text.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+    g = gatestring_structure
+    xvals = g.used_xvals()
+    yvals = g.used_yvals()
+    inner_xvals = g.minor_xvals()
+    inner_yvals = g.minor_yvals()
+
+    #TODO: move hover-function creation routines to new function since duplicated in
+    # gatestring_color_boxplot
+    
+    if hoverInfo and isinstance(g, _objs.LsGermsStructure):
+        if sumUp:
+            def hoverLabelFn(val,iy,ix):
+                if _np.isnan(val): return ""
+                L,germ = xvals[ix],tuple(yvals[iy])
+                baseStr = g.get_plaquette(L,germ,False).base
+                reps = len(baseStr) // len(germ)
+                guess = germ * reps
+                if baseStr == guess:
+                    if len(baseStr) == 0:
+                        txt = "{}"
+                    else:
+                        txt = "(%s)<sup>%d</sup>" % (str(germ),reps)
+                else:
+                    txt = "L: %s<br>germ: %s" % (str(L),str(germ))
+                
+                txt += "<br>val: %g" % val
+                for lbl,addl_subMxs in addl_hover_subMxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
+                return txt
+                    
+        else:
+            def hoverLabelFn(val,iy,ix,iiy,iix):
+                if _np.isnan(val): return ""
+
+                L,germ = xvals[ix],yvals[iy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                baseStr = g.get_plaquette(L,germ,False).base
+                reps = len(baseStr) // len(germ)
+                guess = germ * reps
+                if baseStr == guess:
+                    if len(baseStr) == 0:
+                        txt = "%s+{}+%s" % (str(rhofid),str(efid))
+                    else:
+                        txt = "%s+(%s)<sup>%d</sup>+%s" % (
+                            str(rhofid),str(germ),reps,str(efid))
+                else:
+                    txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
+                          % (str(L),str(germ),str(rhofid),str(efid))
+                txt += ("<br>val: %g" % val)
+                for lbl,addl_subMxs in addl_hover_subMxs.items():
+                    N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N-1-iiy][iix]))
+                return txt
+
+        hoverInfo = hoverLabelFn #generate_boxplot can handle this
+
+    xs = []; ys = []; texts = []
+    for ix,x in enumerate(g.used_xvals()):
+        for iy,y in enumerate(g.used_yvals()):
+            plaq = g.get_plaquette(x,y)
+            N = len(subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
+            #TODO: if sumUp then need to sum before appending...
+            for iix,iiy,gstr in plaq:
+                xs.append( len(gstr))
+                ys.append( subMxs[iy][ix][N-1-iiy][iix] )
+                if hoverInfo:
+                    if callable(hoverInfo):
+                        texts.append(hoverInfo(subMxs[iy][ix][N-1-iiy][iix],iy,ix,iiy,iix))
+                    else:
+                        texts.append(str(subMxs[iy][ix][N-1-iiy][iix]))
+    
+    trace = go.Scatter(x=xs, y=ys, mode="markers",
+                       marker=dict(size=8, color="orange", line=dict(width=1)))
+    if hoverInfo:
+        trace['hoverinfo'] = 'text'
+        trace['text'] = texts
+    else:
+        trace['hoverinfo'] = 'none'
+
+    xaxis = go.XAxis(
+        title='sequence length',
+        showline=True,
+        )
+    yaxis = go.YAxis(
+        title=ylabel
+        )
+
+    layout = go.Layout(
+        width=400*scale,
+        height=400*scale,
+        xaxis=xaxis,
+        yaxis=yaxis
+    )
+    return go.Figure(data=[trace], layout=layout)
+
 
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                              mxBasisDimsY=None, xlabel=None, ylabel=None,
@@ -889,7 +1041,8 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None, dscomparator=None, submatrices=None, scale=1.0):
+                 directGSTgatesets=None, dscomparator=None, submatrices=None,
+                 scatter=False, scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -956,6 +1109,10 @@ class ColorBoxPlot(WorkspacePlot):
             matrices to plot, corresponding to the used x and y values
             of `gss`.
 
+        scatter : bool, optional
+            If True, a scatter plot of the values vs. sequence length is created 
+            instead of a grid of boxes.
+
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
         """
@@ -963,12 +1120,14 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets, dscomparator, submatrices, scale)
+                                          directGSTgatesets, dscomparator, submatrices,
+                                          scatter, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets, dscomparator, submatrices, scale):
+                directGSTgatesets, dscomparator, submatrices,
+                scatter, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -1156,11 +1315,18 @@ class ColorBoxPlot(WorkspacePlot):
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
                 
             else: assert(False) #invalid colormapType was set above
-            
-            newfig = gatestring_color_boxplot(gss, subMxs, colormap,
-                                              False, boxLabels, prec,
-                                              hoverInfo, sumUp, invert,
-                                              scale, addl_hover_info)
+
+            if scatter:
+                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
+                                                      False, boxLabels, prec,
+                                                      hoverInfo, sumUp, typ,
+                                                      scale, addl_hover_info)
+            else:
+                newfig = gatestring_color_boxplot(gss, subMxs, colormap,
+                                                  False, boxLabels, prec,
+                                                  hoverInfo, sumUp, invert,
+                                                  scale, addl_hover_info)
+
             if fig is None:
                 fig = newfig
             else:
@@ -1572,6 +1738,180 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         return go.Figure(data=data, layout=layout)
 
 
+
+class GramMatrixBarPlot(WorkspacePlot):
+    def __init__(self, ws, dataset, target, maxlen=10,
+                 fixedLists=None, scale=1.0):
+        """
+        Creates a bar plot showing eigenvalues of the Gram matrix compared to
+        those of the a target gate set's Gram matrix.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The DataSet
+    
+        target : GateSet
+            A target gateset which is used for it's mapping of SPAM labels to
+            SPAM specifiers and for Gram matrix comparision.
+    
+        maxlen : integer, optional
+            The maximum length string used when searching for the
+            maximal (best) Gram matrix.  It's useful to make this
+            at least twice the maximum length fiducial sequence.
+    
+        fixedLists : (prepStrs, effectStrs), optional
+            2-tuple of gate string lists, specifying the preparation and
+            measurement fiducials to use when constructing the Gram matrix,
+            and thereby bypassing the search for such lists.
+        """
+        super(GramMatrixBarPlot,self).__init__(ws, self._create,
+                                               dataset, target, maxlen, fixedLists, scale)
+        
+    def _create(self, dataset, maxlen, target, fixedLists, scale):
+
+        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists=fixedLists)
+        svals = _np.sort(_np.abs(svals)).reshape(-1,1)
+        target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
+        
+        xs = list(range(svals.size))                
+        trace1 = go.Bar(
+            x=xs, y=list(svals.flatten()),
+            marker=dict(color="blue"),
+            hoverinfo='y',
+            name="from Data"
+        )
+        trace2 = go.Bar(
+            x=xs, y=list(target_svals.flatten()),
+            marker=dict(color="black"),
+            hoverinfo='y',
+            name="from Target"
+        )
+        
+        data = [trace1,trace2]
+        layout = go.Layout(
+            width = 400*scale,
+            height = 300*scale,
+            xaxis = dict(
+                title="index",
+                tickvals=xs
+                ),
+            yaxis = dict(
+                title="eigenvalue",
+                #type='log'
+                ),
+            bargap=0.1
+        )
+        
+        return go.Figure(data=data, layout=layout)
+
+class FitComparisonBarPlot(WorkspacePlot):
+    def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
+                 objective="logl", Xlabel='L', NpByX=None, scale=1.0):
+        """
+        Creates a bar plot showing the overall (aggregate) goodness of fit
+        for one or more gate set estimates to a data set.
+
+        Parameters
+        ----------
+        Xs : list of integers
+            List of X-values. Typically these are the maximum lengths or
+            exponents used to index the different iterations of GST.
+
+        gssByX : list of LsGermsStructure
+            Specifies the set (& structure) of the gate strings used at each X.
+
+        gatesetByX : list of GateSets
+            `GateSet`s corresponding to each X value.
+    
+        dataset : DataSet
+            The data set to compare each gate set against.
+    
+        objective : {"logl", "chi2"}, optional
+            Whether to use log-likelihood or chi^2 values.
+
+        Xlabel : str, optional
+            A label for the 'X' variable which indexes the different gate sets.
+            This string will be the x-label of the resulting bar plot.
+
+        NpByX : list of ints, optional
+            A list of parameter counts to use for each X.  If None, then
+            the number of non-gauge parameters for each gate set is used.
+        """
+        super(FitComparisonBarPlot,self).__init__(ws, self._create,
+                                                  Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale)
+        
+    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale):
+
+        xs = list(range(len(Xs)))
+        xtics = []; ys = []; colors = []; texts=[]
+
+        if NpByX is None:
+            NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+
+        # BEGIN code that is the same as FitComparisonTable creation code
+        for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
+            gstrs = gss.allstrs
+            
+            if objective == "chi2":
+                fitQty = _tools.chi2( dataset, gs, gstrs,
+                                    minProbClipForWeighting=1e-4,
+                                    gateLabelAliases=gss.aliases )
+            elif objective == "logl":
+                logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
+                logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gss.aliases)
+                fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+                if(logL_upperbound < logl):
+                    raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+
+            Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+            Nsig = (fitQty-k)/_np.sqrt(2*k)
+            #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+    
+            if   (fitQty-k) < _np.sqrt(2*k):
+                rating = 5; color="darkgreen"
+            elif (fitQty-k) < 2*k:
+                rating = 4; color="blue"
+            elif (fitQty-k) < 5*k:
+                rating = 3; color="yellow"
+            elif (fitQty-k) < 10*k:
+                rating = 2; color="orange"
+            else:
+                rating = 1; color="red"
+            # END code that is the same as FitComparisonTable creation code
+            
+            xtics.append(str(X))
+            ys.append(Nsig)
+            texts.append("%g<br>rating: %d" % (Nsig,rating))
+            colors.append(color)
+
+        trace = go.Bar(
+            x=xs, y=ys, text=texts,
+            marker=dict(color=colors),
+            hoverinfo='text'
+        )
+        
+        data = [trace]
+        layout = go.Layout(
+            width = 400*scale,
+            height = 300*scale,
+            xaxis = dict(
+                title=Xlabel,
+                tickvals=xs,
+                ticktext=xtics
+                ),
+            yaxis = dict(
+                title="N<sub>sigma</sub>",
+                type='log'
+                ),
+            bargap=0.1
+        )
+        if max(ys) < 1.0:
+            layout['yaxis']['range'] = [min(ys)/2.0,1]
+        
+        return go.Figure(data=data, layout=layout)
+    
 
 class DatasetComparisonPlot(WorkspacePlot):
     def __init__(self, ws, dsc, nbins=50, frequency=True,
