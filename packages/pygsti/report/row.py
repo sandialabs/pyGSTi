@@ -20,13 +20,13 @@ class Row(object):
         if formatters is None:
             formatters = []
         if labels is None:
-            labels = []
+            labels = rowData
 
         lendiff = max(abs(len(formatters) - len(rowData)), 0)
-        formatters = formatters + [None] * lendiff
+        formatters = list(formatters) + [None] * lendiff
         
         lendiff = max(abs(len(labels) - len(rowData)), 0)
-        labels = labels + [None] * lendiff
+        labels = list(labels) + [None] * lendiff 
 
         self.cells = [Cell(item, formatter, label) 
                 for item, formatter, label in 

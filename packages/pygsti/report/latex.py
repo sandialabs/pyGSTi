@@ -14,6 +14,47 @@ import cmath
 from .. import objects as _objs
 from ..tools import compattools as _compat
 
+def table(customHeadings, colHeadingsFormatted, rows, spec):
+    longtables = spec['longtables']
+    table = "longtable" if longtables else "tabular"
+    if customHeadings is not None \
+            and "latex" in customHeadings:
+        latex = customHeadings['latex']
+    else:
+        latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
+            (table, "|c" * len(colHeadingsFormatted) + "|")
+        latex += ("%s \\\\ \hline\n"
+                  % (" & ".join(colHeadingsFormatted)))
+
+    for formatted_rowData in rows:
+        if len(formatted_rowData) > 0:
+            latex += " & ".join(formatted_rowData)
+
+            multirows = [ ("multirow" in el) for el in formatted_rowData ]
+            if any(multirows):
+                latex += " \\\\ "
+                last = True; lineStart = None; col = 1
+                for multi,data in zip(multirows,formatted_rowData):                                
+                    if last == True and multi == False:
+                        lineStart = col #line start
+                    elif last == False and multi == True:
+                        latex += "\cline{%d-%d} " % (lineStart,col) #line end
+                    last=multi
+                    res = _re.search("multicolumn{([0-9])}",data)
+                    if res: col += int(res.group(1))
+                    else:   col += 1
+                if last == False: #need to end last line
+                    latex += "\cline{%d-%d} "%(lineStart,col-1)
+                latex += "\n"
+            else:
+               latex += " \\\\ \hline\n"
+
+    latex += "\end{%s}\n" % table
+    return {'latex' : latex}
+
+def cell(data, label, spec):
+    return data
+
 def list(l, specs):
     """
     Convert a python list to latex tabular column.

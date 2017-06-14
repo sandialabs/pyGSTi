@@ -485,7 +485,8 @@ class GatesVsTargetTable(WorkspaceTable):
         ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
 
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)
+        #def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
     
         formatters = [None] + [ ErrorBars ]*len(qtyNames)
     

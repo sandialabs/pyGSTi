@@ -26,7 +26,7 @@ def functions_in(module):
     '''
     return { name : f for name, f in module.__dict__.items() if callable(f)}
 
-formatDict = {
+convertDict = {
         'html'  : functions_in(html),
         'latex' : functions_in(latex)}
 
@@ -82,9 +82,8 @@ def convert(x, specs, fmt):
     if t == 'reportable':
         return x.render_with(lambda a : convert(a, specs, fmt))
     if t == 'list':
-        return formatDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
-    return formatDict[fmt][t](x, specs)
+        return convertDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
+    return convertDict[fmt][t](x, specs)
 
 def converter(fmt):
     return functools.partial(convert, fmt=fmt)
-

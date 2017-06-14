@@ -12,6 +12,8 @@ from .reportables import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
 import re as _re
 
+from .convert import convertDict as _convertDict
+
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
         self._customHeadings = customHeader
@@ -19,12 +21,18 @@ class ReportTable(object):
         self._override       = isinstance(colHeadings, dict)
 
         if self._override:
+            self._columnNames = colHeadings['text']
+        else:
+            self._columnNames = colHeadings 
+
+        if colHeadingLabels is None:
+            colHeadingLabels = self._columnNames
+
+        if self._override:
             # Dictionary of overridden formats
             self._headings    = {k : Row(v, labels=colHeadingLabels) for k, v in colHeadings.items()}
-            self._columnNames = self._headings['text']
         else:
             self._headings    = Row(colHeadings, formatters, colHeadingLabels)
-            self._columnNames = colHeadings 
 
     def addrow(self, data, formatters=None, labels=None):
         self._rows.append(Row(data, formatters, labels))
@@ -35,7 +43,7 @@ class ReportTable(object):
     def _get_col_headings(self, fmt, spec):
         if self._override:
             # _headings is a dictionary of overridden formats
-            return self._headings[fmt].render(None, spec)
+            return self._headings[fmt].render(fmt, spec)
         else:
             # _headings is a row object
             return self._headings.render(fmt, spec)
@@ -55,91 +63,19 @@ class ReportTable(object):
             'autosize'       : autosize,
             'fontsize'       : fontsize,
             'complexAsPolar' : complexAsPolar,
-            'brackets'       : brackets}
+            'brackets'       : brackets,
+            'longtables'     : longtables,
+            'tableID'        : tableID,
+            'tableclass'     : tableclass}
 
-        if fmt == "latex":
-            table = "longtable" if longtables else "tabular"
-            if self._customHeadings is not None \
-                    and "latex" in self._customHeadings:
-                latex = self._customHeadings['latex']
-            else:
-                colHeadingsFormatted = self._get_col_headings('latex', spec)
-
-                latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
-                    (table, "|c" * len(colHeadingsFormatted) + "|")
-                latex += ("%s \\\\ \hline\n"
-                          % (" & ".join(colHeadingsFormatted)))
-
-            for row in self._rows:
-                formatted_rowData = row.render('latex', spec)
-                if len(formatted_rowData) > 0:
-                    latex += " & ".join(formatted_rowData)
-
-                    multirows = [ ("multirow" in el) for el in formatted_rowData ]
-                    if any(multirows):
-                        latex += " \\\\ "
-                        last = True; lineStart = None; col = 1
-                        for multi,data in zip(multirows,formatted_rowData):                                
-                            if last == True and multi == False:
-                                lineStart = col #line start
-                            elif last == False and multi == True:
-                                latex += "\cline{%d-%d} " % (lineStart,col) #line end
-                            last=multi
-                            res = _re.search("multicolumn{([0-9])}",data)
-                            if res: col += int(res.group(1))
-                            else:   col += 1
-                        if last == False: #need to end last line
-                            latex += "\cline{%d-%d} "%(lineStart,col-1)
-                        latex += "\n"
-                    else:
-                       latex += " \\\\ \hline\n"
-
-            latex += "\end{%s}\n" % table
-            return { 'latex': latex }
-
-
-        elif fmt == "html":
-
-            html = ""
-            js = ""
-            
-            if self._customHeadings is not None \
-                    and "html" in self._customHeadings:
-                html += self._customHeadings['html'] % {'tableclass': tableclass,
-                                                       'tableid': tableID}
-            else:
-                colHeadingsFormatted = self._get_col_headings('html', spec)
-                
-                html += "<table"
-                if tableclass: html += ' class="%s"' % tableclass
-                if tableID: html += ' id="%s"' % tableID
-                html += "><thead><tr><th> %s </th></tr>" % \
-                    (" </th><th> ".join(colHeadingsFormatted))
-                html += "</thead><tbody>"
-            for row in self._rows:
-                formatted_rowData = row.render('html', spec)
-                if len(formatted_rowData) > 0:
-                    html += "<tr>"
-                    for formatted_cell in formatted_rowData:
-                        if isinstance(formatted_cell, dict):
-                            #cell contains javascript along with html
-                            js += formatted_cell['js'] + '\n'
-                            formatted_cell = formatted_cell['html']
-
-                        if formatted_cell is None:
-                            pass #don't add anything -- not even td tags (this
-                                 # allows signals *not* to include a cell)
-                        elif formatted_cell.startswith("<td"):
-                            html += formatted_cell #assume format includes td tags
-                        else: html += "<td>" + str(formatted_cell) + "</td>"
-                    html += "</tr>"
-
-            html += "</tbody></table>"
-
-            return { 'html': html, 'js': js }
-
-        else:
+        if fmt not in _convertDict:
             raise NotImplementedError('%s format option is not currently supported')
+
+        table = _convertDict[fmt]['table'] # Function for rendering a table in the format "fmt"
+        rows  = [row.render(fmt, spec) for row in self._rows]
+
+        colHeadingsFormatted = self._get_col_headings(fmt, spec)
+        return table(self._customHeadings, colHeadingsFormatted, rows, spec)
 
     def __str__(self):
 

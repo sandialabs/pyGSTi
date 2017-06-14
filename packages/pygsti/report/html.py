@@ -17,6 +17,49 @@ from .latex import vector as latex_vector
 from .latex import matrix as latex_matrix
 from .reportables import ReportableQty as _ReportableQty
 
+def table(customHeadings, colHeadingsFormatted, rows, spec):
+    tableclass = spec['tableclass']
+    tableID    = spec['tableID']
+    html = ""
+    js = ""
+    
+    if customHeadings is not None \
+            and "html" in customHeadings:
+        html += customHeadings['html'] % {'tableclass': tableclass,
+                                               'tableid': tableID}
+    else:
+        html += "<table"
+        if tableclass: html += ' class="%s"' % tableclass
+        if tableID: html += ' id="%s"' % tableID
+        html += "><thead><tr><th> %s </th></tr>" % \
+            (" </th><th> ".join(colHeadingsFormatted))
+        html += "</thead><tbody>"
+    for formatted_rowData in rows:
+        if len(formatted_rowData) > 0:
+            html += "<tr>"
+            for formatted_cell in formatted_rowData:
+                if isinstance(formatted_cell, dict):
+                    #cell contains javascript along with html
+                    js += formatted_cell['js'] + '\n'
+                    formatted_cell = formatted_cell['html']
+
+                if formatted_cell is None:
+                    pass #don't add anything -- not even td tags (this
+                         # allows signals *not* to include a cell)
+                elif formatted_cell.startswith("<td"):
+                    html += formatted_cell #assume format includes td tags
+                else: html += "<td>" + str(formatted_cell) + "</td>"
+            html += "</tr>"
+
+    html += "</tbody></table>"
+
+    return { 'html': html, 'js': js }
+
+def cell(data, label, spec):
+    if label is None:
+        return data
+    return '<span title="{}">{}</span>'.format(label, data)
+
 def list(l, specs):
     """
     Convert a list to html.
