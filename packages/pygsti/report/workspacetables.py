@@ -487,7 +487,8 @@ class GatesVsTargetTable(WorkspaceTable):
         ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
 
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)
+        #def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
     
         formatters = [None] + [ ErrorBars ]*len(qtyNames)
     
@@ -1228,9 +1229,9 @@ class FitComparisonTable(WorkspaceTable):
                 'html': (Xlabel,'&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                'text': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating'),
-                'ppt': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
-            }
+                'text': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                }
+                
         elif objective == "logl":
             colHeadings = {
                 'latex': (Xlabel,'$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
@@ -1239,10 +1240,8 @@ class FitComparisonTable(WorkspaceTable):
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
                 'text': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
-                         'N_{sigma}','N_s','N_p', 'Rating'),
-                'ppt': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
-                        'N_{sigma}','N_s','N_p', 'Rating')
-            }
+                                               'N_{sigma}','N_s','N_p', 'Rating')
+                }
         else:
             raise ValueError("Invalid `objective` argument: %s" % objective)
 
@@ -1460,7 +1459,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
         for gl,dct in zip(gateLabels,metricVals):
             row_data = [gl] + [ dct[t] for t in titles ]
-            row_formatters = [None] + ['Precision']*len(titles)
+            row_formatters = [None] + ['Normal']*len(titles)
             table.addrow(row_data, row_formatters)
     
         table.finish()
@@ -1760,7 +1759,7 @@ class SoftwareEnvTable(WorkspaceTable):
         table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
     
         packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
-                    'pptx','nose','PIL','psutil']
+                    'nose','PIL','psutil']
         for pkg in packages:
             table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))
     

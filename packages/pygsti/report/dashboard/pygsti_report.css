@@ -1,7 +1,4 @@
 @page {
-  size: 8.5in 11in;
-  margin: 0.75in 0.75in 1in 0.75in;
-  
   @footnotes {
     columns: 2;
     margin-top: 2em;
@@ -50,9 +47,13 @@ body {
 .footnote {
   float: prince-column-footnote;
 }
+
+/*
 html {
-  //font-size: 9pt;
+  font-size: 9pt;
 }
+*/
+
 body {
   font-family: "Computer Modern Serif", "Times New Roman", Times, serif;
   text-align: justify;
@@ -131,11 +132,10 @@ figcaption {
   caption-side: bottom;
   font-weight: bold;
 }
-figure.tbl {  /* figure that is a table */
+figure.tbl {  
   width: 80%;
-  /*margin: 1.667em 0 1em; */
-  margin: auto; /*center tables*/
-  margin-top: 10px; /*give space above table caption*/
+  margin: auto; //center tables
+  margin-top: 10px; //give space above table caption
   border-collapse: collapse;
   text-align: center;
 }
@@ -184,7 +184,7 @@ cite a {
 }
 a[href^="#"] {
   //color: inherit;
-  text-decoration: none;
+  //text-decoration: none;
 }
 @page {
   
@@ -580,4 +580,5 @@ cite a {
   .copyright {
     display: none;
   }
+
 }

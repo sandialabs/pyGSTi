@@ -97,53 +97,55 @@ class TestReport(ReportBaseCase):
                 return "weird"
         w = weirdType()
 
+        from pygsti.report.convert import converter
+        specs = dict(longtables=False, tableID=None, tableclass=None,
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+               resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
+               brackets=False)
+        html  = converter('html')  # Retrieve low-level formatters
+        latex = converter('latex')
+
         print("Float formatting")
-        pygsti.report.html.html(f)
-        pygsti.report.latex.latex(f)
-        pygsti.report.ppt.ppt(f)
+        html(f, specs)
+        latex(f, specs)
 
         print("List formatting")
-        pygsti.report.html.html(l)
-        pygsti.report.latex.latex(l)
-        pygsti.report.ppt.ppt(l)
+        html(l, specs)
+        latex(l, specs)
 
         print("Arbitrary class formatting")
-        pygsti.report.html.html(w)
-        pygsti.report.latex.latex(w)
-        pygsti.report.ppt.ppt(w)
+        html(w, specs)
+        latex(w, specs)
 
         print("Vector formatting")
-        pygsti.report.html.html(vec)
-        pygsti.report.latex.latex(vec)
-        pygsti.report.ppt.ppt(vec)
+        html(vec, specs)
+        latex(vec, specs)
 
         print("Vector formatting (w/brackets)")
-        pygsti.report.html.html(vec, brackets=True)
-        pygsti.report.latex.latex(vec, brackets=True)
-        pygsti.report.ppt.ppt(vec, brackets=True)
+        specs['brackets'] = True
+        html(vec, specs)
+        latex(vec, specs)
+        specs['brackets'] = False
 
         print("Matrix formatting")
-        pygsti.report.html.html_matrix(mx, fontsize=8, brackets=False)
-        pygsti.report.latex.latex_matrix(mx, fontsize=8, brackets=False)
-        pygsti.report.ppt.ppt_matrix(mx, fontsize=8, brackets=False)
+        specs['fontsize'] = 8
+        html(mx, specs)
+        latex(mx, specs)
+        specs['fontsize'] = None
 
         print("Value formatting")
-        ROUND = 2; complxAsPolar=True
+        specs['precision'] = 2
+        specs['complexAsPolar'] = True
         for complxAsPolar in (True,False):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
-                pygsti.report.html.html_value(x, ROUND, complxAsPolar)
-                pygsti.report.latex.latex_value(x, ROUND, complxAsPolar)
-                pygsti.report.ppt.ppt_value(x, ROUND, complxAsPolar)
+                html(x, specs)
+                latex(x, specs)
 
         with self.assertRaises(ValueError):
-            pygsti.report.html.html(rank3Tensor)
+            html(rank3Tensor, specs)
 
         with self.assertRaises(ValueError):
-            pygsti.report.latex.latex(rank3Tensor)
-
-        with self.assertRaises(ValueError):
-            pygsti.report.ppt.ppt(rank3Tensor)
-
+            latex(rank3Tensor, specs)
 
     def test_reportables(self):
         #Test that None is returned when qty cannot be computed
