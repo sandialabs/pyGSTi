@@ -706,6 +706,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     layout = go.Layout(
         width=400*scale,
         height=400*scale,
+        hovermode= 'closest',
         xaxis=xaxis,
         yaxis=yaxis
     )
