@@ -198,6 +198,11 @@ figure > div.pygsti-wsoutput-group {
     font-size: 9pt;
 }
 
+.sidenav .switch_container label {
+    color: white;
+}
+
+
 .switch_container .ui-slider {
     width: 80%;
     float: left;

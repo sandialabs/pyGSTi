@@ -268,6 +268,7 @@ class GatesTable(WorkspaceTable):
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
+                                             colorbar=False,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
                     row_data.append( fig )
@@ -302,6 +303,7 @@ class GatesTable(WorkspaceTable):
                     
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                             colorbar=False,
                                              mxBasis=basisNm,
                                              mxBasisDims=basisDims)
                     row_data.append( fig )
@@ -711,7 +713,7 @@ class ErrgenTable(WorkspaceTable):
     
     
 #    def get_gates_vs_target_angles_table(gateset, targetGateset, confidenceRegionInfo=None):
-class RotationAxisVsTargetTable(WorkspaceTable):
+class old_RotationAxisVsTargetTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing the rotation axes of the single-qubit gates in
@@ -765,6 +767,89 @@ class RotationAxisVsTargetTable(WorkspaceTable):
     
 #    def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 class GateDecompTable(WorkspaceTable):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None, genType="logG-logT"):
+        """
+        Create table for decomposing a single-qubit gateset's gates.
+
+        This table interprets the eigenvectors and eigenvalues of the
+        gates to extract a rotation angle, axis, and various decay
+        coefficients.
+
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The estimated and target gate sets.
+
+        genType : {"logG-logT", "logTiG"}
+            The type of error generator to compute.  Allowed values are:
+            
+            - "logG-logT" : errgen = log(gate) - log(target_gate)
+            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+    
+        Returns
+        -------
+        ReportTable
+        """
+        super(GateDecompTable,self).__init__(ws, self._create, gateset, targetGateset, confidenceRegionInfo, genType)
+
+        
+    def _create(self, gateset, targetGateset, confidenceRegionInfo, genType):
+
+        gateLabels = list(gateset.gates.keys())  # gate labels
+        basisNm = gateset.get_basis_name()
+        basisDims = gateset.get_basis_dimension()
+
+        colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
+        formatters = [None]*len(colHeadings)
+    
+        table = _ReportTable(colHeadings, formatters)    
+        formatters = (None, 'Pi', 'Normal') + ('Pi',)*len(gateLabels)
+
+        axes = {}; angles = {}
+        for gl in gateLabels:
+            gate = gateset.gates[gl]
+            targetGate = targetGateset.gates[gl]
+
+            import scipy.linalg as scila
+            logG = scila.logm(gate) #_tools.real_matrix_log(gate,"ignore",1e-8)
+            errgen = logG #_tools.error_generator(gate, targetGate, genType)
+            hamProjs = _tools.std_errgen_projections(
+                errgen, "hamiltonian", basisNm, basisNm)
+            norm = _np.linalg.norm(hamProjs)
+            axes[gl] = hamProjs / norm
+            angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
+               # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
+               # least of Pauli products) and divide by 2# to be consistent with
+               # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
+               # theta in units of pi.
+
+        for gl in gateLabels:            
+            rowData = [gl, angles[gl], axes[gl] ]
+
+            for j,gl_other in enumerate(gateLabels):
+                rotnAngle = angles[gl]
+                rotnAngle_other = angles[gl_other]
+    
+                if gl_other == gl:
+                    rowData.append( "" )
+                elif abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
+                    rowData.append( "--" )
+                else:
+                    real_dot = _np.clip( _np.real(_np.dot(axes[gl].flatten(), axes[gl_other].flatten())), -1.0, 1.0)
+                    angle = _np.arccos( real_dot ) / _np.pi
+                    rowData.append( angle )
+                    
+            table.addrow(rowData, formatters)
+    
+        table.finish()
+        return table
+    
+
+class old_GateDecompTable(WorkspaceTable):
     def __init__(self, ws, gateset, confidenceRegionInfo=None):
         """
         Create table for decomposing a single-qubit gateset's gates.
@@ -786,7 +871,7 @@ class GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
+        super(old_GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
 
         
     def _create(self, gateset, confidenceRegionInfo):
@@ -826,10 +911,10 @@ class GateDecompTable(WorkspaceTable):
     
         table.finish()
         return table
-    
+
     
 #    def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None, showAxisAngleErrBars=True):
-class RotationAxisTable(WorkspaceTable):
+class old_RotationAxisTable(WorkspaceTable):
     def __init__(self, ws, gateset, confidenceRegionInfo=None, showAxisAngleErrBars=True):
         """
         Create a table of the angle between a gate rotation axes for
@@ -1047,8 +1132,7 @@ class GateEigenvalueTable(WorkspaceTable):
 #    def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
 #                                   maxLengthList=None):
 class DataSetOverviewTable(WorkspaceTable):
-    def __init__(self, ws, dataset, target, maxlen=10,
-                 fixedLists=None, maxLengthList=None):
+    def __init__(self, ws, dataset, maxLengthList=None):
         """
         Create a table that gives a summary of the properties of `dataset`.
     
@@ -1056,21 +1140,7 @@ class DataSetOverviewTable(WorkspaceTable):
         ----------
         dataset : DataSet
             The DataSet
-    
-        target : GateSet
-            A target gateset which is used for it's mapping of SPAM labels to
-            SPAM specifiers and for Gram matrix comparision.
-    
-        maxlen : integer, optional
-            The maximum length string used when searching for the
-            maximal (best) Gram matrix.  It's useful to make this
-            at least twice the maximum length fiducial sequence.
-    
-        fixedLists : (prepStrs, effectStrs), optional
-            2-tuple of gate string lists, specifying the preparation and
-            measurement fiducials to use when constructing the Gram matrix,
-            and thereby bypassing the search for such lists.
-    
+        
         maxLengthList : list of ints, optional
             A list of the maximum lengths used, if available.
     
@@ -1078,18 +1148,12 @@ class DataSetOverviewTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(DataSetOverviewTable,self).__init__(ws, self._create, dataset, target,
-                                                  maxlen, fixedLists, maxLengthList)
+        super(DataSetOverviewTable,self).__init__(ws, self._create, dataset, maxLengthList)
     
-    def _create(self, dataset, target,
-                maxlen, fixedLists, maxLengthList):
+    def _create(self, dataset, maxLengthList):
     
         colHeadings = ('Quantity','Value')
         formatters = (None,None)
-        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, maxlen, target, fixedLists=fixedLists )
-        svals = _np.sort(_np.abs(svals)).reshape(-1,1)
-        target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
-        svals_2col = _np.concatenate( (svals,target_svals), axis=1 )
     
         table = _ReportTable(colHeadings, formatters)
     
@@ -1101,8 +1165,7 @@ class DataSetOverviewTable(WorkspaceTable):
         table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
         table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
-        table.addrow(("Gram singular values| (right column gives the values|when using the target gate set)",
-                      svals_2col), ('Conversion','Small'))
+
         if maxLengthList is not None:
             table.addrow(("Max. Lengths", ", ".join(map(str,maxLengthList)) ), (None,None))
         if hasattr(dataset,'comment') and dataset.comment is not None:

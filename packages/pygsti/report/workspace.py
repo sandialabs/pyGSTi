@@ -53,6 +53,10 @@ def digest(obj):
                 add(md5,v[k])
         elif isinstance(v, SwitchValue):
             md5.update(v.base.tostring()) #don't recurse to parent switchboard
+        elif v is None:
+            md5.update("NONE".encode('utf-8'))
+        elif isinstance(v,NotApplicable):
+            md5.update("NOTAPPLICABLE".encode('utf-8'))
         else:
             #print("Encoding type: ",str(type(v)))
             attribs = list(sorted(dir(v)))
@@ -282,8 +286,9 @@ class Workspace(object):
 
           # Specific to 1Q gates
         self.GateDecompTable = makefactory(_wt.GateDecompTable)
-        self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
-        self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
+        self.old_GateDecompTable = makefactory(_wt.old_GateDecompTable)
+        #self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
+        #self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
 
           # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
@@ -302,6 +307,8 @@ class Workspace(object):
         self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot)
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
+        self.GramMatrixBarPlot = makefactory(_wp.GramMatrixBarPlot)
+        self.FitComparisonBarPlot = makefactory(_wp.FitComparisonBarPlot)
         self.DatasetComparisonPlot = makefactory(_wp.DatasetComparisonPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 
@@ -350,6 +357,7 @@ class Workspace(object):
         
         #Load our custom plotly extension functions            
         script += insert_resource(connected,None,"pygsti_plotly_ex.js")
+        script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
         # Load style sheets for displaying tables
         script += insert_resource(connected,None,"pygsti_dataviz.css")
@@ -1633,7 +1641,7 @@ class WorkspaceTable(WorkspaceOutput):
                                               resizable=resizable, autosize=autosize)
                 
 
-                divHTML.append("<div id='%s'>\n%s\n</div>\n" %
+                divHTML.append("<div class='single_switched_value' id='%s'>\n%s\n</div>\n" %
                                (tableDivID,table_dict['html']))
                 divJS.append(table_dict['js'])
                 divIDs.append(tableDivID)
@@ -1643,8 +1651,16 @@ class WorkspaceTable(WorkspaceOutput):
             ret = { 'html': base['html'], 'js': '' }
 
             if global_requirejs:
-                ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+                ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
             ret['js'] += '  $(document).ready(function() {\n'
+
+            #FUTURE: make rendering conditional on whether a flag is set (for rendering math)
+            ret['js'] += ('  plotman.enqueue(function() {{ \n'
+                          '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                          '             {{left: "$$", right: "$$", display: true}},\n'
+                          '             {{left: "$", right: "$", display: false}},\n'
+                          '             ] }} ); }}, "Rendering math in {tableID}" );\n').format(tableID=tableID)
+
             ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
             
             if resizable:
@@ -1764,8 +1780,8 @@ class WorkspacePlot(WorkspaceOutput):
                     autosize=autosize, resizable=resizable,
                     lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
                 divIDs.append(getPlotlyDivID(fig_dict['html']))
-                
-            divHTML.append("<div class='relwrap'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
+
+            divHTML.append("<div class='relwrap single_switched_value'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
             divJS.append( fig_dict['js'] )
             
         base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,

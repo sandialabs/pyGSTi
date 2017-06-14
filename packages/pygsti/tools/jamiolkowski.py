@@ -330,8 +330,9 @@ def mags_of_negative_choi_evals(gateset):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
+    mxBasis = gateset.get_basis_name()
     for (_, gate) in gateset.gates.items():
-        J = jamiolkowski_iso( gate, choiMxBasis="std" )
+        J = jamiolkowski_iso( gate, mxBasis, choiMxBasis="std" )
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append( -ev.real if ev.real < 0 else 0.0 )

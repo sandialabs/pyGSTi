@@ -215,20 +215,12 @@ germs_XYnested = _strc.gatestring_list(
 
 #Construct the target gateset
 gs_target = _setc.build_gateset(
-    [4], [('Q0','Q1')],['Gii','Gix','Giy','Gxi','Gyi'],
-    [ "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)" ],
+    [4], [('Q0','Q1')],['Gii','Gix','Giy','Gxi','Gyi','Gcphase'],
+    [ "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CPHASE(Q0,Q1)" ],
     prepLabels=['rho0'], prepExpressions=["0"],
     effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
     spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
               'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")
-
-#CPHASE gate
-_Ucphase = _np.array( [[1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, -1]], 'd')
-_cphaseMx = _gt.unitary_to_process_mx(_Ucphase)
-gs_target.gates['Gcphase'] = _bt.std_to_pp(_cphaseMx)
 
 
 specs16x10 = _spamc.build_spam_specs(
