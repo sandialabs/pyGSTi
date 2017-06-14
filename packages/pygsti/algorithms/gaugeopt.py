@@ -201,7 +201,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       final gauge-transformed gateset.
     """
 
-    objective_fn = _create_objective_fn(gateset, targetGateset,
+    objective_fn = create_objective_fn(gateset, targetGateset,
             itemWeights, 
             CPpenalty, TPpenalty, 
             validSpamPenalty, gatesMetric, 
