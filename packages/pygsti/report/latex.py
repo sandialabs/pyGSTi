@@ -14,7 +14,29 @@ import cmath
 from .. import objects as _objs
 from ..tools import compattools as _compat
 
+'''
+table() and cell() functions are used by table.py in table creation
+everything else is used in creating formatters in formatters.py
+'''
+
 def table(customHeadings, colHeadingsFormatted, rows, spec):
+    '''
+    Create a LaTeX table
+
+    Parameters
+    ----------
+    customHeadings : None, dict
+        optional dictionary of custom table headings
+    colHeadingsFormatted : list
+        formatted column headings
+    rows : list of lists of cell-strings
+        Data in the table, pre-formatted
+    spec : dict
+        options for the formatter
+    Returns
+    -------
+    dict : contains key 'latex', which corresponds to a latex string representing the table
+    '''
     longtables = spec['longtables']
     table = "longtable" if longtables else "tabular"
     if customHeadings is not None \
@@ -53,6 +75,21 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     return {'latex' : latex}
 
 def cell(data, label, spec):
+    '''
+    Format the cell of a latex table 
+
+    Parameters
+    ----------
+    data : string
+        string representation of cell content
+    label : string
+        optional cell label, used for tooltips
+    spec : dict
+        options for the formatters
+    Returns
+    -------
+    string
+    '''
     return data
 
 def list(l, specs):

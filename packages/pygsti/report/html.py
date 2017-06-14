@@ -17,7 +17,29 @@ from .latex import vector as latex_vector
 from .latex import matrix as latex_matrix
 from .reportables import ReportableQty as _ReportableQty
 
+'''
+table() and cell() functions are used by table.py in table creation
+everything else is used in creating formatters in formatters.py
+'''
+
 def table(customHeadings, colHeadingsFormatted, rows, spec):
+    '''
+    Create an HTML table
+
+    Parameters
+    ----------
+    customHeadings : None, dict
+        optional dictionary of custom table headings
+    colHeadingsFormatted : list
+        formatted column headings
+    rows : list of lists of cell-strings
+        Data in the table, pre-formatted
+    spec : dict
+        options for the formatter
+    Returns
+    -------
+    dict : contains keys 'html' and 'js', which correspond to a html and js strings representing the table 
+    '''
     tableclass = spec['tableclass']
     tableID    = spec['tableID']
     html = ""
@@ -56,6 +78,21 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     return { 'html': html, 'js': js }
 
 def cell(data, label, spec):
+    '''
+    Format the cell of an HTML table 
+
+    Parameters
+    ----------
+    data : string
+        string representation of cell content
+    label : string
+        optional cell label, used for tooltips
+    spec : dict
+        options for the formatters
+    Returns
+    -------
+    string
+    '''
     if label is None:
         return data
     return '<span title="{}">{}</span>'.format(label, data)

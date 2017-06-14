@@ -15,7 +15,25 @@ import re as _re
 from .convert import convertDict as _convertDict
 
 class ReportTable(object):
+    '''
+    Table representation, renderable in multiple formats
+    '''
     def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
+        '''
+        Create a table object
+
+        Parameters
+        ----------
+        colHeadings : list or dict
+            default column headings if list,
+            dictionary of overrides if dict
+        formatters : list
+            names of default column heading formatters
+        customHeader : dict
+            dictionary of overriden headers
+        colHeadingLabels : list
+            labels for column headings (tooltips)
+        '''
         self._customHeadings = customHeader
         self._rows           = []
         self._override       = isinstance(colHeadings, dict)
@@ -53,6 +71,41 @@ class ReportTable(object):
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
                brackets=False):
+        '''
+        Render a table object
+
+        Parameters
+        ----------
+        fmt : string
+            name of format to be used
+        scratchDir     : string
+            directory for latex figures to be rendered in
+        precision      : int
+            number of digits to render
+        polarprecision : int
+            number of digits to render for polars
+        sciprecision   : int
+            number of digits to render for scientific notation
+        resizable      : bool
+            allow a table to be resized
+        autosize       : bool
+            allow a table to be automatically sized
+        fontsize       : int
+            override fontsize of a tabel
+        complexAsPolar : bool
+            render complex numbers as polars
+        brackets       : bool
+            render matrix like types w/ brackets
+        longtables     : bool
+            latex table option
+        tableID        : string
+            id tag for HTML tables
+        tableclass     : string
+            class tag for HTML tables
+        Returns
+        -------
+        string
+        '''
 
         spec = {
             'scratchDir'     : scratchDir,

@@ -11,8 +11,22 @@ from .formatters  import formatDict as _formatDict
 from .reportables import ReportableQty as _ReportableQty
 
 class Row(object):
-
+    '''
+    Representation of a table row
+    '''
     def __init__(self, rowData=None, formatters=None, labels=None):
+        '''
+        Create a row object 
+
+        Parameters
+        ----------
+        rowData : list
+            raw data for the table
+        formatters : optional, list[string]
+            formatting options for each cell
+        labels : optional list[string]
+            labeling options for each cell
+        '''
         if rowData is None:
             rowData = []
         else:
@@ -36,6 +50,19 @@ class Row(object):
         self.cells.append(Cell(data, formatter, label))
 
     def render(self, fmt, specs):
+        '''
+        Render a row of cells
+
+        Parameters
+        ----------
+        fmt : string
+            format to be rendered in
+        specs : dict
+            options for formatting
+        Returns
+        -------
+        list
+        '''
         formattedItems = []
         for cell in self.cells:
             formattedItem = cell.render(fmt, specs)

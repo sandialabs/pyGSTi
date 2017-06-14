@@ -14,6 +14,13 @@ from .reportableqty import ReportableQty as _ReportableQty
 class Formatter(object):
     '''
     Class defining the formatting rules for an object
+
+    Once created, is used like a function with the signature: item, specs -> string
+    See __call__ method for details
+
+    __call__ could be renamed to render() for compatibility with table.render(), row.render(), etc..
+    However, using __call__ allows for the user to drop in custom functions in place of Formatter objects,
+    which is useful (i.e. in creating figure formatters)
     '''
 
     def __init__(self, 
@@ -25,6 +32,8 @@ class Formatter(object):
             stringreturn=None,
             defaults=None):
         '''
+        Create a Formatter object by supplying formatting rules to be applied
+
         Parameters
         ----------
         stringreplacers : tuples of the form (pattern, replacement) (optional)
@@ -37,8 +46,14 @@ class Formatter(object):
 
         formatstring : string (optional) Outer formatting for after both replacements have been made
 
+        ebstring : string (optional) formatstring used if the item being formatted has attached error bars 
+
         stringreturn : tuple (string, string)
             return the second string if the label is equal to the first
+
+        defaults : dictionary (string, any)
+            overriden values to the dictionary passed in during formatted. 
+            ie for rounded formatters, which override the precision key to be set to two
         '''
         self.custom          = custom
         self.stringreplacers = stringreplacers
@@ -59,6 +74,9 @@ class Formatter(object):
         --------
         item : string, the item to be formatted!
 
+        specs : dictionary
+            dictionary of options to be sent to the formatter and custom functions
+
         Returns
         --------
         formatted item : string
@@ -73,14 +91,16 @@ class Formatter(object):
                 return s
             # Format with ebstring if error bars present
             if item.has_eb():
-                return item.render_with(lambda s : self(s, specs), self.ebstring)
-                #return self.ebstring % (self(item.get_value(), specs), self(item.get_err_bar(), specs))
+                return item.render_with(partial(self, specs=specs), self.ebstring)
             else:
                 return item.render_with(partial(self, specs=specs))
-        elif self.custom is not None:
+        # item is not ReportableQty, and custom is defined
+        # avoids calling custom twice on ReportableQty objects
+        elif self.custom is not None: 
             item = self.custom(item, specs)
 
         item = str(item)
+        # Avoids replacing commonly used string names with formatting
         if self.stringreturn is not None and item == self.stringreturn[0]:
             return self.stringreturn[1]
 
@@ -95,5 +115,5 @@ class Formatter(object):
             if result is not None:
                 grouped = result.group(1)
                 item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
-        # Additional formatting, ex ${}$ or <i>{}</i>
+        # Additional formatting, ex $%s$ or <i>%s</i>
         return self.formatstring % item

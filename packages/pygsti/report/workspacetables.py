@@ -1396,7 +1396,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
         for gl,dct in zip(gateLabels,metricVals):
             row_data = [gl] + [ dct[t] for t in titles ]
-            row_formatters = [None] + ['Precision']*len(titles)
+            row_formatters = [None] + ['Normal']*len(titles)
             table.addrow(row_data, row_formatters)
     
         table.finish()

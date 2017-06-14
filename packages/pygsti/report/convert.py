@@ -86,4 +86,7 @@ def convert(x, specs, fmt):
     return convertDict[fmt][t](x, specs)
 
 def converter(fmt):
+    '''
+    Create a converter function for some specific format
+    '''
     return functools.partial(convert, fmt=fmt)

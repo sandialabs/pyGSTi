@@ -10,12 +10,40 @@ from .formatters import formatDict  as _formatDict
 from .convert    import convertDict as _convertDict
 
 class Cell(object):
+    '''
+    Representation of a table cell, containing formatting and labeling info
+    '''
     def __init__(self, data=None, formatterName=None, label=None):
+        '''
+        Creates Cell object 
+
+        Parameters
+        ----------
+        data : ReportableQty 
+            data to be reported
+        formatterName : string
+            name of the formatter to be used (ie 'Effect')
+        label : string
+            label of the cell
+        '''
         self.data          = data
         self.formatterName = formatterName
         self.label         = label
 
     def _render_data(self, fmt, spec):
+        '''
+        Render self.data as a string
+
+        Parameters
+        ----------
+        fmt : string
+            name of format to be used
+        spec: dict
+            dictionary of formatting options
+        Returns
+        -------
+        string
+        '''
         if self.formatterName is not None:
             formatter = _formatDict[self.formatterName]
             formatted_item = formatter[fmt](self.data, spec)
@@ -29,6 +57,19 @@ class Cell(object):
                 raise ValueError("Unformatted None in Cell")
 
     def render(self, fmt, spec):
+        '''
+        Render full cell as a string
+
+        Parameters
+        ----------
+        fmt : string
+            name of format to be used
+        spec: dict
+            dictionary of formatting options
+        Returns
+        -------
+        string
+        '''
         format_cell   = _convertDict[fmt]['cell'] # Function for rendering a cell in the format "fmt"
         formattedData = self._render_data(fmt, spec)
 

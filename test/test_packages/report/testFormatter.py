@@ -51,18 +51,13 @@ class GenericFormatterTests(FormatterBaseTestCase):
     def test_unformatted(self):
         self.render_pair('some heading', None)
 
-    '''
     def test_string_return(self):
         self.assertEqual(self.render_pair('remainder', 'Effect', 'html'),
-                         '<table><thead><tr><th> E<sub>C</sub> </th></tr></thead><tbody></tbody></table>')
+                         '<table><thead><tr><th> <span title="remainder">E<sub>C</sub></span> </th></tr></thead><tbody></tbody></table>')
 
     def test_string_replace(self):
         self.assertEqual(self.render_pair('rho0', 'Rho', 'html'),
-                         '<table><thead><tr><th> &rho;<sub>0</sub> </th></tr></thead><tbody></tbody></table>')
-    '''
-
-    def test_no_format(self):
-        self.assertEqual(formatter.no_format('x'), 'x')
+                         '<table><thead><tr><th> <span title="rho0">&rho;<sub>0</sub></span> </th></tr></thead><tbody></tbody></table>')
 
     def test_conversion_formatters(self):
         self.assertEqual(formatter.convert_html('|<STAR>', {}), ' &#9733;')

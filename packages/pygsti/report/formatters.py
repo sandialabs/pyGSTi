@@ -22,13 +22,19 @@ import os      as _os
 
 from plotly.offline import plot as _plot
 
-def no_format(label):
-    return label
-
 ##############################################################################
 #                          Formatting functions                              #
 ##############################################################################
 
+'''
+For documentation on creating additional formatters, see formatter.py
+
+If the Formatter class does not offer enough functionality, 
+  any function with the signature (item, specs -> string) can be used as a formatter
+'''
+
+# This dictionary is intentionally exported to other modules. 
+# Even though it can change at runtime, it never does and should not
 formatDict = dict()
 
 # 'rho' (state prep) formatting
@@ -59,12 +65,6 @@ formatDict['Rounded'] = {
     'html'  : Formatter(html,  defaults={'precision' : 2, 'sciprecision': 0}),
     'latex' : Formatter(latex, defaults={'precision' : 2, 'sciprecision': 0})}
 
-# Similar to the above two formatdicts,
-# but recieves precision during table.render(), which is sent as kwarg to html, for example
-formatDict['Precision'] = {
-    'html'  : Formatter(html),
-    'latex' : Formatter(latex)}
-
 # 'small' formating - make text smaller
 formatDict['Small'] = {
     'html'  : Formatter(html),
@@ -75,23 +75,10 @@ formatDict['Verbatim'] = {
     'html'  : Formatter(html),
     'latex' : Formatter(formatstring='\\spverb!%s!')}
 
-#############################################
-# Helper functions for formatting pi-labels #
-#############################################
-
-def _pi_template(b):
-    # Pi Formatting shares a common predicate and first branch condition
-    def formatter(label, specs):
-        if str(label) == '--' or str(label) == '':
-            return str(label)
-        else:
-            return b(label, specs)
-    return formatter
-
 # Pi formatters
 formatDict['Pi'] = {
-    'html'  : _pi_template(Formatter(html,  formatstring='%s&pi;')),
-    'latex' : _pi_template(Formatter(latex, formatstring='%s$\\pi$'))}
+    'html'  : Formatter(html,  formatstring='%s&pi;'),
+    'latex' : Formatter(latex, formatstring='%s$\\pi$')}
 
 # BracketFormatters
 formatDict['Brackets'] = {
@@ -119,7 +106,7 @@ pre_convert_latex = Formatter(stringreplacers=[
     ('<STAR>', '\\bigstar')])
 
 def special_convert_latex(x, specs):
-    x = pre_convert_latex(str(x), {})
+    x = pre_convert_latex(str(x), specs)
     if '\\bigstar' in x:
         x = '${}$'.format(x)
     if "\\\\" in x:
@@ -176,6 +163,11 @@ formatDict['GateString'] = {
     'html'  : Formatter(lambda s : '.'.join(s) if s is not None else ''),
     'latex' : Formatter(lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])))}
 
+'''
+Figure formatters no longer use Formatter objects, because figure formatters are more specialized.
+Notice that they still have the function signature (item, specs -> string)
+'''
+
 def html_figure(fig, specs):
     render_out = fig.render("html",
                             resizable="handlers only" if specs['resizable'] else False,
@@ -203,7 +195,7 @@ formatDict['Bold'] = {
 
 #Special formatting for Hamiltonian and Stochastic gateset types
 formatDict['GatesetType'] = {
-    'html'  : no_format,
+    'html'  : Formatter(),
     'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}
 
 '''
