@@ -6,7 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .formatters  import formatDict as _formatDict
+from .formatters    import formatDict as _formatDict
 
 class Cell(object):
     def __init__(self, data=None, formatterName=None, label=None):
@@ -15,6 +15,8 @@ class Cell(object):
         self.label         = label
 
     def render(self, fmt, spec):
+        if fmt is None:
+            return str(self.data)
         if self.formatterName is not None:
             formatter = _formatDict[self.formatterName]
             formatted_item = formatter[fmt](self.data, spec)

@@ -14,32 +14,31 @@ import re as _re
 
 class ReportTable(object):
     def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
-        self._customHeadings    = customHeader
-        self._rows              = []
-        self._headingFormatters = formatters
+        self._customHeadings = customHeader
+        self._rows           = []
+        self._override       = isinstance(colHeadings, dict)
 
-        if self._headingFormatters is not None:
-            if colHeadingLabels is None:
-                colHeadingLabels = colHeadings
-            self._headings = [_ReportableQty(item) for item in colHeadings]
-            self._columnNames = self._headings
-        else:
-            self._headings    = colHeadings
+        if self._override:
+            # Dictionary of overridden formats
+            self._headings    = {k : Row(v, labels=colHeadingLabels) for k, v in colHeadings.items()}
             self._columnNames = self._headings['text']
+        else:
+            self._headings    = Row(colHeadings, formatters, colHeadingLabels)
+            self._columnNames = colHeadings 
 
-    def addrow(self, rowData, formatters=None, labels=None):
-        data = [_ReportableQty.from_val(item) for item in rowData]
+    def addrow(self, data, formatters=None, labels=None):
         self._rows.append(Row(data, formatters, labels))
 
     def finish(self):
         pass #nothing to do currently
 
-    def get_col_headings(self, fmt, spec):
-        if self._headingFormatters is not None:
-            row = Row(self._headings, self._headingFormatters)
-            return row.render(fmt, spec)
-        else: #headingFormatters is None => headings is dict w/formats
-            return self._headings[fmt]
+    def _get_col_headings(self, fmt, spec):
+        if self._override:
+            # _headings is a dictionary of overridden formats
+            return self._headings[fmt].render(None, spec)
+        else:
+            # _headings is a row object
+            return self._headings.render(fmt, spec)
 
 
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
@@ -64,7 +63,7 @@ class ReportTable(object):
                     and "latex" in self._customHeadings:
                 latex = self._customHeadings['latex']
             else:
-                colHeadingsFormatted = self.get_col_headings('latex', spec)
+                colHeadingsFormatted = self._get_col_headings('latex', spec)
 
                 latex  = "\\begin{%s}[l]{%s}\n\hline\n" % \
                     (table, "|c" * len(colHeadingsFormatted) + "|")
@@ -109,7 +108,7 @@ class ReportTable(object):
                 html += self._customHeadings['html'] % {'tableclass': tableclass,
                                                        'tableid': tableID}
             else:
-                colHeadingsFormatted = self.get_col_headings('html', spec)
+                colHeadingsFormatted = self._get_col_headings('html', spec)
                 
                 html += "<table"
                 if tableclass: html += ' class="%s"' % tableclass
@@ -200,7 +199,7 @@ class ReportTable(object):
         for row in self._rows:
             row_data = row.cells
             if len(row_data) > 0 and row_data[0].data.get_value() == key:
-                return _OrderedDict( zip(self._columnNames,row_data) )
+                return _OrderedDict( zip(self._columnNames, row_data) )
         raise KeyError("%s not found as a first-column value" % key)
 
     def __len__(self):

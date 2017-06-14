@@ -8,12 +8,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from .cell        import Cell
 from .formatters  import formatDict as _formatDict
+from .reportables import ReportableQty as _ReportableQty
 
 class Row(object):
 
     def __init__(self, rowData=None, formatters=None, labels=None):
         if rowData is None:
             rowData = []
+        else:
+            rowData = [_ReportableQty.from_val(item) for item in rowData]
         if formatters is None:
             formatters = []
         if labels is None:
