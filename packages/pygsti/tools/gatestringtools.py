@@ -1,11 +1,11 @@
 from collections import namedtuple, OrderedDict
 
 def apply_replace(gatestring, replaceRules):
-    for rule in replaceRules:
+    for a, b in replaceRules:
         temp = tuple()
         for item in gatestring:
-            if item == rule:
-                temp += replaceRules[item]
+            if item == a:
+                temp += b 
             else:
                 temp += (item,)
         gatestring = temp
@@ -48,12 +48,12 @@ def pre_process_gatestring(gatestring, sequenceRules, replaceRules):
     gatestring = apply_replace(gatestring, replaceRules)
     return gatestring
 
+'''
 sequenceRules = {
     ('A', 'B') : ('B\'',),
     ('B', 'A') : ('A\'',)}
 
-replaceRules = OrderedDict()
-replaceRules['A'] = ('C', 'C')
-replaceRules['C'] = ('C\'',)
+replaceRules = [('A', ('C', 'C')), ('C', ('C\'',)]
 
 print(pre_process_gatestring(('A', 'B', 'A', 'C'), sequenceRules, replaceRules))
+'''
