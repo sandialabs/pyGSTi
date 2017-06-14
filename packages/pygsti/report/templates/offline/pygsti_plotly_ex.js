@@ -374,8 +374,8 @@ PlotManager.prototype.run = function(){
 	if (!pm.busy) {
 	    pm.busy = true;
 	    if (pm.queue.length){
-		var label = pm.labelqueue.pop();
-		var callback = pm.queue.pop();
+		var label = pm.labelqueue.shift(); //pop();
+		var callback = pm.queue.shift(); //pop();
 		$("#status").text(label + " (" + pm.queue.length + " remaining)");
 		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
 		callback();
