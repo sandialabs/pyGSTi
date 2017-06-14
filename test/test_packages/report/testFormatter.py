@@ -41,7 +41,7 @@ class GenericFormatterTests(FormatterBaseTestCase):
             'ppt'   : lambda l, s : None,
             }
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             self.render_pair('some_heading', 'BadFormat')
 
     def test_unformatted_none(self):

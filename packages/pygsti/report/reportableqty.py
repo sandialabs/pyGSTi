@@ -4,7 +4,7 @@ class ReportableQty(object):
     primarily for use in reports.
     """
 
-    def __init__(self, value, errbar=None, tooltip=None):
+    def __init__(self, value, errbar=None):
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -19,7 +19,6 @@ class ReportableQty(object):
         """
         self.value   = value
         self.errbar  = errbar
-        self.tooltip = tooltip
 
     def __str__(self):
         return self.render_with(str)
@@ -41,9 +40,9 @@ class ReportableQty(object):
         '''
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field'
-            return ReportableQty(value[0], value[1], tooltip=str(value))
+            return ReportableQty(value[0], value[1])
         else:
-            return ReportableQty(value, tooltip=str(value))
+            return ReportableQty(value)
 
     def has_eb(self):
         return self.errbar is not None
@@ -66,12 +65,9 @@ class ReportableQty(object):
         """
         return self.value, self.errbar
 
-    def render_with(self, f):
+    def render_with(self, f, ebstring='%s +/- %s'):
         if self.errbar is not None:
-            rendered = f(self.value) + " +/- " + f(self.errbar)
+            rendered = ebstring % (f(self.value), f(self.errbar))
         else: 
             rendered = f(self.value)
-        if self.tooltip is not None:
-            return '<span title="{}">{}</span>'.format(self.tooltip, rendered)
-        else:
-            return rendered
+        return rendered

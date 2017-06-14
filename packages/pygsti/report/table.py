@@ -21,13 +21,11 @@ class ReportTable(object):
         if self._headingFormatters is not None:
             if colHeadingLabels is None:
                 colHeadingLabels = colHeadings
-            self._headings = [_ReportableQty(item, tooltip=label) for item, label in zip(
-                colHeadings,
-                colHeadingLabels)]
+            self._headings = [_ReportableQty(item) for item in colHeadings]
             self._columnNames = self._headings
         else:
             self._headings    = colHeadings
-            self._columnNames = self._headings['html']
+            self._columnNames = self._headings['text']
 
     def addrow(self, rowData, formatters=None, labels=None):
         data = [_ReportableQty.from_val(item) for item in rowData]

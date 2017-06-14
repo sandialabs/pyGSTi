@@ -73,7 +73,8 @@ class Formatter(object):
                 return s
             # Format with ebstring if error bars present
             if item.has_eb():
-                return self.ebstring % (self(item.get_value(), specs), self(item.get_err_bar(), specs))
+                return item.render_with(lambda s : self(s, specs), self.ebstring)
+                #return self.ebstring % (self(item.get_value(), specs), self(item.get_err_bar(), specs))
             else:
                 return item.render_with(partial(self, specs=specs))
         elif self.custom is not None:

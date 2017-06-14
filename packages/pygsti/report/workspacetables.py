@@ -1164,14 +1164,20 @@ class FitComparisonTable(WorkspaceTable):
                           '$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                 'html': (Xlabel,'&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
-                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating')}
+                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                'text': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                }
+                
         elif objective == "logl":
             colHeadings = {
                 'latex': (Xlabel,'$2\Delta\\log(\\mathcal{L})$','$k$','$2\Delta\\log(\\mathcal{L})-k$',
                           '$\sqrt{2k}$','$N_\\sigma$','$N_s$','$N_p$', 'Rating'),
                 'html': (Xlabel,'2&Delta;(log L)','k','2&Delta;(log L)-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
-                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating')}
+                         'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
+                'text': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
+                                               'N_{sigma}','N_s','N_p', 'Rating')
+                }
         else:
             raise ValueError("Invalid `objective` argument: %s" % objective)
 
