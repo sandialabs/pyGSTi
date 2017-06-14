@@ -408,9 +408,12 @@ def calc_twirled_DDD(gateset, germsList, eps=None, check=False,
     if eps is not None:
         btd_kwargs['eps'] = eps
     twirledDeriv = bulk_twirled_deriv(**btd_kwargs)/germLengths[:, None, None]
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+    nGerms, _, vec_gateset_dim = twirledDeriv.shape
+    twirledDerivDaggerDeriv = _np.zeros((nGerms, vec_gateset_dim, vec_gateset_dim),
+                                        dtype=_np.complex)
+    for i in range(nGerms):
+        twirledDerivDaggerDeriv[i, :, :] = _np.dot(
+            twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
     return twirledDerivDaggerDeriv
 
 
