@@ -233,9 +233,9 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             #print("DB: rendering ",key)
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
-                out = val.render("html", precision=precision, resizable=True, autosize=True)
+                out = val.render("html", precision=precision, resizable=True, autosize=False)
             elif isinstance(val,_ws.WorkspacePlot):
-                out = val.render("html", resizable=True, autosize=True)
+                out = val.render("html", resizable=True, autosize=False)
             else: #switchboards usually
                 out = val.render("html") 
 
