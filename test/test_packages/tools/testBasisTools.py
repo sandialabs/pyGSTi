@@ -8,10 +8,6 @@ import pygsti.tools.basistools as basistools
 
 class BasisBaseTestCase(BaseTestCase):
 
-    ###########################################################
-    ## BASIS TOOLS TESTS     ##################################
-    ###########################################################
-
     def test_expand_contract(self):
         # matrix that operates on 2x2 density matrices, but only on the 0-th and 3-rd
         # elements which correspond to the diagonals of the 2x2 density matrix.
@@ -310,15 +306,6 @@ class BasisBaseTestCase(BaseTestCase):
          [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,],
          [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,]])
         self.assertArraysAlmostEqual(gate,expected)
-
-
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
