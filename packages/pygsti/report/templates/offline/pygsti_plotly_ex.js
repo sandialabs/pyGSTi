@@ -378,9 +378,15 @@ PlotManager.prototype.run = function(){
 		var callback = pm.queue.shift(); //pop();
 		$("#status").text(label + " (" + pm.queue.length + " remaining)");
 		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
-		callback();
+		try {
+		    callback();
+		} finally {
+		    pm.busy = false; // in case an error occurs, don't block queue
+		}
 	    }
-	    pm.busy = false;
+	    else {
+		pm.busy = false;
+	    }
 	}
 	if (pm.queue.length <= 0) {
 	    console.log("PLOTMANAGER: queue empty!");
