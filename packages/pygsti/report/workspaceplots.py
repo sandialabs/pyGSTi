@@ -686,9 +686,12 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                         texts.append(hoverInfo(subMxs[iy][ix][N-1-iiy][iix],iy,ix,iiy,iix))
                     else:
                         texts.append(str(subMxs[iy][ix][N-1-iiy][iix]))
-    
+
     trace = go.Scatter(x=xs, y=ys, mode="markers",
-                       marker=dict(size=8, color="orange", line=dict(width=1)))
+                       marker=dict(size=8,
+                                   color=[colormap.normalize(y) for y in ys],
+                                   colorscale=colormap.get_colorscale(),
+                                   line=dict(width=1)))
     if hoverInfo:
         trace['hoverinfo'] = 'text'
         trace['text'] = texts
@@ -697,7 +700,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
 
     xaxis = go.XAxis(
         title='sequence length',
-        showline=True,
+        showline=False,
+        zeroline=True,
         )
     yaxis = go.YAxis(
         title=ylabel
@@ -708,7 +712,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         height=400*scale,
         hovermode= 'closest',
         xaxis=xaxis,
-        yaxis=yaxis
+        yaxis=yaxis,
     )
     return go.Figure(data=[trace], layout=layout)
 
@@ -1195,6 +1199,7 @@ class ColorBoxPlot(WorkspacePlot):
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
+                ytitle="chi<sup>2</sup>"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
@@ -1209,6 +1214,7 @@ class ColorBoxPlot(WorkspacePlot):
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
+                ytitle="2 log(L ratio)"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
@@ -1223,6 +1229,7 @@ class ColorBoxPlot(WorkspacePlot):
             elif typ == "blank":
                 precomp=False
                 colormapType = "trivial"
+                ytitle = ""
 
                 def mx_fn(plaq,x,y):
                     return _np.nan * _np.zeros( (len(gss.minor_yvals()),
@@ -1231,6 +1238,7 @@ class ColorBoxPlot(WorkspacePlot):
             elif typ == "errorrate":
                 precomp=False
                 colormapType = "seq"
+                ytitle="error rate"
 
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
                 def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
@@ -1240,6 +1248,7 @@ class ColorBoxPlot(WorkspacePlot):
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
+                ytitle="chi<sup>2</sup>"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.direct_chi2_matrix(
@@ -1251,6 +1260,7 @@ class ColorBoxPlot(WorkspacePlot):
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
+                ytitle="Direct 2 log(L ratio)"
                 
                 def mx_fn(plaq,x,y):
                     return _ph.direct_logl_matrix(
@@ -1262,6 +1272,7 @@ class ColorBoxPlot(WorkspacePlot):
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "green"
+                ytitle="2 log(L ratio)"
                 assert(dscomparator is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
 
@@ -1269,7 +1280,7 @@ class ColorBoxPlot(WorkspacePlot):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
             elif (submatrices is not None) and typ in submatrices:
-                precomp = False
+                precomp = False; ytitle = typ
                 if typ + ".colormap" in submatrices:
                     colormapType = submatrices[typ + ".colormap"]
                 else:
@@ -1320,7 +1331,7 @@ class ColorBoxPlot(WorkspacePlot):
             if scatter:
                 newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
                                                       False, boxLabels, prec,
-                                                      hoverInfo, sumUp, typ,
+                                                      hoverInfo, sumUp, ytitle,
                                                       scale, addl_hover_info)
             else:
                 newfig = gatestring_color_boxplot(gss, subMxs, colormap,
