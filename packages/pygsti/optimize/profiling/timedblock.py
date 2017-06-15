@@ -3,13 +3,17 @@ from time import time
 from contextlib import contextmanager
 
 @contextmanager
-def timed_block(label):
+def timed_block(label, timeDict=None):
     start = time()
     try:
         yield
     finally:
         end = time()
-        print('{} block took {} seconds'.format(label, str(end-start)))
+        t = end - start
+        if timeDict is not None:
+            timeDict[label].append(t)
+        else:
+            print('{} block took {} seconds'.format(label, str(t)))
     '''
     start = perf_counter()
     try:
