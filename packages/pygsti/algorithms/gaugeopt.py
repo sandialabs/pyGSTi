@@ -297,7 +297,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     def call_objective_fn(gaugeGroupElVec):
         gaugeGroupEl.from_vector(gaugeGroupElVec)
-        gs = gateset.copy(); gs.transform(gaugeGroupEl)
+        gs = gateset.copy()
+        gs.transform(gaugeGroupEl)
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)

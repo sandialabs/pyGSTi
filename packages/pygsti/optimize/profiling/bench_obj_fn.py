@@ -29,6 +29,6 @@ def main():
             'spamMetric'  : 'frobenius',
             'gatesMetric' : 'frobenius'}
 
-    test(defaultOptions)
+    test(defaultOptions, iterations=10000)
 
 main()
