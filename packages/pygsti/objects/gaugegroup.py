@@ -25,6 +25,7 @@ class GaugeGroup(object):
         def __init__(self): pass
         def get_transform_matrix(self): return None
         def get_transform_matrix_inverse(self): return None
+        def deriv_wrt_params(self): return None
         def to_vector(self): return _np.array([],'d')
         def from_vector(self,v): pass
 
@@ -57,6 +58,9 @@ class GateGaugeGroup(GaugeGroup):
             if self._inv_matrix is None:
                 self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
             return self._inv_matrix
+
+        def deriv_wrt_params(self):
+            return self.gate.deriv_wrt_params()
 
         def to_vector(self):
             return self.gate.to_vector()
