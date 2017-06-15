@@ -21,7 +21,8 @@ class ReportableQty(object):
         self.errbar  = errbar
 
     def __str__(self):
-        return self.render_with(str)
+        def f(x,y): return (str(x) + " +/- " + str(y)) if y else str(x)
+        return self.render_with(f)
 
     def __getattr__(self, attr):
         return getattr(self.value, attr)
@@ -72,6 +73,6 @@ class ReportableQty(object):
             specs['formatstring'] = '%s' # Don't recursively apply format strings to inside error bars
             rendered = ebstring % (f(self.value,  specs), 
                                    f(self.errbar, specs))
-        else: 
+        else:
             rendered = f(self.value, specs)
         return rendered
