@@ -144,7 +144,7 @@ th .errorbar {
 /* maximum height for fluid report figures */
 figure > div.pygsti-wsoutput-group {
     vertical-align: top; /* so multiple groups (e.g. tables) align at top */
-    max-height: 1000px;
+    max-height: 10000px;
 }
 
 .abswrap {
