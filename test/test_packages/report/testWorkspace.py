@@ -46,7 +46,7 @@ class TestWorkspace(ReportBaseCase):
         #tbls.append( w.RotationAxisVsTargetTable(self.gs, self.tgt, cr ) )
         #tbls.append( w.RotationAxisTable(self.gs, cr) )
         tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )
-        tbls.append( w.DataSetOverviewTable(self.ds, self.tgt, maxLengthList=self.gss.Ls) )
+        tbls.append( w.DataSetOverviewTable(self.ds) )
         tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
                                           self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
 
