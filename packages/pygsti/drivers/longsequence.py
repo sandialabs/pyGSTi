@@ -216,6 +216,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         startingPt = advancedOptions.get('starting point',"target")
 
+    #Get dataset for checking below
+    if comm is None or comm.Get_rank() == 0:
+        if _compat.isstr(dataFilenameOrSet):
+            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+        else:
+            dschk = dataFilenameOrSet
+    else: dschk = None
+
     #Construct gate sequences
     gateLabels = advancedOptions.get(
         'gateLabels', list(gs_target.gates.keys()))
@@ -224,7 +232,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
         nest = advancedOptions.get('nestedGateStringLists',True),
         includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
-        gateLabelAliases = advancedOptions.get('gateLabelAliases',None) )
+        gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
+        dscheck=dschk)
     
     assert(len(maxLengths) == len(lsgstLists))
     

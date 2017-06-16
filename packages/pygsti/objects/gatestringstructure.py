@@ -223,7 +223,7 @@ class LsGermsStructure(GatestringStructure):
         """ Returns a list of the minor y-values"""
         return self.effectStrs
 
-    def add_plaquette(self, basestr, L, germ, fidpairs):
+    def add_plaquette(self, basestr, L, germ, fidpairs, dscheck=None):
         """
         Adds a plaquette with the given fiducial pairs at the
         `(L,germ)` location.
@@ -241,15 +241,35 @@ class LsGermsStructure(GatestringStructure):
             A list if `(i,j)` tuples of integers, where `i` is a prepation
             fiducial index and `j` is a measurement fiducial index.
 
+        dscheck : DataSet, optional
+            If not None, check that this data set contains all of the 
+            gate strings being added.
+
         Returns
         -------
         None
         """
         plaq = self.create_plaquette(basestr, fidpairs)
 
-        for i,j,gatestr in plaq:
-            if gatestr not in self.allstrs:
-                self.allstrs.append(gatestr)
+        if dscheck:
+            missing_msgs = []
+            for i,j in fidpairs:
+                el = self.prepStrs[i] + basestr + self.effectStrs[j]
+                if el not in dscheck:
+                    missing_msgs.append(
+                        "Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" \
+                        % (self.prepStrs[i],germ,L,self.effectStrs[j],el))
+            if len(missing_msgs) > 0:
+                raise ValueError(("Missing data! The following %d gate sequences"
+                                 % len(missing_msgs)) + " were expected but not"
+                                 + " found:\n %s" % "\n".join(missing_msgs))
+        elements = [ (j,i,)
+                     for i,j in fidpairs ] #note preps are *cols* not rows
+
+
+        self.allstrs.extend( [gatestr for i,j,gatestr in plaq ] )
+        _lt.remove_duplicates_in_place(self.allstrs)
+
         self._plaquettes[(L,germ)] = plaq
 
         #keep track of which L,germ is the *first* one to "claim" a base string
@@ -257,6 +277,7 @@ class LsGermsStructure(GatestringStructure):
         if basestr not in self._baseStrToLGerm:
             self._firsts.append( (L,germ) )
             self._baseStrToLGerm[ basestr ] = (L,germ)
+
         
     def add_unindexed(self, gsList):
         """
