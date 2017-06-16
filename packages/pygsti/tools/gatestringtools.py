@@ -1,59 +1,55 @@
 from collections import namedtuple, OrderedDict
 
-def apply_replace(gatestring, replaceRules):
-    for a, b in replaceRules:
-        temp = tuple()
-        for item in gatestring:
-            if item == a:
-                temp += b 
-            else:
-                temp += (item,)
-        gatestring = temp
-    return gatestring
-
 def apply_seq(gatestring, sequenceRules):
-    if len(gatestring) <= 1:
-        return gatestring
-    ret = (gatestring[0],)
-    for pair in zip(gatestring[:-1], gatestring[1:]):
-        if pair in sequenceRules:
-            ret += sequenceRules[pair]
-        else:
-            ret += (pair[1],) # Current item
+    rightShifted = (None,) + gatestring[:-1]
+    leftShifted = gatestring[1:] + (None,)
+    ret = tuple()
+    for prevStr, currentStr, nextStr in zip(rightShifted, gatestring, leftShifted):
+        broke = False
+        for rule, replacement in sequenceRules:
+            if rule == (prevStr, currentStr):
+                ret += (replacement[1],)
+                broke = True
+                break
+            if rule == (currentStr, nextStr) and replacement[0] != currentStr:
+                ret += (replacement[0],) 
+                broke = True
+                break
+        if not broke:
+            ret += (currentStr,)
     return ret
 
-def pre_process_gatestring(gatestring, sequenceRules, replaceRules):
-    '''
-    Apply sequencing and replacement rules to a gatestring
-
-    Sequencing
-        if B after A
-            B -> B'
-        if A after B
-            A -> A'
-        Delayed: BAB -> BA'B'
-
-        General rule form:
-            if X after Y
-                X -> Z
-    Replacement
-        A -> C
-        C -> C'
-        Applied in order: A -> C'
-
-        General rule form:
-            X -> Y
-    '''
-    gatestring = apply_seq(gatestring, sequenceRules)
-    gatestring = apply_replace(gatestring, replaceRules)
-    return gatestring
-
 '''
-sequenceRules = {
-    ('A', 'B') : ('B\'',),
-    ('B', 'A') : ('A\'',)}
+Rules:
 
-replaceRules = [('A', ('C', 'C')), ('C', ('C\'',)]
+    AB -> AB' (if B follows A, prime B)
 
-print(pre_process_gatestring(('A', 'B', 'A', 'C'), sequenceRules, replaceRules))
+    BA -> B''A (if B precedes A, double-prime B)
+
+    CA -> CA' (if A follows C, prime A)
+
+    BC -> BC' (if C follows B, prime C)
+
+
+     Desired output:
+
+     BAB ==> B''AB'
+
+     ABA ==> AB'A  (frustrated, so do first replacement: B' not B'')
+
+     CAB ==> CA'B'
+
+     ABC ==> AB'C'
 '''
+
+sequenceRules = [
+        (('A', 'B'), ('A', 'B\'')),
+        (('B', 'A'), ('B\'\'', 'A')),
+        (('C', 'A'), ('C', 'A\'')),
+        (('B', 'C'), ('B', 'C\''))]
+
+run = lambda s : print(''.join(apply_seq(tuple(s), sequenceRules)))
+run('BAB')
+run('ABA')
+run('CAB')
+run('ABC')

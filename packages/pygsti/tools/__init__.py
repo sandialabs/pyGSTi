@@ -18,3 +18,4 @@ from .gatetools import *
 from .slicetools import *
 from .compattools import *
 
+from .gatestringtools import apply_seq
