@@ -121,11 +121,11 @@ formatDict['Conversion'] = {
     'latex' : Formatter(convert_latex)}
 
 formatDict['EBConversion'] = {
-    'html'  : Formatter(convert_html, formatstring='<span class="errorbar">{}</span>'),
+    'html'  : Formatter(convert_html, formatstring='<span class="errorbar">%s</span>'),
     'latex' : Formatter(convert_latex)}
 
 formatDict['NMEBConversion'] = {
-    'html'  : Formatter(convert_html, formatstring='<span class="nmerrorbar">{}</span>'),
+    'html'  : Formatter(convert_html, formatstring='<span class="nmerrorbar">%s</span>'),
     'latex' : Formatter(convert_latex)}
 
 EB_html   = Formatter(html, ebstring='%s <span class="errorbar">+/- %s</span>')
