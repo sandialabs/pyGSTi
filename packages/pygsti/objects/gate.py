@@ -1041,6 +1041,7 @@ class TPParameterizedGate(GateMatrix):
         if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot set TPParameterizedGate: " +
                              "invalid form for 1st row!" )
+            #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
 
 

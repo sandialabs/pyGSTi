@@ -92,6 +92,14 @@ class TPGaugeGroup(GateGaugeGroup):
         def __init__(self, gate):
             GateGaugeGroup.element.__init__(self,gate)
 
+        def get_transform_matrix_inverse(self): 
+            if self._inv_matrix is None:
+                self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+                self._inv_matrix[0,:] = 0.0 #ensure invers is *exactly* TP
+                self._inv_matrix[0,0] = 1.0 # as otherwise small variations can get amplified
+            return self._inv_matrix
+
+
 #        pass #inherits everything it needs
 
 class DiagGaugeGroup(GateGaugeGroup):
