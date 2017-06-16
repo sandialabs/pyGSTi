@@ -521,7 +521,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                 else:
                     txt = "L: %s<br>germ: %s" % (str(L),str(germ))
                 
-                txt += "<br>val: %g" % val
+                txt += "<br>value: %g" % val
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
                 return txt
@@ -544,7 +544,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                 else:
                     txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
                           % (str(L),str(germ),str(rhofid),str(efid))
-                txt += ("<br>val: %g" % val)
+                txt += ("<br>value: %g" % val)
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N-1-iiy][iix]))
@@ -641,7 +641,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 else:
                     txt = "L: %s<br>germ: %s" % (str(L),str(germ))
                 
-                txt += "<br>val: %g" % val
+                txt += "<br>value: %g" % val
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
                 return txt
@@ -664,7 +664,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 else:
                     txt = "L: %s<br>germ: %s<br>rho<sub>i</sub>: %s<br>E<sub>i</sub>: %s" \
                           % (str(L),str(germ),str(rhofid),str(efid))
-                txt += ("<br>val: %g" % val)
+                txt += ("<br>value: %g" % val)
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
                     N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
                     txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N-1-iiy][iix]))
@@ -1205,10 +1205,10 @@ class ColorBoxPlot(WorkspacePlot):
                     return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcm'] = addl_mx_fn_sl
+                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
                 addl_hover_info_fns['p'] = addl_mx_fn_p
                 addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total cnts'] = addl_mx_fn_cnt
+                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
 
             elif typ == "logl":
                 precomp=True
@@ -1220,10 +1220,10 @@ class ColorBoxPlot(WorkspacePlot):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcm'] = addl_mx_fn_sl
+                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
                 addl_hover_info_fns['p'] = addl_mx_fn_p
                 addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total cnts'] = addl_mx_fn_cnt
+                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
                 #DEBUG: addl_hover_info_fns['chk'] = addl_mx_fn_chk
 
             elif typ == "blank":
@@ -1810,7 +1810,8 @@ class GramMatrixBarPlot(WorkspacePlot):
                 ),
             yaxis = dict(
                 title="eigenvalue",
-                #type='log'
+                type='log',
+                exponentformat='power',
                 ),
             bargap=0.1
         )
