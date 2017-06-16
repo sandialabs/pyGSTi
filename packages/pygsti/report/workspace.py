@@ -1659,17 +1659,20 @@ class WorkspaceTable(WorkspaceOutput):
                           '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
                           '             {{left: "$$", right: "$$", display: true}},\n'
                           '             {{left: "$", right: "$", display: false}},\n'
-                          '             ] }} ); }}, "Rendering math in {tableID}" );\n').format(tableID=tableID)
+                          '             ] }} );\n').format(tableID=tableID)
+
+            #Do all of this *after* math is rendered
+            if resizable:
+                ret['js'] += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+            if autosize:
+                ret['js'] += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+            if resizable or autosize:
+                ret['js'] += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
+
+            ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
 
             ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
             
-            if resizable:
-                ret['js'] += 'make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-            if autosize:
-                ret['js'] += 'make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-            if resizable or autosize:
-                ret['js'] += 'trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
-
             ret['js'] += '}); //end on-ready handler\n'
             if global_requirejs:
                 ret['js'] += '}); //end require block\n'
