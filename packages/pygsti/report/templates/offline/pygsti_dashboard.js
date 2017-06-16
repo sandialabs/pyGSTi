@@ -15,9 +15,9 @@ $(document).ready(function() {
     });
     
     
-    $(".pygsti-wsoutput-group").each( function() {
+    $("figcaption").each( function() { //old: .pygsti-wsoutput-group
 	$(this).on('click', function() {
-	    $(this).siblings("figcaption").children("span.captiondetail").toggle();});
+	    $(this).children("span.captiondetail").toggle();}); //siblings("figcaption")
     });
     
     var elSelector		= '.header',
