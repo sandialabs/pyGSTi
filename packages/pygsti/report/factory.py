@@ -60,21 +60,27 @@ def _read_and_preprocess_template(templateFilename, toggles):
         if_text = ""
         else_text = ""
 
-        #Process #elsetoggle
+        #Process #elsetoggle or #endtoggle - whichever is first
         try: k = post_text.index("#elsetoggle") # index in (new) *post_text*
         except ValueError: k = None
-        if k is not None: # if-block ends at #else
+        try: j = post_text.index("#endtoggle") # index in (new) *post_text*
+        except ValueError: j = None
+
+        if k is not None and (j is None or k < j): # if-block ends at #else
+            #process #elsetoggle
             if_text = post_text[0:k]
             post_text = preprocess(post_text[k+len("#elsetoggle"):])
+            else_processed = True
+        else: else_processed = False
 
         #Process #endtoggle
         try: j = post_text.index("#endtoggle") # index in (new) *post_text*
         except ValueError: j = None
         assert(j is not None), "#iftoggle(%s) without corresponding #endtoggle" % toggleName
         
-        if k is None: # if-block ends at #end
+        if not else_processed: # if-block ends at #endtoggle
             if_text = post_text[0:j]
-        else: # if-block already captured; else-block ends at #end
+        else: # if-block already captured; else-block ends at #endtoggle
             else_text = post_text[0:j]
         post_text = preprocess(post_text[j+len("#endtoggle"):])
                 
@@ -871,8 +877,8 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','polar'))
-    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','relpolar'))
+    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
+    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel',)) #'log-rel' (TODO)
     #qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('polar','relpolar'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
