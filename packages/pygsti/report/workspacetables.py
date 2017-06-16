@@ -785,24 +785,17 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
     
 #    def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 class GateDecompTable(WorkspaceTable):
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None, genType="logG-logT"):
+    def __init__(self, ws, gateset, confidenceRegionInfo=None):
         """
-        Create table for decomposing a single-qubit gateset's gates.
+        Create table for decomposing a gateset's gates.
 
-        This table interprets the eigenvectors and eigenvalues of the
-        gates to extract a rotation angle, axis, and various decay
-        coefficients.
+        This table interprets the Hamiltonian projection of the log
+        of the gate matrix to extract a rotation angle and axis.
 
         Parameters
         ----------
-        gateset, targetGateset : GateSet
-            The estimated and target gate sets.
-
-        genType : {"logG-logT", "logTiG"}
-            The type of error generator to compute.  Allowed values are:
-            
-            - "logG-logT" : errgen = log(gate) - log(target_gate)
-            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+        gateset : GateSet
+            The estimated gate set.
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -812,16 +805,16 @@ class GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GateDecompTable,self).__init__(ws, self._create, gateset, targetGateset, confidenceRegionInfo, genType)
+        super(GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
 
         
-    def _create(self, gateset, targetGateset, confidenceRegionInfo, genType):
+    def _create(self, gateset, confidenceRegionInfo):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.get_basis_name()
         basisDims = gateset.get_basis_dimension()
 
-        colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
     
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
@@ -830,13 +823,9 @@ class GateDecompTable(WorkspaceTable):
         axes = {}; angles = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
-            targetGate = targetGateset.gates[gl]
-
-            import scipy.linalg as scila
-            logG = scila.logm(gate) #_tools.real_matrix_log(gate,"ignore",1e-8)
-            errgen = logG #_tools.error_generator(gate, targetGate, genType)
+            logG = _tools.real_matrix_log(gate,"ignore",1e-8)
             hamProjs = _tools.std_errgen_projections(
-                errgen, "hamiltonian", basisNm, basisNm)
+                logG, "hamiltonian", basisNm, basisNm)
             norm = _np.linalg.norm(hamProjs)
             axes[gl] = hamProjs / norm
             angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
