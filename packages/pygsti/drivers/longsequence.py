@@ -219,7 +219,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Get dataset for checking below
     if comm is None or comm.Get_rank() == 0:
         if _compat.isstr(dataFilenameOrSet):
-            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
         else:
             dschk = dataFilenameOrSet
     else: dschk = None
