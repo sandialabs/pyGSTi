@@ -1013,7 +1013,7 @@ class old_RotationAxisTable(WorkspaceTable):
 class GateEigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
-                 display=('evals','rel','log-evals','polar','relpolar') ):
+                 display=('evals','rel','log-evals','log-rel','polar','relpolar') ):
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a gateset's gates.
@@ -1032,13 +1032,13 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "rel", "log-evals", "polar", "relpolar"}
+        display : tuple of {"evals", "rel", "log-evals", "log-rel", "polar", "relpolar"}
             Specifies which columns are displayed in the table: a list of the
             eigenvalues, a list of the relative eigenvalues, the (complex)
-            logarithm of the eigenvalues, a polar plot of
+            logarithm of the eigenvalues and relative eigenvalues, a polar plot of
             the eigenvalues, and/or a polar plot of the relative eigenvalues.
-            If `targetGateset` is None, then `"rel"` and `"relpolar"` will be 
-            silently ignored.
+            If `targetGateset` is None, then `"rel"`, `"log-rel"` and `"relpolar"`
+            will be silently ignored.
     
         Returns
         -------
@@ -1063,8 +1063,11 @@ class GateEigenvalueTable(WorkspaceTable):
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
             elif disp == "log-evals":
-                colHeadings.append('Real log(eigenval)')
-                colHeadings.append('Imag log(eigenval)')
+                colHeadings.append('Real log(eval)')
+                colHeadings.append('Imag log(eval)')
+            elif disp == "log-rel":
+                colHeadings.append('Real log(rel. eval)')
+                colHeadings.append('Imag log(rel. eval)')
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
             elif disp == "relpolar":
@@ -1133,8 +1136,16 @@ class GateEigenvalueTable(WorkspaceTable):
                         row_formatters.append( VecErrorBars ) # this is fine without EBs too...
                         row_formatters.append( "Pi" )  # but PiErrorBars isn't (yet) -- TODO: fix this
 
-                        
 
+                elif disp == "log-rel":
+                    rel_evals,_ = format_evals(rel_evals,None)
+                    log_relevals = _np.log(rel_evals)
+                    row_data.append( (_np.real(log_relevals),None) )
+                    row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
+                    row_formatters.append( VecErrorBars ) # this is fine without EBs too...
+                    row_formatters.append( "Pi" )  # but PiErrorBars isn't (yet) -- TODO: fix this
+
+                    
                 elif disp == "polar":
                     if targetGateset is None:
                         fig = _wp.PolarEigenvaluePlot(
