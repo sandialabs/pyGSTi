@@ -25,9 +25,12 @@
     <div id="theSidenav" class="sidenav">
       <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
       <a href="#" class="tablink" onclick="openTab(event, 'Summary')" id="defaultOpen">Summary</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Goodness of Fit</a>
+      <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Model Violation</a>
       <a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants')">Gauge Invariant</a>
       <a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants')">Gauge Variant</a>
+      #iftoggle(CompareDatasets)
+      <a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Set Comparison</a>
+      #endtoggle
       <a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
       <a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
       %(topSwitchboard)s
@@ -46,12 +49,12 @@
 	%(goSwitchboard1)s
 
 	<figure id="progressBarPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Goodness of fit summary.</span> <span class="captiondetail">The aggregate log-likelihood as a function of GST iteration.</span></figcaption>
+	  <figcaption><span class="captiontitle">Model Violation summary.</span> <span class="captiondetail">The aggregate log-likelihood as a function of GST iteration.</span></figcaption>
 	  %(progressBarPlot)s
 	</figure>
 
 	<figure id="bestEstimateColorScatterPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Per-sequence goodness of fit.</span> <span class="captiondetail"> Each point displays the goodness of fit for a single gate sequence.</span> </figcaption>
+	  <figcaption><span class="captiontitle">Per-sequence model violation.</span> <span class="captiondetail"> Each point displays the goodness of fit for a single gate sequence.</span> </figcaption>
 	  %(bestEstimateColorScatterPlot)s
 	</figure>
 
@@ -96,11 +99,11 @@
 
 
       <div id="Goodness" class="tabcontent">
-	<h1>Goodness-of-model Analysis</h1>
+	<h1>Model Violation Analysis</h1>
 	<p>Metrics indicating how well the estimated gate set can be trusted -- i.e., how well it fits the data.</p>
 
         <figure id="progressTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison between the computed and expected maximum <span class="math">\log(\mathcal{L})</span> for different values of <span class="math">L</span>.</span> <span class="captiondetail"> <span class="math">N_S</span> and <span class="math">N_p</span> are the number of gate strings and parameters, respectively.  The quantity <span class="math">2\Delta\log(\mathcal{L})</span> measures the goodness of fit of the GST model (small is better) and is expected to lie within <span class="math">[k-\sqrt{2k},k+\sqrt{2k}]</span> where <span class="math">k = N_s-N_p</span>. <span class="math">N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}</span> is the number of standard deviations from the mean (a <span class="math">p</span>-value can be straightforwardly derived from <span class="math">N_\sigma</span>).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit as explained in the text.</span></figcaption>
+	  <figcaption><span class="captiontitle">Comparison between the computed and expected maximum <span class="math">\log(\mathcal{L})</span> for different values of <span class="math">L</span>.</span> <span class="captiondetail"> <span class="math">N_S</span> and <span class="math">N_p</span> are the number of gate strings and parameters, respectively.  The quantity <span class="math">2\Delta\log(\mathcal{L})</span> measures the goodness of fit of the GST model (small is better) and is expected to lie within <span class="math">[k-\sqrt{2k},k+\sqrt{2k}]</span> where <span class="math">k = N_s-N_p</span>. <span class="math">N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}</span> is the number of standard deviations from the mean (a <span class="math">p</span>-value can be straightforwardly derived from <span class="math">N_\sigma</span>).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit.</span></figcaption>
 	  <!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
 	  %(progressTable)s
 	</figure>
@@ -122,25 +125,7 @@
 	
 	#elsetoggle
         <p>Note: data-scaling color box figure is not shown because none of the estimates in this report have scaled data.</p>
-	#endtoggle
-
-	<p class="clear"></p>
-		
-	#iftoggle(CompareDatasets)
-    
-	<figure id="dsComparisonHistogram">
-	  %(dsComparisonHistogram)s
-	  %(dscmpSwitchboard)s
-	  <figcaption><span class="captiontitle">Histogram of p-values comparing two data sets.</span> <span class="captiondetail">  Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
-	</figure>
-	
-	<figure id="dsComparisonBoxPlot">
-	  %(dsComparisonBoxPlot)s
-	  <figcaption><span class="captiontitle">Per-sequence p-values comparing two data sets.</span> <span class="captiondetail"> In a similar fashion to other color box plots, this plot shows the p-value of each gate sequence corresponding to how consistent that sequences counts are between the two selected data sets.</span></figcaption>
-	</figure>
-	
-	#endtoggle
-    
+	#endtoggle    
 	<!-- End Ls and Germs only section -->
 
       </div> <!-- end tab content -->
@@ -222,6 +207,28 @@
 	</figure>
 	
       </div> <!-- end tab content -->
+
+      #iftoggle(CompareDatasets)
+      <div id="DataComparison" class="tabcontent">
+	<h1>Dataset comparisons</h1>
+	<p>This report contains information for more than one data set.  This page shows comparisons between different data sets.</p>
+    
+	<figure id="dsComparisonHistogram">
+	  %(dsComparisonHistogram)s
+	  %(dscmpSwitchboard)s
+	  <figcaption><span class="captiontitle">Histogram of p-values comparing two data sets.</span> <span class="captiondetail">  Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
+	</figure>
+	
+	<figure id="dsComparisonBoxPlot">
+	  %(dsComparisonBoxPlot)s
+	  <figcaption><span class="captiontitle">Per-sequence <span class="math">2\Delta\log(\mathcal{L})</span> values comparing two data sets.</span> <span class="captiondetail"> In a similar fashion to other color box plots, this plot shows two times the log-likelihood-ratio for each gate sequence corresponding to how consistent that sequences' counts are between the two selected data sets.  The likelihood ratio is between a models that supposes there is either one or two separate probability distributions from which the data counts are drawn.</span></figcaption>
+	</figure>
+
+	<p class="clear"></p>
+
+      </div> <!-- end tab content -->
+      #endtoggle
+
 
       <div id="Meta" class="tabcontent">
 	<h1>System and pyGSTi parameters</h1>
