@@ -78,6 +78,9 @@ class SpamTable(WorkspaceTable):
         colHeadings = ['Operator']
         for gateset,title in zip(gatesets,titles):
             colHeadings.append( '%sMatrix' % (title+' ' if title else '') )
+        for gateset,title in zip(gatesets,titles):
+            colHeadings.append( '%sEigenvals' % (title+' ' if title else '') )
+
         formatters = [None]*len(colHeadings)
 
         if includeHSVec:
@@ -104,7 +107,15 @@ class SpamTable(WorkspaceTable):
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
                 rowData.append( rhoMx )
                 rowFormatters.append('Brackets')
-    
+
+            for gateset in gatesets:
+                basisNm = gateset.get_basis_name()
+                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
+                evals = _np.linalg.eigvals(rhoMx)
+                rowData.append( evals )
+                rowFormatters.append('Brackets')
+
+                
             if includeHSVec:
                 rowData.append( gatesets[-1].preps[lbl] )
                 rowFormatters.append('Normal')
@@ -127,6 +138,13 @@ class SpamTable(WorkspaceTable):
                 basisNm = gateset.get_basis_name()
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 rowData.append( EMx )
+                rowFormatters.append('Brackets')
+
+            for gateset in gatesets:
+                basisNm = gateset.get_basis_name()
+                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
+                evals = _np.linalg.eigvals(EMx)
+                rowData.append( evals )
                 rowFormatters.append('Brackets')
     
             if includeHSVec:
@@ -806,7 +824,7 @@ class GateDecompTable(WorkspaceTable):
         colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
     
-        table = _ReportTable(colHeadings, formatters)    
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
         formatters = (None, 'Pi', 'Normal') + ('Pi',)*len(gateLabels)
 
         axes = {}; angles = {}
@@ -1006,7 +1024,7 @@ class old_RotationAxisTable(WorkspaceTable):
 class GateEigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
-                 display=('evals','rel','polar','relpolar') ):
+                 display=('evals','rel','log-evals','polar','relpolar') ):
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a gateset's gates.
@@ -1025,9 +1043,10 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "rel", "polar", "relpolar"}
+        display : tuple of {"evals", "rel", "log-evals", "polar", "relpolar"}
             Specifies which columns are displayed in the table: a list of the
-            eigenvalues, a list of the relative eigenvalues, a polar plot of
+            eigenvalues, a list of the relative eigenvalues, the (complex)
+            logarithm of the eigenvalues, a polar plot of
             the eigenvalues, and/or a polar plot of the relative eigenvalues.
             If `targetGateset` is None, then `"rel"` and `"relpolar"` will be 
             silently ignored.
@@ -1045,6 +1064,7 @@ class GateEigenvalueTable(WorkspaceTable):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
         VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
+        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
 
         colHeadings = ['Gate']
         for disp in display:
@@ -1053,6 +1073,9 @@ class GateEigenvalueTable(WorkspaceTable):
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
+            elif disp == "log-evals":
+                colHeadings.append('Real log(eigenval)')
+                colHeadings.append('Imag log(eigenval)')
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
             elif disp == "relpolar":
@@ -1104,6 +1127,24 @@ class GateEigenvalueTable(WorkspaceTable):
                     rel_evals,_ = format_evals(rel_evals,None)
                     row_data.append( (rel_evals,None) )
                     row_formatters.append( VecErrorBars)
+
+                elif disp == "log-evals":
+                    evals,evalsEB = format_evals(evals,evalsEB)
+                    if evalsEB is not None:
+                        logevals, logevalsEB = _np.log(evals), _np.log(evalsEB)
+                        row_data.append( (_np.real(logevals),_np.real(logevalsEB)) )
+                        row_data.append( (_np.imag(logevals)/_np.pi,_np.imag(logevalsEB)/_np.pi) )
+                        row_formatters.append( VecErrorBars )
+                        row_formatters.append( PiErrorBars )
+            
+                    else:
+                        logevals = _np.log(evals)
+                        row_data.append( (_np.real(logevals),None) )
+                        row_data.append( (_np.imag(logevals)/_np.pi,None) )
+                        row_formatters.append( VecErrorBars ) # this is fine without EBs too...
+                        row_formatters.append( "Pi" )  # but PiErrorBars isn't (yet) -- TODO: fix this
+
+                        
 
                 elif disp == "polar":
                     if targetGateset is None:
