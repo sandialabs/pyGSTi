@@ -574,7 +574,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 # and just keep (?) old estimates of all prior iterations (or use "blank"
                 # sentinel once this is supported).
                 
-            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".dscl")
+            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".robust")
 
             #Do final gauge optimization to data-scaled estimate also
             if gaugeOptParams != False:
@@ -587,11 +587,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
                 #    
                 #    tNxt = _time.time()
-                #    profiler.add_time('do_long_sequence_gst: dscl gauge optimization',tRef); tRef=tNxt
+                #    profiler.add_time('do_long_sequence_gst: robust gauge optimization',tRef); tRef=tNxt
                 #else:
                 
                 # add same gauge-optimized result as above
-                ret.estimates[estlbl + ".dscl"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                ret.estimates[estlbl + ".robust"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
 
 
         elif onBadFit == "do nothing":
@@ -723,16 +723,16 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            printer-1)
             
             #Gauge optimize to a variety of spam weights
-            for vSpam in [0,1]:
-                for spamWt in [1e-4,1e-2,1e-1]:
+            for vSpam in [1]:
+                for spamWt in [1e-4,1e-1]:
                     ret.estimates[est_label].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
                          'validSpamPenalty': vSpam},
                         None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
 
                     #Gauge optimize data-scaled estimate also
-                    if est_label + ".dscl" in ret.estimates:
-                        ret.estimates[est_label + ".dscl"].add_gaugeoptimized(
+                    if est_label + ".robust" in ret.estimates:
+                        ret.estimates[est_label + ".robust"].add_gaugeoptimized(
                             {'itemWeights': {'gates':1, 'spam':spamWt},
                              'validSpamPenalty': vSpam},
                             None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
