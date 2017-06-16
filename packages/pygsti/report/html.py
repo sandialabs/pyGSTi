@@ -215,8 +215,8 @@ def value(el, specs):
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
-                    ex = ("i%.1f" % phi) if phi >= 0 else ("-i%.1f" % -phi)
-                    s = "%se<sup>%s</sup>" % (render(r),ex)
+                    ex = ("i%.1f" % phi/_np.pi) if phi >= 0 else ("-i%.1f" % -phi/_np.pi)
+                    s = "%se<sup>%s &pi;</sup>" % (render(r),ex)
                 else:
                     s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
             else:
