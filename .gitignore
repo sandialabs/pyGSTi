@@ -69,3 +69,8 @@ HighImpactPaper1/texFiles/.DS_Store
 doc/html/*
 doc/build/*.rst
 doc/build/_build/*
+
+# Customer Data #
+#################
+packages/pygsti/optimize/profiling/report_profiling/*.ipynb
+packages/pygsti/optimize/profiling/report_profiling/Analyze+2Q+data.py

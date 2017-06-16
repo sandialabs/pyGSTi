@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 from pygsti.tools.mpitools import mpidot, distribute_for_dot
+from pygsti.tools.timed_block   import timed_block
 import numpy as np
                   
 from random      import randint
 from collections import defaultdict
-
-from timedblock import timed_block
 
 def main():
     size = 100

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import pygsti
+from pygsti.tools.timed_block   import timed_block
 
 import pickle
-from timedblock import timed_block
 from contextlib import contextmanager
 
 def main():

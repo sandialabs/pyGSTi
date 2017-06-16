@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import pygsti
 from pygsti.algorithms.gaugeopt import create_objective_fn
+from pygsti.tools.timed_block   import timed_block
 
 import pickle
-from timedblock import timed_block
 from functools  import partial
 
 def test_options(gs, gs_target, options, iterations=100):
