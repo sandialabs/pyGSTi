@@ -89,12 +89,12 @@ function trigger_wstable_plot_creation(id) {
 	// down the heights of header (th) cells.
 	var tab = wstable.closest(".tabcontent")
 	var parent_was_visible = true;
-	if(tab.length > 0 && !tab.is(":visible")) {
+	if(tab.length > 0 && tab.css('display') == 'none') { //!tab.is(":visible")) {
 	    parent_was_visible = false;
 	    tab.show();
 	}
         wstable.children("div").each( function(k,div) {
-            var was_visible = $(div).is(":visible");
+            var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
             $(div).find("td").not(".plotContainingTD").each(
                 function(i,el){ $(el).css("width", $(el).width()); });
@@ -283,11 +283,11 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
     var val_container = el.closest(".single_switched_value")
     var in_invisible_tab = false;
     var in_invisible_val = false;
-    if(tab.length > 0 && !tab.is(":visible")) {
+    if(tab.length > 0 && tab.css('display') == 'none') { //!tab.is(":visible")) {
 	in_invisible_tab = true;
 	tab.show();
     }
-    if(val_container.length > 0 && !val_container.is(":visible")) {
+    if(val_container.length > 0 && val_container.css('display') == 'none') { // !val_container.is(":visible")) {
 	in_invisible_val = true;
 	val_container.show();
     }
