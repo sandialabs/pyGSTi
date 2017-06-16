@@ -144,12 +144,13 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
     if not inverse:
         if gateset:
             rndm_indices = rndm.randint(0,len(gateset.gates.keys()),m)
+            gateLabels = list(gateset.gates.keys())
             if interleaved:
-                interleaved_index = gateset.gates.keys().index(interleaved)
+                interleaved_index = gateLabels.index(interleaved)
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()           
-            random_string = [gateset.gates.keys()[i] for i in rndm_indices ]
+            random_string = [gateLabels[i] for i in rndm_indices ]
             
         else:
             rndm_indices = rndm.randint(0,len(group),m)
@@ -217,7 +218,7 @@ def create_random_gatestrings(m_list, K_m, group_or_gateset, inverse=True,
         rndm = randState
         
     assert hasattr(group_or_gateset, 'gates') or hasattr(group_or_gateset, 
-           'product'), 'group_or_gateset must be a MatrixGroup of Gateset'
+           'product'), 'group_or_gateset must be a MatrixGroup or Gateset'
     
     
     if inverse:

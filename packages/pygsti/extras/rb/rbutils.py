@@ -228,8 +228,8 @@ def errormaps(gs_actual, gs_target):
                                _np.transpose(gs_target.gates[gate]))     
         errormaps_gate_list.append(errormaps.gates[gate])
         
-    errormaps['Gavg'] = _np.mean( _np.array([ i for i in errormaps_gate_list]), 
-                                      axis=0, dtype=_np.float64)           
+    errormaps.gates['Gavg'] = _np.mean( _np.array([ i for i in errormaps_gate_list]), 
+                                        axis=0, dtype=_np.float64)           
     return errormaps
 
 def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond', 
@@ -450,11 +450,11 @@ def transform_to_RB_gauge(gs,gs_target):
     l = RB_gauge(gs,gs_target)
     gs_in_RB_gauge = gs.copy()
     for gate in gs.gates.keys():
-        gs_in_RB_gauge[gate] = _np.dot(l,_np.dot(gs[gate],_np.linalg.inv(l)))
+        gs_in_RB_gauge.gates[gate] = _np.dot(l,_np.dot(gs.gates[gate],_np.linalg.inv(l)))
     for rho in gs.preps.keys():
-        gs_in_RB_gauge[rho] = _np.dot(l,gs[rho])
+        gs_in_RB_gauge.preps[rho] = _np.dot(l,gs.preps[rho])
     for E in gs.effects.keys():
-        gs_in_RB_gauge[E] = _np.dot(_np.transpose(_np.linalg.inv(l)),gs[E])
+        gs_in_RB_gauge.effects[E] = _np.dot(_np.transpose(_np.linalg.inv(l)),gs.effects[E])
         
     return gs_in_RB_gauge
 
@@ -481,8 +481,8 @@ def L_matrix(gs,gs_target):
         
     """  
     dim = len(gs_target.gates.keys())
-    L_matrix = (1 / dim) * _np.sum(_np.kron(gs[key].T,
-                 _np.linalg.inv(gs_target[key])) for key in gs_target.gates.keys())
+    L_matrix = (1 / dim) * _np.sum(_np.kron(gs.gates[key].T,
+                 _np.linalg.inv(gs_target.gates[key])) for key in gs_target.gates.keys())
     return L_matrix
 
 def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,
@@ -587,7 +587,7 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                 label_itoj = group.product([group.get_inv(i),j])
                 for k in range (0,d**2):
                     for l in range(0,d**2):
-                        R[j*d**2+k,i*d**2+l] = gs[group.labels[label_itoj]][k,l]
+                        R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
         R = R/group_dim
                 
     if subset_sampling is not None:
@@ -603,7 +603,7 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                     if group.labels[label_itoj] in subset_sampling:
                         for k in range (0,d**2):
                             for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = gs[group.labels[label_itoj]][k,l]
+                                R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
             R = R/len(subset_sampling)
         
         if group_to_gateset is not None:
@@ -618,7 +618,7 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                     if group.labels[label_itoj] in group_to_gateset.keys():
                         for k in range (0,d**2):
                             for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = gs[group_to_gateset[
+                                R[j*d**2+k,i*d**2+l] = gs.gates[group_to_gateset[
                                         group.labels[label_itoj]]][k,l]
             R = R/len(subset_sampling)
             
@@ -714,7 +714,7 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
                  group_to_gateset=group_to_gateset,d=d)
     rho_index = gs.spamdefs[success_spamlabel][0]
     E_index = gs.spamdefs[success_spamlabel][1]
-    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs[E_index].T)
+    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs.effects[E_index].T)
     if subset_sampling is None:
             extended_E = group_dim*_np.dot(extended_E, R)
     else:
@@ -733,7 +733,7 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
             # depends on the generators, and is 1 for Gi, Gx, Gy.
             return None
             
-    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs[rho_index])
+    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[rho_index])
     Rstep = _np.linalg.matrix_power(R,m_step)
     Riterate =  _np.linalg.matrix_power(R,m_min)
     for i in range (0,1+i_max):
@@ -822,7 +822,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
     rho_index = gs.spamdefs[success_spamlabel][0]
     E_index = gs.spamdefs[success_spamlabel][1]
     emaps = errormaps(gs_go,gs_target)
-    E_eff = _np.dot(gs_go[E_index].T,emaps['Gavg'])
+    E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
     identity_vec = vec(_np.identity(d**2,float))    
     delta = gatedependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
     
@@ -837,7 +837,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
     for i in range (0,1+i_max):
         m[i] = m_min + i*m_step
         L_m_rdd = unvec(_np.dot(Literate,identity_vec))
-        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go[rho_index]))
+        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go.preps[rho_index]))
         Literate = _np.dot(Lstep,Literate)
         upper_bound[i] = P_m[i] + delta/2
         lower_bound[i] = P_m[i] - delta/2
@@ -908,18 +908,18 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     R_list = []
     Q_list = []
     for gate in list(gs_target.gates.keys()):
-        R_list.append(_np.dot(_np.dot(error_gs[gate],gs_target.gates[gate]),
-              _np.dot(error_gs['Gavg'],_np.transpose(gs_target.gates[gate]))))
+        R_list.append(_np.dot(_np.dot(error_gs.gates[gate],gs_target.gates[gate]),
+              _np.dot(error_gs.gates['Gavg'],_np.transpose(gs_target.gates[gate]))))
         Q_list.append(_np.dot(gs_target.gates[gate],
-              _np.dot(error_gs[gate],_np.transpose(gs_target.gates[gate]))))
+              _np.dot(error_gs.gates[gate],_np.transpose(gs_target.gates[gate]))))
     
-    error_gs['GR'] = _np.mean(_np.array([ i for i in R_list]), 
+    error_gs.gates['GR'] = _np.mean(_np.array([ i for i in R_list]), 
                                       axis=0, dtype=_np.float64)
-    error_gs['GQ'] = _np.mean(_np.array([ i for i in Q_list]), 
+    error_gs.gates['GQ'] = _np.mean(_np.array([ i for i in Q_list]), 
                                       axis=0, dtype=_np.float64)    
-    error_gs['GQ2'] = _np.dot(error_gs['GQ'],error_gs['Gavg'])
+    error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])
     
-    error_gs['rhoc_mixed'] = 1./d*error_gs['identity']
+    error_gs.preps['rhoc_mixed'] = 1./d*error_gs['identity']
     error_gs.spamdefs['plus_cm'] = ('rhoc_mixed','E0')
     error_gs.spamdefs['minus_cm'] = ('rhoc_mixed','remainder')
     gsl = [('Gavg',),('GR',),('Gavg','GQ',)]   
@@ -940,7 +940,7 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) \
                             + ((pr_R_p - pr_R_I)/p)
     C_1 = pr_L_p - pr_L_I
-    q = average_gate_infidelity(error_gs['GQ2'],_np.identity(d**2,float),d)
+    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float),d)
     q = r_to_p(q,d)
     
     if p < 0.01:
@@ -1054,7 +1054,7 @@ def unvec(vector_in):
     """
     dim = int(_np.sqrt(len(vector_in)))
     return _np.transpose(_np.array(list(
-                _ittls.izip(*[_ittls.chain(vector_in,
+                zip(*[_ittls.chain(vector_in,
                             _ittls.repeat(None, dim-1))]*dim))))
 
 def norm1(matr):

@@ -14,6 +14,9 @@ from numpy import random as _rndm
 from functools import reduce as _reduce
 from scipy.optimize import curve_fit as _curve_fit
 
+def is_integer(x):
+    return bool(isinstance(x,int) or isinstance(x, _np.integer))
+
 class MatrixGroup(object):
     """
     Encapsulates a group where each element is represented by a matrix
@@ -80,7 +83,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
 
     def get_matrix_inv(self, i):
@@ -96,7 +99,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
     def get_inv(self, i):
@@ -114,7 +117,7 @@ class MatrixGroup(object):
             If `i` is an integer, returns the element's index.  Otherwise
             returns the element's label.
         """
-        if isinstance(i,int):
+        if is_integer(i):
             return self.inverse_table[i]
         else:
             i = self.label_indices[i]
@@ -141,7 +144,7 @@ class MatrixGroup(object):
             index.  Otherwise returns the resulting element's label.
         """
         if len(indices) == 0: return None
-        if isinstance(indices[0],int):
+        if is_integer(indices[0]):
             return _reduce(lambda i,j: self.product_table[i,j], indices)
         else:
             indices = [ self.label_indices[i] for i in indices ]
