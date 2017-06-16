@@ -30,56 +30,41 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_single_qubit_report(self.results,temp_files + "/singleQ_reportA.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
         pygsti.report.create_general_report(self.results,temp_files + "/general_reportA.html",
                                                  confidenceLevel=None, verbosity=3,  auto_open=False)
         #Compare the html files?
-        #self.checkFile("singleQ_reportA%s.html" % vs)
         #self.checkFile("general_reportA%s.html" % vs)
 
 
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_single_qubit_report(self.results,temp_files + "/singleQ_reportB.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
         pygsti.report.create_general_report(self.results,temp_files + "/general_reportB.html",
                                                  confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
-        #self.checkFile("singleQ_reportB%s.html" % vs)
         #self.checkFile("general_reportB%s.html" % vs)
 
 
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_single_qubit_report(self.results,temp_files + "/singleQ_reportE.html",
-                                                 confidenceLevel=-95, verbosity=3,  auto_open=False)
         pygsti.report.create_general_report(self.results,temp_files + "/general_reportE.html",
                                                  confidenceLevel=-95, verbosity=3,  auto_open=False)
         #Compare the html files?
-        #self.checkFile("singleQ_reportC%s.html" % vs)
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_single_qubit_report(self.results_logL,temp_files + "/singleQ_reportC.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
         pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportC.html",
                                                  confidenceLevel=None, verbosity=3,  auto_open=False)
         #Compare the html files?
-        #self.checkFile("singleQ_reportC%s.html" % vs)
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_wCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_single_qubit_report(self.results_logL,temp_files + "/singleQ_reportD.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
         pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportD.html",
                                                  confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
-        #self.checkFile("singleQ_reportD%s.html" % vs)
         #self.checkFile("general_reportD%s.html" % vs)
 
 

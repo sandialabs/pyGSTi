@@ -114,7 +114,7 @@ class RBTestCase(BaseTestCase):
         assert(interleaved_gates_gtt==interleaved_gate)
         assert(interleaved_gates_gstt==interleaved_gate)
         assert(interleaved_gates_gft==interleaved_gate)
-        assert(interleaved_gates_gsft==interleaved_gate))
+        assert(interleaved_gates_gsft==interleaved_gate)
         
         K_m_sched = rb.create_K_m_sched(1,11,5,0.01,0.01,0.001)
         lst = rb.list_random_rb_clifford_strings(1,11,5, rb.std1Q.clifford_group, K_m_sched,

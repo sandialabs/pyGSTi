@@ -42,9 +42,9 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="boxes", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logG-logT") )
-        tbls.append( w.RotationAxisVsTargetTable(self.gs, self.tgt, cr ) )
         tbls.append( w.GateDecompTable(self.gs, cr) )
-        tbls.append( w.RotationAxisTable(self.gs, cr) )
+        #tbls.append( w.RotationAxisVsTargetTable(self.gs, self.tgt, cr ) )
+        #tbls.append( w.RotationAxisTable(self.gs, cr) )
         tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )
         tbls.append( w.DataSetOverviewTable(self.ds, self.tgt, maxLengthList=self.gss.Ls) )
         tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
@@ -91,6 +91,8 @@ class TestWorkspace(ReportBaseCase):
                                     hoverInfo=True, sumUp=True, invert=False) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=True) )
+        plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
+                                    hoverInfo=True, sumUp=False, invert=False, scatter=True) )
 
         from pygsti.algorithms import directx as dx
         specs = pygsti.construction.build_spam_specs(
@@ -116,6 +118,10 @@ class TestWorkspace(ReportBaseCase):
         choieb = np.array([0.05, 0.01, 0.02, 0.01])
         plts.append( w.ChoiEigenvalueBarPlot(choievals, None) )
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
+
+        plts.append( w.FitComparisonBarPlot(self.gss.Ls, self.results.gatestring_structs['iteration'],
+                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
+        plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
                      
         #Now test table rendering in html
         for plt in plts:
