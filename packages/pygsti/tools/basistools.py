@@ -44,6 +44,8 @@ import collections as _collections
 import numpy as _np
 import scipy.linalg as _spl
 from . import matrixtools as _mt
+from .memoize import memoize
+from .basis   import Basis, basis_constructor
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -283,7 +285,6 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
     return lblList
 
 
-@memoize()
 def std_matrices(dimOrBlockDims):
     """
     Get the elements of the matrix unit, or "standard", basis
@@ -440,7 +441,6 @@ def _GetGellMannNonIdentityDiagMxs(dimension):
 
     return listOfMxs
 
-@memoize()
 def gm_matrices_unnormalized(dimOrBlockDims):
     """
     Get the elements of the generalized Gell-Mann
@@ -508,7 +508,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
 
-@memoize()
+@basis_constructor('gm')
 def gm_matrices(dimOrBlockDims):
     """
     Get the normalized elements of the generalized Gell-Mann
@@ -679,7 +679,7 @@ def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
 
-@memoize()
+@basis_constructor('pp')
 def pp_matrices(dim, maxWeight=None):
     """
     Get the elements of the Pauil-product basis
@@ -752,7 +752,7 @@ def pp_matrices(dim, maxWeight=None):
             M = _np.kron(M,sigmaVec[i])
         matrices.append(M)
 
-    return matrices
+    return Basis('pp', matrices)
 
 
 def pp_to_std_transform_matrix(dimOrBlockDims):
@@ -897,7 +897,7 @@ def pp_to_std(mxInPauliProdBasis, dimOrBlockDims=None):
 
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
-
+@basis_constructor('qt')
 def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
     """
     Get the elements of a special basis spanning the density-matrix space of
