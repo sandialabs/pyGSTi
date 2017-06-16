@@ -724,7 +724,7 @@ class Results(object):
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_brief_report_pdf(self, confidenceLevel=None,
                                 filename="auto", title="auto", datasetLabel="auto",
@@ -736,7 +736,7 @@ class Results(object):
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_single_qubit_report(..., brief=True)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
                                 title="auto", datasetLabel="auto", suffix="",
@@ -748,7 +748,7 @@ class Results(object):
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  Beamer presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
@@ -760,7 +760,7 @@ class Results(object):
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  Powerpoint presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
