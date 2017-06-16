@@ -923,19 +923,29 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
     Parameters
     ----------
-    TODO: docstring
-    dmbasis : list
+    dmbasis_ham : list
         A list of basis matrices {B_i} *including* the identity as the first
-        element, making this argument easily obtained by call to
-        :func:`pp_matrices` or a similar function.  The matrices are expected
-        to be in the standard basis, and should be traceless except for the
-        identity.
+        element, for the returned Hamiltonian-type error generators.  This
+        argument is easily obtained by call to  :func:`pp_matrices` or a
+        similar function.  The matrices are expected to be in the standard
+        basis, and should be traceless except for the identity.
+
+    dmbasis_other : list
+        A list of basis matrices {B_i} *including* the identity as the first
+        element, for the returned Stochastic-type error generators.  This
+        argument is easily obtained by call to  :func:`pp_matrices` or a
+        similar function.  The matrices are expected to be in the standard
+        basis, and should be traceless except for the identity.
 
     normalize : bool
         Whether or not generators should be normalized so that 
         numpy.linalg.norm(generator.flat) == 1.0  Note that the generators 
         will still, in general, be non-orthogonal.
 
+    other_diagonal_only : bool, optional
+        If True, only the "diagonal" Stochastic error generators are
+        returned; that is, the generators corresponding to the `i==j`
+        terms in the Lindblad expression.
 
     Returns
     -------
@@ -1062,14 +1072,22 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
     Parameters
     ----------
-    TODO: docstring
     errgen: : ndarray
       The error generator matrix to project.
 
-    projection_basis : {'std', 'gm', 'pp', 'qt'}
-      The basis is used to construct the lindblad error generators onto which
-      the gate  error generator is projected onto.  Allowed values are
-      Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+    ham_basis : {'std', 'gm', 'pp', 'qt'} or list
+      The basis is used to construct the Hamiltonian-type lindblad error
+      generators onto which the gate  error generator is projected onto.
+      Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+      and Qutrit (qt), or you may specify a list of the basis matrices
+      (numpy arrays) themselves.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'} or list
+      The basis is used to construct the Stochastic-type lindblad error
+      generators onto which the gate  error generator is projected onto.
+      Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+      and Qutrit (qt), or you may specify a list of the basis matrices
+      (numpy arrays) themselves.
       
     mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
       Which basis `errgen` is represented in.  Allowed
@@ -1077,19 +1095,17 @@ def lindblad_errgen_projections(errgen, ham_basis,
       Pauli-product (pp), and Qutrit (qt).
 
     normalize : bool, optional
-        Whether or not the generators being projected onto are normalized, so
-        that numpy.linalg.norm(generator.flat) == 1.0.  Note that the generators
-        will still, in general, be non-orthogonal.
+      Whether or not the generators being projected onto are normalized, so
+      that numpy.linalg.norm(generator.flat) == 1.0.  Note that the generators
+      will still, in general, be non-orthogonal.
 
     return_generators : bool, optional
       If True, return the error generators projected against along with the
       projection values themseves.
 
-    maxWeight : int, optional
-      The maximum weight (i.e. number of non-identity single-qubit factors)
-      allowed in elements of the projection basis.  This currently only applies
-      to the case `projection_basis == "pp"`, as only elements of the
-      Pauli-product basis can be decomposed into single qubit factors.
+    other_diagonal_only : bool, optional
+      If True, then only projections onto the "diagonal" terms in the
+      Lindblad expresssion are returned.
 
 
     Returns
@@ -1100,7 +1116,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
     other_projections : numpy.ndarray
       An array of shape (d-1,d-1), where d is the dimension of the gate,
-      giving the projections onto the "other"-type Lindblad terms.
+      giving the projections onto the Stochastic-type Lindblad terms.
 
     ham_generators : numpy.ndarray
       The Hamiltonian-type Lindblad term generators, as would be returned
@@ -1108,7 +1124,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
       Shape is (d-1,d,d), and `ham_generators[i]` is in the standard basis.
 
     other_generators : numpy.ndarray
-      The "other"-type Lindblad term generators, as would be returned
+      The Stochastic-type Lindblad term generators, as would be returned
       from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """

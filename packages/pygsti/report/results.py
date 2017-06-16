@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools   as _itertools
 import warnings    as _warnings
+import time        as _time
 import numpy       as _np
 
 from ..             import construction         as _const
@@ -232,6 +233,17 @@ class Estimate(object):
                 regionType = "std"
 
             ds = self.get_effective_dataset()
+
+            #Check for long hessian computation on a single proc
+            if comm is None and gateset.dim > 4 and len(gatestrings) > 100:
+                _warnings.warn(("Confidence region computations for systems"
+                                "larger than 1 qubit on a single processor"
+                                "may take a long time (many hours).  You might"
+                                "not want to do this, so I'm going to sleep for"
+                                "10s to give you a chance to kill me before"
+                                "I start intensive computation."))
+                _time.sleep(10)
+            
             params = self.parameters
             objective = params.get('objective',"logl")
             if objective == "logl":
@@ -712,7 +724,7 @@ class Results(object):
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_brief_report_pdf(self, confidenceLevel=None,
                                 filename="auto", title="auto", datasetLabel="auto",
@@ -724,7 +736,7 @@ class Results(object):
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_single_qubit_report(..., brief=True)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
                                 title="auto", datasetLabel="auto", suffix="",
@@ -736,7 +748,7 @@ class Results(object):
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  Beamer presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
@@ -748,7 +760,7 @@ class Results(object):
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
              '  replaced with (better) HTML ones. As a part of this change,\n'
              '  Powerpoint presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_single_qubit_report(...)\n'))
+             '  pygsti.report.create_general_report(...)\n'))
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",

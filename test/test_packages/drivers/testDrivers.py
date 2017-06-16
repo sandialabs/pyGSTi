@@ -154,8 +154,8 @@ class TestDriversMethods(DriversTestCase):
                                 advancedOptions={'truncScheme': ts})
 
         #create a report...
-        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_FPR.html",
-                                                 verbosity=2)
+        pygsti.report.create_general_report(result, temp_files + "/full_report_FPR.html",
+                                            verbosity=2)
         #import os
         #print("LOG DEBUG")
         #os.system("cat " + temp_files + "/full_report_FPR.log")
@@ -176,8 +176,8 @@ class TestDriversMethods(DriversTestCase):
             advancedOptions={'truncScheme': ts}) #self.runSilent(
 
         #create a report...
-        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_RFPR.html",
-                                                 verbosity=2)
+        pygsti.report.create_general_report(result, temp_files + "/full_report_RFPR.html",
+                                            verbosity=2)
 
         #With fixed initial fiducial pairs
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
@@ -190,8 +190,8 @@ class TestDriversMethods(DriversTestCase):
                                  advancedOptions={'truncScheme': ts})
 
         #create a report...
-        pygsti.report.create_single_qubit_report(result2, temp_files + "/full_report_RFPR2.html",
-                                                 verbosity=2)
+        pygsti.report.create_general_report(result2, temp_files + "/full_report_RFPR2.html",
+                                            verbosity=2)
 
 
     def test_longSequenceGST_parameterizedGates(self):
@@ -216,8 +216,8 @@ class TestDriversMethods(DriversTestCase):
                                 # very small changes (~0.0001) to the total chi^2.
 
         #create a report...
-        pygsti.report.create_single_qubit_report(result, temp_files + "/full_report_LPGates.html",
-                                                 verbosity=2)
+        pygsti.report.create_general_report(result, temp_files + "/full_report_LPGates.html",
+                                            verbosity=2)
                 
 
 
