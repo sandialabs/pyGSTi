@@ -177,6 +177,11 @@
 	  %(bestGatesetDecompTable)s
 	</figure>
 
+	<figure id="bestGatesetEigenvalueTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Relative Eigenvalues of estimated gates.</span> <span class="captiondetail"> The spectrum of each estimated gate pre-multiplied by the inverse of it's ideal (target) counterpart.  The second column displays these eigenvalues over the complex disc.</span></figcaption>
+	  %(bestGatesetRelEvalTable)s
+	</figure>
+
 	<p class="clear"></p>
 	
 	<figure id="bestGatesetVsTargetTable" class='tbl'>
@@ -201,11 +206,6 @@
 	  %(bestGatesetErrGenBoxTable)s
 	</figure>
 		
-	<figure id="bestGatesetEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Relative Eigenvalues of estimated gates.</span> <span class="captiondetail"> The spectrum of each estimated gate pre-multiplied by the inverse of it's ideal (target) counterpart.  The second column displays these eigenvalues over the complex disc.</span></figcaption>
-	  %(bestGatesetRelEvalTable)s
-	</figure>
-
 	<figure id="bestGatesetChoiTable" class='tbl'>
 	  <figcaption><span class="captiontitle">Choi matrix spectrum of the GST estimated gate set.</span> <span class="captiondetail"> The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of <em>negative</em> values are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum <span class="math">(1,0,0\ldots)</span>, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.</span></figcaption>
 	  %(bestGatesetChoiEvalTable)s

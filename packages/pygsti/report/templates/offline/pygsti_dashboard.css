@@ -71,6 +71,7 @@ figure {
   float: left;
 }
 figcaption {
+  font-size: 12px;
   caption-side: bottom;
   font-weight: bold;
   -webkit-animation: fadeEffect 1s;
