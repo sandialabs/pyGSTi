@@ -160,8 +160,8 @@ formatDict['NMPiErrorBars'] = {
     'latex' : PiEB_latex}
 
 formatDict['GateString'] = {
-    'html'  : Formatter(lambda s : '.'.join(s) if s is not None else ''),
-    'latex' : Formatter(lambda s : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])))}
+    'html'  : Formatter(lambda s,specs : '.'.join(s) if s is not None else ''),
+    'latex' : Formatter(lambda s,specs : ''          if s is None else ('$%s$' % '\\cdot'.join([ ('\\mbox{%s}' % gl) for gl in s])))}
 
 '''
 Figure formatters no longer use Formatter objects, because figure formatters are more specialized.

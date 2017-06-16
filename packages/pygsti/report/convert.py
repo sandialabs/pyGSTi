@@ -58,7 +58,6 @@ def item_type(x):
        isinstance(x,_objs.Gate) or \
        isinstance(x,_objs.SPAMVec):
         d = calc_dim(x)
-        x = _np.squeeze(x)
         if d == 0: return 'value' 
         if d == 1: return 'vector' 
         if d == 2: return 'matrix' 
@@ -76,12 +75,19 @@ def convert(x, specs, fmt):
     '''
     Convert any item to a format
     '''
+
+    #Squeeze arrays before formatting
+    if isinstance(x,_np.ndarray) or \
+       isinstance(x,_objs.Gate) or \
+       isinstance(x,_objs.SPAMVec):
+        x = _np.squeeze(x)
+    
     t = item_type(x)
     if t == 'raw':
         print('WARNING: {} not explicitly converted to {}'.format(x, fmt))
         return str(x)
     if t == 'reportable':
-        return x.render_with(lambda a : convert(a, specs, fmt))
+        return x.render_with(lambda a,specz : convert(a, specz, fmt))
     if t == 'list':
         return convertDict[fmt][t]([convert(xi, specs, fmt) for xi in x], specs)
     return convertDict[fmt][t](x, specs)
