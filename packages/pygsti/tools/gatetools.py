@@ -1256,7 +1256,7 @@ def rotation_gate_mx(r,mxBasis="gm"):
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _bt.pp_matrices(d)
+    pp = _bt.basis_matrices('pp', d)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)
@@ -1265,11 +1265,9 @@ def rotation_gate_mx(r,mxBasis="gm"):
         ex += rot/2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
-    
-    if mxBasis == "pp":   ret = _bt.std_to_pp(stdGate)
-    elif mxBasis == "gm": ret = _bt.std_to_gm(stdGate)
-    elif mxBasis == "std": ret = stdGate
-    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    assert mxBasis in ['pp', 'gm', 'std'], "Invalid basis specifier: %s" % mxBasis
+    ret = _bt.change_basis(mx, 'std', mxBasis, None)
 
     return ret
 

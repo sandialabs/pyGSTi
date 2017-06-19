@@ -64,7 +64,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     numpy array
         The vector specified by vecExpr in the desired basis.
     """
-    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a
                                                          #Hilbert-space state index, so "reduced-std" basis
 
@@ -111,7 +111,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     numpy array
         The identity vector in the desired basis.
     """
-    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
@@ -161,7 +161,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Gate matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, _ , _ = _bt._processBlockDims(stateSpaceDims)
+    dmDim, _ , _ = _bt.process_block_dims(stateSpaceDims)
     fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -454,7 +454,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
 
-    dmDim, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    dmDim, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
     #fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -650,15 +650,16 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         full_finalToPP = _np.identity( gateDim, 'complex' )
         full_ppToFinal = _np.identity( gateDim, 'complex' )
 
+        ppToStd = _bt.basis_transform_matrix('pp', 'std', blockDims[iTensorProdBlk])
+        stdToPP = _bt.basis_transform_matrix('std', 'pp', blockDims[iTensorProdBlk]) # Potentially uses cached results
         if basis == "std":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
             full_ppToFinal[offset:offset+N,offset:offset+N] = ppToStd
             full_finalToPP[offset:offset+N,offset:offset+N] = stdToPP
             realMx = False
 
         elif basis == "gm":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
-            gmToStd = _bt.gm_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToGM = _np.linalg.inv(gmToStd)
+            gmToStd = _bt.basis_transform_matrix('gm', 'std', blockDims[iTensorProdBlk])
+            stdToGM = _bt.basis_transform_matrix('std', 'gm', blockDims[iTensorProdBlk]) 
             full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToGM, ppToStd )
             full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, gmToStd )
             realMx = True
@@ -669,8 +670,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             realMx = True
 
         elif basis == "qt":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
-            qtToStd = _bt.qt_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToQT = _np.linalg.inv(qtToStd)
+            qtToStd = _bt.basis_transform_matrix('qt', 'std', blockDims[iTensorProdBlk])
+            stdToQT = _bt.basis_transform_matrix('std', 'qt', blockDims[iTensorProdBlk]) 
             full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToQT, ppToStd )
             full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, qtToStd )
             realMx = True
@@ -789,7 +790,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == 'N': #more general single-qubit gate
@@ -806,7 +807,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
                 
@@ -840,7 +841,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == "LX":  #TODO - better way to describe leakage?

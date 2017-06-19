@@ -3,6 +3,7 @@ import pygsti
 import os
 import numpy as np
 from pygsti.construction import std1Q_XYI as std
+import pygsti.tools.basistools as basistools
 
 class JamiolkowskiTestCase(unittest.TestCase):
 
@@ -23,9 +24,9 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate( self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)","std")
-        self.testGateGM_mx = pygsti.std_to_gm(self.testGate, self.stateSpaceDims)
+        self.testGateGM_mx = basistools.change_basis(self.testGate, 'std', 'gm', self.stateSpaceDims)
         self.expTestGate_mx = pygsti.expand_from_std_direct_sum_mx(self.testGate, self.stateSpaceDims)
-        self.expTestGateGM_mx = pygsti.std_to_gm(self.expTestGate_mx)
+        self.expTestGateGM_mx = basistools.change_basis(self.expTestGate_mx, 'std', 'gm')
 
     def tearDown(self):
         os.chdir(self.old)
@@ -82,8 +83,8 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
                           [0,-1, 0, 0],
                           [0, 0, 0, 1]], 'complex')
 
-        mxStd = pygsti.gm_to_std(mxGM)
-        mxPP  = pygsti.gm_to_pp(mxGM)
+        mxStd = basistools.change_basis(mxGM, 'std', 'gm')
+        mxPP  = basistools.change_basis(mxGM, 'gm', 'std')
 
         choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")

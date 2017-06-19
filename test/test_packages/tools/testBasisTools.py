@@ -7,6 +7,8 @@ import pygsti
 import pygsti.tools.basistools       as basistools
 import pygsti.tools.lindbladiantools as lindbladiantools
 
+from functools import partial
+
 class BasisBaseTestCase(BaseTestCase):
 
     def test_expand_contract(self):
@@ -108,13 +110,6 @@ class BasisBaseTestCase(BaseTestCase):
                 #Note: conjugate transpose not needed since mxs are Hermitian
         self.assertArraysAlmostEqual( pp_trMx, np.identity(N,'complex') )
 
-    def test_basis_change(self):
-        import pygsti.tools.basis as basis
-        vec = np.array([1,1,1,1])
-        vec = basis.change_basis(vec, 'pp', 'std', 2)
-        print(vec)
-        raise ValueError()
-
     def test_transforms(self):
         mxStd = np.array([[1,0,0,0],
                           [0,1,0,0],
@@ -122,32 +117,33 @@ class BasisBaseTestCase(BaseTestCase):
                           [0,0,0,1]], 'complex')
         vecStd = np.array([1,0,0,0], 'complex')
 
-        mxGM = pygsti.std_to_gm(mxStd)
-        mxStd2 = pygsti.gm_to_std(mxGM)
-        self.assertArraysAlmostEqual( mxStd, mxStd2 )
+        change = basistools.change_basis
+        mxGM = change(mxStd, 'std', 'gm')
+        mxStd2 = change(mxGM, 'gm', 'std')
+        self.assertArraysAlmostEqual( mxStd, mxStd2)
 
-        vecGM = pygsti.std_to_gm(vecStd)
-        vecStd2 = pygsti.gm_to_std(vecGM)
+        vecGM = change(vecStd, 'std', 'gm')
+        vecStd2 = change(vecGM, 'gm', 'std')
         self.assertArraysAlmostEqual( vecStd, vecStd2 )
 
-        mxPP = pygsti.std_to_pp(mxStd)
-        mxStd2 = pygsti.pp_to_std(mxPP)
+        mxPP = change(mxStd, 'std', 'pp')
+        mxStd2 = change(mxPP, 'pp', 'std')
         self.assertArraysAlmostEqual( mxStd, mxStd2 )
 
-        vecPP = pygsti.std_to_pp(vecStd)
-        vecStd2 = pygsti.pp_to_std(vecPP)
+        vecPP = change(vecStd, 'std', 'pp')
+        vecStd2 = change(vecPP, 'pp', 'std')
         self.assertArraysAlmostEqual( vecStd, vecStd2 )
 
-        mxPP2 = pygsti.gm_to_pp(mxGM)
+        mxPP2 = change(mxGM, 'gm', 'pp')
         self.assertArraysAlmostEqual( mxPP, mxPP2 )
 
-        vecPP2 = pygsti.gm_to_pp(vecGM)
+        vecPP2 = change(vecGM, 'gm', 'pp')
         self.assertArraysAlmostEqual( vecPP, vecPP2 )
 
-        mxGM2 = pygsti.pp_to_gm(mxPP)
+        mxGM2 = change(mxPP, 'pp', 'gm')
         self.assertArraysAlmostEqual( mxGM, mxGM2 )
 
-        vecGM2 = pygsti.pp_to_gm(vecPP)
+        vecGM2 = change(vecPP, 'pp', 'gm')
         self.assertArraysAlmostEqual( vecGM, vecGM2 )
 
 
@@ -159,26 +155,26 @@ class BasisBaseTestCase(BaseTestCase):
         rank3tensor = np.ones((4,4,4),'d')
 
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(non_herm_mxStd) #will result in gm mx with *imag* part
+            change(non_herm_mxStd, 'std', 'gm') #will result in gm mx with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(non_herm_vecStd) #will result in gm vec with *imag* part
+            change(non_herm_vecStd, 'std', 'gm') #will result in gm vec with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(non_herm_mxStd) #will result in pp mx with *imag* part
+            change(non_herm_mxStd, 'std', 'pp') #will result in pp mx with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(non_herm_vecStd) #will result in pp vec with *imag* part
+            change(non_herm_vecStd, 'std', 'pp') #will result in pp vec with *imag* part
 
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'std', 'gm') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.gm_to_std(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'gm', 'std') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'std', 'pp') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.pp_to_std(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'pp', 'std') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.gm_to_pp(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'gm', 'pp') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.pp_to_gm(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'pp', 'gm') #only convert rank 1 & 2 objects
 
         densityMx = np.array( [[1,0],[0,-1]], 'complex' )
         gmVec = pygsti.stdmx_to_gmvec(densityMx)
@@ -229,12 +225,12 @@ class BasisBaseTestCase(BaseTestCase):
 
     def test_basistools_misc(self):
         with self.assertRaises(TypeError):
-            basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
+            basistools.process_block_dims("FooBar") #arg should be a list,tuple,or int
         basistools.pp_matrices([1])
 
     def test_basis_longname(self):
-        longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
-        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-prod'})
+        longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp', 'qt'}}
+        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-Product', 'Qutrit'})
         self.assertEqual(basistools.basis_longname('not a basis'), '?Unknown?')
 
     def test_basis_element_labels(self):
