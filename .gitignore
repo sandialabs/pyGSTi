@@ -9,6 +9,8 @@
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
+jupyter_notebooks/Tutorials/offline
+test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
 
@@ -17,7 +19,9 @@ hooks/etc/permissions.yml
 test/output/*
 test/output/pylint/*
 test/output/individual_coverage/*/*
-test/test_packages/.noseids # Used in running failed tests
+test/test_packages/.noseids
+test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
+**tutorial_files
 
 # Compiled source #
 ###################

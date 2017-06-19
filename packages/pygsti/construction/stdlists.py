@@ -220,7 +220,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                        fidPairs=None, truncScheme="whole germ powers", nest=True,
                        keepFraction=1, keepSeed=None, includeLGST=True,
-                       gateLabelAliases=None):
+                       gateLabelAliases=None, dscheck=None):
     """
     Create a set of gate string structures for LSGST.
 
@@ -323,6 +323,10 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    dscheck : DataSet, optional
+        A dataset which should be checked to ensure it contains all of the 
+        returned gate strings.
+
 
     Returns
     -------
@@ -422,12 +426,13 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                     fiducialPairsThisIter = \
                         [ allPossiblePairs[k] for k in
                           sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
-
-                gss.add_plaquette(germ_power, maxLen, germ, fiducialPairsThisIter)
+                        
+                gss.add_plaquette(germ_power, maxLen, germ, fiducialPairsThisIter, dscheck)
 
         if nest: gss = gss.copy() #pinch off a copy of running_gss
         gss.done_adding_strings()
         lsgst_listOfStructs.append( gss )
+
 
     for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
         assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!

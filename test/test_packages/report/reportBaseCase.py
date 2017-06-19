@@ -60,13 +60,16 @@ class ReportBaseCase(BaseTestCase):
             returnAll=True)
 
         cls.results = pygsti.report.Results()
-        cls.results.init_Ls_and_germs("chi2", cls.ds, targetGateset,  cls.gs_clgst,
-                                       lsgst_gatesets_prego, cls.lsgstStructs)
-        cls.results.parameters.update({'minProbClipForWeighting': 1e-4,
-                                       'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                       'weights': None, 'defaultDirectory': temp_files + "",
-                                       'defaultBasename': "MyDefaultReportName"} )
-
+        cls.results.init_dataset(cls.ds)
+        cls.results.init_gatestrings(cls.lsgstStructs)
+        cls.results.add_estimate(targetGateset, cls.gs_clgst,
+                                 lsgst_gatesets_prego,
+                                 {'objective': "chi2",
+                                  'minProbClipForWeighting': 1e-4,
+                                  'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+                                  'weights': None, 'defaultDirectory': temp_files + "",
+                                  'defaultBasename': "MyDefaultReportName"})
+        
         gaugeOptParams = collections.OrderedDict([
                 ('TPpenalty', 0),
                 ('CPpenalty', 0),
@@ -76,25 +79,27 @@ class ReportBaseCase(BaseTestCase):
 
         go_final_gateset = pygsti.gaugeopt_to_target(lsgst_gatesets_prego[-1],
                                         targetGateset, **gaugeOptParams)
-        cls.results.add_gaugeoptimized(gaugeOptParams, go_final_gateset)
+        cls.results.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
 
         #Compute results for MLGST with TP constraint
         lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.gs_clgst_tp, cls.lsgstStrings, verbosity=0,
                                                    minProbClip=1e-4, probClipInterval=(-1e6,1e6),
                                                    returnAll=True) #TP initial gateset => TP output gatesets
         cls.results_logL = pygsti.report.Results()
-        cls.results_logL.init_Ls_and_germs("logl", cls.ds, targetGateset, cls.gs_clgst_tp,
-                                           lsgst_gatesets_TP, cls.lsgstStructs)
-        cls.results_logL.parameters.update({'minProbClip': 1e-4,
-                                            'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                            'weights': None, 'defaultDirectory': temp_files + "",
-                                            'defaultBasename': "MyDefaultReportName"} )
-
+        cls.results_logL.init_dataset(cls.ds)
+        cls.results_logL.init_gatestrings(cls.lsgstStructs)
+        cls.results_logL.add_estimate(targetGateset, cls.gs_clgst_tp,
+                                 lsgst_gatesets_TP,
+                                 {'objective': "logl",
+                                  'minProbClip': 1e-4,
+                                  'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+                                  'weights': None, 'defaultDirectory': temp_files + "",
+                                  'defaultBasename': "MyDefaultReportName"})
         
         tp_target = targetGateset.copy(); tp_target.set_all_parameterizations("TP")
         go_final_gateset = pygsti.gaugeopt_to_target(lsgst_gatesets_TP[-1],
                                         tp_target, **gaugeOptParams)
-        cls.results_logL.add_gaugeoptimized(gaugeOptParams, go_final_gateset)
+        cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
 
         #self.results_logL.options.precision = 3
         #self.results_logL.options.polar_precision = 2

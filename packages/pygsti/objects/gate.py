@@ -1041,6 +1041,7 @@ class TPParameterizedGate(GateMatrix):
         if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot set TPParameterizedGate: " +
                              "invalid form for 1st row!" )
+            #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
 
 
@@ -2164,7 +2165,6 @@ class LindbladParameterizedGate(GateMatrix):
                  ham_basis="pp", nonham_basis="pp", cptp=True,
                  nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
         """
-        TODO: docstring
         Initialize a LindbladParameterizedGate object.
 
         Parameters
@@ -2186,17 +2186,27 @@ class LindbladParameterizedGate(GateMatrix):
             relative to the target), which should be close to the identity,
             is parameterized.  If none, the identity is used by default.
 
+        ham_basis : {'std', 'gm', 'pp', 'qt'} or list
+            The basis is used to construct the Hamiltonian-type lindblad error
+            generators onto whose coefficients (partially) parameterize this gate.
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+            and Qutrit (qt), or you may specify a list of the basis matrices
+            (numpy arrays) themselves.
+    
+        other_basis : {'std', 'gm', 'pp', 'qt'} or list
+            The basis is used to construct the Stochastic-type lindblad error
+            generators onto whose coefficients (partially) parameterize this gate.
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
+            and Qutrit (qt), or you may specify a list of the basis matrices
+            (numpy arrays) themselves.
+
         cptp : bool, optional
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonHamTerms : {"all","diag","none"}, optional
-            Which non-Hamiltonian type Lindblad terms should be included in
-            the parameterization.  Allowed values are:
-
-            - "all" : all "other" (non-Hamiltonian) terms are included.
-            - "diag" : only the "diagonal" (depolarizing) terms are included.
-            - "none" : no non-Hamiltonian terms are included (gate is unitary)
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
@@ -2205,22 +2215,10 @@ class LindbladParameterizedGate(GateMatrix):
             result in a non-positive-definite matrix of non-Hamiltonian term
             coefficients.
 
-        projection_basis : {'std', 'gm', 'pp', 'qt'}, optional
-            The basis is used to construct the lindblad terms used to
-            parameterize the gate.  Allowed values are Matrix-unit (std),
-            Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
-          
         mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
             Which basis `gateMatrix` is represented in.  Allowed values are
             Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and
             Qutrit (qt).
-
-        maxWeight : int, optional
-            The maximum weight (i.e. number of non-identity single-qubit
-            factors) allowed in elements of the projection basis.  This
-            currently only applies to the case `projection_basis == "pp"`, as
-            only elements of the Pauli-product basis can be decomposed into
-            single qubit factors.
         """
         if gateMatrix is None:
             assert(unitaryPrefactor is not None), "arguments cannot both be None"

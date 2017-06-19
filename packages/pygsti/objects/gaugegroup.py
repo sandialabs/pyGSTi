@@ -25,6 +25,7 @@ class GaugeGroup(object):
         def __init__(self): pass
         def get_transform_matrix(self): return None
         def get_transform_matrix_inverse(self): return None
+        def deriv_wrt_params(self): return None
         def to_vector(self): return _np.array([],'d')
         def from_vector(self,v): pass
 
@@ -58,6 +59,9 @@ class GateGaugeGroup(GaugeGroup):
                 self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
             return self._inv_matrix
 
+        def deriv_wrt_params(self):
+            return self.gate.deriv_wrt_params()
+
         def to_vector(self):
             return self.gate.to_vector()
 
@@ -87,6 +91,14 @@ class TPGaugeGroup(GateGaugeGroup):
     class element(GateGaugeGroup.element):
         def __init__(self, gate):
             GateGaugeGroup.element.__init__(self,gate)
+
+        def get_transform_matrix_inverse(self): 
+            if self._inv_matrix is None:
+                self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
+                self._inv_matrix[0,:] = 0.0 #ensure invers is *exactly* TP
+                self._inv_matrix[0,0] = 1.0 # as otherwise small variations can get amplified
+            return self._inv_matrix
+
 
 #        pass #inherits everything it needs
 

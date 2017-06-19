@@ -216,6 +216,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         startingPt = advancedOptions.get('starting point',"target")
 
+    #Get dataset for checking below
+    if comm is None or comm.Get_rank() == 0:
+        if _compat.isstr(dataFilenameOrSet):
+            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
+        else:
+            dschk = dataFilenameOrSet
+    else: dschk = None
+
     #Construct gate sequences
     gateLabels = advancedOptions.get(
         'gateLabels', list(gs_target.gates.keys()))
@@ -224,7 +232,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
         nest = advancedOptions.get('nestedGateStringLists',True),
         includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
-        gateLabelAliases = advancedOptions.get('gateLabelAliases',None) )
+        gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
+        dscheck=dschk)
     
     assert(len(maxLengths) == len(lsgstLists))
     
@@ -531,8 +540,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
 
+    #Perform extra analysis if a bad fit was obtained
     badFitThreshold = advancedOptions.get('badFitThreshold',20)
-    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold: #HARDCODED arbitrary threshold
+    if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
         if onBadFit in ("scale data","scale data and reopt") \
            and parameters['weights'] is None:
@@ -573,7 +583,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 # and just keep (?) old estimates of all prior iterations (or use "blank"
                 # sentinel once this is supported).
                 
-            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".dscl")
+            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".robust")
 
             #Do final gauge optimization to data-scaled estimate also
             if gaugeOptParams != False:
@@ -586,11 +596,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
                 #    
                 #    tNxt = _time.time()
-                #    profiler.add_time('do_long_sequence_gst: dscl gauge optimization',tRef); tRef=tNxt
+                #    profiler.add_time('do_long_sequence_gst: robust gauge optimization',tRef); tRef=tNxt
                 #else:
                 
                 # add same gauge-optimized result as above
-                ret.estimates[estlbl + ".dscl"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                ret.estimates[estlbl + ".robust"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
 
 
         elif onBadFit == "do nothing":
@@ -598,19 +608,6 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         else:
             raise ValueError("Invalid onBadFit value: %s" % onBadFit)
             
-
-    #Do final gauge optimization to *final* iteration result only
-    if gaugeOptParams != False:
-        gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
-        if "targetGateset" not in gaugeOptParams:
-            gaugeOptParams["targetGateset"] = gs_target
-
-        go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
-
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
-
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
     return ret
 
@@ -619,7 +616,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
-                       germsListOrFilename, maxLengths, modes="TP,CPTP",
+                       germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
                        comm=None, memLimit=None, verbosity=2):
 
     """
@@ -672,6 +669,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "CPTP" : Lindbladian CPTP-constrained
         - "H+S"  : Only Hamiltonian + Stochastic errors allowd (CPTP)
         - "S"    : Only Stochastic errors allowd (CPTP)
+        - "Target" : use the target (ideal) gates as the estimate
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -708,26 +706,42 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     with printer.progress_logging(1):
         for i,mode in enumerate(modes):
             printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
-            parameterization = mode #for now, 1-1 correspondence
-            tgt = gs_target.copy(); tgt.set_all_parameterizations(parameterization)
-            advanced = {'appendTo': ret, 'estimateLabel': parameterization }
-            
-            ret = do_long_sequence_gst(ds, tgt, prepStrsListOrFilename,
-                                       effectStrsListOrFilename, germsListOrFilename,
-                                       maxLengths, False, advanced, comm, memLimit,
-                                       printer-1)
+
+            if mode == "Target":
+                if ret == None:
+                    ret = _report.Results()
+                    ret.init_dataset(ds)
+                    #ret.init_gatestrings(lsgstLists) #TODO
+                    raise NotImplementedError("Cannot use 'Target' as the first mode (yet).")
+                tgt_params = _collections.OrderedDict()
+                tgt_params['objective'] = 'logl'
+                tgt_params['minProbClip'] = 1e-4
+                nIters = len(maxLengths) if (maxLengths[0] != 0) else len(maxLengths)-1
+                est_label = mode
+                ret.add_estimate(gs_target, gs_target, [gs_target]*nIters, tgt_params, est_label)
+                
+            else: #assume mode is a parameterization
+                
+                est_label = parameterization = mode #for now, 1-1 correspondence
+                tgt = gs_target.copy(); tgt.set_all_parameterizations(parameterization)
+                advanced = {'appendTo': ret, 'estimateLabel': est_label }
+                
+                ret = do_long_sequence_gst(ds, tgt, prepStrsListOrFilename,
+                                           effectStrsListOrFilename, germsListOrFilename,
+                                           maxLengths, False, advanced, comm, memLimit,
+                                           printer-1)
             
             #Gauge optimize to a variety of spam weights
-            for vSpam in [0]: #,1
-                for spamWt in [1e-4]: #,1e-2,1e-1
-                    ret.estimates[parameterization].add_gaugeoptimized(
+            for vSpam in [1]:
+                for spamWt in [1e-4,1e-1]:
+                    ret.estimates[est_label].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
                          'validSpamPenalty': vSpam},
                         None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
 
                     #Gauge optimize data-scaled estimate also
-                    if parameterization + ".dscl" in ret.estimates:
-                        ret.estimates[parameterization + ".dscl"].add_gaugeoptimized(
+                    if est_label + ".robust" in ret.estimates:
+                        ret.estimates[est_label + ".robust"].add_gaugeoptimized(
                             {'itemWeights': {'gates':1, 'spam':spamWt},
                              'validSpamPenalty': vSpam},
                             None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
