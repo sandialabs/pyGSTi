@@ -13,6 +13,7 @@ import warnings as _warnings
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
 from . import basistools as _bt
+from . import lindbladiantools as _lt
 from . import compattools as _compat
 
 def _hack_sqrtm(A):
@@ -805,9 +806,9 @@ def std_error_generators(dim, projection_type, projection_basis):
     lindbladMxs = _np.empty( (len(mxs),d2,d2), 'complex' )
     for i,basisMx in enumerate(mxs):
         if projection_type == "hamiltonian":
-            lindbladMxs[i] = _bt.hamiltonian_to_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.hamiltonian_to_lindbladian(basisMx) # in std basis
         elif projection_type == "stochastic":
-            lindbladMxs[i] = _bt.stochastic_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.stochastic_lindbladian(basisMx) # in std basis
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
@@ -987,7 +988,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
         hamLindbladTerms = _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
         for i,B in enumerate(ham_mxs[1:]): #don't include identity
-            hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
+            hamLindbladTerms[i] = _lt.hamiltonian_to_lindbladian(B) # in std basis
             if normalize:
                 norm = _np.linalg.norm(hamLindbladTerms[i].flat)
                 if not _np.isclose(norm,0):
@@ -1003,7 +1004,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         if other_diagonal_only:
             otherLindbladTerms = _np.empty( (other_nMxs-1,d2,d2), 'complex' )
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
-                otherLindbladTerms[i] = _bt.nonham_lindbladian(Lm,Lm)
+                otherLindbladTerms[i] = _lt.nonham_lindbladian(Lm,Lm)
                 if normalize:
                     norm = _np.linalg.norm(otherLindbladTerms[i].flat)
                     if not _np.isclose(norm,0):
@@ -1016,7 +1017,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
                 for j,Ln in enumerate(other_mxs[1:]): #don't include identity
                     #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
-                    otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+                    otherLindbladTerms[i,j] = _lt.nonham_lindbladian(Lm,Ln)
                     if normalize:
                         norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
                         if not _np.isclose(norm,0):

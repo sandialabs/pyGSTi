@@ -46,6 +46,7 @@ import scipy.linalg as _spl
 from . import matrixtools as _mt
 from .memoize import memoize
 from .basis   import Basis, basis_constructor
+from .basis   import change_basis as _change_basis
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -285,6 +286,7 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
     return lblList
 
 
+@basis_constructor('std')
 def std_matrices(dimOrBlockDims):
     """
     Get the elements of the matrix unit, or "standard", basis
@@ -441,6 +443,7 @@ def _GetGellMannNonIdentityDiagMxs(dimension):
 
     return listOfMxs
 
+@basis_constructor('gm_unnormalized')
 def gm_matrices_unnormalized(dimOrBlockDims):
     """
     Get the elements of the generalized Gell-Mann
@@ -1338,6 +1341,12 @@ def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
 
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    '''
+    if dimOrBlockDims is None:
+        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        assert( dimOrBlockDims**2 == mx.shape[0] )
+    return _change_basis(mx, from_basis, to_basis, dimOrBlockDims)
+    '''
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.

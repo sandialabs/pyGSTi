@@ -21,7 +21,10 @@ def memoize(obj):
         if len(kwargs) > 0:
             raise ValueError('Cannot currently memoize on kwargs')
         #args = tuple(to_hashable(arg) for arg in args)
-        if args not in cache:
-            cache[args] = obj(*args, **kwargs)
-        return cache[args]
+        try:
+            if args not in cache:
+                cache[args] = obj(*args, **kwargs)
+            return cache[args]
+        except TypeError:
+            return obj(*args, **kwargs)
     return memoizer
