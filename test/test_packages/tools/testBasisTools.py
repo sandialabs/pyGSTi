@@ -108,6 +108,12 @@ class BasisBaseTestCase(BaseTestCase):
                 #Note: conjugate transpose not needed since mxs are Hermitian
         self.assertArraysAlmostEqual( pp_trMx, np.identity(N,'complex') )
 
+    def test_basis_change(self):
+        import pygsti.tools.basis as basis
+        vec = np.array([1,1,1,1])
+        vec = basis.change_basis(vec, 'pp', 'std', 2)
+        print(vec)
+        raise ValueError()
 
     def test_transforms(self):
         mxStd = np.array([[1,0,0,0],

@@ -1341,12 +1341,6 @@ def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
 
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
-    '''
-    if dimOrBlockDims is None:
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-        assert( dimOrBlockDims**2 == mx.shape[0] )
-    return _change_basis(mx, from_basis, to_basis, dimOrBlockDims)
-    '''
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.
@@ -1372,16 +1366,27 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
         The given gate matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
+    if from_basis == to_basis:
+        return mx.copy()
+    if from_basis == "gm" and to_basis == "std":  
+        return gm_to_std(mx, dimOrBlockDims)
+    else:
+        if dimOrBlockDims is None:
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+            assert( dimOrBlockDims**2 == mx.shape[0] )
+        return _np.dot(basis_transform_matrix(from_basis, to_basis, dimOrBlockDims), mx)
+
+
+    '''
     if from_basis == "std":
-        if to_basis == "std": return mx.copy()
-        elif to_basis == "gm": fn = std_to_gm
+        if to_basis == "gm": fn = std_to_gm
         elif to_basis == "pp": fn = std_to_pp
         elif to_basis == "qt": fn = std_to_qt
         else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
         
     elif from_basis == "gm":
-        if to_basis == "std":  fn = gm_to_std
-        elif to_basis == "gm": return mx.copy()
+        if to_basis == "std":  
+            return gm_to_std(mx, dimOrBlockDims)
         elif to_basis == "pp": fn = gm_to_pp
         elif to_basis == "qt": fn = gm_to_qt
         else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
@@ -1389,7 +1394,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     elif from_basis == "pp":
         if to_basis == "std":  fn = pp_to_std
         elif to_basis == "gm": fn = pp_to_gm
-        elif to_basis == "pp": return mx.copy()
         elif to_basis == "qt": fn = pp_to_qt
         else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
 
@@ -1397,11 +1401,29 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
         if to_basis == "std":  fn = qt_to_std
         elif to_basis == "gm": fn = qt_to_gm
         elif to_basis == "pp": fn = qt_to_pp
-        elif to_basis == "qt": return mx.copy()
         else: raise ValueError("Invalid 'to_basis': %s" % to_basis)
 
     else: raise ValueError("Invalid 'from_basis': %s" % from_basis)
-    return fn(mx, dimOrBlockDims)
+    compare = fn(mx, dimOrBlockDims)
+
+    def arraysAlmostEqual(a,b):
+        return abs(_np.linalg.norm(a-b)) < 1e-6
+
+    try:
+        if dimOrBlockDims is None:
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+            assert( dimOrBlockDims**2 == mx.shape[0] )
+        test = _np.dot(basis_transform_matrix(from_basis, to_basis, dimOrBlockDims), mx)
+        if not arraysAlmostEqual(test, compare):
+            print('_' * 80)
+            print('Change of basis: {} to {} (dim:{})'.format(from_basis, to_basis, dimOrBlockDims))
+            print(test)
+            print(compare)
+            print('_' * 80)
+    except Exception as e:
+        print(e)
+    return compare
+    '''
 
 
 

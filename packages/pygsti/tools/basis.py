@@ -48,8 +48,10 @@ class Basis(object):
         else:
             return _np.array_equal(self.matrices, other)
 
+    '''
     def __hash__(self):
         return hash((self.name, self.dim))
+    '''
 
     @memoize
     def is_normalized(self):
@@ -89,7 +91,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
         dimOrBlockDims = tuple(dimOrBlockDims)
     from_basis = build_basis(from_basis, dimOrBlockDims)
     to_basis   = build_basis(to_basis, dimOrBlockDims)
-    return _np.dot(get_conversion_mx(from_basis, to_basis), mx)
+    return _np.dot(mx, get_conversion_mx(from_basis, to_basis))
 
 @parameterized
 def basis_constructor(f, name):
