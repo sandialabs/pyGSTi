@@ -21,6 +21,10 @@ def read_top_n_lines(filename, n, bodystart):
                 n -= 1
     return content
 
+def total_calls(parsed_lines):
+    tuples = sorted(parsed_lines, key=lambda t : t.calls, reverse=True)
+    return tuples[0].calls
+
 def parse_lines(content):
     functions = []
     for line in content:
@@ -30,17 +34,22 @@ def parse_lines(content):
         fname   = ' '.join(values[5:])
         functions.append(FuncInfo(calls, time, fname))
     totaltime = functions[0].time
-    functions = [FuncInfo(calls, int(round(time/totaltime, 2) * 100), fname) for calls, time, fname in functions]
+    totalcalls = total_calls(functions)
+    functions = [FuncInfo(
+        int(round(calls/totalcalls, 2)* 100),
+        int(round(time/totaltime, 2) * 100), 
+        fname) for calls, time, fname in functions]
     return functions
 
-def main(args):
-    assert len(args) == 1
-    filename  = args[0]
+def read_profile_info(filename):
     bodystart = 'filename:lineno(function)'
 
     content   = read_top_n_lines(filename, 100, bodystart)
-    functions = parse_lines(content)
+    return parse_lines(content)
 
+def main(args):
+    assert len(args) == 1
+    functions = read_profile_info(args[0])
     tableStr = '{:<10}| {:>4}% | {:<15}'
     print(tableStr.format('calls', 'time', 'name'))
     print('-' * 80)
