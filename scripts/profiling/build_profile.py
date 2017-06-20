@@ -2,9 +2,9 @@
 import subprocess, sys
 
 def main(args):
-    assert len(args) == 2
-    subprocess.call('python3 -m cProfile -s cumtime {} 2>&1 |  tee {}'.format(
-        args[0], args[1]), shell=True)
+    assert len(args) == 3
+    subprocess.call('python{} -m cProfile -s cumtime {} 2>&1 |  tee {}'.format(
+        args[0], args[1], args[2]), shell=True)
     return 0
 
 if __name__ == '__main__':
