@@ -2,7 +2,7 @@ import pygsti
 import pickle
 
 def load():
-    with open('gauge_profiling/2qbit_results.pkl', 'rb') as infile:
+    with open('gaugeopt/2qbit_results.pkl', 'rb') as infile:
         results = pickle.load(infile)
 
     est = results.estimates['default']
