@@ -13,19 +13,33 @@ from .parameterized import parameterized
 class Basis(object):
     Constructors = dict()
 
-    def __init__(self, name, matrices, longname=None, real=True):
-        assert len(matrices) > 0, 'Need at least one matrix in basis'
+    def __init__(self, name, matrices_creator, dim, longname=None, real=True):
+        _, gateDim, blockDims = process_block_dims(dim)
 
-        self.shape = matrices[0].shape # wont change ( I think? )
+        self.matrixGroups = []
+        for blockDim in blockDims:
+            self.matrixGroups.append(matrices_creator(blockDim))
+        self.matrices = [mx for mxlist in self.matrixGroups for mx in mxlist]
+        '''
+        print('blockdims:')
+        print(blockDims)
+        print('blockdims squared:')
+        print([bd ** 2 for bd in blockDims])
+        '''
+        
+        #assert len(matrices) > 0, 'Need at least one matrix in basis'
+
         self.name = name
         self.real = real
+        self.dim  = dim
+        self.gateDim = gateDim
         if longname is None:
             self.longname = self.name
         else:
             self.longname = longname
 
         self._mxDict = OrderedDict()
-        for i, mx in enumerate(matrices):
+        for i, mx in enumerate(self.matrices):
             if isinstance(mx, tuple):
                 label, mx = mx
             else:
@@ -35,7 +49,7 @@ class Basis(object):
         self.labels = list(self._mxDict.keys())
 
     def __str__(self):
-        return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
+        return '{} Basis (dim {}) : {}'.format(self.longname, self.dim, ', '.join(self.labels))
 
     def __getitem__(self, index):
         return self.matrices[index]
@@ -55,7 +69,7 @@ class Basis(object):
     def __hash__(self):
         return hash((self.name, self.shape))
 
-    @memoize
+    #@memoize
     def is_normalized(self):
         for mx in self.matrices:
             t = _np.trace(_np.dot(mx, mx))
@@ -64,11 +78,26 @@ class Basis(object):
                 return False
         return True
 
-    @memoize
+    #@memoize
     def get_to_std(self):
-        return _np.column_stack([mx.flatten() for mx in self.matrices])
+        toStd = _np.zeros( (self.gateDim, self.gateDim), 'complex' )
 
-    @memoize
+        #Since a multi-block basis is just the direct sum of the individual block bases,
+        # transform mx is just the transfrom matrices of the individual blocks along the
+        # diagonal of the total basis transform matrix
+
+        start = 0
+        for mxs in self.matrixGroups:
+
+            l = len(mxs)
+            for j, mx in enumerate(mxs):
+                toStd[start:start+l,start+j] = mx.flatten()
+            start += l 
+
+        assert(start == self.gateDim)
+        return toStd
+
+    #@memoize
     def get_from_std(self):
         return _inv(self.get_to_std())
 
@@ -124,6 +153,8 @@ def process_block_dims(dimOrBlockDims):
           dimOrBlockDims   : otherwise
     """
     # treat as state space dimensions
+    if isinstance(dimOrBlockDims, str):
+        raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
     if isinstance(dimOrBlockDims, _collections.Container):
         # *full* density matrix is dmDim x dmDim
         dmDim = sum([blockDim for blockDim in dimOrBlockDims])
@@ -137,7 +168,7 @@ def process_block_dims(dimOrBlockDims):
         gateDim = dimOrBlockDims**2
         blockDims = [dimOrBlockDims]
     else:
-        raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
+        raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
     return dmDim, gateDim, blockDims
 
@@ -152,8 +183,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
     to_basis   = build_basis(to_basis, dimOrBlockDims)
 
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-        # TODO: from_basis not used? This seems wrong, but this is how the original code was.
-        ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, to_basis.get_to_std()))
+        ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
     elif len(mx.shape) == 1 or \
         (len(mx.shape) == 2 and mx.shape[1] == 1):
         ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
@@ -170,6 +200,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
 def basis_constructor(f, name, longname, real=True):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return Basis(name, f(*args, **kwargs), longname=longname, real=real)
+        return Basis(name, f, dim=args[0], longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper

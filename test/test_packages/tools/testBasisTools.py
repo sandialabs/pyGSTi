@@ -50,10 +50,12 @@ class BasisBaseTestCase(BaseTestCase):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
         # GM [1,1] matrices are the basis matrices for each block, concatenated together
+        '''
         GM11_mxs = pygsti.gm_matrices_unnormalized([1,1])
         self.assertTrue(len(GM11_mxs) == 2)
         self.assertArraysAlmostEqual( GM11_mxs[0], np.array([[1,0],[0,0]],'d') )
         self.assertArraysAlmostEqual( GM11_mxs[1], np.array([[0,0],[0,1]],'d') )
+        '''
 
         # Normalized Gell-Mann 2x2 matrices should just be the sigma matrices / sqrt(2)
         NGM2_mxs = pygsti.gm_matrices(2)
@@ -95,7 +97,7 @@ class BasisBaseTestCase(BaseTestCase):
         mxs = pygsti.pp_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             pygsti.pp_matrices("Foobar") #dim must be an int
         with self.assertRaises(ValueError):
             pygsti.pp_matrices(3) #dim must be a power of 2

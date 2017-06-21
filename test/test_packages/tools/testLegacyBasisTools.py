@@ -9,6 +9,8 @@ from pygsti.tools.basistools import change_basis, basis_matrices, basis_transfor
 
 from . import legacy_basis_tools as legacy
 
+from pprint import pprint
+
 class BasisBaseTestCase(BaseTestCase):
 
     def test_transforms(self):
@@ -57,9 +59,11 @@ class BasisBaseTestCase(BaseTestCase):
                 ('qt',  [3])]
         for basis, dims in basisDimPairs:
             for dim in dims:
+                print(basis, dim)
                 modernMxs = basis_matrices(basis, dim)
                 legacyMxs = legacy.basis_matrices(basis, dim)
-                self.assertBasesAlmostEqual(modernMxs, legacyMxs)
+                modernMxs = [mx for mxlist in modernMxs.matrices for mx in mxlist]
+                self.assertBasesAlmostEqual(modernMxs.matrices, legacyMxs)
 
 
 
