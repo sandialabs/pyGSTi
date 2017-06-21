@@ -1020,7 +1020,7 @@ def pp_to_std(mxInPauliProdBasis, dimOrBlockDims=None):
         assert( dimOrBlockDims**2 == mxInPauliProdBasis.shape[0] )
 
     ppToStd = pp_to_std_transform_matrix(dimOrBlockDims)
-    stdToPP = _np.linalg.inv(ppToStd)
+    stdToPP = basis_transform_matrix('std', 'pp', dimOrBlockDims)
 
     if len(mxInPauliProdBasis.shape) == 2 and mxInPauliProdBasis.shape[0] == mxInPauliProdBasis.shape[1]:
         return _np.dot( ppToStd, _np.dot( mxInPauliProdBasis, stdToPP ) )
