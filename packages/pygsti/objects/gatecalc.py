@@ -17,6 +17,8 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from .profiler import DummyProfiler as _DummyProfiler
+
+from pprint import pprint
 _dummy_profiler = _DummyProfiler()
 
 class GateCalc(object):
@@ -1630,7 +1632,7 @@ class GateCalc(object):
 
         if T is not None:
             Ti = _nla.inv(T) #TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
-            for gateLabel,gate in self.gates.items():
+            for gateLabel, gate in self.gates.items():
                 wt = itemWeights.get(gateLabel, gateWeight)
                 d += wt * gate.frobeniusdist2(
                     otherCalc.gates[gateLabel], T, Ti)                
@@ -1682,6 +1684,105 @@ class GateCalc(object):
         else:
             return _np.sqrt(d)
 
+    def residuals(self, otherCalc, transformMx=None,
+                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                      normalize=True):
+        """
+        Compute the weighted residuals between two
+        gatesets.  Differences in each corresponding gate matrix and spam
+        vector element are squared, weighted (using gateWeight
+        or spamWeight as applicable), then summed.  The value returned is the
+        square root of this sum, or the square root of this sum divided by the
+        number of summands if normalize == True.
+
+        Parameters
+        ----------
+        otherCalc : GateCalc
+            the other gate calculator to difference against.
+
+        transformMx : numpy array, optional
+            if not None, transform this gateset by
+            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            (and similar for rho and E vectors) before taking the difference.
+            This transformation is applied only for the difference and does
+            not alter the values stored in this gateset.
+
+        gateWeight : float, optional
+           weighting factor for differences between gate elements.
+
+        spamWeight : float, optional
+           weighting factor for differences between elements of spam vectors.
+
+        itemWeights : dict, optional
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
+
+        normalize : bool, optional
+           if True (the default), the frobenius difference is defined by the
+           sum of weighted squared-differences divided by the number of
+           differences.  If False, this final division is not performed.
+
+        Returns
+        -------
+        float
+        """
+        resids = []
+        T = transformMx
+        if itemWeights is None: itemWeights = {}
+
+        if T is not None:
+            Ti = _nla.inv(T) #TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
+            for gateLabel, gate in self.gates.items():
+                wt = itemWeights.get(gateLabel, gateWeight)
+                resids.append(
+                        wt * gate.residuals(
+                    otherCalc.gates[gateLabel], T, Ti))
+
+            for lbl,rhoV in self.preps.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                resids.append(
+                    wt * rhoV.residuals(otherCalc.preps[lbl],
+                                              'prep', T, Ti))
+
+            for lbl,Evec in self.effects.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                resids.append(
+                    wt * Evec.residuals(otherCalc.effects[lbl],
+                                              'effect', T, Ti))
+
+            if self.povm_identity is not None:
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                resids.append(
+                    wt * self.povm_identity.residuals(
+                    otherCalc.povm_identity, 'effect', T, Ti))
+        else:
+            for gateLabel,gate in self.gates.items():
+                wt = itemWeights.get(gateLabel, gateWeight)
+                resids.append(
+                    wt * gate.residuals(otherCalc.gates[gateLabel]))
+
+            for lbl,rhoV in self.preps.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                resids.append(
+                    wt * rhoV.residuals(otherCalc.preps[lbl],'prep'))
+
+            for lbl,Evec in self.effects.items():
+                wt = itemWeights.get(lbl, spamWeight)
+                resids.append(
+                    wt * Evec.frobeniusdist2(otherCalc.effects[lbl],'effect'))
+
+            if self.povm_identity is not None and \
+               otherCalc.povm_identity is not None:
+                wt = itemWeights.get(self._identityLabel, spamWeight)
+                resids.append(
+                    wt * self.povm_identity.frobeniusdist2(
+                    otherCalc.povm_identity, 'effect'))
+        return _np.array(resids)
+        #return _np.concatenate(resids)
 
     def jtracedist(self, otherCalc, transformMx=None):
         """

@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
+from pprint import pprint
 
 from .. import objects as _objs
 from .. import tools as _tools
@@ -16,7 +17,6 @@ from .. import optimize as _opt
 def create_objective_fn(gateset, targetGateset, itemWeights=None,
                        CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
                        gatesMetric="frobenius", spamMetric="frobenius"):
-
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
@@ -29,7 +29,7 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
     if mxBasis == "unknown" and targetGateset is not None: 
         mxBasis = targetGateset.get_basis_name()
         basisDim = targetGateset.get_basis_dimension()
-    
+
     def objective_fn(gs):
         ret = 0
 
@@ -56,6 +56,7 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
         if targetGateset is not None:
             if gatesMetric == "frobenius":
                 if spamMetric == "frobenius":
+                    #r = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
                     ret += gs.frobeniusdist(targetGateset, None, gateWeight,
                                             spamWeight, itemWeights)
                 else:
@@ -201,6 +202,22 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       final gauge-transformed gateset.
     """
 
+    '''
+    if CPpenalty == 0 and \
+       TPpenalty == 0 and \
+       validSpamPenalty == 0 and \
+       targetGateset is not None and \
+       gatesMetric == "frobenius" and \
+       spamMetric == "frobenius":
+           def objective_fn_ls(gs):
+               return gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+           def objective_fn_wrap(x):
+               fx  = objective_fn_ls(x)
+               ret = _np.array([fx.real, fx.imag])
+               return fx.real
+           LSresult = gaugeopt_custom_least_squares(gateset, objective_fn_wrap, gauge_group,
+                                    maxiter, maxfev, tol, returnAll, verbosity)
+    '''
     objective_fn = create_objective_fn(gateset, targetGateset,
             itemWeights, 
             CPpenalty, TPpenalty, 
@@ -219,6 +236,86 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     
     return result
 
+def gaugeopt_custom_least_squares(gateset, objective_fn, gauge_group=None,
+                    maxiter=100000, maxfev=None, tol=1e-8,
+                    returnAll=False, verbosity=0):
+    """
+    Optimize the gauge of a gateset using a custom objective function.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset to gauge-optimize
+
+    objective_fn : function
+        The function to be minimized.  The function must take a single `GateSet`
+        argument and return a float.
+
+    gauge_group : GaugeGroup, optional
+        The gauge group which defines which gauge trasformations are optimized
+        over.  If None, then the `gateset`'s default gauge group is used.
+
+    maxiter : int, optional
+        Maximum number of iterations for the gauge optimization.
+
+    maxfev : int, optional
+        Maximum number of function evaluations for the gauge optimization.
+        Defaults to maxiter.
+
+    tol : float, optional
+        The tolerance for the gauge optimization.
+
+    returnAll : bool, optional
+        When True, return best "goodness" value and gauge matrix in addition to the
+        gauge optimized gateset.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+
+    Returns
+    -------
+    gateset                            if returnAll == False
+
+    (goodnessMin, gaugeMx, gateset)    if returnAll == True
+
+      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
+      found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
+      final gauge-transformed gateset.
+    """
+
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    if gauge_group is None:
+        gauge_group = gateset.default_gauge_group
+        if gauge_group is None:
+            #don't do any gauge optimization (assume trivial gauge group)
+            _warnings.warn("No gauge group specified, so no gauge optimization performed.")
+            if returnAll:
+                return None, None, gateset.copy() 
+            else: return gateset.copy()
+
+    x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
+    gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
+
+    def call_objective_fn(gaugeGroupElVec):
+        gaugeGroupEl.from_vector(gaugeGroupElVec)
+        gs = gateset.copy()
+        gs.transform(gaugeGroupEl)
+        return objective_fn(gs)
+
+    bToStdout = (printer.verbosity > 2 and printer.filename is None)
+    print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
+    if bToStdout: print_obj_func(x0) #print initial point
+    minSol = _opt.least_squares(call_objective_fn, x0, 
+                                max_nfev=maxfev, ftol=tol)
+    gaugeGroupEl.from_vector(minSol.x)
+    newGateset = gateset.copy()
+    newGateset.transform(gaugeGroupEl)
+
+    if returnAll:
+        return minSol.fun, gaugeMat, newGateset
+    else:  return newGateset
 
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,

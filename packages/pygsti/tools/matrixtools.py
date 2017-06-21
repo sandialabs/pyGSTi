@@ -144,7 +144,6 @@ def frobeniusnorm2(ar):
     """
     return _np.sum(ar**2)
 
-
 def nullspace(m, tol=1e-7):
     """
     Compute the nullspace of a matrix.

@@ -408,6 +408,15 @@ class GateMatrix(Gate):
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
 
+    def residuals(self, otherGate, transform=None, inv_transform=None):
+        if transform is None and inv_transform is None:
+            return _gt.residuals(self.base,otherGate)
+        else:
+            return _gt.residuals(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
+
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
         Return the Jamiolkowski trace distance between this gate

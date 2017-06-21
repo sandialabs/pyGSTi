@@ -19,6 +19,8 @@ except:
 
 from .customcg import fmax_cg
 
+from scipy.optimize import least_squares
+
 
 def minimize(fn,x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
