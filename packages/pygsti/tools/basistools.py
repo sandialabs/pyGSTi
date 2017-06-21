@@ -44,7 +44,7 @@ import collections as _collections
 import numpy as _np
 import scipy.linalg as _spl
 from . import matrixtools as _mt
-from .memoize import memoize
+#from .memoize import memoize
 from .basis   import Basis, basis_constructor
 from .basis   import change_basis as _change_basis
 from .basis   import get_conversion_mx as basis_transform_matrix
@@ -112,7 +112,10 @@ def basis_longname(basis, dimOrBlockDims=None):
     if basis in ['gm', 'pp'] and dimOrBlockDims in (2,[2],(2,)): return "Pauli"
     else:
         if dimOrBlockDims is None:
-            dimOrBlockDims = 2
+            if basis == 'qt':
+                dimOrBlockDims = 3
+            else:
+                dimOrBlockDims = 2
         basis = build_basis(basis, dimOrBlockDims)
         return basis.longname
 

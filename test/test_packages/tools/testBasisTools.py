@@ -231,7 +231,8 @@ class BasisBaseTestCase(BaseTestCase):
     def test_basis_longname(self):
         longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp', 'qt'}}
         self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-Product', 'Qutrit'})
-        self.assertEqual(basistools.basis_longname('not a basis'), '?Unknown?')
+        with self.assertRaises(NotImplementedError):
+            self.assertEqual(basistools.basis_longname('not a basis'), '?Unknown?')
 
     def test_basis_element_labels(self):
         basisnames = ['gm', 'std', 'pp', 'akdlfjalsdf']

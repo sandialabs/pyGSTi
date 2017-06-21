@@ -26,14 +26,43 @@ class BasisBaseTestCase(BaseTestCase):
             mxBasisALegacy = legacy.change_basis(mxStd, 'std', basisA)
             self.assertArraysAlmostEqual(mxBasisA, mxBasisALegacy)
             for basisB in bases:
-                mxBasisB = change_basis(mxBasisA, basisA, basisB)
-                mxBasisBLegacy = legacy.change_basis(mxStd, basisA, basisB)
+                mxBasisB       = change_basis(mxBasisA, basisA, basisB)
+                mxBasisBLegacy = legacy.change_basis(mxBasisA, basisA, basisB)
                 self.assertArraysAlmostEqual(mxBasisB, mxBasisBLegacy)
 
                 for dim in dims:
                     modernTransform = basis_transform_matrix(basisA, basisB, dim)
                     legacyTransform = basis_transform_matrix(basisA, basisB, dim)
                     self.assertArraysAlmostEqual(modernTransform, legacyTransform)
+
+    def test_block_dims(self):
+        bases = ['gm', 'std']
+        for basisA in bases:
+            for basisB in bases:
+                dim = [2, 1]
+                modernTransform = basis_transform_matrix(basisA, basisB, dim)
+                legacyTransform = basis_transform_matrix(basisA, basisB, dim)
+                self.assertArraysAlmostEqual(modernTransform, legacyTransform)
+
+
+    def assertBasesAlmostEqual(self, a, b):
+        for mxA, mxB in zip(a, b):
+            self.assertArraysAlmostEqual(mxA, mxB)
+
+    def test_matrices(self):
+        basisDimPairs = [
+                ('std', [2]),
+                ('gm',  [2, [2,1]]),
+                ('pp',  [2]),
+                ('qt',  [3])]
+        for basis, dims in basisDimPairs:
+            for dim in dims:
+                modernMxs = basis_matrices(basis, dim)
+                legacyMxs = legacy.basis_matrices(basis, dim)
+                self.assertBasesAlmostEqual(modernMxs, legacyMxs)
+
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
