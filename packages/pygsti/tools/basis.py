@@ -19,15 +19,7 @@ class Basis(object):
         self.matrixGroups = []
         for blockDim in blockDims:
             self.matrixGroups.append(matrices_creator(blockDim))
-        self.matrices = [mx for mxlist in self.matrixGroups for mx in mxlist]
-        '''
-        print('blockdims:')
-        print(blockDims)
-        print('blockdims squared:')
-        print([bd ** 2 for bd in blockDims])
-        '''
-        
-        #assert len(matrices) > 0, 'Need at least one matrix in basis'
+        self.matrices = matrices_creator(dim)
 
         self.name = name
         self.real = real
@@ -182,13 +174,26 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
     from_basis = build_basis(from_basis, dimOrBlockDims)
     to_basis   = build_basis(to_basis, dimOrBlockDims)
 
+    ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
+    '''
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-        ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
+        stdMx = _np.dot(from_basis.get_to_std(), mx)
+        toMx  = _np.dot(to_basis.get_from_std(), stdMx)
+        ret = toMx
+        # from std_to_gm:
+        # gmToStd = gm_to_std_transform_matrix(dimOrBlockDims)
+        # stdToGM = _np.linalg.inv(gmToStd)
+        # gm      = _np.dot( stdToGM, _np.dot( mxInStdBasis, gmToStd ) 
+        # pp      = _np.dot( stdToPP, _np.dot( mxInStdBasis, ppToStd ) )
+        #           _np.dot( ppToStd, _np.dot( mxInPauliProdBasis, stdToPP ) )
+        #ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
+        #ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
     elif len(mx.shape) == 1 or \
         (len(mx.shape) == 2 and mx.shape[1] == 1):
         ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
     else:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+    '''
     if not to_basis.real:
         return ret
     if _np.linalg.norm(_np.imag(ret)) > 1e-8:

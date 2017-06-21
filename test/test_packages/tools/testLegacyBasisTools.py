@@ -62,11 +62,9 @@ class BasisBaseTestCase(BaseTestCase):
                 print(basis, dim)
                 modernMxs = basis_matrices(basis, dim)
                 legacyMxs = legacy.basis_matrices(basis, dim)
-                modernMxs = [mx for mxlist in modernMxs.matrices for mx in mxlist]
-                self.assertBasesAlmostEqual(modernMxs.matrices, legacyMxs)
-
-
-
+                pprint(modernMxs.matrices)
+                pprint(legacyMxs)
+                self.assertBasesAlmostEqual(modernMxs, legacyMxs)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
