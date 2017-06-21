@@ -2581,7 +2581,6 @@ class GateSet(object):
         return s
 
 
-
     def copy(self):
         """
         Copy this gateset

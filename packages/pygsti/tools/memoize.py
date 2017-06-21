@@ -10,7 +10,7 @@ def memoize(obj):
 
     @wraps(obj)
     def memoizer(*args, **kwargs):
-        key = str(args) + json.dumps(kwargs, sorted_keys=True)
+        key = str(args) + json.dumps(kwargs, sort_keys=True)
         if key not in cache:
             cache[key] = obj(*args, **kwargs)
         return cache[key]

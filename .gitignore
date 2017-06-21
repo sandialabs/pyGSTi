@@ -13,6 +13,7 @@ hooks/etc/permissions.yml
 *comm_output*.txt
 **offline/
 **tutorial_files
+*.cache
 
 # Test Metadata #
 #################
@@ -77,4 +78,7 @@ scripts/profiling/report_profiling/Analyze+2Q+data.py
 scripts/profiling/report_profiling/*.html
 scripts/profiling/report_profiling/standard_report.py
 scripts/profiling/report_profiling/tp_report.py
+
+# Profiling data #
+scripts/profiling/output
 

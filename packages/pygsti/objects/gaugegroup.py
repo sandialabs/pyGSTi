@@ -8,6 +8,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+from ..tools.memoize import memoize
+
 class GaugeGroup(object):
     def __init__(self):
         pass
@@ -50,9 +52,11 @@ class GateGaugeGroup(GaugeGroup):
             self._inv_matrix = None
             GaugeGroup.element.__init__(self)
 
+        @memoize
         def get_transform_matrix(self): 
             return _np.asarray(self.gate)
 
+        @memoize
         def get_transform_matrix_inverse(self): 
             if self._inv_matrix is None:
                 self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))

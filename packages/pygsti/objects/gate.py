@@ -57,7 +57,7 @@ def optimize_gate(gateToOptimize, targetGate):
     targetMatrix = _np.asarray(targetGate)
     def objective_func(param_vec):
         gateToOptimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(gateToOptimize-targetMatrix)
+        return _mt.frobeniusnorm(gateToOptimize - targetMatrix)
 
     x0 = gateToOptimize.to_vector()
     minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,

@@ -42,6 +42,7 @@ import collections as _collections
 import numpy as _np
 import scipy.linalg as _spl
 from . import matrixtools as _mt
+from .memoize import memoize
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -301,7 +302,7 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
 
     return lblList
 
-
+@memoize
 def std_matrices(dimOrBlockDims):
     """
     Get the elements of the matrix unit, or "standard", basis
@@ -576,6 +577,7 @@ def _GetGellMannNonIdentityDiagMxs(dimension):
 
     return listOfMxs
 
+@memoize
 def gm_matrices_unnormalized(dimOrBlockDims):
     """
     Get the elements of the generalized Gell-Mann
@@ -642,7 +644,7 @@ def gm_matrices_unnormalized(dimOrBlockDims):
     else:
         raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
-
+@memoize
 def gm_matrices(dimOrBlockDims):
     """
     Get the normalized elements of the generalized Gell-Mann
@@ -674,6 +676,7 @@ def gm_matrices(dimOrBlockDims):
         mx *= 1/sqrt2
     return mxs
 
+@memoize
 def gm_to_std_transform_matrix(dimOrBlockDims):
     """
     Construct the matrix which transforms a gate matrix in
@@ -773,7 +776,6 @@ def std_to_gm(mxInStdBasis, dimOrBlockDims=None):
 
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
-
 def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
     """
     Convert a gate matrix in the Gell-Mann basis of a
@@ -812,7 +814,7 @@ def gm_to_std(mxInGellMannBasis, dimOrBlockDims=None):
 
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
-
+@memoize
 def pp_matrices(dim, maxWeight=None):
     """
     Get the elements of the Pauil-product basis
@@ -887,7 +889,7 @@ def pp_matrices(dim, maxWeight=None):
 
     return matrices
 
-
+@memoize
 def pp_to_std_transform_matrix(dimOrBlockDims):
     """
     Construct the matrix which transforms a gate matrix in
@@ -934,7 +936,6 @@ def pp_to_std_transform_matrix(dimOrBlockDims):
 
     assert(start == gateDim)
     return ppToStd
-
 
 def std_to_pp(mxInStdBasis, dimOrBlockDims=None):
     """
@@ -1030,7 +1031,7 @@ def pp_to_std(mxInPauliProdBasis, dimOrBlockDims=None):
 
     else: raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
-
+@memoize
 def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
     """
     Get the elements of a special basis spanning the density-matrix space of
@@ -1082,7 +1083,7 @@ def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
     
     return qt_mxs
 
-
+@memoize
 def qt_to_std_transform_matrix(dimOrBlockDims):
     """
     Construct the matrix which transforms a gate matrix in
@@ -1359,7 +1360,7 @@ def qt_to_pp(mxInQutritBasis, dimOrBlockDims=None):
     """
     return std_to_pp(qt_to_std(mxInQutritBasis, dimOrBlockDims), dimOrBlockDims)
 
-
+@memoize
 def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
     """
     Get the elements of the specifed basis-type which
@@ -1400,6 +1401,7 @@ def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
     raise ValueError("Invalid 'basis' argument: %s" % basis)
     
 
+@memoize
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
     """
     Get the matrix which transforms (coverts) from one density-matrix-space

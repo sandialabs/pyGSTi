@@ -2,6 +2,8 @@
 import subprocess, sys
 
 def main(args):
+    if len(args) == 2:
+        args = [3] + args
     assert len(args) == 3
     subprocess.call('python{} -m cProfile -s cumtime {} 2>&1 |  tee {}'.format(
         args[0], args[1], args[2]), shell=True)
