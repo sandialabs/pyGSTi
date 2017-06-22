@@ -360,7 +360,7 @@ def predicted_RB_decay_parameter(gs,gs_target,d=2):
     p = E[1]
     return p
 
-def RB_gauge(gs,gs_target):
+def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     """
     Computes the gauge transformation required so that, when the gateset is transformed
     via this gauge-transformation, the RB number (as predicted by the function 
@@ -377,13 +377,25 @@ def RB_gauge(gs,gs_target):
   
     gs_target : Gateset
         The target gateset corresponding to gs.
-
+                
+    mxBasis : {"std","gm","pp"}, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    weighting : float, optional
+        Must be non-zero. A weighting on the eigenvector with eigenvalue that
+        is the RB decay parameter, in the sum of the this eigenvector and the
+        eigenvector with eigenvalue of 1 that defines the l_operator. The value
+        of this factor should not change whether this l_operator transforms into
+        a gauge in which r = AGsI, but it *might* impact on other properties of the
+        gates in that gauge (certainly in some cases its value is entirely irrelevant).
+        
     Returns
     -------    
     l_operator: array
         The matrix defining the gauge-transformation.
         
-    """
+    """                    
     gam, vecs = _np.linalg.eig(L_matrix(gs,gs_target))
     absgam = abs(gam)
     index_max = _np.argmax(absgam)
@@ -410,13 +422,14 @@ def RB_gauge(gs,gs_target):
         print("Warning: There is more than one significant exponential in RB decay.")
         print("RB theory may not apply")
 
-    vec_l_operator = 1.0*vecs[:,index_max] + decay_constant.real*vecs[:,index_2ndmax]
-    if _np.amax(vec_l_operator.imag) > 10**(-12):
-        print("Warning: the RB gauge transform has significant imaginary component.")
-        # Note -- Tim is not certain that it should always be real when gates are in
-        # the gm/pp basis, but he thinks that is probably the case, so this warning is
-        # likely useful.
-    else:
+    vec_l_operator = vecs[:,index_max] + weighting*vecs[:,index_2ndmax]
+    
+    if mxBasis is None:
+        mxBasis = gs.get_basis_name()
+    assert(mxBasis=='pp' or mxBasis=='gm' or mxBasis=='std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    
+    if mxBasis is 'pp' or 'gm':
+        assert(_np.amax(vec_l_operator.imag) < 10**(-15)), "If 'gm' or 'pp' basis, RB gauge matrix should be real."
         vec_l_operator = vec_l_operator.real
         
     vec_l_operator[abs(vec_l_operator) < 10**(-15)] = 0.
@@ -424,7 +437,7 @@ def RB_gauge(gs,gs_target):
     
     return l_operator
 
-def transform_to_RB_gauge(gs,gs_target):
+def transform_to_RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     """
     Transforms a GateSet into the "RB gauge" (see above), as introduced in  
     arXiv:1702.01853. This gauge is a function of both the gateset and its 
@@ -440,14 +453,26 @@ def transform_to_RB_gauge(gs,gs_target):
   
     gs_target : Gateset
         The target gateset corresponding to gs.
+                                
+    mxBasis : {"std","gm","pp"}, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    weighting : float, optional
+        Must be non-zero. A weighting on the eigenvector with eigenvalue that
+        is the RB decay parameter, in the sum of the this eigenvector and the
+        eigenvector with eigenvalue of 1 that defines the l_operator. The value
+        of this factor should not change whether this l_operator transforms into
+        a gauge in which r = AGsI, but it *might* impact on other properties of the
+        gates in that gauge (certainly in some cases its value is entirely irrelevant).
 
     Returns
     -------   
     gs_in_RB_gauge: GateSet
         The gateset `gs` transformed into the "RB gauge".
         
-    """       
-    l = RB_gauge(gs,gs_target)
+    """            
+    l = RB_gauge(gs,gs_target,mxBasis=mxBasis,weighting=weighting)
     gs_in_RB_gauge = gs.copy()
     for gate in gs.gates.keys():
         gs_in_RB_gauge.gates[gate] = _np.dot(l,_np.dot(gs.gates[gate],_np.linalg.inv(l)))
