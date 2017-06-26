@@ -1,4 +1,4 @@
-from functools import partial, wraps
+from functools import wraps
 import json
 
 def memoize(obj):
