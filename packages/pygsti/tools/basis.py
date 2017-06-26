@@ -13,18 +13,17 @@ from .parameterized import parameterized
 class Basis(object):
     Constructors = dict()
 
-    def __init__(self, name, matrices_creator, dim, longname=None, real=True):
-        _, gateDim, blockDims = process_block_dims(dim)
-
-        self.matrixGroups = []
-        for blockDim in blockDims:
-            self.matrixGroups.append(matrices_creator(blockDim))
-        self.matrices = matrices_creator(dim)
+    def __init__(self, name, matrices, dim, longname=None, real=True):
+        matrices, matrixGroups, largeMatrices = matrices
+        assert len(matrices) > 0
+        self.matrices = matrices
+        self.matrixGroups = matrixGroups
+        self.largeMatrices = largeMatrices
 
         self.name = name
         self.real = real
         self.dim  = dim
-        self.gateDim = gateDim
+
         if longname is None:
             self.longname = self.name
         else:
@@ -72,21 +71,9 @@ class Basis(object):
 
     #@memoize
     def get_to_std(self):
-        toStd = _np.zeros( (self.gateDim, self.gateDim), 'complex' )
-
-        #Since a multi-block basis is just the direct sum of the individual block bases,
-        # transform mx is just the transfrom matrices of the individual blocks along the
-        # diagonal of the total basis transform matrix
-
-        start = 0
-        for mxs in self.matrixGroups:
-
-            l = len(mxs)
-            for j, mx in enumerate(mxs):
-                toStd[start:start+l,start+j] = mx.flatten()
-            start += l 
-
-        assert(start == self.gateDim)
+        toStd = self.largeMatrices[0]
+        for mx in self.largeMatrices[1:]:
+            toStd += mx
         return toStd
 
     #@memoize
@@ -164,7 +151,7 @@ def process_block_dims(dimOrBlockDims):
 
     return dmDim, gateDim, blockDims
 
-def get_conversion_mx(from_basis, to_basis, dimOrBlockDims):
+def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = build_basis(from_basis, dimOrBlockDims)
     to_basis   = build_basis(to_basis, dimOrBlockDims)
 
@@ -207,8 +194,8 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
 
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
-    toMx   = get_conversion_mx(from_basis, to_basis, dimOrBlockDims)
-    fromMx = get_conversion_mx(to_basis, from_basis, dimOrBlockDims)
+    toMx   = basis_transform_matrix(from_basis, to_basis, dimOrBlockDims)
+    fromMx = basis_transform_matrix(to_basis, from_basis, dimOrBlockDims)
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
         ret = _np.dot(toMx, _np.dot(mx, fromMx))
     else:
@@ -220,10 +207,38 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
+def create_matrices(f, dim):
+    _, gateDim, blockDims = process_block_dims(dim)
+
+    matrixGroups = []
+    for blockDim in blockDims:
+        matrixGroups.append(f(blockDim))
+    matrices = f(dim)
+    #Since a multi-block basis is just the direct sum of the individual block bases,
+    # transform mx is just the transfrom matrices of the individual blocks along the
+    # diagonal of the total basis transform matrix
+    largeMatrices = []
+
+    start = 0
+    for mxs in matrixGroups:
+        large = _np.zeros((gateDim, gateDim), 'complex' )
+
+        l = len(mxs)
+        for j, mx in enumerate(mxs):
+            large[start:start+l,start+j] = mx.flatten()
+        start += l 
+
+        largeMatrices.append(large)
+
+    assert(start == gateDim)
+    return matrices, matrixGroups, largeMatrices
+
 @parameterized
 def basis_constructor(f, name, longname, real=True):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return Basis(name, f, dim=args[0], longname=longname, real=real)
+        dim = args[0]
+        matrices = create_matrices(f, dim)
+        return Basis(name, matrices, dim, longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper

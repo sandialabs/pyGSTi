@@ -44,9 +44,7 @@ import collections as _collections
 import numpy as _np
 import scipy.linalg as _spl
 from . import matrixtools as _mt
-#from .memoize import memoize
-from .basis   import Basis, basis_constructor, change_basis
-from .basis   import get_conversion_mx as basis_transform_matrix
+from .basis   import Basis, basis_constructor, change_basis, basis_transform_matrix
 from .basis   import process_block_dims
 from .basis   import build_basis
 
