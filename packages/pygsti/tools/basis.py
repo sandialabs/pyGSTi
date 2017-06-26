@@ -170,16 +170,49 @@ def get_conversion_mx(from_basis, to_basis, dimOrBlockDims):
 
     return _np.dot(to_basis.get_from_std(), from_basis.get_to_std())
 
-def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
+def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix from one basis of a density matrix space
+    to another.
+
+    Parameters
+    ----------
+    mx : numpy array
+        The gate matrix (a 2D square array) in the `from_basis` basis.
+
+    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt).
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mx operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the `to_basis` basis.
+        Array size is the same as `mx`.
+    """
+    if from_basis == to_basis:
+        return mx.copy()
+    if dimOrBlockDims is None:
+        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        assert( dimOrBlockDims**2 == mx.shape[0] )
+
     from_basis = build_basis(from_basis, dimOrBlockDims)
     to_basis   = build_basis(to_basis,   dimOrBlockDims)
 
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+    toMx   = get_conversion_mx(from_basis, to_basis, dimOrBlockDims)
+    fromMx = get_conversion_mx(to_basis, from_basis, dimOrBlockDims)
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-        ret = _np.dot(from_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
+        ret = _np.dot(toMx, _np.dot(mx, fromMx))
     else:
-        ret = _np.dot(get_conversion_mx(from_basis, to_basis, dimOrBlockDims), mx)
+        ret = _np.dot(toMx, mx)
     if not to_basis.real:
         return ret
     if _np.linalg.norm(_np.imag(ret)) > 1e-8:

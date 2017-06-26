@@ -18,24 +18,34 @@ class BasisBaseTestCase(BaseTestCase):
                           [0,0,1,0],
                           [0,0,0,1]], 'complex')
         vecStd = np.array([1,0,0,0], 'complex')
-
+        items = [mxStd, vecStd]
         bases = ['std', 'gm', 'pp']
         dims  = [2]
 
-        for basisA in bases:
-            mxBasisA = change_basis(mxStd, 'std', basisA)
-            mxBasisALegacy = legacy.change_basis(mxStd, 'std', basisA)
-            self.assertArraysAlmostEqual(mxBasisA, mxBasisALegacy)
-            for basisB in bases:
-                print(basisA, basisB)
-                mxBasisB       = change_basis(mxBasisA, basisA, basisB)
-                mxBasisBLegacy = legacy.change_basis(mxBasisALegacy, basisA, basisB)
-                self.assertArraysAlmostEqual(mxBasisB, mxBasisBLegacy)
+        for item in items:
+            for basisA in bases:
+                itemBasisA       = change_basis(item, 'std', basisA)
+                itemBasisALegacy = legacy.change_basis(item, 'std', basisA)
+                self.assertArraysAlmostEqual(itemBasisA, itemBasisALegacy)
+                for basisB in bases:
+                    itemBasisB       = change_basis(itemBasisA, basisA, basisB)
+                    itemBasisBLegacy = legacy.change_basis(itemBasisALegacy, basisA, basisB)
+                    self.assertArraysAlmostEqual(itemBasisB, itemBasisBLegacy)
 
-                for dim in dims:
-                    modernTransform = basis_transform_matrix(basisA, basisB, dim)
-                    legacyTransform = basis_transform_matrix(basisA, basisB, dim)
-                    self.assertArraysAlmostEqual(modernTransform, legacyTransform)
+                    for dim in dims:
+                        modernTransform = basis_transform_matrix(basisA, basisB, dim)
+                        legacyTransform = basis_transform_matrix(basisA, basisB, dim)
+                        self.assertArraysAlmostEqual(modernTransform, legacyTransform)
+
+                    itemBasisC       = change_basis(itemBasisB, basisB, basisA)
+                    itemBasisCLegacy = legacy.change_basis(itemBasisBLegacy, basisB, basisA)
+                    self.assertArraysAlmostEqual(itemBasisC, itemBasisCLegacy)
+
+                    itemBasisD       = change_basis(itemBasisC, basisA, 'std')
+                    itemBasisDLegacy = legacy.change_basis(itemBasisCLegacy, basisA, 'std')
+                    self.assertArraysAlmostEqual(itemBasisD, item)
+                    self.assertArraysAlmostEqual(itemBasisDLegacy, item)
+
 
     def test_other(self):
         mxGM = np.array([[ 0.5       ,  0.        ,  0.        , -0.5        , 0.70710678],

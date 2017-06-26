@@ -152,7 +152,6 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         with self.assertRaises(ValueError):
             pygsti.jamiolkowski_iso_inv(choiStd, "std","foobar") #invalid gate basis
 
-
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std.gs_target)
         sumsOfNeg = pygsti.sums_of_negative_choi_evals(std.gs_target)
         magsOfNeg = pygsti.mags_of_negative_choi_evals(std.gs_target)

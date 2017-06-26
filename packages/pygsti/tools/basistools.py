@@ -45,8 +45,7 @@ import numpy as _np
 import scipy.linalg as _spl
 from . import matrixtools as _mt
 #from .memoize import memoize
-from .basis   import Basis, basis_constructor
-from .basis   import change_basis as _change_basis
+from .basis   import Basis, basis_constructor, change_basis
 from .basis   import get_conversion_mx as basis_transform_matrix
 from .basis   import process_block_dims
 from .basis   import build_basis
@@ -649,49 +648,6 @@ def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
         assert(basis == 'pp')
         return Basis.create(basis, dimOrBlockDims, maxWeight=maxWeight)
     
-def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
-    """
-    Convert a gate matrix from one basis of a density matrix space
-    to another.
-
-    Parameters
-    ----------
-    mx : numpy array
-        The gate matrix (a 2D square array) in the `from_basis` basis.
-
-    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt).
-
-    dimOrBlockDims : int or list of ints, optional
-        Structure of the density-matrix space. If None, then assume
-        mx operates on a single-block density matrix space,
-        i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
-
-    Returns
-    -------
-    numpy array
-        The given gate matrix converted to the `to_basis` basis.
-        Array size is the same as `mx`.
-    """
-    if from_basis == to_basis:
-        return mx.copy()
-    if dimOrBlockDims is None:
-        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-        assert( dimOrBlockDims**2 == mx.shape[0] )
-    '''
-    if from_basis == 'std':
-        if to_basis == 'gm':
-            return std_to_gm(mx, dimOrBlockDims)
-        elif to_basis == 'pp':
-            return std_to_pp(mx, dimOrBlockDims)
-        elif to_basis == 'qt':
-            return std_to_qt(mx, dimOrBlockDims)
-        else:
-            raise TypeError('{} is not a valid basis'.format(to_basis))
-    '''
-    return _change_basis(mx, from_basis, to_basis, dimOrBlockDims)
 
 #TODO: maybe make these more general than for 1 or 2 qubits??
 #############################################################################
