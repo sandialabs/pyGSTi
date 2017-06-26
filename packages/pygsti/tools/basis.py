@@ -172,28 +172,16 @@ def get_conversion_mx(from_basis, to_basis, dimOrBlockDims):
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
     from_basis = build_basis(from_basis, dimOrBlockDims)
-    to_basis   = build_basis(to_basis, dimOrBlockDims)
+    to_basis   = build_basis(to_basis,   dimOrBlockDims)
 
-    ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
-    '''
-    if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-        stdMx = _np.dot(from_basis.get_to_std(), mx)
-        toMx  = _np.dot(to_basis.get_from_std(), stdMx)
-        ret = toMx
-        # from std_to_gm:
-        # gmToStd = gm_to_std_transform_matrix(dimOrBlockDims)
-        # stdToGM = _np.linalg.inv(gmToStd)
-        # gm      = _np.dot( stdToGM, _np.dot( mxInStdBasis, gmToStd ) 
-        # pp      = _np.dot( stdToPP, _np.dot( mxInStdBasis, ppToStd ) )
-        #           _np.dot( ppToStd, _np.dot( mxInPauliProdBasis, stdToPP ) )
-        #ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
-        #ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
-    elif len(mx.shape) == 1 or \
-        (len(mx.shape) == 2 and mx.shape[1] == 1):
-        ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
-    else:
+    if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
-    '''
+    if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
+        ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, to_basis.get_to_std()))
+    else:
+        ret = _np.dot(get_conversion_mx(from_basis, to_basis, dimOrBlockDims), mx)
+        #ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
+
     if not to_basis.real:
         return ret
     if _np.linalg.norm(_np.imag(ret)) > 1e-8:

@@ -4,7 +4,6 @@ import numpy as np
 import scipy
 import pygsti
 
-import pygsti.tools.basistools as basistools
 from pygsti.tools.basistools import change_basis, basis_matrices, basis_transform_matrix
 
 from . import legacy_basis_tools as legacy
@@ -28,8 +27,9 @@ class BasisBaseTestCase(BaseTestCase):
             mxBasisALegacy = legacy.change_basis(mxStd, 'std', basisA)
             self.assertArraysAlmostEqual(mxBasisA, mxBasisALegacy)
             for basisB in bases:
+                print(basisA, basisB)
                 mxBasisB       = change_basis(mxBasisA, basisA, basisB)
-                mxBasisBLegacy = legacy.change_basis(mxBasisA, basisA, basisB)
+                mxBasisBLegacy = legacy.change_basis(mxBasisALegacy, basisA, basisB)
                 self.assertArraysAlmostEqual(mxBasisB, mxBasisBLegacy)
 
                 for dim in dims:

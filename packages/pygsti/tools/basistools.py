@@ -680,6 +680,17 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     if dimOrBlockDims is None:
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
         assert( dimOrBlockDims**2 == mx.shape[0] )
+    '''
+    if from_basis == 'std':
+        if to_basis == 'gm':
+            return std_to_gm(mx, dimOrBlockDims)
+        elif to_basis == 'pp':
+            return std_to_pp(mx, dimOrBlockDims)
+        elif to_basis == 'qt':
+            return std_to_qt(mx, dimOrBlockDims)
+        else:
+            raise TypeError('{} is not a valid basis'.format(to_basis))
+    '''
     return _change_basis(mx, from_basis, to_basis, dimOrBlockDims)
 
 #TODO: maybe make these more general than for 1 or 2 qubits??
