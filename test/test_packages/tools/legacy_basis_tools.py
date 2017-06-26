@@ -1089,6 +1089,7 @@ def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
 
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    print('legacy change basis')
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.

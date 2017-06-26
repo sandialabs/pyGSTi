@@ -177,11 +177,9 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims):
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-        ret = _np.dot(to_basis.get_from_std(), _np.dot(mx, to_basis.get_to_std()))
+        ret = _np.dot(from_basis.get_from_std(), _np.dot(mx, from_basis.get_to_std()))
     else:
         ret = _np.dot(get_conversion_mx(from_basis, to_basis, dimOrBlockDims), mx)
-        #ret = _np.dot(to_basis.get_from_std(), _np.dot(from_basis.get_to_std(), mx))
-
     if not to_basis.real:
         return ret
     if _np.linalg.norm(_np.imag(ret)) > 1e-8:

@@ -86,7 +86,6 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-
     #first, get gate matrix into std basis
     gateMx = _np.asarray(gateMx)
     gateMxInStdBasis = _bt.change_basis(gateMx, gateMxBasis, "std", dimOrStateSpaceDims)

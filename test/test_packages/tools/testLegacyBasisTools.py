@@ -37,6 +37,19 @@ class BasisBaseTestCase(BaseTestCase):
                     legacyTransform = basis_transform_matrix(basisA, basisB, dim)
                     self.assertArraysAlmostEqual(modernTransform, legacyTransform)
 
+    def test_other(self):
+        mxGM = np.array([[ 0.5       ,  0.        ,  0.        , -0.5        , 0.70710678],
+                         [ 0.        ,  0.        ,  0.        ,  0.         , 0.        ],
+                         [ 0.        ,  0.        ,  0.        ,  0.         , 0.        ],
+                         [-0.5       ,  0.        ,  0.        ,  0.5        , 0.70710678],
+                         [ 0.70710678,  0.        ,  0.        ,  0.70710678 , 0.        ]])
+        mxStd       = change_basis(mxGM, 'gm', 'std', [2,1])
+        mxStdLegacy = legacy.change_basis(mxGM, 'gm', 'std', [2,1])
+        print(mxGM)
+        print(mxStd)
+        print(mxStdLegacy)
+        self.assertArraysAlmostEqual(mxStd, mxStdLegacy)
+
     def test_block_dims(self):
         bases = ['gm', 'std']
         for basisA in bases:
@@ -45,6 +58,7 @@ class BasisBaseTestCase(BaseTestCase):
                 modernTransform = basis_transform_matrix(basisA, basisB, dim)
                 legacyTransform = basis_transform_matrix(basisA, basisB, dim)
                 self.assertArraysAlmostEqual(modernTransform, legacyTransform)
+                
 
 
     def assertBasesAlmostEqual(self, a, b):
