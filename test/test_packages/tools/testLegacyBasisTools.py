@@ -46,7 +46,6 @@ class BasisBaseTestCase(BaseTestCase):
                     self.assertArraysAlmostEqual(itemBasisD, item)
                     self.assertArraysAlmostEqual(itemBasisDLegacy, item)
 
-
     def test_other(self):
         mxGM = np.array([[ 0.5       ,  0.        ,  0.        , -0.5        , 0.70710678],
                          [ 0.        ,  0.        ,  0.        ,  0.         , 0.        ],

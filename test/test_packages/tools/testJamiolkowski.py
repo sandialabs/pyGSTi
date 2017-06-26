@@ -83,8 +83,8 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
                           [0,-1, 0, 0],
                           [0, 0, 0, 1]], 'complex')
 
-        mxStd = basistools.change_basis(mxGM, 'std', 'gm')
-        mxPP  = basistools.change_basis(mxGM, 'gm', 'std')
+        mxStd = basistools.change_basis(mxGM, 'gm', 'std')
+        mxPP  = basistools.change_basis(mxGM, 'gm', 'pp')
 
         choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")
@@ -143,13 +143,13 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         self.assertArraysAlmostEqual( fastGatePP, mxPP)
 
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso(mxStd, "foobar","gm") #invalid gate basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso(mxStd, "std","foobar") #invalid choi basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso_inv(choiStd, "foobar","gm") #invalid choi basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso_inv(choiStd, "std","foobar") #invalid gate basis
 
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std.gs_target)
