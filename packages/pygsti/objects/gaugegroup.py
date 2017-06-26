@@ -52,11 +52,9 @@ class GateGaugeGroup(GaugeGroup):
             self._inv_matrix = None
             GaugeGroup.element.__init__(self)
 
-        @memoize
         def get_transform_matrix(self): 
             return _np.asarray(self.gate)
 
-        @memoize
         def get_transform_matrix_inverse(self): 
             if self._inv_matrix is None:
                 self._inv_matrix = _np.linalg.inv(_np.asarray(self.gate))
