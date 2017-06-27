@@ -326,7 +326,7 @@ class Gate(object):
 
     def transform(self, S):
         """ Update gate G with inv(S) * G * S."""
-        raise NotImplementedError("This gate cannot be tranform()'d")
+        raise NotImplementedError("This gate cannot be transform()'d")
 
     def depolarize(self, amount):
         """ Depolarize gate by the given amount. """

@@ -30,7 +30,6 @@ class GaugeGroup(object):
         def to_vector(self): return _np.array([],'d')
         def from_vector(self,v): pass
 
-
 class GateGaugeGroup(GaugeGroup):
     def __init__(self, gate):
         self.gate = gate
