@@ -297,6 +297,9 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
+        std = basis_matrices('std', dimOrBlockDims)
+        return _np.dot(std.get_contract_mx(), _np.dot(mxInStdBasis, std.get_expand_mx()))
+        '''
         dmDim, _, blockDims = process_block_dims(dimOrBlockDims)
 
         N = dmDim**2 #dimension of space in which density matrix is not restricted (the "embedding" density matrix space)
@@ -315,7 +318,6 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
                 mx[fi,fj] = mxInStdBasis[i,j]
 
         # TESTING
-        '''
         print(dimOrBlockDims)
         std = basis_matrices('std', dimOrBlockDims)
         print(_np.array(mxInStdBasis))
@@ -326,8 +328,8 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
         #print(_np.dot(std.get_contract_mx(), mx))
         print(_np.dot(std.get_expand_mx(), _np.dot(mx, std.get_contract_mx())))
         1/0
-        '''
         # END TESTING
+        '''
 
         return mx
 
@@ -362,23 +364,8 @@ def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
         assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mxInStdBasis
     else:
-        dmDim, gateDim, blockDims = process_block_dims(dimOrBlockDims)
-
-        mx = _np.empty((gateDim,gateDim), 'complex')
-        indxMap = [] # maps gate row/col indices onto indices of un-restricted "expanded" matrix
-
-        start = 0
-        for blockDim in blockDims:
-            for i in range(start,start+blockDim):
-                for j in range(start,start+blockDim):
-                    indxMap.append( dmDim*i + j ) # index of (i,j) element when vectorized in the un-restricted gate mx
-            start += blockDim
-
-        for i,fi in enumerate(indxMap):
-            for j,fj in enumerate(indxMap):
-                mx[i,j] = mxInStdBasis[fi,fj]
-
-        return mx
+        std = basis_matrices('std', dimOrBlockDims)
+        return _np.dot(std.get_expand_mx(), _np.dot(mxInStdBasis, std.get_contract_mx()))
 
 def _GetGellMannNonIdentityDiagMxs(dimension):
     d = dimension
