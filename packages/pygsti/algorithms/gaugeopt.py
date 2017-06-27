@@ -202,22 +202,24 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       final gauge-transformed gateset.
     """
 
-    '''
     if CPpenalty == 0 and \
        TPpenalty == 0 and \
        validSpamPenalty == 0 and \
        targetGateset is not None and \
        gatesMetric == "frobenius" and \
        spamMetric == "frobenius":
-           def objective_fn_ls(gs):
-               return gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
-           def objective_fn_wrap(x):
-               fx  = objective_fn_ls(x)
-               ret = _np.array([fx.real, fx.imag])
-               return fx.real
-           LSresult = gaugeopt_custom_least_squares(gateset, objective_fn_wrap, gauge_group,
-                                    maxiter, maxfev, tol, returnAll, verbosity)
-    '''
+
+       if itemWeights is None: 
+           itemWeights = {}
+       gateWeight = itemWeights.get('gates',1.0)
+       spamWeight = itemWeights.get('spam',1.0)
+       def objective_fn_ls(gs):
+           return gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+       def objective_fn_wrap(x):
+           fx  = objective_fn_ls(x)
+           return fx
+       LSresult = gaugeopt_custom_least_squares(gateset, objective_fn_wrap, gauge_group,
+                                maxiter, maxfev, tol, returnAll, verbosity)
     objective_fn = create_objective_fn(gateset, targetGateset,
             itemWeights, 
             CPpenalty, TPpenalty, 

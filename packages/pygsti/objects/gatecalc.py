@@ -1781,8 +1781,8 @@ class GateCalc(object):
                 resids.append(
                     wt * self.povm_identity.frobeniusdist2(
                     otherCalc.povm_identity, 'effect'))
-        return _np.array(resids)
-        #return _np.concatenate(resids)
+        resids = [r.flatten() for r in resids]
+        return _np.concatenate(resids)
 
     def jtracedist(self, otherCalc, transformMx=None):
         """
