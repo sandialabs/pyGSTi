@@ -314,6 +314,21 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
             for j,fj in enumerate(indxMap):
                 mx[fi,fj] = mxInStdBasis[i,j]
 
+        # TESTING
+        '''
+        print(dimOrBlockDims)
+        std = basis_matrices('std', dimOrBlockDims)
+        print(_np.array(mxInStdBasis))
+        #print(std.get_expand_mx())
+        #print(_np.dot(std.get_expand_mx().T, mxInStdBasis))
+        print(_np.dot(std.get_contract_mx(), _np.dot(mxInStdBasis, std.get_expand_mx())))
+        print(mx)
+        #print(_np.dot(std.get_contract_mx(), mx))
+        print(_np.dot(std.get_expand_mx(), _np.dot(mx, std.get_contract_mx())))
+        1/0
+        '''
+        # END TESTING
+
         return mx
 
 

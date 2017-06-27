@@ -7,22 +7,34 @@ import collections as _collections
 from numpy.linalg import inv as _inv
 import numpy as _np
 
+from pprint import pprint
+
 from .memoize       import memoize
 from .parameterized import parameterized
 
 class Basis(object):
     Constructors = dict()
 
-    def __init__(self, name, matrices, dim, longname=None, real=True):
-        matrices, matrixGroups, largeMatrices = matrices
-        assert len(matrices) > 0
-        self.matrices = matrices
-        self.matrixGroups = matrixGroups
-        self.largeMatrices = largeMatrices
+    def __init__(self, name, f, dim, longname=None, real=True):
+        _, gateDim, blockDims = process_block_dims(dim)
 
-        self.name = name
-        self.real = real
-        self.dim  = dim
+        self.matrixGroups = []
+        for blockDim in blockDims:
+            self.matrixGroups.append(f(blockDim))
+        self.matrices = f(dim)
+        self.gateDim  = gateDim
+        self.dim = dim
+
+        '''
+        if dim == [2, 1]:
+            print(self.get_composite_matrices())
+            print(self.get_expand_mx())
+            print(self.get_contract_mx())
+            1/0
+        '''
+
+        self.name     = name
+        self.real     = real
 
         if longname is None:
             self.longname = self.name
@@ -40,7 +52,7 @@ class Basis(object):
         self.labels = list(self._mxDict.keys())
 
     def __str__(self):
-        return '{} Basis (dim {}) : {}'.format(self.longname, self.dim, ', '.join(self.labels))
+        return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
 
     def __getitem__(self, index):
         return self.matrices[index]
@@ -58,7 +70,7 @@ class Basis(object):
             return _np.array_equal(self.matrices, other)
 
     def __hash__(self):
-        return hash((self.name, self.shape))
+        return hash((self.name, self.dim))
 
     #@memoize
     def is_normalized(self):
@@ -69,11 +81,55 @@ class Basis(object):
                 return False
         return True
 
+    def get_composite_matrices(self):
+        '''
+        Build the large composite matrices of a composite basis
+        ie for std basis with dim [2, 1], build
+        [[1 0 0]  [[0 1 0]  [[0 0 0]  [[0 0 0]  [[0 0 0]
+         [0 0 0]   [0 0 0]   [1 0 0]   [0 1 0]   [0 0 0]
+         [0 0 0]], [0 0 0]], [0 0 0]], [0 0 0]], [0 0 1]]
+        For a non composite basis, this just returns the basis matrices
+        '''
+        compMxs = []
+        start = 0
+        length = sum(mxs[0].shape[0] for mxs in self.matrixGroups)
+        for mxs in self.matrixGroups:
+            d = mxs[0].shape[0]
+            for mx in mxs:
+                compMx = _np.zeros((length, length), 'complex' )
+                compMx[start:start+d,start:start+d] = mx
+                compMxs.append(compMx)
+            start += d
+        assert(start == length)
+        return compMxs
+
+    def get_expand_mx(self):
+        x = sum(len(mxs) for mxs in self.matrixGroups)
+        y = sum(mxs[0].shape[0] for mxs in self.matrixGroups) ** 2
+        expandMx = _np.zeros((x, y), 'complex')
+        start = 0
+        for i, compMx in enumerate(self.get_composite_matrices()):
+            assert(len(compMx.flatten()) == y), '{} != {}'.format(len(compMx.flatten()), y)
+            expandMx[i,0:y] = compMx.flatten()
+        return expandMx
+
+    def get_contract_mx(self):
+        return self.get_expand_mx().T
+
     #@memoize
     def get_to_std(self):
-        toStd = self.largeMatrices[0]
-        for mx in self.largeMatrices[1:]:
-            toStd += mx
+        toStd = _np.zeros((self.gateDim, self.gateDim), 'complex' )
+        #Since a multi-block basis is just the direct sum of the individual block bases,
+        # transform mx is just the transfrom matrices of the individual blocks along the
+        # diagonal of the total basis transform matrix
+
+        start = 0
+        for mxs in self.matrixGroups:
+            l = len(mxs)
+            for j, mx in enumerate(mxs):
+                toStd[start:start+l,start+j] = mx.flatten()
+            start += l 
+        assert(start == self.gateDim)
         return toStd
 
     #@memoize
@@ -191,7 +247,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
 
     from_basis = build_basis(from_basis, dimOrBlockDims)
     to_basis   = build_basis(to_basis,   dimOrBlockDims)
-
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
     toMx   = basis_transform_matrix(from_basis, to_basis, dimOrBlockDims)
@@ -207,38 +262,11 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
-def create_matrices(f, dim):
-    _, gateDim, blockDims = process_block_dims(dim)
-
-    matrixGroups = []
-    for blockDim in blockDims:
-        matrixGroups.append(f(blockDim))
-    matrices = f(dim)
-    #Since a multi-block basis is just the direct sum of the individual block bases,
-    # transform mx is just the transfrom matrices of the individual blocks along the
-    # diagonal of the total basis transform matrix
-    largeMatrices = []
-
-    start = 0
-    for mxs in matrixGroups:
-        large = _np.zeros((gateDim, gateDim), 'complex' )
-
-        l = len(mxs)
-        for j, mx in enumerate(mxs):
-            large[start:start+l,start+j] = mx.flatten()
-        start += l 
-
-        largeMatrices.append(large)
-
-    assert(start == gateDim)
-    return matrices, matrixGroups, largeMatrices
-
 @parameterized
 def basis_constructor(f, name, longname, real=True):
     @wraps(f)
     def wrapper(*args, **kwargs):
         dim = args[0]
-        matrices = create_matrices(f, dim)
-        return Basis(name, matrices, dim, longname=longname, real=real)
+        return Basis(name, f, dim, longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper
