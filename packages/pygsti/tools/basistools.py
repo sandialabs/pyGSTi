@@ -37,6 +37,7 @@ Notes:
     constrained.  This makes gate matrix parameterization and optimization much more convenient
     in the "gm" or "pp" bases.
 """
+import functools    as _functools
 import itertools    as _itertools
 import numbers      as _numbers
 import collections  as _collections
@@ -47,7 +48,7 @@ from . import matrixtools as _mt
 
 from .basisconstructors import *
 from .basis import Basis, basis_constructor, change_basis, basis_transform_matrix
-from .basis import build_basis
+from .basis import build_basis, expand_from_direct_sum_mx, contract_to_direct_sum_mx
 from .dim   import Dim
 
 ## Pauli basis matrices
@@ -217,69 +218,8 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
     return lblList
 
 
-def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
-    """
-    Convert a gate matrix in the standard basis of a "direct-sum"
-    space to a matrix in the standard basis of the embedding space.
-
-    Parameters
-    ----------
-    mxInStdBasis : numpy array
-        Matrix of size N x N, where N is the dimension
-        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
-
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-
-    Returns
-    -------
-    numpy array
-        A M x M matrix, where M is the dimension of the
-        embedding density matrix space, i.e.
-        sum( dimOrBlockDims_i )^2
-    """
-    if dimOrBlockDims is None:
-        return mxInStdBasis
-    elif isinstance(dimOrBlockDims, _numbers.Integral):
-        assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
-        return mxInStdBasis
-    else:
-        std = basis_matrices('std', dimOrBlockDims)
-        return _np.dot(std.get_contract_mx(), _np.dot(mxInStdBasis, std.get_expand_mx()))
-
-
-def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
-    """
-    Convert a gate matrix in the standard basis of the
-    embedding space to a matrix in the standard basis
-    of the "direct-sum" space.
-
-    Parameters
-    ----------
-    mxInStdBasis : numpy array
-        Matrix of size M x M, where M is the dimension of the
-        embedding density matrix space, i.e.
-        sum( dimOrBlockDims_i )^2
-
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-
-    Returns
-    -------
-    numpy array
-        A N x N matrix, where where N is the dimension
-        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
-    """
-
-    # TODO: should we check if the dimensions being projected out are the identity?
-    if dimOrBlockDims is None:
-        return mxInStdBasis
-    elif isinstance(dimOrBlockDims, _numbers.Integral):
-        assert(mxInStdBasis.shape == (dimOrBlockDims,dimOrBlockDims) )
-        return mxInStdBasis
-    else:
-        std = basis_matrices('std', dimOrBlockDims)
-        return _np.dot(std.get_expand_mx(), _np.dot(mxInStdBasis, std.get_contract_mx()))
+expand_from_std_direct_sum_mx = _functools.partial(expand_from_direct_sum_mx, basis='std')
+contract_to_std_direct_sum_mx = _functools.partial(contract_to_direct_sum_mx, basis='std')
 
 def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
     """

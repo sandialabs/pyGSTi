@@ -199,3 +199,66 @@ def basis_constructor(f, name, longname, real=True):
         return Basis(name, f, *args, longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper
+
+def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
+    """
+    Convert a gate matrix in an arbitrary basis of a "direct-sum"
+    space to a matrix in the same basis of the embedding space.
+
+    Parameters
+    ----------
+    mx: numpy array
+        Matrix of size N x N, where N is the dimension
+        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
+
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    Returns
+    -------
+    numpy array
+        A M x M matrix, where M is the dimension of the
+        embedding density matrix space, i.e.
+        sum( dimOrBlockDims_i )^2
+    """
+    if dimOrBlockDims is None:
+        return mx
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
+        assert(mx.shape == (dimOrBlockDims, dimOrBlockDims) )
+        return mx
+    else:
+        basisobj = build_basis(basis, dimOrBlockDims)
+        return _np.dot(basisobj.get_contract_mx(), _np.dot(mx, basisobj.get_expand_mx()))
+
+def contract_to_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
+    """
+    Convert a gate matrix in an arbitrary basis of the
+    embedding space to a matrix in the same basis
+    of the "direct-sum" space.
+
+    Parameters
+    ----------
+    mxInStdBasis : numpy array
+        Matrix of size M x M, where M is the dimension of the
+        embedding density matrix space, i.e.
+        sum( dimOrBlockDims_i )^2
+
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    Returns
+    -------
+    numpy array
+        A N x N matrix, where where N is the dimension
+        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
+    """
+
+    # TODO: should we check if the dimensions being projected out are the identity?
+    if dimOrBlockDims is None:
+        return mx
+    elif isinstance(dimOrBlockDims, _numbers.Integral):
+        assert(mx.shape == (dimOrBlockDims,dimOrBlockDims) )
+        return mx
+    else:
+        basisobj = build_basis(basis, dimOrBlockDims)
+        return _np.dot(basisobj.get_expand_mx(), _np.dot(mx, basisobj.get_contract_mx()))
