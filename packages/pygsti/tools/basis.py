@@ -21,27 +21,19 @@ class Basis(object):
         self.matrixGroups = []
         for blockDim in blockDims:
             self.matrixGroups.append(f(blockDim))
-        self.matrices = f(dim)
-        self.gateDim  = gateDim
-        self.dim = dim
-
-        self.name     = name
-        self.real     = real
+        self.matrices  = f(dim)
+        self.gateDim   = gateDim
+        self.dim       = dim
+        self.blockDims = tuple(blockDims)
+        self.name      = name
+        self.real      = real
 
         if longname is None:
             self.longname = self.name
         else:
             self.longname = longname
 
-        self._mxDict = OrderedDict()
-        for i, mx in enumerate(self.matrices):
-            if isinstance(mx, tuple):
-                label, mx = mx
-            else:
-                label = 'M{}{}'.format(self.name, i)
-            self._mxDict[label] = mx
-        self.matrices = list(self._mxDict.values())
-        self.labels = list(self._mxDict.keys())
+        self.labels = ['M{}{}'.format(self.name, i) for i in range(len(self.matrices))]
 
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
@@ -62,9 +54,9 @@ class Basis(object):
             return _np.array_equal(self.matrices, other)
 
     def __hash__(self):
-        return hash((self.name, self.dim))
+        return hash((self.name, self.blockDims))
 
-    #@memoize
+    @memoize
     def is_normalized(self):
         for mx in self.matrices:
             t = _np.trace(_np.dot(mx, mx))
@@ -73,6 +65,7 @@ class Basis(object):
                 return False
         return True
 
+    @memoize
     def get_composite_matrices(self):
         '''
         Build the large composite matrices of a composite basis
@@ -95,6 +88,7 @@ class Basis(object):
         assert(start == length)
         return compMxs
 
+    @memoize
     def get_expand_mx(self):
         x = sum(len(mxs) for mxs in self.matrixGroups)
         y = sum(mxs[0].shape[0] for mxs in self.matrixGroups) ** 2
@@ -108,7 +102,7 @@ class Basis(object):
     def get_contract_mx(self):
         return self.get_expand_mx().T
 
-    #@memoize
+    @memoize
     def get_to_std(self):
         toStd = _np.zeros((self.gateDim, self.gateDim), 'complex' )
         #Since a multi-block basis is just the direct sum of the individual block bases,
@@ -124,7 +118,7 @@ class Basis(object):
         assert(start == self.gateDim)
         return toStd
 
-    #@memoize
+    @memoize
     def get_from_std(self):
         return _inv(self.get_to_std())
 
