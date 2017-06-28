@@ -280,7 +280,7 @@ class BasisBaseTestCase(BaseTestCase):
         vec = np.zeros(shape=(2,))
         for basis in {'gm', 'pp', 'std'}:
             basistools.vec_to_stdmx(vec, basis)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             basistools.vec_to_stdmx(vec, 'akdfj;ladskf')
 
     def test_single_qubit_gate_matrix(self):

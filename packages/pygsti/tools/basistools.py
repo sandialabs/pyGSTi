@@ -348,149 +348,37 @@ def unitary_to_pauligate_2q(U):
     return op_mx
 
 
-def vec_to_stdmx(v, basis):
+def vec_to_stdmx(v, basis, keep_complex=False):
     """
-    Convert a vector in the given basis to a matrix in the standard basis.
-
-    A convenience function for calling [pp,gm,std]vec_to_stdmx(v) based on
-    the value of basis.
-
+    Convert a vector in any basis to
+     a matrix in the standard basis.
 
     Parameters
     ----------
     v : numpy array
-        The vector
-
-    basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret v ("gm" = Gell-Mann,
-        "pp" = Pauli-product, "std" = matrix unit, "qt" = qutrit, or standard).
+        The vector length 4 or 16 respectively.
 
     Returns
     -------
     numpy array
+        The matrix, 2x2 or 4x4 depending on nqubits 
     """
-    if basis == "pp":   return ppvec_to_stdmx(v)
-    elif basis == "gm": return gmvec_to_stdmx(v)
-    elif basis == "std": return stdvec_to_stdmx(v)
-    elif basis == "qt": return qtvec_to_stdmx(v)
-    else: raise ValueError("Invalid basis specifier: %s" % basis)
-
-def ppvec_to_stdmx(v):
-    """
-    Convert a vector in the Pauli basis to a matrix
-     in the standard basis.
-
-    Parameters
-    ----------
-    v : numpy array
-        The vector, length 4 (1Q) or 16 (2Q)
-
-    Returns
-    -------
-    numpy array
-        The matrix, shape (2,2) or (4,4) respectively.
-    """
-
-    # nQubits = _np.log2(len(v)) / 2  ( n qubits = 2^n x 2^n mx ; len(v) = 2^2n -> n = log2(len(v))/2 )
-    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    ppMxs    = pp_matrices(dim)
+    dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+    mxs = basis_matrices(basis, dim)
 
     ret = _np.zeros( (dim,dim), 'complex' )
-    for i,ppMx in enumerate(ppMxs):
-        ret += float(v[i])*ppMx
-    return ret
-
-
-def gmvec_to_stdmx(v,keep_complex=False):
-    """
-    Convert a vector in the Gell-Mann basis to a matrix
-     in the standard basis.
-
-    Parameters
-    ----------
-    v : numpy array
-        The vector (length must be a perfect square, e.g. 4, 9, 16, ...)
-
-    keep_complex : bool, optional
-        If set to true, retains complex information in v.
-    Returns
-    -------
-    numpy array
-        The matrix, shape (2,2) or (4,4) respectively.
-    """
-
-    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2
-    gmMxs = gm_matrices(dim)
-
-    ret = _np.zeros( (dim,dim), 'complex' )
-    for i,gmMx in enumerate(gmMxs):
+    for i, mx in enumerate(mxs):
         if keep_complex:
-            ret += v[i] * gmMx
+            ret += v[i]*mx
         else:
-            ret += float(v[i])*gmMx
+            ret += float(v[i])*mx
     return ret
+gmvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='gm')
+ppvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='pp')
+qtvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='qt')
+stdvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='std')
 
-def qtvec_to_stdmx(v,keep_complex=False):
-    """
-    Convert a vector in the Qutrit basis to a matrix
-     in the standard basis.
-
-    Parameters
-    ----------
-    v : numpy array
-        The vector (length must equal 9)
-
-    keep_complex : bool, optional
-        If set to true, retains complex information in v.
-    Returns
-    -------
-    numpy array
-        The matrix, shape (3,3)
-    """
-    assert(len(v) == 9)
-    qtMxs = qt_matrices(3)
-
-    ret = _np.zeros( (3,3), 'complex' )
-    for i,qtMx in enumerate(qtMxs):
-        if keep_complex:
-            ret += v[i] * qtMx
-        else:
-            ret += float(v[i])*qtMx
-    return ret
-
-
-def stdvec_to_stdmx(v,keep_complex=False):
-    """
-    Convert a vector in the standard basis to a matrix
-     in the standard basis.
-
-    Parameters
-    ----------
-    v : numpy array
-        The vector, length 4 (1Q) or 16 (2Q)
-
-    keep_complex : bool, optional
-        If set to true, retains complex information in v.    
-    Returns
-    -------
-    numpy array
-        The matrix, shape (2,2) or (4,4) respectively.
-    """
-
-    # nQubits = _np.log2(len(v)) / 2  ( n qubits = 2^n x 2^n mx ; len(v) = 2^2n -> n = log2(len(v))/2 )
-    dim = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension
-    stdMxs = std_matrices(dim)
-
-    ret = _np.zeros( (dim,dim), 'complex' )
-    for i,stdMx in enumerate(stdMxs):
-        if keep_complex:
-            ret += v[i] * stdMx
-        else:
-            ret += float(v[i])*stdMx
-    return ret
-
-
-def stdmx_to_ppvec(m):
+def stdmx_to_vec(m, basis):
     """
     Convert a matrix in the standard basis to
      a vector in the Pauli basis.
@@ -508,67 +396,15 @@ def stdmx_to_ppvec(m):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
-    ppMxs = pp_matrices(dim)
-
+    mxs = basis_matrices(basis, dim)
     v = _np.empty((dim**2,1))
-    for i,ppMx in enumerate(ppMxs):
-        v[i,0] = _np.real(_mt.trace(_np.dot(ppMx,m)))
-
+    for i, mx in enumerate(mxs):
+        v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
     return v
 
-def stdmx_to_gmvec(m):
-    """
-    Convert a matrix in the standard basis to
-     a vector in the Gell-Mann basis.
-
-    Parameters
-    ----------
-    m : numpy array
-        The matrix, must be square.
-
-    Returns
-    -------
-    numpy array
-        The vector, length == number of elements in m
-    """
-
-    assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
-    dim = m.shape[0]
-    gmMxs = gm_matrices(dim)
-
-    v = _np.empty((dim**2,1))
-    for i,gmMx in enumerate(gmMxs):
-        v[i,0] = _np.real(_mt.trace(_np.dot(gmMx,m)))
-
-    return v
-
-
-def stdmx_to_stdvec(m):
-    """
-    Convert a matrix in the standard basis to
-     a vector in the standard basis.
-
-    Parameters
-    ----------
-    m : numpy array
-        The matrix, must be square.
-
-    Returns
-    -------
-    numpy array
-        The vector, length == number of elements in m
-    """
-
-    assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
-    dim = m.shape[0]
-    stdMxs = std_matrices(dim)
-
-    v = _np.empty((dim**2,1))
-    for i,stdMx in enumerate(stdMxs):
-        v[i,0] = _np.real(_mt.trace(_np.dot(stdMx,m)))
-
-    return v
-
+stdmx_to_ppvec = _functools.partial(stdmx_to_vec, basis='pp')
+stdmx_to_gmvec = _functools.partial(stdmx_to_vec, basis='gm')
+stdmx_to_stdvec = _functools.partial(stdmx_to_vec, basis='std')
 
 def single_qubit_gate(hx, hy, hz, noise=0):
     """
