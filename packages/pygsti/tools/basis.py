@@ -14,18 +14,17 @@ from .parameterized import parameterized
 
 from .dim import Dim
 
+# TODO: Docstrings
+
 class Basis(object):
     Constructors = dict()
 
-    def __init__(self, name, f, dim, longname=None, real=True):
-        self.dim = Dim(dim)
-
-        self.matrixGroups = []
-        for blockDim in self.dim.blockDims:
-            self.matrixGroups.append(f(blockDim))
-        self.matrices  = f(dim)
-        self.name      = name
-        self.real      = real
+    def __init__(self, name, matrices, matrixGroups, dim, longname=None, real=True):
+        self.matrices     = matrices
+        self.matrixGroups = matrixGroups
+        self.dim          = dim
+        self.name         = name
+        self.real         = real
 
         if longname is None:
             self.longname = self.name
@@ -48,6 +47,7 @@ class Basis(object):
 
     def __eq__(self, other):
         if isinstance(other, Basis):
+            #return self.name == other.name and self.dim == other.dim
             return _np.array_equal(self.matrices, other.matrices)
         else:
             return _np.array_equal(self.matrices, other)
@@ -64,7 +64,7 @@ class Basis(object):
                 return False
         return True
 
-    @memoize
+    #@memoize
     def get_composite_matrices(self):
         '''
         Build the large composite matrices of a composite basis
@@ -127,6 +127,30 @@ class Basis(object):
         if basisname in Basis.Constructors:
             return Basis.Constructors[basisname](dim, *args, **kwargs)
         raise NotImplementedError('No instructions to create basis: {} {}'.format(basisname, dim))
+
+# TODO: move this and other functions into the basis class somehow
+# Alternatively, use the numpy approach and provide both external and member functions
+# i.e.  a.reshape(*args) v np.reshape(a, *args)
+
+def build_composite_basis(basisDimPairs):
+    assert len(basisDimPairs) > 0, 'Need at least one basis-dim pair to compose'
+    bases = []
+    for basis, dimOrBlockDims in basisDimPairs:
+        bases.append(build_basis(basis, dimOrBlockDims))
+
+    dim           = Dim(0)
+    dim.dmDim     = sum(basis.dim.dmDim for basis in bases)
+    dim.gateDim   = sum(basis.dim.gateDim for basis in bases)
+    dim.blockDims = [bdim for basis in bases for bdim in basis.dim.blockDims] 
+    matrices      = []
+    matrixGroups  = [mx for basis in bases for group in bases.matrixGroups for mx in group]
+    name          = ','.join(basis.name for basis in bases)
+    longname      = ','.join(basis.longname for basis in bases)
+    real          = all(basis.real for basis in bases)
+
+    composite = Basis(name, matrices, matrixGroups, dim, real=real)
+    composite.matrices = composite.get_composite_matrices()
+    return composite
 
 def build_basis(basis, dimOrBlockDims):
     if isinstance(basis, Basis):
@@ -192,11 +216,18 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
-@parameterized
+@parameterized # this decorator takes additional arguments
 def basis_constructor(f, name, longname, real=True):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return Basis(name, f, *args, longname=longname, real=real)
+        assert len(args) > 0, 'Dim argument required for basis'
+        dimOrBlockDims = args[0]
+        dim = Dim(dimOrBlockDims)
+        matrixGroups = []
+        for blockDim in dim.blockDims:
+            matrixGroups.append(f(blockDim))
+        matrices = f(dimOrBlockDims)
+        return Basis(name, matrices, matrixGroups, dim, longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper
 
