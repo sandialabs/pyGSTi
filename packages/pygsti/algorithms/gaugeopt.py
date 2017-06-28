@@ -215,23 +215,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
 
-        '''
-        def create_jacobian_inner(gate):
-            def jacobian_inner(v):
-                dot = _np.dot
-
-                G      = gate.matrix()?
-                Gt     = target
-                S      = gate.get_element(v)
-                S_inv  = _np.linalg.inv(S)
-                dS     = S.get_deriv_wrt_params(v)
-                dS_inv = -1 * dot(_np.dot(Sinv, dS), Sinv)
-
-                inside  = dot(S_inv, dot(G, S)) - Gt
-                outside = dot(dS_inv, dot(G, S)) + dot(dot(S_inv, G), dS)
-                return 2 * dot(inside, outside)
-        '''
-
         def objective_fn_ls(gs):
             return gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
 
@@ -239,6 +222,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                                  maxiter, maxfev, tol, returnAll, verbosity)
         print(LSresult)
 
+    '''
     objective_fn = create_objective_fn(gateset, targetGateset,
             itemWeights, 
             CPpenalty, TPpenalty, 
@@ -248,6 +232,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     result = gaugeopt_custom(gateset, objective_fn, gauge_group,
                  method, maxiter, maxfev, tol, returnAll, verbosity)
     print(result.frobeniusdist(LSresult))
+    '''
+    result = LSresult
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -335,68 +321,95 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
     if bToStdout: print_obj_func(x0) #print initial point
 
     def jacobian(vec):
+        jacMx = _np.zeros((1300, 256))
+        
         gateJacs = []
         dot = _np.dot
-        print(vec.shape)
         gaugeGroupEl.from_vector(vec)
         # Do these two steps need to be done?
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
 
+        start = 9 # Skip prep params, which take up first ten elements?
+
         for i, (G, Gt) in enumerate(zip(gs.gates.values(), targetGateset.gates.values())):
-            print('G')
-            print(G.shape)
-            print('Gt')
-            print(Gt.shape)
+            #print(start + i)
+            # G, Gt, S, and S_inv are all 16x16 (dxd)
             S      = gaugeGroupEl.get_transform_matrix()
-            print('S')
-            print(S.shape)
             S_inv  = gaugeGroupEl.get_transform_matrix_inverse()
-            print('S_inv')
-            print(S_inv.shape)
+
+            # dS is 256x256 ((d*d)xlen(v)), len(v) = 256
             dS     = gaugeGroupEl.gate.deriv_wrt_params()
-            print('dS')
-            print(dS.shape)
+            #print('dS')
+            #print(dS.shape)
             #dS     = dS.reshape((16, 16, 256))
             # THIS RESHAPING IS NOT CORRECT
             dS     = dS.reshape((256, 16, 16))
-            print('dS')
-            print(dS.shape)
+            #print('dS')
+            #print(dS.shape)
             dS_inv = -1 * dot(_np.dot(S_inv, dS), S_inv)
-            print('dS_inv')
-            print(dS_inv.shape)
+            #print('dS_inv')
+            #print(dS_inv.shape)
             dS
             inside  = dot(S_inv, dot(G, S)) - Gt
-            print('inside')
-            print(inside.shape)
+            #print('inside')
+            #print(inside.shape)
             outside = dot(dS_inv, dot(G, S)) + dot(dot(S_inv, G), dS)
-            print('outside')
-            print(outside.shape)
+            #print('outside')
+            #print(outside.shape)
             #outside = outside.reshape((256, 16, 16))
             # THIS RESHAPING IS NOT CORRECT 
             outside = outside.reshape((16, 16, 256))
-            print('outside')
-            print(outside.shape)
+            #print('outside')
+            #print(outside.shape)
             gateJac = 2 * dot(inside, outside)
-            print('ret')
-            print(gateJac.shape)
-            print(i)
-            gateJacs.append(gateJac)
-        preJac = _np.array(gateJacs)
-        print('preJac')
-        print(preJac.shape)
-        # THIS RESHAPING IS NOT CORRECT 
-        jac = preJac.reshape((256, 1280))
-        print(jac)
-        print('jac')
-        print(jac.shape)
+            # THIS RESHAPING IS NOT CORRECT 
+            gateJac = gateJac.reshape((256, 256))
+            #print(gateJac)
+            #print(gateJac.shape)
+            jacMx[start + i*256 : start + (i+1)*256] = gateJac
+        #print(jacMx)
+        return jacMx
     #jacobian(x0)
 
-    minSol = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
+    minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
+    '''
+    minSoljac1 = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+                                max_nfev=maxfev, ftol=tol)
+    minSoljac2 = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+                                max_nfev=maxfev, ftol=tol)
+    minSol1    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
+                                max_nfev=maxfev, ftol=tol)
+    minSol2    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
+                                max_nfev=maxfev, ftol=tol)
+
+    gaugeGroupEl.from_vector(minSol1.x)
+    a = gateset.copy()
+    a.transform(gaugeGroupEl)
+    gaugeGroupEl.from_vector(minSol2.x)
+    b = gateset.copy()
+    b.transform(gaugeGroupEl)
+    gaugeGroupEl.from_vector(minSoljac1.x)
+    c = gateset.copy()
+    c.transform(gaugeGroupEl)
+    gaugeGroupEl.from_vector(minSoljac2.x)
+    d = gateset.copy()
+    d.transform(gaugeGroupEl)
+    print('baseline (same gateset)')
+    print(a.frobeniusdist(a))
+    print('different runs w/out jacobian')
+    print(a.frobeniusdist(b))
+    print('different runs w/ jacobian')
+    print(c.frobeniusdist(d))
+    print('no jacobian to jacobian')
+    print(a.frobeniusdist(c))
+    1/0
+    '''
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
+
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
