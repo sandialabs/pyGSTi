@@ -227,7 +227,7 @@ class BasisBaseTestCase(BaseTestCase):
 
     def test_basistools_misc(self):
         with self.assertRaises(TypeError):
-            basistools.process_block_dims("FooBar") #arg should be a list,tuple,or int
+            basistools.Dim("FooBar") #arg should be a list,tuple,or int
         basistools.pp_matrices([1])
 
     def test_basis_longname(self):

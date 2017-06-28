@@ -64,7 +64,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     numpy array
         The vector specified by vecExpr in the desired basis.
     """
-    _, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
+    _, gateDim, blockDims = _bt.Dim(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a
                                                          #Hilbert-space state index, so "reduced-std" basis
 
@@ -111,7 +111,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     numpy array
         The identity vector in the desired basis.
     """
-    _, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
+    _, gateDim, blockDims = _bt.Dim(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
@@ -161,7 +161,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Gate matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, _ , _ = _bt.process_block_dims(stateSpaceDims)
+    dmDim, _ , _ = _bt.Dim(stateSpaceDims)
     fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -454,7 +454,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
 
-    dmDim, gateDim, blockDims = _bt.process_block_dims(stateSpaceDims)
+    dmDim, gateDim, blockDims = _bt.Dim(stateSpaceDims)
     #fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block

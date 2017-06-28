@@ -37,16 +37,17 @@ Notes:
     constrained.  This makes gate matrix parameterization and optimization much more convenient
     in the "gm" or "pp" bases.
 """
-import itertools as _itertools
-import numbers as _numbers
-import collections as _collections
-
-import numpy as _np
+import itertools    as _itertools
+import numbers      as _numbers
+import collections  as _collections
+import numpy        as _np
 import scipy.linalg as _spl
+
 from . import matrixtools as _mt
-from .basis   import Basis, basis_constructor, change_basis, basis_transform_matrix
-from .basis   import process_block_dims
-from .basis   import build_basis
+
+from .basis import Basis, basis_constructor, change_basis, basis_transform_matrix
+from .basis import build_basis
+from .dim   import Dim
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -155,7 +156,7 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
     #Note: the loops constructing the labels in this function
     # must be in-sync with those for constructing the matrices
     # in std_matrices, gm_matrices, and pp_matrices.
-    _, _, blockDims = process_block_dims(dimOrBlockDims)
+    _, _, blockDims = Dim(dimOrBlockDims)
 
     lblList = []; start = 0
     if basis == "std":
@@ -257,7 +258,7 @@ def std_matrices(dimOrBlockDims):
     a single "1" entry amidst a background of zeros, and there
     are never "1"s in positions outside the block-diagonal structure.
     """
-    dmDim, gateDim, blockDims = process_block_dims(dimOrBlockDims)
+    dmDim, gateDim, blockDims = Dim(dimOrBlockDims)
 
     mxList = []; start = 0
     for blockDim in blockDims:
@@ -299,39 +300,6 @@ def expand_from_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
     else:
         std = basis_matrices('std', dimOrBlockDims)
         return _np.dot(std.get_contract_mx(), _np.dot(mxInStdBasis, std.get_expand_mx()))
-        '''
-        dmDim, _, blockDims = process_block_dims(dimOrBlockDims)
-
-        N = dmDim**2 #dimension of space in which density matrix is not restricted (the "embedding" density matrix space)
-        mx = _np.zeros( (N,N), 'complex') #zeros since all added basis elements are coherences which get completely collapsed
-        indxMap = [] # maps gate row/col indices onto indices of un-restricted "expanded" matrix
-
-        start = 0
-        for blockDim in blockDims:
-            for i in range(start,start+blockDim):
-                for j in range(start,start+blockDim):
-                    indxMap.append( dmDim*i + j ) # index of (i,j) element when vectorized in the un-restricted gate mx
-            start += blockDim
-
-        for i,fi in enumerate(indxMap):
-            for j,fj in enumerate(indxMap):
-                mx[fi,fj] = mxInStdBasis[i,j]
-
-        # TESTING
-        print(dimOrBlockDims)
-        std = basis_matrices('std', dimOrBlockDims)
-        print(_np.array(mxInStdBasis))
-        #print(std.get_expand_mx())
-        #print(_np.dot(std.get_expand_mx().T, mxInStdBasis))
-        print(_np.dot(std.get_contract_mx(), _np.dot(mxInStdBasis, std.get_expand_mx())))
-        print(mx)
-        #print(_np.dot(std.get_contract_mx(), mx))
-        print(_np.dot(std.get_expand_mx(), _np.dot(mx, std.get_contract_mx())))
-        1/0
-        # END TESTING
-        '''
-
-        return mx
 
 
 def contract_to_std_direct_sum_mx(mxInStdBasis, dimOrBlockDims):
@@ -435,8 +403,8 @@ def gm_matrices_unnormalized(dimOrBlockDims):
         assert(len(listOfMxs) == d**2)
         return listOfMxs
 
-    elif isinstance(dimOrBlockDims, _collections.Container):
-        dmDim, gateDim, blockDims = process_block_dims(dimOrBlockDims)
+    elif isinstance(dimOrBlockDims, _collections.Container) or isinstance(dimOrBlockDims, Dim):
+        dmDim, gateDim, blockDims = Dim(dimOrBlockDims)
 
         listOfMxs = []; start = 0
         for blockDim in blockDims:

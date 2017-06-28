@@ -12,19 +12,18 @@ from pprint import pprint
 from .memoize       import memoize
 from .parameterized import parameterized
 
+from .dim import Dim
+
 class Basis(object):
     Constructors = dict()
 
     def __init__(self, name, f, dim, longname=None, real=True):
-        _, gateDim, blockDims = process_block_dims(dim)
+        self.dim = Dim(dim)
 
         self.matrixGroups = []
-        for blockDim in blockDims:
+        for blockDim in self.dim.blockDims:
             self.matrixGroups.append(f(blockDim))
         self.matrices  = f(dim)
-        self.gateDim   = gateDim
-        self.dim       = dim
-        self.blockDims = tuple(blockDims)
         self.name      = name
         self.real      = real
 
@@ -54,7 +53,7 @@ class Basis(object):
             return _np.array_equal(self.matrices, other)
 
     def __hash__(self):
-        return hash((self.name, self.blockDims))
+        return hash((self.name, self.dim))
 
     @memoize
     def is_normalized(self):
@@ -99,12 +98,13 @@ class Basis(object):
             expandMx[i,0:y] = compMx.flatten()
         return expandMx
 
+    @memoize
     def get_contract_mx(self):
         return self.get_expand_mx().T
 
     @memoize
     def get_to_std(self):
-        toStd = _np.zeros((self.gateDim, self.gateDim), 'complex' )
+        toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
         #Since a multi-block basis is just the direct sum of the individual block bases,
         # transform mx is just the transfrom matrices of the individual blocks along the
         # diagonal of the total basis transform matrix
@@ -115,7 +115,7 @@ class Basis(object):
             for j, mx in enumerate(mxs):
                 toStd[start:start+l,start+j] = mx.flatten()
             start += l 
-        assert(start == self.gateDim)
+        assert(start == self.dim.gateDim)
         return toStd
 
     @memoize
@@ -133,65 +133,6 @@ def build_basis(basis, dimOrBlockDims):
         return basis
     else:
         return Basis.create(basis, dimOrBlockDims)
-
-def process_block_dims(dimOrBlockDims):
-    """
-    Performs basic processing on the dimensions
-      of a direct-sum space.
-
-    Parameters
-    ----------
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-        A list of integers designates the space is
-          the direct sum of spaces with the square of the given
-          matrix-block dimensions.  Matrices in this space are
-          represented in the standard basis by a block-diagonal
-          matrix with blocks of the given dimensions.
-        A single integer is equivalent to a list with a single
-          element, and so designates the space of matrices with
-          the given dimension, and thus a space of the dimension^2.
-
-    Returns
-    -------
-    dmDim : int
-        The (matrix) dimension of the overall density matrix
-        within which the block-diagonal density matrix described by
-        dimOrBlockDims is embedded, equal to the sum of the
-        individual block dimensions. (The overall density matrix
-        is a dmDim x dmDim matrix, and is contained in a space
-        of dimension dmDim**2).
-    gateDim : int
-        The (matrix) dimension of the "gate-space" corresponding
-        to the density matrix space, equal to the dimension
-        of the density matrix space, sum( ith-block_dimension^2 ).
-        Gate matrices are thus gateDim x gateDim dimensions.
-    blockDims : list of ints
-        Dimensions of the individual matrix-blocks.  The direct sum
-        of the matrix spaces (of dim matrix-block-dim^2) forms the
-        density matrix space.  Equals:
-        [ dimOrBlockDims ] : if dimOrBlockDims is a single int
-          dimOrBlockDims   : otherwise
-    """
-    # treat as state space dimensions
-    if isinstance(dimOrBlockDims, str):
-        raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
-    if isinstance(dimOrBlockDims, _collections.Container):
-        # *full* density matrix is dmDim x dmDim
-        dmDim = sum([blockDim for blockDim in dimOrBlockDims])
-
-        # gate matrices will be vecDim x vecDim
-        gateDim = sum([blockDim**2 for blockDim in dimOrBlockDims])
-
-        blockDims = dimOrBlockDims
-    elif isinstance(dimOrBlockDims, _numbers.Integral):
-        dmDim = dimOrBlockDims
-        gateDim = dimOrBlockDims**2
-        blockDims = [dimOrBlockDims]
-    else:
-        raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
-
-    return dmDim, gateDim, blockDims
 
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = build_basis(from_basis, dimOrBlockDims)
@@ -227,16 +168,19 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     """
     if from_basis == to_basis:
         return mx.copy()
+
     if dimOrBlockDims is None:
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
         assert( dimOrBlockDims**2 == mx.shape[0] )
 
-    from_basis = build_basis(from_basis, dimOrBlockDims)
-    to_basis   = build_basis(to_basis,   dimOrBlockDims)
+    dim = Dim(dimOrBlockDims)
+
+    from_basis = build_basis(from_basis, dim)
+    to_basis   = build_basis(to_basis,   dim)
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
-    toMx   = basis_transform_matrix(from_basis, to_basis, dimOrBlockDims)
-    fromMx = basis_transform_matrix(to_basis, from_basis, dimOrBlockDims)
+    toMx   = basis_transform_matrix(from_basis, to_basis, dim)
+    fromMx = basis_transform_matrix(to_basis, from_basis, dim)
     if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
         ret = _np.dot(toMx, _np.dot(mx, fromMx))
     else:
@@ -252,7 +196,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
 def basis_constructor(f, name, longname, real=True):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        dim = args[0]
-        return Basis(name, f, dim, longname=longname, real=real)
+        return Basis(name, f, *args, longname=longname, real=real)
     Basis.Constructors[name] = wrapper
     return wrapper
