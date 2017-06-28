@@ -283,6 +283,11 @@ class BasisBaseTestCase(BaseTestCase):
         with self.assertRaises(NotImplementedError):
             basistools.vec_to_stdmx(vec, 'akdfj;ladskf')
 
+    '''
+    def test_composite_basis(self):
+        comp = basistools.build_composite_basis([(2, 'std'), (1, 'std')])
+    '''
+
     def test_single_qubit_gate_matrix(self):
         expected = np.array([[1.00000000e+00, 2.77555756e-16, -2.28983499e-16, 0.00000000e+00],
                             [ -3.53885261e-16, -8.09667193e-01, 5.22395269e-01, -2.67473774e-01],

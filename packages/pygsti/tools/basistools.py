@@ -399,7 +399,10 @@ def stdmx_to_vec(m, basis):
     mxs = basis_matrices(basis, dim)
     v = _np.empty((dim**2,1))
     for i, mx in enumerate(mxs):
-        v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
+        if mxs.real:
+            v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
+        else:
+            v[i,0] = _mt.trace(_np.dot(mx,m))
     return v
 
 stdmx_to_ppvec = _functools.partial(stdmx_to_vec, basis='pp')
