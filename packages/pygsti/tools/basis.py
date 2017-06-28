@@ -34,13 +34,17 @@ class Basis(object):
             if isinstance(mx, tuple):
                 label, mx = mx
             else:
-                label = 'M{}'.format(i)
+                label = 'M{}{}'.format(self.name, i)
             self._mxDict[label] = mx
         self.matrices = list(self._mxDict.values())
         self.labels = list(self._mxDict.keys())
 
     def __str__(self):
-        return '{} Basis (dim {}) : {}'.format(self.longname, self.dim, ', '.join(self.labels))
+        return '{} Basis (dim {}) : {}\n{}\n{}'.format(
+                self.longname, self.dim, ', '.join(self.labels),
+                len(self.largeMatrices),
+                '\n'.join(map(str, self.largeMatrices)))
+                
 
     def __getitem__(self, index):
         return self.matrices[index]
