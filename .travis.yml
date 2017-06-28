@@ -9,7 +9,6 @@ branches:
     - master
     - beta
     - develop
-    - feature-basistools
 
 env:
     - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
