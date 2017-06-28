@@ -321,53 +321,51 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
     if bToStdout: print_obj_func(x0) #print initial point
 
     def jacobian(vec):
-        jacMx = _np.zeros((1300, 256))
-        
-        gateJacs = []
         dot = _np.dot
+        #jacMx = _np.zeros((1300, 256))
         gaugeGroupEl.from_vector(vec)
         # Do these two steps need to be done?
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
 
-        start = 9 # Skip prep params, which take up first ten elements?
-
         for i, (G, Gt) in enumerate(zip(gs.gates.values(), targetGateset.gates.values())):
-            #print(start + i)
-            # G, Gt, S, and S_inv are all 16x16 (dxd)
+            # G, Gt, S, and S_inv are all (dxd)
             S      = gaugeGroupEl.get_transform_matrix()
             S_inv  = gaugeGroupEl.get_transform_matrix_inverse()
 
-            # dS is 256x256 ((d*d)xlen(v)), len(v) = 256
+            # dS is ((d*d)xlen(v))
             dS     = gaugeGroupEl.gate.deriv_wrt_params()
-            #print('dS')
-            #print(dS.shape)
-            #dS     = dS.reshape((16, 16, 256))
-            # THIS RESHAPING IS NOT CORRECT
-            dS     = dS.reshape((256, 16, 16))
-            #print('dS')
-            #print(dS.shape)
-            dS_inv = -1 * dot(_np.dot(S_inv, dS), S_inv)
+            print('dS')
+            print(dS.shape)
+            # dS is (dxdxlen(v))
+            dS     = dS.reshape((16, 16, 256))
+            print('dS')
+            print(dS.shape)
+            right = dot(S_inv, dot(G, S))
+            print('right')
+            print(right.shape)
+            rolled = _np.rollaxis(dS, 2)
+            print('rolled dS')
+            print(rolled.shape)
+            right = dot(rolled, right)
+            print('right')
+            print(right.shape)
+
+            print('rolled')
+            print(rolled.shape)
+            left = dot(G, rolled)
+            print('left')
+            print(left.shape)
+            1/0 #BREAKPOINT
+            #dS_inv = -1 * dot(_np.dot(S_inv, dS), S_inv)
             #print('dS_inv')
             #print(dS_inv.shape)
             dS
             inside  = dot(S_inv, dot(G, S)) - Gt
             #print('inside')
             #print(inside.shape)
-            outside = dot(dS_inv, dot(G, S)) + dot(dot(S_inv, G), dS)
-            #print('outside')
-            #print(outside.shape)
-            #outside = outside.reshape((256, 16, 16))
-            # THIS RESHAPING IS NOT CORRECT 
-            outside = outside.reshape((16, 16, 256))
-            #print('outside')
-            #print(outside.shape)
-            gateJac = 2 * dot(inside, outside)
-            # THIS RESHAPING IS NOT CORRECT 
-            gateJac = gateJac.reshape((256, 256))
-            #print(gateJac)
-            #print(gateJac.shape)
-            jacMx[start + i*256 : start + (i+1)*256] = gateJac
+
+            #jacMx[start + i*256 : start + (i+1)*256] = gateJac
         #print(jacMx)
         return jacMx
     #jacobian(x0)
@@ -413,7 +411,8 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
-    else:  return newGateset
+    else:  
+        return newGateset
 
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
