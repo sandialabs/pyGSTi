@@ -816,7 +816,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     # Vertical lines
     for i in range(nX-1):
         #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and i-1 % 4 == 0) else 1
+        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
         
         gridlines.append(     
             {
@@ -829,7 +829,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     #Horizontal lines
     for i in range(nY-1):
         #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and i-1 % 4 == 0) else 1
+        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
 
         gridlines.append(     
             {
