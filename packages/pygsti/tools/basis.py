@@ -19,9 +19,14 @@ from .dim import Dim
 class Basis(object):
     Constructors = dict()
 
-    def __init__(self, name, matrices, matrixGroups, dim, longname=None, real=True):
-        self.matrices     = matrices
+    def __init__(self, name, matrixGroups, dim, longname=None, real=True):
+        assert len(matrixGroups) > 0, 'Cannot build a Basis with no matrices'
+        if not isinstance(matrixGroups[0], list): # If not nested lists (really just 'matrices')
+            matrixGroups = [matrixGroups]         # Then nest
+
         self.matrixGroups = matrixGroups
+        # Equivalent to matrices for non-composite bases
+        self.matrices     = self.get_composite_matrices() 
         self.dim          = dim
         self.name         = name
         self.real         = real
@@ -47,7 +52,6 @@ class Basis(object):
 
     def __eq__(self, other):
         if isinstance(other, Basis):
-            #return self.name == other.name and self.dim == other.dim
             return _np.array_equal(self.matrices, other.matrices)
         else:
             return _np.array_equal(self.matrices, other)
@@ -132,30 +136,32 @@ class Basis(object):
 # Alternatively, use the numpy approach and provide both external and member functions
 # i.e.  a.reshape(*args) v np.reshape(a, *args)
 
-def build_composite_basis(basisDimPairs):
-    assert len(basisDimPairs) > 0, 'Need at least one basis-dim pair to compose'
-    bases = []
-    for basis, dimOrBlockDims in basisDimPairs:
-        bases.append(build_basis(basis, dimOrBlockDims))
+def build_composite_basis(bases):
+    '''
+    Build a composite basis from a list of tuples or Basis objects 
+      (or a list of mixed tuples and Basis objects)
+    '''
+    assert len(bases) > 0, 'Need at least one basis-dim pair to compose'
+    bases = [build_basis(*item) for item in bases]
 
     dim           = Dim(0)
     dim.dmDim     = sum(basis.dim.dmDim for basis in bases)
     dim.gateDim   = sum(basis.dim.gateDim for basis in bases)
     dim.blockDims = [bdim for basis in bases for bdim in basis.dim.blockDims] 
-    matrices      = []
-    matrixGroups  = [mx for basis in bases for group in bases.matrixGroups for mx in group]
+    matrixGroups  = [basis.matrices for basis in bases]
     name          = ','.join(basis.name for basis in bases)
     longname      = ','.join(basis.longname for basis in bases)
     real          = all(basis.real for basis in bases)
 
-    composite = Basis(name, matrices, matrixGroups, dim, real=real)
-    composite.matrices = composite.get_composite_matrices()
+    composite = Basis(name, matrixGroups, dim, longname=longname, real=real)
     return composite
 
-def build_basis(basis, dimOrBlockDims):
+def build_basis(basis, dimOrBlockDims=None):
     if isinstance(basis, Basis):
+        assert dimOrBlockDims is None
         return basis
     else:
+        assert dimOrBlockDims is not None
         return Basis.create(basis, dimOrBlockDims)
 
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
@@ -226,8 +232,8 @@ def basis_constructor(f, name, longname, real=True):
         matrixGroups = []
         for blockDim in dim.blockDims:
             matrixGroups.append(f(blockDim))
-        matrices = f(dimOrBlockDims)
-        return Basis(name, matrices, matrixGroups, dim, longname=longname, real=real)
+        b = Basis(name, matrixGroups, dim, longname=longname, real=real)
+        return b
     Basis.Constructors[name] = wrapper
     return wrapper
 

@@ -47,8 +47,7 @@ import scipy.linalg as _spl
 from . import matrixtools as _mt
 
 from .basisconstructors import *
-from .basis import Basis, basis_constructor, change_basis, basis_transform_matrix
-from .basis import build_basis, expand_from_direct_sum_mx, contract_to_direct_sum_mx
+from .basis import *
 from .dim   import Dim
 
 ## Pauli basis matrices

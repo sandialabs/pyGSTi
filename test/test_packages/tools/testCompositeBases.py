@@ -14,7 +14,16 @@ class CompositeBasisTestCase(BaseTestCase):
         print('_' * 80)
         print(std.get_to_std())
         print(std.get_from_std())
-        raise Exception()
+
+    def test_build_composite_basis(self):
+        a = basistools.build_composite_basis([('std', 2), ('std', 2)])
+        b = basistools.build_basis('std', [2,2])
+        print(a)
+        print(b)
+        print(a.matrices)
+        print(b.matrices)
+        1/0
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
