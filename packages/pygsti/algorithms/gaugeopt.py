@@ -208,8 +208,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
-
-
     if CPpenalty == 0 and \
         TPpenalty == 0 and \
         validSpamPenalty == 0 and \
@@ -229,7 +227,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
                                  maxiter, maxfev, tol, returnAll, verbosity)
     else:
-
+                
         objective_fn = create_objective_fn(gateset, targetGateset,
                 itemWeights, 
                 CPpenalty, TPpenalty, 
@@ -405,24 +403,28 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
 
     minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
+    '''
     minSol2    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
 
     gaugeGroupEl.from_vector(minSol2.x)
-    a = gateset.copy()
-    a.transform(gaugeGroupEl)
+    finiteDifsGateset = gateset.copy()
+    finiteDifsGateset.transform(gaugeGroupEl)
+    '''
 
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
 
+    '''
     print('jacobian compared to finite differences')
-    print(a.frobeniusdist(newGateset))
+    print(finiteDifsGateset.frobeniusdist(newGateset))
+    '''
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
     else:  
-        return newGateset
+        return newGateset #, finiteDifsGateset
 
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
