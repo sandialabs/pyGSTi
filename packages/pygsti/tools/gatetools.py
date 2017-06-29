@@ -125,7 +125,7 @@ def residuals(A, B):
     np.array
         residuals
     """
-    return (A-B) ** 2
+    return (A-B).flatten()
 
 
 def tracenorm(A):

@@ -1732,6 +1732,7 @@ class GateCalc(object):
         """
         resids = []
         T = transformMx
+        nSummands = 0.0
         if itemWeights is None: itemWeights = {}
 
         if T is not None:
@@ -1741,48 +1742,58 @@ class GateCalc(object):
                 resids.append(
                         wt * gate.residuals(
                     otherCalc.gates[gateLabel], T, Ti))
+                nSummands += wt * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
                 wt = itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * rhoV.residuals(otherCalc.preps[lbl],
                                               'prep', T, Ti))
+                nSummands += wt * rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 wt = itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * Evec.residuals(otherCalc.effects[lbl],
-                                              'effect', T, Ti))
+                                        'effect', T, Ti))
+
+                nSummands += wt * Evec.dim
 
             if self.povm_identity is not None:
                 wt = itemWeights.get(self._identityLabel, spamWeight)
                 resids.append(
                     wt * self.povm_identity.residuals(
                     otherCalc.povm_identity, 'effect', T, Ti))
+                nSummands += wt * self.povm_identity.dim
         else:
             for gateLabel,gate in self.gates.items():
                 wt = itemWeights.get(gateLabel, gateWeight)
                 resids.append(
                     wt * gate.residuals(otherCalc.gates[gateLabel]))
+                nSummands += wt * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
                 wt = itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * rhoV.residuals(otherCalc.preps[lbl],'prep'))
+                nSummands += wt * rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 wt = itemWeights.get(lbl, spamWeight)
                 resids.append(
-                    wt * Evec.frobeniusdist2(otherCalc.effects[lbl],'effect'))
+                    wt * Evec.residuals(otherCalc.effects[lbl],'effect'))
+                nSummands += wt * Evec.dim
 
             if self.povm_identity is not None and \
                otherCalc.povm_identity is not None:
                 wt = itemWeights.get(self._identityLabel, spamWeight)
                 resids.append(
-                    wt * self.povm_identity.frobeniusdist2(
+                    wt * self.povm_identity.residuals(
                     otherCalc.povm_identity, 'effect'))
+                nSummands += wt * self.povm_identity.dim
         resids = [r.flatten() for r in resids]
-        return _np.concatenate(resids)
+        resids = _np.concatenate(resids)
+        return resids, nSummands
 
     def jtracedist(self, otherCalc, transformMx=None):
         """

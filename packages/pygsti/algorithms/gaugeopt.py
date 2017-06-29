@@ -56,9 +56,16 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
         if targetGateset is not None:
             if gatesMetric == "frobenius":
                 if spamMetric == "frobenius":
-                    #r = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
-                    ret += gs.frobeniusdist(targetGateset, None, gateWeight,
+                    f = gs.frobeniusdist(targetGateset, None, gateWeight,
                                             spamWeight, itemWeights)
+                    '''
+                    # Sanity checks for the residual function:
+                    r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+                    f_alt = _np.sqrt(_np.sum(r**2) / nsummands)
+                    diff = abs(f - f_alt)
+                    assert diff < 1e-5, '{} != {} within 7 places (diff: {})'.format(f_alt, f, diff)
+                    '''
+                    ret += f
                 else:
                     ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
     
@@ -216,24 +223,22 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         spamWeight = itemWeights.get('spam',1.0)
 
         def objective_fn_ls(gs):
-            return gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            return r
 
-        LSresult = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
+        result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
                                  maxiter, maxfev, tol, returnAll, verbosity)
-        print(LSresult)
+    else:
 
-    '''
-    objective_fn = create_objective_fn(gateset, targetGateset,
-            itemWeights, 
-            CPpenalty, TPpenalty, 
-            validSpamPenalty, gatesMetric, 
-            spamMetric)
-    
-    result = gaugeopt_custom(gateset, objective_fn, gauge_group,
-                 method, maxiter, maxfev, tol, returnAll, verbosity)
-    print(result.frobeniusdist(LSresult))
-    '''
-    result = LSresult
+        objective_fn = create_objective_fn(gateset, targetGateset,
+                itemWeights, 
+                CPpenalty, TPpenalty, 
+                validSpamPenalty, gatesMetric, 
+                spamMetric)
+            
+        
+        result = gaugeopt_custom(gateset, objective_fn, gauge_group,
+                     method, maxiter, maxfev, tol, returnAll, verbosity)
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -321,54 +326,65 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
     if bToStdout: print_obj_func(x0) #print initial point
 
     def jacobian(vec):
+        N = vec.shape[0]
         dot = _np.dot
-        #jacMx = _np.zeros((1300, 256))
+        jacMx = _np.zeros((1360, 256))
         gaugeGroupEl.from_vector(vec)
         # Do these two steps need to be done?
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
 
-        for i, (G, Gt) in enumerate(zip(gs.gates.values(), targetGateset.gates.values())):
-            # G, Gt, S, and S_inv are all (dxd)
+        for i, G in enumerate(gs.gates.values()):
+            d      = G.shape[0]
+            # G, Gt (unused), S, and S_inv are all (dxd)
             S      = gaugeGroupEl.get_transform_matrix()
             S_inv  = gaugeGroupEl.get_transform_matrix_inverse()
 
             # dS is ((d*d)xlen(v))
             dS     = gaugeGroupEl.gate.deriv_wrt_params()
-            print('dS')
-            print(dS.shape)
+            #print('dS')
+            #print(dS.shape)
             # dS is (dxdxlen(v))
-            dS     = dS.reshape((16, 16, 256))
-            print('dS')
-            print(dS.shape)
+            dS     = dS.reshape((d, d, N))
+            #print('dS')
+            #print(dS.shape)
             right = dot(S_inv, dot(G, S))
-            print('right')
-            print(right.shape)
+            #print('right')
+            #print(right.shape)
             rolled = _np.rollaxis(dS, 2)
-            print('rolled dS')
-            print(rolled.shape)
+            #print('rolled dS')
+            #print(rolled.shape)
             right = dot(rolled, right)
-            print('right')
-            print(right.shape)
+            #print('right')
+            #print(right.shape)
 
-            print('rolled')
-            print(rolled.shape)
+            #print('rolled')
+            #print(rolled.shape)
             left = dot(G, rolled)
-            print('left')
-            print(left.shape)
-            1/0 #BREAKPOINT
-            #dS_inv = -1 * dot(_np.dot(S_inv, dS), S_inv)
-            #print('dS_inv')
-            #print(dS_inv.shape)
-            dS
-            inside  = dot(S_inv, dot(G, S)) - Gt
-            #print('inside')
-            #print(inside.shape)
-
-            #jacMx[start + i*256 : start + (i+1)*256] = gateJac
+            #print('left')
+            #print(left.shape)
+            left = _np.rollaxis(left, 1)
+            #print('left')
+            #print(left.shape)
+            result = left - right
+            #print('result')
+            #print(result.shape)
+            result = dot(S_inv, result)
+            #print('result')
+            #print(result.shape)
+            result = _np.rollaxis(result, 2)
+            #print('result')
+            #print(result.shape)
+            result = result.reshape(d ** 2, N)
+            #print('result')
+            #print(result.shape)
+            jacMx[i*(d**2) : (i+1)*N] = result
         #print(jacMx)
+        #print(jacMx.shape)
+        #print(jacMx)
+
         return jacMx
-    #jacobian(x0)
+    jacobian(x0)
 
     minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
@@ -485,6 +501,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
             if returnAll:
                 return None, None, gateset.copy() 
             else: return gateset.copy()
+
+
 
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
