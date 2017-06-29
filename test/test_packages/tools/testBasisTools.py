@@ -97,7 +97,7 @@ class BasisBaseTestCase(BaseTestCase):
         mxs = pygsti.pp_matrices(dim)
         N = len(mxs); self.assertTrue(N == dim**2)
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             pygsti.pp_matrices("Foobar") #dim must be an int
         with self.assertRaises(ValueError):
             pygsti.pp_matrices(3) #dim must be a power of 2

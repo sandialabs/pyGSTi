@@ -73,6 +73,12 @@ class Dim(object):
         else:
             raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
 
+    def __str__(self):
+        return 'Dim: {}'.format(self.blockDims)
+
+    def __repr__(self):
+        return str(self)
+
     def __getitem__(self, index):
         if index == 0:
             return self.dmDim

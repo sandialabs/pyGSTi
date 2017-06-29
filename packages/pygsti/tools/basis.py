@@ -1,4 +1,4 @@
-from collections  import OrderedDict
+from collections  import OrderedDict, namedtuple
 from functools    import wraps
 
 import numbers as _numbers
@@ -16,12 +16,20 @@ from .parameterized import parameterized
 
 from .dim import Dim
 
+DefaultBasisInfo = namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
+
+# Allow flexible basis building without cluttering the basis __init__ method with instance checking
+def flexible_args(__init__):
+    @wraps(__init__)
+    def wrapper(*args, **kwargs):
+        __init__(*args, **kwargs)
+    return wrapper
+
 class Basis(object):
-    Constructors = dict() # Dictionary of functions that build default bases, by name
-    LongNames    = dict() # Dictionary of longnames by shortnames
-    RealBases    = dict() # Dictionary of booleans by name, indicating if a basis is real
+    DefaultInfo = dict()
     CustomCount  = 0      # The number of custom bases
 
+    @flexible_args
     def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, **kwargs):
         if isinstance(name, Basis):
             matrixGroups = name.matrixGroups
@@ -47,7 +55,7 @@ class Basis(object):
 
         if real is None:
             try:
-                real = Basis.RealBases[name]
+                real = Basis.DefaultInfo[name].real
             except KeyError:
                 real = True
 
@@ -62,7 +70,7 @@ class Basis(object):
 
         if longname is None:
             try:
-                self.longname = Basis.LongNames[self.name]
+                self.longname = Basis.DefaultInfo[self.name].longname
             except KeyError:
                 self.longname = self.name
         else:
@@ -241,10 +249,10 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     return _np.real(ret)
 
 def build_matrix_groups(name, dim, **kwargs):
-    if name not in Basis.Constructors:
-        raise NotImplementedError('No instructions to create the basis:  {} of dim {}'.format(
+    if name not in Basis.DefaultInfo:
+        raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dim))
-    f = Basis.Constructors[name]
+    f = Basis.DefaultInfo[name].constructor
     matrixGroups = []
     dim = Dim(dim)
     for blockDim in dim.blockDims:
@@ -257,15 +265,16 @@ def build_matrix_groups(name, dim, **kwargs):
 
 @parameterized # this decorator takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
-    Basis.Constructors[name] = f
-    Basis.LongNames[name] = longname
-    Basis.RealBases[name] = real
+    Basis.DefaultInfo[name] = DefaultBasisInfo(f, longname, real)
+    '''
     @wraps(f)
     def wrapper(*args, **kwargs):
         assert len(args) > 0, 'Dim argument required for basis'
         matrixGroups = build_matrix_groups(name, args[0], **kwargs)
         return Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
     return wrapper
+    '''
+    return f
 
 def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
     """

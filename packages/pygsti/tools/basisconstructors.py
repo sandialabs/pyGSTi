@@ -245,7 +245,7 @@ def pp_matrices(dim, maxWeight=None):
         if isinstance(dim, _collections.Container) and len(dim) == 1:
             dim = dim[0]
         else:
-            raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
+            raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2 (got {})".format(dim))
 
     if isinstance(dim, Dim):
         nQubits = _np.log2(dim.dmDim)
