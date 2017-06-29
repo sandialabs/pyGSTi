@@ -2163,7 +2163,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         `comm`, and `distributeMethod`.
        
     forcefn_grad : numpy array, optional
-        An array of shape `(D,nParams)`, where `D` is the dimsion of the
+        An array of shape `(D,nParams)`, where `D` is the dimension of the
         (unspecified) forcing function and `nParams=startGateset.num_params()`.
         This array gives the gradient of the forcing function with respect to
         each gateset parameter and is used for the computation of "linear

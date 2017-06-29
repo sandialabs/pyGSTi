@@ -120,6 +120,17 @@ class TestCoreMethods(BaseTestCase):
                                      svdTruncateTo=4, verbosity=0)
                       # incomplete dataset
 
+        #LGST on an "old-style" gateset
+        old_style_gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["1"],
+            spamdefs={'plus': ('rho0','E0'),
+            'minus': ('remainder','remainder') } )
+        gs_lgst = pygsti.do_lgst(ds, self.specs, old_style_gateset,
+                                 svdTruncateTo=4, verbosity=0)
+
 
 
 
@@ -243,6 +254,14 @@ class TestCoreMethods(BaseTestCase):
                                                       useFreqWeightedChiSq=True, gateStringSetLabels=["Set1","Set2"],
                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
 
+        aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
+        gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
+        del gs_withA1.gates["Gx"] # otherwise gs_withA1 will have Gx params that we have no knowledge of!
+        gs_lsgst_chk_opts2 = pygsti.do_mc2gst(ds, gs_withA1, aliased_list, minProbClipForWeighting=1e-6,
+                                              probClipInterval=(-1e2,1e2), verbosity=10,
+                                              gateLabelAliases={ 'GA1': ('Gx',) })
+
+        
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
         #self.runSilent(pygsti.do_mc2gst,ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
         #                 probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
@@ -326,11 +345,17 @@ class TestCoreMethods(BaseTestCase):
                                               gateLabelAliases={ 'GA1': ('Gx',) })
 
         #Other option variations - just make sure they run at this point
-        gs_mlegst_chk_opts = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
+        gs_mlegst_chk_opts3 = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
                                                        minProbClip=1e-6, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
                                                        gatestringWeightsDict={ ('Gx',): 2.0 } )
 
+        #Forcing function used by linear response error bars
+        forcingfn_grad = np.ones((1,gs_clgst.num_params()), 'd')
+        gs_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
+            ds, gs_clgst, self.lsgstStrings[0], verbosity=0,
+            minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+            forcefn_grad=forcingfn_grad)
 
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
         #self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
@@ -339,7 +364,6 @@ class TestCoreMethods(BaseTestCase):
         pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                         probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
                        #non-Poisson picture - should use (-1,-1) gateset for consistency?
-
 
         #Check errors:
         with self.assertRaises(MemoryError):
@@ -444,7 +468,7 @@ class TestCoreMethods(BaseTestCase):
         gs_lgst_target     = self.runSilent(pygsti.optimize_gauge, gs_lgst,"target",targetGateset=self.gateset,verbosity=10) #DEPRECATED
         gs_lgst_target     = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, verbosity=10)
 
-        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0, useDirectCP=False) #DEBUG
+        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0, useDirectCP=False) #non-direct CP contraction
 
         #Gauge Opt to Target using non-frobenius metrics
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,

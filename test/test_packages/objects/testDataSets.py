@@ -5,6 +5,7 @@ import pygsti
 import numpy as np
 import warnings
 import os
+from pygsti.construction import std1Q_XYI as std
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -143,6 +144,11 @@ class TestDataSetMethods(BaseTestCase):
         nStrs = len(ds)
         cntDict = ds[('Gx',)].as_dict()
         asStr = str(ds[('Gx',)])
+        
+        ds[('Gx',)].scale(2.0)
+        self.assertEqual(ds[('Gx',)]['plus'], 20)
+        self.assertEqual(ds[('Gx',)]['minus'], 180)
+        
 
         #Test loading a deprecated dataset file
         dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
@@ -514,6 +520,38 @@ Gy 11001100
         self.assertEqual(ds[()].fraction('minus'), 0.5)
         self.assertEqual(ds[('Gy',)].fraction('minus'), 0.5)
         self.assertEqual(ds[('Gx',)].total(), 9)
+
+
+    def test_intermediate_measurements(self):
+        gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
+        E = gs.effects['E0']
+        Erem = gs.effects['remainder']
+        gs.gates['Gmz_plus'] = np.dot(E,E.T)
+        gs.gates['Gmz_minus'] = np.dot(Erem,Erem.T)
+        #print(gs['Gmz_plus'] + gs['Gmz_minus'])
+
+        gatestring_list = pygsti.construction.gatestring_list([ 
+            (),
+            ('Zmeas',),
+            ('Gx','Zmeas') 
+        ])
+        
+        ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
+                                                        sampleError="multinomial", seed=0,
+                                                        measurementGates={'Zmeas': ['Gmz_plus', 'Gmz_minus']})
+
+        #create manually so no randomness
+        ds = pygsti.objects.DataSet(spamLabels=['plus','minus'],
+                                    measurementGates={'Zmeas': ['Gmz_plus', 'Gmz_minus']})
+        ds.add_count_list( (), [10,90] )
+        ds.add_count_list( ('Gmz_plus',), [9,1] )
+        ds.add_count_list( ('Gmz_minus',), [9,81] )
+        ds.add_count_list( ('Gx','Gmz_plus'), [37,4] )
+        ds.add_count_list( ('Gx','Gmz_minus'), [5,54] )
+        ds.done_adding_data()
+        
+        self.assertAlmostEqual( ds[('Gmz_plus',)].fraction('plus'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
+        self.assertAlmostEqual( ds[('Gx','Gmz_minus')].fraction('minus'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
         
 
 

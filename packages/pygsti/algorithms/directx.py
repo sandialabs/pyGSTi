@@ -13,10 +13,10 @@ from .  import core         as _core
 
 
 def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, specs,
-                                        targetGateset=None, includeTargetGates=True,
-                                        gateLabelAliases=None, spamDict=None,
-                                        guessGatesetForGauge=None, gateStringLabels=None,
-                                        svdTruncateTo=0, verbosity=0 ):
+                                            targetGateset=None, includeTargetGates=True,
+                                            gateLabelAliases=None, spamDict=None,
+                                            guessGatesetForGauge=None, gateStringLabels=None,
+                                            svdTruncateTo=0, verbosity=0 ):
     """
     Constructs a gateset that contains LGST estimates for gateStringsToEstimate.
 

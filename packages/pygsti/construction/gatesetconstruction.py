@@ -545,9 +545,9 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     def embed_gate(gatemx, labels, indicesToParameterize="all"):
         #print "DEBUG: embed_gate gatemx = \n", gatemx
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-        assert( len(set(iTensorProdBlks)) == 1 )
-          #All qubit labels of a multi-qubit gate must correspond to the
-          # same tensor-product-block of the state space -- checked previously
+        if len(set(iTensorProdBlks)) != 1:
+            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
+                             " same tensor-product-block of the state space -- checked previously")
 
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]

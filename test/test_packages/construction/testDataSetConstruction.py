@@ -51,6 +51,10 @@ class DataSetConstructionTestCase(BaseTestCase):
         dataset = pc.generate_fake_data(self.dataset, self.gatestring_list, nSamples=None, sampleError='multinomial', seed=100)
         dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='round', seed=100)
 
+    def test_merge_outcomes(self):
+        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['plus', 'minus']})
+        for dsRow in merged_dataset.itervalues():
+            self.assertEqual( dsRow.total(), dsRow['merged_spam_label'] )
 
 
 if __name__ == '__main__':

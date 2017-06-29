@@ -61,16 +61,27 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        nRandom=100, seed=None, verbosity=3,
                        memLimit=None)
 
-        #Uncomment to save reference fidPairs dictionary
         vs = self.versionsuffix
         cmpFilenm = compare_files + "/IFPR_fidPairs_dict%s.pkl" % vs
-        with open(cmpFilenm,"wb") as pklfile:
-            pickle.dump(fidPairs, pklfile)
+        #Uncomment to save reference fidPairs dictionary
+        #with open(cmpFilenm,"wb") as pklfile:
+        #    pickle.dump(fidPairs, pklfile)
 
         with open(cmpFilenm,"rb") as pklfile:
             fidPairs_cmp = pickle.load(pklfile)
 
         self.assertEqual(fidPairs, fidPairs_cmp)
+
+        #test out some additional code paths: mem limit, random mode, & no good pair list
+        fidPairs2 = self.runSilent(
+            pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
+                       std.gs_target, std.fiducials, std.fiducials,
+                       std.germs, spamLabels="all",
+                       searchMode="random",
+                       constrainToTP=True,
+                       nRandom=3, seed=None, verbosity=3,
+                       memLimit=1024*1024*10)
+
 
 
 if __name__ == '__main__':

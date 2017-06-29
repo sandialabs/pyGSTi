@@ -135,6 +135,11 @@ class TestGateStringMethods(BaseTestCase):
         allStrs = pygsti.construction.list_all_gatestrings( ('Gx','Gy'), 0,2 )
         self.assertEqual( set(allStrs), expected_allStrs)
 
+        expected_onelenStrs = set( pygsti.construction.gatestring_list(
+            [('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')] ))
+        onelenStrs = pygsti.construction.list_all_gatestrings_onelen(('Gx','Gy'), 2)
+        self.assertEqual( set(onelenStrs), expected_onelenStrs )
+
         allStrs = list(pygsti.construction.gen_all_gatestrings( ('Gx','Gy'), 0,2 ))
         #self.assertEqual( set(allStrs), set([(),('Gx',),('Gy',),('Gx','Gx'),('Gx','Gy'),('Gy','Gx'),('Gy','Gy')]))
         #self.assertEqual( set(allStrs), set([(),('Gx',),('Gy',),('Gx','Gy'),('Gy','Gx')]))
@@ -161,6 +166,7 @@ class TestGateStringMethods(BaseTestCase):
         strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
         germs = pygsti.construction.gatestring_list( [('Gx','Gy'),('Gy','Gy')] )
         testFidPairs = [(0,1)]
+        testFidPairsDict = { ('Gx','Gy'): [(0,0),(0,1)], ('Gy','Gy'): [(0,0)] }
 
         # LSGST
         maxLens = [1,2]
@@ -183,6 +189,10 @@ class TestGateStringMethods(BaseTestCase):
 
         lsgstLists5 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            truncScheme="whole germ powers")
+
+        lsgstLists6 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
             truncScheme="whole germ powers")
 
         lsgstExpList = pygsti.construction.make_lsgst_experiment_list(
@@ -295,7 +305,26 @@ class TestGateStringMethods(BaseTestCase):
             pygsti.objects.gatestring.CompressedGateString( ('Gx',) ) #can only create from GateStrings
 
 
+    def test_alias_manips(self):
+        orig_list = pygsti.construction.gatestring_list(
+            [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','Gx'), ('Gy','Gy'), ('Gi',) ] )
+        
+        list1 = pygsti.construction.translate_gatestring_list(orig_list, {'Gx': ('Gx2',), 'Gy': ('Gy',)} )
+        list2 = pygsti.construction.translate_gatestring_list(orig_list, {'Gi': ('Gx','Gx','Gx','Gx')} )
+        print(list1)
+        
+        expected_list1 = pygsti.construction.gatestring_list(
+                    [ ('Gx2','Gx2'), ('Gx2','Gy'), ('Gx2','Gx2','Gx2'), ('Gy','Gy'), ('Gi',) ] )
+        expected_list2 = pygsti.construction.gatestring_list(
+                    [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','Gx'), ('Gy','Gy'), ('Gx','Gx','Gx','Gx') ] )
 
+        self.assertEqual(list1, expected_list1)
+        self.assertEqual(list2, expected_list2)
+
+        aliasDict1 = { 'A': ('B','B') }
+        aliasDict2 = { 'B': ('C','C') }
+        aliasDict3 = pygsti.construction.compose_alias_dicts(aliasDict1, aliasDict2)
+        self.assertEqual(aliasDict3, { 'A': ('C','C','C','C') } )
 
 
 if __name__ == "__main__":

@@ -830,7 +830,7 @@ def _optProjectionFromSplit(gateset, base_hessian, level, verbosity = 0):
     proj = gateset.get_nongauge_projector(itemWeights={'gates':0.0,'spam': 1.0})
     projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
     ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
-    spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+    spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(sl).flatten()
                                      for sl in _itertools.chain(iter(gateset.preps),
                                                                 iter(gateset.effects))] )
     spam_intrinsic_err = _np.sqrt( _np.sum(spamCIs**2) )
@@ -844,7 +844,7 @@ def _optProjectionFromSplit(gateset, base_hessian, level, verbosity = 0):
         ci = ConfidenceRegion(gateset, projected_hessian, level, hessianProjection="none")
         gateCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
                                          for gl in gateset.gates] )
-        spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(gl).flatten()
+        spamCIs = _np.concatenate( [ ci.get_profile_likelihood_confidence_intervals(sl).flatten()
                                          for sl in _itertools.chain(iter(gateset.preps),
                                                                     iter(gateset.effects))] )
         gate_err = _np.sqrt( _np.sum(gateCIs**2) )

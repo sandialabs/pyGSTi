@@ -14,3 +14,4 @@ from .spamspecconstruction import *
 from .datasetconstruction import *
 from .confidenceregionconstruction import *
 from .stdlists import *
+from .qutrit import make_qutrit_gateset

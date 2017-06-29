@@ -11,12 +11,18 @@ from pygsti.construction import std1Q_XYI as std
 g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
 
-def runOneQubit_Tutorial():
+def assertGatesetsInSync(gs, comm):
+    if comm is not None:
+        bc = gs if comm.Get_rank() == 0 else None
+        gs_cmp = comm.bcast(bc, root=0)
+        assert(gs.frobeniusdist(gs_cmp) < 1e-6)
+
+def run1Q_end2end(comm):
     from pygsti.construction import std1Q_XYI
     gs_target = std1Q_XYI.gs_target
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
-    maxLengths = [1,2,4,8,16,32,64,128,256,512,1024,2048]
+    maxLengths = [1,2,4,8,16,32]
 
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
@@ -29,16 +35,8 @@ def runOneQubit_Tutorial():
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
 
-    #results.create_full_report_pdf(confidenceLevel=95,
-    #    filename="tutorial_files/MyEvenEasierReport.pdf",verbosity=2)
-
-
-def assertGatesetsInSync(gs, comm):
-    if comm is not None:
-        bc = gs if comm.Get_rank() == 0 else None
-        gs_cmp = comm.bcast(bc, root=0)
-        assert(gs.frobeniusdist(gs_cmp) < 1e-6)
-
+    pygsti.report.create_general_report(results, "mpi_test_report.html",
+                                        confidenceLevel=95, verbosity=2, comm=comm)
 
 def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,

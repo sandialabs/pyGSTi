@@ -26,6 +26,21 @@ Gx^4 20 90
             output.write(dataset_txt)
         self.ds = pygsti.io.load_dataset(temp_files + "/MetricsDataset.txt")
 
+        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
+                                        returnHessian=True)
+        self.ci = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
+                                             hessianProjection="std")
+
+        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset_dep,
+                                        returnHessian=True)
+        self.ci_dep = pygsti.obj.ConfidenceRegion(self.gateset_dep, chi2Hessian, 95.0,
+                                             hessianProjection="std")
+
+        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset_rdm,
+                                        returnHessian=True)
+        self.ci_rdm = pygsti.obj.ConfidenceRegion(self.gateset_rdm, chi2Hessian, 95.0,
+                                             hessianProjection="std")
+
 
     def test_dataset_qtys(self):
         names = ('gate string', 'gate string index', 'gate string length', 'count total',
@@ -41,11 +56,11 @@ Gx^4 20 90
 
     def test_gateset_qtys(self):
         names = pygsti.report.compute_gateset_qty(None, self.gateset)
-        qtys = pygsti.report.compute_gateset_qtys(names, self.gateset)
-        qty = pygsti.report.compute_gateset_qty("Gx eigenvalues", self.gateset)
+        qtys = pygsti.report.compute_gateset_qtys(names, self.gateset, self.ci)
+        qty = pygsti.report.compute_gateset_qty("Gx eigenvalues", self.gateset, self.ci)
 
-        qtys_dep = pygsti.report.compute_gateset_qtys(names, self.gateset_dep)
-        qtys_rdm = pygsti.report.compute_gateset_qtys(names, self.gateset_rdm)
+        qtys_dep = pygsti.report.compute_gateset_qtys(names, self.gateset_dep, self.ci_dep)
+        qtys_rdm = pygsti.report.compute_gateset_qtys(names, self.gateset_rdm, self.ci_rdm)
         #TODO: test quantities
 
     def test_gateset_dataset_qtys(self):
@@ -59,11 +74,11 @@ Gx^4 20 90
 
     def test_gateset_gateset_qtys(self):
         names = pygsti.report.compute_gateset_gateset_qty(None, self.gateset, self.gateset_dep)
-        qtys = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset, self.gateset_dep)
-        qty = pygsti.report.compute_gateset_gateset_qty("Gx fidelity", self.gateset, self.gateset_dep)
+        qtys = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset, self.gateset_dep, self.ci)
+        qty = pygsti.report.compute_gateset_gateset_qty("Gx fidelity", self.gateset, self.gateset_dep, self.ci)
 
-        qtys2 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset, self.gateset_rdm)
-        qtys3 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset_dep, self.gateset_rdm)
+        qtys2 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset, self.gateset_rdm, self.ci)
+        qtys3 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset_dep, self.gateset_rdm, self.ci_dep)
         #TODO: test quantities
 
 if __name__ == "__main__":

@@ -7,12 +7,6 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 
 class TestWriteAndLoad(BaseTestCase):
 
-    def test_paramfile(self):
-        d = {'a': 1, 'b': 2 }
-        pygsti.io.write_parameter_file(temp_files + "/paramFile.json", d)
-        d2 = pygsti.io.load_parameter_file(temp_files + "/paramFile.json")
-        self.assertEqual(d,d2)
-
     def test_dataset_file(self):
 
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )

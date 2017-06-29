@@ -125,6 +125,8 @@ class TestHessianMethods(BaseTestCase):
         ci_opt = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
                                              hessianProjection="optimal gate CIs",
                                              tol=0.1) #very low tol so doesn't take long
+        ci_intrinsic = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
+                                             hessianProjection="intrinsic error")
 
         with self.assertRaises(ValueError):
             pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
@@ -182,7 +184,42 @@ class TestHessianMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             ci_std.get_spam_fn_confidence_interval(fnOfSpam_3D, verbosity=0)
 
+
+
+        def fnOfGateSet_float(gs):
+            return float( gs.gates['Gx'][0,0] )
+        def fnOfGateSet_0D(gs):
+            return np.array( gs.gates['Gx'][0,0]  )
+        def fnOfGateSet_1D(gs):
+            return np.array( gs.gates['Gx'][0,:] )
+        def fnOfGateSet_2D(gs):
+            return np.array( gs.gates['Gx'] )
+        def fnOfGateSet_3D(gs):
+            return np.zeros( (2,2,2), 'd') #just to test for error
+
+        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_float, verbosity=0)
+        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_0D, verbosity=0)
+        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_1D, verbosity=0)
+        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_2D, verbosity=0)
+        df, f0 = self.runSilent(ci_std.get_gateset_fn_confidence_interval,
+                                fnOfGateSet_float, returnFnVal=True, verbosity=4)
+
+        with self.assertRaises(ValueError):
+            ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_3D, verbosity=0)
+
         #TODO: assert values of df & f0 ??
+
+    def test_mapcalc_hessian(self):
+        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
+                                        returnHessian=True)
+        
+        gs_mapcalc = self.gateset.copy()
+        gs_mapcalc._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.ds, self.gateset,
+                                        returnHessian=True)
+
+        self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
+
 
 
 if __name__ == "__main__":
