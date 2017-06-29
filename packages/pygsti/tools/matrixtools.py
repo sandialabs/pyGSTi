@@ -291,7 +291,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
+def real_matrix_log(M, TOL=1e-8):
     """ 
     Construct a *real* logarithm of matrix `M`.
 
@@ -303,11 +303,6 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
     M : numpy array
         The matrix to take the logarithm of
 
-    actionIfImaginary : {"raise","warn","ignore"}, optional
-        What action should be taken if a real-valued logarithm cannot be found.
-        "raise" raises a ValueError, "warn" issues a warning, and "ignore"
-        ignores the condition and simply returns the complex-valued result.
-
     TOL : float, optional
         An internal tolerance used when testing for equivalence and zero
         imaginary parts (real-ness).
@@ -318,8 +313,44 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
         An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
         and `logM` is real (if possible).
     """
+    logM = custom_matrix_log(M, "raise", TOL, True)
+    assert( _np.linalg.norm(_np.imag(logM)) < TOL ), "real_matrix_log failed to construct a real logarithm!"
+    return _np.real(logM)
+
+
+def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=False):
+    """ 
+    Construct the logarithm of matrix `M`.
+
+    Parameters
+    ----------
+    M : numpy array
+        The matrix to take the logarithm of
+
+    actionIfImaginary : {"raise","warn","ignore"}, optional
+        What action should be taken if a real-valued logarithm cannot be found
+        and `real_logarithm == True`.  "raise" raises a ValueError, "warn"
+        issues a warning, and "ignore" ignores the condition and simply returns
+        the complex-valued result.
+
+    TOL : float, optional
+        An internal tolerance used when testing for equivalence and zero
+        imaginary parts (real-ness).
+
+    real_logarithm : bool, optional
+        If True, then attempt to return a *real* logarithm.  This may mean
+        choosing an *inconsistent* branch cut whereby pairs of -1.0 eigenvalues
+        have *conjugate* logs, e.g. `r+1j*pi` and `r-1j*pi`, in order to 
+        preserve real-ness.  If False, a consistent branch cut is chosen.
+
+    Returns
+    -------
+    logM : numpy array
+        An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
+    """
     assert(_np.linalg.norm(_np.imag(M)) < TOL) #M should be real to begin with
     evals,U = _np.linalg.eig(M)
+    U = U.astype("complex")
 
     used_indices = set()
     neg_real_pairs_real_evecs = []
@@ -346,27 +377,85 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
                         neg_real_pairs_conj_evecs.append( (i,j) ); break
                 else: unpaired_indices.append(i)
 
-    log_evals = _np.log(evals)
+    log_evals = _np.log(evals.astype("complex"))
+      # astype guards against case all evals are real but some are negative
+
+    #DEBUG
+    #print("DB: evals = ",evals)
+    #print("DB: log_evals:",log_evals)
+    #for i,ev in enumerate(log_evals):
+    #    print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
+    #print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
+    #print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
+    #print("DB: evec[5] = ",mx_to_string(U[:,5]))
+    #print("DB: evec[6] = ",mx_to_string(U[:,6]))
     
     for (i,j) in neg_real_pairs_real_evecs: #need to adjust evecs as well
-        log_evals[i] = _np.log(evals[i])
-        log_evals[j] = log_evals[i].conjugate()
-        U[:,i] = (U[:,i] + 1j*U[:,j])/_np.sqrt(2)
-        U[:,j] = U[:,i].conjugate()
+        log_evals[i] = _np.log(-evals[i]) + 1j*_np.pi
+        if real_logarithm: #see note below
+            log_evals[j] = log_evals[i].conjugate()
+            U[:,i] = (U[:,i] + 1j*U[:,j])/_np.sqrt(2)
+            U[:,j] = U[:,i].conjugate()
+        else:
+            log_evals[j] = log_evals[i]
 
     for (i,j) in neg_real_pairs_conj_evecs: # evecs already conjugates of each other
-        log_evals[i] = _np.log(evals[i])
-        log_evals[j] = log_evals[i].conjugate()
+        log_evals[i] = _np.log(-evals[i]) + 1j*_np.pi
+        log_evals[j] = log_evals[i].conjugate() if real_logarithm else log_evals[i]
+        #Note: if *don't* conjugate j-th, then this picks *consistent* branch cut (what scipy would do), which
+        # results, in general, in a complex logarithm BUT one which seems more intuitive (?) - at least permits
+        # expected angle extraction, etc.
+        
+        #vr,vi = _np.real(U[:,i]), _np.imag(U[:,i])
+        #U[:,i] = vr + 3j*vi
+        #U[:,i] /= _np.linalg.norm(U[:,i])
+        #U[:,j] = U[:,i].conjugate() #vr - 2j*vi
+        ###U[:,j] /= _np.linalg.norm(U[:,j])
+
+    #Scratch: TODO REMOVE
+    #  U'  *       A  = U
+    #  [vr vi]  [ 1      1]      = [vr + alpha * vi, vr - alpha * vi ]
+    #           [ alpha -alpha]
+    # inv(U) = inv(U'*A) = inv(A)*inv(U')
+    # B = U * log_evals * Uinv = U'*A*log_evals*Ainv*inv(U')
+    # [ 1  1 ] [ l1  0 ] [ 1  1/a]   = [ l1   l2    ] [ 1  1/a]   = [ (l1+l2)/2     (l1-l2)/2a ]
+    # [ a -a ] [  0  l2] [ 1 -1/a]/2   [ l1*a -l2*a ] [ 1 -1/a]/2   [ (l1-l2)*a/2   (l1+l2)/2  ]
+    #
+    #   U * A = U'
+    #  [vr+i*vi  vr-i*vi]  [ 1-alpha   alpha   ] = [vr + i*vi - 2*alpha*i*vi, vr - i*vi +2*alpha*i*vi ]
+    #                      [ alpha     1-alpha ]
+    #  inv(U') = inv(U*A) = inv(A)*inv(U)
+    #  B = U' * log_evals * U'inv = U*(A*log_evals*Ainv)*Uinv
+    #  Ainv = [ a  b ]
+    #         [ b  a ]
+    #  [ 1-alpha   alpha   ] [ l1 0  ] [ a  b ] = [ l1(1-alpha)   l2(alpha)   ] [ a  b ] = [ a*l1*(1-alpha) + b*l2*alpha   b*l1*(1-alpha)+a*l2*alpha   ]
+    #  [ alpha     1-alpha ] [ 0  l2 ] [ b  a ]   [ l1(alpha)     l2(1-alpha) ] [ b  a ]   [ a*l1*alpha + b*l2*(1-alpha)   b*l1*alpha + a*l2*(1-alpha) ]
+    #
+    # (1-alpha)*a + alpha*b = 1
+    # alpha*a + (1-alpha)*b = 0
+    # a + b = 1 => b = 1-a
+    # (1-alpha)*a + alpha*(1-a) = 1
+    # a - 2*alpha*a + alpha = 1
+    # a = (1-alpha)/(1-2*alpha)
+    # b = 1-a
+
+    #DEBUG
+    #Uinv_test = _np.linalg.inv(U)[5:7,:]
+    #U_test = U[:,5:7]
+    #logM_test =  _np.dot( U_test, _np.dot(_np.diag(log_evals[5:7]), Uinv_test ))
+    #print("TEST = ",mx_to_string(logM_test))
+    #checknorm1 = _np.linalg.norm( _np.linalg.inv(U) - _np.transpose(_np.conjugate(U)))
+    #checknorm2 = _np.linalg.norm( _np.linalg.inv(U) - _np.transpose(U))
+    #print("Checknorms = ",checknorm1, checknorm2)
 
     logM =  _np.dot( U, _np.dot(_np.diag(log_evals), _np.linalg.inv(U) ))
-    imMag = _np.linalg.norm(_np.imag(logM))
-    #print("DB: log_evals = ",log_evals)
-    #print("DEBUG: |imag(logM)| = ",imMag)
+    #DEBUG: print_mx(logM)
 
     #if there are unpaired negative real eigenvalues, the logarithm might be imaginary
     mayBeImaginary = bool(len(unpaired_indices) > 0)
-    
-    if mayBeImaginary and imMag > TOL:
+    imMag = _np.linalg.norm(_np.imag(logM))
+
+    if real_logarithm and mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative" +
                          " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
@@ -377,8 +466,5 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
             pass
         else:
             assert(False), "Invalid 'actionIfImaginary' argument: %s" % actionIfImaginary
-    else: # logM should be real!
-        assert( imMag < TOL ), "real_matrix_log failed to construct a real logarithm (when it should have!)"
-        logM = _np.real(logM)
-        
+
     return logM

@@ -680,8 +680,8 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logG = _mt.real_matrix_log(gate,"ignore",TOL)
-        logT = _mt.real_matrix_log(target_gate,"ignore",TOL)
+        logG = _mt.custom_matrix_log(gate,"ignore",TOL,True)
+        logT = _mt.custom_matrix_log(target_gate,"ignore",TOL,True)
 
         # if logG and logT are both real, just take the difference,
         #  as there are no branch cut issues in this case
@@ -711,7 +711,7 @@ def error_generator(gate, target_gate, typ="logG-logT"):
         
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        errgen = _spl.logm(_np.dot(target_gate_inv,gate))
+        errgen = _mt.custom_matrix_log(_np.dot(target_gate_inv,gate))
         
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
@@ -880,10 +880,21 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     projections = _np.empty( len(lindbladMxs), 'd' )
     for i,lindbladMx in enumerate(lindbladMxs):
         proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ), tol=1000)
+
+        #DEBUG - for checking why perfect gates gave weird projections --> log ambiguity
+        #print("DB: rawproj(%d) = " % i,proj)
+        #errgen_pp = errgen.copy()#_bt.change_basis(errgen_std,"std","pp")
+        #lindbladMx_pp = _bt.change_basis(lindbladMx,"std","pp")
+        #if proj > 1.0:
+        #    for k in range(errgen_std.shape[0]):
+        #        for j in range(errgen_std.shape[1]):
+        #            if abs(errgen_pp[k,j].conjugate() * lindbladMx_pp[k,j]) > 1e-2:
+        #                print(" [%d,%d]: + " % (k,j),errgen_pp[k,j].conjugate(),"*",lindbladMx_pp[k,j],"=",(errgen_pp[k,j].conjugate() * lindbladMx_pp[i,j]))
+        
         #assert(_np.isreal(proj)), "non-real projection: %s" % str(proj) #just a warning now
         if not _np.isreal(proj): 
-            _warnings.warn("Dropping non-real part of projection: %s" % str(proj))
-            proj = proj.real
+            _warnings.warn("Taking abs() of non-real projection: %s" % str(proj))
+            proj = abs(proj)
         projections[i] = proj
 
     if return_generators:

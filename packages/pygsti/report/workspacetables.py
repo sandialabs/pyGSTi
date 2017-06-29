@@ -823,16 +823,26 @@ class GateDecompTable(WorkspaceTable):
         axes = {}; angles = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
-            logG = _tools.real_matrix_log(gate,"ignore",1e-8)
+            logG = _tools.custom_matrix_log(gate)
             hamProjs = _tools.std_errgen_projections(
                 logG, "hamiltonian", basisNm, basisNm)
             norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs / norm
-            angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
+            axes[gl] = hamProjs #/ norm
+            #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
                # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
                # least of Pauli products) and divide by 2# to be consistent with
                # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
                # theta in units of pi.
+
+            angles[gl] = norm * (2.0/gateset.dim)**0.5 / _np.pi
+               #Scratch...
+               # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
+               # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
+               # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
+               # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
+               # normalized paulis are just /sqrt(2), so need to additionally divide by
+               # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
+               # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
 
         for gl in gateLabels:            
             rowData = [gl, angles[gl], axes[gl] ]
