@@ -655,11 +655,11 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
         Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
                 
-    qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
-    qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, eff_ds, gsL,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc, sumUp=True)
+    #qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
+    #qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
+    #    switchBd.objective, gss, eff_ds, gsL,
+    #    linlg_pcntle=float(linlogPercentile) / 100,
+    #    minProbClipForWeighting=switchBd.mpc, sumUp=True)
 
     qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
         "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
@@ -670,11 +670,14 @@ def create_general_report(results, filename, confidenceLevel=None,
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc)
+    qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
 
     qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+    #qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
+    #  Fast enough now thanks to scattergl
 
     if multidataset:
         #initialize a new "dataset comparison switchboard"

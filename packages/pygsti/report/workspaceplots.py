@@ -111,6 +111,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
         heatmapArgs['text'] = hoverLabels                            
         
     trace = go.Heatmap(**heatmapArgs)
+    #trace = dict(type='heatmapgl', **heatmapArgs)
     data = [trace]
 
     xaxis = go.XAxis(
@@ -687,7 +688,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                     else:
                         texts.append(str(subMxs[iy][ix][N-1-iiy][iix]))
 
-    trace = go.Scatter(x=xs, y=ys, mode="markers",
+    trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
                                    color=[colormap.normalize(y) for y in ys],
                                    colorscale=colormap.get_colorscale(),
@@ -800,6 +801,11 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                        colorscale=colormap.get_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
                        zmax=colormap.hmax, hoverinfo='z')
+    #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
+    #             colorscale=colormap.get_colorscale(),
+    #             showscale=colorbar, zmin=colormap.hmin,
+    #             zmax=colormap.hmax, hoverinfo='z')
+    
     data = [trace]
     
     nX = gateMatrix.shape[1]
@@ -935,6 +941,9 @@ class BoxKeyPlot(WorkspacePlot):
         trace = go.Heatmap(z=_np.zeros((nY,nX),'d'),
                            colorscale=[ [0, 'white'], [1, 'black'] ],
                            showscale=False, zmin=0,zmax=1,hoverinfo='none')
+        #trace = dict(type='heatmapgl', z=_np.zeros((nY,nX),'d'),
+        #                   colorscale=[ [0, 'white'], [1, 'black'] ],
+        #                   showscale=False, zmin=0,zmax=1,hoverinfo='none')
         data = [trace]
 
         gridlines = []

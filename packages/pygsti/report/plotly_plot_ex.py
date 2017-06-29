@@ -15,8 +15,9 @@ from pkg_resources import resource_string
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, autosize=False,
-            lock_aspect_ratio=False, master=True):
+            lock_aspect_ratio=False, master=True, click_to_display=False):
     """ 
+    TODO: docstring
     Create a pyGSTi plotly graph locally, returning HTML & JS separately.
 
     figure_or_data -- a plotly.graph_objs.Figure or plotly.graph_objs.Data or
@@ -110,6 +111,14 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         groupclass = "pygsti-plotgroup-master" \
                      if master else "pygsti-plotgroup-slave"
 
+
+        plotly_click_js = ""
+        if click_to_display and master:
+            # move plotly plot creation from "create" to "click" handler
+            plotly_click_js = plotly_create_js
+            plotly_create_js = ""
+            
+            
         full_script = (  #(assume this will all be run within an on-ready handler)
             '  $("#{id}").addClass("{groupclass}");\n' #perform this right away
             '  $("#{id}").on("init", function(event) {{\n' #always add init-size handler
@@ -117,9 +126,17 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '    pex_init_slaves($("#{id}"));\n'
             '    console.log("Initialized {id}");\n'
             '  }});\n'
+            '  $("#{id}").on("click.pygsti", function(event) {{\n'
+            '     plotman.enqueue(function() {{ \n'
+            '       {plotlyClickJS} \n'
+            '     }}, "Click-creating Plot {id}" );\n'
+            '     $("#{id}").off("click.pygsti");\n' #remove this event handler
+            '     console.log("Click-Created {id}");\n'
+            '  }});\n'
             '  $("#{id}").on("create", function(event, fracw, frach) {{\n' #always add create handler
             '     pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'
             '     plotman.enqueue(function() {{ \n'
+            '       $("#{id}").addClass("pygBackground");\n'
             '       {plotlyCreateJS} \n'
             '       pex_create_slaves($("#{id}"), {ow}, {oh});\n'
             '     }}, "Creating Plot {id}" );\n'
@@ -137,6 +154,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                  groupclass=groupclass,
                  ow=orig_width if orig_width else "null",
                  oh=orig_height if orig_height else "null",
+                 plotlyClickJS=plotly_click_js,
                  plotlyCreateJS=plotly_create_js,
                  plotlyResizeJS=plotly_resize_js)
 

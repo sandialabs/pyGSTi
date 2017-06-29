@@ -70,7 +70,7 @@ class ReportTable(object):
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
                scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
-               brackets=False):
+               brackets=False, click_to_display=False):
         '''
         Render a table object
 
@@ -90,6 +90,8 @@ class ReportTable(object):
             allow a table to be resized
         autosize       : bool
             allow a table to be automatically sized
+        click_to_display : bool
+            table plots must be clicked to prompt creation
         fontsize       : int
             override fontsize of a tabel
         complexAsPolar : bool
@@ -114,6 +116,7 @@ class ReportTable(object):
             'sciprecision'   : sciprecision,
             'resizable'      : resizable,
             'autosize'       : autosize,
+            'click_to_display' : click_to_display,
             'fontsize'       : fontsize,
             'complexAsPolar' : complexAsPolar,
             'brackets'       : brackets,

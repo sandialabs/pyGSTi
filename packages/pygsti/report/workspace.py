@@ -1567,6 +1567,27 @@ class WorkspaceTable(WorkspaceOutput):
         self.initargs = args
         self.tables,self.switchboards,self.sbSwitchIndices,self.switchpos_map = \
             self.ws.switchedCompute(self.tablefn, *self.initargs)
+        self.options = { 'click_to_display': False }
+
+    def set_render_options(self, click_to_display=None):
+        """
+        Sets rendering options, which affect how render() behaves.
+
+        Parameters
+        ----------
+        click_to_display : bool, optional
+            If True, table plots are not initially created but must
+            be clicked to prompt creation.  This is False by default,
+            and can be useful to set to True for tables with
+            especially complex plots whose creation would slow down
+            page loading significantly.
+
+        Returns
+        -------
+        None
+        """
+        if click_to_display is not None:
+            self.options['click_to_display'] = click_to_display
 
         
     def render(self, typ, global_requirejs=False, precision=None,
@@ -1638,8 +1659,8 @@ class WorkspaceTable(WorkspaceOutput):
                                               precision=precDict['normal'],
                                               polarprecision=precDict['polar'],
                                               sciprecision=precDict['sci'],
-                                              resizable=resizable, autosize=autosize)
-                
+                                              resizable=resizable, autosize=autosize,
+                                              click_to_display=self.options['click_to_display'])
 
                 divHTML.append("<div class='single_switched_value' id='%s'>\n%s\n</div>\n" %
                                (tableDivID,table_dict['html']))
@@ -1654,24 +1675,31 @@ class WorkspaceTable(WorkspaceOutput):
                 ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
             ret['js'] += '  $(document).ready(function() {\n'
 
-            #FUTURE: make rendering conditional on whether a flag is set (for rendering math)
-            ret['js'] += ('  plotman.enqueue(function() {{ \n'
-                          '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
-                          '             {{left: "$$", right: "$$", display: true}},\n'
-                          '             {{left: "$", right: "$", display: false}},\n'
-                          '             ] }} );\n').format(tableID=tableID)
-
-            #Do all of this *after* math is rendered
+            #Table initialization javascript: this will either be within the math-rendering (queued) function
+            # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
+            init_table_js = ''
             if resizable:
-                ret['js'] += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+                init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
             if autosize:
-                ret['js'] += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-            if resizable or autosize:
-                ret['js'] += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
-
-            ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
+                init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+            if resizable or autosize: #TODO: doesn't this delayed creation always happen?
+                init_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
 
             ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+
+            if '$' in ret['html']:
+                # then there is math text that needs rendering,
+                # so queue this, *then* trigger plot creation
+                ret['js'] += ('  plotman.enqueue(function() {{ \n'
+                              '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                              '             {{left: "$$", right: "$$", display: true}},\n'
+                              '             {{left: "$", right: "$", display: false}},\n'
+                              '             ] }} );\n').format(tableID=tableID)
+                ret['js'] += init_table_js
+                ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
+            else:
+                #Note: this MUST be below plot handler init, as this triggers plot creation
+                ret['js'] += init_table_js 
             
             ret['js'] += '}); //end on-ready handler\n'
             if global_requirejs:
@@ -1714,7 +1742,27 @@ class WorkspacePlot(WorkspaceOutput):
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
+        self.options = { 'click_to_display': False }
 
+    def set_render_options(self, click_to_display=None):
+        """
+        Sets rendering options, which affect how render() behaves.
+
+        Parameters
+        ----------
+        click_to_display : bool, optional
+            If True, the plot is rendered so that it is not initially
+            created, but must be clicked to prompt creation.  This is
+            False by default, and can be useful to set to True for 
+            especially complex plots whose creation would slow down
+            page loading significantly.
+
+        Returns
+        -------
+        None
+        """
+        if click_to_display is not None:
+            self.options['click_to_display'] = click_to_display
         
     def render(self, typ="html", global_requirejs=False, resizable=True, autosize=False):
         """
@@ -1781,14 +1829,15 @@ class WorkspacePlot(WorkspaceOutput):
                 fig_dict = _plotly_ex.plot_ex(
                     fig, show_link=False,
                     autosize=autosize, resizable=resizable,
-                    lock_aspect_ratio=True, master=True ) # bool(i==iMaster)
+                    lock_aspect_ratio=True, master=True, # bool(i==iMaster)
+                    click_to_display=self.options['click_to_display'])
                 divIDs.append(getPlotlyDivID(fig_dict['html']))
 
             divHTML.append("<div class='relwrap single_switched_value'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
             divJS.append( fig_dict['js'] )
             
         base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                self.switchboards, self.sbSwitchIndices)        
+                                self.switchboards, self.sbSwitchIndices)
         ret = { 'html': base['html'], 'js': '' }
 
         # "handlers only" mode is when plot is embedded in something
