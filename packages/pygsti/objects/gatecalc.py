@@ -1686,7 +1686,7 @@ class GateCalc(object):
 
     def residuals(self, otherCalc, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
+                      normalize=True, includePOVM=True):
         """
         Compute the weighted residuals between two
         gatesets.  Differences in each corresponding gate matrix and spam
@@ -1759,7 +1759,7 @@ class GateCalc(object):
 
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None:
+            if self.povm_identity is not None and includePOVM:
                 wt = itemWeights.get(self._identityLabel, spamWeight)
                 resids.append(
                     wt * self.povm_identity.residuals(
@@ -1785,7 +1785,7 @@ class GateCalc(object):
                 nSummands += wt * Evec.dim
 
             if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
+               otherCalc.povm_identity is not None and includePOVM:
                 wt = itemWeights.get(self._identityLabel, spamWeight)
                 resids.append(
                     wt * self.povm_identity.residuals(

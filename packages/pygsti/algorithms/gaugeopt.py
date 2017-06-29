@@ -223,7 +223,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         spamWeight = itemWeights.get('spam',1.0)
 
         def objective_fn_ls(gs):
-            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights, includePOVM=False)
             return r
 
         result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
@@ -348,14 +348,6 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         d = gates[0].shape[0]
         N = vec.shape[0]
         L = d**2 * len(gates) + d*len(preps) + d*len(effects)
-        # ================================================================================
-        # This is concerning.. 
-        # ================================================================================
-        # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        L += 16 #???? Additional vec ????
-        # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        # ================================================================================
-        # ================================================================================
         jacMx = _np.zeros((L, N))
 
         # S, and S_inv are (dxd)
