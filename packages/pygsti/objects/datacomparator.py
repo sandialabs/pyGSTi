@@ -144,6 +144,7 @@ class DataComparator():
         number_of_single_thresh_violators = _np.sum(_np.where(self.llrVals>single_string_thresh,1,0))
         composite_thresh = find_thresh(confidence_level,1,self.num_strs*self.dof)
         composite_score = _np.sum(self.llrVals)
+        
         print("Consistency report- datasets are inconsistent at given confidence level if EITHER of the following scores report inconsistency.")
         print()
         print("Threshold for individual gatestring scores is {0}".format(single_string_thresh))
@@ -160,6 +161,11 @@ class DataComparator():
         else:
             print("As measured by sum of gatestring scores, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
         print("Total loglikelihood is {0}".format(composite_score))
+        
+        self.single_string_thresh = single_string_thresh
+        self.number_of_single_thresh_violators = number_of_single_thresh_violators
+        self.composite_thresh = composite_thresh
+        self.composite_score = composite_score
         
     def rectify_datasets(self,confidence_level=0.95,target_score='dof',x0=0.5,method='Nelder-Mead'):
         if target_score == 'dof':
