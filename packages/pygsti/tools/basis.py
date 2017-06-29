@@ -9,30 +9,58 @@ import numpy as _np
 
 from pprint import pprint
 
+import math
+
 from .memoize       import memoize
 from .parameterized import parameterized
 
 from .dim import Dim
 
-# TODO: Docstrings
-
 class Basis(object):
-    Constructors = dict()
+    Constructors = dict() # Dictionary of functions that build default bases, by name
+    LongNames    = dict() # Dictionary of longnames by shortnames
+    RealBases    = dict() # Dictionary of booleans by name, indicating if a basis is real
+    CustomCount  = 0      # The number of custom bases
 
-    def __init__(self, name, matrixGroups, dim, longname=None, real=True):
-        assert len(matrixGroups) > 0, 'Cannot build a Basis with no matrices'
-        if not isinstance(matrixGroups[0], list): # If not nested lists (really just 'matrices')
-            matrixGroups = [matrixGroups]         # Then nest
+    def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, **kwargs):
+        if isinstance(name, Basis):
+            matrixGroups = name.matrixGroups
+            name         = name.name
+        else:
+            if matrices is None: # built by name and dim, ie Basis('pp', 4)
+                assert name is not None and dim is not None, \
+                        'If matrices is none, name and dim must be supplied to Basis.__init__'
+                matrices = build_matrix_groups(name, dim, **kwargs)
+
+            assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
+            if not isinstance(matrices[0], list): # If not nested lists (really just 'matrices')
+                matrixGroups = [matrices]         # Then nest
+            else:
+                matrixGroups = matrices           # Given as nested lists
+            if name is None:
+                name = 'CustomBasis_{}'.format(Basis.CustomCount)
+                CustomCount += 1
+
+        if real is None:
+            try:
+                real = Basis.RealBases[name]
+            except KeyError:
+                real = True
+
+        blockDims = [int(math.sqrt(len(group))) for group in matrixGroups]
 
         self.matrixGroups = matrixGroups
         # Equivalent to matrices for non-composite bases
         self.matrices     = self.get_composite_matrices() 
-        self.dim          = dim
+        self.dim          = Dim(blockDims)
         self.name         = name
         self.real         = real
 
         if longname is None:
-            self.longname = self.name
+            try:
+                self.longname = Basis.LongNames[self.name]
+            except KeyError:
+                self.longname = self.name
         else:
             self.longname = longname
 
@@ -40,6 +68,9 @@ class Basis(object):
 
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
+
+    def __repr__(self):
+        return str(self)
 
     def __getitem__(self, index):
         return self.matrices[index]
@@ -108,6 +139,7 @@ class Basis(object):
 
     @memoize
     def get_to_std(self):
+        print(self)
         toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
         #Since a multi-block basis is just the direct sum of the individual block bases,
         # transform mx is just the transfrom matrices of the individual blocks along the
@@ -126,12 +158,6 @@ class Basis(object):
     def get_from_std(self):
         return _inv(self.get_to_std())
 
-    @staticmethod
-    def create(basisname, dim, *args, **kwargs):
-        if basisname in Basis.Constructors:
-            return Basis.Constructors[basisname](dim, *args, **kwargs)
-        raise NotImplementedError('No instructions to create basis: {} {}'.format(basisname, dim))
-
 # TODO: move this and other functions into the basis class somehow
 # Alternatively, use the numpy approach and provide both external and member functions
 # i.e.  a.reshape(*args) v np.reshape(a, *args)
@@ -142,31 +168,19 @@ def build_composite_basis(bases):
       (or a list of mixed tuples and Basis objects)
     '''
     assert len(bases) > 0, 'Need at least one basis-dim pair to compose'
-    bases = [build_basis(*item) for item in bases]
+    bases = [Basis(*item) for item in bases]
 
-    dim           = Dim(0)
-    dim.dmDim     = sum(basis.dim.dmDim for basis in bases)
-    dim.gateDim   = sum(basis.dim.gateDim for basis in bases)
-    dim.blockDims = [bdim for basis in bases for bdim in basis.dim.blockDims] 
     matrixGroups  = [basis.matrices for basis in bases]
     name          = ','.join(basis.name for basis in bases)
     longname      = ','.join(basis.longname for basis in bases)
     real          = all(basis.real for basis in bases)
 
-    composite = Basis(name, matrixGroups, dim, longname=longname, real=real)
+    composite = Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
     return composite
 
-def build_basis(basis, dimOrBlockDims=None):
-    if isinstance(basis, Basis):
-        assert dimOrBlockDims is None
-        return basis
-    else:
-        assert dimOrBlockDims is not None
-        return Basis.create(basis, dimOrBlockDims)
-
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
-    from_basis = build_basis(from_basis, dimOrBlockDims)
-    to_basis   = build_basis(to_basis, dimOrBlockDims)
+    from_basis = Basis(from_basis, dimOrBlockDims)
+    to_basis   = Basis(to_basis, dimOrBlockDims)
 
     return _np.dot(to_basis.get_from_std(), from_basis.get_to_std())
 
@@ -205,8 +219,8 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
 
     dim = Dim(dimOrBlockDims)
 
-    from_basis = build_basis(from_basis, dim)
-    to_basis   = build_basis(to_basis,   dim)
+    from_basis = Basis(from_basis, dim)
+    to_basis   = Basis(to_basis,   dim)
     if len(mx.shape) not in [1, 2]:
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
     toMx   = basis_transform_matrix(from_basis, to_basis, dim)
@@ -222,19 +236,31 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
-@parameterized # this decorator takes additional arguments
+def build_matrix_groups(name, dim, **kwargs):
+    if name not in Basis.Constructors:
+        raise NotImplementedError('No instructions to create the basis:  {} of dim {}'.format(
+            name, dim))
+    f = Basis.Constructors[name]
+    matrixGroups = []
+    dim = Dim(dim)
+    for blockDim in dim.blockDims:
+        group = f(blockDim, **kwargs)
+        if isinstance(group, Basis):
+            matrixGroups.append(group.matrices)
+        else:
+            matrixGroups.append(f(blockDim, **kwargs))
+    return matrixGroups
+
+@parameterized # this decorator takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
+    Basis.Constructors[name] = f
+    Basis.LongNames[name] = longname
+    Basis.RealBases[name] = real
     @wraps(f)
     def wrapper(*args, **kwargs):
         assert len(args) > 0, 'Dim argument required for basis'
-        dimOrBlockDims = args[0]
-        dim = Dim(dimOrBlockDims)
-        matrixGroups = []
-        for blockDim in dim.blockDims:
-            matrixGroups.append(f(blockDim))
-        b = Basis(name, matrixGroups, dim, longname=longname, real=real)
-        return b
-    Basis.Constructors[name] = wrapper
+        matrixGroups = build_matrix_groups(name, args[0], **kwargs)
+        return Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
     return wrapper
 
 def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
@@ -264,7 +290,7 @@ def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
         assert(mx.shape == (dimOrBlockDims, dimOrBlockDims) )
         return mx
     else:
-        basisobj = build_basis(basis, dimOrBlockDims)
+        basisobj = Basis(basis, dimOrBlockDims)
         return _np.dot(basisobj.get_contract_mx(), _np.dot(mx, basisobj.get_expand_mx()))
 
 def contract_to_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
@@ -297,5 +323,5 @@ def contract_to_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
         assert(mx.shape == (dimOrBlockDims,dimOrBlockDims) )
         return mx
     else:
-        basisobj = build_basis(basis, dimOrBlockDims)
+        basisobj = Basis(basis, dimOrBlockDims)
         return _np.dot(basisobj.get_expand_mx(), _np.dot(mx, basisobj.get_contract_mx()))

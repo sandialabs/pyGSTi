@@ -10,8 +10,7 @@ import numbers      as _numbers
 import collections  as _collections
 import numpy        as _np
 
-from .basis import Basis, basis_constructor, change_basis, basis_transform_matrix
-from .basis import build_basis
+from .basis import basis_constructor 
 from .dim   import Dim
 '''
 Functions for creating the standard sets of matrices in the standard, pauli, gell mann, and qutrit bases

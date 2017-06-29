@@ -67,8 +67,6 @@ class BasisBaseTestCase(BaseTestCase):
                 modernTransform = basis_transform_matrix(basisA, basisB, dim)
                 legacyTransform = basis_transform_matrix(basisA, basisB, dim)
                 self.assertArraysAlmostEqual(modernTransform, legacyTransform)
-                
-
 
     def assertBasesAlmostEqual(self, a, b):
         for mxA, mxB in zip(a, b):
@@ -77,7 +75,7 @@ class BasisBaseTestCase(BaseTestCase):
     def test_matrices(self):
         basisDimPairs = [
                 ('std', [2]),
-                ('gm',  [2, [2,1]]),
+                ('gm',  [2]),#, [2,1]]),
                 ('pp',  [2]),
                 ('qt',  [3])]
         for basis, dims in basisDimPairs:

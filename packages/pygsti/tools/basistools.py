@@ -98,14 +98,15 @@ def basis_longname(basis, dimOrBlockDims=None):
     -------
     string
     """
-    if basis in ['gm', 'pp'] and dimOrBlockDims in (2,[2],(2,)): return "Pauli"
+    if basis in ['gm', 'pp'] and dimOrBlockDims in (2,[2],(2,)): 
+        return "Pauli"
     else:
         if dimOrBlockDims is None:
             if basis == 'qt':
                 dimOrBlockDims = 3
             else:
                 dimOrBlockDims = 2
-        basis = build_basis(basis, dimOrBlockDims)
+        basis = Basis(basis, dimOrBlockDims)
         return basis.longname
 
 def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
@@ -251,10 +252,9 @@ def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
         equal to sum( block_dim_i^2 ).
     """
     if maxWeight is None:
-        return Basis.create(basis, dimOrBlockDims)
+        return Basis(basis, dimOrBlockDims)
     else:
-        assert(basis == 'pp')
-        return Basis.create(basis, dimOrBlockDims, maxWeight=maxWeight)
+        return Basis(basis, dimOrBlockDims, maxWeight=maxWeight)
     
 
 #TODO: maybe make these more general than for 1 or 2 qubits??
