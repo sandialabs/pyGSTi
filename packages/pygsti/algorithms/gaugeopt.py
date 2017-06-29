@@ -326,104 +326,106 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
     if bToStdout: print_obj_func(x0) #print initial point
 
     def jacobian(vec):
-        N = vec.shape[0]
+        '''
+        The derivative of the objective function with respect the input parameter vector, v
+        This is UNSQUARED, because the residuals are unsquared.
+        '''
+        # equivalent to a 'from numpy import dot', but only for the scope of this function
         dot = _np.dot
-        jacMx = _np.zeros((1360, 256))
+
         gaugeGroupEl.from_vector(vec)
-        # Do these two steps need to be done?
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
 
-        for i, G in enumerate(gs.gates.values()):
-            d      = G.shape[0]
-            # G, Gt (unused), S, and S_inv are all (dxd)
-            S      = gaugeGroupEl.get_transform_matrix()
-            S_inv  = gaugeGroupEl.get_transform_matrix_inverse()
 
-            # dS is ((d*d)xlen(v))
-            dS     = gaugeGroupEl.gate.deriv_wrt_params()
-            #print('dS')
-            #print(dS.shape)
-            # dS is (dxdxlen(v))
-            dS     = dS.reshape((d, d, N))
-            #print('dS')
-            #print(dS.shape)
-            right = dot(S_inv, dot(G, S))
-            #print('right')
-            #print(right.shape)
-            rolled = _np.rollaxis(dS, 2)
-            #print('rolled dS')
-            #print(rolled.shape)
-            right = dot(rolled, right)
-            #print('right')
-            #print(right.shape)
+        gates   = list(gs.gates.values())
+        preps   = list(gs.preps.values())
+        effects = list(gs.effects.values())
+        assert len(gates) > 0
 
-            #print('rolled')
-            #print(rolled.shape)
-            left = dot(G, rolled)
-            #print('left')
-            #print(left.shape)
-            left = _np.rollaxis(left, 1)
-            #print('left')
-            #print(left.shape)
+        # Indices: Jacobian output matrix has shape (L, N)
+        start = 0
+        d = gates[0].shape[0]
+        N = vec.shape[0]
+        L = d**2 * len(gates) + d*len(preps) + d*len(effects)
+        # ================================================================================
+        # This is concerning.. 
+        # ================================================================================
+        # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        L += 16 #???? Additional vec ????
+        # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        # ================================================================================
+        # ================================================================================
+        jacMx = _np.zeros((L, N))
+
+        # S, and S_inv are (dxd)
+        S       = gaugeGroupEl.get_transform_matrix()
+        S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
+        # dS is ((d*d)xlen(v))
+        dS      = gaugeGroupEl.gate.deriv_wrt_params()
+        # dS is (dxdxlen(v))
+        dS      = dS.reshape((d, d, N))
+        rolled  = _np.rollaxis(dS, 2)
+        rolled2 = _np.rollaxis(rolled, 1)
+        for G in gates:
+            '''
+            Jac_gate = S_inv @ [Gk @ dS - dS @ S_inv @ Gk @ S]
+                                ^^^^^^^   ^^^^^^^^^^^^^^^^^^^
+                                left      right
+            => (d**2, N) mx
+            '''
+            right  = dot(S_inv, dot(G, S))
+            right  = dot(rolled, right)
+            left   = dot(G, rolled)
+            left   = _np.rollaxis(left, 1)
             result = left - right
-            #print('result')
-            #print(result.shape)
             result = dot(S_inv, result)
-            #print('result')
-            #print(result.shape)
             result = _np.rollaxis(result, 2)
-            #print('result')
-            #print(result.shape)
             result = result.reshape(d ** 2, N)
-            #print('result')
-            #print(result.shape)
-            jacMx[i*(d**2) : (i+1)*N] = result
-        #print(jacMx)
-        #print(jacMx.shape)
-        #print(jacMx)
-
+            assert result.shape == (d ** 2, N)
+            jacMx[start:start+d**2] = result
+            start += (d**2)
+        for P in preps:
+            '''
+            Jac_prep = - S_inv @ dS @ S_inv @ P
+                                 ^^^^^^^^^^^^^^       
+                                 right
+            => (d, N) mx
+            '''
+            right  = dot(S_inv, P)
+            right  = _np.dot(rolled2, right)
+            right  = right.reshape((d, N)) # Change (d, N, 1) to (d, N)
+            result = _np.dot(S_inv, right)
+            assert result.shape == (d, N)
+            jacMx[start:start+d] = result
+            start += (d)
+        for E in effects:
+            '''
+            Jac_effect = Ek.T @ dS
+            => (d, N) mx
+            '''
+            result = dot(E.T, dS)
+            result = result.reshape(d, N) # Change (1, d, N) to (d, N)
+            assert result.shape == (d, N)
+            jacMx[start:start+d] = result
+            start += (d)
         return jacMx
-    jacobian(x0)
 
     minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
-                                max_nfev=maxfev, ftol=tol)
-    '''
-    minSoljac1 = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
-                                max_nfev=maxfev, ftol=tol)
-    minSoljac2 = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
-                                max_nfev=maxfev, ftol=tol)
-    minSol1    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
     minSol2    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
 
-    gaugeGroupEl.from_vector(minSol1.x)
+    gaugeGroupEl.from_vector(minSol2.x)
     a = gateset.copy()
     a.transform(gaugeGroupEl)
-    gaugeGroupEl.from_vector(minSol2.x)
-    b = gateset.copy()
-    b.transform(gaugeGroupEl)
-    gaugeGroupEl.from_vector(minSoljac1.x)
-    c = gateset.copy()
-    c.transform(gaugeGroupEl)
-    gaugeGroupEl.from_vector(minSoljac2.x)
-    d = gateset.copy()
-    d.transform(gaugeGroupEl)
-    print('baseline (same gateset)')
-    print(a.frobeniusdist(a))
-    print('different runs w/out jacobian')
-    print(a.frobeniusdist(b))
-    print('different runs w/ jacobian')
-    print(c.frobeniusdist(d))
-    print('no jacobian to jacobian')
-    print(a.frobeniusdist(c))
-    1/0
-    '''
+
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
 
+    print('jacobian compared to finite differences')
+    print(a.frobeniusdist(newGateset))
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
