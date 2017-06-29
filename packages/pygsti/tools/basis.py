@@ -33,10 +33,14 @@ class Basis(object):
                 matrices = build_matrix_groups(name, dim, **kwargs)
 
             assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
-            if not isinstance(matrices[0], list): # If not nested lists (really just 'matrices')
-                matrixGroups = [matrices]         # Then nest
+            first = matrices[0]
+            if isinstance(first, tuple) or \
+                    isinstance(first, Basis):
+                matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
+            elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
+                matrixGroups = [matrices]                      # Then nest
             else:
-                matrixGroups = matrices           # Given as nested lists
+                matrixGroups = matrices                        # Given as nested lists
             if name is None:
                 name = 'CustomBasis_{}'.format(Basis.CustomCount)
                 CustomCount += 1
