@@ -15,6 +15,7 @@ from . import matrixtools as _mt
 from . import basistools as _bt
 from . import lindbladiantools as _lt
 from . import compattools as _compat
+from ..objects.basis import change_basis
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -866,7 +867,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       that these matricies are in the *std* (matrix unit) basis.
     """
 
-    errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    errgen_std = change_basis(errgen, mxBasis, "std")
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
     nQubits = _np.log2(d)
@@ -1130,7 +1131,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """
 
-    errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    errgen_std = change_basis(errgen, mxBasis, "std")
 
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
@@ -1221,7 +1222,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
     else:
         return hamProjs, otherProjs
 
-
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
 def rotation_gate_mx(r, mxBasis="gm"):
@@ -1266,8 +1266,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
 
-    assert mxBasis in ['pp', 'gm', 'std'], "Invalid basis specifier: %s" % mxBasis
-    ret = _bt.change_basis(mx, 'std', mxBasis, None)
+    ret = change_basis(stdGate, 'std', mxBasis, None)
 
     return ret
 
@@ -1341,13 +1340,13 @@ def project_gateset(gateset, targetGateset,
             hamProj, hamGens = std_errgen_projections(
                 errgen, "hamiltonian", basisNm, basisNm, True)
             ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
-            ham_error_gen = _bt.change_basis(ham_error_gen,"std",basisNm)
+            ham_error_gen = change_basis(ham_error_gen,"std",basisNm)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
                 errgen, "stochastic", basisNm, basisNm, True)
             sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-            sto_error_gen = _bt.change_basis(sto_error_gen,"std",basisNm)
+            sto_error_gen = change_basis(sto_error_gen,"std",basisNm)
             
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
             HProj, OProj, HGens, OGens = \
@@ -1357,7 +1356,7 @@ def project_gateset(gateset, targetGateset,
             #Note: return values *can* be None if an empty/None basis is given
             lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
                             _np.einsum('ij,ijkl', OProj, OGens)
-            lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basisNm)
+            lnd_error_gen = change_basis(lnd_error_gen,"std",basisNm)
 
         if 'H' in projectiontypes:
             gsDict['H'].gates[gl] = gate_from_error_generator(
@@ -1386,7 +1385,7 @@ def project_gateset(gateset, targetGateset,
               #OProj_cp is now a pos-def matrix
             lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
                                _np.einsum('ij,ijkl', OProj_cp, OGens)
-            lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basisNm)
+            lnd_error_gen_cp = change_basis(lnd_error_gen_cp,"std",basisNm)
 
             gsDict['LND'].gates[gl] = gate_from_error_generator(
                 lnd_error_gen_cp, targetGate, genType)
@@ -1413,3 +1412,26 @@ def project_gateset(gateset, targetGateset,
     ret_gs = [ gsDict[p] for p in projectiontypes ]
     ret_Nps = [ NpDict[p] for p in projectiontypes ]
     return ret_gs, ret_Nps
+
+
+def unitary_to_pauligate(U):
+    """
+    Get the linear operator on (vectorized) density
+    matrices corresponding to a n-qubit unitary
+    operator on states.
+
+    Parameters
+    ----------
+    U : numpy array
+        A dxd array giving the action of the unitary
+        on a state in the sigma-z basis.
+        where d = 2 ** n-qubits
+
+    Returns
+    -------
+    numpy array
+        The operator on density matrices that have been
+        vectorized as d**2 vectors in the Pauli basis.
+    """
+    assert U.shape[0] == U.shape[1], '"Unitary" matrix is not square'
+    return change_basis(unitary_to_process_mx(U), 'std', 'pp')
