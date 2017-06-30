@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from .basistools import *
+from ..objects.basis import basis_matrices
 
 def hamiltonian_to_lindbladian(hamiltonian):
     """
@@ -35,7 +36,7 @@ def hamiltonian_to_lindbladian(hamiltonian):
     d = hamiltonian.shape[0]
     lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
 
-    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
         rho1 = -1j*(_np.dot(hamiltonian,rho0) - _np.dot(rho0,hamiltonian))
         lindbladian[:,i] = rho1.flatten()
           # vectorize rho1 & set as linbladian column
@@ -72,7 +73,7 @@ def stochastic_lindbladian(Q):
     d = Q.shape[0]
     lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
 
-    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
         rho1 = _np.dot(Q,_np.dot(rho0,Qdag))
         lindbladian[:,i] = rho1.flatten()
           # vectorize rho1 & set as linbladian column
@@ -113,7 +114,7 @@ def nonham_lindbladian(Lm,Ln):
     lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
 
 #    print("BEGIN VERBOSE") #DEBUG!!!
-    for i,rho0 in enumerate(std_matrices(d)): #rho0 == input density mx
+    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
         rho1 = _np.dot(Ln,_np.dot(rho0,Lm_dag)) - 0.5 * (
             _np.dot(rho0,_np.dot(Lm_dag,Ln))+_np.dot(_np.dot(Lm_dag,Ln),rho0))
 #        print("rho0[%d] = \n" % i,rho0)

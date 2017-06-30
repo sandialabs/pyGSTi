@@ -30,6 +30,7 @@ from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
 from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
+from .basis import Basis
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -92,7 +93,7 @@ class GateSet(object):
         # that the gates and SPAM vectors are expressed in.  This
         # is for interpretational purposes only, and is reset often
         # (for instance, when reading GateSet params from a vector)
-        self._basisNameAndDim = ("unknown",None)
+        self.reset_basis()
 
         #SPAM vectors
         self.preps = _ld.OrderedSPAMVecDict(self,default_param,
@@ -180,76 +181,12 @@ class GateSet(object):
         """
         return self._dim
 
-
-    def get_basis_name(self):
-        """
-        Returns the name abbreviation of the basis, essentially identifying
-        its type.  The gate matrices and SPAM vectors within the GateSet
-        are to be interpreted within this basis.  Note that the dimension of
-        the (matrix) elements of the basis can be obtained by
-        get_basis_dimension(...).  The basis abbreviations use by pyGSTi are
-        "gm" (a Gell-Mann basis), "pp" (a Pauli-product basis), and "std"
-        (a matrix unit, or "standard" basis).  If the basis is unknown, the
-        string "unknown" is returned.
-
-        Returns
-        -------
-        str
-            basis abbreviation (or "unknown")
-        """
-        return self._basisNameAndDim[0]
-
-
-    def get_basis_dimension(self):
-        """
-        Get the dimension of the basis matrices, or more generally,
-        the structure of the density matrix space as a list of integer
-        dimensions.  In the latter case, the dimension of each basis
-        element (a matrix) is d x d, where d equals the sum of the
-        returned list of integers. (In the former case, d equals the
-        single returned integers.)  This density-matrix-space
-        structure can be used, along with the basis name (cf.
-        get_basis_name), to construct that basis of matrices used
-        to express the gate matrices and SPAM vectors of this
-        GateSet.
-
-        Returns
-        -------
-        int or list
-            density-matrix dimension or a list of integers
-            specifying the dimension of each term in a
-            direct sum decomposition of the density matrix
-            space.
-        """
-        return self._basisNameAndDim[1]
-
-
-    def set_basis(self, basisName, basisDimension):
-        """
-        Sets the basis name and dimension.  See
-        get_basis_name and gate_basis_dimension for
-        details on these quantities.
-
-        Parameters
-        ----------
-        basisName : str
-           The name abbreviation for the basis. Typically in {"pp","gm","std"}
-
-        basisDimension : int or list
-           The dimension of the density matrix space this basis spans, or a
-           list specifying the dimensions of terms in a direct-sum
-           decomposition of the density matrix space.
-        """
-        self._basisNameAndDim = (basisName, basisDimension)
-
-
     def reset_basis(self):
         """
         "Forgets" the basis name and dimension by setting
         these quantities to "unkown" and None, respectively.
         """
-        self._basisNameAndDim = ("unknown", None)
-
+        self.basis = Basis('unknown', None)
 
     def get_prep_labels(self):
         """
@@ -466,7 +403,7 @@ class GateSet(object):
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
         etyp = "static" if typ == "static" else "full"
-        basis = self.get_basis_name()
+        basis = self.basis.name
 
         for lbl,gate in self.gates.items():
             self.gates[lbl] = _gate.convert(gate, typ, basis)
@@ -2598,7 +2535,7 @@ class GateSet(object):
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset.povm_identity = self.povm_identity.copy()
         newGateset._dim = self._dim
-        newGateset._basisNameAndDim = self._basisNameAndDim
+        newGateset.basis = self.basis
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
@@ -2778,7 +2715,7 @@ class GateSet(object):
         """
         newGateset = self.copy() # start by just copying gateset
         dim = self.get_dimension()
-        myBasis = self.get_basis_name()
+        myBasis = self.basis.name
 
         if max_rotate is not None:
             if rotate is not None:
@@ -2849,7 +2786,7 @@ class GateSet(object):
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
             randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = _bt.change_basis(randGate, "std", self.get_basis_name())
+            randGate = _bt.change_basis(randGate, "std", self.basis.name)
 
             gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randGate,gate))
@@ -3018,7 +2955,7 @@ class GateSet(object):
         -------
         None
         """
-        mxBasis = self.get_basis_name()
+        mxBasis = self.basis.name
         print(self)
         print("\n")
         print("Basis = ",mxBasis)

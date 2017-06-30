@@ -16,6 +16,7 @@ from ..tools import gatetools as _gt
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
+from ..objects.basis import Basis
 
 
 #############################################
@@ -996,7 +997,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     else:
         basisDims = stateSpaceDims
 
-    ret.set_basis(basis, basisDims)
+    ret.basis = Basis(basis, basisDims)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)

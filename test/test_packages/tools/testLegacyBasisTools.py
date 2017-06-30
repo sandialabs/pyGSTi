@@ -83,7 +83,7 @@ class BasisBaseTestCase(BaseTestCase):
                 print(basis, dim)
                 modernMxs = basis_matrices(basis, dim)
                 legacyMxs = legacy.basis_matrices(basis, dim)
-                pprint(modernMxs.matrices)
+                pprint(modernMxs)
                 pprint(legacyMxs)
                 self.assertBasesAlmostEqual(modernMxs, legacyMxs)
 

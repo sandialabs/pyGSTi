@@ -849,7 +849,7 @@ def read_gateset(filename):
             raise ValueError("Cannot infer basis dimension!")
 
     #Set basis
-    gs.set_basis(basis_abbrev, basis_dims)
+    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:

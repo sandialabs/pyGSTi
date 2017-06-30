@@ -145,12 +145,12 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.get_basis_name()
-    basisDim = gs.get_basis_dimension()
+    mxBasis = gs.basis.name
+    basisDim = gs.basis.dim.blockDims
 
     def objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+        gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
@@ -179,7 +179,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.get_basis_name()
+    mxBasis = gs.basis.name
     #printer.log('', 1)
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
 

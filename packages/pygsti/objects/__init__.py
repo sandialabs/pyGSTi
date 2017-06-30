@@ -51,3 +51,4 @@ from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
 #Functions
 from .gate import compose, optimize_gate
 from .verbosityprinter import VerbosityPrinter
+from .basis import Basis

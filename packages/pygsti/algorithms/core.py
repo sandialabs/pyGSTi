@@ -1008,8 +1008,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
     gs = startGateset.copy()
-    gateBasis = startGateset.get_basis_name()
-    basisDim = startGateset.get_basis_dimension()
+    gateBasis = startGateset.basis.name
+    basisDim = startGateset.basis.dim.blockDims
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -1801,8 +1801,8 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                     if gatestr in stringsToEstimate:
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
-            lsgstGateset.set_basis(startGateset.get_basis_name(),
-                                   startGateset.get_basis_dimension())
+            lsgstGateset.basis = Basis(startGateset.basis.name,
+                                   startGateset.basis.dim.blockDims)
 
             minErr, lsgstGateset = \
                 do_mc2gst( dataset, lsgstGateset, stringsToEstimate,
@@ -2181,8 +2181,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     tStart = _time.time()
 
     gs = startGateset.copy()
-    gateBasis = startGateset.get_basis_name()
-    basisDim = startGateset.get_basis_dimension()
+    gateBasis = startGateset.basis.name
+    basisDim = startGateset.basis.dim.blockDims
 
     if maxfev is None: maxfev = maxiter
 
@@ -2766,8 +2766,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
 
-            mleGateset.set_basis(startGateset.get_basis_name(),
-                                   startGateset.get_basis_dimension()) 
+            mleGateset.basis = Basis(startGateset.basis.name,
+                                   startGateset.basis.dim.blockDims) 
               #set basis in case of CPTP constraints
 
             _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
@@ -2804,8 +2804,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
 
-                mleGateset.set_basis(startGateset.get_basis_name(),
-                                     startGateset.get_basis_dimension()) 
+                mleGateset.basis = Basis(startGateset.basis.name,
+                                     startGateset.basis.dim.blockDims) 
     
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,

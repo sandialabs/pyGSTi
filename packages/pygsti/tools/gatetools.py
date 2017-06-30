@@ -1224,7 +1224,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
-def rotation_gate_mx(r,mxBasis="gm"):
+def rotation_gate_mx(r, mxBasis="gm"):
     """
     Construct a rotation gate matrix.
 
@@ -1261,7 +1261,7 @@ def rotation_gate_mx(r,mxBasis="gm"):
 
     #build unitary (in std basis)
     ex = _np.zeros( (d,d), 'complex' )
-    for rot,pp_mx in zip(r,pp[1:]):
+    for rot, pp_mx in zip(r, pp[1:]):
         ex += rot/2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
@@ -1316,12 +1316,12 @@ def project_gateset(gateset, targetGateset,
     """
     
     gateLabels = list(gateset.gates.keys())  # gate labels
-    basisNm = gateset.get_basis_name()
-    basisDims = gateset.get_basis_dimension()
+    basisNm = gateset.basis.name
+    basisDims = gateset.basis.dim.blockDims
     
-    if basisNm != targetGateset.get_basis_name():
+    if basisNm != targetGateset.basis.name:
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-                         % (basisNm, targetGateset.get_basis_name()))
+                         % (basisNm, targetGateset.basis.name))
     
     # Note: set to "full" parameterization so we can set the gates below
     #  regardless of what parameterization the original gateset had.

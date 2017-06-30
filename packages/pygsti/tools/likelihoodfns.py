@@ -989,7 +989,7 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        b = gateset.get_basis_name()
+        b = gateset.basis.name
         ret += sum([ prep_penalty(r,b) for r in list(gateset.preps.values()) ])
         ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
     return ret

@@ -82,8 +82,8 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             gateset = gatesets[-1] #only show HSVec for last gateset
-            mxBasis    = gateset.get_basis_name()
-            mxBasisDim = gateset.get_basis_dimension()
+            mxBasis    = gateset.basis.name
+            mxBasisDim = gateset.basis.dim.blockDims
             basisNm    = _tools.basis_longname(mxBasis, mxBasisDim)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
@@ -100,7 +100,7 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
                 rowData.append( rhoMx )
                 rowFormatters.append('Brackets')
@@ -124,7 +124,7 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
@@ -239,8 +239,8 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            basisNm = gateset.get_basis_name()
-            basisDims = gateset.get_basis_dimension()
+            basisNm = gateset.basis.name
+            basisDims = gateset.basis.dim.blockDims
             basisLongNm = _tools.basis_longname(basisNm, basisDims)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
@@ -260,8 +260,8 @@ class GatesTable(WorkspaceTable):
             row_formatters = [None]
     
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
-                basisDims = gateset.get_basis_dimension()
+                basisNm = gateset.basis.name
+                basisDims = gateset.basis.dim.blockDims
 
                 if display_as == "numbers":
                     row_data.append(gateset.gates[gl])
@@ -280,14 +280,14 @@ class GatesTable(WorkspaceTable):
                 if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
+                    basisNm = gatesets[-1].basis.name
+                    basisDims = gatesets[-1].basis.dim.blockDims
                     intervalMx = intervalVec.reshape(gate_dim,gate_dim)
                 elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
+                    basisNm = gatesets[-1].basis.name
+                    basisDims = gatesets[-1].basis.dim.blockDims
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
@@ -378,8 +378,8 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    basisNm = gateset.get_basis_name()
-                    basisDims = gateset.get_basis_dimension()
+                    basisNm = gateset.basis.name
+                    basisDims = gateset.basis.dim.blockDims
                     basisLongNm = _tools.basis_longname(basisNm, basisDims)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
@@ -610,8 +610,8 @@ class ErrgenTable(WorkspaceTable):
                 confidenceRegionInfo, display, display_as, genType):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.get_basis_name()
-        basisDims = gateset.get_basis_dimension()
+        basisNm = gateset.basis.name
+        basisDims = gateset.basis.dim.blockDims
         colHeadings = ['Gate']
 
         for disp in display:
@@ -1335,14 +1335,14 @@ class GatesSingleMetricTable(WorkspaceTable):
     def _create(self, gatesets, titles, targetGateset, metric):
     
         gateLabels = list(targetGateset.gates.keys())  # use target's gate labels
-        basisNm = targetGateset.get_basis_name()
-        basisDims = targetGateset.get_basis_dimension()
+        basisNm = targetGateset.basis.name
+        basisDims = targetGateset.basis.dim.blockDims
 
         #Check that all gatesets are in the same basis as targetGateset
         for title,gateset in zip(titles,gatesets):
-            if basisNm != gateset.get_basis_name():
+            if basisNm != gateset.basis.name:
                 raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
-                                 % (title, gateset.get_basis_name(), basisNm))
+                                 % (title, gateset.basis.name, basisNm))
 
         #Do computation first
         metricVals = [] #one element per row (gate label)

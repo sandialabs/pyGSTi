@@ -46,9 +46,11 @@ import scipy.linalg as _spl
 
 from . import matrixtools as _mt
 
+from ..objects.basis import *
+from ..objects.dim   import Dim
+
 from .basisconstructors import *
-from .basis import *
-from .dim   import Dim
+from .basisconstructors import _mut
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -220,42 +222,6 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
 expand_from_std_direct_sum_mx = _functools.partial(resize_mx, resize='expand', startBasis='std', endBasis='std')
 contract_to_std_direct_sum_mx = _functools.partial(resize_mx, resize='contract', startBasis='std', endBasis='std')
 
-def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
-    """
-    Get the elements of the specifed basis-type which
-    spans the density-matrix space given by dimOrBlockDims.
-
-    Parameters
-    ----------
-    basis : {'std', 'gm', 'pp', 'qt'}
-        The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).
-
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-
-    maxWeight : int, optional
-      Restrict the elements returned to those having weight <= `maxWeight`. An
-      element's "weight" is defined as the number of non-identity single-qubit
-      factors of which it is comprised.  As this notion of factors is only 
-      meaningful to the the Pauli-product basis, A non-None `maxWeight` can
-      only be used when `basis == "pp"`.
-
-    Returns
-    -------
-    list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
-        and N is the dimension of the density-matrix space,
-        equal to sum( block_dim_i^2 ).
-    """
-    if maxWeight is None:
-        return Basis(basis, dimOrBlockDims)
-    else:
-        return Basis(basis, dimOrBlockDims, maxWeight=maxWeight)
-    
-
 #TODO: maybe make these more general than for 1 or 2 qubits??
 #############################################################################
 
@@ -362,7 +328,7 @@ def vec_to_stdmx(v, basis, keep_complex=False):
         The matrix, 2x2 or 4x4 depending on nqubits 
     """
     dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    mxs = basis_matrices(basis, dim)
+    mxs = Basis(basis, dim)
 
     ret = _np.zeros( (dim,dim), 'complex' )
     for i, mx in enumerate(mxs):
@@ -371,9 +337,10 @@ def vec_to_stdmx(v, basis, keep_complex=False):
         else:
             ret += float(v[i])*mx
     return ret
-gmvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='gm')
-ppvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='pp')
-qtvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='qt')
+
+gmvec_to_stdmx  = _functools.partial(vec_to_stdmx, basis='gm')
+ppvec_to_stdmx  = _functools.partial(vec_to_stdmx, basis='pp')
+qtvec_to_stdmx  = _functools.partial(vec_to_stdmx, basis='qt')
 stdvec_to_stdmx = _functools.partial(vec_to_stdmx, basis='std')
 
 def stdmx_to_vec(m, basis):
@@ -394,7 +361,7 @@ def stdmx_to_vec(m, basis):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
-    mxs = basis_matrices(basis, dim)
+    mxs = Basis(basis, dim)
     v = _np.empty((dim**2,1))
     for i, mx in enumerate(mxs):
         if mxs.real:
