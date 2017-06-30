@@ -217,9 +217,8 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
 
     return lblList
 
-
-expand_from_std_direct_sum_mx = _functools.partial(expand_from_direct_sum_mx, basis='std')
-contract_to_std_direct_sum_mx = _functools.partial(contract_to_direct_sum_mx, basis='std')
+expand_from_std_direct_sum_mx = _functools.partial(resize_mx, resize='expand', startBasis='std', endBasis='std')
+contract_to_std_direct_sum_mx = _functools.partial(resize_mx, resize='contract', startBasis='std', endBasis='std')
 
 def basis_matrices(basis, dimOrBlockDims, maxWeight=None):
     """

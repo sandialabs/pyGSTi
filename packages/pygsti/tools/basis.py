@@ -1,5 +1,5 @@
 from collections  import OrderedDict, namedtuple
-from functools    import wraps
+from functools    import wraps, partial
 
 import numbers as _numbers
 import collections as _collections
@@ -18,49 +18,23 @@ from .dim import Dim
 
 DefaultBasisInfo = namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
-# Allow flexible basis building without cluttering the basis __init__ method with instance checking
-def build_matrix_groups(name=None, dim=None, matrices=None, **kwargs):
-    if isinstance(name, Basis):
-        matrixGroups = name.matrixGroups
-        name         = name.name
-    else:
-        if matrices is None: # built by name and dim, ie Basis('pp', 4)
-            assert name is not None and dim is not None, \
-                    'If matrices is none, name and dim must be supplied to Basis.__init__'
-            matrices = build_default_matrix_groups(name, dim, **kwargs)
-
-        assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
-        first = matrices[0]
-        if isinstance(first, tuple) or \
-                isinstance(first, Basis):
-            matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
-        elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-            matrixGroups = [matrices]                      # Then nest
-        else:
-            matrixGroups = matrices                        # Given as nested lists
-        if name is None:
-            name = 'CustomBasis_{}'.format(Basis.CustomCount)
-            CustomCount += 1
-    return name, matrixGroups
-
-# Shorthand for retrieving a default value from the Basis.DefaultInfo dict
-def get_info(name, attr, default):
-    try:
-        return getattr(Basis.DefaultInfo[name], attr)
-    except KeyError:
-        return default
-
 class Basis(object):
     DefaultInfo = dict()
     CustomCount  = 0      # The number of custom bases
 
     def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, **kwargs):
         self.name, self.matrixGroups = build_matrix_groups(name, dim, matrices, **kwargs)
+        # Shorthand for retrieving a default value from the Basis.DefaultInfo dict
+        def get_info(attr, default):
+            try:
+                return getattr(Basis.DefaultInfo[self.name], attr)
+            except KeyError:
+                return default
 
         if real is None:
-            real = get_info(self.name, 'real', default=True)
+            real     = get_info('real', default=True)
         if longname is None:
-            longname = get_info(self.name, 'longname', default=self.name)
+            longname = get_info('longname', default=self.name)
 
         blockDims = [int(math.sqrt(len(group))) for group in self.matrixGroups]
 
@@ -97,6 +71,59 @@ class Basis(object):
     def __hash__(self):
         return hash((self.name, self.dim))
 
+    def transform_matrix(self, to_basis, dimOrBlockDims):
+        to_basis = Basis(to_basis, dimOrBlockDims)
+        return _np.dot(to_basis.get_from_std(), self.get_to_std())
+
+    def change_basis(self, mx, to_basis, dimOrBlockDims=None):
+        """
+        Convert a gate matrix from one basis of a density matrix space
+        to another.
+
+        Parameters
+        ----------
+        mx : numpy array
+            The gate matrix (a 2D square array) in the `from_basis` basis.
+
+        from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt).
+
+        dimOrBlockDims : int or list of ints, optional
+            Structure of the density-matrix space. If None, then assume
+            mx operates on a single-block density matrix space,
+            i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
+
+        Returns
+        -------
+        numpy array
+            The given gate matrix converted to the `to_basis` basis.
+            Array size is the same as `mx`.
+        """
+        if dimOrBlockDims is None:
+            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+            assert( dimOrBlockDims**2 == mx.shape[0] )
+        dim = Dim(dimOrBlockDims)
+        to_basis   = Basis(to_basis,   dim)
+        if self.name == to_basis.name:
+            return mx.copy()
+
+        if len(mx.shape) not in [1, 2]:
+            raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+        toMx   = self.transform_matrix(to_basis, dim)
+        fromMx = to_basis.transform_matrix(self, dim)
+        if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
+            ret = _np.dot(toMx, _np.dot(mx, fromMx))
+        else:
+            ret = _np.dot(toMx, mx)
+        if not to_basis.real:
+            return ret
+        if _np.linalg.norm(_np.imag(ret)) > 1e-8:
+            raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
+                             (_np.linalg.norm(_np.imag(ret)), self, to_basis, ret))
+        return _np.real(ret)
+
     @memoize
     def is_normalized(self):
         for mx in self.matrices:
@@ -106,7 +133,6 @@ class Basis(object):
                 return False
         return True
 
-    #@memoize
     def get_composite_matrices(self):
         '''
         Build the large composite matrices of a composite basis
@@ -165,10 +191,6 @@ class Basis(object):
     def get_from_std(self):
         return _inv(self.get_to_std())
 
-# TODO: move this and other functions into the basis class somehow
-# Alternatively, use the numpy approach and provide both external and member functions
-# i.e.  a.reshape(*args) v np.reshape(a, *args)
-
 def build_composite_basis(bases):
     '''
     Build a composite basis from a list of tuples or Basis objects 
@@ -187,11 +209,14 @@ def build_composite_basis(bases):
 
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = Basis(from_basis, dimOrBlockDims)
-    to_basis   = Basis(to_basis, dimOrBlockDims)
-
-    return _np.dot(to_basis.get_from_std(), from_basis.get_to_std())
+    return from_basis.transform_matrix(to_basis, dimOrBlockDims)
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    if dimOrBlockDims is None:
+        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        assert( dimOrBlockDims**2 == mx.shape[0] )
+    from_basis = Basis(from_basis, dimOrBlockDims)
+    return from_basis.change_basis(mx, to_basis, dimOrBlockDims)
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.
@@ -243,6 +268,32 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
+# Allow flexible basis building without cluttering the basis __init__ method with instance checking
+def build_matrix_groups(name=None, dim=None, matrices=None, **kwargs):
+    if isinstance(name, Basis):
+        matrixGroups = name.matrixGroups
+        name         = name.name
+    else:
+        if matrices is None: # built by name and dim, ie Basis('pp', 4)
+            assert name is not None, \
+                    'If matrices is none, name must be supplied to Basis.__init__'
+            matrices = build_default_matrix_groups(name, dim, **kwargs)
+
+        assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
+        first = matrices[0]
+        if isinstance(first, tuple) or \
+                isinstance(first, Basis):
+            matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
+        elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
+            matrixGroups = [matrices]                      # Then nest
+        else:
+            matrixGroups = matrices                        # Given as nested lists
+        if name is None:
+            name = 'CustomBasis_{}'.format(Basis.CustomCount)
+            CustomCount += 1
+    return name, matrixGroups
+
+
 def build_default_matrix_groups(name, dim, **kwargs):
     if name not in Basis.DefaultInfo:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
@@ -261,13 +312,14 @@ def build_default_matrix_groups(name, dim, **kwargs):
 @parameterized # this "decorator" takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
     # Really this decorator only saves f to a dictionary for constructing default bases
+    #    => No wrapper is created:
     Basis.DefaultInfo[name] = DefaultBasisInfo(f, longname, real)
     return f
 
-def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
-    """
-    Convert a gate matrix in an arbitrary basis of a "direct-sum"
-    space to a matrix in the same basis of the embedding space.
+def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
+    '''
+    Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
+    space to a matrix in the same basis in the opposite space.
 
     Parameters
     ----------
@@ -284,45 +336,23 @@ def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
         A M x M matrix, where M is the dimension of the
         embedding density matrix space, i.e.
         sum( dimOrBlockDims_i )^2
-    """
+    '''
     if dimOrBlockDims is None:
         return mx
     elif isinstance(dimOrBlockDims, _numbers.Integral):
         assert(mx.shape == (dimOrBlockDims, dimOrBlockDims) )
         return mx
     else:
-        basisobj = Basis(basis, dimOrBlockDims)
-        return _np.dot(basisobj.get_contract_mx(), _np.dot(mx, basisobj.get_expand_mx()))
+        assert resize is not None and resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
+        start = change_basis(mx, startBasis, 'std', dimOrBlockDims)
 
-def contract_to_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
-    """
-    Convert a gate matrix in an arbitrary basis of the
-    embedding space to a matrix in the same basis
-    of the "direct-sum" space.
+        stdBasis = Basis('std', dimOrBlockDims)
+        if resize == 'expand':
+            mid = _np.dot(stdBasis.get_contract_mx(), _np.dot(start, stdBasis.get_expand_mx()))
+        elif resize == 'contract':
+            mid = _np.dot(stdBasis.get_expand_mx(), _np.dot(start, stdBasis.get_contract_mx()))
+        # No else case needed, see assert
+        return change_basis(mid, 'std', endBasis, dimOrBlockDims)
 
-    Parameters
-    ----------
-    mxInStdBasis : numpy array
-        Matrix of size M x M, where M is the dimension of the
-        embedding density matrix space, i.e.
-        sum( dimOrBlockDims_i )^2
-
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-
-    Returns
-    -------
-    numpy array
-        A N x N matrix, where where N is the dimension
-        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
-    """
-
-    # TODO: should we check if the dimensions being projected out are the identity?
-    if dimOrBlockDims is None:
-        return mx
-    elif isinstance(dimOrBlockDims, _numbers.Integral):
-        assert(mx.shape == (dimOrBlockDims,dimOrBlockDims) )
-        return mx
-    else:
-        basisobj = Basis(basis, dimOrBlockDims)
-        return _np.dot(basisobj.get_expand_mx(), _np.dot(mx, basisobj.get_contract_mx()))
+expand_from_direct_sum_mx = partial(resize_mx, resize='expand')
+contract_to_direct_sum_mx = partial(resize_mx, resize='contract')
