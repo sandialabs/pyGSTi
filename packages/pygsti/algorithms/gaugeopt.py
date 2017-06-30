@@ -221,7 +221,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         spamWeight = itemWeights.get('spam',1.0)
 
         def objective_fn_ls(gs):
-            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights, includePOVM=False)
+            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
             return r
 
         result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
@@ -237,6 +237,9 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         
         result = gaugeopt_custom(gateset, objective_fn, gauge_group,
                      method, maxiter, maxfev, tol, returnAll, verbosity)
+
+    print('Result frobenius dist')
+    print(result.frobeniusdist(targetGateset))
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -345,7 +348,7 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         start = 0
         d = gates[0].shape[0]
         N = vec.shape[0]
-        L = d**2 * len(gates) + d*len(preps) + d*len(effects)
+        L = d**2 * len(gates) + d*len(preps) + d*len(effects) + d*(0 if gs._povm_identity is None else 1)
         jacMx = _np.zeros((L, N))
 
         # S, and S_inv are (dxd)
@@ -374,7 +377,7 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             result = result.reshape(d ** 2, N)
             assert result.shape == (d ** 2, N)
             jacMx[start:start+d**2] = result
-            start += (d**2)
+            start += d**2
         for P in preps:
             '''
             Jac_prep = - S_inv @ dS @ S_inv @ P
@@ -388,7 +391,7 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             result = _np.dot(S_inv, right)
             assert result.shape == (d, N)
             jacMx[start:start+d] = result
-            start += (d)
+            start += d
         for E in effects:
             '''
             Jac_effect = Ek.T @ dS
@@ -398,33 +401,30 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             result = result.reshape(d, N) # Change (1, d, N) to (d, N)
             assert result.shape == (d, N)
             jacMx[start:start+d] = result
-            start += (d)
+            start += d
+        if gs._povm_identity is not None:
+            POVM = gs._povm_identity
+            '''
+            Jac_effect = Ek.T @ dS
+            => (d, N) mx
+            '''
+            result = dot(POVM.T, dS)
+            result = result.reshape(d, N) # Change (1, d, N) to (d, N)
+            assert result.shape == (d, N)
+            jacMx[start:start+d] = result
+            start += d
         return jacMx
 
     minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
-    '''
-    minSol2    = _opt.least_squares(call_objective_fn, x0, #jac=jacobian,
-                                max_nfev=maxfev, ftol=tol)
-
-    gaugeGroupEl.from_vector(minSol2.x)
-    finiteDifsGateset = gateset.copy()
-    finiteDifsGateset.transform(gaugeGroupEl)
-    '''
-
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
 
-    '''
-    print('jacobian compared to finite differences')
-    print(finiteDifsGateset.frobeniusdist(newGateset))
-    '''
-
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
     else:  
-        return newGateset #, finiteDifsGateset
+        return newGateset
 
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,

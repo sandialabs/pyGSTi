@@ -2471,7 +2471,7 @@ class GateSet(object):
 
     def residuals(self, otherGateSet, transformMx=None,
                       gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True, includePOVM=False):
+                      normalize=True):
         """
         Compute the weighted residuals between this
         gateset and otherGateSet.  Differences in each corresponding gate
@@ -2517,7 +2517,7 @@ class GateSet(object):
         """
         return self._calc().residuals(otherGateSet._calc(), transformMx,
                                           gateWeight, spamWeight, itemWeights,
-                                          normalize, includePOVM)
+                                          normalize)
 
     def jtracedist(self, otherGateSet, transformMx=None):
         """
