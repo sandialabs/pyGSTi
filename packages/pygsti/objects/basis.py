@@ -13,6 +13,7 @@ import math
 
 from ..tools.memoize       import memoize
 from ..tools.parameterized import parameterized
+from ..tools import matrixtools as _mt
 
 from .dim import Dim
 
@@ -70,6 +71,56 @@ class Basis(object):
 
     def __hash__(self):
         return hash((self.name, self.dim))
+
+    def stdmx_to_vec(self, m):
+        """
+        Convert a matrix in the standard basis to
+         a vector in the Pauli basis.
+
+        Parameters
+        ----------
+        m : numpy array
+            The matrix, shape 2x2 (1Q) or 4x4 (2Q)
+
+        Returns
+        -------
+        numpy array
+            The vector, length 4 or 16 respectively.
+        """
+
+        assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
+        dim = m.shape[0]
+        v = _np.empty((dim**2,1))
+        for i, mx in enumerate(self.matrices):
+            if self.real:
+                v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
+            else:
+                v[i,0] = _mt.trace(_np.dot(mx,m))
+        return v
+
+    def vec_to_stdmx(self, v, keep_complex=False):
+        """
+        Convert a vector in any basis to
+         a matrix in the standard basis.
+
+        Parameters
+        ----------
+        v : numpy array
+            The vector length 4 or 16 respectively.
+
+        Returns
+        -------
+        numpy array
+            The matrix, 2x2 or 4x4 depending on nqubits 
+        """
+        dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
+        ret = _np.zeros( (dim, dim), 'complex' )
+        for i, mx in enumerate(self.matrices):
+            if keep_complex:
+                ret += v[i]*mx
+            else:
+                ret += float(v[i])*mx
+        return ret
 
     def transform_matrix(self, to_basis, dimOrBlockDims):
         to_basis = Basis(to_basis, dimOrBlockDims)

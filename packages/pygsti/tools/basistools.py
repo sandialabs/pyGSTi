@@ -328,15 +328,8 @@ def vec_to_stdmx(v, basis, keep_complex=False):
         The matrix, 2x2 or 4x4 depending on nqubits 
     """
     dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-    mxs = Basis(basis, dim)
-
-    ret = _np.zeros( (dim,dim), 'complex' )
-    for i, mx in enumerate(mxs):
-        if keep_complex:
-            ret += v[i]*mx
-        else:
-            ret += float(v[i])*mx
-    return ret
+    basis = Basis(basis, dim)
+    return basis.vec_to_stdmx(v, keep_complex)
 
 gmvec_to_stdmx  = _functools.partial(vec_to_stdmx, basis='gm')
 ppvec_to_stdmx  = _functools.partial(vec_to_stdmx, basis='pp')
@@ -361,14 +354,8 @@ def stdmx_to_vec(m, basis):
 
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
-    mxs = Basis(basis, dim)
-    v = _np.empty((dim**2,1))
-    for i, mx in enumerate(mxs):
-        if mxs.real:
-            v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
-        else:
-            v[i,0] = _mt.trace(_np.dot(mx,m))
-    return v
+    basis = Basis(basis, dim)
+    return basis.stdmx_to_vec(m)
 
 stdmx_to_ppvec = _functools.partial(stdmx_to_vec, basis='pp')
 stdmx_to_gmvec = _functools.partial(stdmx_to_vec, basis='gm')

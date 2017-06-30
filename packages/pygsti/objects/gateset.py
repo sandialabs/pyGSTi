@@ -403,10 +403,11 @@ class GateSet(object):
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
         etyp = "static" if typ == "static" else "full"
-        basis = self.basis.name
+
+        basisname = self.basis.name
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basis)
+            self.gates[lbl] = _gate.convert(gate, typ, basisname)
 
         for lbl,vec in self.preps.items():
             self.preps[lbl] = _sv.convert(vec, rtyp)
