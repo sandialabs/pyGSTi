@@ -52,6 +52,8 @@ from ..objects.dim   import Dim
 from .basisconstructors import *
 from .basisconstructors import _mut
 
+from .gatetools import unitary_to_process_mx
+
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
 id2x2 = _np.array([[1,0],[0,1]])
@@ -245,72 +247,27 @@ def state_to_pauli_density_vec(state_vec):
     dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) #density matrix in sigmaz basis
     return stdmx_to_ppvec(dm_mx)
 
-
-def unitary_to_pauligate_1q(U):
+def unitary_to_pauligate(U):
     """
     Get the linear operator on (vectorized) density
-    matrices corresponding to a 1-qubit unitary
+    matrices corresponding to a n-qubit unitary
     operator on states.
 
     Parameters
     ----------
     U : numpy array
-        A 2x2 array giving the action of the unitary
+        A dxd array giving the action of the unitary
         on a state in the sigma-z basis.
+        where d = 2 ** n-qubits
 
     Returns
     -------
     numpy array
         The operator on density matrices that have been
-        vectorized as length-4 vectors in the Pauli basis.
-        Array has shape == (4,4).
+        vectorized as d**2 vectors in the Pauli basis.
     """
-    assert( U.shape == (2,2) )
-    op_mx = _np.empty( (4,4) ) #, 'complex' )
-    Udag = _np.conjugate(_np.transpose(U))
-
-    sigmaVec = pp_matrices(2)
-
-    for i in (0,1,2,3):
-        for j in (0,1,2,3):
-            op_mx[i,j] = _np.real(_mt.trace(_np.dot(sigmaVec[i],_np.dot(U,_np.dot(sigmaVec[j],Udag)))))
-        # in clearer notation: op_mx[i,j] = _mt.trace( sigma[i] * U * sigma[j] * Udag )
-    return op_mx
-
-# single qubit density matrix in 2-qubit pauli basis (16x16 matrix)
-# U must be a 4x4 matrix
-def unitary_to_pauligate_2q(U):
-    """
-    Get the linear operator on (vectorized) density
-    matrices corresponding to a 2-qubit unitary
-    operator on states.
-
-    Parameters
-    ----------
-    U : numpy array
-        A 4x4 array giving the action of the unitary
-        on a state in the sigma-z basis.
-
-    Returns
-    -------
-    numpy array
-        The operator on density matrices that have been
-        vectorized as length-16 vectors in the Pauli-product basis.
-        Array has shape == (16,16).
-    """
-
-    assert( U.shape == (4,4) )
-    op_mx = _np.empty( (16,16), 'd') #, 'complex' )
-    Udag = _np.conjugate(_np.transpose(U))
-
-    sigmaVec_2Q = pp_matrices(4)
-
-    for i in range(16):
-        for j in range(16):
-            op_mx[i,j] = _np.real(_mt.trace(_np.dot(sigmaVec_2Q[i],_np.dot(U,_np.dot(sigmaVec_2Q[j],Udag)))))
-        # in clearer notation: op_mx[i,j] = trace( sigma[i] * U * sigma[j] * Udag )
-    return op_mx
-
+    assert U.shape[0] == U.shape[1], '"Unitary" matrix is not square'
+    return change_basis(unitary_to_process_mx(U), 'std', 'pp')
 
 def vec_to_stdmx(v, basis, keep_complex=False):
     """
@@ -393,7 +350,7 @@ def single_qubit_gate(hx, hy, hz, noise=0):
     """
     ex = -1j * (hx*sigmax + hy*sigmay + hz*sigmaz)
     D = _np.diag( [1]+[1-noise]*(4-1) )
-    return _np.dot(D, unitary_to_pauligate_1q( _spl.expm(ex) ))
+    return _np.dot(D, unitary_to_pauligate( _spl.expm(ex) ))
 
 
 def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, yz=0, zi=0, zx=0, zy=0, zz=0, ii=0):
@@ -476,5 +433,5 @@ def two_qubit_gate(ix=0, iy=0, iz=0, xi=0, xx=0, xy=0, xz=0, yi=0, yx=0, yy=0, y
     ex += zx * sigmazx
     ex += zy * sigmazy
     ex += zz * sigmazz
-    return unitary_to_pauligate_2q( _spl.expm(-1j * ex) )
+    return unitary_to_pauligate( _spl.expm(-1j * ex) )
       #TODO: fix noise op to depolarizing

@@ -208,9 +208,9 @@ class RBTestCase(BaseTestCase):
         error_unitary_y = _expm(-1j * (0.05 / 2) *z)
 
         gs_Z = gs_target.copy()
-        error_gate_i = pygsti.unitary_to_pauligate_1q(error_unitary_i)
-        error_gate_x = pygsti.unitary_to_pauligate_1q(error_unitary_x)
-        error_gate_y = pygsti.unitary_to_pauligate_1q(error_unitary_y)
+        error_gate_i = pygsti.unitary_to_pauligate(error_unitary_i)
+        error_gate_x = pygsti.unitary_to_pauligate(error_unitary_x)
+        error_gate_y = pygsti.unitary_to_pauligate(error_unitary_y)
         gs_Z['Gi'] = _np.dot(error_gate_i,gs_target['Gi'])
         gs_Z['Gx'] = _np.dot(error_gate_x,gs_target['Gx'])
         gs_Z['Gy'] = _np.dot(error_gate_y,gs_target['Gy'])
