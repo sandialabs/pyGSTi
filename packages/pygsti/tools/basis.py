@@ -19,62 +19,57 @@ from .dim import Dim
 DefaultBasisInfo = namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
 # Allow flexible basis building without cluttering the basis __init__ method with instance checking
-def flexible_args(__init__):
-    @wraps(__init__)
-    def wrapper(*args, **kwargs):
-        __init__(*args, **kwargs)
-    return wrapper
+def build_matrix_groups(name=None, dim=None, matrices=None, **kwargs):
+    if isinstance(name, Basis):
+        matrixGroups = name.matrixGroups
+        name         = name.name
+    else:
+        if matrices is None: # built by name and dim, ie Basis('pp', 4)
+            assert name is not None and dim is not None, \
+                    'If matrices is none, name and dim must be supplied to Basis.__init__'
+            matrices = build_default_matrix_groups(name, dim, **kwargs)
+
+        assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
+        first = matrices[0]
+        if isinstance(first, tuple) or \
+                isinstance(first, Basis):
+            matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
+        elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
+            matrixGroups = [matrices]                      # Then nest
+        else:
+            matrixGroups = matrices                        # Given as nested lists
+        if name is None:
+            name = 'CustomBasis_{}'.format(Basis.CustomCount)
+            CustomCount += 1
+    return name, matrixGroups
+
+# Shorthand for retrieving a default value from the Basis.DefaultInfo dict
+def get_info(name, attr, default):
+    try:
+        return getattr(Basis.DefaultInfo[name], attr)
+    except KeyError:
+        return default
 
 class Basis(object):
     DefaultInfo = dict()
     CustomCount  = 0      # The number of custom bases
 
-    @flexible_args
     def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, **kwargs):
-        if isinstance(name, Basis):
-            matrixGroups = name.matrixGroups
-            name         = name.name
-        else:
-            if matrices is None: # built by name and dim, ie Basis('pp', 4)
-                assert name is not None and dim is not None, \
-                        'If matrices is none, name and dim must be supplied to Basis.__init__'
-                matrices = build_matrix_groups(name, dim, **kwargs)
-
-            assert len(matrices) > 0, 'Cannot build a Basis with no matrices'
-            first = matrices[0]
-            if isinstance(first, tuple) or \
-                    isinstance(first, Basis):
-                matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
-            elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-                matrixGroups = [matrices]                      # Then nest
-            else:
-                matrixGroups = matrices                        # Given as nested lists
-            if name is None:
-                name = 'CustomBasis_{}'.format(Basis.CustomCount)
-                CustomCount += 1
+        self.name, self.matrixGroups = build_matrix_groups(name, dim, matrices, **kwargs)
 
         if real is None:
-            try:
-                real = Basis.DefaultInfo[name].real
-            except KeyError:
-                real = True
+            real = get_info(self.name, 'real', default=True)
+        if longname is None:
+            longname = get_info(self.name, 'longname', default=self.name)
 
-        blockDims = [int(math.sqrt(len(group))) for group in matrixGroups]
+        blockDims = [int(math.sqrt(len(group))) for group in self.matrixGroups]
 
-        self.matrixGroups = matrixGroups
         # Equivalent to matrices for non-composite bases
         self.matrices     = self.get_composite_matrices() 
         self.dim          = Dim(blockDims)
         self.name         = name
+        self.longname     = longname
         self.real         = real
-
-        if longname is None:
-            try:
-                self.longname = Basis.DefaultInfo[self.name].longname
-            except KeyError:
-                self.longname = self.name
-        else:
-            self.longname = longname
 
         self.labels = ['M{}{}'.format(self.name, i) for i in range(len(self.matrices))]
 
@@ -248,7 +243,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
                          (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
     return _np.real(ret)
 
-def build_matrix_groups(name, dim, **kwargs):
+def build_default_matrix_groups(name, dim, **kwargs):
     if name not in Basis.DefaultInfo:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dim))
@@ -263,17 +258,10 @@ def build_matrix_groups(name, dim, **kwargs):
             matrixGroups.append(f(blockDim, **kwargs))
     return matrixGroups
 
-@parameterized # this decorator takes additional arguments (other than just f)
+@parameterized # this "decorator" takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
+    # Really this decorator only saves f to a dictionary for constructing default bases
     Basis.DefaultInfo[name] = DefaultBasisInfo(f, longname, real)
-    '''
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        assert len(args) > 0, 'Dim argument required for basis'
-        matrixGroups = build_matrix_groups(name, args[0], **kwargs)
-        return Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
-    return wrapper
-    '''
     return f
 
 def expand_from_direct_sum_mx(mx, dimOrBlockDims, basis='std'):
