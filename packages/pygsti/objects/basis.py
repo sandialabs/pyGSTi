@@ -124,8 +124,8 @@ class Basis(object):
                 ret += float(v[i])*mx
         return ret
 
-    def transform_matrix(self, to_basis, dimOrBlockDims):
-        to_basis = Basis(to_basis, dimOrBlockDims)
+    def transform_matrix(self, to_basis):
+        to_basis = Basis(to_basis, self.dim.blockDims)
         return _np.dot(to_basis.get_from_std(), self.get_to_std())
 
     def change_basis(self, mx, to_basis, dimOrBlockDims=None):
@@ -164,8 +164,8 @@ class Basis(object):
 
         if len(mx.shape) not in [1, 2]:
             raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
-        toMx   = self.transform_matrix(to_basis, dim)
-        fromMx = to_basis.transform_matrix(self, dim)
+        toMx   = self.transform_matrix(to_basis)
+        fromMx = to_basis.transform_matrix(self)
         if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
             ret = _np.dot(toMx, _np.dot(mx, fromMx))
         else:
@@ -261,7 +261,7 @@ def _build_composite_basis(bases):
 
 def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = Basis(from_basis, dimOrBlockDims)
-    return from_basis.transform_matrix(to_basis, dimOrBlockDims)
+    return from_basis.transform_matrix(to_basis)
 
 # Convenience function, see above for docstring
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):

@@ -129,7 +129,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
         rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
 
         self.assertArraysAlmostEqual(leakA  , leakA_old  )

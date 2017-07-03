@@ -649,55 +649,32 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         #   bases for the other blocks - say the "std" basis (which one does't matter since the identity is the same for std, gm, and pp)
 
         #print "DEBUG: embed_gate gateBlk = \n", gateBlk
-        full_finalToPP = _np.identity( gateDim, 'complex' )
-        full_ppToFinal = _np.identity( gateDim, 'complex' )
+        tensorDim = blockDims[iTensorProdBlk]
+        startBasis = Basis('pp',  tensorDim)
+        finalBasis = Basis(basis, tensorDim)
 
-        ppToStd = _basis.basis_transform_matrix('pp', 'std', blockDims[iTensorProdBlk])
-        stdToPP = _basis.basis_transform_matrix('std', 'pp', blockDims[iTensorProdBlk]) # Potentially uses cached results
-        if basis == "std":
-            full_ppToFinal[offset:offset+N,offset:offset+N] = ppToStd
-            full_finalToPP[offset:offset+N,offset:offset+N] = stdToPP
-            realMx = False
+        d = slice(offset, offset+N)
 
-        elif basis == "gm":
-            gmToStd = _basis.basis_transform_matrix('gm', 'std', blockDims[iTensorProdBlk])
-            stdToGM = _basis.basis_transform_matrix('std', 'gm', blockDims[iTensorProdBlk]) 
-            full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToGM, ppToStd )
-            full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, gmToStd )
-            realMx = True
+        full_ppToFinal       = _np.identity(gateDim, 'complex')
+        full_ppToFinal[d, d] = startBasis.transform_matrix(finalBasis)
 
-        elif basis == "pp":
-            # Note: finalGate may have some non-power-of-2 dimensional blocks that can't be in a "pp" basis,
-            #  but don't check for this here as they'll be caught by any gate term that operates on that block
-            realMx = True
+        full_finalToPP       = _np.identity(gateDim, 'complex')
+        full_finalToPP[d, d] = finalBasis.transform_matrix(startBasis)
 
-        elif basis == "qt":
-            qtToStd = _basis.basis_transform_matrix('qt', 'std', blockDims[iTensorProdBlk])
-            stdToQT = _basis.basis_transform_matrix('std', 'qt', blockDims[iTensorProdBlk]) 
-            full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToQT, ppToStd )
-            full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, qtToStd )
-            realMx = True
-
-        else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', 'pp', or 'qt')" % basis)
-
+        finalGateInFinalBasis = _np.dot(full_ppToFinal,
+                                        _np.dot( finalGate, full_finalToPP))
         if parameterization == "full":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
             return _gate.FullyParameterizedGate(
                 _np.real(finalGateInFinalBasis)
-                if realMx else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis )
 
         if parameterization == "static":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
             return _gate.StaticGate(
                 _np.real(finalGateInFinalBasis)
-                if realMx else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis )
 
         if parameterization == "TP":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
-            if not realMx:
+            if not finalBasis.real:
                 raise ValueError("TP gates must be real. Failed to build gate!")
             return _gate.TPParameterizedGate(_np.real(finalGateInFinalBasis))
 
@@ -715,7 +692,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
             return _gate.LinearlyParameterizedGate(
                 finalGate, paramArray, parameterToBaseIndicesMap,
-                full_ppToFinal, full_finalToPP, realMx )
+                full_ppToFinal, full_finalToPP, finalBasis.real )
 
 
         else:
