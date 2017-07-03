@@ -43,7 +43,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std")
         rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar") #bad basis specifier
         with self.assertRaises(ValueError):
             old_build_gate( [2],[('Q0',)], "FooBar(Q0)",b) #bad gate name
@@ -72,7 +72,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
         rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
         with self.assertRaises(ValueError):
             build_gate( [2],[('Q0',)], "FooBar(Q0)",b,prm,ue) #bad gate name
@@ -88,7 +88,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
         with self.assertRaises(ValueError):
             build_gate( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)","foobar",prm,ue)
               #LX with bad basis spec
 
@@ -360,7 +360,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         #with self.assertRaises(ValueError):
         #    gateset1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
@@ -478,7 +478,7 @@ SPAMLABEL minus = rho remainder
                                                               'minus': ('rho0','remainder') })
                                                # state space dimension mismatch (4 != 2)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                prepLabels=['rho0'], prepExpressions=["0"],

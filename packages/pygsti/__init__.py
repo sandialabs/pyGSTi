@@ -18,6 +18,7 @@ from .algorithms.core import *
 from .algorithms.gaugeopt import *
 from .algorithms.contract import *
 from .algorithms.grammatrix import *
+from .construction.gateconstruction import * # *_qubit_gate fns
 from .tools import *
 from .drivers import *
 
