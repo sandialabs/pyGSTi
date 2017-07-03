@@ -13,6 +13,8 @@ from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
 
+from ..objects.basis import Basis
+
 def create_objective_fn(gateset, targetGateset, itemWeights=None,
                        CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
                        gatesMetric="frobenius", spamMetric="frobenius"):

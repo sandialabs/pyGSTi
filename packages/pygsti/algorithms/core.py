@@ -16,6 +16,7 @@ import time           as _time
 from .. import optimize as _opt
 from .. import tools    as _tools
 from .. import objects  as _objs
+from ..objects.basis import Basis
 _dummy_profiler = _objs.profiler.DummyProfiler()
 
 CUSTOMLM = True
