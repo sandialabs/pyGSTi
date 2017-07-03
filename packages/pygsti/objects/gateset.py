@@ -15,7 +15,6 @@ import warnings as _warnings
 import time as _time
 
 from ..tools import matrixtools as _mt
-from ..tools import basistools as _bt
 from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
@@ -30,7 +29,7 @@ from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
 from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
-from .basis import Basis
+from .basis import Basis, change_basis, _mut
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -647,7 +646,7 @@ class GateSet(object):
         dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _bt._mut(i,j,dim)
+                unitMx = _mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
                     gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl,EVec in self.effects.items():
@@ -2787,7 +2786,7 @@ class GateSet(object):
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
             randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = _bt.change_basis(randGate, "std", self.basis.name)
+            randGate = change_basis(randGate, "std", self.basis.name)
 
             gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randGate,gate))

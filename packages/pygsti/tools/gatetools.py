@@ -12,7 +12,7 @@ import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
-from . import basistools as _bt
+from ..objects import basis as _basis
 from . import lindbladiantools as _lt
 from . import compattools as _compat
 from ..objects.basis import change_basis
@@ -275,78 +275,6 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
         return -2
     return prob.value
-
-
-#Kenny's Monte-Carlo version
-# had additional params: nSamples=1000, seed=None
-#
-#    nSamples : int, optional
-#        Number of Monte Carlo samples to use for diamond norm approximation.
-#
-#    seed : int, optional
-#        If not None, a seed value for the random number generator used
-#        to produce Monte Carlo samples.
-#
-#
-#    gate_dim = A.shape[0]
-#    assert(gate_dim == A.shape[1] == B.shape[0] == B.shape[1])
-#
-#    if dimOrStateSpaceDims is not None:
-#        raise ValueError("Diamond Norm not fully implemented when dimOrStateSpaceDims is not None")
-#        #Need to think more about how to deal with dimOrStateSpaceDims...
-#    state_dim = _np.sqrt(gate_dim) # dimension of state space -- more complicated with dimOrStateSpaceDims?
-#
-#    #first, get gate matrices into std basis
-#    if mxBasis == "std":
-#        AInStdBasis, BInStdBasis = A, B
-#    elif mxBasis == "gm" or mxBasis == "pauli":
-#        AInStdBasis = _bt.gm_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.gm_to_std(B, dimOrStateSpaceDims)
-#    elif mxBasis == "pp":
-#        AInStdBasis = _bt.pp_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.pp_to_std(B, dimOrStateSpaceDims)
-#    else: raise ValueError("Invalid mxBasis: %s" % mxBasis)
-#
-#    rndm = _np.random.RandomState(seed)
-#
-#    AtensorId = _np.kron(AInStdBasis,_np.identity(gate_dim))
-#    BtensorId = _np.kron(BInStdBasis,_np.identity(gate_dim))
-#    gateDiffTensorId = BtensorId - AtensorId # in std basis by construction
-#
-#    def random_two_state_density_mx():
-#        x = rndm.randn(state_dim*2,1) + 1j * rndm.randn(state_dim*2,1)
-#        x = x / _np.linalg.norm(x,'fro') # normalize state
-#        x = _np.dot(x,_np.conj(x).T) # state => density matrix via dm = psi x psi_dag
-#        x = _np.reshape(x.T,[(state_dim*2)**2,1]) #density matrix in std basis
-#        return x
-#
-#    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X))
-#    def one_shot_one_qubit_diamond_norm(gateDiffTensorId):
-#        randStateDM = random_two_state_density_mx() # in std basis
-#        outDM = _np.dot(gateDiffTensorId,randStateDM) # in std basis
-#        outDM = _np.reshape(outDM, [2*state_dim, 2*state_dim] )
-#            # Omit transposition here to save time, as that does not affect eigenvalues
-#        return _np.sum(_np.abs(_np.linalg.eigvalsh(outDM)))
-#
-#    oneShotVals = [ one_shot_one_qubit_diamond_norm(gateDiffTensorId) for i in xrange(nSamples) ]
-#    return max(oneShotVals)
-
-
-
-#Scratch -- to remove later
-  ##extract unitary from targetGate (assumes it corresponds to a unitary)
-  #target_JMx = _jam.jamiolkowski_iso( targetGate )
-  #target_Jevals, target_Jevecs = _np.linalg.eig(target_JMx)
-  #max_target_Jevec = target_Jevecs[:,_np.argmax(target_Jevals)]  # |max_Jevec> = (U x I)|bell>
-
-    #TODO -- need to extract ex matrix from target_U = _spl.expm(ex) and decompose ex in terms of pauli?
-    # |bell> = [1,0,0,1]/sqrt(2) (1-qubit) -- not sure how to generalize yet
-    #target_U = _np.sqrt(2) * _np.array( [ [max_target_Jevec[0], max_target_Jevec[1]], [max_target_Jevec[2],max_target_Jevec[3]] ] )
-
-  #U = _spl.expm( 1j * (solnVec[0]*sigmax + solnVec[1]*sigmay + solnVec[2]*sigmaz) )
-  #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
-  #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
-
 
 def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
@@ -799,7 +727,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     d = int(_np.sqrt(d2))
 
     #Get a list of the basis matrices
-    mxs = _bt.basis_matrices(projection_basis, d)
+    mxs = _basis.basis_matrices(projection_basis, d)
 
     assert(len(mxs) == d2)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
@@ -873,7 +801,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     nQubits = _np.log2(d)
 
     #Get a list of the d2 generators (in corresspondence with the
-    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    #  Pauli-product matrices given by _basis.pp_matrices(d) ).
     lindbladMxs = std_error_generators(d2, projection_type, projection_basis) # in std basis
 
     assert(len(lindbladMxs) == d2)
@@ -1140,11 +1068,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
     if _compat.isstr(ham_basis):
-        hamBasisMxs = _bt.basis_matrices(ham_basis, d)
+        hamBasisMxs = _basis.basis_matrices(ham_basis, d)
     else: hamBasisMxs = ham_basis
         
     if _compat.isstr(other_basis):
-        otherBasisMxs = _bt.basis_matrices(other_basis, d)
+        otherBasisMxs = _basis.basis_matrices(other_basis, d)
     else: otherBasisMxs = other_basis
     
     hamGens,otherGens = lindblad_error_generators(
@@ -1256,7 +1184,7 @@ def rotation_gate_mx(r, mxBasis="gm"):
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _bt.basis_matrices('pp', d)
+    pp = _basis.basis_matrices('pp', d)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)

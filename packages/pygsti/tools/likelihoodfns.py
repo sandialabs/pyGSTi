@@ -10,7 +10,7 @@ import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
 #import time as _time
-from . import basistools as _bt
+from ..objects import basis as _basis
 from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
@@ -925,7 +925,7 @@ def prep_penalty(rhoVec, basis):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec),basis)
+    rhoMx = _basis.vec_to_stdmx(_np.asarray(rhoVec),basis)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
     tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
@@ -956,7 +956,7 @@ def effect_penalty(EVec, basis):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.vec_to_stdmx(_np.asarray(EVec),basis)
+    EMx = _basis.vec_to_stdmx(_np.asarray(EVec),basis)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:

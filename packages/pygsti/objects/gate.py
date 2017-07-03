@@ -12,8 +12,8 @@ import functools as _functools
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
-from ..tools import basistools as _bt
 from ..tools import jamiolkowski as _jt
+from . import basis as _basis
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
@@ -2332,7 +2332,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Assume gate in in the pauli-product basis for now, just for
         # simplicity.  I think everything should work fine in any other
         # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _bt.basis_transform_matrix(mxBasis, "std", d)
+        mxBasisToStd = _basis.basis_transform_matrix(mxBasis, "std", d)
         self.leftTrans  = _np.linalg.inv(mxBasisToStd)
         self.rightTrans = mxBasisToStd
 

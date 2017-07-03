@@ -761,7 +761,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s angle btwn rotn axes' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
 
-            def angle_btwn_axes(gate): #Note: default 'gm' basis
+            def angles_btwn_axes(gate): #Note: default 'gm' basis
                 decomp = _tools.decompose_gate_matrix(gate)
                 decomp2 = _tools.decompose_gate_matrix(gateset2.gates[gateLabel])
                 axisOfRotn = decomp.get('axis of rotation',None)
@@ -782,7 +782,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
                   #      well, must flip sign of angle of rotation if you allow axis to
                   #      "reverse" by 180 degrees.
 
-            ret[key] = _getGateQuantity(angle_btwn_axes, gateset1, gateLabel,
+            ret[key] = _getGateQuantity(angles_btwn_axes, gateset1, gateLabel,
                                     eps, confidenceRegionInfo)
 
         key = '%s relative eigenvalues' % gateLabel; possible_qtys.append(key)

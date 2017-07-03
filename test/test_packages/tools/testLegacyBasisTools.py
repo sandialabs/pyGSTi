@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import pygsti
 
-from pygsti.tools.basistools import change_basis, basis_matrices, basis_transform_matrix
+from pygsti.objects.basis import change_basis, basis_matrices, basis_transform_matrix
 
 from . import legacy_basis_tools as legacy
 

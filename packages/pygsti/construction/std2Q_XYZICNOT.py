@@ -14,7 +14,6 @@ from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
 from . import spamspecconstruction as _spamc
 from ..tools import gatetools as _gt
-from ..tools import basistools as _bt
 
 description = "I*X(pi/2), I*Y(pi/2), I*Z(pi/2), X(pi/2)*I, Y(pi/2)*I, Z(pi/2)*I and CNOT gates"
 
