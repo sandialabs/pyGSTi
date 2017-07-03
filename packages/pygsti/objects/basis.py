@@ -12,13 +12,11 @@ from pprint import pprint
 
 import math
 
-from ..tools.memoize       import memoize
-from ..tools.parameterized import parameterized
+from ..tools.opttools import cache_by_hashed_args 
+from ..tools.basisconstructors import _basisConstructorDict
 from ..tools import matrixtools as _mt
 
 from .dim import Dim
-
-DefaultBasisInfo = namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
 class Basis(object):
     DefaultInfo = dict()
@@ -26,10 +24,18 @@ class Basis(object):
 
     def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, labels=None, **kwargs):
         self.name, self.matrixGroups = _build_matrix_groups(name, dim, matrices, **kwargs)
-        # Shorthand for retrieving a default value from the Basis.DefaultInfo dict
+        self.matrices = self.get_composite_matrices() # Equivalent to matrices for non-composite bases
+
+        for block in self.matrixGroups:
+            for mx in block:
+                mx.flags.writeable = False
+        for mx in self.matrices:
+            mx.flags.writeable = False
+
+        # Shorthand for retrieving a default value from the _basisConstructorDict dict
         def get_info(attr, default):
             try:
-                return getattr(Basis.DefaultInfo[self.name], attr)
+                return getattr(_basisConstructorDict[self.name], attr)
             except KeyError:
                 return default
 
@@ -40,7 +46,7 @@ class Basis(object):
 
         blockDims = [int(math.sqrt(len(group))) for group in self.matrixGroups]
 
-        self.matrices = self.get_composite_matrices() # Equivalent to matrices for non-composite bases
+
         if labels is None:
             labels = ['M{}{}'.format(self.name, i) for i in range(len(self.matrices))]
 
@@ -58,9 +64,6 @@ class Basis(object):
 
     def __getitem__(self, index):
         return self.matrices[index]
-
-    def __setitem__(self, index, value):
-        self.matrices[index] = value
 
     def __len__(self):
         return len(self.matrices)
@@ -177,7 +180,7 @@ class Basis(object):
                              (_np.linalg.norm(_np.imag(ret)), self, to_basis, ret))
         return _np.real(ret)
 
-    @memoize
+    @cache_by_hashed_args
     def is_normalized(self):
         for mx in self.matrices:
             t = _np.trace(_np.dot(mx, mx))
@@ -208,22 +211,23 @@ class Basis(object):
         assert(start == length)
         return compMxs
 
-    @memoize
+    @cache_by_hashed_args
     def get_expand_mx(self):
         x = sum(len(mxs) for mxs in self.matrixGroups)
         y = sum(mxs[0].shape[0] for mxs in self.matrixGroups) ** 2
         expandMx = _np.zeros((x, y), 'complex')
         start = 0
         for i, compMx in enumerate(self.get_composite_matrices()):
-            assert(len(compMx.flatten()) == y), '{} != {}'.format(len(compMx.flatten()), y)
-            expandMx[i,0:y] = compMx.flatten()
+            flattened = compMx.flatten()
+            assert len(flattened) == y, '{} != {}'.format(len(flattened), y)
+            expandMx[i,0:y] = flattened 
         return expandMx
 
-    @memoize
+    @cache_by_hashed_args
     def get_contract_mx(self):
         return self.get_expand_mx().T
 
-    @memoize
+    @cache_by_hashed_args
     def get_to_std(self):
         toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
         #Since a multi-block basis is just the direct sum of the individual block bases,
@@ -239,7 +243,7 @@ class Basis(object):
         assert(start == self.dim.gateDim)
         return toStd
 
-    @memoize
+    @cache_by_hashed_args
     def get_from_std(self):
         return _inv(self.get_to_std())
 
@@ -251,15 +255,15 @@ def _build_composite_basis(bases):
     assert len(bases) > 0, 'Need at least one basis-dim pair to compose'
     bases = [Basis(*item) for item in bases]
 
-    matrixGroups  = [basis.matrices for basis in bases]
-    name          = ','.join(basis.name for basis in bases)
+    matrixGroups  = [basis.matrices         for basis in bases]
+    name          = ','.join(basis.name     for basis in bases)
     longname      = ','.join(basis.longname for basis in bases)
-    real          = all(basis.real for basis in bases)
+    real          = all(basis.real          for basis in bases)
 
     composite = Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
     return composite
 
-def basis_transform_matrix(from_basis, to_basis, dimOrBlockDims):
+def transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
@@ -302,14 +306,13 @@ def _build_matrix_groups(name=None, dim=None, matrices=None, **kwargs):
             matrixGroups = []
     return name, matrixGroups
 
-
 def _build_default_matrix_groups(name, dim, **kwargs):
     if name == 'unknown':
         return []
-    if name not in Basis.DefaultInfo:
+    if name not in _basisConstructorDict:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dim))
-    f = Basis.DefaultInfo[name].constructor
+    f = _basisConstructorDict[name].constructor
     matrixGroups = []
     dim = Dim(dim)
     for blockDim in dim.blockDims:
@@ -320,12 +323,6 @@ def _build_default_matrix_groups(name, dim, **kwargs):
             matrixGroups.append(f(blockDim, **kwargs))
     return matrixGroups
 
-@parameterized # this "decorator" takes additional arguments (other than just f)
-def basis_constructor(f, name, longname, real=True):
-    # Really this decorator only saves f to a dictionary for constructing default bases
-    #    => No wrapper is created:
-    Basis.DefaultInfo[name] = DefaultBasisInfo(f, longname, real)
-    return f
 
 def basis_matrices(name, dimOrBlockDims, maxWeight=None):
     '''
@@ -357,10 +354,10 @@ def basis_matrices(name, dimOrBlockDims, maxWeight=None):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     '''
-    if name not in Basis.DefaultInfo:
+    if name not in _basisConstructorDict:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dimOrBlockDims))
-    f = Basis.DefaultInfo[name].constructor
+    f = _basisConstructorDict[name].constructor
 
     if maxWeight is None:
         return f(dimOrBlockDims)

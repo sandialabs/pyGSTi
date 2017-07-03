@@ -4,17 +4,29 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-
 import itertools    as _itertools
 import numbers      as _numbers
 import collections  as _collections
 import numpy        as _np
 
-from ..objects.basis import basis_constructor 
-from ..objects.dim   import Dim
+from collections    import namedtuple as _namedtuple
+from .parameterized import parameterized as _parameterized
+
 '''
 Functions for creating the standard sets of matrices in the standard, pauli, gell mann, and qutrit bases
 '''
+
+DefaultBasisInfo = _namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
+
+@_parameterized # this "decorator" takes additional arguments (other than just f)
+def basis_constructor(f, name, longname, real=True):
+    # Really this decorator only saves f to a dictionary for constructing default bases
+    #    => No wrapper is created:
+    _basisConstructorDict[name] = DefaultBasisInfo(f, longname, real)
+    return f
+
+_basisConstructorDict = dict()
+
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
 id2x2 = _np.array([[1,0],[0,1]])
@@ -33,28 +45,28 @@ mxUnitVec_2Q = ( _mut(0,0,4), _mut(0,1,4), _mut(0,2,4), _mut(0,3,4),
                  _mut(3,0,4), _mut(3,1,4), _mut(3,2,4), _mut(3,3,4)  )
 
 @basis_constructor('std', 'Matrix-unit', real=False)
-def std_matrices(dimOrBlockDims):
+def std_matrices(dim):
     """
     Get the elements of the matrix unit, or "standard", basis
-    spanning the density-matrix space given by dimOrBlockDims.
+    spanning the density-matrix space given by dim.
 
     The returned matrices are given in the standard basis of the
     "embedding" density matrix space, that is, the space which
     embeds the block-diagonal matrix structure stipulated in
-    dimOrBlockDims. These matrices form an orthonormal basis under
+    dim. These matrices form an orthonormal basis under
     the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
 
     Parameters
     ----------
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+    dim: int
+        dimension of the density-matrix space.
 
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
+        A list of N numpy arrays each of shape (dim, dim),
+        where dim is the matrix-dimension of the overall
+        "embedding" density matrix (the sum of dim)
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
 
@@ -64,16 +76,13 @@ def std_matrices(dimOrBlockDims):
     a single "1" entry amidst a background of zeros, and there
     are never "1"s in positions outside the block-diagonal structure.
     """
-    dmDim, gateDim, blockDims = Dim(dimOrBlockDims)
+    gateDim = dim ** 2
 
-    mxList = []; start = 0
-    for blockDim in blockDims:
-        for i in range(start,start+blockDim):
-            for j in range(start,start+blockDim):
-                mxList.append( _mut( i, j, dmDim ) )
-        start += blockDim
-
-    assert(len(mxList) == gateDim and start == dmDim)
+    mxList = []
+    for i in range(dim):
+        for j in range(dim):
+            mxList.append(_mut(i, j, dim))
+    assert len(mxList) == gateDim
     return mxList
 
 def _GetGellMannNonIdentityDiagMxs(dimension):
@@ -94,34 +103,33 @@ def _GetGellMannNonIdentityDiagMxs(dimension):
     return listOfMxs
 
 @basis_constructor('gm_unnormalized', 'Gell-Mann unnormalized', real=True)
-def gm_matrices_unnormalized(dimOrBlockDims):
+def gm_matrices_unnormalized(dim):
     """
     Get the elements of the generalized Gell-Mann
-    basis spanning the density-matrix space given by dimOrBlockDims.
+    basis spanning the density-matrix space given by dim.
 
     The returned matrices are given in the standard basis of the
     "embedding" density matrix space, that is, the space which
     embeds the block-diagonal matrix structure stipulated in
-    dimOrBlockDims. These matrices form an orthogonal but not
+    dim. These matrices form an orthogonal but not
     orthonormal basis under the trace inner product.
 
     Parameters
     ----------
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+    dim : int 
+        Dimension of the density-matrix space.
 
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
+        A list of N numpy arrays each of shape (dim, dim),
+        where dim is the matrix-dimension of the overall
+        "embedding" density matrix (the sum of dim)
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    if isinstance(dimOrBlockDims, _numbers.Integral):
-        d = dimOrBlockDims
-
+    if isinstance(dim, _numbers.Integral):
+        d = dim
         #Identity Mx
         listOfMxs = [ _np.identity(d, 'complex') ]
 
@@ -143,51 +151,37 @@ def gm_matrices_unnormalized(dimOrBlockDims):
 
         assert(len(listOfMxs) == d**2)
         return listOfMxs
-
-    elif isinstance(dimOrBlockDims, _collections.Container) or isinstance(dimOrBlockDims, Dim):
-        dmDim, gateDim, blockDims = Dim(dimOrBlockDims)
-
-        listOfMxs = []; start = 0
-        for blockDim in blockDims:
-            for blockMx in gm_matrices_unnormalized(blockDim):
-                mx = _np.zeros( (dmDim, dmDim), 'complex' )
-                mx[start:start+blockDim, start:start+blockDim] = blockMx
-                listOfMxs.append( mx )
-            start += blockDim
-        assert(len(listOfMxs) == gateDim)
-        return listOfMxs
-
     else:
-        raise ValueError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
+        raise ValueError("Invalid dim = %s" % str(dim))
 
 
 @basis_constructor('gm', 'Gell-Mann', real=True)
-def gm_matrices(dimOrBlockDims):
+def gm_matrices(dim):
     """
     Get the normalized elements of the generalized Gell-Mann
-    basis spanning the density-matrix space given by dimOrBlockDims.
+    basis spanning the density-matrix space given by dim.
 
     The returned matrices are given in the standard basis of the
     "embedding" density matrix space, that is, the space which
     embeds the block-diagonal matrix structure stipulated in
-    dimOrBlockDims. These matrices form an orthonormal basis
+    dim. These matrices form an orthonormal basis
     under the trace inner product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.
 
     Parameters
     ----------
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+    dim : int 
+        Dimension of the density-matrix space.
 
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (dmDim, dmDim),
-        where dmDim is the matrix-dimension of the overall
-        "embedding" density matrix (the sum of dimOrBlockDims)
+        A list of N numpy arrays each of shape (dim, dim),
+        where dim is the matrix-dimension of the overall
+        "embedding" density matrix (the sum of dim)
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    mxs = gm_matrices_unnormalized(dimOrBlockDims)
+    mxs = gm_matrices_unnormalized(dim)
     mxs[0] *= 1/_np.sqrt( mxs[0].shape[0] ) #identity mx
     for mx in mxs[1:]:
         mx *= 1/sqrt2
@@ -241,16 +235,13 @@ def pp_matrices(dim, maxWeight=None):
     def is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
 
-    if not isinstance(dim, _numbers.Integral) and not isinstance(dim, Dim):
+    if not isinstance(dim, _numbers.Integral):
         if isinstance(dim, _collections.Container) and len(dim) == 1:
             dim = dim[0]
         else:
             raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2 (got {})".format(dim))
 
-    if isinstance(dim, Dim):
-        nQubits = _np.log2(dim.dmDim)
-    else:
-        nQubits = _np.log2(dim)
+    nQubits = _np.log2(dim)
     if not is_integer(nQubits):
         raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
 
