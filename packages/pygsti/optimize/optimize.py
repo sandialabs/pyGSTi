@@ -742,7 +742,12 @@ def create_obj_func_printer(objFunc, startTime=None):
         if f is not None and accepted is not None:
             print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
-            print("%5ds %22.10f" % (_time.time()-startTime, objFunc(x)))
+            result = objFunc(x)
+            duration = _time.time() - startTime
+            try:
+                print("%5ds %22.10f" % (duration, result))
+            except TypeError: # Objfun returns vector, not scalar
+                print('%5ds %s' % (duration,  result))
     return print_obj_func
 
 

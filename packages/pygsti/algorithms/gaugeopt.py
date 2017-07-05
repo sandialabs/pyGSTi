@@ -208,6 +208,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
+    '''
     if CPpenalty == 0 and \
         TPpenalty == 0 and \
         validSpamPenalty == 0 and \
@@ -228,18 +229,19 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                                  maxiter, maxfev, tol, returnAll, verbosity)
     else:
                 
-        objective_fn = create_objective_fn(gateset, targetGateset,
-                itemWeights, 
-                CPpenalty, TPpenalty, 
-                validSpamPenalty, gatesMetric, 
-                spamMetric)
-            
+    '''
+    objective_fn = create_objective_fn(gateset, targetGateset,
+            itemWeights, 
+            CPpenalty, TPpenalty, 
+            validSpamPenalty, gatesMetric, 
+            spamMetric)
         
-        result = gaugeopt_custom(gateset, objective_fn, gauge_group,
-                     method, maxiter, maxfev, tol, returnAll, verbosity)
+    
+    result = gaugeopt_custom(gateset, objective_fn, gauge_group,
+                 method, maxiter, maxfev, tol, returnAll, verbosity)
 
-    print('Result frobenius dist')
-    print(result.frobeniusdist(targetGateset))
+    #print('Result frobenius dist')
+    #print(result.frobeniusdist(targetGateset))
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -337,7 +339,6 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         gaugeGroupEl.from_vector(vec)
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
-
 
         gates   = list(gs.gates.values())
         preps   = list(gs.preps.values())
