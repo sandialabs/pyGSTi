@@ -292,5 +292,11 @@ class BasisBaseTestCase(BaseTestCase):
         b = basis.Basis('std', [2,2])
         self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
 
+    def test_auto_expand(self):
+        comp = basis.Basis(matrices=[('std', 2,), ('std', 1)])
+        std  = basis.Basis('std', 3)
+        mxStd = np.identity(5)
+        test  = basis.change_basis(mxStd, comp, std)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

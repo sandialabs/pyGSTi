@@ -72,6 +72,7 @@ class Dim(object):
             self.blockDims = [dimOrBlockDims]
         else:
             raise TypeError("Invalid dimOrBlockDims = %s" % str(dimOrBlockDims))
+        self.embedDim = self.dmDim ** 2
 
     def __str__(self):
         return 'Dim: {}'.format(self.blockDims)
@@ -91,6 +92,3 @@ class Dim(object):
 
     def __hash__(self):
         return hash(tuple(self.blockDims))
-
-    def __eq__(self, other):
-        return self.blockDims == other.blockDims

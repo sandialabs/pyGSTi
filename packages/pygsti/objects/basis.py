@@ -294,12 +294,17 @@ def _build_composite_basis(bases):
         the composite basis created
     '''
     assert len(bases) > 0, 'Need at least one basis-dim pair to compose'
-    bases = [Basis(*item) for item in bases]
+    basisObjs = []
+    for item in bases:
+        if isinstance(item, tuple):
+            basisObjs.append(Basis(name=item[0], dim=item[1]))
+        else:
+            basisObjs.append(item)
 
-    blockMatrices = [basis._matrices        for basis in bases]
-    name          = ','.join(basis.name     for basis in bases)
-    longname      = ','.join(basis.longname for basis in bases)
-    real          = all(basis.real          for basis in bases)
+    blockMatrices = [basis._matrices        for basis in basisObjs]
+    name          = ','.join(basis.name     for basis in basisObjs)
+    longname      = ','.join(basis.longname for basis in basisObjs)
+    real          = all(basis.real          for basis in basisObjs)
 
     composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real)
     return composite
@@ -358,13 +363,13 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
 
     if dimOrBlockDims is None:
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-        assert( dimOrBlockDims**2 == mx.shape[0] )
+        #assert( dimOrBlockDims**2 == mx.shape[0] )
 
     dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
 
-    if from_basis.dim != to_basis.dim:
+    if from_basis.dim.gateDim != to_basis.dim.gateDim:
         raise NotImplementedError('Automatic basis expanding/contracting not implemented')
 
     if from_basis.name == to_basis.name:
@@ -430,14 +435,14 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
             first = matrices[0]
             if isinstance(first, tuple) or \
                     isinstance(first, Basis):
-                blockMatrices = build_composite_basis(matrices) # really list of Bases or basis tuples
+                blockMatrices = _build_composite_basis(matrices) # really list of Bases or basis tuples
             elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
                 blockMatrices = [matrices]                      # Then nest
             else:
                 blockMatrices = matrices                        # Given as nested lists
             if name is None:
                 name = 'CustomBasis_{}'.format(Basis.CustomCount)
-                CustomCount += 1
+                Basis.CustomCount += 1
         else:
             blockMatrices = []
     return name, blockMatrices
