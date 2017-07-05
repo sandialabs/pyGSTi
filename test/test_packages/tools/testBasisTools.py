@@ -233,11 +233,11 @@ class BasisBaseTestCase(BaseTestCase):
     def test_basis_longname(self):
         longnames = {basis.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
         self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-Product', 'Qutrit'})
-        with self.assertRaises(NotImplementedError):
-            self.assertEqual(basis.basis_longname('not a basis'), '?Unknown?')
+        with self.assertRaises(KeyError):
+            basis.basis_longname('not a basis')
 
     def test_basis_element_labels(self):
-        basisnames = ['gm', 'std', 'pp', 'akdlfjalsdf']
+        basisnames = ['gm', 'std', 'pp']
 
         # One dimensional gm
         self.assertEqual([''], basis.basis_element_labels('gm', 1))
@@ -246,10 +246,12 @@ class BasisBaseTestCase(BaseTestCase):
         expectedLabels = [
         ['I', 'X', 'Y', 'Z'],
         ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
-        ['I', 'X', 'Y', 'Z'],
-        []]
+        ['I', 'X', 'Y', 'Z']]
         labels = [basis.basis_element_labels(basisname, 2)  for basisname in basisnames]
         self.assertEqual(labels, expectedLabels)
+
+        with self.assertRaises(NotImplementedError):
+            basis.basis_element_labels('asdklfasdf', 2)
 
         # Non power of two for pp labels:
         with self.assertRaises(ValueError):
@@ -262,7 +264,7 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertEqual(basis.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
 
         # Four dimensional+
-        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ'], []]
+        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']]
         labels = [basis.basis_element_labels(basisname, 4)  for basisname in basisnames]
         self.assertEqual(expectedLabels, labels)
 

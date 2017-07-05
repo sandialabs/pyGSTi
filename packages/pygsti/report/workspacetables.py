@@ -84,7 +84,7 @@ class SpamTable(WorkspaceTable):
             gateset = gatesets[-1] #only show HSVec for last gateset
             mxBasis    = gateset.basis.name
             mxBasisDim = gateset.basis.dim.blockDims
-            basisNm    = _tools.basis_longname(mxBasis, mxBasisDim)
+            basisNm    = _tools.basis_longname(mxBasis)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
             
@@ -241,7 +241,7 @@ class GatesTable(WorkspaceTable):
         for gateset,title in zip(gatesets,titles):
             basisNm = gateset.basis.name
             basisDims = gateset.basis.dim.blockDims
-            basisLongNm = _tools.basis_longname(basisNm, basisDims)
+            basisLongNm = _tools.basis_longname(basisNm)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -380,7 +380,7 @@ class ChoiTable(WorkspaceTable):
                 for gateset,title in zip(gatesets,titles):
                     basisNm = gateset.basis.name
                     basisDims = gateset.basis.dim.blockDims
-                    basisLongNm = _tools.basis_longname(basisNm, basisDims)
+                    basisLongNm = _tools.basis_longname(basisNm)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":

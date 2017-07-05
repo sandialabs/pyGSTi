@@ -23,6 +23,34 @@ class Basis(object):
     Encapsulates a basis
 
     A Basis stores groups of matrices, which are used to create/recast matrices and vectors used in pyGSTi.
+
+    There are three different bases that GST can use and convert between (as well as the qutrit basis, not mentioned): 
+      - The Standard ("std") basis:
+         State space is the tensor product of [0,1] for each qubit, e.g. for two qubits: ``[00,01,10,11] = [ |0>|0>, |0>|1>, ... ]``
+         the gate space is thus the tensor product of two qubit spaces, so identical in form to state space
+         for twice qubits, but interpret as ket/bra states.  E.g. for a *one* qubit gate, std basis is: = ``[ |0><0|, |0><1|, ... ]``
+
+      - The Pauli-product ("pp") basis:
+         Not used for state space - just for gates.  Basis consists of tensor products of the 4 pauli matrices (normalized by sqrt(2)).
+         Examples:
+
+         - 1-qubit gate basis is [ I, X, Y, Z ]  (in std basis, each is a pauli mx / sqrt(2))
+         - 2-qubit gate basis is [ IxI, IxX, IxY, IxZ, XxI, ... ] (16 of them. In std basis, each is the tensor product of two pauli/sqrt(2) mxs)
+
+      - The Gell-Mann ("gm") basis:
+         Not used for state space - just for gates.  Basis consists of the Gell-Mann matrices of the given dimension (useful for dimensions that are not a power of 2)
+         Examples:
+
+         - 1-qubit gate basis is [ I, X, Y, Z ]  (in std basis, each is a pauli mx / sqrt(2)) -- SAME as Pauli-product!
+         - 2-qubit gate basis is the 16 Gell-Mann matrices of dimension 4. In std basis, each is as given by Wikipedia page up to normalization.
+
+    Notes:
+      - The elements of each basis are normalized so that Tr(Bi Bj) = delta_ij
+      - since density matrices are Hermitian and all Gell-Mann and Pauli-product matrices are Hermitian too,
+        gate parameterization by Gell-Mann or Pauli-product matrices have *real* coefficients, whereas
+        in the standard basis gate matrices can have complex elements but these elements are additionally
+        constrained.  This makes gate matrix parameterization and optimization much more convenient
+        in the "gm" or "pp" bases.
     '''
     DefaultInfo = dict()
     CustomCount = 0 # The number of custom bases, used for serialized naming
@@ -81,7 +109,10 @@ class Basis(object):
 
 
         if labels is None:
-            labels = ['M{}{}'.format(self.name, i) for i in range(len(self._matrices))]
+            try:
+                labels = basis_element_labels(self.name, blockDims)
+            except NotImplementedError:
+                labels = ['M{}{}'.format(self.name, i) for i in range(len(self._matrices))]
 
         self.dim      = Dim(blockDims)
         self.labels   = labels
@@ -439,7 +470,6 @@ def _build_default_block_matrices(name, dim):
         blockMatrices.append(f(blockDim))
     return blockMatrices
 
-
 def basis_matrices(name, dimOrBlockDims):
     '''
     Get the elements of the specifed basis-type which
@@ -506,79 +536,27 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
         # No else case needed, see assert
         return change_basis(mid, 'std', endBasis, dimOrBlockDims)
 
-# TODO: Clean this stuff up:
-
-"""
-Functions for creating and converting between matrix bases.
-
-There are three different bases that GST can use and convert between:
-  - The Standard ("std") basis:
-     State space is the tensor product of [0,1] for each qubit, e.g. for two qubits: ``[00,01,10,11] = [ |0>|0>, |0>|1>, ... ]``
-     the gate space is thus the tensor product of two qubit spaces, so identical in form to state space
-     for twice qubits, but interpret as ket/bra states.  E.g. for a *one* qubit gate, std basis is: = ``[ |0><0|, |0><1|, ... ]``
-
-  - The Pauli-product ("pp") basis:
-     Not used for state space - just for gates.  Basis consists of tensor products of the 4 pauli matrices (normalized by sqrt(2)).
-     Examples:
-
-     - 1-qubit gate basis is [ I, X, Y, Z ]  (in std basis, each is a pauli mx / sqrt(2))
-     - 2-qubit gate basis is [ IxI, IxX, IxY, IxZ, XxI, ... ] (16 of them. In std basis, each is the tensor product of two pauli/sqrt(2) mxs)
-
-  - The Gell-Mann ("gm") basis:
-     Not used for state space - just for gates.  Basis consists of the Gell-Mann matrices of the given dimension (useful for dimensions that are not a power of 2)
-     Examples:
-
-     - 1-qubit gate basis is [ I, X, Y, Z ]  (in std basis, each is a pauli mx / sqrt(2)) -- SAME as Pauli-product!
-     - 2-qubit gate basis is the 16 Gell-Mann matrices of dimension 4. In std basis, each is as given by Wikipedia page up to normalization.
-
-Notes:
-  - The elements of each basis are normalized so that Tr(Bi Bj) = delta_ij
-  - since density matrices are Hermitian and all Gell-Mann and Pauli-product matrices are Hermitian too,
-    gate parameterization by Gell-Mann or Pauli-product matrices have *real* coefficients, whereas
-    in the standard basis gate matrices can have complex elements but these elements are additionally
-    constrained.  This makes gate matrix parameterization and optimization much more convenient
-    in the "gm" or "pp" bases.
-"""
-
 from ..tools.basisconstructors import *
 from ..tools.basisconstructors import _mut
 
-def basis_longname(basis, dimOrBlockDims=None):
+def basis_longname(basis):
     """
     Get the "long name" for a particular basis,
     which is typically used in reports, etc.
 
     Parameters
     ----------
-    basis : {'std', 'gm', 'pp', 'qt'}
-        Which basis the gateset is represented in.  Allowed
-        options are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).
+    basis : string or Basis object
 
-    dimOrBlockDims : int or list, optional
-        Dimension of basis matrices, to aid in creating a
-        long-name.  For example, a basis of the 2-dimensional
-        Gell-Mann matrices is the same as the Pauli matrices,
-        and thus the long name is just "Pauli" in this case.
-        If a list of integers, then gives the dimensions of
-        the terms in a direct-sum decomposition of the density
-        matrix space acted on by the basis.
     Returns
     -------
     string
     """
-    if basis in ['gm', 'pp'] and dimOrBlockDims in (2,[2],(2,)): 
-        return "Pauli"
-    else:
-        if dimOrBlockDims is None:
-            if basis == 'qt':
-                dimOrBlockDims = 3
-            else:
-                dimOrBlockDims = 2
-        basis = Basis(basis, dimOrBlockDims)
+    if isinstance(basis, Basis):
         return basis.longname
+    return _basisConstructorDict[basis].longname
 
-def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
+def basis_element_labels(basis, dimOrBlockDims):
     """
     Returns a list of short labels corresponding to to the
     elements of the described basis.  These labels are
@@ -599,17 +577,14 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
         direct-sum decomposition of the density
         matrix space acted on by the basis.
 
-    maxWeight : int, optional
-        Restrict the elements returned to those having weight <= `maxWeight`.
-        (see :func:`basis_matrices`)
-
-
     Returns
     -------
     list of strings
         A list of length dim, whose elements label the basis
         elements.
     """
+    if isinstance(basis, Basis):
+        return basis.labels
 
     if dimOrBlockDims == 1: #Special case of single element basis, in which
         return [ "" ]       # case we return a single label.
@@ -673,8 +648,6 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
 
             basisLblList = [ ['I','X','Y','Z'] ]*nQubits
             for sigmaLbls in product(*basisLblList):
-                if maxWeight is not None:
-                    if sigmaLbls.count('I') < nQubits-maxWeight: continue
                 lblList.append( ''.join(sigmaLbls) )
 
     elif basis == "qt":
@@ -682,8 +655,7 @@ def basis_element_labels(basis, dimOrBlockDims, maxWeight=None):
         lblList = ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
 
     else:
-        lblList = [] #Unknown basis
-
+        raise NotImplementedError('Unknown basis {}'.format(basis))
     return lblList
 
 def state_to_pauli_density_vec(state_vec):
