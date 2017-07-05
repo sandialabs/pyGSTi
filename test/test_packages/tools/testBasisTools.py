@@ -49,8 +49,8 @@ class BasisBaseTestCase(BaseTestCase):
         with self.assertRaises(ValueError):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
-        # GM [1,1] matrices are the basis matrices for each block, concatenated together
         '''
+        # GM [1,1] matrices are the basis matrices for each block, concatenated together
         GM11_mxs = pygsti.gm_matrices_unnormalized([1,1])
         self.assertTrue(len(GM11_mxs) == 2)
         self.assertArraysAlmostEqual( GM11_mxs[0], np.array([[1,0],[0,0]],'d') )
@@ -288,7 +288,7 @@ class BasisBaseTestCase(BaseTestCase):
 
         a = basis.Basis([('std', 2), ('std', 2)])
         b = basis.Basis('std', [2,2])
-        self.assertArraysAlmostEqual(np.array(a.matrices), np.array(b.matrices))
+        self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

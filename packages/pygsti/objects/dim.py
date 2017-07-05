@@ -91,3 +91,6 @@ class Dim(object):
 
     def __hash__(self):
         return hash(tuple(self.blockDims))
+
+    def __eq__(self, other):
+        return self.blockDims == other.blockDims

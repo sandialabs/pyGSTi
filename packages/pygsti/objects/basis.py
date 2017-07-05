@@ -19,17 +19,50 @@ from ..tools import matrixtools as _mt
 from .dim import Dim
 
 class Basis(object):
+    '''
+    Encapsulates a basis
+
+    A Basis stores groups of matrices, which are used to create/recast matrices and vectors used in pyGSTi.
+    '''
     DefaultInfo = dict()
     CustomCount = 0 # The number of custom bases, used for serialized naming
 
-    def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, labels=None, **kwargs):
-        self.name, self.matrixGroups = _build_matrix_groups(name, dim, matrices, **kwargs)
-        self.matrices = self.get_composite_matrices() # Equivalent to matrices for non-composite bases
+    def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, labels=None):
+        '''
+        Initialize a basis object.
 
-        for block in self.matrixGroups:
+        Parameters
+        ----------
+        name : string or Basis
+            Name of the basis to be created or a Basis to copy from
+            if the name is 'pp', 'std', 'gm', or 'qt' and a dimension is provided, 
+            then a default basis is created
+
+        dim : int or list of ints,
+            dimension/blockDimensions of the basis to be created.
+            Only required when creating default bases
+
+        matrices : list of numpy arrays, list of lists of numpy arrays, list of Basis objects/tuples
+            Flexible argument that allows different types of basis creation
+            When a list of numpy arrays, creates a non composite basis
+            When a list of lists of numpy arrays or list of other bases, creates a composite bases with each outer list element as a composite part.
+
+        longname : str
+            Printout name for the basis
+
+        real : bool
+            Determine whether the basis admits complex elements during basis change
+
+        labels : list of strings
+            Labels for the basis matrices (i.e. I, X, Y, Z for the Pauli 2x2 basis)
+        '''
+        self.name, self._blockMatrices = _build_block_matrices(name, dim, matrices)
+        self._matrices = self.get_composite_matrices() # Equivalent to matrices for non-composite bases
+
+        for block in self._blockMatrices:
             for mx in block:
                 mx.flags.writeable = False
-        for mx in self.matrices:
+        for mx in self._matrices:
             mx.flags.writeable = False
 
         # Shorthand for retrieving a default value from the _basisConstructorDict dict
@@ -44,11 +77,11 @@ class Basis(object):
         if longname is None:
             longname = get_info('longname', default=self.name)
 
-        blockDims = [int(math.sqrt(len(group))) for group in self.matrixGroups]
+        blockDims = [int(math.sqrt(len(group))) for group in self._blockMatrices]
 
 
         if labels is None:
-            labels = ['M{}{}'.format(self.name, i) for i in range(len(self.matrices))]
+            labels = ['M{}{}'.format(self.name, i) for i in range(len(self._matrices))]
 
         self.dim      = Dim(blockDims)
         self.labels   = labels
@@ -63,126 +96,61 @@ class Basis(object):
         return str(self)
 
     def __getitem__(self, index):
-        return self.matrices[index]
+        return self._matrices[index]
 
     def __len__(self):
-        return len(self.matrices)
+        return len(self._matrices)
 
     def __eq__(self, other):
         if isinstance(other, Basis):
-            return _np.array_equal(self.matrices, other.matrices)
+            return _np.array_equal(self._matrices, other._matrices)
         else:
-            return _np.array_equal(self.matrices, other)
+            return _np.array_equal(self._matrices, other)
 
     def __hash__(self):
         return hash((self.name, self.dim))
 
-    def stdmx_to_vec(self, m):
-        """
-        Convert a matrix in the standard basis to
-         a vector in this basis.
-
-        Parameters
-        ----------
-        m : numpy array
-            The matrix, shape 2x2 (1Q) or 4x4 (2Q)
-
-        Returns
-        -------
-        numpy array
-            The vector, length 4 or 16 respectively.
-        """
-
-        assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
-        dim = m.shape[0]
-        v = _np.empty((dim**2,1))
-        for i, mx in enumerate(self.matrices):
-            if self.real:
-                v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
-            else:
-                v[i,0] = _mt.trace(_np.dot(mx,m))
-        return v
-
-    def vec_to_stdmx(self, v, keep_complex=False):
-        """
-        Convert a vector in this basis to
-         a matrix in the standard basis.
-
-        Parameters
-        ----------
-        v : numpy array
-            The vector length 4 or 16 respectively.
-
-        Returns
-        -------
-        numpy array
-            The matrix, 2x2 or 4x4 depending on nqubits 
-        """
-        dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
-        ret = _np.zeros( (dim, dim), 'complex' )
-        for i, mx in enumerate(self.matrices):
-            if keep_complex:
-                ret += v[i]*mx
-            else:
-                ret += float(v[i])*mx
-        return ret
-
     def transform_matrix(self, to_basis):
+        '''
+        Retrieve a list of matrices by index 
+
+        Parameters
+        ----------
+        index : int
+            the position of matrices to retrieve
+
+        Returns
+        -------
+        matrix to transform from this basis to another
+        '''
         to_basis = Basis(to_basis, self.dim.blockDims)
         return _np.dot(to_basis.get_from_std(), self.get_to_std())
 
-    def change_basis(self, mx, to_basis, dimOrBlockDims=None):
-        """
-        Convert a gate matrix from one basis of a density matrix space
-        to another.
+    def get_sub_basis(self, index):
+        '''
+        Retrieve a list of matrices by index 
 
         Parameters
         ----------
-        mx : numpy array
-            The gate matrix (a 2D square array) in the `from_basis` basis.
-
-        from_basis, to_basis: {'std', 'gm', 'pp', 'qt'}
-            The source and destination basis, respectively.  Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt).
-
-        dimOrBlockDims : int or list of ints, optional
-            Structure of the density-matrix space. If None, then assume
-            mx operates on a single-block density matrix space,
-            i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
+        index : int
+            the position of matrices to retrieve
 
         Returns
         -------
-        numpy array
-            The given gate matrix converted to the `to_basis` basis.
-            Array size is the same as `mx`.
-        """
-        if dimOrBlockDims is None:
-            dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
-            assert( dimOrBlockDims**2 == mx.shape[0] )
-        dim = Dim(dimOrBlockDims)
-        to_basis   = Basis(to_basis,   dim)
-        if self.name == to_basis.name:
-            return mx.copy()
-
-        if len(mx.shape) not in [1, 2]:
-            raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
-        toMx   = self.transform_matrix(to_basis)
-        fromMx = to_basis.transform_matrix(self)
-        if len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]:
-            ret = _np.dot(toMx, _np.dot(mx, fromMx))
-        else:
-            ret = _np.dot(toMx, mx)
-        if not to_basis.real:
-            return ret
-        if _np.linalg.norm(_np.imag(ret)) > 1e-8:
-            raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
-                             (_np.linalg.norm(_np.imag(ret)), self, to_basis, ret))
-        return _np.real(ret)
+        list of matrices
+        '''
+        return self._blockMatrices[index]
 
     @cache_by_hashed_args
     def is_normalized(self):
-        for mx in self.matrices:
+        '''
+        Check if a basis is normalized
+
+        Returns
+        -------
+        bool
+        '''
+        for mx in self._matrices:
             t = _np.trace(_np.dot(mx, mx))
             t = _np.real(t)
             if t != 0:
@@ -197,11 +165,15 @@ class Basis(object):
          [0 0 0]   [0 0 0]   [1 0 0]   [0 1 0]   [0 0 0]
          [0 0 0]], [0 0 0]], [0 0 0]], [0 0 0]], [0 0 1]]
         For a non composite basis, this just returns the basis matrices
+
+        Returns
+        -------
+        list of matrices
         '''
         compMxs = []
-        start = 0
-        length = sum(mxs[0].shape[0] for mxs in self.matrixGroups)
-        for mxs in self.matrixGroups:
+        start   = 0
+        length  = sum(mxs[0].shape[0] for mxs in self._blockMatrices)
+        for mxs in self._blockMatrices:
             d = mxs[0].shape[0]
             for mx in mxs:
                 compMx = _np.zeros((length, length), 'complex' )
@@ -213,8 +185,15 @@ class Basis(object):
 
     @cache_by_hashed_args
     def get_expand_mx(self):
-        x = sum(len(mxs) for mxs in self.matrixGroups)
-        y = sum(mxs[0].shape[0] for mxs in self.matrixGroups) ** 2
+        '''
+        Retrieve the matrix that will convert from the direct sum space to the embedding space
+
+        Returns
+        -------
+        numpy array
+        '''
+        x = sum(len(mxs) for mxs in self._blockMatrices)
+        y = sum(mxs[0].shape[0] for mxs in self._blockMatrices) ** 2
         expandMx = _np.zeros((x, y), 'complex')
         start = 0
         for i, compMx in enumerate(self.get_composite_matrices()):
@@ -225,17 +204,32 @@ class Basis(object):
 
     @cache_by_hashed_args
     def get_contract_mx(self):
+        '''
+        Retrieve the matrix that will convert from the embedding space to the direct sum space,
+        truncating if necessary (Currently without warning)
+
+        Returns
+        -------
+        numpy array
+        '''
         return self.get_expand_mx().T
 
     @cache_by_hashed_args
     def get_to_std(self):
+        '''
+        Retrieve the matrix that will convert from the current basis to the standard basis
+
+        Returns
+        -------
+        numpy array
+        '''
         toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
         #Since a multi-block basis is just the direct sum of the individual block bases,
         # transform mx is just the transfrom matrices of the individual blocks along the
         # diagonal of the total basis transform matrix
 
         start = 0
-        for mxs in self.matrixGroups:
+        for mxs in self._blockMatrices:
             l = len(mxs)
             for j, mx in enumerate(mxs):
                 toStd[start:start+l,start+j] = mx.flatten()
@@ -245,86 +239,208 @@ class Basis(object):
 
     @cache_by_hashed_args
     def get_from_std(self):
+        '''
+        Retrieve the matrix that will convert from the standard basis to the current basis
+
+        Returns
+        -------
+        numpy array
+        '''
         return _inv(self.get_to_std())
 
 def _build_composite_basis(bases):
     '''
     Build a composite basis from a list of tuples or Basis objects 
       (or a list of mixed tuples and Basis objects)
+
+    Parameters
+    ----------
+    bases : list of tuples/Basis objects
+
+    Returns
+    -------
+    Basis
+        the composite basis created
     '''
     assert len(bases) > 0, 'Need at least one basis-dim pair to compose'
     bases = [Basis(*item) for item in bases]
 
-    matrixGroups  = [basis.matrices         for basis in bases]
+    blockMatrices = [basis._matrices        for basis in bases]
     name          = ','.join(basis.name     for basis in bases)
     longname      = ','.join(basis.longname for basis in bases)
     real          = all(basis.real          for basis in bases)
 
-    composite = Basis(matrices=matrixGroups, name=name, longname=longname, real=real)
+    composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real)
     return composite
 
 def transform_matrix(from_basis, to_basis, dimOrBlockDims):
+    '''
+    Compute the transformation matrix between two bases
+
+    Parameters
+    ----------
+    from_basis : Basis or str
+        Basis being converted from
+
+    to_basis : Basis or str
+        Basis being converted to
+
+    dimOrBlockDims : int or list of ints
+        if strings provided as bases, the dimension of basis to use.
+
+    Returns
+    -------
+    Basis
+        the composite basis created
+    '''
     from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
-# Convenience function, see above for docstring
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+    """
+    Convert a gate matrix from one basis of a density matrix space
+    to another.
+
+    Parameters
+    ----------
+    mx : numpy array
+        The gate matrix (a 2D square array) in the `from_basis` basis.
+
+    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    dimOrBlockDims : int or list of ints, optional
+        Structure of the density-matrix space. If None, then assume
+        mx operates on a single-block density matrix space,
+        i.e. on K x K density matrices with K == sqrt( mx.shape[0] ).
+
+    Returns
+    -------
+    numpy array
+        The given gate matrix converted to the `to_basis` basis.
+        Array size is the same as `mx`.
+    """
+    if len(mx.shape) not in [1, 2]:
+        raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+
     if dimOrBlockDims is None:
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
         assert( dimOrBlockDims**2 == mx.shape[0] )
-    from_basis = Basis(from_basis, dimOrBlockDims)
-    return from_basis.change_basis(mx, to_basis, dimOrBlockDims)
+
+    dim        = Dim(dimOrBlockDims)
+    from_basis = Basis(from_basis, dim)
+    to_basis   = Basis(to_basis, dim)
+
+    if from_basis.dim != to_basis.dim:
+        raise NotImplementedError('Automatic basis expanding/contracting not implemented')
+
+    if from_basis.name == to_basis.name:
+        return mx.copy()
+
+    toMx   = from_basis.transform_matrix(to_basis)
+    fromMx = to_basis.transform_matrix(from_basis)
+
+    isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
+    if isMx:
+        ret = _np.dot(toMx, _np.dot(mx, fromMx))
+    else: # isVec
+        ret = _np.dot(toMx, mx)
+
+    if not to_basis.real:
+        return ret
+
+    if _np.linalg.norm(_np.imag(ret)) > 1e-8:
+        raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
+                         (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
+    return _np.real(ret)
 
 # Allow flexible basis building without cluttering the basis __init__ method with instance checking
-def _build_matrix_groups(name=None, dim=None, matrices=None, **kwargs):
+def _build_block_matrices(name=None, dim=None, matrices=None):
+    '''
+    Build the block matrices for a basis object by flexible arguments
+
+    Parameters
+    ----------
+    name : string or Basis
+        Name of the basis to be created or a Basis to copy from
+        if the name is 'pp', 'std', 'gm', or 'qt' and a dimension is provided, 
+        then a default basis is created
+
+    dim : int or list of ints,
+        dimension/blockDimensions of the basis to be created.
+        Only required when creating default bases
+
+    matrices : list of numpy arrays, list of lists of numpy arrays, list of Basis objects/tuples
+        Flexible argument that allows different types of basis creation
+        When a list of numpy arrays, creates a non composite basis
+        When a list of lists of numpy arrays or list of other bases, creates a composite bases with each outer list element as a composite part.
+
+    Returns
+    -------
+    name, list of lists of numpy arrays
+    '''
     if isinstance(name, Basis):
-        matrixGroups = name.matrixGroups
-        name         = name.name
+        basis         = name
+        blockMatrices = basis._blockMatrices
+        name          = basis.name
     elif isinstance(name, list):
         basis = _build_composite_basis(name)
-        matrixGroups = basis.matrixGroups
-        name         = basis.name
+        blockMatrices = basis._blockMatrices
+        name          = basis.name
     else:
         if matrices is None: # built by name and dim, ie Basis('pp', 4)
             assert name is not None, \
                     'If matrices is none, name must be supplied to Basis.__init__'
-            matrices = _build_default_matrix_groups(name, dim, **kwargs)
+            matrices = _build_default_block_matrices(name, dim)
 
         if len(matrices) > 0:
             first = matrices[0]
             if isinstance(first, tuple) or \
                     isinstance(first, Basis):
-                matrixGroups = build_composite_basis(matrices) # really list of Bases or basis tuples
+                blockMatrices = build_composite_basis(matrices) # really list of Bases or basis tuples
             elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-                matrixGroups = [matrices]                      # Then nest
+                blockMatrices = [matrices]                      # Then nest
             else:
-                matrixGroups = matrices                        # Given as nested lists
+                blockMatrices = matrices                        # Given as nested lists
             if name is None:
                 name = 'CustomBasis_{}'.format(Basis.CustomCount)
                 CustomCount += 1
         else:
-            matrixGroups = []
-    return name, matrixGroups
+            blockMatrices = []
+    return name, blockMatrices
 
-def _build_default_matrix_groups(name, dim, **kwargs):
+def _build_default_block_matrices(name, dim):
+    '''
+    Build the default block matrices for a basis object 
+    (i.e. std, pp, gm, or qt basis matrices at time of writing)
+
+    Parameters
+    ----------
+    name : string
+        Name of the basis to be created
+
+    dim : int
+        dimension of the basis to be created.
+    Returns
+    -------
+    list of lists of numpy arrays
+    '''
     if name == 'unknown':
         return []
     if name not in _basisConstructorDict:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dim))
     f = _basisConstructorDict[name].constructor
-    matrixGroups = []
+    blockMatrices = []
     dim = Dim(dim)
     for blockDim in dim.blockDims:
-        group = f(blockDim, **kwargs)
-        if isinstance(group, Basis):
-            matrixGroups.append(group.matrices)
-        else:
-            matrixGroups.append(f(blockDim, **kwargs))
-    return matrixGroups
+        blockMatrices.append(f(blockDim))
+    return blockMatrices
 
 
-def basis_matrices(name, dimOrBlockDims, maxWeight=None):
+def basis_matrices(name, dimOrBlockDims):
     '''
     Get the elements of the specifed basis-type which
     spans the density-matrix space given by dimOrBlockDims.
@@ -337,13 +453,6 @@ def basis_matrices(name, dimOrBlockDims, maxWeight=None):
 
     dimOrBlockDims : int or list of ints
         Structure of the density-matrix space.
-
-    maxWeight : int, optional
-      Restrict the elements returned to those having weight <= `maxWeight`. An
-      element's "weight" is defined as the number of non-identity single-qubit
-      factors of which it is comprised.  As this notion of factors is only 
-      meaningful to the the Pauli-product basis, A non-None `maxWeight` can
-      only be used when `basis == "pp"`.
 
     Returns
     -------
@@ -359,10 +468,7 @@ def basis_matrices(name, dimOrBlockDims, maxWeight=None):
             name, dimOrBlockDims))
     f = _basisConstructorDict[name].constructor
 
-    if maxWeight is None:
-        return f(dimOrBlockDims)
-    else:
-        return f(dimOrBlockDims, maxWeight=maxWeight)
+    return f(dimOrBlockDims)
 
 def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
     '''
@@ -602,7 +708,7 @@ def state_to_pauli_density_vec(state_vec):
 
 def vec_to_stdmx(v, basis, keep_complex=False):
     """
-    Convert a vector in any basis to
+    Convert a vector in this basis to
      a matrix in the standard basis.
 
     Parameters
@@ -617,7 +723,13 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     """
     dim   = int(_np.sqrt( len(v) )) # len(v) = dim^2, where dim is matrix dimension of Pauli-prod mxs
     basis = Basis(basis, dim)
-    return basis.vec_to_stdmx(v, keep_complex)
+    ret = _np.zeros( (dim, dim), 'complex' )
+    for i, mx in enumerate(basis._matrices):
+        if keep_complex:
+            ret += v[i]*mx
+        else:
+            ret += float(v[i])*mx
+    return ret
 
 gmvec_to_stdmx  = partial(vec_to_stdmx, basis='gm')
 ppvec_to_stdmx  = partial(vec_to_stdmx, basis='pp')
@@ -643,7 +755,13 @@ def stdmx_to_vec(m, basis):
     assert(len(m.shape) == 2 and m.shape[0] == m.shape[1])
     dim = m.shape[0]
     basis = Basis(basis, dim)
-    return basis.stdmx_to_vec(m)
+    v = _np.empty((dim**2,1))
+    for i, mx in enumerate(basis._matrices):
+        if basis.real:
+            v[i,0] = _np.real(_mt.trace(_np.dot(mx,m)))
+        else:
+            v[i,0] = _mt.trace(_np.dot(mx,m))
+    return v
 
 stdmx_to_ppvec  = partial(stdmx_to_vec, basis='pp')
 stdmx_to_gmvec  = partial(stdmx_to_vec, basis='gm')
