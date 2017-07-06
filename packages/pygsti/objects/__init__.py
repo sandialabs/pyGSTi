@@ -51,6 +51,8 @@ from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
 #Functions
 from .gate import compose, optimize_gate
 from .verbosityprinter import VerbosityPrinter
-from ..tools import basis
-from ..tools.basis import Basis # To prevent circular imports. In all respects, Basis is an object, but it needs to live in tools so that there are no circular imports or backwards dependencies.
+
+# To prevent circular imports. In all respects, Basis is an object, but it needs to live in tools so that there are no circular imports or backwards dependencies.
 # An alternative would be to move certain modules that depend on the Basis object out of tools, but moving the Basis object to tools works fine.
+from ..tools import basis
+from ..tools.basis import *
