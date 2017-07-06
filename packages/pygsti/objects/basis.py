@@ -338,7 +338,7 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims):
     from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
-def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
+def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     """
     Convert a gate matrix from one basis of a density matrix space
     to another.
@@ -375,25 +375,16 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
 
-    if from_basis.dim.gateDim != to_basis.dim.gateDim:
-        print('converting a matrix of shape:')
-        print(mx.shape)
-        print('from:')
-        print(from_basis)
-        print('to:')
-        print(to_basis)
-        #X = _np.dot(to_basis.get_contract_mx(), _np.dot(mx, to_basis.get_expand_mx()))
-        print('from shapes (expand, contract')
-        print(from_basis.get_expand_mx().shape)
-        print(from_basis.get_contract_mx().shape)
-        print(from_basis.get_expand_mx())
-        print(from_basis.get_contract_mx())
-        print('to shapes (expand, contract')
-        print(to_basis.get_expand_mx().shape)
-        print(to_basis.get_expand_mx())
-        X = _np.dot(_np.dot(to_basis.get_contract_mx(), mx), to_basis.get_expand_mx())
-        print(X.shape)
-        raise NotImplementedError('Automatic basis expanding/contracting not implemented')
+    if from_basis.dim.gateDim != to_basis.dim.gateDim or \
+            resize is not None:
+        if resize is None:
+            if from_basis.dim.gateDim < to_basis.dim.gateDim:
+                resize = 'contract'
+                assert len(to_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
+            else:
+                resize = 'expand'
+                assert len(from_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
+        return resize_mx(mx, from_basis.dim.blockDims, resize, from_basis, to_basis)
 
     if from_basis.name == to_basis.name:
         return mx.copy()
@@ -556,15 +547,21 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
         resize is None:
         return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
     else:
+        dim = Dim(dimOrBlockDims)
+        startBasis = Basis(startBasis, dim)
+        endBasis   = Basis(endBasis, dim)
+        stdBasis1  = Basis('std', startBasis.dim.blockDims)
+        stdBasis2  = Basis('std', endBasis.dim.blockDims)
+
         assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
-        start = change_basis(mx, startBasis, 'std', dimOrBlockDims)
-        stdBasis = Basis('std', dimOrBlockDims)
+
+        start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
         if resize == 'expand':
-            mid = _np.dot(stdBasis.get_contract_mx(), _np.dot(start, stdBasis.get_expand_mx()))
+            mid = _np.dot(stdBasis1.get_contract_mx(), _np.dot(start, stdBasis1.get_expand_mx()))
         elif resize == 'contract':
-            mid = _np.dot(stdBasis.get_expand_mx(), _np.dot(start, stdBasis.get_contract_mx()))
+            mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(start, stdBasis1.get_contract_mx()))
         # No else case needed, see assert
-        return change_basis(mid, 'std', endBasis, dimOrBlockDims)
+        return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
 
 from ..tools.basisconstructors import *
 from ..tools.basisconstructors import _mut

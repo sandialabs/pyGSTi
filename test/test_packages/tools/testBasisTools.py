@@ -20,8 +20,12 @@ class BasisBaseTestCase(BaseTestCase):
                                  [3,0,0,4]],'d')
 
         # Reduce to a matrix operating on a density matrix space with 2 1x1 blocks (hence [1,1])
-        mxInReducedBasis = basis.resize_mx(mxInStdBasis,[1,1], resize='contract')
-        notReallyContracted = basis.resize_mx(mxInStdBasis, 4, resize='contract')
+        begin = basis.Basis('std', [1,1])
+        end   = basis.Basis('std', 2)
+        
+        mxInReducedBasis = basis.change_basis(mxInStdBasis, begin, end)
+        mxInReducedBasis = basis.change_basis(mxInStdBasis, 'std', 'std', [1,1], resize='contract')
+        notReallyContracted = basis.change_basis(mxInStdBasis, 'std', 'std', 4)
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
@@ -296,7 +300,10 @@ class BasisBaseTestCase(BaseTestCase):
         comp = basis.Basis(matrices=[('std', 2,), ('std', 1)])
         std  = basis.Basis('std', 3)
         mxStd = np.identity(5)
-        test  = basis.change_basis(mxStd, comp, std)
+        # def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
+        #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
+        #test  = basis.change_basis(mxStd, std, comp)
+        #test  = basis.change_basis(mxStd, comp, std)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
