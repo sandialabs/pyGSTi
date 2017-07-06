@@ -23,16 +23,17 @@ class BasisBaseTestCase(BaseTestCase):
         begin = basis.Basis('std', [1,1])
         end   = basis.Basis('std', 2)
         
+        mxInReducedBasis = pygsti.resize_mx(mxInStdBasis,[1,1], resize='contract')
         mxInReducedBasis = basis.change_basis(mxInStdBasis, begin, end)
-        mxInReducedBasis = basis.change_basis(mxInStdBasis, 'std', 'std', [1,1], resize='contract')
         notReallyContracted = basis.change_basis(mxInStdBasis, 'std', 'std', 4)
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
         self.assertArraysAlmostEqual( notReallyContracted, mxInStdBasis )
 
-        expandedMx = pygsti.resize_mx(mxInReducedBasis,[1,1], resize='expand')
-        expandedMxAgain = pygsti.resize_mx(expandedMx, 4, resize='expand')
+        expandedMx = pygsti.resize_mx(mxInReducedBasis, [1,1], resize='expand')
+        expandedMx = pygsti.change_basis(mxInReducedBasis, end, begin)
+        expandedMxAgain = pygsti.change_basis(expandedMx, 'std', 'std', 4)
         self.assertArraysAlmostEqual( expandedMx, mxInStdBasis )
         self.assertArraysAlmostEqual( expandedMxAgain, mxInStdBasis )
 

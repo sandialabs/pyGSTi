@@ -187,6 +187,9 @@ class GateSet(object):
         """
         self.basis = Basis('unknown', None)
 
+    def change_basis(self, other):
+        self.basis = other
+
     def get_prep_labels(self):
         """
         Get the labels of state preparation vectors.
