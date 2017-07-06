@@ -36,7 +36,7 @@ class TestCoreMethods(BaseTestCase):
 
         ##UNCOMMENT to create LGST analysis dataset
         #ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-        #                                                 nSamples=10000,sampleError='binomial', seed=100)
+                                                         nSamples=10000,sampleError='binomial', seed=100)
         #ds_lgst.save(compare_files + "/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
 
@@ -372,7 +372,7 @@ class TestCoreMethods(BaseTestCase):
             diffs.append( my_datagen_gateset.frobeniusdist(gs_lgst_go) )
 
         diffs = np.array(diffs, 'd')
-        a,b = polyfit(np.log10(nSamplesList), np.log10(diffs), deg=1)
+        a, b = polyfit(np.log10(nSamplesList), np.log10(diffs), deg=1)
         #print "\n",nSamplesList; print diffs; print a #DEBUG
         self.assertLess( a+0.5, 0.05 )
 
