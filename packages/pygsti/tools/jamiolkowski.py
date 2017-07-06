@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """Utility functions related to the Choi representation of gates."""
 
 import numpy as _np
-from ..objects import basis as _basis
+from . import basis as _basis
 from . import matrixtools as _mt
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)

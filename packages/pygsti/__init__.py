@@ -19,6 +19,6 @@ from .algorithms.gaugeopt import *
 from .algorithms.contract import *
 from .algorithms.grammatrix import *
 from .construction.gateconstruction import * # *_qubit_gate fns
-from .objects.basis import *
+from .objects import Basis
 from .tools import *
 from .drivers import *

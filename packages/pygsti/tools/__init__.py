@@ -16,4 +16,5 @@ from .chi2fns import *
 from .gatetools import *
 from .slicetools import *
 from .compattools import *
-
+from .basis import *
+from .dim import Dim

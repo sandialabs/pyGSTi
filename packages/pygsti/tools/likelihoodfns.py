@@ -10,7 +10,7 @@ import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
 #import time as _time
-from ..objects import basis as _basis
+from . import basis as _basis
 from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit

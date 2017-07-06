@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import pygsti
 
-import pygsti.objects.basis       as basis
+import pygsti.tools.basis       as basis
 import pygsti.tools.lindbladiantools as lindbladiantools
 
 from functools import partial

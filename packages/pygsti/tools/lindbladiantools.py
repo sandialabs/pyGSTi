@@ -6,8 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-from ..objects.basis import *
-from ..objects.basis import basis_matrices
+from .basis import *
 
 def hamiltonian_to_lindbladian(hamiltonian):
     """

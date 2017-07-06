@@ -12,10 +12,10 @@ import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
-from ..objects import basis as _basis
 from . import lindbladiantools as _lt
 from . import compattools as _compat
-from ..objects.basis import change_basis
+from . import basis as _basis
+from .basis import change_basis
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function

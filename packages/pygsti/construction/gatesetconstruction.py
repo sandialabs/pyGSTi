@@ -17,8 +17,6 @@ from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..objects import basis as _basis
-from ..objects.basis import Basis, Dim, change_basis
-
 
 #############################################
 # Build gates based on "standard" gate names
@@ -66,7 +64,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     numpy array
         The vector specified by vecExpr in the desired basis.
     """
-    _, gateDim, blockDims = Dim(stateSpaceDims)
+    _, gateDim, blockDims = _basis.Dim(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a
                                                          #Hilbert-space state index, so "reduced-std" basis
 
@@ -86,7 +84,7 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
                 vecIndex += 1
         start += blockDim
 
-    return change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
+    return _basis.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
 
 def build_identity_vec(stateSpaceDims, basis="gm"):
     """
@@ -113,7 +111,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
     numpy array
         The identity vector in the desired basis.
     """
-    _, gateDim, blockDims = Dim(stateSpaceDims)
+    _, gateDim, blockDims = _basis.Dim(stateSpaceDims)
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
@@ -125,7 +123,7 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
                 vecIndex += 1
         start += blockDim
 
-    return change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
+    return _basis.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
 
 
 
@@ -163,7 +161,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Gate matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, _ , _ = Dim(stateSpaceDims)
+    dmDim, _ , _ = _basis.Dim(stateSpaceDims)
     fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -364,7 +362,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
     gateInReducedStdBasis = _basis.resize_mx(gateInStdBasis, stateSpaceDims, resize='contract')
 
     #Change from std (mx unit) basis to another if requested
-    gateMxInFinalBasis = change_basis(gateInReducedStdBasis, "std", basis, stateSpaceDims)
+    gateMxInFinalBasis = _basis.change_basis(gateInReducedStdBasis, "std", basis, stateSpaceDims)
     
     return _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
@@ -456,9 +454,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
 
-    dmDim, gateDim, blockDims = Dim(stateSpaceDims)
+    dmDim, gateDim, blockDims = _basis.Dim(stateSpaceDims)
     #fullOpDim = dmDim**2
-
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
     #  each label is in, and check to make sure dimensions match stateSpaceDims
     tensorBlkIndices = {}; startIndex = []; M = 0
@@ -540,7 +537,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if parameterization != "full":
             raise ValueError("Unitary embedding is only implemented for parmeterization='full'")
 
-        finalGateInFinalBasis = change_basis(finalGateInStdBasis, "std", basis, blockDims)
+        finalGateInFinalBasis = _basis.change_basis(finalGateInStdBasis, "std", basis, blockDims)
         return _gate.FullyParameterizedGate(finalGateInFinalBasis)
 
 
@@ -650,8 +647,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
         #print "DEBUG: embed_gate gateBlk = \n", gateBlk
         tensorDim = blockDims[iTensorProdBlk]
-        startBasis = Basis('pp',  tensorDim)
-        finalBasis = Basis(basis, tensorDim)
+        startBasis = _basis.Basis('pp',  tensorDim)
+        finalBasis = _basis.Basis(basis, tensorDim)
 
         d = slice(offset, offset+N)
 
@@ -769,7 +766,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _basis.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == 'N': #more general single-qubit gate
@@ -786,7 +783,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _basis.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
                 
@@ -820,7 +817,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
                 gateMx = _gt.unitary_to_process_mx(Ugate) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-                pp_gateMx = change_basis(gateMx, 'std', 'pp') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
+                pp_gateMx = _basis.change_basis(gateMx, 'std', 'pp') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == "LX":  #TODO - better way to describe leakage?
@@ -839,7 +836,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             gateTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             gateTermInReducedStdBasis = _basis.resize_mx(gateTermInStdBasis, blockDims, resize='contract')
 
-            gateMxInFinalBasis = change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
+            gateMxInFinalBasis = _basis.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
             gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
@@ -975,7 +972,7 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     else:
         basisDims = stateSpaceDims
 
-    ret.basis = Basis(basis, basisDims)
+    ret.basis = _basis.Basis(basis, basisDims)
 
     if parameterization == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)

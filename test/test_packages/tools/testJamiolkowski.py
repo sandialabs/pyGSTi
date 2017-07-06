@@ -3,7 +3,7 @@ import pygsti
 import os
 import numpy as np
 from pygsti.construction import std1Q_XYI as std
-import pygsti.objects.basis as basis
+import pygsti.tools.basis as basis
 
 class JamiolkowskiTestCase(unittest.TestCase):
 

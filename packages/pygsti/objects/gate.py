@@ -13,7 +13,7 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
-from . import basis as _basis
+from ..tools import basis as _basis
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
