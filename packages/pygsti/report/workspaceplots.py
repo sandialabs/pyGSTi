@@ -554,8 +554,16 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        yextra += 0.5 if (mxBasisDims > 1) else 0
-        xextra += 0.5 if (mxBasisDimsY > 1) else 0
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDims) > 1:
+                yextra += .5
+        elif mxBasisDims > 1:
+            yextra += .5
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDimsY) > 1:
+                yextra += .5
+        elif mxBasisDimsY > 1:
+            yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
