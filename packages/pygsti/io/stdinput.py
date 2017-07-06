@@ -739,13 +739,13 @@ def read_gateset(filename):
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                spam_vecs[cur_label] = _objs.basis.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                spam_vecs[cur_label] = _objs.basis.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
