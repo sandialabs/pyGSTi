@@ -116,7 +116,6 @@ class Basis(object):
 
         self.dim      = Dim(blockDims)
         self.labels   = labels
-        self.name     = name
         self.longname = longname
         self.real     = real
 
@@ -223,6 +222,9 @@ class Basis(object):
         -------
         numpy array
         '''
+        #print(self.dim)
+        # Dim: dmDim 5 gateDim 5 blockDims [1, 1, 1, 1, 1] embedDim 25
+
         x = sum(len(mxs) for mxs in self._blockMatrices)
         y = sum(mxs[0].shape[0] for mxs in self._blockMatrices) ** 2
         expandMx = _np.zeros((x, y), 'complex')
@@ -307,6 +309,10 @@ def _build_composite_basis(bases):
     real          = all(basis.real          for basis in basisObjs)
 
     composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real)
+    #pprint(composite._blockMatrices)
+    #print(composite.dim)
+    #print(composite.name)
+    #pprint(composite.get_composite_matrices())
     return composite
 
 def transform_matrix(from_basis, to_basis, dimOrBlockDims):
@@ -370,6 +376,23 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None):
     to_basis   = Basis(to_basis, dim)
 
     if from_basis.dim.gateDim != to_basis.dim.gateDim:
+        print('converting a matrix of shape:')
+        print(mx.shape)
+        print('from:')
+        print(from_basis)
+        print('to:')
+        print(to_basis)
+        #X = _np.dot(to_basis.get_contract_mx(), _np.dot(mx, to_basis.get_expand_mx()))
+        print('from shapes (expand, contract')
+        print(from_basis.get_expand_mx().shape)
+        print(from_basis.get_contract_mx().shape)
+        print(from_basis.get_expand_mx())
+        print(from_basis.get_contract_mx())
+        print('to shapes (expand, contract')
+        print(to_basis.get_expand_mx().shape)
+        print(to_basis.get_expand_mx())
+        X = _np.dot(_np.dot(to_basis.get_contract_mx(), mx), to_basis.get_expand_mx())
+        print(X.shape)
         raise NotImplementedError('Automatic basis expanding/contracting not implemented')
 
     if from_basis.name == to_basis.name:
@@ -435,16 +458,18 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
             first = matrices[0]
             if isinstance(first, tuple) or \
                     isinstance(first, Basis):
-                blockMatrices = _build_composite_basis(matrices) # really list of Bases or basis tuples
+                basis = _build_composite_basis(matrices) # really list of Bases or basis tuples
+                blockMatrices = basis._blockMatrices
+                name          = basis.name
             elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
                 blockMatrices = [matrices]                      # Then nest
             else:
                 blockMatrices = matrices                        # Given as nested lists
-            if name is None:
-                name = 'CustomBasis_{}'.format(Basis.CustomCount)
-                Basis.CustomCount += 1
         else:
             blockMatrices = []
+        if name is None:
+            name = 'CustomBasis_{}'.format(Basis.CustomCount)
+            Basis.CustomCount += 1
     return name, blockMatrices
 
 def _build_default_block_matrices(name, dim):

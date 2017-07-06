@@ -75,7 +75,7 @@ class Dim(object):
         self.embedDim = self.dmDim ** 2
 
     def __str__(self):
-        return 'Dim: {}'.format(self.blockDims)
+        return 'Dim: dmDim {} gateDim {} blockDims {} embedDim {}'.format(self.dmDim, self.gateDim, self.blockDims, self.embedDim)
 
     def __repr__(self):
         return str(self)
