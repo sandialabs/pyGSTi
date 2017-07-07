@@ -350,7 +350,7 @@ class Gate(object):
         and `otherGate`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
-        return _np.sqrt(self.frobeniusdist(otherGate, transform, inv_transform))
+        return _np.sqrt(self.frobeniusdist2(otherGate, transform, inv_transform))
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -367,6 +367,49 @@ class Gate(object):
         using `transform` and `inv_transform`.
         """
         raise NotImplementedError("diamonddist(...) not implemented!")
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+        """
+        raise NotImplementedError("num_params not implemented!")
+
+
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+        """
+        raise NotImplementedError("to_vector not implemented!")
+
+    
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError("from_vector not implemented!")
+
+
+    def copy(self):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        raise NotImplementedError("copy not implemented!")
+
 
     #Pickle plumbing
     def __setstate__(self, state):
@@ -433,6 +476,21 @@ class GateMatrix(Gate):
             return _gt.diamonddist(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        raise NotImplementedError("deriv_wrt_params(...) is not implemented")
 
 
     #Handled by derived classes

@@ -64,7 +64,7 @@ def create_gatestring_list(*args,**kwargs):
     """
     lst = []
 
-    loopOrder = kwargs.pop('order',[])
+    loopOrder = list(kwargs.pop('order',[]))
     loopLists = {}; loopLocals = { 'True': True, 'False': False, 'str':str, 'int': int, 'float': float}
     for key,val in kwargs.items():
         if type(val) in (list,tuple): #key describes a variable to loop over

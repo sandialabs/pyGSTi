@@ -17,27 +17,7 @@ def assertGatesetsInSync(gs, comm):
         gs_cmp = comm.bcast(bc, root=0)
         assert(gs.frobeniusdist(gs_cmp) < 1e-6)
 
-def run1Q_end2end(comm):
-    from pygsti.construction import std1Q_XYI
-    gs_target = std1Q_XYI.gs_target
-    fiducials = std1Q_XYI.fiducials
-    germs = std1Q_XYI.germs
-    maxLengths = [1,2,4,8,16,32]
-
-    gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
-    listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
-                                                nSamples=1000,
-                                                sampleError="binomial",
-                                                seed=1234)
-
-    results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
-                                          germs, maxLengths, comm=comm)
-
-    pygsti.report.create_general_report(results, "mpi_test_report.html",
-                                        confidenceLevel=95, verbosity=2, comm=comm)
-
+        
 def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
                 minProbClipForWeighting=1e-4, fidPairList=None,
@@ -732,6 +712,33 @@ def test_MPI_derivcols(comm):
             print("DIFF (%d) = " % comm.Get_rank(), gs1.strdiff(gs2_go))
         assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
+
+@mpitest(4)
+def run1Q_end2end(comm):
+    from pygsti.construction import std1Q_XYI
+    gs_target = std1Q_XYI.gs_target
+    fiducials = std1Q_XYI.fiducials
+    germs = std1Q_XYI.germs
+    maxLengths = [1,2,4]
+
+    gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+    listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
+    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
+                                                nSamples=1000,
+                                                sampleError="binomial",
+                                                seed=1234)
+
+    results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
+                                          germs, maxLengths, comm=comm)
+
+    pygsti.report.create_general_report(results, "mpi_test_report.html",
+                                        confidenceLevel=95, verbosity=2, comm=comm)
+
+
+@mpitest(4)
+def test_MPI_germsel(comm):
+    pygsti.alg.build_up_breadth(..., comm=comm)
 
 
 

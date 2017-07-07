@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import os as _os
 import sys as _sys
+import time as _time
 import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
@@ -19,6 +20,27 @@ from .. import tools as _tools
 
 _pp.ParserElement.enablePackrat()
 _sys.setrecursionlimit(10000)
+
+def get_display_progress_fn(showProgress):
+    
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__')
+
+    if is_interactive() and showProgress:
+        try:
+            from IPython.display import clear_output
+            def ipython_display_progress(i,N):
+                _time.sleep(0.001); clear_output()
+                print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
+                _sys.stdout.flush()
+        except:
+            def display_progress(i,N): pass
+    else:
+        def display_progress(i,N): pass
+        
+    return display_progress
+
 
 class StdInputParser(object):
     """
@@ -365,22 +387,7 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         countDict = {}
         with open(filename, 'r') as inputfile:
@@ -521,22 +528,7 @@ class StdInputParser(object):
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0),1)
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
@@ -624,7 +616,7 @@ class StdInputParser(object):
         return countDicts
 
 
-    def parse_tddatafile(self, filename):
+    def parse_tddatafile(self, filename, showProgress=True):
         """ 
         Parse a data set file into a TDDataSet object.
 
@@ -632,6 +624,9 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
 
         Returns
         -------
@@ -671,22 +666,7 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive():
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N): 
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         for (iLine,line) in enumerate(open(filename,'r')):
             if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)

@@ -33,9 +33,11 @@ class GermSelectionTestCase(AlgorithmTestCase):
             self.gs_target_noisy, germsToTest, initialWeights=None,
             fixedSlack=0.1, slackFrac=False, returnAll=False, tol=1e-6, verbosity=4)
 
+        forceStrs = pygsti.construction.gatestring_list([ ('Gx',), ('Gy') ])
         finalGerms, wts, scoreDict = pygsti.alg.optimize_integer_germs_slack(
             self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2), 'd' ),
-            fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4)
+            fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4,
+            force=forceStrs)
 
         self.runSilent(pygsti.alg.optimize_integer_germs_slack,
                        self.gs_target_noisy, germsToTest,
@@ -63,10 +65,17 @@ class GermSelectionTestCase(AlgorithmTestCase):
         max_length   = 6
         gates        = std.gs_target.gates.keys()
         superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
-        pygsti.alg.grasp_germ_set_optimization(gatesetList=gatesetNeighborhood, germsList=superGermSet,
+        soln = pygsti.alg.grasp_germ_set_optimization(gatesetList=gatesetNeighborhood, germsList=superGermSet,
                                             alpha=0.1, randomize=False, seed=2014, scoreFunc='all',
                                             threshold=threshold, verbosity=1, iterations=1,
-                                            l1Penalty=1.0, returnAll=True)
+                                            l1Penalty=1.0, returnAll=False)
+
+        forceStrs = pygsti.construction.gatestring_list([ ('Gx',), ('Gy') ])
+        bestSoln, initialSolns, localSolns = \
+            pygsti.alg.grasp_germ_set_optimization(gatesetList=gatesetNeighborhood, germsList=superGermSet,
+                                               alpha=0.1, randomize=False, seed=2014, scoreFunc='all',
+                                               threshold=threshold, verbosity=1, iterations=1,
+                                               l1Penalty=1.0, returnAll=True, force=forceStrs)
 
 
 
@@ -77,6 +86,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
         gatesetNeighborhood   = pygsti.alg.randomizeGatesetList([std.gs_target],
                                   randomizationStrength=randomizationStrength,
                                   numCopies=neighborhoodSize, seed=2014)
+        forceStrs = pygsti.construction.gatestring_list([ ('Gx',), ('Gy') ])
 
         max_length   = 6
         gates        = std.gs_target.gates.keys()
@@ -86,11 +96,23 @@ class GermSelectionTestCase(AlgorithmTestCase):
         pygsti.alg.build_up(gatesetNeighborhood, superGermSet,
                                     randomize=False, seed=2014, scoreFunc='all',
                                     threshold=threshold, verbosity=1, gatePenalty=1.0)
+          # with forced gate strings
+        pygsti.alg.build_up(gatesetNeighborhood, superGermSet,
+                            randomize=False, seed=2014, scoreFunc='all',
+                            threshold=threshold, verbosity=1, gatePenalty=1.0,
+                            force=forceStrs)
+
 
         #Breadth first
         pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
                                     randomize=False, seed=2014, scoreFunc='all',
                                     threshold=threshold, verbosity=1, gatePenalty=1.0)
+          # with forced gate strings
+        pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+                                    randomize=False, seed=2014, scoreFunc='all',
+                                    threshold=threshold, verbosity=1, gatePenalty=1.0,
+                                    force=forceStrs)
+
           # with small memory limit
         with self.assertRaises(MemoryError):
             pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
@@ -125,6 +147,15 @@ class GermSelectionTestCase(AlgorithmTestCase):
 	                       algorithm_kwargs=options, memLimit=None, comm=None,
 		               profiler=None, verbosity=1)
 
+        #more args
+        options['returnAll'] = True #but doesn't change generate_germs return value
+        germs2 = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
+                                           numGSCopies=5, seed=2017, maxGermLength=6,
+                                           force="singletons", algorithm='grasp',
+	                                   algorithm_kwargs=options, memLimit=None, comm=None,
+		                           profiler=None, verbosity=1)
+
+
         #SLACK
         options = dict(fixedSlack=False, slackFrac=0.1)
         germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
@@ -132,3 +163,36 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                force="singletons", algorithm='slack',
 	                       algorithm_kwargs=options, memLimit=None, comm=None,
 		               profiler=None, verbosity=1)
+
+        #no options -> use defaults
+        options = {}
+        germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
+                                          numGSCopies=5, seed=2017, maxGermLength=6,
+                                          force="singletons", algorithm='slack',
+	                                  algorithm_kwargs=options, memLimit=None, comm=None,
+		                          profiler=None, verbosity=1)
+
+
+        #INVALID
+        with self.assertRaises(ValueError):
+            pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
+                                      numGSCopies=5, seed=2017, maxGermLength=6,
+                                      force="singletons", algorithm='foobar',
+	                              algorithm_kwargs=options, memLimit=None, comm=None,
+		                      profiler=None, verbosity=1)
+
+
+    def test_scoring(self):
+        import pygsti.algorithms.scoring as scoring
+        eigenvalue_array = np.array([1e-6,1e-4,1.0,2.0])
+        s0 = scoring.list_score(eigenvalue_array)
+        self.assertEqual(s0, 1010001.5)
+
+        s1 = scoring.list_score(eigenvalue_array, 'all')
+        self.assertEqual(s1, 1010001.5)
+
+        s2 = scoring.list_score(eigenvalue_array, 'worst')
+        self.assertEqual(s2, 1000000)
+
+        with self.assertRaises(ValueError):
+            scoring.list_score(eigenvalue_array, 'foobar')

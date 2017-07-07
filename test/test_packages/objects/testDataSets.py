@@ -82,6 +82,9 @@ class TestDataSetMethods(BaseTestCase):
             pygsti.objects.DataSet(gateStrings=gstrs, spamLabels=['plus','minus'], bStatic=True)
               #must specify counts when creating static DataSet
 
+        #Test has_key methods
+        self.assertTrue( ds2.has_key(('Gx',)) )
+        self.assertTrue(ds2[('Gx',)].has_key('plus'))
 
         #Test indexing methods
         cnt = 0
@@ -386,6 +389,8 @@ Gx^4 20 80 0.2 100
         self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
         self.assertEqual( ds.keys(stripOccuranceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
+        ds.set_row( ('Gx','Gx'), {'plus': 5, 'minus': 95}, occurance=1 ) #test set_row with occurance arg
+
 
     def test_tddataset(self):
         # Create a dataset from scratch
@@ -539,6 +544,9 @@ Gy 11001100
         ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
                                                         sampleError="multinomial", seed=0,
                                                         measurementGates={'Zmeas': ['Gmz_plus', 'Gmz_minus']})
+        #Test copy operations
+        ds_gen2 = ds_gen.copy()
+        ds_gen3 = ds_gen.copy_nonstatic()
 
         #create manually so no randomness
         ds = pygsti.objects.DataSet(spamLabels=['plus','minus'],
@@ -552,6 +560,14 @@ Gy 11001100
         
         self.assertAlmostEqual( ds[('Gmz_plus',)].fraction('plus'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
         self.assertAlmostEqual( ds[('Gx','Gmz_minus')].fraction('minus'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
+
+        ds_gen[('Gmz_plus',)]['plus'] = 20
+        self.assertEqual(ds_gen[('Gmz_plus',)]['plus'], 20)
+        self.assertEqual(ds_gen[('Gmz_plus',)].total(), (20.0 + 1.0 + 9.0 + 81.0) )
+        ds_gen[('Gmz_plus',)].scale(0.5)
+        self.assertEqual(ds_gen[('Gmz_plus',)]['plus'], 10)
+        self.assertEqual(ds_gen[('Gmz_plus',)].total(), (10.0 + 0.5 + 9.0 + 81.0) )
+
         
 
 

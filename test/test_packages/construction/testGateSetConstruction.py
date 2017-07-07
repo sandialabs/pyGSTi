@@ -5,6 +5,7 @@ import pygsti
 import numpy as np
 import warnings
 import os
+import collections
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -52,6 +53,8 @@ class TestGateSetConstructionMethods(BaseTestCase):
         CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b)
         CY_old      = old_build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b)
         CZ_old      = old_build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b)
+        CNOT_old    = old_build_gate( [4],[('Q0','Q1')], "CNOT(Q0,Q1)",b)
+        CPHASE_old  = old_build_gate( [4],[('Q0','Q1')], "CPHASE(Q0,Q1)",b)
         #rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std")
         #rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp")
 
@@ -242,11 +245,13 @@ class TestGateSetConstructionMethods(BaseTestCase):
         # A single-qubit gate on a 2-qubit space, parameterizes so that there are only 16 gate parameters
         gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
                                                parameterization="linear")
-        gate2 = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate2  = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate2b = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linearTP")
         gate3 = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0):D(Q1)","gm",
                                                parameterization="linear") #composes parameterized gates
 
-
+        #Test L's in spec
+        gateL  = pygsti.construction.build_gate( [2,1],[('Q0',),('L0',)], "D(Q0)","gm", parameterization="linear")
 
         with self.assertRaises(ValueError):
             gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
@@ -391,7 +396,18 @@ class TestGateSetConstructionMethods(BaseTestCase):
                                                       effectLabels=['E0'], effectExpressions=["1"],
                                                       spamdefs={'plus': ('rho0','E0'),
                                                                 'minus': ('rho0','remainder') })
+        
+        ordered_spamdefs = collections.OrderedDict( [('plus',  ('rho0','E0')),
+                                                     ('minus', ('rho0','remainder'))] )
+        gateset2b = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                       prepLabels=['rho0'], prepExpressions=["0"],
+                                                       effectLabels=['E0'], effectExpressions=["1"],
+                                                       spamdefs=ordered_spamdefs)
+        self.assertEqual(list(gateset2b.spamdefs.keys())[0], 'plus')
+        self.assertEqual(list(gateset2b.spamdefs.keys())[1], 'minus')
 
+        
         #gateset3 = self.assertWarns(pygsti.construction.build_gateset,
         #                            [2], [('Q0',)],['Gi','Gx','Gy'],
         #                            [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],

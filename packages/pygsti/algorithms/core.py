@@ -2232,8 +2232,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     
-    if evaltree_cache and evaltree_cache.has_key('evTree') \
-            and evaltree_cache.has_key('wrtBlkSize'):
+    if evaltree_cache and 'evTree' in evaltree_cache \
+            and 'wrtBlkSize' in evaltree_cache:
         #use cache dictionary to speed multiple calls which use
         # the same gateset, gate strings, comm, memlim, etc.
         evTree = evaltree_cache['evTree']

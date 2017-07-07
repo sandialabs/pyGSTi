@@ -352,7 +352,7 @@ class DataSet(object):
             a repeated gate sequence to extract data for.
         """
         if occurance > 0: 
-            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
+            gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurance,))
         if gatestring in self:
             row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
                              self._total_key(gatestring))

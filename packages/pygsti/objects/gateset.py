@@ -1309,10 +1309,15 @@ class GateSet(object):
         -------
         evt : EvalTree
             The evaluation tree object, split as necesary.
-        paramBlockSize : int or None
-            The maximum size of parameter blocks (i.e. the maximum
-            number of parameters to compute at once in calls to 
-            dprobs, etc., usually specified as wrtBlockSize).
+        paramBlockSize1 : int or None
+            The maximum size of 1st-deriv-dimension parameter blocks
+            (i.e. the maximum number of parameters to compute at once
+             in calls to dprobs, etc., usually specified as wrtBlockSize
+             or wrtBlockSize1).
+        paramBlockSize2 : int or None
+            The maximum size of 2nd-deriv-dimension parameter blocks
+            (i.e. the maximum number of parameters to compute at once
+             in calls to hprobs, etc., usually specified as wrtBlockSize2).
         """
 
         # Let np = # param groups, so 1 <= np <= num_params, size of each param group = num_params/np
