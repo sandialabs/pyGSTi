@@ -173,7 +173,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 def logl_terms(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
-         check=False, gateLabelAliases=None):
+         check=False, gateLabelAliases=None, probs=None):
     """
     The vector of log-likelihood contributions for each gate string & SPAM label
 
@@ -200,7 +200,6 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
-    probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
         fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
@@ -219,7 +218,9 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     if evalTree is None:
         evalTree = gateset.bulk_evaltree(gatestring_list)
 
-    gateset.bulk_fill_probs(probs, spam_lbl_rows, evalTree, probClipInterval, check)
+    if probs is None:
+        probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
+        gateset.bulk_fill_probs(probs, spam_lbl_rows, evalTree, probClipInterval, check)
     pos_probs = _np.where(probs < min_p, min_p, probs)
 
     if poissonPicture:
@@ -253,7 +254,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
-         check=False, gateLabelAliases=None):
+         check=False, gateLabelAliases=None, probs=None):
     """
     The log-likelihood function.
 
@@ -314,6 +315,12 @@ def logl(gateset, dataset, gatestring_list=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    probs : numpy array, optional
+        Two-dimensional numpy array whose rows correspond to the gate's spam
+        labels (i.e. gateset.get_spam_labels()).  Each row contains the
+        expected probability for that spam label for each gate string in gatestring_list.
+        Use gateset.bulk_fill_probs(...) to generate this quantity once for multiple
+        evaluations of the log-likelihood function which use the same gateset.
 
     Returns
     -------
@@ -323,7 +330,7 @@ def logl(gateset, dataset, gatestring_list=None,
     v = logl_terms(gateset, dataset, gatestring_list,
                    minProbClip, probClipInterval, radius,
                    evalTree, countVecMx, totalCntVec, poissonPicture,
-                   check, gateLabelAliases)
+                   check, gateLabelAliases, probs)
     return _np.sum(v) # sum over *all* dimensions
 
 
