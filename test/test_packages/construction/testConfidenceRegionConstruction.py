@@ -44,6 +44,10 @@ class TestConfidenceRegionConstructionMethods(BaseTestCase):
                            cptp_penalty_factor=None, distributeMethod="deriv",
                            gateLabelAliases=None)
 
+        #make sure we can pickle it
+        s = pickle.dumps(cr)
+        cr2 = pickle.loads(s)
+
         #also test gatestring_list=None (defaults to dataset keys) behavior
         cr_linresponse = pygsti.construction.logl_confidence_region(self.gateset, self.ds, 95,
                            gatestring_list=None, probClipInterval=(-1e6,1e6),
@@ -65,6 +69,10 @@ class TestConfidenceRegionConstructionMethods(BaseTestCase):
                            minProbClipForWeighting=1e-4, hessianProjection="std",
                            regionType='std', comm=None, memLimit=None,
                            gateLabelAliases=None)
+
+        #make sure we can pickle it
+        s = pickle.dumps(cr)
+        cr2 = pickle.loads(s)
 
         #also test gatestring_list=None (defaults to dataset keys) behavior
         with self.assertRaises(NotImplementedError): # not implemented yet

@@ -145,7 +145,7 @@ def convert(gate, toType, basis):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND"}
         The type of parameterizaton to convert to.
 
     basis : {"std", "gm", "pp", "qt"}
@@ -183,7 +183,7 @@ def convert(gate, toType, basis):
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
 
-    elif toType in ("CPTP","H+S","S"):
+    elif toType in ("CPTP","H+S","S","GLND"):
         RANK_TOL = 1e-6        
         J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
         if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
@@ -197,7 +197,7 @@ def convert(gate, toType, basis):
         ham_basis = proj_basis if toType in ("CPTP","H+S") else None
         nonham_basis = proj_basis
         nonham_diagonal_only = bool(toType in ("H+S","S") )
-        cptp=True
+        cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
         truncate=True
 
         if isinstance(gate, LindbladParameterizedGate) and \
@@ -2354,7 +2354,7 @@ class LindbladParameterizedGate(GateMatrix):
                         Lmx = _np.linalg.cholesky(otherC)
     
                     for i in range(bsO-1):
-                        assert(_np.isreal(Lmx[i,i]))
+                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
                         otherParams[i,i] = Lmx[i,i].real
                         for j in range(i):
                             otherParams[i,j] = Lmx[i,j].real
@@ -2362,7 +2362,7 @@ class LindbladParameterizedGate(GateMatrix):
     
                 else: #otherParams mx stores otherC (hermitian) directly
                     for i in range(bsO-1):
-                        assert(_np.isreal(otherC[i,i]))
+                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
                         otherParams[i,i] = otherC[i,i].real
                         for j in range(i):
                             otherParams[i,j] = otherC[i,j].real

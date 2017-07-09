@@ -42,6 +42,9 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         prepFiducials, measFiducials = fidsel.generate_fiducials(gs_target)
 
+        #test returnAll - this just prints more info...
+        p,m = fidsel.generate_fiducials(gs_target, algorithm_kwargs={'returnAll': True})
+
 
         # Now that we have germs and fiducials, we can construct the list of experiments we need to perform in
         # order to do GST. The only new things to provide at this point are the sizes for the experiments we want

@@ -518,6 +518,7 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple "
                          "copies only!")
+
     newgatesetList = []
     if len(gatesetList) > 1:
         for gatesetnum, gateset in enumerate(gatesetList):

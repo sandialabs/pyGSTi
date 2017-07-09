@@ -171,6 +171,8 @@ class GateTestCase(BaseTestCase):
             a = gate[0,0]
             b = gate[:]
             c = gate[0,:]
+            #with self.assertRaises(ValueError):
+            #    gate.<some method that changes shape in place> #not allowed to reshape
 
             try:
                 gate[1,1] = 2.0

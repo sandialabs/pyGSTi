@@ -39,6 +39,11 @@ class GermSelectionTestCase(AlgorithmTestCase):
             fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4,
             force=forceStrs)
 
+        finalGerms = pygsti.alg.optimize_integer_germs_slack(
+            self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2), 'd' ),
+            fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4,
+            force=False) #don't force any strings (default would have been "singletons"
+
         self.runSilent(pygsti.alg.optimize_integer_germs_slack,
                        self.gs_target_noisy, germsToTest,
                        initialWeights=np.ones( len(germsToTest), 'd' ),
@@ -52,6 +57,13 @@ class GermSelectionTestCase(AlgorithmTestCase):
                 initialWeights=np.ones( len(germsToTest), 'd' ),
                 returnAll=True, tol=1e-6, verbosity=4)
                 # must specify either fixedSlack or slackFrac
+
+        with self.assertRaises(ValueError):
+            pygsti.alg.optimize_integer_germs_slack(
+                self.gs_target_noisy, germsToTest,
+                initialWeights=np.ones( 1, 'd' ),
+                returnAll=True, tol=1e-6, verbosity=4)
+                # length of initialWeights must match length of germs list
 
 
     def test_germsel_grasp(self):
@@ -76,6 +88,13 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                                alpha=0.1, randomize=False, seed=2014, scoreFunc='all',
                                                threshold=threshold, verbosity=1, iterations=1,
                                                l1Penalty=1.0, returnAll=True, force=forceStrs)
+
+        # try case with incomplete initial germ set
+        incompleteSet = pygsti.construction.gatestring_list([ ('Gx',), ('Gy') ])
+        soln = pygsti.alg.grasp_germ_set_optimization(gatesetList=gatesetNeighborhood, germsList=incompleteSet,
+                                               alpha=0.1, randomize=False, seed=2014, scoreFunc='worst',
+                                               threshold=threshold, verbosity=1, iterations=1,
+                                               l1Penalty=1.0)
 
 
 
@@ -196,3 +215,25 @@ class GermSelectionTestCase(AlgorithmTestCase):
 
         with self.assertRaises(ValueError):
             scoring.list_score(eigenvalue_array, 'foobar')
+
+    def test_randomize_gateset(self):
+        #with numCopies and a single gate set
+        gatesetNeighborhood = pygsti.alg.randomizeGatesetList([std.gs_target],
+                                                              randomizationStrength=1e-3,
+                                                              numCopies=3, seed=2014)
+
+        #with multiple gate sets
+        gatesetNeighborhood   = pygsti.alg.randomizeGatesetList(
+            [std.gs_target,std.gs_target], numCopies=None,
+            randomizationStrength=1e-3, seed=2014)
+
+        #cannot specify both:
+        with self.assertRaises(ValueError):
+            pygsti.alg.randomizeGatesetList([std.gs_target,std.gs_target],
+                                            numCopies=3, randomizationStrength=1e-3, seed=2014)
+
+    def test_num_nonspam_params(self):
+        gs_reduced = pygsti.alg.removeSPAMVectors(std.gs_target)
+        N = pygsti.alg.num_non_spam_gauge_params(std.gs_target)
+        self.assertEqual(gs_reduced.num_gauge_params(), N)
+        self.assertNotEqual(std.gs_target.num_gauge_params(), N)

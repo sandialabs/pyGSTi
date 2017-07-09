@@ -738,8 +738,56 @@ def run1Q_end2end(comm):
 
 @mpitest(4)
 def test_MPI_germsel(comm):
-    pygsti.alg.build_up_breadth(..., comm=comm)
+    if comm is None or comm.Get_rank() == 0:
+        gatesetNeighborhood = pygsti.alg.randomizeGatesetList(
+            [std.gs_target], randomizationStrength=1e-3,
+            numCopies=3, seed=2018)
+        comm.bcast(gatesetNeighborhood, root=0)
+    else:
+        gatesetNeighborhood = comm.bcast(None, root=0)
 
+    max_length   = 6
+    gates        = std.gs_target.gates.keys()
+    superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+
+    germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+                                        randomize=False, seed=2018, scoreFunc='all',
+                                        threshold=1e6, verbosity=1, gatePenalty=1.0,
+                                        memLimit=3*(1024**3), comm=comm)
+
+@mpitest(4)
+def test_MPI_profiler(comm):
+    mem = pygsti.objects.profiler._get_root_mem_usage(comm)
+    mem = pygsti.objects.profiler._get_max_mem_usage(comm)
+    
+    start_time = time.time()
+    p = pygsti.objects.Profiler(comm, default_print_memcheck=True)
+    p.add_time("My Name", start_time, prefix=1)
+    p.add_count("My Count", inc=1, prefix=1)
+    p.add_count("My Count", inc=2, prefix=1)
+    p.mem_check("My Memcheck", prefix=1)
+    p.mem_check("My Memcheck", prefix=1)
+    p.print_mem("My Memcheck just to print")
+    p.print_mem("My Memcheck just to print", show_minmax=True)
+    p.print_msg("My Message")
+    p.print_msg("My Message", all_ranks=True)
+    
+    s = p.format_times(sortBy="name")
+    s = p.format_times(sortBy="time")
+    #with self.assertRaises(ValueError):
+    #    p.format_times(sortBy="foobar")
+        
+    s = p.format_counts(sortBy="name")
+    s = p.format_counts(sortBy="count")
+    #with self.assertRaises(ValueError):
+    #    p.format_counts(sortBy="foobar")
+
+    s = p.format_memory(sortBy="name")
+    s = p.format_memory(sortBy="usage")
+    #with self.assertRaises(ValueError):
+    #    p.format_memory(sortBy="foobar")
+    #with self.assertRaises(NotImplementedError):
+    #    p.format_memory(sortBy="timestamp")
 
 
 if __name__ == "__main__":

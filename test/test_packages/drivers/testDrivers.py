@@ -85,14 +85,21 @@ class TestDriversMethods(DriversTestCase):
                                                           'memoryLimitInBytes': 1000**3})
                         # Also try profile=2 and deprecated advanced options here (above)
 
+        #check invalid profile options
+        with self.assertRaises(ValueError):
+            pygsti.do_long_sequence_gst(ds, std.gs_target, std.fiducials, std.fiducials,
+                                        std.germs, maxLens, 
+                                        advancedOptions={'profile': 3})
+
         #Try using effectStrs == None and some advanced options
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, None,
                                 std.germs, maxLens,
                                 advancedOptions={'contractStartToCPTP': True,
-                                                 'start': std.gs_target,
+                                                 'starting point': std.gs_target,
                                                  'depolarizeStart': 0.05,
-                                                 'truncScheme': ts})
+                                                 'truncScheme': ts,
+                                                 'cptpPenaltyFactor': 1.0})
 
 
         #Check errors
@@ -285,6 +292,29 @@ class TestDriversMethods(DriversTestCase):
         gs_target = std.gs_target.copy()
         gs_target.set_all_parameterizations("S")
 
+        maxLens = self.maxLens
+        result = self.runSilent(pygsti.do_long_sequence_gst,
+                                ds, gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens)
+
+        #create a report...
+        pygsti.report.create_general_report(result, temp_files + "/full_report_SGates.html",
+                                            verbosity=2)
+
+
+    def test_longSequenceGST_GLND(self):
+        #General Lindbladian parameterization (allowed to be non-CPTP)
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+
+        gs_target = std.gs_target.copy()
+
+        #No set_all_parameterizations option for this one, since it probably isn't so useful
+        for lbl,gate in gs_target.gates.items():
+            gs_target.gates[lbl] = pygsti.objects.gate.convert(gate, "GLND", "gm")
+        gs_target.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(gs_target.dim)
+          #Lindblad gates only know how to do unitary transforms currently, even though
+          # in the non-cptp case it they should be able to transform generally.
+        
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, gs_target, std.fiducials, std.fiducials,

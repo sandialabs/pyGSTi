@@ -1038,6 +1038,11 @@ SPAMLABEL minus = rho remainder
             deriv = svec.deriv_wrt_params()
             #test results?
 
+            a = svec[:]
+            b = svec[0]
+            #with self.assertRaises(ValueError):
+            #    svec.shape = (2,2) #something that would affect the shape??
+
             svec_as_str = str(svec)
             a1 = svec[:] #invoke getslice method
 
@@ -1081,6 +1086,34 @@ SPAMLABEL minus = rho remainder
             result = V - svec
             self.assertEqual(type(result), np.ndarray)
 
+        #Run a few methods that won't work on static spam vecs
+        for svec in (full_spamvec, tp_spamvec):
+            v = svec.copy()
+            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            v.transform(S, 'prep')
+            v.transform(S, 'effect')
+            with self.assertRaises(ValueError):
+                v.transform(S,'foobar')
+                
+            v.depolarize(0.9)
+            v.depolarize([0.9,0.8,0.7])
+
+        #Ensure we aren't allowed to tranform or depolarize a static vector
+        with self.assertRaises(ValueError):
+            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            static_spamvec.transform(S,'prep')
+
+        with self.assertRaises(ValueError):
+            static_spamvec.depolarize(0.9)
+
+        #Test conversions to own type (not tested elsewhere)
+        conv = pygsti.obj.spamvec.convert(full_spamvec, "full")
+        conv = pygsti.obj.spamvec.convert(tp_spamvec, "TP")
+        conv = pygsti.obj.spamvec.convert(static_spamvec, "static")
+        with self.assertRaises(ValueError):
+            pygsti.obj.spamvec.convert(full_spamvec, "foobar")
+
+            
 
 
     def test_labeldicts(self):

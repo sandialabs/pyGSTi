@@ -24,9 +24,9 @@ from . import plothelpers as _ph
 import plotly.graph_objs as go
 
 
-import time as _time  #DEBUG TIMER
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot #DEBUG
-
+#DEBUG
+#import time as _time  #DEBUG TIMER
+#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
                   prec=0, hoverLabelFn=None, hoverLabels=None):

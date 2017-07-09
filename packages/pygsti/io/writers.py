@@ -11,23 +11,6 @@ import json as _json
 from .. import tools as _tools
 from .. import objects as _objs
 
-def write_parameter_file(filename, params):
-    """
-    Write a json-formatted parameter file.
-
-    Parameters
-    ----------
-    filename : string
-        The name of the file to write.
-
-    params: dict
-        The parameters to save.
-    """
-    with open(filename, 'w') as output:
-        return _json.dump(params, output, indent=4)
-    #return _json.dump( params, open(filename, "wb"), indent=4) # object_pairs_hook=_collections.OrderedDict
-
-
 def write_empty_dataset(filename, gatestring_list,
                         headerString='## Columns = plus frequency, count total', numZeroCols=None,
                         appendWeightsColumn=False):

@@ -194,7 +194,7 @@ class DataSet(object):
 
         comment : string, optional
             A user-specified comment string that gets carried around with the 
-            data.  A common use for this field is to attache to the data details
+            data.  A common use for this field is to attach to the data details
             regarding its collection.
 
         measurementGates : dict, optional
