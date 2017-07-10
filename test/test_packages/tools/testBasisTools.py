@@ -4,13 +4,12 @@ import numpy as np
 import scipy
 import pygsti
 
-import pygsti.tools.basistools as basistools
+import pygsti.tools.basis       as basis
+import pygsti.tools.lindbladiantools as lindbladiantools
+
+from functools import partial
 
 class BasisBaseTestCase(BaseTestCase):
-
-    ###########################################################
-    ## BASIS TOOLS TESTS     ##################################
-    ###########################################################
 
     def test_expand_contract(self):
         # matrix that operates on 2x2 density matrices, but only on the 0-th and 3-rd
@@ -21,15 +20,20 @@ class BasisBaseTestCase(BaseTestCase):
                                  [3,0,0,4]],'d')
 
         # Reduce to a matrix operating on a density matrix space with 2 1x1 blocks (hence [1,1])
-        mxInReducedBasis = pygsti.contract_to_std_direct_sum_mx(mxInStdBasis,[1,1])
-        notReallyContracted = pygsti.contract_to_std_direct_sum_mx(mxInStdBasis,4)
+        begin = basis.Basis('std', [1,1])
+        end   = basis.Basis('std', 2)
+        
+        mxInReducedBasis = pygsti.resize_mx(mxInStdBasis,[1,1], resize='contract')
+        mxInReducedBasis = basis.change_basis(mxInStdBasis, begin, end)
+        notReallyContracted = basis.change_basis(mxInStdBasis, 'std', 'std', 4)
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
         self.assertArraysAlmostEqual( notReallyContracted, mxInStdBasis )
 
-        expandedMx = pygsti.expand_from_std_direct_sum_mx(mxInReducedBasis,[1,1])
-        expandedMxAgain = pygsti.expand_from_std_direct_sum_mx(expandedMx,4)
+        expandedMx = pygsti.resize_mx(mxInReducedBasis, [1,1], resize='expand')
+        expandedMx = pygsti.change_basis(mxInReducedBasis, end, begin)
+        expandedMxAgain = pygsti.change_basis(expandedMx, 'std', 'std', 4)
         self.assertArraysAlmostEqual( expandedMx, mxInStdBasis )
         self.assertArraysAlmostEqual( expandedMxAgain, mxInStdBasis )
 
@@ -47,14 +51,16 @@ class BasisBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual( GM2_mxs[1], sigmax )
         self.assertArraysAlmostEqual( GM2_mxs[2], sigmay )
         self.assertArraysAlmostEqual( GM2_mxs[3], sigmaz )
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             pygsti.gm_matrices_unnormalized("FooBar") #arg must be tuple,list,or int
 
+        '''
         # GM [1,1] matrices are the basis matrices for each block, concatenated together
         GM11_mxs = pygsti.gm_matrices_unnormalized([1,1])
         self.assertTrue(len(GM11_mxs) == 2)
         self.assertArraysAlmostEqual( GM11_mxs[0], np.array([[1,0],[0,0]],'d') )
         self.assertArraysAlmostEqual( GM11_mxs[1], np.array([[0,0],[0,1]],'d') )
+        '''
 
         # Normalized Gell-Mann 2x2 matrices should just be the sigma matrices / sqrt(2)
         NGM2_mxs = pygsti.gm_matrices(2)
@@ -111,7 +117,6 @@ class BasisBaseTestCase(BaseTestCase):
                 #Note: conjugate transpose not needed since mxs are Hermitian
         self.assertArraysAlmostEqual( pp_trMx, np.identity(N,'complex') )
 
-
     def test_transforms(self):
         mxStd = np.array([[1,0,0,0],
                           [0,1,0,0],
@@ -119,32 +124,33 @@ class BasisBaseTestCase(BaseTestCase):
                           [0,0,0,1]], 'complex')
         vecStd = np.array([1,0,0,0], 'complex')
 
-        mxGM = pygsti.std_to_gm(mxStd)
-        mxStd2 = pygsti.gm_to_std(mxGM)
-        self.assertArraysAlmostEqual( mxStd, mxStd2 )
+        change = basis.change_basis
+        mxGM = change(mxStd, 'std', 'gm')
+        mxStd2 = change(mxGM, 'gm', 'std')
+        self.assertArraysAlmostEqual( mxStd, mxStd2)
 
-        vecGM = pygsti.std_to_gm(vecStd)
-        vecStd2 = pygsti.gm_to_std(vecGM)
+        vecGM = change(vecStd, 'std', 'gm')
+        vecStd2 = change(vecGM, 'gm', 'std')
         self.assertArraysAlmostEqual( vecStd, vecStd2 )
 
-        mxPP = pygsti.std_to_pp(mxStd)
-        mxStd2 = pygsti.pp_to_std(mxPP)
+        mxPP = change(mxStd, 'std', 'pp')
+        mxStd2 = change(mxPP, 'pp', 'std')
         self.assertArraysAlmostEqual( mxStd, mxStd2 )
 
-        vecPP = pygsti.std_to_pp(vecStd)
-        vecStd2 = pygsti.pp_to_std(vecPP)
+        vecPP = change(vecStd, 'std', 'pp')
+        vecStd2 = change(vecPP, 'pp', 'std')
         self.assertArraysAlmostEqual( vecStd, vecStd2 )
 
-        mxPP2 = pygsti.gm_to_pp(mxGM)
+        mxPP2 = change(mxGM, 'gm', 'pp')
         self.assertArraysAlmostEqual( mxPP, mxPP2 )
 
-        vecPP2 = pygsti.gm_to_pp(vecGM)
+        vecPP2 = change(vecGM, 'gm', 'pp')
         self.assertArraysAlmostEqual( vecPP, vecPP2 )
 
-        mxGM2 = pygsti.pp_to_gm(mxPP)
+        mxGM2 = change(mxPP, 'pp', 'gm')
         self.assertArraysAlmostEqual( mxGM, mxGM2 )
 
-        vecGM2 = pygsti.pp_to_gm(vecPP)
+        vecGM2 = change(vecPP, 'pp', 'gm')
         self.assertArraysAlmostEqual( vecGM, vecGM2 )
 
 
@@ -156,26 +162,26 @@ class BasisBaseTestCase(BaseTestCase):
         rank3tensor = np.ones((4,4,4),'d')
 
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(non_herm_mxStd) #will result in gm mx with *imag* part
+            change(non_herm_mxStd, 'std', 'gm') #will result in gm mx with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(non_herm_vecStd) #will result in gm vec with *imag* part
+            change(non_herm_vecStd, 'std', 'gm') #will result in gm vec with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(non_herm_mxStd) #will result in pp mx with *imag* part
+            change(non_herm_mxStd, 'std', 'pp') #will result in pp mx with *imag* part
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(non_herm_vecStd) #will result in pp vec with *imag* part
+            change(non_herm_vecStd, 'std', 'pp') #will result in pp vec with *imag* part
 
         with self.assertRaises(ValueError):
-            pygsti.std_to_gm(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'std', 'gm') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.gm_to_std(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'gm', 'std') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.std_to_pp(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'std', 'pp') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.pp_to_std(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'pp', 'std') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.gm_to_pp(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'gm', 'pp') #only convert rank 1 & 2 objects
         with self.assertRaises(ValueError):
-            pygsti.pp_to_gm(rank3tensor) #only convert rank 1 & 2 objects
+            change(rank3tensor, 'pp', 'gm') #only convert rank 1 & 2 objects
 
         densityMx = np.array( [[1,0],[0,-1]], 'complex' )
         gmVec = pygsti.stdmx_to_gmvec(densityMx)
@@ -205,7 +211,7 @@ class BasisBaseTestCase(BaseTestCase):
         U = scipy.linalg.expm(ex)
         # U is 2x2 unitary matrix operating on single qubit in [0,1] basis (X(pi) rotation)
 
-        op = pygsti.unitary_to_pauligate_1q(U)
+        op = pygsti.unitary_to_pauligate(U)
         op_ans = np.array([[ 1.,  0.,  0.,  0.],
                            [ 0.,  1.,  0.,  0.],
                            [ 0.,  0., -1.,  0.],
@@ -215,7 +221,7 @@ class BasisBaseTestCase(BaseTestCase):
         U_2Q = np.identity(4, 'complex'); U_2Q[2:,2:] = U
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
-        op_2Q = pygsti.unitary_to_pauligate_2q(U_2Q)
+        op_2Q = pygsti.unitary_to_pauligate(U_2Q)
 
         stdMx = np.array( [[1,0],[0,0]], 'complex' ) #density matrix
         pauliVec = pygsti.stdmx_to_ppvec(stdMx)
@@ -224,44 +230,47 @@ class BasisBaseTestCase(BaseTestCase):
         stdMx2 = pygsti.ppvec_to_stdmx(pauliVec)
         self.assertArraysAlmostEqual( stdMx, stdMx2 )
 
-    def test_basistools_misc(self):
+    def test_basis_misc(self):
         with self.assertRaises(TypeError):
-            basistools._processBlockDims("FooBar") #arg should be a list,tuple,or int
-        basistools.pp_matrices([1])
+            basis.Dim("FooBar") #arg should be a list,tuple,or int
+        basis.pp_matrices([1])
 
     def test_basis_longname(self):
-        longnames = {basistools.basis_longname(basis) for basis in {'gm', 'std', 'pp'}}
-        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-prod'})
-        self.assertEqual(basistools.basis_longname('not a basis'), '?Unknown?')
+        longnames = {basis.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
+        self.assertEqual(longnames, {'Gell-Mann', 'Matrix-unit', 'Pauli-Product', 'Qutrit'})
+        with self.assertRaises(KeyError):
+            basis.basis_longname('not a basis')
 
     def test_basis_element_labels(self):
-        basisnames = ['gm', 'std', 'pp', 'akdlfjalsdf']
+        basisnames = ['gm', 'std', 'pp']
 
         # One dimensional gm
-        self.assertEqual([''], basistools.basis_element_labels('gm', 1))
+        self.assertEqual([''], basis.basis_element_labels('gm', 1))
 
         # Two dimensional
         expectedLabels = [
         ['I', 'X', 'Y', 'Z'],
         ['(0,0)', '(0,1)', '(1,0)', '(1,1)'],
-        ['I', 'X', 'Y', 'Z'],
-        []]
-        labels = [basistools.basis_element_labels(basisname, 2)  for basisname in basisnames]
+        ['I', 'X', 'Y', 'Z']]
+        labels = [basis.basis_element_labels(basisname, 2)  for basisname in basisnames]
         self.assertEqual(labels, expectedLabels)
+
+        with self.assertRaises(NotImplementedError):
+            basis.basis_element_labels('asdklfasdf', 2)
 
         # Non power of two for pp labels:
         with self.assertRaises(ValueError):
-            label = basistools.basis_element_labels('pp', 3)
+            label = basis.basis_element_labels('pp', 3)
 
         with self.assertRaises(ValueError):
-            label = basistools.basis_element_labels('pp', [1, 2])
+            label = basis.basis_element_labels('pp', [1, 2])
 
         # Single list arg for pp labels
-        self.assertEqual(basistools.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
+        self.assertEqual(basis.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
 
         # Four dimensional+
-        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ'], []]
-        labels = [basistools.basis_element_labels(basisname, 4)  for basisname in basisnames]
+        expectedLabels = [['I^{(0)}', 'X^{(0)}_{0,1}', 'X^{(0)}_{0,2}', 'X^{(0)}_{0,3}', 'X^{(0)}_{1,2}', 'X^{(0)}_{1,3}', 'X^{(0)}_{2,3}', 'Y^{(0)}_{0,1}', 'Y^{(0)}_{0,2}', 'Y^{(0)}_{0,3}', 'Y^{(0)}_{1,2}', 'Y^{(0)}_{1,3}', 'Y^{(0)}_{2,3}', 'Z^{(0)}_{1}', 'Z^{(0)}_{2}', 'Z^{(0)}_{3}'], ['(0,0)', '(0,1)', '(0,2)', '(0,3)', '(1,0)', '(1,1)', '(1,2)', '(1,3)', '(2,0)', '(2,1)', '(2,2)', '(2,3)', '(3,0)', '(3,1)', '(3,2)', '(3,3)'], ['II', 'IX', 'IY', 'IZ', 'XI', 'XX', 'XY', 'XZ', 'YI', 'YX', 'YY', 'YZ', 'ZI', 'ZX', 'ZY', 'ZZ']]
+        labels = [basis.basis_element_labels(basisname, 4)  for basisname in basisnames]
         self.assertEqual(expectedLabels, labels)
 
     def test_hamiltonian_to_lindbladian(self):
@@ -271,54 +280,31 @@ class BasisBaseTestCase(BaseTestCase):
                                         [ 0,  0,  0,  0]]
                                        )
 
-        self.assertArraysAlmostEqual(basistools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
+        self.assertArraysAlmostEqual(lindbladiantools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
                                      expectedLindbladian)
 
     def test_vec_to_stdmx(self):
         vec = np.zeros(shape=(2,))
-        for basis in {'gm', 'pp', 'std'}:
-            basistools.vec_to_stdmx(vec, basis)
-        with self.assertRaises(ValueError):
-            basistools.vec_to_stdmx(vec, 'akdfj;ladskf')
+        for b in {'gm', 'pp', 'std'}:
+            basis.vec_to_stdmx(vec, b)
+        with self.assertRaises(NotImplementedError):
+            basis.vec_to_stdmx(vec, 'akdfj;ladskf')
 
-    def test_single_qubit_gate_matrix(self):
-        expected = np.array([[1.00000000e+00, 2.77555756e-16, -2.28983499e-16, 0.00000000e+00],
-                            [ -3.53885261e-16, -8.09667193e-01, 5.22395269e-01, -2.67473774e-01],
-                            [ -3.92523115e-17, 5.22395269e-01, 8.49200550e-01, 7.72114534e-02],
-                            [ 1.66533454e-16, 2.67473774e-01, -7.72114534e-02, -9.60466643e-01]]
-                            )
-        mx = basistools.single_qubit_gate(24.0, 83.140134, 0.0000)
-        self.assertArraysAlmostEqual(expected, mx)
+    def test_composite_basis(self):
+        comp = basis.Basis([('std', 2,), ('std', 1)])
 
-    def test_two_qubit_gate_mx(self):
-        gate = basistools.two_qubit_gate()
-        expected = np.array([
-         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0,],
-         [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,]])
-        self.assertArraysAlmostEqual(gate,expected)
+        a = basis.Basis([('std', 2), ('std', 2)])
+        b = basis.Basis('std', [2,2])
+        self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
 
-
-
-
-
-
-
-
-
+    def test_auto_expand(self):
+        comp = basis.Basis(matrices=[('std', 2,), ('std', 1)])
+        std  = basis.Basis('std', 3)
+        mxStd = np.identity(5)
+        # def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
+        #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
+        #test  = basis.change_basis(mxStd, std, comp)
+        #test  = basis.change_basis(mxStd, comp, std)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -719,13 +719,13 @@ def read_gateset(filename):
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                spam_vecs[cur_label] = _objs.basis.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                spam_vecs[cur_label] = _objs.basis.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
@@ -735,20 +735,20 @@ def read_gateset(filename):
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q(ar))
+                        _tools.unitary_to_pauligate(ar))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q(ar))
+                        _tools.unitary_to_pauligate(ar))
             else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliMx":
@@ -829,7 +829,7 @@ def read_gateset(filename):
             raise ValueError("Cannot infer basis dimension!")
 
     #Set basis
-    gs.set_basis(basis_abbrev, basis_dims)
+    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:

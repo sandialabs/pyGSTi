@@ -12,6 +12,7 @@ import warnings as _warnings
 from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
+from ..objects import Basis
 
 def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead", verbosity=0):
     """
@@ -145,12 +146,12 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.get_basis_name()
-    basisDim = gs.get_basis_dimension()
+    mxBasis = gs.basis.name
+    basisDim = gs.basis.dim.blockDims
 
     def objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        gs.set_basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+        gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
@@ -179,7 +180,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.get_basis_name()
+    mxBasis = gs.basis.name
     #printer.log('', 1)
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
 
@@ -358,7 +359,7 @@ def _contractToValidSPAM(gateset, verbosity=0):
 
     # ** assumption: only the first vector element of pauli vectors has nonzero trace
     dummyVec = _np.zeros( (gateset.get_dimension(),1), 'd'); dummyVec[0,0] = 1.0
-    firstElTrace = _np.real( _tools.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
+    firstElTrace = _np.real( _tools.trace(_objs.basis.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
     diff = 0
 
     # rhoVec must be positive semidefinite and trace = 1
@@ -376,21 +377,21 @@ def _contractToValidSPAM(gateset, verbosity=0):
             for ELabel,EVec in gs.effects.items():
                 gs.effects[ELabel] = EVec / r
 
-        mx = _tools.ppvec_to_stdmx(vec)
+        mx = _objs.basis.ppvec_to_stdmx(vec)
 
         #Ensure positive semidefinite
         lowEval = min( [ev.real for ev in _np.linalg.eigvals( mx ) ])
         while(lowEval < -TOL):
             idEl = vec[0,0] #only element with trace (even for multiple qubits) -- keep this constant and decrease others
             vec /= 1.00001; vec[0,0] = idEl
-            lowEval = min( [ev.real for ev in _np.linalg.eigvals( _tools.ppvec_to_stdmx(vec) ) ])
+            lowEval = min( [ev.real for ev in _np.linalg.eigvals( _objs.basis.ppvec_to_stdmx(vec) ) ])
 
         diff += _np.linalg.norm( gateset.preps[prepLabel] - vec )
         gs.preps[prepLabel] = vec
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
     for ELabel,EVec in gs.effects.items():
-        evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
+        evals,evecs = _np.linalg.eig( _objs.basis.ppvec_to_stdmx(EVec) )
         if(min(evals) < 0.0 or max(evals) > 1.0):
             if all([ev > 1.0 for ev in evals]):
                 evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
