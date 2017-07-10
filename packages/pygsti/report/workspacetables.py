@@ -812,7 +812,7 @@ class GateDecompTable(WorkspaceTable):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.basis.name
-        basisDims = gateset.get_basis_dimension()
+        basisDims = gateset.basis.dim
 
         colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
