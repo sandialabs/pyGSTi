@@ -112,7 +112,13 @@ class Basis(object):
             try:
                 labels = basis_element_labels(self.name, blockDims)
             except NotImplementedError:
-                labels = ['M{}{}'.format(self.name, i) for i in range(len(self._matrices))]
+                labels = []
+                for i, block in enumerate(self._blockMatrices):
+                    for j in range(len(block)):
+                        labels.append('M({})[{}]'.format(
+                            self.name,
+                            '{},{}'.format(i, j)
+                            ))
 
         self.dim      = Dim(blockDims)
         self.labels   = labels
