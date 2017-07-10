@@ -208,7 +208,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
-    '''
     if CPpenalty == 0 and \
         TPpenalty == 0 and \
         validSpamPenalty == 0 and \
@@ -228,17 +227,15 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
                                  maxiter, maxfev, tol, returnAll, verbosity)
     else:
-                
-    '''
-    objective_fn = create_objective_fn(gateset, targetGateset,
-            itemWeights, 
-            CPpenalty, TPpenalty, 
-            validSpamPenalty, gatesMetric, 
-            spamMetric)
+        objective_fn = create_objective_fn(gateset, targetGateset,
+                itemWeights, 
+                CPpenalty, TPpenalty, 
+                validSpamPenalty, gatesMetric, 
+                spamMetric)
+            
         
-    
-    result = gaugeopt_custom(gateset, objective_fn, gauge_group,
-                 method, maxiter, maxfev, tol, returnAll, verbosity)
+        result = gaugeopt_custom(gateset, objective_fn, gauge_group,
+                     method, maxiter, maxfev, tol, returnAll, verbosity)
 
     #print('Result frobenius dist')
     #print(result.frobeniusdist(targetGateset))
@@ -251,6 +248,43 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                              targetGateset.get_basis_dimension())
     
     return result
+
+def _finite_differences_raw_mx(mx, eps=1e-7):
+    '''
+    Computes a finite-difference Jacobian for a Gate object.
+
+    The returned value is a matrix whose columns are the vectorized
+    derivatives of the flattened gate matrix with respect to a single
+    gate parameter, matching the format expected from the gate's
+    `deriv_wrt_params` method.
+
+    Parameters
+    ----------
+    gate : Gate
+        The gate object to compute a Jacobian for.
+        
+    eps : float, optional
+        The finitite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N matrix where M is the number of gate elements and
+        N is the number of gate parameters. 
+    '''
+    dim = mx.shape[0]
+    mx2 = mx.copy()
+    p = mx.flatten()
+    fd_deriv = _np.empty((dim, dim, dim**2), 'd') #assume real (?)
+
+    for i in range(dim**2):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        mx2[:,:] = p_plus_dp.reshape((dim, dim))
+        fd_deriv[:,:,i] = (mx2-mx)/eps
+
+    fd_deriv.shape = [dim**2, dim**2]
+    return fd_deriv
 
 def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_group=None,
                     maxiter=100000, maxfev=None, tol=1e-8,
@@ -357,6 +391,9 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
         # dS is ((d*d)xlen(v))
         dS      = gaugeGroupEl.gate.deriv_wrt_params()
+        alt_dS  = _finite_differences_raw_mx(S)
+        # Sanity check: deriv_wrt_params works
+        assert _np.linalg.norm(dS - alt_dS) < 1e-6
         # dS is (dxdxlen(v))
         dS      = dS.reshape((d, d, N))
         rolled  = _np.rollaxis(dS, 2)
