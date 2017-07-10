@@ -220,29 +220,22 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
 
-        def objective_fn_ls(gs):
+        def objective_fn(gs):
             r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
             return r
 
-        result = gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn_ls, gauge_group,
-                                 maxiter, maxfev, tol, returnAll, verbosity)
+        algorithm = 'ls'
     else:
         objective_fn = create_objective_fn(gateset, targetGateset,
                 itemWeights, 
                 CPpenalty, TPpenalty, 
                 validSpamPenalty, gatesMetric, 
                 spamMetric)
+        algorithm = 'min'
         
-        result = gaugeopt_custom(gateset, objective_fn, gauge_group,
-                     method, maxiter, maxfev, tol, returnAll, verbosity)
 
-    '''
-    print('LS frobenius dist')
-    print(resulta.frobeniusdist(targetGateset))
-    print('Min frobenius dist')
-    print(resultb.frobeniusdist(targetGateset))
-    result = resulta
-    '''
+    result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
+            maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm)
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -290,82 +283,7 @@ def _finite_differences_raw_mx(mx, eps=1e-7):
     fd_deriv.shape = [dim**2, dim**2]
     return fd_deriv
 
-def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_group=None,
-                    maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity=0):
-    """
-    Optimize the gauge of a gateset using a custom objective function.
-
-    Parameters
-    ----------
-    gateset : GateSet
-        The gateset to gauge-optimize
-
-    targetGateset : GateSet
-        The gateset to optimize to.  The metric used for comparing gatesets
-        is given by `gatesMetric` and `spamMetric`.
-
-    objective_fn : function
-        The function to be minimized.  The function must take a single `GateSet`
-        argument and return a float.
-
-    gauge_group : GaugeGroup, optional
-        The gauge group which defines which gauge trasformations are optimized
-        over.  If None, then the `gateset`'s default gauge group is used.
-
-    maxiter : int, optional
-        Maximum number of iterations for the gauge optimization.
-
-    maxfev : int, optional
-        Maximum number of function evaluations for the gauge optimization.
-        Defaults to maxiter.
-
-    tol : float, optional
-        The tolerance for the gauge optimization.
-
-    returnAll : bool, optional
-        When True, return best "goodness" value and gauge matrix in addition to the
-        gauge optimized gateset.
-
-    verbosity : int, optional
-        How much detail to send to stdout.
-
-
-    Returns
-    -------
-    gateset                            if returnAll == False
-
-    (goodnessMin, gaugeMx, gateset)    if returnAll == True
-
-      where goodnessMin is the minimum value of the goodness function (the best 'goodness')
-      found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
-      final gauge-transformed gateset.
-    """
-
-    printer = _objs.VerbosityPrinter.build_printer(verbosity)
-
-    if gauge_group is None:
-        gauge_group = gateset.default_gauge_group
-        if gauge_group is None:
-            #don't do any gauge optimization (assume trivial gauge group)
-            _warnings.warn("No gauge group specified, so no gauge optimization performed.")
-            if returnAll:
-                return None, None, gateset.copy() 
-            else: return gateset.copy()
-
-    x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
-    gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
-
-    def call_objective_fn(gaugeGroupElVec):
-        gaugeGroupEl.from_vector(gaugeGroupElVec)
-        gs = gateset.copy()
-        gs.transform(gaugeGroupEl)
-        return objective_fn(gs)
-
-    bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
-    if bToStdout: print_obj_func(x0) #print initial point
-
+def calculate_ls_jacobian(gaugeGroupEl, gateset):
     def jacobian(vec):
         '''
         The derivative of the objective function with respect the input parameter vector, v
@@ -463,37 +381,11 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             jacMx[start:start+d] = result
             start += d
         return jacMx
-
-    print(jacobian(x0).shape) 
-    print(_np.dot(jacobian(x0), x0).shape)
-
-    1/0
-    minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
-                                max_nfev=maxfev, ftol=tol)
-
-    '''
-    minSol1 = _opt.least_squares(call_objective_fn, x0, jac='3-point',
-                                max_nfev=maxfev, ftol=tol)
-    gaugeGroupEl.from_vector(minSol1.x)
-    newGateset1 = gateset.copy()
-    newGateset1.transform(gaugeGroupEl)
-    '''
-
-    gaugeGroupEl.from_vector(minSol.x)
-    newGateset = gateset.copy()
-    newGateset.transform(gaugeGroupEl)
-
-    #print(newGateset.frobeniusdist(newGateset1))
-
-    if returnAll:
-        return minSol.fun, gaugeMat, newGateset
-    else:  
-        return newGateset
-
+    return jacobian
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity=0):
+                    returnAll=False, verbosity=0, algorithm='min'):
     """
     Optimize the gauge of a gateset using a custom objective function.
 
@@ -539,6 +431,11 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     verbosity : int, optional
         How much detail to send to stdout.
 
+    jacobian : function, optional
+        Derivative of the objective function
+
+    algorithm : string, either 'ls' or 'min', optional
+        The algorithm to use when performing gauge optimization
 
     Returns
     -------
@@ -574,10 +471,19 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
-    if bToStdout: print_obj_func(x0) #print initial point
-    minSol = _opt.minimize(call_objective_fn, x0,
-                          method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
-                          callback = print_obj_func if bToStdout else None)
+    if bToStdout: 
+        print_obj_func(x0) #print initial point
+
+    if algorithm == 'min':
+        minSol = _opt.minimize(call_objective_fn, x0,
+                              method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
+                              callback = print_obj_func if bToStdout else None)
+    elif algorithm == 'ls':
+        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset)
+        minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+                                    max_nfev=maxfev, ftol=tol)
+    else:
+        raise ValueError('Unknown algorithm inside of gauge opt: {}'.format(algorithm))
 
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
@@ -585,13 +491,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
-    else:  return newGateset
-
-    #OLD regarding stopval setting (in call to _opt.minimize):
-    # stopval= -20 if toGetTo == "CPTP" else None,
-    ## stopval=1e-7 -- (before I added log10)
-
-
+    else:  
+        return newGateset
 
 
 # OLD ############################################################################################
