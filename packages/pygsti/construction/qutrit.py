@@ -9,8 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy import linalg as _linalg
 
-from .basis import change_basis
 from .. import objects as _objs
+from ..tools import change_basis, Basis
 
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:

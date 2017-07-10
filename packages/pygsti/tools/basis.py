@@ -623,7 +623,8 @@ def basis_element_labels(basis, dimOrBlockDims):
     # in std_matrices, gm_matrices, and pp_matrices.
     _, _, blockDims = Dim(dimOrBlockDims)
 
-    lblList = []; start = 0
+    lblList = []
+    start = 0
     if basis == "std":
         for blockDim in blockDims:
             for i in range(start,start+blockDim):
@@ -664,23 +665,28 @@ def basis_element_labels(basis, dimOrBlockDims):
             #Some extra checking, since list-of-dims not supported for pp matrices yet.
             def is_integer(x):
                 return bool( abs(x - round(x)) < 1e-6 )
-            if not isinstance(dimOrBlockDims, _numbers.Integral):
-                if (isinstance(dimOrBlockDims, _collections.Container)
-                        and len(dimOrBlockDims) == 1):
-                    dimOrBlockDims = dimOrBlockDims[0]
-                else:
-                    raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2")
-            nQubits = _np.log2(dimOrBlockDims)
-            if not is_integer(nQubits):
-                raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
-            nQubits = int(round(nQubits))
+            if isinstance(dimOrBlockDims, _numbers.Integral):
+                dimOrBlockDims = [dimOrBlockDims]
+            assert isinstance(dimOrBlockDims, _collections.Container)
+            for i, dim in enumerate(dimOrBlockDims):
+                nQubits = _np.log2(dim)
+                if not is_integer(nQubits):
+                    raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
+                nQubits = int(round(nQubits))
 
-            basisLblList = [ ['I','X','Y','Z'] ]*nQubits
-            for sigmaLbls in product(*basisLblList):
-                lblList.append( ''.join(sigmaLbls) )
+                 
+
+                basisLblList = [ ['I','X','Y','Z'] ]*nQubits
+                if i == 0 and len(dimOrBlockDims) == 1:
+                    for sigmaLbls in product(*basisLblList):
+                        lblList.append(''.join(sigmaLbls))
+                else:
+                    for sigmaLbls in product(*basisLblList):
+                        lblList.append('{}{}'.format(''.join(sigmaLbls), i))
+
 
     elif basis == "qt":
-        assert(dimOrBlockDims == 3)
+        assert dimOrBlockDims == 3 or (len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 3)
         lblList = ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
 
     else:

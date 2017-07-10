@@ -262,9 +262,6 @@ class BasisBaseTestCase(BaseTestCase):
         with self.assertRaises(ValueError):
             label = basis.basis_element_labels('pp', 3)
 
-        with self.assertRaises(ValueError):
-            label = basis.basis_element_labels('pp', [1, 2])
-
         # Single list arg for pp labels
         self.assertEqual(basis.basis_element_labels('pp', [2]), ['I', 'X', 'Y', 'Z'])
 
