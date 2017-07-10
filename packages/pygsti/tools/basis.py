@@ -222,7 +222,6 @@ class Basis(object):
         -------
         numpy array
         '''
-        #print(self.dim)
         # Dim: dmDim 5 gateDim 5 blockDims [1, 1, 1, 1, 1] embedDim 25
 
         x = sum(len(mxs) for mxs in self._blockMatrices)
@@ -380,7 +379,6 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
             else:
                 resize = 'expand'
                 assert len(from_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
-        print(resize)
         return resize_mx(mx, from_basis.dim.blockDims, resize, from_basis, to_basis)
 
     if from_basis.name == to_basis.name:
@@ -545,11 +543,6 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
         dim = Dim(dimOrBlockDims)
         startBasis = Basis(startBasis, dim)
         endBasis   = Basis(endBasis, dim)
-        print(resize) 
-        print('start')
-        print(startBasis.dim)
-        print('end')
-        print(endBasis.dim)
         stdBasis1  = Basis('std', startBasis.dim.blockDims)
         stdBasis2  = Basis('std', endBasis.dim.blockDims)
 
@@ -557,11 +550,6 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
 
         start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
         if resize == 'expand':
-            print(start.shape)
-            print(stdBasis1.get_expand_mx().shape)
-            print(stdBasis2.get_expand_mx().shape)
-            print(stdBasis1.get_contract_mx().shape)
-            print(stdBasis2.get_contract_mx().shape)
             right = _np.dot(start, stdBasis2.get_expand_mx())
             mid   = _np.dot(stdBasis2.get_contract_mx(), right)
         elif resize == 'contract':
