@@ -680,8 +680,8 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logG = _mt.custom_matrix_log(gate,"ignore",TOL,True)
-        logT = _mt.custom_matrix_log(target_gate,"ignore",TOL,True)
+        logG = _mt.real_matrix_log(gate,"ignore",TOL,True)
+        logT = _mt.real_matrix_log(target_gate,"ignore",TOL,True)
 
         # if logG and logT are both real, just take the difference,
         #  as there are no branch cut issues in this case
@@ -711,7 +711,7 @@ def error_generator(gate, target_gate, typ="logG-logT"):
         
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        errgen = _mt.custom_matrix_log(_np.dot(target_gate_inv,gate))
+        errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate))
         
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
