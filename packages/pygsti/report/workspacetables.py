@@ -109,7 +109,7 @@ class SpamTable(WorkspaceTable):
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
                 evals = _np.linalg.eigvals(rhoMx)
                 rowData.append( evals )
@@ -141,7 +141,7 @@ class SpamTable(WorkspaceTable):
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 evals = _np.linalg.eigvals(EMx)
                 rowData.append( evals )
@@ -811,7 +811,7 @@ class GateDecompTable(WorkspaceTable):
     def _create(self, gateset, confidenceRegionInfo):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.get_basis_name()
+        basisNm = gateset.basis.name
         basisDims = gateset.get_basis_dimension()
 
         colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
