@@ -221,8 +221,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         spamWeight = itemWeights.get('spam',1.0)
 
         def objective_fn(gs):
-            r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
-            return r
+            residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            return residuals
 
         algorithm = 'ls'
     else:
@@ -336,10 +336,17 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             left   = _np.rollaxis(left, 1)
             result = left - right
             result = dot(S_inv, result)
-            result = _np.rollaxis(result, 2)
-            # This call to reshape is required, I think.
-            result = result.reshape(d ** 2, N)
+            result.shape = (d**2, N)
             assert result.shape == (d ** 2, N)
+            #result = _np.flipud(result)
+            #result = _np.fliplr(result)
+
+            #print(result.shape)
+            #result = _np.rollaxis(result, 2)
+            #print(result.shape)
+            #1/0
+            # This call to reshape is required, I think.
+            #result = result.reshape(d ** 2, N)
             jacMx[start:start+d**2] = result
             start += d**2
         for P in preps:
@@ -480,6 +487,17 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                               callback = print_obj_func if bToStdout else None)
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset)
+        #alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, x0)
+        er, erList, alt_jac = _opt.check_jac(call_objective_fn, x0, jacobian(x0))
+        print(er)
+        import matplotlib.pyplot as plt
+        plt.matshow(alt_jac - jacobian(x0))
+        plt.colorbar()
+        plt.show()
+        pprint(erList)
+        print(_np.linalg.norm(alt_jac - jacobian(x0)))
+        print(alt_jac - jacobian(x0))
+        assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
