@@ -208,12 +208,12 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
-    if CPpenalty == 0 and \
-        TPpenalty == 0 and \
+    if CPpenalty         == 0 and \
+        TPpenalty        == 0 and \
         validSpamPenalty == 0 and \
         targetGateset is not None and \
         gatesMetric == "frobenius" and \
-        spamMetric == "frobenius":
+        spamMetric  == "frobenius":
 
         if itemWeights is None: 
             itemWeights = {}
@@ -232,13 +232,17 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                 CPpenalty, TPpenalty, 
                 validSpamPenalty, gatesMetric, 
                 spamMetric)
-            
         
         result = gaugeopt_custom(gateset, objective_fn, gauge_group,
                      method, maxiter, maxfev, tol, returnAll, verbosity)
 
-    #print('Result frobenius dist')
-    #print(result.frobeniusdist(targetGateset))
+    '''
+    print('LS frobenius dist')
+    print(resulta.frobeniusdist(targetGateset))
+    print('Min frobenius dist')
+    print(resultb.frobeniusdist(targetGateset))
+    result = resulta
+    '''
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -264,7 +268,7 @@ def _finite_differences_raw_mx(mx, eps=1e-7):
         The gate object to compute a Jacobian for.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -383,7 +387,10 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         start = 0
         d = gates[0].shape[0]
         N = vec.shape[0]
-        L = d**2 * len(gates) + d*len(preps) + d*len(effects) + d*(0 if gs._povm_identity is None else 1)
+        L = (d**2 * len(gates)   + 
+             d    * len(preps)   + 
+             d    * len(effects) +
+             d    * (0 if gs._povm_identity is None else 1))
         jacMx = _np.zeros((L, N))
 
         # S, and S_inv are (dxd)
@@ -395,7 +402,7 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
         # Sanity check: deriv_wrt_params works
         assert _np.linalg.norm(dS - alt_dS) < 1e-6
         # dS is (dxdxlen(v))
-        dS      = dS.reshape((d, d, N))
+        dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
         rolled2 = _np.rollaxis(rolled, 1)
         for G in gates:
@@ -412,6 +419,7 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             result = left - right
             result = dot(S_inv, result)
             result = _np.rollaxis(result, 2)
+            # This call to reshape is required, I think.
             result = result.reshape(d ** 2, N)
             assert result.shape == (d ** 2, N)
             jacMx[start:start+d**2] = result
@@ -425,7 +433,8 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             '''
             right  = dot(S_inv, P)
             right  = _np.dot(rolled2, right)
-            right  = right.reshape((d, N)) # Change (d, N, 1) to (d, N)
+            # (1,d, N) to (d, N)
+            right.shape = (d, N)
             result = _np.dot(S_inv, right)
             assert result.shape == (d, N)
             jacMx[start:start+d] = result
@@ -436,7 +445,8 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             => (d, N) mx
             '''
             result = dot(E.T, dS)
-            result = result.reshape(d, N) # Change (1, d, N) to (d, N)
+            # (1,d, N) to (d, N)
+            result.shape = (d, N)
             assert result.shape == (d, N)
             jacMx[start:start+d] = result
             start += d
@@ -447,17 +457,33 @@ def gaugeopt_custom_least_squares(gateset, targetGateset, objective_fn, gauge_gr
             => (d, N) mx
             '''
             result = dot(POVM.T, dS)
-            result = result.reshape(d, N) # Change (1, d, N) to (d, N)
+            result.shape = (d, N)
+            # (1,d, N) to (d, N)
             assert result.shape == (d, N)
             jacMx[start:start+d] = result
             start += d
         return jacMx
 
-    minSol = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+    print(jacobian(x0).shape) 
+    print(_np.dot(jacobian(x0), x0).shape)
+
+    1/0
+    minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                 max_nfev=maxfev, ftol=tol)
+
+    '''
+    minSol1 = _opt.least_squares(call_objective_fn, x0, jac='3-point',
+                                max_nfev=maxfev, ftol=tol)
+    gaugeGroupEl.from_vector(minSol1.x)
+    newGateset1 = gateset.copy()
+    newGateset1.transform(gaugeGroupEl)
+    '''
+
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
+
+    #print(newGateset.frobeniusdist(newGateset1))
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
@@ -534,9 +560,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
             _warnings.warn("No gauge group specified, so no gauge optimization performed.")
             if returnAll:
                 return None, None, gateset.copy() 
-            else: return gateset.copy()
-
-
+            else: 
+                return gateset.copy()
 
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals

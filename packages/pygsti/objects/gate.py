@@ -237,7 +237,7 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
         The gate object to compute a Jacobian for.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -281,7 +281,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
         class's `deriv_wrt_params()` method itself as a part of testing.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
