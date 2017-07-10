@@ -9,3 +9,7 @@ def load():
     gs_target = est.gatesets['target']
     gs = est.gatesets['final iteration estimate']
     return gs, gs_target
+
+def load_3q():
+    with open('gaugeopt/3qbit_results.pkl', 'rb', ) as infile:
+        return pickle.load(infile, encoding='latin1')
