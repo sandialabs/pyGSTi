@@ -390,6 +390,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
         return jacMx
     return jacobian
 
+@profile
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
                     returnAll=False, verbosity=0, algorithm='min'):
@@ -470,6 +471,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
+    @profile
     def call_objective_fn(gaugeGroupElVec):
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
@@ -488,16 +490,16 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset)
         #alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, x0)
-        er, erList, alt_jac = _opt.check_jac(call_objective_fn, x0, jacobian(x0))
-        print(er)
-        import matplotlib.pyplot as plt
-        plt.matshow(alt_jac - jacobian(x0))
-        plt.colorbar()
-        plt.show()
-        pprint(erList)
-        print(_np.linalg.norm(alt_jac - jacobian(x0)))
-        print(alt_jac - jacobian(x0))
-        assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
+        #er, erList, alt_jac = _opt.check_jac(call_objective_fn, x0, jacobian(x0))
+        #print(er)
+        #import matplotlib.pyplot as plt
+        #plt.matshow(alt_jac - jacobian(x0))
+        #plt.colorbar()
+        #plt.show()
+        #pprint(erList)
+        #print(_np.linalg.norm(alt_jac - jacobian(x0)))
+        #print(alt_jac - jacobian(x0))
+        #assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
