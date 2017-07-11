@@ -112,10 +112,11 @@ class RBTestCase(BaseTestCase):
             interleaved_gates_gft.append(gtt[2*i+1])
             interleaved_gates_gsft.append(gtt[2*i+1])
             interleaved_gate.append('Gc0')  
-        assert(interleaved_gates_gtt==interleaved_gate)
-        assert(interleaved_gates_gstt==interleaved_gate)
-        assert(interleaved_gates_gft==interleaved_gate)
-        assert(interleaved_gates_gsft==interleaved_gate)
+
+        self.assertEqual(interleaved_gates_gtt, interleaved_gate)
+        self.assertEqual(interleaved_gates_gst, interleaved_gate)
+        self.assertEqual(interleaved_gates_gft, interleaved_gate)
+        self.assertEqual(interleaved_gates_gsf, interleaved_gate)
         
         K_m_sched = rb.create_K_m_sched(1,11,5,0.01,0.01,0.001)
         #Seems this method was removed...
@@ -211,9 +212,10 @@ class RBTestCase(BaseTestCase):
         error_unitary_y = expm(-1j * (0.05 / 2) *z)
 
         gs_Z = gs_target.copy()
-        error_gate_i = pygsti.unitary_to_pauligate_1q(error_unitary_i)
-        error_gate_x = pygsti.unitary_to_pauligate_1q(error_unitary_x)
-        error_gate_y = pygsti.unitary_to_pauligate_1q(error_unitary_y)
+
+        error_gate_i = pygsti.unitary_to_pauligate(error_unitary_i)
+        error_gate_x = pygsti.unitary_to_pauligate(error_unitary_x)
+        error_gate_y = pygsti.unitary_to_pauligate(error_unitary_y)
         gs_Z.gates['Gi'] = np.dot(error_gate_i,gs_target.gates['Gi'])
         gs_Z.gates['Gx'] = np.dot(error_gate_x,gs_target.gates['Gx'])
         gs_Z.gates['Gy'] = np.dot(error_gate_y,gs_target.gates['Gy'])

@@ -12,8 +12,10 @@ import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
-from . import basistools as _bt
+from . import lindbladiantools as _lt
 from . import compattools as _compat
+from . import basis as _basis
+from .basis import change_basis
 
 def _hack_sqrtm(A):
     return _spl.sqrtm(A) #Travis found this scipy function
@@ -273,78 +275,6 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
         return -2
     return prob.value
-
-
-#Kenny's Monte-Carlo version
-# had additional params: nSamples=1000, seed=None
-#
-#    nSamples : int, optional
-#        Number of Monte Carlo samples to use for diamond norm approximation.
-#
-#    seed : int, optional
-#        If not None, a seed value for the random number generator used
-#        to produce Monte Carlo samples.
-#
-#
-#    gate_dim = A.shape[0]
-#    assert(gate_dim == A.shape[1] == B.shape[0] == B.shape[1])
-#
-#    if dimOrStateSpaceDims is not None:
-#        raise ValueError("Diamond Norm not fully implemented when dimOrStateSpaceDims is not None")
-#        #Need to think more about how to deal with dimOrStateSpaceDims...
-#    state_dim = _np.sqrt(gate_dim) # dimension of state space -- more complicated with dimOrStateSpaceDims?
-#
-#    #first, get gate matrices into std basis
-#    if mxBasis == "std":
-#        AInStdBasis, BInStdBasis = A, B
-#    elif mxBasis == "gm" or mxBasis == "pauli":
-#        AInStdBasis = _bt.gm_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.gm_to_std(B, dimOrStateSpaceDims)
-#    elif mxBasis == "pp":
-#        AInStdBasis = _bt.pp_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.pp_to_std(B, dimOrStateSpaceDims)
-#    else: raise ValueError("Invalid mxBasis: %s" % mxBasis)
-#
-#    rndm = _np.random.RandomState(seed)
-#
-#    AtensorId = _np.kron(AInStdBasis,_np.identity(gate_dim))
-#    BtensorId = _np.kron(BInStdBasis,_np.identity(gate_dim))
-#    gateDiffTensorId = BtensorId - AtensorId # in std basis by construction
-#
-#    def random_two_state_density_mx():
-#        x = rndm.randn(state_dim*2,1) + 1j * rndm.randn(state_dim*2,1)
-#        x = x / _np.linalg.norm(x,'fro') # normalize state
-#        x = _np.dot(x,_np.conj(x).T) # state => density matrix via dm = psi x psi_dag
-#        x = _np.reshape(x.T,[(state_dim*2)**2,1]) #density matrix in std basis
-#        return x
-#
-#    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X))
-#    def one_shot_one_qubit_diamond_norm(gateDiffTensorId):
-#        randStateDM = random_two_state_density_mx() # in std basis
-#        outDM = _np.dot(gateDiffTensorId,randStateDM) # in std basis
-#        outDM = _np.reshape(outDM, [2*state_dim, 2*state_dim] )
-#            # Omit transposition here to save time, as that does not affect eigenvalues
-#        return _np.sum(_np.abs(_np.linalg.eigvalsh(outDM)))
-#
-#    oneShotVals = [ one_shot_one_qubit_diamond_norm(gateDiffTensorId) for i in xrange(nSamples) ]
-#    return max(oneShotVals)
-
-
-
-#Scratch -- to remove later
-  ##extract unitary from targetGate (assumes it corresponds to a unitary)
-  #target_JMx = _jam.jamiolkowski_iso( targetGate )
-  #target_Jevals, target_Jevecs = _np.linalg.eig(target_JMx)
-  #max_target_Jevec = target_Jevecs[:,_np.argmax(target_Jevals)]  # |max_Jevec> = (U x I)|bell>
-
-    #TODO -- need to extract ex matrix from target_U = _spl.expm(ex) and decompose ex in terms of pauli?
-    # |bell> = [1,0,0,1]/sqrt(2) (1-qubit) -- not sure how to generalize yet
-    #target_U = _np.sqrt(2) * _np.array( [ [max_target_Jevec[0], max_target_Jevec[1]], [max_target_Jevec[2],max_target_Jevec[3]] ] )
-
-  #U = _spl.expm( 1j * (solnVec[0]*sigmax + solnVec[1]*sigmay + solnVec[2]*sigmaz) )
-  #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
-  #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
-
 
 def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
@@ -798,7 +728,7 @@ def std_error_generators(dim, projection_type, projection_basis):
     d = int(_np.sqrt(d2))
 
     #Get a list of the basis matrices
-    mxs = _bt.basis_matrices(projection_basis, d)
+    mxs = _basis.basis_matrices(projection_basis, d)
 
     assert(len(mxs) == d2)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
@@ -806,9 +736,9 @@ def std_error_generators(dim, projection_type, projection_basis):
     lindbladMxs = _np.empty( (len(mxs),d2,d2), 'complex' )
     for i,basisMx in enumerate(mxs):
         if projection_type == "hamiltonian":
-            lindbladMxs[i] = _bt.hamiltonian_to_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.hamiltonian_to_lindbladian(basisMx) # in std basis
         elif projection_type == "stochastic":
-            lindbladMxs[i] = _bt.stochastic_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.stochastic_lindbladian(basisMx) # in std basis
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
@@ -866,13 +796,13 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       that these matricies are in the *std* (matrix unit) basis.
     """
 
-    errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    errgen_std = change_basis(errgen, mxBasis, "std")
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
     nQubits = _np.log2(d)
 
     #Get a list of the d2 generators (in corresspondence with the
-    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    #  Pauli-product matrices given by _basis.pp_matrices(d) ).
     lindbladMxs = std_error_generators(d2, projection_type, projection_basis) # in std basis
 
     assert(len(lindbladMxs) == d2)
@@ -999,7 +929,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
         hamLindbladTerms = _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
         for i,B in enumerate(ham_mxs[1:]): #don't include identity
-            hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
+            hamLindbladTerms[i] = _lt.hamiltonian_to_lindbladian(B) # in std basis
             if normalize:
                 norm = _np.linalg.norm(hamLindbladTerms[i].flat)
                 if not _np.isclose(norm,0):
@@ -1015,7 +945,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         if other_diagonal_only:
             otherLindbladTerms = _np.empty( (other_nMxs-1,d2,d2), 'complex' )
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
-                otherLindbladTerms[i] = _bt.nonham_lindbladian(Lm,Lm)
+                otherLindbladTerms[i] = _lt.nonham_lindbladian(Lm,Lm)
                 if normalize:
                     norm = _np.linalg.norm(otherLindbladTerms[i].flat)
                     if not _np.isclose(norm,0):
@@ -1028,7 +958,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
                 for j,Ln in enumerate(other_mxs[1:]): #don't include identity
                     #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
-                    otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+                    otherLindbladTerms[i,j] = _lt.nonham_lindbladian(Lm,Ln)
                     if normalize:
                         norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
                         if not _np.isclose(norm,0):
@@ -1141,7 +1071,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """
 
-    errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    errgen_std = change_basis(errgen, mxBasis, "std")
 
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
@@ -1150,11 +1080,11 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
     if _compat.isstr(ham_basis):
-        hamBasisMxs = _bt.basis_matrices(ham_basis, d)
+        hamBasisMxs = _basis.basis_matrices(ham_basis, d)
     else: hamBasisMxs = ham_basis
         
     if _compat.isstr(other_basis):
-        otherBasisMxs = _bt.basis_matrices(other_basis, d)
+        otherBasisMxs = _basis.basis_matrices(other_basis, d)
     else: otherBasisMxs = other_basis
     
     hamGens,otherGens = lindblad_error_generators(
@@ -1232,10 +1162,9 @@ def lindblad_errgen_projections(errgen, ham_basis,
     else:
         return hamProjs, otherProjs
 
-
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
-def rotation_gate_mx(r,mxBasis="gm"):
+def rotation_gate_mx(r, mxBasis="gm"):
     """
     Construct a rotation gate matrix.
 
@@ -1267,20 +1196,17 @@ def rotation_gate_mx(r,mxBasis="gm"):
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _bt.pp_matrices(d)
+    pp = _basis.basis_matrices('pp', d)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)
     ex = _np.zeros( (d,d), 'complex' )
-    for rot,pp_mx in zip(r,pp[1:]):
+    for rot, pp_mx in zip(r, pp[1:]):
         ex += rot/2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
-    
-    if mxBasis == "pp":   ret = _bt.std_to_pp(stdGate)
-    elif mxBasis == "gm": ret = _bt.std_to_gm(stdGate)
-    elif mxBasis == "std": ret = stdGate
-    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    ret = change_basis(stdGate, 'std', mxBasis, None)
 
     return ret
 
@@ -1329,12 +1255,12 @@ def project_gateset(gateset, targetGateset,
     """
     
     gateLabels = list(gateset.gates.keys())  # gate labels
-    basisNm = gateset.get_basis_name()
-    basisDims = gateset.get_basis_dimension()
+    basisNm = gateset.basis.name
+    basisDims = gateset.basis.dim.blockDims
     
-    if basisNm != targetGateset.get_basis_name():
+    if basisNm != targetGateset.basis.name:
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-                         % (basisNm, targetGateset.get_basis_name()))
+                         % (basisNm, targetGateset.basis.name))
     
     # Note: set to "full" parameterization so we can set the gates below
     #  regardless of what parameterization the original gateset had.
@@ -1354,13 +1280,13 @@ def project_gateset(gateset, targetGateset,
             hamProj, hamGens = std_errgen_projections(
                 errgen, "hamiltonian", basisNm, basisNm, True)
             ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
-            ham_error_gen = _bt.change_basis(ham_error_gen,"std",basisNm)
+            ham_error_gen = change_basis(ham_error_gen,"std",basisNm)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
                 errgen, "stochastic", basisNm, basisNm, True)
             sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-            sto_error_gen = _bt.change_basis(sto_error_gen,"std",basisNm)
+            sto_error_gen = change_basis(sto_error_gen,"std",basisNm)
             
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
             HProj, OProj, HGens, OGens = \
@@ -1370,7 +1296,7 @@ def project_gateset(gateset, targetGateset,
             #Note: return values *can* be None if an empty/None basis is given
             lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
                             _np.einsum('ij,ijkl', OProj, OGens)
-            lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basisNm)
+            lnd_error_gen = change_basis(lnd_error_gen,"std",basisNm)
 
         if 'H' in projectiontypes:
             gsDict['H'].gates[gl] = gate_from_error_generator(
@@ -1399,7 +1325,7 @@ def project_gateset(gateset, targetGateset,
               #OProj_cp is now a pos-def matrix
             lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
                                _np.einsum('ij,ijkl', OProj_cp, OGens)
-            lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basisNm)
+            lnd_error_gen_cp = change_basis(lnd_error_gen_cp,"std",basisNm)
 
             gsDict['LND'].gates[gl] = gate_from_error_generator(
                 lnd_error_gen_cp, targetGate, genType)
@@ -1426,3 +1352,26 @@ def project_gateset(gateset, targetGateset,
     ret_gs = [ gsDict[p] for p in projectiontypes ]
     ret_Nps = [ NpDict[p] for p in projectiontypes ]
     return ret_gs, ret_Nps
+
+
+def unitary_to_pauligate(U):
+    """
+    Get the linear operator on (vectorized) density
+    matrices corresponding to a n-qubit unitary
+    operator on states.
+
+    Parameters
+    ----------
+    U : numpy array
+        A dxd array giving the action of the unitary
+        on a state in the sigma-z basis.
+        where d = 2 ** n-qubits
+
+    Returns
+    -------
+    numpy array
+        The operator on density matrices that have been
+        vectorized as d**2 vectors in the Pauli basis.
+    """
+    assert U.shape[0] == U.shape[1], '"Unitary" matrix is not square'
+    return change_basis(unitary_to_process_mx(U), 'std', 'pp')
