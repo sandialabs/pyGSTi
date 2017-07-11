@@ -458,10 +458,9 @@ def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=Fal
 
     if real_logarithm and mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
-            print("DEBUG M = \n", M)
-            print("DEBUG evals = ", evals)
             raise ValueError("Cannot construct a real log: unpaired negative" +
-                         " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+                             " real eigenvalues: %s" % [evals[i] for i in unpaired_indices] +
+                             "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative" +
                          " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
