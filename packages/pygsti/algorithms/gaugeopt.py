@@ -325,41 +325,45 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
         rolled2 = _np.rollaxis(rolled, 1)
-        print('ds')
-        print(dS.shape)
-        print('rolled ds')
-        print(rolled.shape)
-        print('rolled dS 2')
-        print(rolled2.shape)
-        print('S_inv')
-        print(S_inv.shape)
-        dS_inv = dot(rolled2, S_inv)
-        dS_inv = -1 * dot(S_inv, _np.rollaxis(dS_inv, 2))
-        print('dS_inv')
-        print(dS_inv.shape)
         for G in gates:
-            print('G')
-            print(G.shape)
             '''
+            Not sure if this is still correct
             Jac_gate = dS_inv @ Gk @ S + S_inv @ Gk @ dS
                        ^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^
                        left              right
 
             => (d**2, N) mx
             '''
-            right = dot(dot(S_inv, G), rolled)
-            right = _np.rollaxis(right, 2)
-            right = right.reshape(d ** 2, N)
-            print('right')
-            print(right.shape)
+            #import matplotlib.pyplot as plt
+            #fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, sharey=True)
 
-            left = dot(_np.rollaxis(_np.rollaxis(dS_inv, 2), 1), dot(G, S))
-            left = _np.rollaxis(left, 2)
-            left = left.reshape(d ** 2, N)
-            print('left')
-            print(left.shape)
+            right  = dot(S_inv, dot(G, S))
+            right  = dot(rolled, right)
+            #ax1.matshow(right.reshape(256, 256), vmin=-1, vmax=1)
+            #ax1.set_title('right')
+            left   = dot(G, rolled)
+            left   = _np.rollaxis(left, 1)
+            #ax2.matshow(right.reshape(256, 256), vmin=-1, vmax=1)
+            #ax2.set_title('left')
+            #ax3.matshow(left.reshape(256, 256) - right.reshape(256, 256), vmin=-1, vmax=1)
+            #ax3.set_title('diff')
+            result = left - right
+            result = result.reshape(d**2, N)
+            result = _np.flipud(_np.fliplr(result).T)
+            #result = _np.fliplr(_np.flipud(result).T)
+            #result = dot(S_inv, result)
+            #result *= -1
+            #result.shape = (d**2, N)
+            #im = ax4.matshow(result, vmin=-1, vmax=1)
+            #ax4.set_title('result')
+            assert result.shape == (d ** 2, N)
 
-            jacMx[start:start+d**2] = left + right
+            #fig.subplots_adjust(right=0.8)
+            #cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+            #fig.colorbar(im, cax=cbar_ax)
+            #plt.show()
+
+            jacMx[start:start+d**2] = result
             start += d**2
         for P in preps:
             '''
