@@ -7,6 +7,8 @@ import pygsti
 import pygsti.tools.basis       as basis
 import pygsti.tools.lindbladiantools as lindbladiantools
 
+from pygsti.tools.basis import Basis, Dim, change_basis
+
 from functools import partial
 
 class BasisBaseTestCase(BaseTestCase):
@@ -20,12 +22,12 @@ class BasisBaseTestCase(BaseTestCase):
                                  [3,0,0,4]],'d')
 
         # Reduce to a matrix operating on a density matrix space with 2 1x1 blocks (hence [1,1])
-        begin = basis.Basis('std', [1,1])
-        end   = basis.Basis('std', 2)
+        begin = Basis('std', [1,1])
+        end   = Basis('std', 2)
         
         mxInReducedBasis = pygsti.resize_mx(mxInStdBasis,[1,1], resize='contract')
-        mxInReducedBasis = basis.change_basis(mxInStdBasis, begin, end)
-        notReallyContracted = basis.change_basis(mxInStdBasis, 'std', 'std', 4)
+        mxInReducedBasis = change_basis(mxInStdBasis, begin, end)
+        notReallyContracted = change_basis(mxInStdBasis, 'std', 'std', 4)
         correctAnswer = np.array([[ 1.0,  2.0],
                                   [ 3.0,  4.0]])
         self.assertArraysAlmostEqual( mxInReducedBasis, correctAnswer )
@@ -288,21 +290,88 @@ class BasisBaseTestCase(BaseTestCase):
             basis.vec_to_stdmx(vec, 'akdfj;ladskf')
 
     def test_composite_basis(self):
-        comp = basis.Basis([('std', 2,), ('std', 1)])
+        comp = Basis([('std', 2,), ('std', 1)])
 
-        a = basis.Basis([('std', 2), ('std', 2)])
-        b = basis.Basis('std', [2,2])
+        a = Basis([('std', 2), ('std', 2)])
+        b = Basis('std', [2,2])
         self.assertEqual(len(a), len(b))
         self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
 
     def test_auto_expand(self):
-        comp = basis.Basis(matrices=[('std', 2,), ('std', 1)])
-        std  = basis.Basis('std', 3)
+        comp = Basis(matrices=[('std', 2,), ('std', 1)])
+        std  = Basis('std', 3)
         mxStd = np.identity(5)
         # def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
         #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
-        #test  = basis.change_basis(mxStd, std, comp)
-        #test  = basis.change_basis(mxStd, comp, std)
+        #test  = change_basis(mxStd, std, comp)
+        #test  = change_basis(mxStd, comp, std)
+
+    def test_general(self):
+        Basis('pp', 2)
+        Basis('std', [2, 1])
+        Basis([('std', 2), ('gm', 2)])
+
+        std  = Basis('std', 2)
+        gm   = Basis('gm', 2)
+        ungm = Basis('gm_unnormalized', 2)
+
+        std[0]
+        std.get_sub_basis_matrices(0)
+
+        #self.assertTrue(std.is_normalized()) ?
+        self.assertFalse(ungm.is_normalized())
+
+        transMx = basis.transform_matrix(std, gm)
+
+        composite = Basis([std, gm])
+
+        comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite')
+
+        comp.labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+        comp = Basis(matrices=[std, gm], name='comp', longname='CustomComposite', labels=[
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
+            ])
+
+        std2x2Matrices = [
+                np.array([[1, 0],
+                          [0, 0]]),
+                np.array([[0, 1],
+                          [0, 0]]),
+                np.array([[0, 0],
+                          [1, 0]]),
+                np.array([[0, 0],
+                          [0, 1]])]
+
+        empty = Basis(matrices=[])
+        alt_standard = Basis(matrices=std2x2Matrices)
+        alt_standard = Basis(matrices=std2x2Matrices,
+                             name='std',
+                             longname='Standard'
+                            )
+        self.assertEqual(alt_standard, std2x2Matrices)
+
+        mx = np.array([
+                [1, 0, 0, 1],
+                [0, 1, 2, 0],
+                [0, 2, 1, 0],
+                [1, 0, 0, 1]
+            ])
+
+        change_basis(mx, 'std', 'gm') # shortname lookup
+        change_basis(mx, std, gm) # object
+        change_basis(mx, std, 'gm') # combination
+        mxInStdBasis = np.array([[1,0,0,2],
+                                 [0,0,0,0],
+                                 [0,0,0,0],
+                                 [3,0,0,4]],'d')
+
+        begin = Basis('std', [1,1])
+        end   = Basis('std', 2)
+        mxInReducedBasis = change_basis(mxInStdBasis, begin, end)
+        original = change_basis(mxInReducedBasis, end, begin)
+
+
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

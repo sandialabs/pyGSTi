@@ -159,7 +159,7 @@ class Basis(object):
         to_basis = Basis(to_basis, self.dim.blockDims)
         return _np.dot(to_basis.get_from_std(), self.get_to_std())
 
-    def get_sub_basis(self, index):
+    def get_sub_basis_matrices(self, index):
         '''
         Retrieve a list of matrices by index 
 
@@ -186,7 +186,7 @@ class Basis(object):
         for mx in self._matrices:
             t = _np.trace(_np.dot(mx, mx))
             t = _np.real(t)
-            if t != 0:
+            if t > 1e-6:
                 return False
         return True
 
@@ -313,7 +313,7 @@ def _build_composite_basis(bases):
     composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real)
     return composite
 
-def transform_matrix(from_basis, to_basis, dimOrBlockDims):
+def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
     '''
     Compute the transformation matrix between two bases
 
@@ -333,7 +333,10 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims):
     Basis
         the composite basis created
     '''
-    from_basis = Basis(from_basis, dimOrBlockDims)
+    if dimOrBlockDims is None:
+        assert isinstance(from_basis, Basis)
+    else:
+        from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
