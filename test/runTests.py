@@ -50,7 +50,7 @@ slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
               parallel=False, failed=False, cores=None, coverdir='../output/coverage', html=False,
-              threshold=90, outputfile=None):
+              threshold=90, outputfile=None, package='pygsti'):
 
     with directory('test_packages'):
 
@@ -112,8 +112,8 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             # html coverage is prettiest
             pythoncommands += ['--with-coverage',
                                '--cover-erase',
-                               '--cover-package=pygsti',
-                               '--cover-min-percentage=%s' % threshold]
+                               '--cover-package={}'.format(package),
+                               '--cover-min-percentage={}'.format(threshold)]
 
         returned = 0
         if len(testnames) > 0:
@@ -166,6 +166,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run tests for pygsti')
     parser.add_argument('tests', nargs='*', default=default, type=str,
                         help='list of packages to run tests for')
+    parser.add_argument('--package', type=str,
+                        help='package to test coverage for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')
     parser.add_argument('--changed', '-c', action='store_true', help='run only the changed packages')
@@ -190,6 +192,7 @@ if __name__ == "__main__":
 
     parsed = parser.parse_args(sys.argv[1:])
 
+    # With this many arguments, maybe this function should be refactored?
     run_tests(parsed.tests, parsed.version, parsed.fast, parsed.changed, parsed.cover,
               parsed.parallel, parsed.failed, parsed.cores, parsed.coverdir,
-              parsed.html, parsed.threshold, parsed.output)
+              parsed.html, parsed.threshold, parsed.output, parsed.package)
