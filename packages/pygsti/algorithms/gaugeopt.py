@@ -325,8 +325,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
         rolled2 = _np.rollaxis(rolled, 1)
-        print(rolled.shape)
-        print(rolled2.shape)
         for G in gates:
             '''
             Jac_gate = S_inv @ [Gk @ dS - dS @ S_inv @ Gk @ S]
@@ -348,9 +346,12 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             #ax3.matshow(left.reshape(256, 256) - right.reshape(256, 256), vmin=-1, vmax=1)
             #ax3.set_title('diff')
             result = left - right
-            result *= -1
-            #result = -1 * dot(S_inv, result)
-            result.shape = (d**2, N)
+            result = result.reshape(d**2, N)
+            result = _np.flipud(_np.fliplr(result).T)
+            #result = _np.fliplr(_np.flipud(result).T)
+            #result = dot(S_inv, result)
+            #result *= -1
+            #result.shape = (d**2, N)
             #im = ax4.matshow(result, vmin=-1, vmax=1)
             #ax4.set_title('result')
             assert result.shape == (d ** 2, N)
