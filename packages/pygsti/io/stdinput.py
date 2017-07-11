@@ -30,14 +30,14 @@ def get_display_progress_fn(showProgress):
     if is_interactive() and showProgress:
         try:
             from IPython.display import clear_output
-            def ipython_display_progress(i,N):
+            def display_progress(i,N,filename):
                 _time.sleep(0.001); clear_output()
                 print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
                 _sys.stdout.flush()
         except:
-            def display_progress(i,N): pass
+            def display_progress(i,N,f): pass
     else:
-        def display_progress(i,N): pass
+        def display_progress(i,N,f): pass
         
     return display_progress
 
@@ -392,7 +392,7 @@ class StdInputParser(object):
         countDict = {}
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -532,7 +532,7 @@ class StdInputParser(object):
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -669,7 +669,7 @@ class StdInputParser(object):
         display_progress = get_display_progress_fn(showProgress)
 
         for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
             line = line.strip()
             if len(line) == 0 or line[0] == '#': continue
