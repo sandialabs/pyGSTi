@@ -292,6 +292,7 @@ class BasisBaseTestCase(BaseTestCase):
 
         a = basis.Basis([('std', 2), ('std', 2)])
         b = basis.Basis('std', [2,2])
+        self.assertEqual(len(a), len(b))
         self.assertArraysAlmostEqual(np.array(a._matrices), np.array(b._matrices))
 
     def test_auto_expand(self):

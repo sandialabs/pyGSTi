@@ -128,9 +128,6 @@ class Basis(object):
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
 
-    def __repr__(self):
-        return str(self)
-
     def __getitem__(self, index):
         return self._matrices[index]
 
