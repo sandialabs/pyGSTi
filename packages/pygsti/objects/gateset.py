@@ -180,15 +180,30 @@ class GateSet(object):
         """
         return self._dim
 
+    def get_basis_name(self):
+        _warnings.warn('gs.get_basis_name() is deprecated. ' + \
+                'Use gs.basis.name instead.')
+        return self.basis.name
+
+    def get_basis_dimension(self):
+        _warnings.warn('gs.get_basis_dimension() is deprecated. ' + \
+                'Use gs.basis.dim.dmDim (same functionality) or gs.basis.dim.blockDims (full blockDims) instead')
+        return self.basis.dim.dmDim
+
+    def set_basis(self, name, dimension):
+        _warnings.warn('gs.set_basis() is deprecated. ' + \
+                'Use gs.basis = Basis({}, {}) ' + \
+                '(or another method of basis construction, ' + \
+                'like gs.basis = Basis([(\'std\', 2), (\'gm\', 2)])) ' + \
+                'instead.'.format(name, dimension))
+        self.basis = Basis(name, dimension)
+
     def reset_basis(self):
         """
         "Forgets" the basis name and dimension by setting
         these quantities to "unkown" and None, respectively.
         """
         self.basis = Basis('unknown', None)
-
-    def change_basis(self, other):
-        self.basis = other
 
     def get_prep_labels(self):
         """

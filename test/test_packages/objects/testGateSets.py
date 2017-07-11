@@ -958,8 +958,10 @@ class TestGateSetMethods(GateSetTestCase):
         #for mx in self.gateset.iterall():
         pass
 
-
-
+    def test_deprecated_functions(self):
+        name = self.gateset.get_basis_name()
+        dim  = self.gateset.get_basis_dimension()
+        self.gateset.set_basis(name, dim)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
