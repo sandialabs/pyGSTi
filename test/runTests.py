@@ -2,25 +2,12 @@
 from __future__                  import print_function, division, unicode_literals, absolute_import
 from helpers.automation_tools    import directory, get_changed_packages
 import subprocess, argparse, shutil, sys, os
+import webbrowser
 
 '''
 Script for running the test suite.
 
 see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
-
-'''
-'''
-echo "Parallel tests started..."
-cp mpi/setup.cfg.mpi setup.cfg #stage setup.cfg
-mv .coverage output/coverage.mpi
-rm setup.cfg #unstage setup.cfg
-echo "MPI Output written to coverage_tests_mpi.out"
-
-cp output/coverage.serial .coverage.serial
-cp output/coverage.mpi    .coverage.mpi
-coverage combine
-coverage report -m --include="*/pyGSTi/packages/pygsti/*" > output/coverage_tests.out 2>&1
-echo "Combined Output written to coverage_tests.out"
 '''
 
 def run_mpi_coverage_tests(coverage_cmd, nproc=4):
@@ -118,7 +105,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
         returned = 0
         if len(testnames) > 0:
             commands = pythoncommands + testnames + postcommands
-            print(commands)
+            print(' '.join(commands))
 
             if outputfile is None:
                 returned = subprocess.call(commands)
@@ -157,6 +144,7 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
 
         if html:
             create_html(coverdir, coverage_cmd)
+            webbrowser.open(coverdir + '/index.html')
 
         sys.exit(returned)
 
