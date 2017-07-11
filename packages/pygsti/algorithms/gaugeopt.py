@@ -324,44 +324,43 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
         # dS is (dxdxlen(v))
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
-        rolled2 = _np.rollaxis(rolled, 1)
+        rolled2 = _np.rollaxis(rolled, 2)
+        print('rolled')
+        print(rolled.shape)
+        print('rolled2')
+        print(rolled2.shape)
         for G in gates:
             '''
-            Not sure if this is still correct
-            Jac_gate = dS_inv @ Gk @ S + S_inv @ Gk @ dS
-                       ^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^
-                       left              right
+            Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
+                                ^^^^^^^^^^^^^^^^^^^   ^^^^^^^
+                                left                  right
 
             => (d**2, N) mx
             '''
-            #import matplotlib.pyplot as plt
-            #fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, sharey=True)
+            right = dot(G, rolled)
+            print('right')
+            print(right.shape)
+            right = _np.rollaxis(right, 2)
+            print('right')
+            print(right.shape)
 
-            right  = dot(S_inv, dot(G, S))
-            right  = dot(rolled, right)
-            #ax1.matshow(right.reshape(256, 256), vmin=-1, vmax=1)
-            #ax1.set_title('right')
-            left   = dot(G, rolled)
-            left   = _np.rollaxis(left, 1)
-            #ax2.matshow(right.reshape(256, 256), vmin=-1, vmax=1)
-            #ax2.set_title('left')
-            #ax3.matshow(left.reshape(256, 256) - right.reshape(256, 256), vmin=-1, vmax=1)
-            #ax3.set_title('diff')
+            left = dot(S_inv, dot(G, S))
+            left = dot(rolled, left)
+            print('left')
+            print(left.shape)
+            left = _np.rollaxis(left, 0, 3)
+            print('left')
+            print(left.shape)
+
             result = left - right
-            result = result.reshape(d**2, N)
-            result = _np.flipud(_np.fliplr(result).T)
-            #result = _np.fliplr(_np.flipud(result).T)
-            #result = dot(S_inv, result)
-            #result *= -1
-            #result.shape = (d**2, N)
-            #im = ax4.matshow(result, vmin=-1, vmax=1)
-            #ax4.set_title('result')
-            assert result.shape == (d ** 2, N)
+            result = _np.rollaxis(result, 2)
+            result = _np.dot(S_inv, result)
+            result = _np.rollaxis(result, 2)
+            result = result.reshape((d**2, N))
+            print('result')
+            print(result.shape)
 
-            #fig.subplots_adjust(right=0.8)
-            #cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-            #fig.colorbar(im, cax=cbar_ax)
-            #plt.show()
+            assert result.shape == (d ** 2, N)
 
             jacMx[start:start+d**2] = result
             start += d**2
@@ -505,8 +504,6 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset)
         alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, x0, 1e-10)
-        #er, erList, alt_jac = _opt.check_jac(call_objective_fn, x0, jacobian(x0))
-        #print(er)
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
 
@@ -523,8 +520,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         plt.show()
 
         #print(_np.linalg.norm(alt_jac - jacobian(x0)))
-        #print(alt_jac - jacobian(x0))
-        #assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
+        assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
