@@ -680,10 +680,8 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logG = _mt.real_matrix_log(gate,TOL)
-        logT = _mt.real_matrix_log(target_gate,TOL)
-        #logG = _mt.custom_matrix_log(gate,"ignore",TOL,True)
-        #logT = _mt.custom_matrix_log(target_gate,"ignore",TOL,True)
+        logG = _mt.custom_matrix_log(gate,"ignore",TOL,real_logarithm=True)
+        logT = _mt.custom_matrix_log(target_gate,"ignore",TOL,real_logarithm=True)
 
 
         # if logG and logT are both real, just take the difference,
