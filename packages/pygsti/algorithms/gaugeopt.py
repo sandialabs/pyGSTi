@@ -248,42 +248,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     
     return result
 
-def _finite_differences_raw_mx(mx, eps=1e-7):
-    '''
-    Computes a finite-difference Jacobian for a Gate object.
-
-    The returned value is a matrix whose columns are the vectorized
-    derivatives of the flattened gate matrix with respect to a single
-    gate parameter, matching the format expected from the gate's
-    `deriv_wrt_params` method.
-
-    Parameters
-    ----------
-    gate : Gate
-        The gate object to compute a Jacobian for.
-        
-    eps : float, optional
-        The finite difference step to use.
-
-    Returns
-    -------
-    numpy.ndarray
-        An M by N matrix where M is the number of gate elements and
-        N is the number of gate parameters. 
-    '''
-    dim = mx.shape[0]
-    mx2 = mx.copy()
-    p = mx.flatten()
-    fd_deriv = _np.empty((dim, dim, dim**2), 'd') #assume real (?)
-
-    for i in range(dim**2):
-        p_plus_dp = p.copy()
-        p_plus_dp[i] += eps
-        mx2[:,:] = p_plus_dp.reshape((dim, dim))
-        fd_deriv[:,:,i] = (mx2-mx)/eps
-
-    fd_deriv.shape = [dim**2, dim**2]
-    return fd_deriv
 
 def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
     def jacobian(vec):
@@ -318,9 +282,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
         # dS is ((d*d)xlen(v))
         dS      = gaugeGroupEl.gate.deriv_wrt_params()
-        alt_dS  = _finite_differences_raw_mx(S)
-        # Sanity check: deriv_wrt_params works
-        assert _np.linalg.norm(dS - alt_dS) < 1e-6
         # dS is (dxdxlen(v))
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
@@ -389,6 +350,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             start += d
 
         alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
+        '''
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
 
@@ -403,6 +365,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
+        '''
         return jacMx
     return jacobian
 
