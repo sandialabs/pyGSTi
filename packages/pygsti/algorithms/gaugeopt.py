@@ -285,7 +285,7 @@ def _finite_differences_raw_mx(mx, eps=1e-7):
     fd_deriv.shape = [dim**2, dim**2]
     return fd_deriv
 
-def calculate_ls_jacobian(gaugeGroupEl, gateset):
+def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
     def jacobian(vec):
         '''
         The derivative of the objective function with respect the input parameter vector, v
@@ -325,10 +325,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
         rolled2 = _np.rollaxis(rolled, 2)
-        print('rolled')
-        print(rolled.shape)
-        print('rolled2')
-        print(rolled2.shape)
         for G in gates:
             '''
             Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
@@ -338,28 +334,17 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             => (d**2, N) mx
             '''
             right = dot(G, rolled)
-            print('right')
-            print(right.shape)
-            right = _np.rollaxis(right, 2)
-            print('right')
-            print(right.shape)
+            right = _np.rollaxis(right, 2, 1)
 
             left = dot(S_inv, dot(G, S))
             left = dot(rolled, left)
-            print('left')
-            print(left.shape)
             left = _np.rollaxis(left, 0, 3)
-            print('left')
-            print(left.shape)
 
             result = left - right
-            result = _np.rollaxis(result, 2)
-            result = _np.dot(S_inv, result)
-            result = _np.rollaxis(result, 2)
-            result = result.reshape((d**2, N))
-            print('result')
-            print(result.shape)
-
+            result = _np.rollaxis(result, 2) # Roll the same way as dS
+            result = dot(S_inv, result)
+            result = _np.rollaxis(result, 2, 1) # Don't mix up d sides
+            result = -1 * result.reshape((d**2, N))
             assert result.shape == (d ** 2, N)
 
             jacMx[start:start+d**2] = result
@@ -378,7 +363,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             right.shape = (d, N)
             result = _np.dot(S_inv, right)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
         for E in effects:
             '''
@@ -389,7 +374,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             # (1,d, N) to (d, N)
             result.shape = (d, N)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
         if gs._povm_identity is not None:
             POVM = gs._povm_identity
@@ -401,8 +386,24 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset):
             result.shape = (d, N)
             # (1,d, N) to (d, N)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
+
+        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
+        import matplotlib.pyplot as plt
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
+
+        ax1.matshow(jacMx, vmin=-1, vmax=1)
+        ax1.set_title('analytic')
+        ax2.matshow(alt_jac, vmin=-1, vmax=1)
+        ax2.set_title('ffd')
+        im = ax3.matshow(alt_jac - jacMx, vmin=-1, vmax=1)
+        ax3.set_title('combined')
+
+        fig.subplots_adjust(right=0.8)
+        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+        fig.colorbar(im, cax=cbar_ax)
+        plt.show()
         return jacMx
     return jacobian
 
@@ -502,25 +503,10 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                               method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                               callback = print_obj_func if bToStdout else None)
     elif algorithm == 'ls':
-        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset)
-        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, x0, 1e-10)
-        import matplotlib.pyplot as plt
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
-
-        ax1.matshow(jacobian(x0), vmin=-1, vmax=1)
-        ax1.set_title('analytic')
-        ax2.matshow(alt_jac, vmin=-1, vmax=1)
-        ax2.set_title('ffd')
-        im = ax3.matshow(alt_jac - jacobian(x0), vmin=-1, vmax=1)
-        ax3.set_title('combined')
-
-        fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-        fig.colorbar(im, cax=cbar_ax)
-        plt.show()
+        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn)
 
         #print(_np.linalg.norm(alt_jac - jacobian(x0)))
-        assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
+        #assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
