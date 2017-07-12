@@ -20,7 +20,7 @@ fiducials = _strc.gatestring_list( [ (), ('Gxi',), ('Gyi',), ('Gxi','Gxi') ] )
 #                                     ('Gxi','Gxi','Gxi'), ('Gyi','Gyi','Gyi') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.gatestring_list( [('Gxi',), ('Gyi',), ('Gii',), ('Gxi', 'Gyi'),
+germs = _strc.gatestring_list( [('Gii',), ('Gxi',), ('Gyi',), ('Gxi', 'Gyi'),
                                 ('Gxi', 'Gyi', 'Gii'), ('Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gii', 'Gii'), ('Gyi', 'Gii', 'Gii'),
                                   ('Gxi', 'Gxi', 'Gii', 'Gyi'), ('Gxi', 'Gyi', 'Gyi', 'Gii'),
                                   ('Gxi', 'Gxi', 'Gyi', 'Gxi', 'Gyi', 'Gyi')] )
