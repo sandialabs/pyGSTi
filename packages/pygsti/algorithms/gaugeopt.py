@@ -56,16 +56,8 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
         if targetGateset is not None:
             if gatesMetric == "frobenius":
                 if spamMetric == "frobenius":
-                    f = gs.frobeniusdist(targetGateset, None, gateWeight,
+                    ret += gs.frobeniusdist(targetGateset, None, gateWeight,
                                             spamWeight, itemWeights)
-                    '''
-                    # Sanity checks for the residual function:
-                    r, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
-                    f_alt = _np.sqrt(_np.sum(r**2) / nsummands)
-                    diff = abs(f - f_alt)
-                    assert diff < 1e-5, '{} != {} within 7 places (diff: {})'.format(f_alt, f, diff)
-                    '''
-                    ret += f
                 else:
                     ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
     
@@ -321,9 +313,9 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             # (N, d, 1) to (N, d)
             right.shape = (N, d)
             right = _np.rollaxis(right, 1) # d, N
-            result = _np.dot(S_inv, right)
+            result = -1 * _np.dot(S_inv, right)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
         for E in effects:
             '''
@@ -334,7 +326,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             # (1,d, N) to (d, N)
             result.shape = (d, N)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
         if gs._povm_identity is not None:
             POVM = gs._povm_identity
@@ -346,11 +338,11 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result.shape = (d, N)
             # (1,d, N) to (d, N)
             assert result.shape == (d, N)
-            jacMx[start:start+d] = result
+            #jacMx[start:start+d] = result
             start += d
 
-        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
         '''
+        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
 
@@ -368,6 +360,11 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         '''
         return jacMx
     return jacobian
+
+'''
+def array_eq(a, b):
+    return _np.linalg.norm(a-b) < 1e-6
+'''
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
@@ -449,10 +446,28 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
+
     def call_objective_fn(gaugeGroupElVec):
+        #print(gaugeGroupElVec)
+        #print('_' * 80)
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
+        original = gs.preps['rho0'].base
+        #print('original:')
+        #print(original)
+        transform = gaugeGroupEl.get_transform_matrix()
+        '''
+        if array_eq(transform, _np.identity(transform.shape[0])):
+            print('Transform was equal to identity')
+        else:
+            print('Non identity')
+        '''
         gs.transform(gaugeGroupEl)
+        transformed = gs.preps['rho0'].base
+        #print('transformed:')
+        #print(transformed)
+        #if not array_eq(original, transformed):
+        #raise ValueError('Gate rho vec changed')
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
@@ -466,9 +481,6 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                               callback = print_obj_func if bToStdout else None)
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn)
-
-        #print(_np.linalg.norm(alt_jac - jacobian(x0)))
-        #assert _np.linalg.norm(alt_jac - jacobian(x0)) < 1e-6
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
