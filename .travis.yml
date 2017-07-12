@@ -10,6 +10,7 @@ branches:
     - beta
     - develop
     - feature-optimization
+    - feature-clean-optimization
 
 env:
     - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)

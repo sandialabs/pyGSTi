@@ -200,6 +200,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
+    '''
     if CPpenalty         == 0 and \
         TPpenalty        == 0 and \
         validSpamPenalty == 0 and \
@@ -218,12 +219,13 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
 
         algorithm = 'ls'
     else:
-        objective_fn = create_objective_fn(gateset, targetGateset,
-                itemWeights, 
-                CPpenalty, TPpenalty, 
-                validSpamPenalty, gatesMetric, 
-                spamMetric)
-        algorithm = 'min'
+    '''
+    objective_fn = create_objective_fn(gateset, targetGateset,
+            itemWeights, 
+            CPpenalty, TPpenalty, 
+            validSpamPenalty, gatesMetric, 
+            spamMetric)
+    algorithm = 'min'
         
 
     result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
@@ -358,6 +360,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
         '''
+
         return jacMx
     return jacobian
 
