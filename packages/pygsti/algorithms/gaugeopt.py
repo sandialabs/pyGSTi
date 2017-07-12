@@ -388,7 +388,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             jacMx[start:start+d] = result
             start += d
 
-        '''
         alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
@@ -404,7 +403,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
-        '''
         return jacMx
     return jacobian
 
