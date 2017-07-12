@@ -313,6 +313,7 @@ def real_matrix_log(M, TOL=1e-8):
         An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
         and `logM` is real (if possible).
     """
+    assert( _np.linalg.norm(_np.imag(M)) < TOL ), "real_matrix_log must be passed a *real* matrix!"
     logM = custom_matrix_log(M, "raise", TOL, True)
     assert( _np.linalg.norm(_np.imag(logM)) < TOL ), "real_matrix_log failed to construct a real logarithm!"
     return _np.real(logM)
@@ -381,12 +382,12 @@ def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=Fal
       # astype guards against case all evals are real but some are negative
 
     #DEBUG
-    #print("DB: evals = ",evals)
-    #print("DB: log_evals:",log_evals)
-    #for i,ev in enumerate(log_evals):
-    #    print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
-    #print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
-    #print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
+    print("DB: evals = ",evals)
+    print("DB: log_evals:",log_evals)
+    for i,ev in enumerate(log_evals):
+        print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
+    print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
+    print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
     #print("DB: evec[5] = ",mx_to_string(U[:,5]))
     #print("DB: evec[6] = ",mx_to_string(U[:,6]))
     
@@ -400,7 +401,7 @@ def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=Fal
             log_evals[j] = log_evals[i]
 
     for (i,j) in neg_real_pairs_conj_evecs: # evecs already conjugates of each other
-        log_evals[i] = _np.log(-evals[i]) + 1j*_np.pi
+        log_evals[i] = _np.log(-evals[i].real) + 1j*_np.pi
         log_evals[j] = log_evals[i].conjugate() if real_logarithm else log_evals[i]
         #Note: if *don't* conjugate j-th, then this picks *consistent* branch cut (what scipy would do), which
         # results, in general, in a complex logarithm BUT one which seems more intuitive (?) - at least permits
@@ -458,7 +459,8 @@ def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=Fal
     if real_logarithm and mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative" +
-                         " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+                             " real eigenvalues: %s" % [evals[i] for i in unpaired_indices] +
+                             "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative" +
                          " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])

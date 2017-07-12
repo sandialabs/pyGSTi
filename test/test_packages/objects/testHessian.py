@@ -127,6 +127,12 @@ class TestHessianMethods(BaseTestCase):
                                              tol=0.1) #very low tol so doesn't take long
         ci_intrinsic = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
                                              hessianProjection="intrinsic error")
+        ci_linresponse = pygsti.obj.ConfidenceRegion(self.gateset, None, 95.0,
+                                                     hessianProjection="linear response",
+                                                     linresponse_mlgst_params={'dataset': self.ds,
+                                                                               'gateStringsToUse': list(self.ds.keys())} )
+
+        self.assertTrue( ci_std.has_hessian() )
 
         with self.assertRaises(ValueError):
             pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
@@ -135,79 +141,129 @@ class TestHessianMethods(BaseTestCase):
         self.assertWarns(pygsti.obj.ConfidenceRegion, self.gateset,
                          chi2Hessian, 0.95, hessianProjection="none") # percentage < 1.0
 
-        ar_of_intervals_Gx = ci_std.get_profile_likelihood_confidence_intervals("Gx")
-        ar_of_intervals_rho0 = ci_std.get_profile_likelihood_confidence_intervals("rho0")
-        ar_of_intervals_E0 = ci_std.get_profile_likelihood_confidence_intervals("E0")
-        ar_of_intervals = ci_std.get_profile_likelihood_confidence_intervals()
+        for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic, ci_linresponse):
+            try: 
+                ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals("Gx")
+                ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals("rho0")
+                ar_of_intervals_E0 = ci_cur.get_profile_likelihood_confidence_intervals("E0")
+                ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
+            except NotImplementedError: 
+                pass #linear response CI doesn't support profile likelihood intervals
+    
+            def fnOfGate_float(mx):
+                return float(mx[0,0])
+            def fnOfGate_0D(mx):
+                return np.array( float(mx[0,0]) )
+            def fnOfGate_1D(mx):
+                return mx[0,:]
+            def fnOfGate_2D(mx):
+                return mx[:,:]
+            def fnOfGate_3D(mx):
+                return np.zeros( (2,2,2), 'd') #just to test for error
+    
+    
+            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_float, 'Gx', verbosity=0)
+            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_0D, 'Gx', verbosity=0)
+            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_1D, 'Gx', verbosity=0)
+            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_2D, 'Gx', verbosity=0)
+            df, f0 = self.runSilent(ci_cur.get_gate_fn_confidence_interval,
+                                    fnOfGate_float, 'Gx', returnFnVal=True, verbosity=4)
+    
+            with self.assertRaises(ValueError):
+                ci_cur.get_gate_fn_confidence_interval(fnOfGate_3D, 'Gx', verbosity=0)
 
-        def fnOfGate_float(mx):
-            return float(mx[0,0])
-        def fnOfGate_0D(mx):
-            return np.array( float(mx[0,0]) )
-        def fnOfGate_1D(mx):
-            return mx[0,:]
-        def fnOfGate_2D(mx):
-            return mx[:,:]
-        def fnOfGate_3D(mx):
-            return np.zeros( (2,2,2), 'd') #just to test for error
-
-
-        df = ci_std.get_gate_fn_confidence_interval(fnOfGate_float, 'Gx', verbosity=0)
-        df = ci_std.get_gate_fn_confidence_interval(fnOfGate_0D, 'Gx', verbosity=0)
-        df = ci_std.get_gate_fn_confidence_interval(fnOfGate_1D, 'Gx', verbosity=0)
-        df = ci_std.get_gate_fn_confidence_interval(fnOfGate_2D, 'Gx', verbosity=0)
-        df, f0 = self.runSilent(ci_std.get_gate_fn_confidence_interval,
-                                fnOfGate_float, 'Gx', returnFnVal=True, verbosity=4)
-
-        with self.assertRaises(ValueError):
-            ci_std.get_gate_fn_confidence_interval(fnOfGate_3D, 'Gx', verbosity=0)
-
-
-        def fnOfSpam_float(rhoVecs, EVecs):
-            return float( np.dot( rhoVecs[0].T, EVecs[0] ) )
-        def fnOfSpam_0D(rhoVecs, EVecs):
-            return np.array( float( np.dot( rhoVecs[0].T, EVecs[0] ) ) )
-        def fnOfSpam_1D(rhoVecs, EVecs):
-            return np.array( [ np.dot( rhoVecs[0].T, EVecs[0] ), 0] )
-        def fnOfSpam_2D(rhoVecs, EVecs):
-            return np.array( [[ np.dot( rhoVecs[0].T, EVecs[0] ), 0],[0,0]] )
-        def fnOfSpam_3D(rhoVecs, EVecs):
-            return np.zeros( (2,2,2), 'd') #just to test for error
-
-        df = ci_std.get_spam_fn_confidence_interval(fnOfSpam_float, verbosity=0)
-        df = ci_std.get_spam_fn_confidence_interval(fnOfSpam_0D, verbosity=0)
-        df = ci_std.get_spam_fn_confidence_interval(fnOfSpam_1D, verbosity=0)
-        df = ci_std.get_spam_fn_confidence_interval(fnOfSpam_2D, verbosity=0)
-        df, f0 = self.runSilent(ci_std.get_spam_fn_confidence_interval,
-                                fnOfSpam_float, returnFnVal=True, verbosity=4)
-
-        with self.assertRaises(ValueError):
-            ci_std.get_spam_fn_confidence_interval(fnOfSpam_3D, verbosity=0)
-
-
-
-        def fnOfGateSet_float(gs):
-            return float( gs.gates['Gx'][0,0] )
-        def fnOfGateSet_0D(gs):
-            return np.array( gs.gates['Gx'][0,0]  )
-        def fnOfGateSet_1D(gs):
-            return np.array( gs.gates['Gx'][0,:] )
-        def fnOfGateSet_2D(gs):
-            return np.array( gs.gates['Gx'] )
-        def fnOfGateSet_3D(gs):
-            return np.zeros( (2,2,2), 'd') #just to test for error
-
-        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_float, verbosity=0)
-        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_0D, verbosity=0)
-        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_1D, verbosity=0)
-        df = ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_2D, verbosity=0)
-        df, f0 = self.runSilent(ci_std.get_gateset_fn_confidence_interval,
-                                fnOfGateSet_float, returnFnVal=True, verbosity=4)
-
-        with self.assertRaises(ValueError):
-            ci_std.get_gateset_fn_confidence_interval(fnOfGateSet_3D, verbosity=0)
+            #SHORT-CIRCUIT linear reponse here to reduce run time
+            if ci_cur is ci_linresponse: continue
+    
+            def fnOfVec_float(v):
+                return float(v[0])
+            def fnOfVec_0D(v):
+                return np.array( float(v[0]) )
+            def fnOfVec_1D(v):
+                return np.array(v[:])
+            def fnOfVec_2D(v):
+                return np.dot(v.T,v)
+            def fnOfVec_3D(v):
+                return np.zeros( (2,2,2), 'd') #just to test for error
+    
+    
+            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_float, 'rho0', verbosity=0)
+            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_0D, 'rho0', verbosity=0)
+            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_1D, 'rho0', verbosity=0)
+            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_2D, 'rho0', verbosity=0)
+            df, f0 = self.runSilent(ci_cur.get_prep_fn_confidence_interval,
+                                    fnOfVec_float, 'rho0', returnFnVal=True, verbosity=4)
+    
+            with self.assertRaises(ValueError):
+                ci_cur.get_prep_fn_confidence_interval(fnOfVec_3D, 'rho0', verbosity=0)
+    
+            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_float, 'E0', verbosity=0)
+            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_0D, 'E0', verbosity=0)
+            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_1D, 'E0', verbosity=0)
+            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_2D, 'E0', verbosity=0)
+            df, f0 = self.runSilent(ci_cur.get_effect_fn_confidence_interval,
+                                    fnOfVec_float, 'E0', returnFnVal=True, verbosity=4)
+    
+            with self.assertRaises(ValueError):
+                ci_cur.get_effect_fn_confidence_interval(fnOfVec_3D, 'E0', verbosity=0)
+    
+    
+            def fnOfSpam_float(rhoVecs, EVecs):
+                return float( np.dot( rhoVecs[0].T, EVecs[0] ) )
+            def fnOfSpam_0D(rhoVecs, EVecs):
+                return np.array( float( np.dot( rhoVecs[0].T, EVecs[0] ) ) )
+            def fnOfSpam_1D(rhoVecs, EVecs):
+                return np.array( [ np.dot( rhoVecs[0].T, EVecs[0] ), 0] )
+            def fnOfSpam_2D(rhoVecs, EVecs):
+                return np.array( [[ np.dot( rhoVecs[0].T, EVecs[0] ), 0],[0,0]] )
+            def fnOfSpam_3D(rhoVecs, EVecs):
+                return np.zeros( (2,2,2), 'd') #just to test for error
+    
+            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_float, verbosity=0)
+            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_0D, verbosity=0)
+            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_1D, verbosity=0)
+            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_2D, verbosity=0)
+            df, f0 = self.runSilent(ci_cur.get_spam_fn_confidence_interval,
+                                    fnOfSpam_float, returnFnVal=True, verbosity=4)
+    
+            with self.assertRaises(ValueError):
+                ci_cur.get_spam_fn_confidence_interval(fnOfSpam_3D, verbosity=0)
+    
+    
+    
+            def fnOfGateSet_float(gs):
+                return float( gs.gates['Gx'][0,0] )
+            def fnOfGateSet_0D(gs):
+                return np.array( gs.gates['Gx'][0,0]  )
+            def fnOfGateSet_1D(gs):
+                return np.array( gs.gates['Gx'][0,:] )
+            def fnOfGateSet_2D(gs):
+                return np.array( gs.gates['Gx'] )
+            def fnOfGateSet_3D(gs):
+                return np.zeros( (2,2,2), 'd') #just to test for error
+    
+            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_float, verbosity=0)
+            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_0D, verbosity=0)
+            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_1D, verbosity=0)
+            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_2D, verbosity=0)
+            df, f0 = self.runSilent(ci_cur.get_gateset_fn_confidence_interval,
+                                    fnOfGateSet_float, returnFnVal=True, verbosity=4)
+    
+            with self.assertRaises(ValueError):
+                ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_3D, verbosity=0)
 
         #TODO: assert values of df & f0 ??
+
+    def tets_pickle_ConfidenceRegion(self):
+        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
+                                        returnHessian=True)
+        ci_std = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
+                                             hessianProjection="std")
+        import pickle
+        s = pickle.dumps(ci_std)
+        ci_std2 = pickle.loads(s)
+        #TODO: make sure ci_std and ci_std2 are the same
+
 
     def test_mapcalc_hessian(self):
         chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,

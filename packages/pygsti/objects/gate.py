@@ -12,8 +12,8 @@ import functools as _functools
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
-from ..tools import basistools as _bt
 from ..tools import jamiolkowski as _jt
+from ..tools import basis as _basis
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
@@ -145,7 +145,7 @@ def convert(gate, toType, basis):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND"}
         The type of parameterizaton to convert to.
 
     basis : {"std", "gm", "pp", "qt"}
@@ -183,7 +183,7 @@ def convert(gate, toType, basis):
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
 
-    elif toType in ("CPTP","H+S","S"):
+    elif toType in ("CPTP","H+S","S","GLND"):
         RANK_TOL = 1e-6        
         J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
         if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
@@ -197,7 +197,7 @@ def convert(gate, toType, basis):
         ham_basis = proj_basis if toType in ("CPTP","H+S") else None
         nonham_basis = proj_basis
         nonham_diagonal_only = bool(toType in ("H+S","S") )
-        cptp=True
+        cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
         truncate=True
 
         if isinstance(gate, LindbladParameterizedGate) and \
@@ -350,7 +350,7 @@ class Gate(object):
         and `otherGate`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
-        return _np.sqrt(self.frobeniusdist(otherGate, transform, inv_transform))
+        return _np.sqrt(self.frobeniusdist2(otherGate, transform, inv_transform))
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -367,6 +367,49 @@ class Gate(object):
         using `transform` and `inv_transform`.
         """
         raise NotImplementedError("diamonddist(...) not implemented!")
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+        """
+        raise NotImplementedError("num_params not implemented!")
+
+
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+        """
+        raise NotImplementedError("to_vector not implemented!")
+
+    
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError("from_vector not implemented!")
+
+
+    def copy(self):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        raise NotImplementedError("copy not implemented!")
+
 
     #Pickle plumbing
     def __setstate__(self, state):
@@ -433,6 +476,21 @@ class GateMatrix(Gate):
             return _gt.diamonddist(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        raise NotImplementedError("deriv_wrt_params(...) is not implemented")
 
 
     #Handled by derived classes
@@ -2296,7 +2354,7 @@ class LindbladParameterizedGate(GateMatrix):
                         Lmx = _np.linalg.cholesky(otherC)
     
                     for i in range(bsO-1):
-                        assert(_np.isreal(Lmx[i,i]))
+                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
                         otherParams[i,i] = Lmx[i,i].real
                         for j in range(i):
                             otherParams[i,j] = Lmx[i,j].real
@@ -2304,7 +2362,7 @@ class LindbladParameterizedGate(GateMatrix):
     
                 else: #otherParams mx stores otherC (hermitian) directly
                     for i in range(bsO-1):
-                        assert(_np.isreal(otherC[i,i]))
+                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
                         otherParams[i,i] = otherC[i,i].real
                         for j in range(i):
                             otherParams[i,j] = otherC[i,j].real
@@ -2333,7 +2391,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Assume gate in in the pauli-product basis for now, just for
         # simplicity.  I think everything should work fine in any other
         # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _bt.basis_transform_matrix(mxBasis, "std", d)
+        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
         self.leftTrans  = _np.linalg.inv(mxBasisToStd)
         self.rightTrans = mxBasisToStd
 

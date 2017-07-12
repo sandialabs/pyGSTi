@@ -168,7 +168,7 @@ class GateMapCalc(GateCalc):
         """ non-remainder version of hpr(...) overridden by derived clases """
         
         #Finite difference hessian
-        eps = 1e-7 #hardcoded?
+        eps = 1e-4 #hardcoded?
         if returnPr:
             dp,p = self.dpr(spamLabel, gatestring, returnPr, clipTo)
         else:
@@ -183,7 +183,7 @@ class GateMapCalc(GateCalc):
                 for i in range(Np):
                     vec = orig_vec.copy(); vec[i] += eps
                     dct[lbl].from_vector(vec)
-                    dp[kk,:] = (self.dpr(spamLabel, gatestring, False, clipTo)-dp)/eps
+                    hp[0,kk,:] = (self.dpr(spamLabel, gatestring, False, clipTo)-dp)/eps
                     kk += 1
                 dct[lbl].from_vector(orig_vec)
             return kk
@@ -203,9 +203,11 @@ class GateMapCalc(GateCalc):
             else:        return hp
 
 
-    def _compute_pr_cache(self, rho, E, evalTree, comm, scratch=None):
+    def _compute_pr_cache(self, spamLabel, evalTree, comm, scratch=None):
         dim = self.dim
         cacheSize = len(evalTree)
+        rho,E = self._rhoE_from_spamLabel(spamLabel)
+        
         if scratch is None:
             rho_cache = _np.zeros((cacheSize, dim), 'd')
         else:
@@ -224,7 +226,7 @@ class GateMapCalc(GateCalc):
         pCache = _np.dot(E,rho_cache.T) # (1,cacheSize)
         return _np.squeeze(pCache, axis=0) # shape (cacheSize,)
     
-    def _compute_dpr_cache(self, rho, E, evalTree, wrtSlice, comm, scratch=None):
+    def _compute_dpr_cache(self, spamLabel, evalTree, wrtSlice, comm, scratch=None):
         #Compute finite difference derivatives, one parameter at a time.
 
         param_indices = range(self.tot_params) if (wrtSlice is None) else _slct.indices(wrtSlice)
@@ -241,7 +243,7 @@ class GateMapCalc(GateCalc):
             dpr_cache  = scratch[:,0:nDerivCols]
             
         eps = 1e-7 #hardcoded?
-        pCache = self._compute_pr_cache(rho,E,evalTree,comm,rho_cache)
+        pCache = self._compute_pr_cache(spamLabel,evalTree,comm,rho_cache)
 
         all_slices, my_slice, owners, subComm = \
                 _mpit.distribute_slice(slice(0,len(param_indices)), comm)
@@ -264,7 +266,7 @@ class GateMapCalc(GateCalc):
                         vec = orig_vec.copy(); vec[i] += eps
                         dct[lbl].from_vector(vec)
                         dpr_cache[:,iFinal] = ( self._compute_pr_cache(
-                            rho,E,evalTree,subComm,rho_cache) - pCache)/eps
+                            spamLabel,evalTree,subComm,rho_cache) - pCache)/eps
                     ip += 1 #global parameter index
                 dct[lbl].from_vector(orig_vec)
             return ip
@@ -280,7 +282,7 @@ class GateMapCalc(GateCalc):
 
         return dpr_cache
 
-    def _compute_hpr_cache(self, rho, E, evalTree, wrtSlice1, wrtSlice2, comm):
+    def _compute_hpr_cache(self, spamLabel, evalTree, wrtSlice1, wrtSlice2, comm):
         #Compute finite difference hessians, one parameter at a time.
 
         param_indices1 = range(self.tot_params) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
@@ -290,13 +292,15 @@ class GateMapCalc(GateCalc):
         
         dim = self.dim
         cacheSize  = len(evalTree)
-        dpr_scratch = _np.zeros(cacheSize,nDerivCols2 + dim)
+        dpr_scratch = _np.zeros((cacheSize,nDerivCols2 + dim), 'd')
         hpr_cache  = _np.zeros((cacheSize, nDerivCols1, nDerivCols2),'d')
             
-        eps = 1e-7 #hardcoded?
-        dpCache = self._compute_dpr_cache(rho,E,evalTree,wrtSlice2,comm,
-                                          dpr_scratch)
-
+        eps = 1e-4 #hardcoded?
+        dpCache = self._compute_dpr_cache(spamLabel,evalTree,wrtSlice2,comm,
+                                          dpr_scratch).copy()
+           #need copy here b/c scratch space is used by sub-calls to
+           # _compute_dpr_cache below in finite difference computation.
+           
         all_slices, my_slice, owners, subComm = \
                 _mpit.distribute_slice(slice(0,len(param_indices1)), comm)
 
@@ -306,7 +310,7 @@ class GateMapCalc(GateCalc):
         
         #Get a map from global parameter indices to the desired
         # final index within dpr_cache
-        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices1) }
+        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
         
         def fd_hessian(dct, ip):
             for lbl in dct.keys():
@@ -317,8 +321,8 @@ class GateMapCalc(GateCalc):
                         iFinal = iParamToFinal[ip]
                         vec = orig_vec.copy(); vec[i] += eps
                         dct[lbl].from_vector(vec)
-                        hprCache[:,iFinal,:] = ( self._compute_dpr_cache(
-                            rho,E,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
+                        hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
+                            spamLabel,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
                     ip += 1 #global parameter index
                 dct[lbl].from_vector(orig_vec)
             return ip
@@ -330,7 +334,7 @@ class GateMapCalc(GateCalc):
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
-        _mpit.gather_slices(all_slices, owners, hprCache, axes=1, comm=comm)
+        _mpit.gather_slices(all_slices, owners, hpr_cache, axes=1, comm=comm)
 
         return hpr_cache
 
@@ -475,8 +479,7 @@ class GateMapCalc(GateCalc):
                 tm = _time.time()
                 
                 #Fill cache info
-                rho,E = self._rhoE_from_spamLabel(spamLabel)
-                prCache = self._compute_pr_cache(rho, E, evalSubTree, mySubComm)
+                prCache = self._compute_pr_cache(spamLabel, evalSubTree, mySubComm)
 
                 #use cached data to final values
                 ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
@@ -614,10 +617,9 @@ class GateMapCalc(GateCalc):
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
                 tm = _time.time()
-                rho,E = self._rhoE_from_spamLabel(spamLabel)
                 
                 if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(rho, E, evalSubTree, fillComm)
+                    prCache = self._compute_pr_cache(spamLabel, evalSubTree, fillComm)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
                     if sumInto:
                         prMxToFill[isp,fslc] += ps
@@ -625,7 +627,7 @@ class GateMapCalc(GateCalc):
                         prMxToFill[isp,fslc] = ps
 
                 #Fill cache info
-                dprCache = self._compute_dpr_cache(rho, E, evalSubTree, paramSlice, fillComm)
+                dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice, fillComm)
                 dps = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
 
                 if sumInto:
@@ -753,7 +755,7 @@ class GateMapCalc(GateCalc):
           with the probabilities as per spam_label_rows, similar to
           bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
+        deriv1MxToFill, deriv2MxToFill : numpy array, optional
           when not None, an already-allocated KxSxM numpy array that is filled
           with the probability derivatives as per spam_label_rows, similar to
           bulk_fill_dprobs(...), but where M is the number of gateset parameters
@@ -821,7 +823,7 @@ class GateMapCalc(GateCalc):
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             fslc = evalSubTree.final_slice(evalTree)
-            fillComm = blkComm #comm used by calc_and_fill
+            fillComm = mySubComm
 
             #Free memory from previous subtree iteration before computing caches
             prCache = dprCache1 = dprCache2 = hprCache = None
@@ -829,38 +831,37 @@ class GateMapCalc(GateCalc):
             paramSlice2 = slice(None)
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-                rho,E = self._rhoE_from_spamLabel(spamLabel)
 
                 if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(evalSubTree, fillComm)
+                    prCache = self._compute_pr_cache(spamLabel, evalSubTree, fillComm)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
                     if sumInto:
                         prMxToFill[isp,fslc] += ps
                     else:
                         prMxToFill[isp,fslc] = ps
 
-                if derivMxToFill1 is not None:
-                    dprCache = self._compute_dpr_cache(rho, E, evalSubTree, paramSlice1, fillComm)
+                if deriv1MxToFill is not None:
+                    dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice1, fillComm)
                     dps1 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
                     if sumInto:
-                        derivMxToFill1[isp,fslc,pslc1] += dps1
+                        deriv1MxToFill[isp,fslc,pslc1] += dps1
                     else:
-                        derivMxToFill1[isp,fslc,pslc1] = dps1
+                        deriv1MxToFill[isp,fslc,pslc1] = dps1
 
-                if derivMxToFill2 is not None:
-                    if derivMxToFill1 is not None and paramSlice1 == paramSlice2:
+                if deriv2MxToFill is not None:
+                    if deriv1MxToFill is not None and paramSlice1 == paramSlice2:
                         dps2 = dps1
                     else:
-                        dprCache = self._compute_dpr_cache(rho, E, evalSubTree, paramSlice2, fillComm)
+                        dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice2, fillComm)
                         dps2 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
                         
                     if sumInto:
-                        derivMxToFill2[isp,fslc,pslc2] += dps2
+                        deriv2MxToFill[isp,fslc,pslc2] += dps2
                     else:
-                        derivMxToFill2[isp,fslc,pslc2] = dps2
+                        deriv2MxToFill[isp,fslc,pslc2] = dps2
 
                 #Fill cache info
-                hprCache = self._compute_hpr_cache(rho, E, evalSubTree, paramSlice1, paramSlice2, fillComm)
+                hprCache = self._compute_hpr_cache(spamLabel, evalSubTree, paramSlice1, paramSlice2, fillComm)
                 hps = evalSubTree.final_view( hprCache, axis=0) # ( nGateStrings, )
 
                 if sumInto:

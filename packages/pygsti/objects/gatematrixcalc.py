@@ -2358,7 +2358,7 @@ class GateMatrixCalc(GateCalc):
           with the probabilities as per spam_label_rows, similar to
           bulk_fill_probs(...).
 
-        derivMxToFill1, derivMxToFill2 : numpy array, optional
+        deriv1MxToFill, deriv2MxToFill : numpy array, optional
           when not None, an already-allocated KxSxM numpy array that is filled
           with the probability derivatives as per spam_label_rows, similar to
           bulk_fill_dprobs(...), but where M is the number of gateset parameters

@@ -4,6 +4,7 @@ import pygsti
 import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
+from pygsti.construction import std1Q_XY
 
 class TestGateStringMethods(BaseTestCase):
     def test_simple(self):
@@ -161,7 +162,7 @@ class TestGateStringMethods(BaseTestCase):
         gs2_tup = pygsti.obj.GateString.from_pythonstr( pystr, ('Gx','Gy','Gz') )
         self.assertEqual( gs2_tup, tuple(gs) )
 
-    def test_std_lists(self):
+    def test_std_lists_and_structs(self):
         gateLabels = ['Gx','Gy']
         strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
         germs = pygsti.construction.gatestring_list( [('Gx','Gy'),('Gy','Gy')] )
@@ -171,47 +172,86 @@ class TestGateStringMethods(BaseTestCase):
         # LSGST
         maxLens = [1,2]
         lsgstLists = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
-            truncScheme="whole germ powers")
+            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") #also try a GateSet as first arg
+        lsgstStructs = pygsti.construction.make_lsgst_structs(
+            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") #also try a GateSet as first arg
+        self.assertEqual(set(lsgstLists[-1]), set(lsgstStructs[-1].allstrs))
 
         lsgstLists2 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="truncated germ powers")
+        lsgstStructs2 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="truncated germ powers")
+        self.assertEqual(set(lsgstLists2[-1]), set(lsgstStructs2[-1].allstrs))
 
         lsgstLists3 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="length as exponent")
+        lsgstStructs3 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="length as exponent")
+        self.assertEqual(set(lsgstLists3[-1]), set(lsgstStructs3[-1].allstrs))
+
 
         maxLens = [1,2]
         lsgstLists4 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers", nest=False)
+        lsgstStructs4 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers", nest=False)
+        self.assertEqual(set(lsgstLists4[-1]), set(lsgstStructs4[-1].allstrs))
 
         lsgstLists5 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers")
+        lsgstStructs5 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            truncScheme="whole germ powers")
+        self.assertEqual(set(lsgstLists5[-1]), set(lsgstStructs5[-1].allstrs))
 
         lsgstLists6 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
             truncScheme="whole germ powers")
+        lsgstStructs6 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairsDict,
+            truncScheme="whole germ powers")
+        self.assertEqual(set(lsgstLists6[-1]), set(lsgstStructs6[-1].allstrs))
 
         lsgstExpList = pygsti.construction.make_lsgst_experiment_list(
             gateLabels, strs, strs, germs, maxLens, fidPairs=None,
             truncScheme="whole germ powers")
+        lsgstExpListb = pygsti.construction.make_lsgst_experiment_list(
+            std1Q_XY.gs_target, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers") # with GateSet as first arg
 
         with self.assertRaises(ValueError):
             pygsti.construction.make_lsgst_lists(
                 gateLabels, strs, strs, germs, maxLens, fidPairs=None,
                 truncScheme="foobar")
-
-        lsgstLists6 = pygsti.construction.make_lsgst_lists(
-            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
-            truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
+        with self.assertRaises(ValueError):
+            pygsti.construction.make_lsgst_structs(
+                gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+                truncScheme="foobar")
 
         lsgstLists7 = pygsti.construction.make_lsgst_lists(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
+        lsgstStructs7 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=None,
+            truncScheme="whole germ powers", keepFraction=0.5, keepSeed=1234)
+        self.assertEqual(set(lsgstLists7[-1]), set(lsgstStructs7[-1].allstrs))
+
+        lsgstLists8 = pygsti.construction.make_lsgst_lists(
             gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
             truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
-
+        lsgstStructs8 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, fidPairs=testFidPairs,
+            truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
+        self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1].allstrs))
 
 
 
@@ -225,6 +265,10 @@ class TestGateStringMethods(BaseTestCase):
         elgstLists2 = pygsti.construction.make_elgst_lists(
             gateLabels, germs, maxLens, truncScheme="whole germ powers",
             nest=False, includeLGST=False)
+        elgstLists2b = pygsti.construction.make_elgst_lists(
+            std1Q_XY.gs_target, germs, maxLens, truncScheme="whole germ powers",
+            nest=False, includeLGST=False) #with a GateSet as first arg
+                
 
         elgstExpLists = pygsti.construction.make_elgst_experiment_list(
             gateLabels, germs, maxLens, truncScheme="whole germ powers")
@@ -233,10 +277,14 @@ class TestGateStringMethods(BaseTestCase):
             pygsti.construction.make_elgst_lists(
                 gateLabels, germs, maxLens, truncScheme="foobar")
 
+            
+
 
 
         #TODO: check values here
 
+
+        
     def test_gatestring_object(self):
         s1 = pygsti.obj.GateString( ('Gx','Gx'), "Gx^2" )
         s2 = pygsti.obj.GateString( s1, "Gx^2" )
@@ -308,6 +356,9 @@ class TestGateStringMethods(BaseTestCase):
     def test_alias_manips(self):
         orig_list = pygsti.construction.gatestring_list(
             [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','Gx'), ('Gy','Gy'), ('Gi',) ] )
+
+        list0 = pygsti.construction.translate_gatestring_list(orig_list, None)
+        self.assertEqual(list0, orig_list)
         
         list1 = pygsti.construction.translate_gatestring_list(orig_list, {'Gx': ('Gx2',), 'Gy': ('Gy',)} )
         list2 = pygsti.construction.translate_gatestring_list(orig_list, {'Gi': ('Gx','Gx','Gx','Gx')} )
