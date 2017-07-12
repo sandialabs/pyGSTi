@@ -324,7 +324,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         # dS is (dxdxlen(v))
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
-        rolled2 = _np.rollaxis(rolled, 2)
         for G in gates:
             '''
             Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
@@ -356,14 +355,14 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
                                  right
             => (d, N) mx
             '''
-
             right  = dot(S_inv, P)
-            right  = _np.dot(rolled2, right)
-            # (1,d, N) to (d, N)
-            right.shape = (d, N)
+            right  = _np.dot(rolled, right)
+            # (N, d, 1) to (N, d)
+            right.shape = (N, d)
+            right = _np.rollaxis(right, 1) # d, N
             result = _np.dot(S_inv, right)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            jacMx[start:start+d] = result
             start += d
         for E in effects:
             '''
@@ -374,7 +373,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             # (1,d, N) to (d, N)
             result.shape = (d, N)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            jacMx[start:start+d] = result
             start += d
         if gs._povm_identity is not None:
             POVM = gs._povm_identity
@@ -386,9 +385,10 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result.shape = (d, N)
             # (1,d, N) to (d, N)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            jacMx[start:start+d] = result
             start += d
 
+        '''
         alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
@@ -404,6 +404,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
+        '''
         return jacMx
     return jacobian
 
