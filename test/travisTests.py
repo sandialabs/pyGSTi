@@ -34,10 +34,10 @@ elif doReportB == 'True':
     # Removed: 'testFigureFormatter.py',
 
 elif doDrivers == 'True':
-    tests = ['drivers']
+    tests = ['drivers', 'algorithms']
 
 elif doDefault == 'True':
-    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms', 'construction','extras']
+    tests = ['objects', 'tools', 'iotest', 'optimize', 'construction','extras']
     parallel = False #multiprocessing bug in darwin (and apparently TravisCI) causes segfault if used.
 
 elif doMPI == 'True':
