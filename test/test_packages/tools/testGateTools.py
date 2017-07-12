@@ -1,6 +1,10 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
+
 import pygsti
 import pygsti.tools.gatetools as gatetools
+
+from pygsti.construction import std2Q_XXYYII
+
 import numpy as np
 import unittest
 
@@ -83,6 +87,21 @@ class GateBaseTestCase(BaseTestCase):
         identity  = np.identity(2)
         processMx = gatetools.unitary_to_process_mx(identity)
         self.assertArraysAlmostEqual(processMx, np.identity(4))
+
+    def test_other(self):
+        gs_target = std2Q_XXYYII.gs_target
+        gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+
+        for gateTarget, gate in zip(gs_target.gates.values(), gs_datagen.gates.values()):
+            errgen    = gatetools.error_generator(gate, gateTarget)
+            altErrgen = gatetools.error_generator(gate, gateTarget, 'logTiG')
+            with self.assertRaises(ValueError):
+                gatetools.error_generator(gate, gateTarget, 'adsf')
+
+            originalGate    = gatetools.gate_from_error_generator(errgen, gateTarget)
+            altOriginalGate = gatetools.gate_from_error_generator(altErrgen, gateTarget, 'logTiG')
+            with self.assertRaises(ValueError):
+                gatetools.gate_from_error_generator(errgen, gateTarget, 'adsf')
 
 
 if __name__ == '__main__':
