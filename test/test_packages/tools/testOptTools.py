@@ -6,6 +6,7 @@ import pygsti
 
 from pygsti.tools.opttools import cache_by_hashed_args, timed_block
 
+from collections import defaultdict
 from functools import partial
 
 @cache_by_hashed_args
@@ -37,7 +38,7 @@ class OptToolsBaseTestCase(BaseTestCase):
         with timed_block('40th fibonacci'):
             print(fib(40))
 
-        timeDict = dict()
+        timeDict = defaultdict(list)
         with timed_block('100th fibonacci', timeDict): # Duration saved to dict under label "100th fibonacci"
             print(fib(100))
 
