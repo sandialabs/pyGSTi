@@ -38,11 +38,12 @@ elif doDrivers == 'True':
     tests = ['drivers', 'objects']
 
 elif doAlgorithms == 'True':
+    parallel = False
     tests = ['algorithms']
 
 elif doDefault == 'True':
     tests = ['tools', 'iotest', 'optimize', 'construction','extras']
-    parallel = False #multiprocessing bug in darwin (and apparently TravisCI) causes segfault if used.
+    #parallel = False #multiprocessing bug in darwin (and apparently TravisCI) causes segfault if used.
 
 elif doMPI == 'True':
     tests = ['mpi']
