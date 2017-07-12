@@ -12,11 +12,12 @@ branches:
     - feature-basistools
 
 env:
-    - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
-    - Default=True  # construction, io, objects, tools, optimize, algorithms
-    - ReportA=True  # Only testReport.py (none of the other reports tests)
-    - ReportB=True  # test the other reports tests
-    - MPI=True  # All of MPI
+    - Drivers=True    # All of drivers (Tends to take longer, put it first in the mx)
+    - Algorithms=True # Separate algorithms tests
+    - Default=True    # construction, io, objects, tools, optimize, algorithms
+    - ReportA=True    # Only testReport.py (none of the other reports tests)
+    - ReportB=True    # test the other reports tests
+    - MPI=True        # All of MPI
    
 before_install:
   - sudo apt-get -qq update

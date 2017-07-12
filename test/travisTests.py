@@ -4,11 +4,12 @@ from runTests   import run_tests
 from helpers.automation_tools import get_branchname
 import os, sys
 
-doReportA = os.environ.get('ReportA', 'False')
-doReportB = os.environ.get('ReportB', 'False')
-doDrivers = os.environ.get('Drivers', 'False')
-doDefault = os.environ.get('Default', 'False')
-doMPI     = os.environ.get('MPI',     'False')
+doReportA    = os.environ.get('ReportA', 'False')
+doReportB    = os.environ.get('ReportB', 'False')
+doDrivers    = os.environ.get('Drivers', 'False')
+doDefault    = os.environ.get('Default', 'False')
+doMPI        = os.environ.get('MPI',     'False')
+doAlgorithms = os.environ.get('Algorithms', 'False')
 
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
@@ -36,8 +37,11 @@ elif doReportB == 'True':
 elif doDrivers == 'True':
     tests = ['drivers', 'objects']
 
+elif doAlgorithms == 'True':
+    tests = ['algorithms']
+
 elif doDefault == 'True':
-    tests = ['tools', 'iotest', 'optimize', 'algorithms', 'construction','extras']
+    tests = ['tools', 'iotest', 'optimize', 'construction','extras']
     parallel = False #multiprocessing bug in darwin (and apparently TravisCI) causes segfault if used.
 
 elif doMPI == 'True':
