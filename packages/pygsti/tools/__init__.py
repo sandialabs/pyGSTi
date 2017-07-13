@@ -17,4 +17,5 @@ from .gatetools import *
 from .slicetools import *
 from .compattools import *
 from .basis import *
+from .basisconstructors import *
 from .dim import Dim

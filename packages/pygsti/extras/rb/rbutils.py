@@ -151,11 +151,11 @@ def unitarity(A,mxBasis="gm",d=2):
         The unitarity of the gate.
         
     """
-    if mxBasis=="gm" or mxBasis=="pp":
+    if mxBasis == "gm" or mxBasis == "pp":
         B = A
     else:
-        assert(mxBasis=="std"), "mxBasis must be 'gm', 'pp', or 'std'."
-        B =  _tls.std_to_gm(A)
+        assert mxBasis == "std", "mxBasis must be 'gm', 'pp', or 'std'."
+        B =  _tls.change_basis(A, 'std', 'gm')
     
     unital = B[1:d**2,1:d**2]
     u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
@@ -1108,9 +1108,9 @@ def norm1to1(operator, n_samples=10000, mxBasis="gm",return_list=False):
     of Hermitian 1-to-1 norm can be found in arxiv:1109.6887.
     """
     if mxBasis=='gm':
-        std_operator = _tls.gm_to_std(operator)
+        std_operator = _tls.change_basis(operator, 'gm', 'std')
     elif mxBasis=='pp':
-        std_operator = _tls.pp_to_std(operator)
+        std_operator = _tls.change_basis(operator, 'pp', 'std')
     elif mxBasis=='std':
         std_operator = operator
     else:

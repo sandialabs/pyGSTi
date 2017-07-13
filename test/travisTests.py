@@ -23,7 +23,7 @@ package  = 'pygsti' # Check coverage of all of pygsti by default
 # All other reports tests
 if doReport:
     tests = ['report']
-    package = pygsti.report
+    package = 'pygsti.report'
 
 elif doDrivers:
     tests = ['drivers', 'objects']
