@@ -381,12 +381,12 @@ def custom_matrix_log(M, actionIfImaginary="raise", TOL=1e-8, real_logarithm=Fal
       # astype guards against case all evals are real but some are negative
 
     #DEBUG
-    print("DB: evals = ",evals)
-    print("DB: log_evals:",log_evals)
-    for i,ev in enumerate(log_evals):
-        print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
-    print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
-    print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
+    #print("DB: evals = ",evals)
+    #print("DB: log_evals:",log_evals)
+    #for i,ev in enumerate(log_evals):
+    #    print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
+    #print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
+    #print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
     #print("DB: evec[5] = ",mx_to_string(U[:,5]))
     #print("DB: evec[6] = ",mx_to_string(U[:,6]))
     
