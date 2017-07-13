@@ -4,7 +4,7 @@ from ..testutils import compare_files, temp_files
 
 import numpy as np
 
-from .reportBaseCase import ReportBaseCase
+from ..report.reportBaseCase import ReportBaseCase
 
 class TestWorkspace(ReportBaseCase):
 

@@ -8,6 +8,7 @@ def check_env(varname):
     return os.environ.get(varname, 'False') == 'True'
 
 doReport      = check_env('Report')
+doReportB     = check_env('ReportB')
 doDrivers     = check_env('Drivers')
 doDefault     = check_env('Default')
 doMPI         = check_env('MPI') 
@@ -24,6 +25,10 @@ package  = 'pygsti' # Check coverage of all of pygsti by default
 # All other reports tests
 if doReport:
     tests = ['report']
+    package = 'pygsti.report'
+
+elif doReportB:
+    tests = ['reportb']
     package = 'pygsti.report'
 
 elif doDrivers:
