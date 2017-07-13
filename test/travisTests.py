@@ -35,12 +35,12 @@ elif doDrivers:
     tests = ['drivers', 'objects']
 
 elif doAlgorithms:
-    parallel = False
+    #parallel = False
     tests = ['algorithms']
     package = 'pygsti.algorithms'
 
 elif doAlgorithmsB:
-    parallel = False
+    #parallel = False
     tests = ['algorithmsb']
     package = 'pygsti.algorithms'
 
