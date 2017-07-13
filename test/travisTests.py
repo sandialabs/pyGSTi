@@ -7,11 +7,12 @@ import os, sys
 def check_env(varname):
     return os.environ.get(varname, 'False') == 'True'
 
-doReport     = check_env('Report')
-doDrivers    = check_env('Drivers')
-doDefault    = check_env('Default')
-doMPI        = check_env('MPI') 
-doAlgorithms = check_env('Algorithms') 
+doReport      = check_env('Report')
+doDrivers     = check_env('Drivers')
+doDefault     = check_env('Default')
+doMPI         = check_env('MPI') 
+doAlgorithms  = check_env('Algorithms') 
+doAlgorithmsB = check_env('AlgorithmsB') 
 
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
@@ -28,9 +29,14 @@ if doReport:
 elif doDrivers:
     tests = ['drivers', 'objects']
 
-elif doAlgorithms:
+elif doAlgorithmsA:
     parallel = False
     tests = ['algorithms']
+    package = 'pygsti.algorithms'
+
+elif doAlgorithmsB:
+    parallel = False
+    tests = ['algorithmsb']
     package = 'pygsti.algorithms'
 
 elif doDefault:

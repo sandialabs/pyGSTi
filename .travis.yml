@@ -14,6 +14,7 @@ branches:
 env:
     - Drivers=True    # First in build mx because long duration
     - Algorithms=True 
+    - AlgorithmsB=True
     - Default=True    # construction, io, objects, tools, optimize, algorithms
     - Report=True      
     - MPI=True        
