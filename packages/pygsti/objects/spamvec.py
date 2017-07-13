@@ -172,6 +172,39 @@ class SPAMVec(object):
                                                   self.base), otherSpamVec)
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
 
+    def residuals(self, otherSpamVec, typ, transform=None, inv_transform=None):
+        """ 
+        Return a vector of residuals between this spam vector and
+        `otherSpamVec`, optionally transforming this vector first using
+        `transform` and `inv_transform` (depending on the value of `typ`).
+
+        Parameters
+        ----------
+        otherSpamVec : SPAMVec
+            The other spam vector
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed.
+
+        transform, inv_transform : numpy.ndarray
+            The transformation (if not None) to be performed.
+        
+        Returns
+        -------
+        float
+        """
+        if typ == 'prep':
+            if inv_transform is None:
+                return _gt.residuals(self.base,otherSpamVec)
+            else:
+                return _gt.residuals(_np.dot(inv_transform,self.base),
+                                          otherSpamVec)
+        elif typ == "effect":
+            if transform is None:
+                return _gt.residuals(self.base,otherSpamVec)
+            else:
+                return _gt.residuals(_np.dot(_np.transpose(transform),
+                                                  self.base), otherSpamVec)
 
     #Handled by derived classes
     #def __str__(self):

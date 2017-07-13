@@ -366,7 +366,7 @@ class TestCoreMethods(AlgorithmsBase):
             diffs.append( my_datagen_gateset.frobeniusdist(gs_lgst_go) )
 
         diffs = np.array(diffs, 'd')
-        a,b = polyfit(np.log10(nSamplesList), np.log10(diffs), deg=1)
+        a, b = polyfit(np.log10(nSamplesList), np.log10(diffs), deg=1)
         #print "\n",nSamplesList; print diffs; print a #DEBUG
         self.assertLess( a+0.5, 0.05 )
 

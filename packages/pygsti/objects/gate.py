@@ -57,7 +57,7 @@ def optimize_gate(gateToOptimize, targetGate):
     targetMatrix = _np.asarray(targetGate)
     def objective_func(param_vec):
         gateToOptimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(gateToOptimize-targetMatrix)
+        return _mt.frobeniusnorm(gateToOptimize - targetMatrix)
 
     x0 = gateToOptimize.to_vector()
     minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
@@ -237,7 +237,7 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
         The gate object to compute a Jacobian for.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -281,7 +281,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
         class's `deriv_wrt_params()` method itself as a part of testing.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -326,7 +326,7 @@ class Gate(object):
 
     def transform(self, S):
         """ Update gate G with inv(S) * G * S."""
-        raise NotImplementedError("This gate cannot be tranform()'d")
+        raise NotImplementedError("This gate cannot be transform()'d")
 
     def depolarize(self, amount):
         """ Depolarize gate by the given amount. """
@@ -450,6 +450,15 @@ class GateMatrix(Gate):
             return _gt.frobeniusdist2(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
+
+    def residuals(self, otherGate, transform=None, inv_transform=None):
+        if transform is None and inv_transform is None:
+            return _gt.residuals(self.base,otherGate)
+        else:
+            return _gt.residuals(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 

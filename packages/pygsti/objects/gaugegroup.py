@@ -8,6 +8,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
+from ..tools.memoize import memoize
+
 class GaugeGroup(object):
     def __init__(self):
         pass
@@ -28,7 +30,6 @@ class GaugeGroup(object):
         def deriv_wrt_params(self): return None
         def to_vector(self): return _np.array([],'d')
         def from_vector(self,v): pass
-
 
 class GateGaugeGroup(GaugeGroup):
     def __init__(self, gate):

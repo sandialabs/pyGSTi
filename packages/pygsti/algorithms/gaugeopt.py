@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
+from pprint import pprint
 
 from .. import objects as _objs
 from .. import tools as _tools
@@ -18,7 +19,6 @@ from ..objects import Basis
 def create_objective_fn(gateset, targetGateset, itemWeights=None,
                        CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
                        gatesMetric="frobenius", spamMetric="frobenius"):
-
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
@@ -31,7 +31,6 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
     if mxBasis == "unknown" and targetGateset is not None: 
         mxBasis = targetGateset.basis.name
         basisDim = targetGateset.basis.dim.blockDims
-    
     def objective_fn(gs):
         ret = 0
 
@@ -202,15 +201,36 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
+    '''
+    if CPpenalty         == 0 and \
+        TPpenalty        == 0 and \
+        validSpamPenalty == 0 and \
+        targetGateset is not None and \
+        gatesMetric == "frobenius" and \
+        spamMetric  == "frobenius":
 
+        if itemWeights is None: 
+            itemWeights = {}
+        gateWeight = itemWeights.get('gates',1.0)
+        spamWeight = itemWeights.get('spam',1.0)
+
+        def objective_fn(gs):
+            residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            return residuals
+
+        algorithm = 'ls'
+    else:
+    '''
     objective_fn = create_objective_fn(gateset, targetGateset,
             itemWeights, 
             CPpenalty, TPpenalty, 
             validSpamPenalty, gatesMetric, 
             spamMetric)
-    
-    result = gaugeopt_custom(gateset, objective_fn, gauge_group,
-                 method, maxiter, maxfev, tol, returnAll, verbosity)
+    algorithm = 'min'
+        
+
+    result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
+            maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm)
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -218,14 +238,141 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         newGateset = result[-1] if returnAll else result
         newGateset.basis = Basis(targetGateset.basis.name,
                              targetGateset.basis.dim.blockDims)
+        print('gauge opt result distance to target')
+        print(newGateset.frobeniusdist(targetGateset))
     
     return result
 
 
+def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
+    def jacobian(vec):
+        '''
+        The derivative of the objective function with respect the input parameter vector, v
+        This is UNSQUARED, because the residuals are unsquared.
+        '''
+        # equivalent to a 'from numpy import dot', but only for the scope of this function
+        dot = _np.dot
+
+        gaugeGroupEl.from_vector(vec)
+        gs = gateset.copy()
+        gs.transform(gaugeGroupEl)
+
+        gates   = list(gs.gates.values())
+        preps   = list(gs.preps.values())
+        effects = list(gs.effects.values())
+        assert len(gates) > 0
+
+        # Indices: Jacobian output matrix has shape (L, N)
+        start = 0
+        d = gates[0].shape[0]
+        N = vec.shape[0]
+        L = (d**2 * len(gates)   + 
+             d    * len(preps)   + 
+             d    * len(effects) +
+             d    * (0 if gs._povm_identity is None else 1))
+        jacMx = _np.zeros((L, N))
+
+        # S, and S_inv are (dxd)
+        S       = gaugeGroupEl.get_transform_matrix()
+        S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
+        # dS is ((d*d)xlen(v))
+        dS      = gaugeGroupEl.gate.deriv_wrt_params()
+        # dS is (dxdxlen(v))
+        dS.shape = (d, d, N)
+        rolled  = _np.rollaxis(dS, 2)
+        for G in gates:
+            '''
+            Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
+                                ^^^^^^^^^^^^^^^^^^^   ^^^^^^^
+                                left                  right
+
+            => (d**2, N) mx
+            '''
+            right = dot(G, rolled)
+            right = _np.rollaxis(right, 2, 1)
+
+            left = dot(S_inv, dot(G, S))
+            left = dot(rolled, left)
+            left = _np.rollaxis(left, 0, 3)
+
+            result = left - right
+            result = _np.rollaxis(result, 2) # Roll the same way as dS
+            result = dot(S_inv, result)
+            result = _np.rollaxis(result, 2, 1) # Don't mix up d sides
+            result = -1 * result.reshape((d**2, N))
+            assert result.shape == (d ** 2, N)
+
+            jacMx[start:start+d**2] = result
+            start += d**2
+        for P in preps:
+            '''
+            Jac_prep = - S_inv @ dS @ S_inv @ P
+                                 ^^^^^^^^^^^^^^       
+                                 right
+            => (d, N) mx
+            '''
+            right  = dot(S_inv, P)
+            right  = _np.dot(rolled, right)
+            # (N, d, 1) to (N, d)
+            right.shape = (N, d)
+            right = _np.rollaxis(right, 1) # d, N
+            result = -1 * _np.dot(S_inv, right)
+            assert result.shape == (d, N)
+            #jacMx[start:start+d] = result
+            start += d
+        for E in effects:
+            '''
+            Jac_effect = Ek.T @ dS
+            => (d, N) mx
+            '''
+            result = dot(E.T, dS)
+            # (1,d, N) to (d, N)
+            result.shape = (d, N)
+            assert result.shape == (d, N)
+            #jacMx[start:start+d] = result
+            start += d
+        if gs._povm_identity is not None:
+            POVM = gs._povm_identity
+            '''
+            Jac_effect = Ek.T @ dS
+            => (d, N) mx
+            '''
+            result = dot(POVM.T, dS)
+            result.shape = (d, N)
+            # (1,d, N) to (d, N)
+            assert result.shape == (d, N)
+            #jacMx[start:start+d] = result
+            start += d
+
+        '''
+        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
+        import matplotlib.pyplot as plt
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
+
+        ax1.matshow(jacMx, vmin=-1, vmax=1)
+        ax1.set_title('analytic')
+        ax2.matshow(alt_jac, vmin=-1, vmax=1)
+        ax2.set_title('ffd')
+        im = ax3.matshow(alt_jac - jacMx, vmin=-1, vmax=1)
+        ax3.set_title('combined')
+
+        fig.subplots_adjust(right=0.8)
+        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+        fig.colorbar(im, cax=cbar_ax)
+        plt.show()
+        '''
+
+        return jacMx
+    return jacobian
+
+'''
+def array_eq(a, b):
+    return _np.linalg.norm(a-b) < 1e-6
+'''
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity=0):
+                    returnAll=False, verbosity=0, algorithm='min'):
     """
     Optimize the gauge of a gateset using a custom objective function.
 
@@ -271,6 +418,11 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     verbosity : int, optional
         How much detail to send to stdout.
 
+    jacobian : function, optional
+        Derivative of the objective function
+
+    algorithm : string, either 'ls' or 'min', optional
+        The algorithm to use when performing gauge optimization
 
     Returns
     -------
@@ -292,23 +444,51 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
             _warnings.warn("No gauge group specified, so no gauge optimization performed.")
             if returnAll:
                 return None, None, gateset.copy() 
-            else: return gateset.copy()
+            else: 
+                return gateset.copy()
 
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
+
     def call_objective_fn(gaugeGroupElVec):
+        #print(gaugeGroupElVec)
+        #print('_' * 80)
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
+        original = gs.preps['rho0'].base
+        #print('original:')
+        #print(original)
+        transform = gaugeGroupEl.get_transform_matrix()
+        '''
+        if array_eq(transform, _np.identity(transform.shape[0])):
+            print('Transform was equal to identity')
+        else:
+            print('Non identity')
+        '''
         gs.transform(gaugeGroupEl)
+        transformed = gs.preps['rho0'].base
+        #print('transformed:')
+        #print(transformed)
+        #if not array_eq(original, transformed):
+        #raise ValueError('Gate rho vec changed')
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
-    if bToStdout: print_obj_func(x0) #print initial point
-    minSol = _opt.minimize(call_objective_fn, x0,
-                          method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
-                          callback = print_obj_func if bToStdout else None)
+    if bToStdout: 
+        print_obj_func(x0) #print initial point
+
+    if algorithm == 'min':
+        minSol = _opt.minimize(call_objective_fn, x0,
+                              method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
+                              callback = print_obj_func if bToStdout else None)
+    elif algorithm == 'ls':
+        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn)
+        minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+                                    max_nfev=maxfev, ftol=tol)
+    else:
+        raise ValueError('Unknown algorithm inside of gauge opt: {}'.format(algorithm))
 
     gaugeGroupEl.from_vector(minSol.x)
     newGateset = gateset.copy()
@@ -316,13 +496,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     if returnAll:
         return minSol.fun, gaugeMat, newGateset
-    else:  return newGateset
-
-    #OLD regarding stopval setting (in call to _opt.minimize):
-    # stopval= -20 if toGetTo == "CPTP" else None,
-    ## stopval=1e-7 -- (before I added log10)
-
-
+    else:  
+        return newGateset
 
 
 # OLD ############################################################################################
