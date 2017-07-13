@@ -271,6 +271,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
 
         # S, and S_inv are (dxd)
         S       = gaugeGroupEl.get_transform_matrix()
+        #print(S)
         S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
         # dS is ((d*d)xlen(v))
         dS      = gaugeGroupEl.gate.deriv_wrt_params()
@@ -299,29 +300,20 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result = _np.rollaxis(result, 2, 1) # Don't mix up d sides
             result = -1 * result.reshape((d**2, N))
             assert result.shape == (d ** 2, N)
-
             jacMx[start:start+d**2] = result
             start += d**2
         for P in preps:
             '''
             Jac_prep = - S_inv @ dS @ S_inv @ P
-                                 ^^^^^^^^^^^^^^       
-                                 right
+                         ^^^^^^^^^^   ^^^^^^^^^       
+                         left         right
             => (d, N) mx
             '''
+            left   = dot(S_inv, rolled)
             right  = dot(S_inv, P)
-            #print(right)
-            #right  = _np.dot(rolled2, right)
-            right = _np.dot(rolled, right)
-            #print(right)
-            # (N, d, 1) to (N, d)
-            right.shape = (N, d)
-            #print(right)
-            right = _np.rollaxis(right, 1) # d, N
-            #print(right)
-            result = -1 * _np.dot(S_inv, right)
-            #print(right)
-            #1/0
+            result = dot(left, right)
+            result *= -1
+            result.shape = (d, N)
             assert result.shape == (d, N)
             #jacMx[start:start+d] = result
             start += d
@@ -330,7 +322,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             Jac_effect = Ek.T @ dS
             => (d, N) mx
             '''
-            result = dot(E.T, dS)
+            result = dot(E.T, rolled)
             # (1,d, N) to (d, N)
             result.shape = (d, N)
             assert result.shape == (d, N)
@@ -342,7 +334,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             Jac_effect = Ek.T @ dS
             => (d, N) mx
             '''
-            result = dot(POVM.T, dS)
+            result = dot(POVM.T, rolled)
             result.shape = (d, N)
             # (1,d, N) to (d, N)
             assert result.shape == (d, N)
@@ -366,7 +358,10 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
         '''
+
         return jacMx
+        
+    
     return jacobian
 
 '''
