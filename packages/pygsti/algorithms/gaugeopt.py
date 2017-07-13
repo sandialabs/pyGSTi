@@ -277,6 +277,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         # dS is (dxdxlen(v))
         dS.shape = (d, d, N)
         rolled  = _np.rollaxis(dS, 2)
+        rolled2 = _np.rollaxis(dS, 2, 1)
         for G in gates:
             '''
             Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
@@ -309,11 +310,18 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             => (d, N) mx
             '''
             right  = dot(S_inv, P)
-            right  = _np.dot(rolled, right)
+            #print(right)
+            #right  = _np.dot(rolled2, right)
+            right = _np.dot(rolled, right)
+            #print(right)
             # (N, d, 1) to (N, d)
             right.shape = (N, d)
+            #print(right)
             right = _np.rollaxis(right, 1) # d, N
+            #print(right)
             result = -1 * _np.dot(S_inv, right)
+            #print(right)
+            #1/0
             assert result.shape == (d, N)
             #jacMx[start:start+d] = result
             start += d
