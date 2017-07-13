@@ -262,7 +262,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
-    mxBasis = gateset.basis.name
+    mxBasis = gateset._basisNameAndDim[0]
 
     def choi_matrix(gate):
         return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -639,10 +639,10 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
-    mxBasis = gateset1.basis.name
-    if mxBasis != gateset2.basis.name:
+    mxBasis = gateset1._basisNameAndDim[0]
+    if mxBasis != gateset2._basisNameAndDim[0]:
         raise ValueError("Basis mismatch: %s != %s" %
-                         (mxBasis, gateset2.basis.name))
+                         (mxBasis, gateset2._basisNameAndDim[0]))
 
     ### per gate quantities
     #############################################

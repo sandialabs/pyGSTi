@@ -640,12 +640,16 @@ class Workspace(object):
             else:
                 # argVals now contains all the arguments, so call the function if
                 #  we need to and add result.
+                '''
                 key = call_key(fn, argVals) # cache by call key
                 if key not in self.compCache:
                     #print("DB: computing with args = ", argVals)
                     #print("DB: computing with arg types = ", [type(x) for x in argVals])
                     self.compCache[key] = fn(*argVals)
                 result = self.compCache[key]
+                '''
+                key = 'NA'
+                result = fn(*argVals)
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
@@ -658,6 +662,7 @@ class Workspace(object):
         return resultValues, switchboards, switchboard_switch_indices, switchpos_map
 
 
+    '''
     def cachedCompute(self, fn, *args):
         """
         Call a function with the given arguments (if needed).
@@ -685,6 +690,7 @@ class Workspace(object):
             self.compCache[curkey] = fn(*valArgs)
             
         return self.compCache[curkey]
+    '''
     
     
 class Switchboard(_collections.OrderedDict):
