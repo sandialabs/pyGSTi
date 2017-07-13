@@ -29,7 +29,7 @@ if doReport:
 elif doDrivers:
     tests = ['drivers', 'objects']
 
-elif doAlgorithmsA:
+elif doAlgorithms:
     parallel = False
     tests = ['algorithms']
     package = 'pygsti.algorithms'
