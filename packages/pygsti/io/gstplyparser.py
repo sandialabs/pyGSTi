@@ -25,6 +25,7 @@ from ply import lex, yacc
 #yacc.yaccdebug = False
 
 class GSTLexer:
+    # List of token names.   This is always required
     tokens = (
         'EXPOP',
         'MULTOP',
@@ -40,11 +41,11 @@ class GSTLexer:
         'RPAREN',
         'STRINGIND'
     )
-    # List of token names.   This is always required
+
     @staticmethod
     def t_GATE(t):
         r'G[a-z0-9_]+'
-        t.value = t.value,
+        t.value = t.value,  # make it a tuple
         return t
 
     @staticmethod
@@ -57,7 +58,6 @@ class GSTLexer:
         r'\[\s*[a-zA-Z0-9_]+\s*\]'
         t.value = t.value[1:-1].strip()
         return t
-
 
     # Regular expression rules for simple tokens
     t_EXPOP = r'\^'
@@ -75,15 +75,15 @@ class GSTLexer:
         return t
 
     @staticmethod
-    def t_INTEGER(t):
-        r'\d+'
-        t.value = int(t.value)
+    def t_REAL(t):
+        r'[-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?'
+        t.value = float(t.value)
         return t
 
     @staticmethod
-    def t_REAL(t):
-        r'[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?'
-        t.value = float(t.value)
+    def t_INTEGER(t):
+        r'\d+'
+        t.value = int(t.value)
         return t
 
     # A string containing ignored characters (spaces and tabs)
@@ -173,7 +173,7 @@ class GSTStringParser:
 
     @staticmethod
     def p_error(p):
-        raise ValueError("Syntax error in input")
+        raise ValueError("Syntax error at pos {} of input {}".format(p.lexpos, p.lexer.lexdata))
 
     def parse(self, code):
         self._lexer.input(code)
@@ -186,20 +186,26 @@ class GSTDatalineParser(GSTStringParser):
         self._lookup = lookup
         self._lexer = lex.lex(object=lexer_object)
         self._parser = yacc.yacc(module=self, start="dataline", debug=False, tabmodule='parsetab_dataline')
+        self._first_data = None
 
     @staticmethod
     def p_dataline(p):
         'dataline : string reals'
-        p[0] = tuple()
+        p[0] = (p[1], p[2])
 
     @staticmethod
     def p_reals_seq(p):
-        '''reals : reals REAL'''
-        p[0] = tuple()
+        '''reals : reals REAL
+                 | reals INTEGER'''
+        p[0] = p[1] + (p[2], )
 
-    @staticmethod
-    def p_reals_single(p):
-        '''reals : REAL'''
-        p[0] = tuple()
+    def p_reals_single(self, p):
+        '''reals : REAL
+                 | INTEGER'''
+        p[0] = (p[1], )
+        self._first_data = p.slice[1].lexpos
 
 
+    def parse(self, code):
+        self._first_data = None
+        return super().parse(code), self._first_data
