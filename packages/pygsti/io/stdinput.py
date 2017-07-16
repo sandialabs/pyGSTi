@@ -68,13 +68,10 @@ class StdInputParser(object):
             Representing the gate string.
         """
         self._string_parser.lookup = lookup
-        try:
-            result = self._string_parser.parse(s)
-        except Exception as e:
-            raise ValueError("Parsing error when parsing %s: %s" % (s, str(e)))
+        gate_tuple = self._string_parser.parse(s)
         # print "DB: result = ",result
         # print "DB: stack = ",self.exprStack
-        return result
+        return gate_tuple
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -126,15 +123,7 @@ class StdInputParser(object):
 
         gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
         gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
-
-        # self._dataline_parser.lookup = lookup
-        # try:
-        #     (gateStringTuple, counts), pos = self._dataline_parser.parse(s)
-        #     gateStringStr = s[:pos]
-        # except Exception as e:
-        #     raise ValueError("Parsing error when parsing %s: %s" % (s, str(e)))
         return gateStringTuple, gateStringStr, counts
-
 
     def parse_dictline(self, s):
         """
