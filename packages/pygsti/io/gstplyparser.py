@@ -99,9 +99,9 @@ class GateStringLexer:
 class GateStringParser:
     tokens = GateStringLexer.tokens
 
-    def __init__(self, lexer_object, lookup={}):
+    def __init__(self, lexer_object=None, lookup={}):
         self._lookup = lookup
-        self._lexer = lex.lex(object=lexer_object)
+        self._lexer = lex.lex(object=lexer_object if lexer_object else GateStringLexer())
         self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='parsetab_string')
 
     @property
