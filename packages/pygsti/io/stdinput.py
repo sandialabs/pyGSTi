@@ -25,25 +25,6 @@ _sys.setrecursionlimit(10000)
 class StdInputParser(object):
     """
     Encapsulates a text parser for reading GST input files.
-
-    ** Grammar **
-
-    expop   :: '^'
-    multop  :: '*'
-    integer :: '0'..'9'+
-    real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
-    reflbl  :: (alpha | digit | '_')+
-
-    nop     :: '{}'
-    gate    :: 'G' [ lowercase | digit | '_' ]+
-    strref  :: 'S' '[' reflbl ']'
-    slcref  :: strref [ '[' integer ':' integer ']' ]
-    expable :: gate | slcref | '(' string ')' | nop
-    expdstr :: expable [ expop integer ]*
-    string  :: expdstr [ [ multop ] expdstr ]*
-
-    dataline :: string [ real ]+
-    dictline :: reflbl string
     """
 
     def __init__(self):

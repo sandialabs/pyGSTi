@@ -1,3 +1,8 @@
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
 """
 Encapsulates a text parser for reading GST input files.
 
@@ -16,13 +21,10 @@ slcref  :: strref [ '[' integer ':' integer ']' ]
 expable :: gate | slcref | '(' string ')' | nop
 expdstr :: expable [ expop integer ]*
 string  :: expdstr [ [ multop ] expdstr ]*
-
-dataline :: string [ real ]+
-dictline :: reflbl string
 """
 
 from ply import lex, yacc
-#yacc.yaccdebug = False
+
 
 class GateStringLexer:
     # List of token names.   This is always required
@@ -93,7 +95,6 @@ class GateStringLexer:
     @staticmethod
     def t_error(t):
         raise ValueError("Illegal character '{}' at position {} of string '{}'".format(t.value[0], t.lexpos, t.lexer.lexdata))
-
 
 
 class GateStringParser:
