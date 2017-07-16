@@ -18,7 +18,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import objects as _objs
 from .. import tools as _tools
 
-from .gstplyparser import GateStringParser, GSTDatalineParser, GateStringLexer
+from .gstplyparser import GateStringParser, GateStringLexer
 
 _sys.setrecursionlimit(10000)
 
@@ -48,7 +48,7 @@ class StdInputParser(object):
 
     def __init__(self):
         self._string_parser = GateStringParser(GateStringLexer())
-        self._dataline_parser = GSTDatalineParser(GateStringLexer())
+        # self._dataline_parser = GSTDatalineParser(GateStringLexer())
 
     def parse_gatestring(self, s, lookup={}):
         """

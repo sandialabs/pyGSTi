@@ -180,31 +180,3 @@ class GateStringParser:
         result = self._parser.parse(lexer=self._lexer)
         return result
 
-
-class GSTDatalineParser(GateStringParser):
-    def __init__(self, lexer_object, lookup={}):
-        self._lookup = lookup
-        self._lexer = lex.lex(object=lexer_object)
-        self._parser = yacc.yacc(module=self, start="dataline", debug=False, tabmodule='parsetab_dataline')
-        self._first_data = None
-
-    @staticmethod
-    def p_dataline(p):
-        'dataline : string reals'
-        p[0] = (p[1], p[2])
-
-    @staticmethod
-    def p_reals_seq(p):
-        '''reals : reals REAL
-                 | reals INTEGER'''
-        p[0] = p[1] + (p[2], )
-
-    def p_reals_single(self, p):
-        '''reals : REAL
-                 | INTEGER'''
-        p[0] = (p[1], )
-        self._first_data = p.slice[1].lexpos
-
-    def parse(self, code):
-        self._first_data = None
-        return super().parse(code), self._first_data
