@@ -150,7 +150,7 @@ class GateStringParser:
     @staticmethod
     def p_expdstr_expop(p):
         '''expdstr : expable EXPOP INTEGER'''
-        p[0] = p[1] * p[3]
+        p[0] = p[1] * p[3]  # tuple repetition
 
     @staticmethod
     def p_expdstr(p):
@@ -159,18 +159,18 @@ class GateStringParser:
 
     @staticmethod
     def p_string_expdstr(p):
-        '''string : expdstr'''  # MULTOP expdstr
+        '''string : expdstr'''
         p[0] = p[1]
 
     @staticmethod
     def p_string_str(p):
-        '''string : string expdstr'''  # MULTOP expdstr
-        p[0] = p[1] + p[2]
+        '''string : string expdstr'''
+        p[0] = p[1] + p[2]  # tuple conatenation
 
     @staticmethod
     def p_string(p):
-        '''string : string MULTOP expdstr'''  # MULTOP expdstr
-        p[0] = p[1] + p[3]
+        '''string : string MULTOP expdstr'''
+        p[0] = p[1] + p[3]  # tuple concatenation
 
     @staticmethod
     def p_error(p):
