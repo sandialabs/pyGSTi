@@ -24,7 +24,7 @@ dictline :: reflbl string
 from ply import lex, yacc
 #yacc.yaccdebug = False
 
-class GSTLexer:
+class GateStringLexer:
     # List of token names.   This is always required
     tokens = (
         'EXPOP',
@@ -96,8 +96,8 @@ class GSTLexer:
 
 
 
-class GSTStringParser:
-    tokens = GSTLexer.tokens
+class GateStringParser:
+    tokens = GateStringLexer.tokens
 
     def __init__(self, lexer_object, lookup={}):
         self._lookup = lookup
@@ -181,7 +181,7 @@ class GSTStringParser:
         return result
 
 
-class GSTDatalineParser(GSTStringParser):
+class GSTDatalineParser(GateStringParser):
     def __init__(self, lexer_object, lookup={}):
         self._lookup = lookup
         self._lexer = lex.lex(object=lexer_object)
