@@ -104,38 +104,36 @@ class StdInputParser(object):
         counts : list
             List of counts following the gate string.
         """
-        # self.lookup = lookup
-        # self.exprStack = []
-        # self.countList = []
-        #
-        # # get counts from end of s
-        # parts = s.split();
-        # counts = []
-        # for p in reversed(parts):
-        #     try:
-        #         f = float(p)
-        #     except:
-        #         break
-        #     counts.append(f)
-        # counts.reverse()  # because we appended them in reversed order
-        # totalCounts = len(counts)  # in case expectedCounts is less
-        # if len(counts) > expectedCounts >= 0:
-        #     counts = counts[0:expectedCounts]
-        #
-        # nCounts = len(counts)
-        # if expectedCounts >= 0 and nCounts != expectedCounts:
-        #     raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
-        # if nCounts == len(parts):
-        #     raise ValueError("No gatestring column found -- all columns look like data")
-        #
-        # gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
-        # gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
-        self._dataline_parser.lookup = lookup
-        try:
-            (gateStringTuple, counts), pos = self._dataline_parser.parse(s)
-            gateStringStr = s[:pos]
-        except Exception as e:
-            raise ValueError("Parsing error when parsing %s: %s" % (s, str(e)))
+
+        # get counts from end of s
+        parts = s.split();
+        counts = []
+        for p in reversed(parts):
+            try:
+                f = float(p)
+            except:
+                break
+            counts.append(f)
+        counts.reverse()  # because we appended them in reversed order
+        totalCounts = len(counts)  # in case expectedCounts is less
+        if len(counts) > expectedCounts >= 0:
+            counts = counts[0:expectedCounts]
+
+        nCounts = len(counts)
+        if expectedCounts >= 0 and nCounts != expectedCounts:
+            raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
+        if nCounts == len(parts):
+            raise ValueError("No gatestring column found -- all columns look like data")
+
+        gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
+        gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
+
+        # self._dataline_parser.lookup = lookup
+        # try:
+        #     (gateStringTuple, counts), pos = self._dataline_parser.parse(s)
+        #     gateStringStr = s[:pos]
+        # except Exception as e:
+        #     raise ValueError("Parsing error when parsing %s: %s" % (s, str(e)))
         return gateStringTuple, gateStringStr, counts
 
 

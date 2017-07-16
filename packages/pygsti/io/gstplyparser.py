@@ -205,7 +205,6 @@ class GSTDatalineParser(GSTStringParser):
         p[0] = (p[1], )
         self._first_data = p.slice[1].lexpos
 
-
     def parse(self, code):
         self._first_data = None
         return super().parse(code), self._first_data
