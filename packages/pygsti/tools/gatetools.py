@@ -12,7 +12,7 @@ import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
-from . import lindbladiantools as _lt
+from . import lindbladtools as _lt
 from . import compattools as _compat
 from . import basis as _basis
 from .basis import change_basis
