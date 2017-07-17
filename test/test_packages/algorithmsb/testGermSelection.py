@@ -4,7 +4,7 @@ import pygsti
 import numpy as np
 import sys, os
 
-from .algorithmsTestCase import AlgorithmTestCase
+from ..algorithms.algorithmsTestCase import AlgorithmTestCase
 
 class GermSelectionTestCase(AlgorithmTestCase):
 

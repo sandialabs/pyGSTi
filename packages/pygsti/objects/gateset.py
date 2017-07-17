@@ -2429,6 +2429,55 @@ class GateSet(object):
                                           gateWeight, spamWeight, itemWeights,
                                           normalize)
 
+    def residuals(self, otherGateSet, transformMx=None,
+                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
+                      normalize=True):
+        """
+        Compute the weighted residuals between this
+        gateset and otherGateSet.  Differences in each corresponding gate
+        matrix and spam vector element are squared, weighted (using gateWeight
+        or spamWeight as applicable), then summed.  The value returned is the
+        square root of this sum, or the square root of this sum divided by the
+        number of summands if normalize == True.
+
+        Parameters
+        ----------
+        otherGateSet : GateSet
+            the other gate set to difference against.
+
+        transformMx : numpy array, optional
+            if not None, transform this gateset by
+            G => inv(transformMx) * G * transformMx, for each gate matrix G
+            (and similar for rho and E vectors) before taking the difference.
+            This transformation is applied only for the difference and does
+            not alter the values stored in this gateset.
+
+        gateWeight : float, optional
+           weighting factor for differences between gate elements.
+
+        spamWeight : float, optional
+           weighting factor for differences between elements of spam vectors.
+
+        itemWeights : dict, optional
+           Dictionary of weighting factors for individual gates and spam
+           operators. Weights are applied multiplicatively to the squared
+           differences, i.e., (*before* the final square root is taken).  Keys
+           can be gate, state preparation, POVM effect, or spam labels.  Values
+           are floating point numbers.  By default, weights are set by
+           gateWeight and spamWeight.
+
+        normalize : bool, optional
+           if True (the default), the frobenius difference is defined by the
+           sum of weighted squared-differences divided by the number of
+           differences.  If False, this final division is not performed.
+
+        Returns
+        -------
+        float
+        """
+        return self._calc().residuals(otherGateSet._calc(), transformMx,
+                                          gateWeight, spamWeight, itemWeights,
+                                          normalize)
 
     def jtracedist(self, otherGateSet, transformMx=None):
         """
@@ -2539,7 +2588,6 @@ class GateSet(object):
                 (lbl, _np.linalg.norm(self.gates[lbl]-otherGateSet.gates[lbl]))
 
         return s
-
 
 
     def copy(self):

@@ -16,7 +16,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
     def setUp(self):
         super(AutoExperimentDesignTestCase, self).setUp()
 
-    def test_auto_experiment_desgin(self):
+    def test_auto_experiment_design(self):
         # Let's construct a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ gateset for which we will need to find germs and fiducials.
 
         gs_target = constr.build_gateset([2], [('Q0',)], ['Gi', 'Gx', 'Gy'],

@@ -306,6 +306,10 @@ class BasisBaseTestCase(BaseTestCase):
         #test  = change_basis(mxStd, std, comp)
         #test  = change_basis(mxStd, comp, std)
 
+    def test_qt(self):
+        qt = Basis('qt', 3)
+        qt = Basis('qt', [3])
+
     def test_general(self):
         Basis('pp', 2)
         Basis('std', [2, 1])
@@ -369,9 +373,6 @@ class BasisBaseTestCase(BaseTestCase):
         end   = Basis('std', 2)
         mxInReducedBasis = change_basis(mxInStdBasis, begin, end)
         original = change_basis(mxInReducedBasis, end, begin)
-
-
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

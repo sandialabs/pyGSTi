@@ -110,6 +110,25 @@ def frobeniusdist2(A, B):
     """
     return _mt.frobeniusnorm2(A-B)
 
+def residuals(A, B):
+    """
+    Calculate residuals between the elements of two matrices
+
+    Parameters
+    ----------
+    A : numpy array
+        First matrix.
+
+    B : numpy array
+        Second matrix.
+
+    Returns
+    -------
+    np.array
+        residuals
+    """
+    return (A-B).flatten()
+
 
 def tracenorm(A):
     """

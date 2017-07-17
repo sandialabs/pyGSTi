@@ -49,7 +49,7 @@ from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
 #from gigateset import GaugeInvGateSet
 
 #Functions
-from .gate import compose, optimize_gate
+from .gate import compose, optimize_gate, finite_difference_deriv_wrt_params
 from .verbosityprinter import VerbosityPrinter
 
 # To prevent circular imports. In all respects, Basis is an object, but it needs to live in tools so that there are no circular imports or backwards dependencies.
