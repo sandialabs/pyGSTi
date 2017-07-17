@@ -11,7 +11,7 @@ def main():
                 itemWeights={'spam' : 1.0, 'gates':1.0},
                 #itemWeights={'spam' : 0.0001, 'gates':1.0},
                 spamMetric='frobenius',
-                gatesMetric='frobenius')
+                gatesMetric='frobenius', checkJac=True)
 
 if __name__ == '__main__':
     main()
