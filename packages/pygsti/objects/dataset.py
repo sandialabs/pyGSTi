@@ -27,7 +27,8 @@ class DataSet_KeyValIterator(object):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        return next(self.gsIter), DataSetRow(self.dataset, next(self.countIter))
+        gs = next(self.gsIter); tk = self.dataset._total_key(gs)
+        return gs, DataSetRow(self.dataset, next(self.countIter), tk)
 
     next = __next__
 
@@ -37,12 +38,14 @@ class DataSet_ValIterator(object):
     def __init__(self, dataset):
         self.dataset = dataset
         self.countIter = dataset.counts.__iter__()
+        self.gsIter = dataset.gsIndex.__iter__()
 
     def __iter__(self):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        return DataSetRow(self.dataset, next(self.countIter))
+        tk = self.dataset._total_key( next(self.gsIter) )
+        return DataSetRow(self.dataset, next(self.countIter), tk)
 
     next = __next__
 
@@ -52,9 +55,10 @@ class DataSetRow(object):
       looks similar to a dictionary with spam labels as keys and counts as
       values.
     """
-    def __init__(self, dataset, rowData):
+    def __init__(self, dataset, rowData, totalKey):
         self.dataset = dataset
         self.rowData = rowData
+        self.totalKey = totalKey
 
     def __iter__(self):
         return self.dataset.slIndex.__iter__() #iterator over spam labels
@@ -80,6 +84,8 @@ class DataSetRow(object):
 
     def total(self):
         """ Returns the total counts."""
+        if self.totalKey is not None:
+            return self.dataset.totals[self.totalKey]
         return float(sum(self.rowData))
 
     def fraction(self,spamlabel):
@@ -90,7 +96,18 @@ class DataSetRow(object):
         return self.rowData[ self.dataset.slIndex[spamlabel] ]
 
     def __setitem__(self,spamlabel,count):
+        if self.totalKey is not None:
+            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
+            self.dataset.totals[self.totalKey] += count - old_count
         self.rowData[ self.dataset.slIndex[spamlabel] ] = count
+
+    def scale(self, factor):
+        """ Scales all the counts of this row by the given factor """
+        for spamlabel in self.dataset.slIndex.keys():
+            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
+            if self.totalKey is not None:
+                self.dataset.totals[self.totalKey] += factor*old_count - old_count
+            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*old_count
 
     def as_dict(self):
         """ Returns the (spamlabel,count) pairs as a dictionary."""
@@ -126,7 +143,7 @@ class DataSet(object):
 
     def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
-                 collisionAction="aggregate", comment=None):
+                 collisionAction="aggregate", comment=None, measurementGates=None):
         """
         Initialize a DataSet.
 
@@ -179,6 +196,13 @@ class DataSet(object):
             A user-specified comment string that gets carried around with the 
             data.  A common use for this field is to attache to the data details
             regarding its collection.
+
+        measurementGates : dict, optional
+            If not None, a dictrionary whose keys are user-defined "measurement
+            labels" and whose values are lists of gate labels.  The gate labels 
+            in each list define the set of gates which describe the the operation
+            that is performed contingent on a *specific outcome* of the measurement
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
 
 
         Returns
@@ -245,6 +269,17 @@ class DataSet(object):
         # comment
         self.comment = comment
 
+        # measurement gates & labels
+        if measurementGates is not None:
+            self.measurementGates = measurementGates.copy()
+            self.measurementLabels = {}
+            for mlbl,gateLbls in measurementGates.items():
+                self.measurementLabels.update( {g: mlbl for g in gateLbls} )
+            self.totals = {}
+        else:
+            self.measurementGates = None
+            self.measurementLabels = None
+            self.totals = None
 
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
@@ -260,6 +295,18 @@ class DataSet(object):
 
     def __contains__(self, gatestring):
         return gatestring in self.gsIndex
+
+    def _total_key(self, gatestring):
+        """ 
+        Returns gatestring "aliased" according to self.measurementLabels
+        so that all strings corresponding to the same sequence up to 
+        different intermediate measurement outcomes will have the same key.
+        """
+        if self.measurementLabels is not None:
+            return tuple([self.measurementLabels.get(lbl,lbl)
+                          for lbl in gatestring])
+        else: return None
+        
 
     def get_row(self, gatestring, occurance=0):
         """
@@ -282,7 +329,8 @@ class DataSet(object):
         """
         if occurance > 0: 
             gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
-        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
+                          self._total_key(gatestring))
 
 
     def set_row(self, gatestring, countDict, occurance=0):
@@ -306,7 +354,8 @@ class DataSet(object):
         if occurance > 0: 
             gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
         if gatestring in self:
-            row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+            row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
+                             self._total_key(gatestring))
             for spamLabel,cnt in countDict.items():
                 row[spamLabel] = cnt
         else:
@@ -473,6 +522,12 @@ class DataSet(object):
             self.counts.append( countArray )
             self.gsIndex[ gateString ] = gateStringIndx
 
+        #In all cases, the total just gets incremented by all the counts
+        totalKey = self._total_key(gateString)
+        if totalKey is not None:
+            if totalKey not in self.totals: self.totals[totalKey] = 0
+            self.totals[totalKey] += countArray.sum()
+
     def add_counts_1q(self, gateString, nPlus, nMinus):
         """
         Single-qubit version of addCountsDict, for convenience when
@@ -593,9 +648,12 @@ class DataSet(object):
             return self # doesn't need to be copied since data can't change
         else:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction)
+                               collisionAction=self.collisionAction,
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
+            if self.totals is not None:
+                copyOfMe.totals = self.totals.copy()
             return copyOfMe
 
 
@@ -603,9 +661,12 @@ class DataSet(object):
         """ Make a non-static copy of this DataSet. """
         if self.bStatic:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction)
+                               collisionAction=self.collisionAction,
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
+            if self.totals is not None:
+                copyOfMe.totals = self.totals.copy()                
             return copyOfMe
         else:
             return self.copy()
@@ -632,7 +693,10 @@ class DataSet(object):
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
                      'counts': self.counts,
-                     'collisionAction': self.collisionAction}
+                     'collisionAction': self.collisionAction,
+                     'measurementGates': self.measurementGates,
+                     'measurementLabels': self.measurementLabels,
+                     'totals': self.totals}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -642,6 +706,9 @@ class DataSet(object):
         self.counts = state_dict['counts']
         self.bStatic = state_dict['bStatic']
         self.collisionAction = state_dict.get('collisionAction',"aggregate") #backwards compatibility
+        self.measurementGates = state_dict.get('measurementGates',None)
+        self.measurementLabels = state_dict.get('measurementLabels',None)
+        self.totals = state_dict.get('totals',None)
 
 
     def save(self, fileOrFilename):
@@ -664,7 +731,10 @@ class DataSet(object):
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
                      'collisionAction': self.collisionAction,
-                     'comment': self.comment } 
+                     'comment': self.comment,
+                     'measurementGates': self.measurementGates,
+                     'measurementLabels': self.measurementLabels,
+                     'totals': self.totals} 
                      #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
@@ -709,6 +779,7 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
+            self.file_origin = fileOrFilename
         else:
             f = fileOrFilename
 
@@ -727,6 +798,9 @@ class DataSet(object):
         self.bStatic = state_dict['bStatic']
         self.collisionAction = state_dict.get("collisionAction","aggregate") #backward compatibility
         self.comment = state_dict.get("comment",None) #backward compatibility
+        self.measurementGates = state_dict.get('measurementGates',None)
+        self.measurementLabels = state_dict.get('measurementLabels',None)
+        self.totals = state_dict.get('totals',None)
 
         if self.bStatic:
             self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip

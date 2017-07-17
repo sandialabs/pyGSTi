@@ -17,54 +17,9 @@ from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
+from .reportableqty import ReportableQty
 
 FINITE_DIFF_EPS = 1e-7
-
-class ReportableQty(object):
-    """
-    Encapsulates a computed quantity and possibly its error bars,
-    primarily for use in reports.
-    """
-
-    def __init__(self, value, errbar=None):
-        """
-        Initialize a new ReportableQty object, which
-        is essentially a container for a value and error bars.
-
-        Parameters
-        ----------
-        value : anything
-           The value to store
-
-        errbar : anything
-           The error bar(s) to store
-        """
-        self.value = value
-        self.errbar = errbar
-
-    def get_value(self):
-        """
-        Returns the quantity's value
-        """
-        return self.value
-
-    def get_err_bar(self):
-        """
-        Returns the quantity's error bar(s)
-        """
-        return self.errbar
-
-    def get_value_and_err_bar(self):
-        """
-        Returns the quantity's value and error bar(s)
-        """
-        return self.value, self.errbar
-
-    def __str__(self):
-        if self.errbar is not None:
-            return str(self.value) + " +/- " + str(self.errbar)
-        else: return str(self.value)
-
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
@@ -785,24 +740,35 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
             ret[key] = _getGateQuantity(angle_btwn_axes, gateset1, gateLabel,
                                     eps, confidenceRegionInfo)
 
-        key = '%s relative logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
+        key = '%s relative eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
+                target_gate_inv = _np.linalg.inv(gateset2.gates[gateLabel])
+                rel_gate = _np.dot(target_gate_inv,gate)
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
             ret[key] = _getGateQuantity(rel_eigvals, gateset1, gateLabel,
                                         eps, confidenceRegionInfo)
 
-        key = '%s relative logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
+        key = '%s logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
-            def rel_eigvals(gate):
+            def rel_logTiG_eigvals(gate):
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
+                return _np.linalg.eigvals(rel_gate)
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            ret[key] = _getGateQuantity(rel_logTiG_eigvals, gateset1, gateLabel,
+                                        eps, confidenceRegionInfo)
+
+        key = '%s logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
+        if key in qtynames:
+            def rel_logGmlogT_eigvals(gate):
                 rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logG-logT")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
-            ret[key] = _getGateQuantity(rel_eigvals, gateset1, gateLabel,
+            ret[key] = _getGateQuantity(rel_logGmlogT_eigvals, gateset1, gateLabel,
                                         eps, confidenceRegionInfo)
 
 

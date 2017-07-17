@@ -57,7 +57,7 @@ class BaseTestCase(unittest.TestCase):
         # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
         if a.size > 1:
             raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
-        self.assertAlmostEqual(float(a), b)
+        self.assertAlmostEqual(float(a), float(b))
 
     def assertNoWarnings(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:

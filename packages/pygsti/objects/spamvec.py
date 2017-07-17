@@ -12,6 +12,8 @@ functionality.
 import numpy as _np
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
+from ..tools import gatetools as _gt
+from ..tools import compattools as _compat
 from .protectedarray import ProtectedArray as _ProtectedArray
 
 
@@ -123,7 +125,7 @@ class SPAMVec(object):
         """ Return the dimension of the gate matrix. """
         return self.dim
 
-    def transform(self, S):
+    def transform(self, S, typ):
         """
         Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
         effect SPAM vectors, respectively (depending on the value of `typ`). 
@@ -133,6 +135,43 @@ class SPAMVec(object):
     def depolarize(self, amount):
         """ Depolarize spam vector by the given amount. """
         raise NotImplementedError("This SPAM vector cannot be depolarize()'d")
+
+    def frobeniusdist2(self, otherSpamVec, typ, transform=None,
+                       inv_transform=None):
+        """ 
+        Return the squared frobenius difference between this spam vector and
+        `otherSpamVec`, optionally transforming this vector first using
+        `transform` and `inv_transform` (depending on the value of `typ`).
+
+        Parameters
+        ----------
+        otherSpamVec : SPAMVec
+            The other spam vector
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed.
+
+        transform, inv_transform : numpy.ndarray
+            The transformation (if not None) to be performed.
+        
+        Returns
+        -------
+        float
+        """
+        if typ == 'prep':
+            if inv_transform is None:
+                return _gt.frobeniusdist2(self.base,otherSpamVec)
+            else:
+                return _gt.frobeniusdist2(_np.dot(inv_transform,self.base),
+                                          otherSpamVec)
+        elif typ == "effect":
+            if transform is None:
+                return _gt.frobeniusdist2(self.base,otherSpamVec)
+            else:
+                return _gt.frobeniusdist2(_np.dot(_np.transpose(transform),
+                                                  self.base), otherSpamVec)
+        else: raise ValueError("Invalid 'typ' argument: %s" % typ)
+
 
     #Handled by derived classes
     #def __str__(self):
@@ -499,7 +538,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float) or isinstance(amount,int):
+        if isinstance(amount,float) or _compat.isint(amount):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)
@@ -710,7 +749,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         -------
         None
         """
-        if isinstance(amount,float) or isinstance(amount,int):
+        if isinstance(amount,float) or _compat.isint(amount):
             D = _np.diag( [1]+[1-amount]*(self.dim-1) )
         else:
             assert(len(amount) == self.dim-1)

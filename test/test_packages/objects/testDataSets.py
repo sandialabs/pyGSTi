@@ -381,6 +381,140 @@ Gx^4 20 80 0.2 100
         self.assertEqual( ds.keys(stripOccuranceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
 
+    def test_tddataset(self):
+        # Create a dataset from scratch
+
+        def printInfo(ds, gstr):
+            print( "%s info" % str(gstr))
+            print( ds[gstr] )
+            print( ds[gstr].sli )
+            print( ds[gstr].time )
+            print( ds[gstr].reps )
+            print( ds[gstr].get_sl() )
+            print( ds[gstr].get_expanded_sl() )
+            print( ds[gstr].get_expanded_sli() )
+            print( ds[gstr].get_expanded_times() )
+            print( ds[gstr].get_counts() )
+            print( ds[gstr].total() )
+            print( ds[gstr].fraction('plus') )
+            print( len(ds[gstr]) )
+        
+        ds = pygsti.objects.TDDataSet(spamLabels=['plus','minus'])
+        ds.add_series_data( ('Gx',),
+                            ['plus','plus','minus','plus','minus','plus','minus','minus','minus','plus'],
+                            [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
+        printInfo(ds, ('Gx',) )
+
+        ds.add_series_data( ('Gy',),['plus','minus'],[0.0, 1.0], [3,7]) #using repetitions
+        printInfo(ds, ('Gy',) )
+
+        #Setting data
+        ds[('Gx',)][0] = ('minus',0.1,1)
+        ds[('Gy',)][1] = ('plus',0.4,3)
+        printInfo(ds, ('Gx',) )
+        printInfo(ds, ('Gy',) )
+        
+        ds.done_adding_data()
+
+        #Setting data while static is not allowed
+        #with self.assertRaises(ValueError):
+        #    ds[('Gx',)][0] = ('minus',0.1,1) #this is OK b/c doesn't add data...
+        with self.assertRaises(ValueError):
+            ds.add_series_data( ('Gy','Gx'),['plus','minus'],[0.0, 1.0], [2,2])
+
+        #test contents
+        self.assertTrue( ('Gx',) in ds)
+        self.assertTrue( ('Gx',) in ds.keys())
+        self.assertTrue( ds.has_key(('Gx',)) )
+        self.assertEqual( list(ds.get_spam_labels()), ['plus','minus'] )
+        self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
+
+        #test iteration
+        for gstr,dsRow in ds.iteritems():
+            print(gstr, dsRow)
+        for dsRow in ds.itervalues():
+            print(dsRow)
+            
+        #Later: add_series_from_dataset(otherTDDataSet)
+
+        print("Whole thing:")
+        print(ds)
+
+        dsWritable = ds.copy_nonstatic()
+        dsWritable[('Gx',)][0] = ('minus',0.1,1)
+        dsWritable.add_series_data( ('Gy','Gx'),['plus','minus'],[0.0, 1.0], [2,2])
+        
+        dsWritable2 = dsWritable.copy_nonstatic()
+         #test copy_nonstatic on already non-static dataset
+
+        #Pickle and unpickle
+        with open(temp_files + '/tddataset.pickle', 'wb') as datasetfile:
+            pickle.dump(ds, datasetfile)
+        ds_from_pkl = None
+        with open(temp_files + '/tddataset.pickle', 'rb') as datasetfile:
+            ds_from_pkl = pickle.load(datasetfile)
+
+        # LATER: Invoke the DataSet constructor other ways
+
+        #Test truncation
+        dsWritable.truncate( [('Gx',),('Gy',)] ) #non-static
+        ds.truncate( [('Gx',),('Gy',)] ) #static
+        dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=False ) #non-static
+        ds.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=False ) #static
+        with self.assertRaises(ValueError):
+            dsWritable.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
+        with self.assertRaises(ValueError):
+            ds.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
+
+        #test copy
+        dsWritable_copy = dsWritable.copy() #non-static
+        ds_copy = ds.copy() #static
+
+        #Loading and saving
+        ds.save(temp_files + "/nonstatic_tddataset.saved")
+        ds.save(temp_files + "/nonstatic_tddataset.saved.gz")
+        with open(temp_files + "/nonstatic_tddataset.stream","wb") as streamfile:
+            ds.save(streamfile)
+
+        dsWritable.save(temp_files + "/static_tddataset.saved")
+        dsWritable.save(temp_files + "/static_tddataset.saved.gz")
+        with open(temp_files + "/static_tddataset.stream","wb") as streamfile:
+            dsWritable.save(streamfile)
+
+        ds.load(temp_files + "/nonstatic_tddataset.saved")
+        ds.load(temp_files + "/nonstatic_tddataset.saved.gz")
+        with open(temp_files + "/nonstatic_tddataset.stream","rb") as streamfile:
+            ds.load(streamfile)
+
+        dsWritable.load(temp_files + "/static_tddataset.saved")
+        dsWritable.load(temp_files + "/static_tddataset.saved.gz")
+        with open(temp_files + "/static_tddataset.stream","rb") as streamfile:
+            dsWritable.load(streamfile)
+
+        #Test various other methods
+        nStrs = len(ds)
+        #Remove these test for now since TravisCI scipy doesn't like to interpolate
+        #ds.compute_fourier_filtering(verbosity=5)
+        #dsT = ds.create_dataset_at_time(0.2)
+        #dsT2 = ds.create_dataset_from_time_range(0,0.3)
+
+        
+    def test_tddataset_from_file(self):
+        # creating and loading a text-format dataset file
+        dataset_txt = \
+"""## 0 = minus
+## 1 = plus
+{} 011001
+Gx 111000111
+Gy 11001100
+"""
+        with open(temp_files + "/TDDataset.txt","w") as output:
+            output.write(dataset_txt)
+        ds = pygsti.io.load_tddataset(temp_files + "/TDDataset.txt")
+        self.assertEqual(ds[()].fraction('minus'), 0.5)
+        self.assertEqual(ds[('Gy',)].fraction('minus'), 0.5)
+        self.assertEqual(ds[('Gx',)].total(), 9)
+        
 
 
 if __name__ == "__main__":

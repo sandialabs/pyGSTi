@@ -11,6 +11,7 @@ import warnings as _warnings
 import itertools as _itertools
 #import time as _time
 from . import basistools as _bt
+from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
 from . import slicetools as _slct
@@ -169,9 +170,90 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 
 
+def logl_terms(gateset, dataset, gatestring_list=None,
+         minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
+         evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
+         check=False, gateLabelAliases=None):
+    """
+    The vector of log-likelihood contributions for each gate string & SPAM label
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`logl` except it
+    doesn't perform the final sum over gate sequences and SPAM labels.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (nSpamLabels, nGateStrings) where 
+        `nSpamLabels = gateset.get_spam_labels()` and 
+        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the log-likelihood contributions of the corresponding
+        SPAM label and gate string.
+    """
+    if gatestring_list is None:
+        gatestring_list = list(dataset.keys())
+
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
+    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
+    spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
+
+    probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
+    if countVecMx is None:
+        countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
+        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
+
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in ds_gatestring_list], 'd')
+
+    #freqs = countVecMx / totalCntVec[None,:]
+    #freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+    #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
+    #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+
+    a = radius # parameterizes "roundness" of f == 0 terms
+    min_p = minProbClip
+
+    if evalTree is None:
+        evalTree = gateset.bulk_evaltree(gatestring_list)
+
+    gateset.bulk_fill_probs(probs, spam_lbl_rows, evalTree, probClipInterval, check)
+    pos_probs = _np.where(probs < min_p, min_p, probs)
+
+    if poissonPicture:
+        S = countVecMx / min_p - totalCntVec[None,:] # slope term that is derivative of logl at min_p
+        S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
+        v = countVecMx * _np.log(pos_probs) - totalCntVec[None,:]*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)
+        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where( countVecMx == 0, -totalCntVec[None,:] * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
+           #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
+
+    else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
+        S = countVecMx / min_p               # slope term that is derivative of logl at min_p
+        S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
+        v = countVecMx * _np.log(pos_probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
+        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
+        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
+        v = _np.where( countVecMx == 0, 0.0, v)
+
+    #DEBUG
+    #print "num clipped = ",_np.sum(probs < min_p)," of ",probs.shape
+    #print "min/max probs = ",min(probs.flatten()),",",max(probs.flatten())
+    #for i in range(v.shape[1]):
+    #    print "%d %.0f (%f) %.0f (%g)" % (i,v[0,i],probs[0,i],v[1,i],probs[1,i])
+
+    # v[iSpamLabel,iGateString] contains all logl contributions
+    return v
+
+
+
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-         evalTree=None, countVecMx=None, poissonPicture=True, check=False):
+         evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
+         check=False, gateLabelAliases=None):
     """
     The log-likelihood function.
 
@@ -214,79 +296,41 @@ def logl(gateset, dataset, gatestring_list=None,
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
 
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
+
     poissonPicture : boolean, optional
         Whether the log-likelihood-in-the-Poisson-picture terms should be included
         in the returned logl value.
 
     check : boolean, optional
-      If True, perform extra checks within code to verify correctness.  Used
-      for testing, and runs much slower when True.
+        If True, perform extra checks within code to verify correctness.  Used
+        for testing, and runs much slower when True.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
     float
         The log likelihood
     """
-
-    if gatestring_list is None:
-        gatestring_list = list(dataset.keys())
-
-    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
-    spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-
-    probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-    if countVecMx is None:
-        countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
-
-    totalCntVec = _np.sum(countVecMx, axis=0)
-
-    #freqs = countVecMx / totalCntVec[None,:]
-    #freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-    #freqTerm = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
-    #freqTerm[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-
-    a = radius # parameterizes "roundness" of f == 0 terms
-    min_p = minProbClip
-
-    if evalTree is None:
-        evalTree = gateset.bulk_evaltree(gatestring_list)
-
-    gateset.bulk_fill_probs(probs, spam_lbl_rows, evalTree, probClipInterval, check)
-    pos_probs = _np.where(probs < min_p, min_p, probs)
-
-    if poissonPicture:
-        S = countVecMx / min_p - totalCntVec[None,:] # slope term that is derivative of logl at min_p
-        S2 = -0.5 * countVecMx / (min_p**2)          # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) - totalCntVec[None,:]*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, -totalCntVec[None,:] * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)
-           #special handling for f == 0 poissonPicture terms using quadratic rounding of function with minimum: max(0,(a-p))^2/(2a) + p
-
-    else: #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
-        S = countVecMx / min_p               # slope term that is derivative of logl at min_p
-        S2 = -0.5 * countVecMx / (min_p**2)  # 2nd derivative of logl term at min_p
-        v = countVecMx * _np.log(pos_probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
-        v = _np.minimum(v,0)  #remove small positive elements due to roundoff error (above expression *cannot* really be positive)
-        v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
-        v = _np.where( countVecMx == 0, 0.0, v)
-
-    #DEBUG
-    #print "num clipped = ",_np.sum(probs < min_p)," of ",probs.shape
-    #print "min/max probs = ",min(probs.flatten()),",",max(probs.flatten())
-    #for i in range(v.shape[1]):
-    #    print "%d %.0f (%f) %.0f (%g)" % (i,v[0,i],probs[0,i],v[1,i],probs[1,i])
-
-    # v[iSpamLabel,iGateString] contains all logl contributions
+    v = logl_terms(gateset, dataset, gatestring_list,
+                   minProbClip, probClipInterval, radius,
+                   evalTree, countVecMx, totalCntVec, poissonPicture,
+                   check, gateLabelAliases)
     return _np.sum(v) # sum over *all* dimensions
-
-
 
 
 def logl_jacobian(gateset, dataset, gatestring_list=None,
                   minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
-                  evalTree=None, countVecMx=None, poissonPicture=True, check=False):
+                  evalTree=None, countVecMx=None, totalCntVec=None,
+                  poissonPicture=True, check=False, gateLabelAliases=None):
     """
     The jacobian of the log-likelihood function.
 
@@ -329,12 +373,23 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
       Use fill_count_vecs(...) to generate this quantity once for multiple
       evaluations of the log-likelihood function which use the same dataset.
 
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
+
     poissonPicture : boolean, optional
         Whether the Poisson-picutre log-likelihood should be differentiated.
 
     check : boolean, optional
         If True, perform extra checks within code to verify correctness.  Used
         for testing, and runs much slower when True.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -348,16 +403,21 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
 
+    ds_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+
     spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
 
     if countVecMx is None:
         countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
+        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, ds_gatestring_list)
+
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in gatestring_list], 'd')
 
     probs = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
     dprobs = _np.empty( (len(spamLabels),len(gatestring_list),nP), 'd' )
-    totalCntVec = _np.sum(countVecMx, axis=0)
 
     #freqs = cntVecMx / totalCntVec[None,:]
     #freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -413,7 +473,8 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
 
 def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
                  probClipInterval=(-1e6,1e6), radius=1e-4, poissonPicture=True,
-                 check=False, comm=None, memLimit=None, verbosity=0):
+                 check=False, comm=None, memLimit=None,
+                 gateLabelAliases=None, verbosity=0):
     """
     The hessian of the log-likelihood function.
 
@@ -459,6 +520,12 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     memLimit : int, optional
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
+
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     verbosity : int, optional
         How much detail to print to stdout.
@@ -613,9 +680,12 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         probs  =  probs_mem[:,0:sub_nGateStrings]
 
         # Fill cntVecMx, totalCntVec
+        ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
+            evalSubTree.generate_gatestring_list(), gateLabelAliases)
         fill_count_vecs(cntVecMx,spam_lbl_rows,dataset,
-                            evalSubTree.generate_gatestring_list())
-        totalCntVec = _np.sum(cntVecMx, axis=0)
+                            ds_subtree_gatestring_list)
+        totalCntVec = _np.array( [dataset[s].total()
+                                  for s in ds_subtree_gatestring_list], 'd')
 
         #compute pos_probs separately
         gateset.bulk_fill_probs(probs, spam_lbl_rows, evalSubTree,
@@ -674,7 +744,8 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     return final_hessian # (N,N)
 
 
-def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True, check=False):
+def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
+             poissonPicture=True, check=False, gateLabelAliases=None):
     """
     The maximum log-likelihood possible for a DataSet.  That is, the
     log-likelihood obtained by a maximal model that can fit perfectly
@@ -697,6 +768,10 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
         Use fill_count_vecs(...) to generate this quantity when it is useful elsewhere
         (e.g. for logl(...) calls).
 
+    totalCntVec : numpy array, optional
+        One-dimensional numpy array whose entries are the total counts of each
+        gate string in `gatestring_list`.
+
     poissonPicture : boolean, optional
         Whether the Poisson-picture maximum log-likelihood should be returned.
 
@@ -704,31 +779,20 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
         Whether additional check is performed which computes the max logl another
         way an compares to the faster method.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
     Returns
     -------
     float
     """
-
-    if gatestring_list is None:
-        gatestring_list = list(dataset.keys())
-
-    if countVecMx is None:
-        spamLabels = dataset.get_spam_labels()
-        spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-        countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
-        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
-
-    totalCntVec = _np.sum(countVecMx, axis=0)
-    freqs = countVecMx / totalCntVec[None,:]
-    freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
-
-    if poissonPicture:
-        maxLogLTerms = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
-    else:
-        maxLogLTerms = countVecMx * _np.log(freqs_nozeros)
-
-    maxLogLTerms[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
-
+    maxLogLTerms = logl_max_terms(dataset, gatestring_list, countVecMx,
+                                  totalCntVec, poissonPicture, check,
+                                  gateLabelAliases)
+    
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
     maxLogL = _np.sum(maxLogLTerms) # sum over *all* dimensions
 
@@ -749,6 +813,56 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, poissonPicture=True
                                (maxLogL, L, maxLogL-L))
 
     return maxLogL
+
+
+def logl_max_terms(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
+                   poissonPicture=True, check=False, gateLabelAliases=None):
+    """
+    The vector of maximum log-likelihood contributions for each gate string
+    & SPAM label.
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`logl_max` except it
+    doesn't perform the final sum over gate sequences and SPAM labels.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (nSpamLabels, nGateStrings) where 
+        `nSpamLabels = gateset.get_spam_labels()` and 
+        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the maximum log-likelihood contributions of the
+         corresponding SPAM label and gate string.
+    """
+
+    if gatestring_list is None:
+        gatestring_list = list(dataset.keys())
+    else:
+        gatestring_list = _lt.find_replace_tuple_list(
+            gatestring_list, gateLabelAliases)
+
+    if countVecMx is None:
+        spamLabels = dataset.get_spam_labels()
+        spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
+        countVecMx = _np.empty( (len(spamLabels),len(gatestring_list)), 'd' )
+        fill_count_vecs(countVecMx, spam_lbl_rows, dataset, gatestring_list)
+
+    if totalCntVec is None:
+        totalCntVec = _np.array( [dataset[gstr].total() for gstr in gatestring_list], 'd')
+        
+    freqs = countVecMx / totalCntVec[None,:]
+    freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
+
+    if poissonPicture:
+        maxLogLTerms = countVecMx * ( _np.log(freqs_nozeros) - 1.0 )
+    else:
+        maxLogLTerms = countVecMx * _np.log(freqs_nozeros)
+
+    maxLogLTerms[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
+
+    # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
+    return maxLogLTerms
 
 
 def forbidden_prob(gateset, dataset):
@@ -789,7 +903,7 @@ def forbidden_prob(gateset, dataset):
 
     return forbidden_prob
 
-def prep_penalty(rhoVec):
+def prep_penalty(rhoVec, basis):
     """
     Penalty assigned to a state preparation (rho) vector rhoVec.  State
       preparation density matrices must be positive semidefinite
@@ -801,21 +915,26 @@ def prep_penalty(rhoVec):
     rhoVec : numpy array
         rho vector array of shape (N,1) for some N.
 
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret rhoVec
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
+
     Returns
     -------
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _bt.gmvec_to_stdmx(_np.asarray(rhoVec))
+    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec),basis)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
-    nQubits = _np.log2(len(rhoVec)) / 2
-    tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(2))**nQubits) # tensor of n I(2x2)/sqrt(2) has trace sqrt(2)**n
+    tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
+      # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
     #print "Sum of neg = ",sumOfNeg  #DEBUG
-    #print "Trace Penalty = ",tracePenalty  #DEBUG
+    #print "Trace Penalty = ",tracePenalty  #DEBUG    
     return sumOfNeg +  tracePenalty
 
-def effect_penalty(EVec):
+def effect_penalty(EVec, basis):
     """
     Penalty assigned to a POVM effect vector EVec. Effects
       must have eigenvalues between 0 and 1.  A positive return
@@ -827,12 +946,17 @@ def effect_penalty(EVec):
     EVec : numpy array
          effect vector array of shape (N,1) for some N.
 
+    basis : {"std", "gm", "pp", "qt"}
+        The abbreviation for the basis used to interpret EVec
+        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
+         "qt" = qutrit, or standard).
+
     Returns
     -------
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _bt.gmvec_to_stdmx(_np.asarray(EVec))
+    EMx = _bt.vec_to_stdmx(_np.asarray(EVec),basis)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -865,8 +989,9 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        ret += sum([ prep_penalty(r) for r in list(gateset.preps.values()) ])
-        ret += sum([ effect_penalty(e) for e in list(gateset.effects.values()) ])
+        b = gateset.get_basis_name()
+        ret += sum([ prep_penalty(r,b) for r in list(gateset.preps.values()) ])
+        ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
     return ret
 
 

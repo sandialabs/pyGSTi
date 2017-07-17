@@ -2,7 +2,7 @@ import unittest
 import pygsti
 import numpy as np
 
-from  pygsti.objects import Gate
+from  pygsti.objects import GateMatrix
 import pygsti.construction as pc
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -11,7 +11,7 @@ class GateTestCase(BaseTestCase):
 
     def setUp(self):
         super(GateTestCase, self).setUp()
-        self.gate = Gate(np.zeros(2))
+        self.gate = GateMatrix(np.zeros(2))
 
     def test_slice(self):
         self.gate[:]
@@ -22,7 +22,7 @@ class GateTestCase(BaseTestCase):
                   [[[]], [[1, 2]]]]
         for bad_mx in bad_mxs:
             with self.assertRaises(ValueError):
-                Gate.convert_to_matrix(bad_mx)
+                GateMatrix.convert_to_matrix(bad_mx)
 
     def test_lpg_deriv(self):
         gs_target_lp = pc.build_gateset(

@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the GateString class and derived classes which represent gate strings."""
 
 import numpy as _np
+from ..tools import compattools as _compat
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -26,7 +27,7 @@ class GateString(object):
     testing for equality, indexing,  slicing, multiplying).
     """
 
-    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True):
+    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True, lookup=None):
         """
         Create a new GateString object
 
@@ -43,6 +44,10 @@ class GateString(object):
         bCheck : bool, optional
             If true, raise ValueEror if stringRepresentation does not evaluate
             to tupleOfGateLabels.
+
+        lookup : dict, optional
+            A dictionary with keys == labels and values == tuples of gate labels
+            which can be used for substitutions using the S<label> syntax.
         """
 
         if tupleOfGateLabels is None and stringRepresentation is None:
@@ -51,7 +56,7 @@ class GateString(object):
         if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
             from ..io import stdinput as _stdinput
             parser = _stdinput.StdInputParser()
-            chkTuple = parser.parse_gatestring( stringRepresentation )
+            chkTuple = parser.parse_gatestring( stringRepresentation, lookup)
             if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
             elif tuple(tupleOfGateLabels) != chkTuple:
                 raise ValueError("Error intializing GateString: " +
@@ -157,7 +162,7 @@ class GateString(object):
         return GateString(self.tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
-        assert( (isinstance(x,int) or _np.issubdtype(x,int)) and x >= 0)
+        assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
@@ -171,10 +176,10 @@ class GateString(object):
         return self.tup == tuple(x) #better than x.tup since x can be a tuple
 
     def __lt__(self,x):
-        return self.tup.__lt__(x)
+        return self.tup.__lt__(tuple(x))
 
     def __gt__(self,x):
-        return self.tup.__gt__(x)
+        return self.tup.__gt__(tuple(x))
 
     def __hash__(self):
         return self.tup.__hash__()
@@ -192,7 +197,6 @@ class GateString(object):
 
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
-
 
 
 class WeightedGateString(GateString):

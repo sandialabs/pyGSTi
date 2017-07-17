@@ -16,15 +16,18 @@ import time as _time
 
 from ..tools import matrixtools as _mt
 from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
+from ..tools import compattools as _compat
 
 from . import evaltree as _evaltree
 from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
-from . import gscalc as _gscalc
 from . import gaugegroup as _gg
+from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
+from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
 
@@ -33,7 +36,6 @@ from .verbosityprinter import VerbosityPrinter
 # should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
 # well.
 P_RANK_TOL = 1e-7
-
 
 class GateSet(object):
     """
@@ -110,7 +112,11 @@ class GateSet(object):
         self._identitylabel = identity_label
         self._default_gauge_group = None
 
+        self._calcClass = _GateMatrixCalc
+        #self._calcClass = _GateMapCalc
+
         super(GateSet, self).__init__()
+
 
     @property
     def povm_identity(self):
@@ -452,19 +458,21 @@ class GateSet(object):
 
         Parameters
         ----------
-        parameterization_type : {"full", "TP", "static"}
+        parameterization_type : {"full", "TP", "CPTP", "H+S", "S", "static"}
             The gate and SPAM vector parameterization type:
 
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','static'))
-        etyp = "full" if typ == "TP" else typ #EVecs never "TP"
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
+        rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+        etyp = "static" if typ == "static" else "full"
+        basis = self.get_basis_name()
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ)
+            self.gates[lbl] = _gate.convert(gate, typ, basis)
 
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, typ)
+            self.preps[lbl] = _sv.convert(vec, rtyp)
 
         for lbl,vec in self.effects.items():
             self.effects[lbl] = _sv.convert(vec, etyp)
@@ -473,7 +481,9 @@ class GateSet(object):
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
         elif typ == 'TP': 
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
-        elif typ == 'static': 
+        elif typ == 'CPTP':
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim)
+        else: # typ in ('static','H+S','S')
             self.default_gauge_group = None
         
         #Note: self.povm_identity should *always* be fully
@@ -540,8 +550,7 @@ class GateSet(object):
         int
             the number of non-gauge gateset parameters.
         """
-        P = self.get_nongauge_projector()
-        return _np.linalg.matrix_rank(P, P_RANK_TOL)
+        return self.num_params() - self.num_gauge_params()
 
 
     def num_gauge_params(self):
@@ -554,7 +563,9 @@ class GateSet(object):
         int
             the number of gauge gateset parameters.
         """
-        return self.num_params() - self.num_nongauge_params()
+        dPG = self._buildup_dPG()
+        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
+        return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
     def to_vector(self):
@@ -657,6 +668,64 @@ class GateSet(object):
 
         return deriv
 
+    def _buildup_dPG(self):
+        """ 
+        Helper function for building gauge/non-gauge projectors and 
+          for computing the number of gauge/non-gauge elements.
+
+        Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
+        whose nullspace gives the gauge directions in parameter space.
+        """
+
+        # ** See comments at the beginning of get_nongauge_projector for explanation **
+        
+        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        dim = self._dim
+        nParams = self.num_params()
+        nElements = self.num_elements()
+
+        #This was considered as optional behavior, but better to just delete qtys from GateSet
+        ##whether elements of the raw gateset matrices/SPAM vectors that are not
+        ## parameterized at all should be ignored.   By ignoring changes to such
+        ## elements, they are treated as not being a part of the "gateset"
+        #bIgnoreUnparameterizedEls = True
+
+        #Note: gateset object (gsDeriv) must have all elements of gate
+        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
+        # order to match deriv_wrt_params call, which gives derivatives wrt
+        # *all* elements of a gate set.
+        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
+                          self.gates._prefix, self._remainderlabel,
+                          self._identitylabel)
+        for gateLabel in self.gates:
+            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
+        for prepLabel in self.preps:
+            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
+        for effectLabel in self.effects:
+            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
+
+        assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
+
+        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
+        for i in range(dim):      # always range over all rows: this is the
+            for j in range(dim):  # *generator* mx, not gauge mx itself
+                unitMx = _bt._mut(i,j,dim)
+                for lbl,rhoVec in self.preps.items():
+                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
+                for lbl,EVec in self.effects.items():
+                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
+                for lbl,gate in self.gates.items():
+                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
+                                         _np.dot(gate,unitMx)
+
+                #Note: vectorize all the parameters in this full-
+                # parameterization object, which gives a vector of length
+                # equal to the number of gateset *elements*.
+                dPG[:,nParams + i*dim+j] = gsDeriv.to_vector()
+
+        dPG[:, 0:nParams] = self.deriv_wrt_params()
+        return dPG
+
 
     def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
@@ -754,61 +823,14 @@ class GateSet(object):
         #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
         #   above to get the general case projector.
 
-
-        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
-        dim = self._dim
         nParams = self.num_params()
         nElements = self.num_elements()
+        dPG = self._buildup_dPG()
 
-        #This was considered as optional behavior, but better to just delete qtys from GateSet
-        ##whether elements of the raw gateset matrices/SPAM vectors that are not
-        ## parameterized at all should be ignored.   By ignoring changes to such
-        ## elements, they are treated as not being a part of the "gateset"
-        #bIgnoreUnparameterizedEls = True
-
-        #Note: gateset object (gsDeriv) must have all elements of gate
-        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
-        # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set.
-        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
-                          self.gates._prefix, self._remainderlabel,
-                          self._identitylabel)
-        for gateLabel in self.gates:
-            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
-        for prepLabel in self.preps:
-            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
-        for effectLabel in self.effects:
-            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
-
-        assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
-
-        dG = _np.empty( (nElements, dim**2), 'd' )
-        for i in range(dim):      # always range over all rows: this is the
-            for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _bt._mut(i,j,dim)
-                for lbl,rhoVec in self.preps.items():
-                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
-                for lbl,EVec in self.effects.items():
-                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
-                for lbl,gate in self.gates.items():
-                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
-                                         _np.dot(gate,unitMx)
-
-                #Note: vectorize all the parameters in this full-
-                # parameterization object, which gives a vector of length
-                # equal to the number of gateset *elements*.
-                dG[:,i*dim+j] = gsDeriv.to_vector()
-
-        dP = self.deriv_wrt_params()
-
-        #if bIgnoreUnparameterizedEls:
-        #    for i in range(dP.shape[0]):
-        #        if _np.isclose( _np.linalg.norm(dP[i,:]), 0):
-        #            dG[i,:] = 0 #if i-th element not parameterized,
-        #                        # clear dG row corresponding to it.
-
-        M = _np.concatenate( (dP,dG), axis=1 )
-        nullsp = _mt.nullspace(M) #columns are nullspace basis vectors
+        #print("DB: shapes = ",dP.shape,dG.shape)
+        #OLD: M = _np.concatenate( (dP,dG), axis=1 )
+        #OLD: nullsp = _mt.nullspace(dPG) #columns are nullspace basis vectors
+        nullsp = _mt.nullspace_qr(dPG) #columns are nullspace basis vectors
         gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
                                      # of subspace intersection in gate-parameter space
         #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
@@ -840,7 +862,8 @@ class GateSet(object):
 
             # BEGIN GAUGE MIX ----------------------------------------
             # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions
+            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
+            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are the non-gauge directions *orthogonal* to the gauge directions
 
             #for each column of gen_dG, which is a gauge direction in gateset parameter space,
             # we add some amount of non-gauge direction, given by coefficients of the
@@ -876,9 +899,12 @@ class GateSet(object):
                 i,j = offsets[lbl]
                 metric_diag[i:j] = itemWeights.get(lbl, spamWeight)
             metric = _np.diag(metric_diag)
-            gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T,metric))
         else:
-            gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+            #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+            gen_ndG = _mt.nullspace_qr(gen_dG.T) #cols are non-gauge directions
+            #print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
                 
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
@@ -947,10 +973,12 @@ class GateSet(object):
 
 
     def _calc(self):
-        return _gscalc.GateSetCalculator(self._dim, self.gates, self.preps,
-                                         self.effects, self.povm_identity,
-                                         self.spamdefs, self._remainderlabel,
-                                         self._identitylabel)
+        if not hasattr(self,"_calcClass"): #for backward compatibility
+            self._calcClass = _GateMatrixCalc
+        return self._calcClass(self._dim, self.gates, self.preps,
+                               self.effects, self.povm_identity,
+                               self.spamdefs, self._remainderlabel,
+                               self._identitylabel)
 
     def product(self, gatestring, bScale=False):
         """
@@ -1316,14 +1344,12 @@ class GateSet(object):
 
         printer = VerbosityPrinter.build_printer(verbosity, comm)
 
-        nspam = len(self.get_spam_labels())
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
-        dim = self._dim
         evt_cache = {} # cache of eval trees based on # min subtrees, to avoid re-computation
-        floatSize = 8 # in bytes: TODO: a better way
         C = 1.0/(1024.0**3)
-
+        calc = self._calc()
+        
         bNp2Matters = ("bulk_fill_hprobs" in subcalls) or ("bulk_hprobs_by_block" in subcalls)
 
         if memLimit is not None:
@@ -1345,79 +1371,45 @@ class GateSet(object):
                 factors.append(n)
             return factors
 
-
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
             tm = _time.time()
-
+            
             #Get cache size
             if not fastCacheSz:
                 #Slower (but more accurate way)
-                if ng not in evt_cache: evt_cache[ng] = self.bulk_evaltree(
-                    gatestring_list,minSubtrees=ng,verbosity=printer-1)
-                tstTree = evt_cache[ng]
-                cacheSize = max([len(s) for s in tstTree.get_sub_trees()])
+                if ng not in evt_cache:
+                    evt_cache[ng] = self.bulk_evaltree(
+                        gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+                cacheSize = max([len(s) for s in evt_cache[ng].get_sub_trees()])
             else:
                 #heuristic (but fast)
                 cacheSize = int( 1.3 * len(gatestring_list) / ng )
 
-            wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
-            wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
-            nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
-
-            mem = 0
-            for fnName in subcalls:
-                if fnName == "bulk_fill_probs":
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache (exps)
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_fill_dprobs":
-                    mem += cacheSize * wrtLen1 * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_fill_hprobs":
-                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                elif fnName == "bulk_hprobs_by_block":
-                    #Note: includes "results" memory since this is allocated within
-                    # the generator and yielded, *not* allocated by the user.
-                    mem += 2 * cacheSize * nspam * wrtLen1 * wrtLen2 # hprobs & dprobs12 results
-                    mem += cacheSize * nspam * (wrtLen1 + wrtLen2) # dprobs1 & dprobs2
-                    mem += cacheSize * wrtLen1 * wrtLen2 * dim * dim # hproduct cache
-                    mem += cacheSize * (wrtLen1 + wrtLen2) * dim * dim # dproduct cache
-                    mem += cacheSize * dim * dim # product cache
-                    mem += cacheSize # scale cache
-                    mem += cacheSize # scale vals
-
-                else:
-                    raise ValueError("Unknown subcall name: %s" % fnName)
+            mem = calc.estimate_mem_usage(subcalls,cacheSize,ng,Ng,np1,np2)
             
             if verb == 1:
-                fc_est_str = " (%.2fGB fc)" % (memEstimate(ng,np1,np2,Ng,True)*C)\
-                    if (not fastCacheSz) else ""
+                if (not fastCacheSz):
+                    fast_estimate = calc.estimate_mem_usage(
+                        subcalls, cacheSize, ng, Ng, np1, np2)
+                    fc_est_str = " (%.2fGB fc)" % (fast_estimate*C)
+                else: fc_est_str = ""
+
                 printer.log(" mem(%d subtrees, %d,%d param-grps, %d proc-grps)"
                             % (ng, np1, np2, Ng) + " in %.0fs = %.2fGB%s"
-                            % (_time.time()-tm, mem*floatSize*C, fc_est_str))
+                            % (_time.time()-tm, mem*C, fc_est_str))
             elif verb == 2:
-                printer.log(" Memory estimate = %.2fGB" % (mem*floatSize*C) +
+                wrtLen1 = (num_params+np1-1) // np1 # ceiling(num_params / np1)
+                wrtLen2 = (num_params+np2-1) // np2 # ceiling(num_params / np2)
+                nSubtreesPerProc = (ng+Ng-1) // Ng # ceiling(ng / Ng)
+                printer.log(" Memory estimate = %.2fGB" % (mem*C) +
                      " (cache=%d, wrtLen1=%d, wrtLen2=%d, subsPerProc=%d)." %
                             (cacheSize, wrtLen1, wrtLen2, nSubtreesPerProc))
                 #printer.log("  subcalls = %s" % str(subcalls))
                 #printer.log("  cacheSize = %d" % cacheSize)
                 #printer.log("  wrtLen = %d" % wrtLen)
                 #printer.log("  nSubtreesPerProc = %d" % nSubtreesPerProc)
-                #if "bulk_fill_dprobs" in subcalls:
-                #    printer.log(" DB Detail: dprobs cache = %.2fGB" % 
-                #                (8*cacheSize * wrtLen * dim * dim * C))
-                #    printer.log(" DB Detail: probs cache = %.2fGB" % 
-                #                (8*cacheSize * dim * dim * C))
-            return mem * floatSize
+
+            return mem
 
 
         if distributeMethod == "gatestrings":
@@ -1442,6 +1434,7 @@ class GateSet(object):
             else:
                 memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
+                
         elif distributeMethod == "deriv":
 
             #Set Ng, the number of subTree processor groups, such
@@ -1601,7 +1594,7 @@ class GateSet(object):
         """
         tm = _time.time()
         printer = VerbosityPrinter.build_printer(verbosity)
-        evalTree = _evaltree.EvalTree()
+        evalTree = self._calc().construct_evaltree()
         evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
@@ -2609,6 +2602,11 @@ class GateSet(object):
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
+        
+        if not hasattr(self,"_calcClass"): #for backward compatibility
+            self._calcClass = _GateMatrixCalc
+        newGateset._calcClass = self._calcClass
+        
         return newGateset
 
     def __str__(self):
@@ -2794,7 +2792,7 @@ class GateSet(object):
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or isinstance(rotate,int) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(isinstance(rotate,float) or _compat.isint(rotate) or len(rotate) == dim-1), "Invalid 'rotate' argument"
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].rotate(rotate, myBasis)
 
@@ -2808,9 +2806,7 @@ class GateSet(object):
 
         Apply a random unitary to each element of a gateset, and return the
         result, without modifying the original (this) gateset. This method
-        currently only works on single- and two-qubit gatesets, and *assumes*
-        that the gate matrices of this gateset are being interpreted in the
-        Pauli-product basis.
+        works on GateSet as long as the dimension is a perfect square.
 
         Parameters
         ----------
@@ -2833,39 +2829,32 @@ class GateSet(object):
         GateSet
             the randomized GateSet
         """
-        gs_pauli = self.copy() # assumes self is in the pauli-product basis!!
         if randState is None:
             rndm = _np.random.RandomState(seed)
         else:
             rndm = randState
 
-        gate_dim = gs_pauli.get_dimension()
-        if gate_dim == 4:
-            unitary_dim = 2
-        elif gate_dim == 16:
-            unitary_dim = 4
-        else: raise ValueError("Gateset dimension must be either 4"
-                               " (single-qubit) or 16 (two-qubit)")
+        gate_dim = self.get_dimension()
+        unitary_dim = int(round(_np.sqrt(gate_dim)))
+        assert( unitary_dim**2 == gate_dim ), \
+            "GateSet dimension must be a perfect square, %d is not" % gate_dim
 
-        for gateLabel in list(gs_pauli.gates.keys()):
+        gs_randomized = self.copy()
+        
+        for gateLabel,gate in self.gates.items():
             randMat = scale * (rndm.randn(unitary_dim,unitary_dim) \
                                    + 1j * rndm.randn(unitary_dim,unitary_dim))
-#            randMat = _np.dot(_np.transpose(_np.conjugate(randMat)),randMat)
             randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-                        # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randU   = _scipy.linalg.expm(-1j*randMat)
+                  # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
+            randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
-            if unitary_dim == 2:
-                randUPP = _bt.unitary_to_pauligate_1q(randU)
-            elif unitary_dim == 4:
-                randUPP = _bt.unitary_to_pauligate_2q(randU)
-            # No else case needed, unitary_dim MUST be at either 2 or 4 at this point
-            #   (Redundant exception)
+            randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
+            randGate = _bt.change_basis(randGate, "std", self.get_basis_name())
 
-            gs_pauli.gates[gateLabel] = _gate.FullyParameterizedGate(
-                            _np.dot(randUPP,gs_pauli.gates[gateLabel]))
+            gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
+                            _np.dot(randGate,gate))
 
-        return gs_pauli
+        return gs_randomized
 
 
     def increase_dimension(self, newDimension):
@@ -3029,8 +3018,10 @@ class GateSet(object):
         -------
         None
         """
+        mxBasis = self.get_basis_name()
         print(self)
         print("\n")
+        print("Basis = ",mxBasis)
         print("Choi Matrices:")
         for (label,gate) in self.gates.items():
             print(("Choi(%s) in pauli basis = \n" % label,
@@ -3040,9 +3031,9 @@ class GateSet(object):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
-        prep_penalty = sum( [ _lf.prep_penalty(rhoVec)
+        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,mxBasis)
                                 for rhoVec in list(self.preps.values()) ] )
-        effect_penalty   = sum( [ _lf.effect_penalty(EVec)
+        effect_penalty   = sum( [ _lf.effect_penalty(EVec,mxBasis)
                                 for EVec in list(self.effects.values()) ] )
         print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
         print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))

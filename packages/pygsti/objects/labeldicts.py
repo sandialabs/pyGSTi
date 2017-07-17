@@ -10,6 +10,7 @@ import warnings as _warnings
 
 from . import spamvec as _sv
 from . import gate as _gate
+from ..tools import compattools as _compat
 
 class PrefixOrderedDict(_collections.OrderedDict):
     def __init__(self, prefix, items=[]):
@@ -203,7 +204,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         super(OrderedSPAMLabelDict,self).__init__(items)
 
     def __setitem__(self, key, val):
-        if not isinstance(key, str):
+        if not _compat.isstr(key):
             key = str(key)
         if type(val) != tuple or len(val) != 2:
             raise KeyError("SPAM label values must be 2-tuples!")

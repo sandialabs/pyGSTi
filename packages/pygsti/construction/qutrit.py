@@ -151,5 +151,6 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
     qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
     qutritGS.set_basis(basis,3)
+    qutritGS.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritGS.dim)
     
     return qutritGS

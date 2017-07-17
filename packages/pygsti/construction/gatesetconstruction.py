@@ -12,6 +12,7 @@ import collections as _collections
 import scipy.linalg as _spl
 
 from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
@@ -227,8 +228,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
                     if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
                         UcohBlk[i,j] = Ugate[ b1[K], b2[K] ] # then fill in element
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -243,18 +243,31 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
                     gateTermInStdBasis[fi,fj] = gateBlk[i,j]
 
 
-        elif gateName in ('CX','CY','CZ'): #two-qubit gate names
-            assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label1 = args[1]; assert(label1.startswith('Q'))
-            label2 = args[2]; assert(label2.startswith('Q'))
+        elif gateName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
 
-            if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
-            elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
-            elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
-            Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+            if gateName in ('CX','CY','CZ'):
+                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
+                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+                label1, label2 = args[1:]
+
+                if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
+                elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
+                elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
+                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+                
+            else: # gateName in ('CNOT','CPHASE')
+                assert(len(args) == 2) # qubit-label1, qubit-label2
+                label1, label2 = args
+                if gateName == 'CNOT':
+                    Utarget = _np.array( [[0, 1],
+                                          [1, 0]], 'd')
+                elif gateName == 'CPHASE':
+                    Utarget = _np.array( [[1, 0],
+                                          [0,-1]], 'd')
+
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
+            assert(label1.startswith('Q') and label2.startswith('Q'))
             iTensorProdBlk = tensorBlkIndices[label1] # index of tensor product block (of state space) this bit label is part of
             assert( iTensorProdBlk == tensorBlkIndices[label2] ) #labels must be members of the same tensor product block
             cohBlk = stateSpaceLabels[iTensorProdBlk]
@@ -278,8 +291,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
             #print "UcohBlk = \n",UcohBlk
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -292,7 +304,6 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             for i,fi in enumerate(mapBlk):
                 for j,fj in enumerate(mapBlk):
                     gateTermInStdBasis[fi,fj] = gateBlk[i,j]
-
 
         elif gateName == "LX":  #TODO - better way to describe leakage?
             assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
@@ -307,8 +318,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
 
-            Utotc = Utot.conjugate()
-            gateBlk = _np.kron(Utot,Utotc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis (vectorized 2x2) into final gate basis
             mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
@@ -394,6 +404,10 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
           on qubit labeled by ssl1 with ssl0 being the control.
         - CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.  Acts
           on qubit labeled by ssl1 with ssl0 being the control.
+        - CNOT(ssl0, ssl1) = standard controlled-not gate.  Acts on qubit
+          labeled by ssl1 with ssl0 being the control.
+        - CPHASE(ssl0, ssl1) = standard controlled-phase gate.  Acts on qubit
+          labeled by ssl1 with ssl0 being the control.
         - LX(theta, i0, i1) = leakage between states i0 and i1.  Implemented as
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
@@ -510,8 +524,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                     UcohBlk[i,j] = Ugate[ gate_i, gate_j ] # fill in element
                     #FUTURE: could keep track of what Ugate <-> UcohBlk elements for parameterization here
 
-        UcohBlkc = UcohBlk.conjugate()
-        gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+        gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
         #print "DEBUG: Ugate = \n", Ugate
         #print "DEBUG: UcohBlk = \n", UcohBlk
@@ -771,11 +784,11 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             elif gateName == 'Z': ex = -1j * theta*_bt.sigmaz/2
 
             Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            #print("CDBG Ugate = \n",Ugate)
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -792,28 +805,41 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
-        elif gateName in ('CX','CY','CZ'): #two-qubit gate names
-            assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label1 = args[1].strip(); assert(label1.startswith('Q'))
-            label2 = args[2].strip(); assert(label2.startswith('Q'))
+                
+        elif gateName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
 
-            if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2.
-            elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2.
-            elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2.
-            Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+            if gateName in ('CX','CY','CZ'):
+                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
+                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+                label1 = args[1].strip(); label2 = args[2].strip()
+
+                if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
+                elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
+                elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
+                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+                
+            else: # gateName in ('CNOT','CPHASE')
+                assert(len(args) == 2) # qubit-label1, qubit-label2
+                label1 = args[0].strip(); label2 = args[1].strip()
+
+                if gateName == 'CNOT':
+                    Utarget = _np.array( [[0, 1],
+                                          [1, 0]], 'd')
+                elif gateName == 'CPHASE':
+                    Utarget = _np.array( [[1, 0],
+                                          [0,-1]], 'd')
+
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
+            assert(label1.startswith('Q') and label2.startswith('Q'))
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
                 pp_gateMx = _bt.std_to_pp(gateMx) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
@@ -830,8 +856,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             Utot[ i1,i2 ] = Ugate[0,1]
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
-            Utotc = Utot.conjugate()
-            gateTermInStdBasis = _np.kron(Utot,Utotc) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
+            gateTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
             gateTermInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateTermInStdBasis, blockDims)
 
             gateMxInFinalBasis = _bt.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
@@ -842,7 +867,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:
-            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis )
+            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis, basis)
 
     return gateInFinalBasis # a Gate object
 

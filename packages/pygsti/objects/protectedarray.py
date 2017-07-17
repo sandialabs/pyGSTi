@@ -1,5 +1,6 @@
 from __future__ import division, print_function, absolute_import, unicode_literals
 import numpy as _np
+from ..tools import compattools as _compat
 
 class ProtectedArray(object):
     """
@@ -21,7 +22,7 @@ class ProtectedArray(object):
             for ky,L in zip(indicesToProtect,self.base.shape):
                 if isinstance( ky, slice ):
                     pindices = range(*ky.indices(L))
-                elif isinstance( ky, int ):
+                elif _compat.isint( ky ):
                     i = ky+L if ky<0 else ky
                     if i < 0 or i > L:
                         raise IndexError("index (%d) is out of range." % ky)
@@ -109,7 +110,7 @@ class ProtectedArray(object):
                     nTotalInDim = len(indices)
                     nUnprotectedInCurDim = (len(indices) - len(new_pindices))
 
-                elif isinstance( ky, int ):
+                elif _compat.isint( ky ):
                     i = ky+L if ky<0 else ky
                     if i > L:
                         raise IndexError("The index (%d) is out of range." % ky)
@@ -177,7 +178,7 @@ class ProtectedArray(object):
                         protectionViolation.append(True)
                     else: protectionViolation.append(False)
 
-                elif isinstance( ky, int ):
+                elif _compat.isint( ky ):
                     i = ky+L if ky<0 else ky
                     if i > L:
                         raise IndexError("The index (%d) is out of range." % ky)

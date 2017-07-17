@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Matrix related utility functions """
 
 import numpy as _np
+import scipy.linalg as _spl
 import warnings as _warnings
 
 
@@ -163,6 +164,40 @@ def nullspace(m, tol=1e-7):
     _,s,vh = _np.linalg.svd(m)
     rank = (s > tol).sum()
     return vh[rank:].T.copy()
+
+
+def nullspace_qr(m, tol=1e-7):
+    """
+    Compute the nullspace of a matrix using the QR decomposition.
+
+    The QR decomposition is faster but less accurate than the SVD
+    used by :func:`nullspace`.
+
+    Parameters
+    ----------
+    m : numpy array
+       An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float (optional)
+       Nullspace tolerance, used when comparing diagonal values of R with zero.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    M,N = m.shape
+    q,r,p = _spl.qr(m.T,mode='full', pivoting=True)
+      # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
+      
+    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
+    rank = (_np.abs(_np.diagonal(r)) > tol).sum()
+    
+    #DEBUG
+    #print("Rank QR = ",rank)
+    #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
+    #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
+    
+    return q[:,rank:]
 
 
 def print_mx(mx, width=9, prec=4):

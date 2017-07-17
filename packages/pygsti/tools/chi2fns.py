@@ -7,12 +7,97 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Chi-squared and related functions """
 
 import numpy as _np
+from . import listtools as _lt
+
+def chi2_terms(dataset, gateset, gateStrings=None,
+               minProbClipForWeighting=1e-4, clipTo=None,
+               useFreqWeightedChiSq=False, check=False,
+               memLimit=None, gateLabelAliases=None):
+    """
+    Computes the chi^2 contriburtions from a set of gate strings.
+
+    This function returns the same value as :func:`chi2` with
+    `returnGradient=False` and `returnHessian=False`, except the
+    contributions from different gate strings and spam labels is
+    not summed but returned as an array.
+
+    Parameters
+    ----------
+    This function takes the same arguments as :func:`chi2` except
+    for `returnGradient` and `returnHessian` (which aren't supported yet).
+
+    Returns
+    -------
+    chi2 : numpy.ndarray
+        Array of shape (nSpamLabels, nGateStrings) where 
+        `nSpamLabels = gateset.get_spam_labels()` and 
+        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the chi2 contributions of the corresponding SPAM
+        label and gate string.
+    """
+    if useFreqWeightedChiSq:
+        raise ValueError("frequency weighted chi2 is not implemented yet.")
+
+    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
+    spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
+
+    if gateStrings is None:
+        gateStrings = list(dataset.keys())
+
+    dsGateStrings = _lt.find_replace_tuple_list(
+            gateStrings, gateLabelAliases)
+
+    nSpamLabels = len(spamLabels)
+    nGateStrings = len(gateStrings)
+
+    evTree = gateset.bulk_evaltree(gateStrings)
+
+    #Memory allocation
+    ns = nSpamLabels; ng = nGateStrings
+    ne = gateset.num_params(); gd = gateset.get_dimension()
+    C = 1.0/1024.0**3
+
+    #  Estimate & check persistent memory (from allocs directly below)
+    persistentMem = 8* (ng*(1 + 2*ns)) # in bytes
+    if memLimit is not None and memLimit < persistentMem:
+        raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
+                          "< memory required to hold final results (%g GB)"
+                          % (persistentMem*C))
+
+    #  Allocate peristent memory
+    N      = _np.empty( nGateStrings )
+    f      = _np.empty( (nSpamLabels, nGateStrings) )
+    probs  = _np.empty( (nSpamLabels, nGateStrings) )
+
+    #  Estimate & check intermediate memory
+    #    - maybe make GateSet methods get intermediate estimates?
+    intermedMem = 8*ng*gd**2 # ~ bulk_product
+    if memLimit is not None and memLimit < intermedMem:
+        reductionFactor = float(intermedMem) / float(memLimit)
+        maxEvalSubTreeSize = int(ng / reductionFactor)
+    else:
+        maxEvalSubTreeSize = None
+
+    if maxEvalSubTreeSize is not None:
+        evTree.split(maxEvalSubTreeSize, None)
+
+    for (i,gateStr) in enumerate(dsGateStrings):
+        N[i] = float(dataset[gateStr].total())
+        for k,sl in enumerate(spamLabels):
+            f[k,i] = dataset[gateStr].fraction(sl)
+
+    gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree,
+                            clipTo, check)
+
+    cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
+    return N[None,:] * ((probs - f)**2/cprobs)
+
 
 def chi2(dataset, gateset, gateStrings=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
-         memLimit=None):
+         memLimit=None, gateLabelAliases=None):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -55,6 +140,12 @@ def chi2(dataset, gateset, gateStrings=None,
         A rough memory limit in bytes which restricts the amount of intermediate
         values that are computed and stored.
 
+    gateLabelAliases : dictionary, optional
+        Dictionary whose keys are gate label "aliases" and whose values are tuples
+        corresponding to what that gate label should be expanded into before querying
+        the dataset. Defaults to the empty dictionary (no aliases defined)
+        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+
 
     Returns
     -------
@@ -84,6 +175,9 @@ def chi2(dataset, gateset, gateStrings=None,
 
     if gateStrings is None:
         gateStrings = list(dataset.keys())
+
+    dsGateStrings = _lt.find_replace_tuple_list(
+            gateStrings, gateLabelAliases)
 
     nSpamLabels = len(spamLabels)
     nGateStrings = len(gateStrings)
@@ -141,7 +235,7 @@ def chi2(dataset, gateset, gateStrings=None,
     #  evTree.print_analysis()
 
 
-    for (i,gateStr) in enumerate(gateStrings):
+    for (i,gateStr) in enumerate(dsGateStrings):
         N[i] = float(dataset[gateStr].total())
         for k,sl in enumerate(spamLabels):
             f[k,i] = dataset[gateStr].fraction(sl)

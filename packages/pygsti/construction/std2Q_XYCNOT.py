@@ -9,9 +9,12 @@ Variables for working with the 2-qubit gate set containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 """
 
+import numpy as _np
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
 from . import spamspecconstruction as _spamc
+from ..tools import gatetools as _gt
+from ..tools import basistools as _bt
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT gates"
 
@@ -184,7 +187,7 @@ legacy_germs = _strc.gatestring_list(
 #Construct the target gateset
 gs_target = _setc.build_gateset(
     [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
-    [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
+    [  "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     prepLabels=['rho0'], prepExpressions=["0"],
     effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
     spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
@@ -208,3 +211,13 @@ specs36 = _spamc.build_spam_specs(
     effect_labels=gs_target.get_effect_labels() )
 
 specs = specs16x10 #use smallest specs set as "default"
+
+
+#Wrong CNOT (bad 1Q phase factor)
+legacy_gs_target = _setc.build_gateset(
+    [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
+    [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
+    prepLabels=['rho0'], prepExpressions=["0"],
+    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
+    spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
+              'dnup': ('rho0','E2'), 'dndn': ('rho0','remainder') }, basis="pp")

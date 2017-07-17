@@ -8,7 +8,7 @@ from .mpinoseutils import *
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 
-g_maxLengths = [0,1,2,4,8]
+g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
 
 def runOneQubit_Tutorial():
@@ -16,7 +16,7 @@ def runOneQubit_Tutorial():
     gs_target = std1Q_XYI.gs_target
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
-    maxLengths = [0,1,2,4,8,16,32,64,128,256,512,1024,2048]
+    maxLengths = [1,2,4,8,16,32,64,128,256,512,1024,2048]
 
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
@@ -92,7 +92,7 @@ def runOneQubit(obj, ds, lsgstStrings, comm=None, distributeMethod="gatestrings"
 
 def create_fake_dataset(comm):
     fidPairList = None
-    maxLengths = [0,1,2,4,8,16]
+    maxLengths = [1,2,4,8,16]
     nSamples = 1000
     specs = pygsti.construction.build_spam_specs(
         std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
@@ -131,7 +131,7 @@ def test_MPI_products(comm):
     gs.kick(0.1,seed=1234)
 
     #Get some gate strings
-    maxLengths = [0,1,2,4,8]
+    maxLengths = [1,2,4,8]
     gstrs = pygsti.construction.make_lsgst_experiment_list(
         list(std.gs_target.gates.keys()), std.fiducials, std.fiducials, std.germs, maxLengths)
     tree = gs.bulk_evaltree(gstrs)

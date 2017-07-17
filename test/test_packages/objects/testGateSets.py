@@ -44,6 +44,9 @@ class GateSetTestCase(BaseTestCase):
                            'minus': ('rho0','remainder') },
             parameterization="static")
 
+        self.mgateset = self.gateset.copy()
+        self.mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+
 
 class TestGateSetMethods(GateSetTestCase):
 
@@ -180,9 +183,9 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
-        PORIG = pygsti.objects.gscalc.PSMALL; pygsti.objects.gscalc.PSMALL = 10
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
         p4,scale = self.gateset.product(gatestring, bScale=True)
-        pygsti.objects.gscalc.PSMALL = PORIG
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
         self.assertArraysAlmostEqual(p1,scale*p4)
 
         dp = self.gateset.dproduct(gatestring)
@@ -199,9 +202,9 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
-        PORIG = pygsti.objects.gscalc.PSMALL; pygsti.objects.gscalc.PSMALL = 10
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
         p4,scale = self.gateset.product(gatestring, bScale=True)
-        pygsti.objects.gscalc.PSMALL = PORIG
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
         self.assertArraysAlmostEqual(p1,scale*p4)
 
 
@@ -223,10 +226,10 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
-        PORIG = pygsti.objects.gscalc.PSMALL; pygsti.objects.gscalc.PSMALL = 10
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
         bulk_prods_scaled, scaleVals3 = self.gateset.bulk_product(evt, bScale=True)
         bulk_prods3 = scaleVals3[:,None,None] * bulk_prods_scaled
-        pygsti.objects.gscalc.PSMALL = PORIG
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
         self.assertArraysAlmostEqual(bulk_prods3[0],p1)
         self.assertArraysAlmostEqual(bulk_prods3[1],p2)
 
@@ -255,6 +258,23 @@ class TestGateSetMethods(GateSetTestCase):
         dp4,p4 = self.gateset.dpr('plus',gatestring,returnPr=True)
         self.assertArraysAlmostEqual(dp,dp4)
 
+        #Compare with map-based computation
+        mp2 = self.mgateset.pr('plus',gatestring)
+        mp3 = self.mgateset.pr('plus',gatestring,bUseScaling=False)
+        self.assertArraysAlmostEqual(p1,mp2)
+        self.assertArraysAlmostEqual(p1,mp3)
+
+        mp2 = self.mgateset.pr('minus',gatestring)
+        mp3 = self.mgateset.pr('minus',gatestring,bUseScaling=False)
+        self.assertArraysAlmostEqual(1.0-p1,mp2)
+        self.assertArraysAlmostEqual(1.0-p1,mp3)
+
+        mdp = self.mgateset.dpr('plus',gatestring)
+        mdp4,mp4 = self.mgateset.dpr('plus',gatestring,returnPr=True)
+        self.assertArraysAlmostEqual(mdp,mdp4)
+        self.assertArraysAlmostEqual(dp,mdp)
+
+
     def test_simple_probabilityB(self):
         gatestring = ('Gx','Gy','Gy')
         p1 = np.dot( np.transpose(self.gateset.effects['E0']),
@@ -272,6 +292,7 @@ class TestGateSetMethods(GateSetTestCase):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
         evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
+        mevt = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
 
         p1 = np.dot( np.transpose(self.gateset.effects['E0']),
                      np.dot( self.gateset['Gy'],
@@ -287,47 +308,82 @@ class TestGateSetMethods(GateSetTestCase):
         #check == true could raise a warning if a mismatch is detected
         bulk_pr = self.assertNoWarnings(self.gateset.bulk_pr,'plus',evt,check=True)
         bulk_pr_m = self.assertNoWarnings(self.gateset.bulk_pr,'minus',evt,check=True)
+        mbulk_pr = self.assertNoWarnings(self.mgateset.bulk_pr,'plus',mevt,check=True)
+        mbulk_pr_m = self.assertNoWarnings(self.mgateset.bulk_pr,'minus',mevt,check=True)
         self.assertSingleElemArrayAlmostEqual(p1, bulk_pr[0])
         self.assertSingleElemArrayAlmostEqual(p2, bulk_pr[1])
         self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_pr_m[0])
         self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_pr_m[1])
+        self.assertSingleElemArrayAlmostEqual(p1, mbulk_pr[0])
+        self.assertSingleElemArrayAlmostEqual(p2, mbulk_pr[1])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_pr_m[0])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_pr_m[1])
 
         probs1 = self.gateset.probs(gatestring1)
         probs2 = self.gateset.probs(gatestring2)
+        mprobs1 = self.mgateset.probs(gatestring1)
+        mprobs2 = self.mgateset.probs(gatestring2)
         self.assertSingleElemArrayAlmostEqual(p1, probs1['plus'])
         self.assertSingleElemArrayAlmostEqual(p2, probs2['plus'])
         self.assertSingleElemArrayAlmostEqual(1.0 - p1, probs1['minus'])
         self.assertSingleElemArrayAlmostEqual(1.0 - p2, probs2['minus'])
+        self.assertSingleElemArrayAlmostEqual(p1, mprobs1['plus'])
+        self.assertSingleElemArrayAlmostEqual(p2, mprobs2['plus'])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mprobs1['minus'])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mprobs2['minus'])
+
 
         bulk_probs = self.assertNoWarnings(self.gateset.bulk_probs,evt,check=True)
+        mbulk_probs = self.assertNoWarnings(self.mgateset.bulk_probs,mevt,check=True)
         self.assertSingleElemArrayAlmostEqual(p1, bulk_probs['plus'][0])
         self.assertSingleElemArrayAlmostEqual(p2, bulk_probs['plus'][1])
         self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_probs['minus'][0])
         self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_probs['minus'][1])
+        self.assertSingleElemArrayAlmostEqual(p1, mbulk_probs['plus'][0])
+        self.assertSingleElemArrayAlmostEqual(p2, mbulk_probs['plus'][1])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_probs['minus'][0])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_probs['minus'][1])
+
 
         #test with split eval tree
         evt_split = evt.copy(); evt_split.split(numSubTrees=2)
+        mevt_split = mevt.copy(); mevt_split.split(numSubTrees=2)
         bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_probs,
                                      evt_split, check=True)
+        mbulk_probs_splt = self.assertNoWarnings(self.mgateset.bulk_probs,
+                                     mevt_split, check=True)
+
         evt_split.print_analysis()
+        mevt_split.print_analysis()
         self.assertArraysAlmostEqual(bulk_probs['plus'],
                    evt_split.permute_computation_to_original(bulk_probs_splt['plus']))
         self.assertArraysAlmostEqual(bulk_probs['minus'], 
                    evt_split.permute_computation_to_original(bulk_probs_splt['minus']))
+        self.assertArraysAlmostEqual(bulk_probs['plus'],
+                   mevt_split.permute_computation_to_original(mbulk_probs_splt['plus']))
+        self.assertArraysAlmostEqual(bulk_probs['minus'], 
+                   mevt_split.permute_computation_to_original(mbulk_probs_splt['minus']))
 
 
         nGateStrings = 2; nSpamLabels = 2
         probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
+        mprobs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
         spam_label_rows = { 'plus': 0, 'minus': 1 }
         self.assertNoWarnings(self.gateset.bulk_fill_probs, probs_to_fill, spam_label_rows, evt, check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_probs, mprobs_to_fill, spam_label_rows, mevt, check=True)
         self.assertSingleElemArrayAlmostEqual(p1, probs_to_fill[0,0])
         self.assertSingleElemArrayAlmostEqual(p2, probs_to_fill[0,1])
         self.assertSingleElemArrayAlmostEqual(1-p1, probs_to_fill[1,0])
         self.assertSingleElemArrayAlmostEqual(1-p2, probs_to_fill[1,1])
+        self.assertSingleElemArrayAlmostEqual(p1, mprobs_to_fill[0,0])
+        self.assertSingleElemArrayAlmostEqual(p2, mprobs_to_fill[0,1])
+        self.assertSingleElemArrayAlmostEqual(1-p1, mprobs_to_fill[1,0])
+        self.assertSingleElemArrayAlmostEqual(1-p2, mprobs_to_fill[1,1])
 
         prods = self.gateset.bulk_product(evt) #TODO: test output?
 
 
+#TODO: add checks with map-gateset (.mgateset) for derivs and hessians
 
     def test_derivatives(self):
         gatestring0 = ('Gi','Gx')
@@ -359,12 +415,12 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling
         # to be sure to engate the scaling machinery
-        PORIG = pygsti.objects.gscalc.PSMALL; pygsti.objects.gscalc.PSMALL = 10
-        DORIG = pygsti.objects.gscalc.DSMALL; pygsti.objects.gscalc.DSMALL = 10
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
         bulk_dPb = self.gateset.bulk_dpr("plus", evt, returnPr=False, check=True)
-        pygsti.objects.gscalc.PSMALL = PORIG
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
         bulk_dPc = self.gateset.bulk_dpr("plus", evt, returnPr=False, check=True)
-        pygsti.objects.gscalc.DSMALL = DORIG
+        pygsti.objects.gatematrixcalc.DSMALL = DORIG
         self.assertArraysAlmostEqual(bulk_dPb,bulk_dP_chk)
         self.assertArraysAlmostEqual(bulk_dPc,bulk_dP_chk)
 
@@ -449,14 +505,14 @@ class TestGateSetMethods(GateSetTestCase):
 
         #Artificially reset the "smallness" threshold for scaling
         # to be sure to engate the scaling machinery
-        PORIG = pygsti.objects.gscalc.PSMALL; pygsti.objects.gscalc.PSMALL = 10
-        DORIG = pygsti.objects.gscalc.DSMALL; pygsti.objects.gscalc.DSMALL = 10
-        HORIG = pygsti.objects.gscalc.HSMALL; pygsti.objects.gscalc.HSMALL = 10
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
+        HORIG = pygsti.objects.gatematrixcalc.HSMALL; pygsti.objects.gatematrixcalc.HSMALL = 10
         bulk_hPb = self.gateset.bulk_hpr("plus", evt, returnPr=False, returnDeriv=False, check=True)
-        pygsti.objects.gscalc.PSMALL = PORIG
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
         bulk_hPc = self.gateset.bulk_hpr("plus", evt, returnPr=False, returnDeriv=False, check=True)
-        pygsti.objects.gscalc.DSMALL = DORIG
-        pygsti.objects.gscalc.HSMALL = HORIG
+        pygsti.objects.gatematrixcalc.DSMALL = DORIG
+        pygsti.objects.gatematrixcalc.HSMALL = HORIG
         self.assertArraysAlmostEqual(bulk_hPb,bulk_hP_chk)
         self.assertArraysAlmostEqual(bulk_hPc,bulk_hP_chk)
 

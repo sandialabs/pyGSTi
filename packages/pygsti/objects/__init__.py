@@ -12,9 +12,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #Import Objects at package level
 from .confidenceregion import ConfidenceRegion
 from .dataset import DataSet
+from .tddataset import TDDataSet
 from .exceptions import *
 from .evaltree import EvalTree
+from .matrixevaltree import MatrixEvalTree
+from .mapevaltree import MapEvalTree
 from .gate import Gate
+from .gate import GateMatrix
 from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
@@ -29,10 +33,13 @@ from .spamvec import StaticSPAMVec
 from .gateset import GateSet
 from .gatestring import GateString
 from .gatestring import WeightedGateString
+from .gatestringstructure import GatestringStructure
+from .gatestringstructure import LsGermsStructure
 from .multidataset import MultiDataSet
 from .spamspec import SpamSpec
 from .profiler import Profiler
 from .profiler import DummyProfiler
+from .datacomparator import DataComparator
 
 from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
     DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup

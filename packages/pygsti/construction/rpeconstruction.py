@@ -429,44 +429,45 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     #print "% true alpha deviation from target:", percentAlphaError
 
     if plot:
-        import matplotlib as _mpl
-        _mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
-        _mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
-        _mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
-        _mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
-
-#        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\Phi func.$')
-        _mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
+        raise NotImplementedError("plot removed b/c matplotlib support dropped")
+        #import matplotlib as _mpl #REMOVED
+        #_mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
+        #_mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
+        #_mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
+        #_mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
+        #
+#       # _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\Phi func.$')
+        #_mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
 
     outputDict = {}
 #    outputDict['alphaArray'] = alphaHatListArray
