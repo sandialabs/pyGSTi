@@ -18,12 +18,12 @@ import sys as _sys
 import hashlib as _hashlib
 
 from ..tools import compattools as _compat
+from ..tools.opttools import timed_block
 
 from . import plotly_plot_ex as _plotly_ex
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
-
 
 def digest(obj):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
@@ -79,6 +79,11 @@ def _is_hashable(x):
         return False
     return True
 
+def get_fn_name_key(fn):
+    name = fn.__name__
+    if hasattr(fn, '__self__'):
+        name += '.' + fn.__self__.__class__.__name__
+    return name
 
 def call_key(fn, args):
     """ 
@@ -96,13 +101,8 @@ def call_key(fn, args):
     -------
     tuple
     """
-    if hasattr(fn,"__self__"):
-        # hash on ClassName.methodName to avoid collisions, e.g. w/ "_create"
-        fnName = fn.__self__.__class__.__name__ + "." + fn.__name__
-    else:
-        fnName = fn.__name__
+    fnName = get_fn_name_key(fn)
     return (fnName,) + tuple(map(digest,args))
-
 
 def randomID():
     """ Returns a random DOM ID """
@@ -204,6 +204,7 @@ class Workspace(object):
 
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
+        self.ineffectiveCache = set()
         self._register_components(False)
 
 
@@ -640,16 +641,25 @@ class Workspace(object):
             else:
                 # argVals now contains all the arguments, so call the function if
                 #  we need to and add result.
-                '''
-                key = call_key(fn, argVals) # cache by call key
-                if key not in self.compCache:
-                    #print("DB: computing with args = ", argVals)
-                    #print("DB: computing with arg types = ", [type(x) for x in argVals])
-                    self.compCache[key] = fn(*argVals)
-                result = self.compCache[key]
-                '''
-                key = 'NA'
-                result = fn(*argVals)
+                name_key = get_fn_name_key(fn)
+                if fn.__name__ == '_create' or \
+                    name_key in self.ineffectiveCache:
+                    result = fn(*argVals)
+                    key = 'NA'
+                else:
+                    times = dict()
+                    with timed_block('hash', times):
+                        key = call_key(fn, argVals) # cache by call key
+                    if key not in self.compCache:
+                        #print("DB: computing with args = ", argVals)
+                        #print("DB: computing with arg types = ", [type(x) for x in argVals])
+                        with timed_block('call', times):
+                            self.compCache[key] = fn(*argVals)
+                    if 'call' in times:
+                        if times['hash'] > times['call']:
+                            self.ineffectiveCache.add(name_key)
+                            print('Tagged function {} as cache-ineffective'.format(name_key))
+                    result = self.compCache[key]
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
@@ -1816,11 +1826,6 @@ class WorkspacePlot(WorkspaceOutput):
         for i, fig in enumerate(self.figs):
             if isinstance(fig, NotApplicable): 
                 continue
-            if 'height' in fig['layout']:
-                if fig['layout']['height'] > maxH:
-                    iMaster, maxH = i, fig['layout']['height'];
-        assert(iMaster is not None)
-          #maybe we'll deal with this case in the future by setting 
           # master=None below, but it's unclear whether this will is needed.
         
         divHTML = []
