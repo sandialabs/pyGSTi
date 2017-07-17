@@ -200,6 +200,11 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
+    if itemWeights is None: 
+        itemWeights = {}
+    gateWeight = itemWeights.get('gates',1.0)
+    spamWeight = itemWeights.get('spam',1.0)
+
     if CPpenalty         == 0 and \
         TPpenalty        == 0 and \
         validSpamPenalty == 0 and \
@@ -207,12 +212,11 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         gatesMetric == "frobenius" and \
         spamMetric  == "frobenius":
 
-        if itemWeights is None: 
-            itemWeights = {}
-        gateWeight = itemWeights.get('gates',1.0)
-        spamWeight = itemWeights.get('spam',1.0)
-
         def objective_fn(gs):
+            #print('in obj fn')
+            #print(targetGateset.preps['rho0'].base)
+            #print(gs.preps['rho0'].base)
+
             residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
             return residuals
 
@@ -227,7 +231,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         
 
     result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
-            maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm)
+            maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm, gateWeight=gateWeight, spamWeight=spamWeight)
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
@@ -241,7 +245,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     return result
 
 
-def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
+def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, gateWeight, spamWeight):
     def jacobian(vec):
         '''
         The derivative of the objective function with respect the input parameter vector, v
@@ -300,7 +304,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result = _np.rollaxis(result, 2, 1) # Don't mix up d sides
             result = -1 * result.reshape((d**2, N))
             assert result.shape == (d ** 2, N)
-            jacMx[start:start+d**2] = result
+            jacMx[start:start+d**2] = gateWeight * result
             start += d**2
         for P in preps:
             '''
@@ -315,7 +319,8 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result *= -1
             result.shape = (d, N)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            print(spamWeight)
+            jacMx[start:start+d] = spamWeight * result
             start += d
         for E in effects:
             '''
@@ -326,7 +331,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             # (1,d, N) to (d, N)
             result.shape = (d, N)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            jacMx[start:start+d] = spamWeight * result
             start += d
         if gs._povm_identity is not None:
             POVM = gs._povm_identity
@@ -338,11 +343,10 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
             result.shape = (d, N)
             # (1,d, N) to (d, N)
             assert result.shape == (d, N)
-            #jacMx[start:start+d] = result
+            jacMx[start:start+d] = spamWeight * result
             start += d
 
-        '''
-        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-10)
+        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-2)
         import matplotlib.pyplot as plt
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
 
@@ -357,21 +361,18 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn):
         cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
         fig.colorbar(im, cax=cbar_ax)
         plt.show()
-        '''
 
         return jacMx
         
     
     return jacobian
 
-'''
 def array_eq(a, b):
-    return _np.linalg.norm(a-b) < 1e-6
-'''
+    return _np.linalg.norm(a-b) < 1e-8
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity=0, algorithm='min'):
+                    returnAll=False, verbosity=0, algorithm='min', gateWeight=1, spamWeight=1):
     """
     Optimize the gauge of a gateset using a custom objective function.
 
@@ -417,11 +418,14 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     verbosity : int, optional
         How much detail to send to stdout.
 
-    jacobian : function, optional
-        Derivative of the objective function
-
     algorithm : string, either 'ls' or 'min', optional
         The algorithm to use when performing gauge optimization
+
+    spamWeight : float
+        Weight for spam elements
+
+    gateWeight : float
+        Weight for gate elements
 
     Returns
     -------
@@ -449,7 +453,6 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
-
     def call_objective_fn(gaugeGroupElVec):
         #print(gaugeGroupElVec)
         #print('_' * 80)
@@ -469,8 +472,6 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         transformed = gs.preps['rho0'].base
         #print('transformed:')
         #print(transformed)
-        #if not array_eq(original, transformed):
-        #raise ValueError('Gate rho vec changed')
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
@@ -483,7 +484,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                               method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                               callback = print_obj_func if bToStdout else None)
     elif algorithm == 'ls':
-        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn)
+        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, gateWeight, spamWeight)
         minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
                                     max_nfev=maxfev, ftol=tol)
     else:
