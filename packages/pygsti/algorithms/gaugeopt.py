@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
-from pprint import pprint
 
 from .. import objects as _objs
 from .. import tools as _tools
@@ -213,10 +212,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         spamMetric  == "frobenius":
 
         def objective_fn(gs):
-            #print('in obj fn')
-            #print(targetGateset.preps['rho0'].base)
-            #print(gs.preps['rho0'].base)
-
             residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
             return residuals
 
@@ -275,7 +270,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, gateWeight, 
 
         # S, and S_inv are (dxd)
         S       = gaugeGroupEl.get_transform_matrix()
-        #print(S)
         S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
         # dS is ((d*d)xlen(v))
         dS      = gaugeGroupEl.gate.deriv_wrt_params()
@@ -319,7 +313,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, gateWeight, 
             result *= -1
             result.shape = (d, N)
             assert result.shape == (d, N)
-            print(spamWeight)
             jacMx[start:start+d] = spamWeight * result
             start += d
         for E in effects:
@@ -345,23 +338,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, gateWeight, 
             assert result.shape == (d, N)
             jacMx[start:start+d] = spamWeight * result
             start += d
-
-        alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-2)
-        import matplotlib.pyplot as plt
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
-
-        ax1.matshow(jacMx, vmin=-1, vmax=1)
-        ax1.set_title('analytic')
-        ax2.matshow(alt_jac, vmin=-1, vmax=1)
-        ax2.set_title('ffd')
-        im = ax3.matshow(alt_jac - jacMx, vmin=-1, vmax=1)
-        ax3.set_title('combined')
-
-        fig.subplots_adjust(right=0.8)
-        cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-        fig.colorbar(im, cax=cbar_ax)
-        plt.show()
-
         return jacMx
     
     return jacobian
@@ -453,24 +429,10 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
     def call_objective_fn(gaugeGroupElVec):
-        #print(gaugeGroupElVec)
-        #print('_' * 80)
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
-        original = gs.preps['rho0'].base
-        #print('original:')
-        #print(original)
         transform = gaugeGroupEl.get_transform_matrix()
-        '''
-        if array_eq(transform, _np.identity(transform.shape[0])):
-            print('Transform was equal to identity')
-        else:
-            print('Non identity')
-        '''
         gs.transform(gaugeGroupEl)
-        transformed = gs.preps['rho0'].base
-        #print('transformed:')
-        #print(transformed)
         return objective_fn(gs)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
