@@ -13,7 +13,7 @@ import scipy.stats        as _stats
 from .. import algorithms as _alg
 from .. import tools      as _tools
 from .. import objects    as _objs
-from . import reportables as _cr
+from . import reportables as _reportables
 
 from .table import ReportTable as _ReportTable
 
@@ -199,7 +199,7 @@ class SpamParametersTable(WorkspaceTable):
     
         table       = _ReportTable(colHeadings, formatters)
     
-        spamDotProdsQty = _cr.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
+        spamDotProdsQty = _reportables.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
         DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
     
         formatters      = [ 'Rho' ] + [ ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
@@ -403,7 +403,7 @@ class ChoiTable(WorkspaceTable):
             if "eigenvalues" in display or "barplot" in display:
                 qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
             cri = confidenceRegionInfo if (gateset is gatesets[-1]) else None
-            qtysList.append( _cr.compute_gateset_qtys(qtys_to_compute, gateset, cri) )
+            qtysList.append( _reportables.compute_gateset_qtys(qtys_to_compute, gateset, cri) )
 
         colHeadings = ['Gate']
         for disp in display:
@@ -513,7 +513,7 @@ class GatesVsTargetTable(WorkspaceTable):
     
         qtyNames        = ('infidelity','Jamiolkowski trace dist','diamond norm') #,'Frobenius diff'
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys            = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+        qtys            = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
         ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
 
@@ -572,7 +572,7 @@ class SpamVsTargetTable(WorkspaceTable):
     
         formatters = [ 'Rho' ] + [ ErrorBars ]*len(qtyNames)
         qtys_to_compute = [ '%s prep %s' % (l,qty) for qty in qtyNames for l in prepLabels ]
-        qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+        qtys = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
         for l in prepLabels:
             if confidenceRegionInfo is None:
@@ -583,7 +583,7 @@ class SpamVsTargetTable(WorkspaceTable):
     
         formatters = [ 'Effect' ] + [ ErrorBars ]*len(qtyNames)
         qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
-        qtys = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+        qtys = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
         for l in effectLabels:
             if confidenceRegionInfo is None:
@@ -779,7 +779,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
     
         qtyNames        = ('angle btwn rotn axes',)
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys            = _cr.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
+        qtys            = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
                                                 confidenceRegionInfo)
         PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
     
@@ -916,7 +916,7 @@ class old_GateDecompTable(WorkspaceTable):
     
         qtyNames = ('eigenvalues','decomposition')
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+        qtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
         decompNames = ('fixed point',
                        'axis of rotation',
                        'decay of diagonal rotation terms',
@@ -980,7 +980,7 @@ class old_RotationAxisTable(WorkspaceTable):
         gateLabels = list(gateset.gates.keys())
     
         qtys_to_compute = [ '%s decomposition' % gl for gl in gateLabels ] + ['Gateset Axis Angles']
-        qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+        qtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
     
         colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
         nCols = len(colHeadings)
@@ -1107,7 +1107,7 @@ class GateEigenvalueTable(WorkspaceTable):
     
         qtyNames = ('eigenvalues',)
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys = _cr.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
+        qtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
 
         def format_evals(evals,evalsEB):
             evals = evals.reshape(evals.size, 1)

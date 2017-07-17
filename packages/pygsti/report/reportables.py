@@ -19,13 +19,14 @@ from .. import tools as _tools
 from .. import algorithms as _alg
 from .reportableqty import ReportableQty
 
+from pprint import pprint
+
 FINITE_DIFF_EPS = 1e-7
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
     if p > 1-tol: return 1-tol
     return p
-
 
 def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
@@ -59,7 +60,6 @@ def _getPrepQuantity(fnOfPrep, gateset, prepLabel, eps, confidenceRegionInfo, ve
                                                               verbosity=verbosity)
     return ReportableQty(f0,df)
 
-
 def _getEffectQuantity(fnOfEffect, gateset, effectLabel, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a POVM effect. """
 
@@ -74,7 +74,6 @@ def _getEffectQuantity(fnOfEffect, gateset, effectLabel, eps, confidenceRegionIn
     df, f0 = confidenceRegionInfo.get_effect_fn_confidence_interval(
         fnOfEffect, effectLabel, eps, returnFnVal=True, verbosity=verbosity)
     return ReportableQty(f0,df)
-
 
 def _getGateSetQuantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
@@ -92,7 +91,6 @@ def _getGateSetQuantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosi
 
     return ReportableQty(f0,df)
 
-
 def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a spam vectors."""
 
@@ -108,8 +106,6 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
                                                               eps, returnFnVal=True,
                                                               verbosity=verbosity)
     return ReportableQty(f0,df)
-
-
 
 def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     """
@@ -207,7 +203,6 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
     if qtynames[0] is None:
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
-
 
 def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
     """
@@ -356,8 +351,6 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
                 angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
         return angles_btwn_rotn_axes
 
-
-
     # Spam quantities (computed for all spam vectors at once):
     key = "Spam DotProds"; possible_qtys.append(key)
     if key in qtynames:
@@ -378,8 +371,8 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
         if any( [qtyname in gate_qtys for qtyname in qtynames] ):
             #gate_evals,gate_evecs = _np.linalg.eig(gate)
-            evalsQty = _getGateQuantity(_np.linalg.eigvals, gateset, label, eps, confidenceRegionInfo)
-            choiQty = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
+            evalsQty  = _getGateQuantity(_np.linalg.eigvals, gateset, label, eps, confidenceRegionInfo)
+            choiQty   = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
             choiEvQty = _getGateQuantity(choi_evals, gateset, label, eps, confidenceRegionInfo)
             choiTrQty = _getGateQuantity(choi_trace, gateset, label, eps, confidenceRegionInfo)
 
@@ -446,8 +439,9 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
     if qtynames[0] is None:
         return possible_qtys
+    #pprint(qtynames)
+    #pprint(ret)
     return ret
-
 
 def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):
     """
@@ -519,7 +513,8 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
         per_gatestring_qtys['gatestring chi2(%s)' % spl] = []
 
     if any( [qtyname in per_gatestring_qtys for qtyname in qtynames ] ):
-        if gatestrings is None: gatestrings = list(dataset.keys())
+        if gatestrings is None: 
+            gatestrings = list(dataset.keys())
         for gs in gatestrings:
             if gs in dataset: # skip gate strings given that are not in dataset
                 dsRow = dataset[gs]
@@ -568,7 +563,6 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
     if qtynames[0] is None:
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
-
 
 def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,
                                 confidenceRegionInfo=None):

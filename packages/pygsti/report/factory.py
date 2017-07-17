@@ -22,6 +22,7 @@ from ..             import tools as _tools
 from .              import workspace as _ws
 
 from ..tools.opttools import timed_block as _timed_block
+from ..tools.mpitools import distribute_indices as _distribute_indices
 
 import functools as _functools
 
@@ -735,23 +736,33 @@ def create_general_report(results, filename, confidenceLevel=None,
                 dscmp_switchBd.add("dscmp_gss",(0,))
 
             with timed('datacomparators'):
-                with printer.progress_logging(2):
-                    for d1, dslbl1 in enumerate(dataset_labels):
-                        printer.show_progress(d1, len(dataset_labels), messageLevel=2, prefix='Dataset1 ')
-                        dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
-                        # Note: just use gate string structure from the "first" (Dataset1) data set,
-                        # which means that if the 2nd results object could have *different* gate strings
-                        # and the 'dscmp' color box plot must gracefully handle this case.
-                        
-                        with printer.progress_logging(2):
-                            for d2, dslbl2 in enumerate(dataset_labels):
-                                printer.show_progress(d2, len(dataset_labels), prefix='    Dataset2 ')
-                                with timed('Dataset 2 datacomparator', verbosity=3):
-                                    ds1 = results_dict[dslbl1].dataset
-                                    ds2 = results_dict[dslbl2].dataset
-                                    dscmp_switchBd.dscmp[d1,d2] = _DataComparator(
-                                        [ds1,ds2], DS_names=[dslbl1,dslbl2])
+                for d1, dslbl1 in enumerate(dataset_labels):
+                    dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
 
+                dsComp = dict()
+                indices = []
+                for i in range(len(dataset_labels)):
+                    for j in range(len(dataset_labels)):
+                        indices.append((i, j))
+                _, indexDict, _ = _distribute_indices(indices, comm)
+                rank = comm.Get_rank()
+                for k, v in indexDict.items():
+                    if v == rank:
+                        d1, d2 = k
+                        dslbl1 = dataset_labels[d1]
+                        dslbl2 = dataset_labels[d2]
+
+                        ds1 = results_dict[dslbl1].dataset
+                        ds2 = results_dict[dslbl2].dataset
+                        dsComp[(d1, d2)] = _DataComparator(
+                            [ds1, ds2], DS_names=[dslbl1,dslbl2])
+                dicts = comm.gather(dsComp, root=0)
+                if rank == 0:
+                    for d in dicts:
+                        for k, v in d.items():
+                            d1, d2 = k
+                            dscmp_switchBd.dscmp[d1, d2] = v
+                
             with timed('dscmpSwitchBoard'):
                 add_qty('dscmpSwitchboard', dscmp_switchBd)
             with timed('dsComparisonHistogram'):
@@ -763,12 +774,13 @@ def create_general_report(results, filename, confidenceLevel=None,
     else:
         toggles['CompareDatasets'] = False
 
-    # 3) populate template html file => report html file
-    printer.log("*** Merging into template file ***")
-    template = "report_dashboard.html"
-    _merge_template(qtys, template, filename, auto_open, precision,
-                    connected=connected, toggles=toggles, verbosity=printer,
-                    CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+    if comm.Get_rank() == 0:
+        # 3) populate template html file => report html file
+        printer.log("*** Merging into template file ***")
+        template = "report_dashboard.html"
+        _merge_template(qtys, template, filename, auto_open, precision,
+                        connected=connected, toggles=toggles, verbosity=printer,
+                        CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

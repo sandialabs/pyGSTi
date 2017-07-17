@@ -1813,8 +1813,9 @@ class WorkspacePlot(WorkspaceOutput):
         #pick "master" plot, whose resizing dictates the resizing of other plots,
         # as the largest-height plot.
         iMaster = None; maxH = 0;
-        for i,fig in enumerate(self.figs):
-            if isinstance(fig,NotApplicable): continue
+        for i, fig in enumerate(self.figs):
+            if isinstance(fig, NotApplicable): 
+                continue
             if 'height' in fig['layout']:
                 if fig['layout']['height'] > maxH:
                     iMaster, maxH = i, fig['layout']['height'];

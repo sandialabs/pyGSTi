@@ -46,8 +46,8 @@ def loglikelihoodRatioTest(nListList):
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
 
-def pval(llrval,dof):
-    return 1-_stats.chi2.cdf(llrval,dof)
+def pval(llrval, dof):
+    return 1 - _stats.chi2.cdf(llrval, dof)
 
 def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
     for gate in gate_exclusions:
