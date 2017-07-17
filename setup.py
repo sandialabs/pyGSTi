@@ -42,7 +42,7 @@ setup(name='pyGSTi',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.construction', 'pygsti.drivers', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
       package_data={'pygsti.report': ['templates/*.html', 'templates/css/*.css']},
-      requires=['numpy','scipy','plotly','pyparsing'],
+      requires=['numpy','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
