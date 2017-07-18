@@ -8,9 +8,10 @@ def main():
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
     with timed_block('Basic gauge opt:'):
         gs_gaugeopt = gaugeopt_to_target(gs_datagen, gs_target, 
-                itemWeights={'spam' : 0.0001, 'gates':1.0},
+                itemWeights={'spam' : 1.0, 'gates':1.0},
+                #itemWeights={'spam' : 0.0001, 'gates':1.0},
                 spamMetric='frobenius',
-                gatesMetric='frobenius')
+                gatesMetric='frobenius', checkJac=True)
 
 if __name__ == '__main__':
     main()
