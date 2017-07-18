@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import warnings           as _warnings
 import numpy              as _np
 import scipy.stats        as _stats
+import scipy.linalg       as _spl
 
 from .. import algorithms as _alg
 from .. import tools      as _tools
@@ -588,7 +589,7 @@ class SpamVsTargetTable(WorkspaceTable):
 class ErrgenTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S"), display_as="boxes",
-                 genType="logG-logT"):  #TODO: change default
+                 genType="logTiG"):
                  
         """
         Create a table listing the error generators obtained by
@@ -785,7 +786,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
     
 #    def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 class GateDecompTable(WorkspaceTable):
-    def __init__(self, ws, gateset, confidenceRegionInfo=None):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create table for decomposing a gateset's gates.
 
@@ -796,6 +797,10 @@ class GateDecompTable(WorkspaceTable):
         ----------
         gateset : GateSet
             The estimated gate set.
+
+        targetGateset : GateSet
+            The target gate set, used to help disambiguate the matrix
+            logarithms that are used in the decomposition.
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -805,29 +810,33 @@ class GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
+        super(GateDecompTable,self).__init__(ws, self._create, gateset,
+                                             targetGateset, confidenceRegionInfo)
 
         
-    def _create(self, gateset, confidenceRegionInfo):
+    def _create(self, gateset, targetGateset, confidenceRegionInfo):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.basis.name
         basisDims = gateset.basis.dim
 
-        colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
     
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
-        formatters = (None, 'Pi', 'Normal') + ('Pi',)*len(gateLabels)
+        formatters = (None, 'Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
-        axes = {}; angles = {}
+        axes = {}; angles = {}; inexact = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
-            logG = _tools.custom_matrix_log(gate)
+            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl])
+            logG = _tools.approximate_matrix_log(gate, target_logG)
+            inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
+            
             hamProjs = _tools.std_errgen_projections(
                 logG, "hamiltonian", basisNm, basisNm)
             norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs #/ norm
+            axes[gl] = hamProjs / norm
             #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
                # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
                # least of Pauli products) and divide by 2# to be consistent with
@@ -845,7 +854,7 @@ class GateDecompTable(WorkspaceTable):
                # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
 
         for gl in gateLabels:            
-            rowData = [gl, angles[gl], axes[gl] ]
+            rowData = [gl, angles[gl], axes[gl], inexact[gl] ]
 
             for j,gl_other in enumerate(gateLabels):
                 rotnAngle = angles[gl]
