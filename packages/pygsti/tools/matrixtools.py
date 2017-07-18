@@ -11,6 +11,7 @@ import scipy.linalg as _spl
 import warnings as _warnings
 
 def array_eq(a, b, tol=1e-8):
+    print(_np.linalg.norm(a-b))
     return _np.linalg.norm(a-b) < tol
 
 def trace(M): #memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
