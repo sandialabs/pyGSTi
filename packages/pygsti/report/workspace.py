@@ -17,6 +17,7 @@ import inspect as _inspect
 import sys as _sys
 import hashlib as _hashlib
 
+from .. import objects as _objs
 from ..tools import compattools as _compat
 from ..tools.opttools import timed_block
 
@@ -82,7 +83,7 @@ def _is_hashable(x):
 def get_fn_name_key(fn):
     name = fn.__name__
     if hasattr(fn, '__self__'):
-        name += '.' + fn.__self__.__class__.__name__
+        name = fn.__self__.__class__.__name__ + '.' + name
     return name
 
 def call_key(fn, args):
@@ -204,8 +205,8 @@ class Workspace(object):
 
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
-        self.ineffectiveCache = set()
         self._register_components(False)
+        self.ineffectiveCache = set()
 
 
     def _makefactory(self,cls,autodisplay):
@@ -633,32 +634,31 @@ class Workspace(object):
             for j,arg in nonSwitchedArgs:
                 argVals[j] = arg
 
+            name_key = get_fn_name_key(fn)
             #if any argument is a NotApplicable object, just use it as the
             # result. Otherwise, compute the result or pull it from cache.
             for v in argVals:
-                if isinstance(v,NotApplicable):
+                if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
+                if isinstance(v, (_objs.DataSet, _objs.DataComparator)):
+                    self.ineffectiveCache.add(name_key)
             else:
-                # argVals now contains all the arguments, so call the function if
-                #  we need to and add result.
-                name_key = get_fn_name_key(fn)
-                if fn.__name__ == '_create' or \
-                    name_key in self.ineffectiveCache:
-                    result = fn(*argVals)
+                if name_key in self.ineffectiveCache:
                     key = 'NA'
+                    result = fn(*argVals)
                 else:
+                    # argVals now contains all the arguments, so call the function if
+                    #  we need to and add result.
                     times = dict()
                     with timed_block('hash', times):
                         key = call_key(fn, argVals) # cache by call key
                     if key not in self.compCache:
-                        #print("DB: computing with args = ", argVals)
-                        #print("DB: computing with arg types = ", [type(x) for x in argVals])
                         with timed_block('call', times):
                             self.compCache[key] = fn(*argVals)
                     if 'call' in times:
                         if times['hash'] > times['call']:
+                            print('Added {} to hash-ineffective functions'.format(name_key))
                             self.ineffectiveCache.add(name_key)
-                            print('Tagged function {} as cache-ineffective'.format(name_key))
                     result = self.compCache[key]
 
             if key not in storedKeys:
