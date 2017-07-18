@@ -35,3 +35,4 @@ PauliMx
 IDENTITYVEC 1.4142136 0 0 0
 SPAMLABEL minus = rho0 remainder
 SPAMLABEL plus = rho0 E0
+BASIS unknown
