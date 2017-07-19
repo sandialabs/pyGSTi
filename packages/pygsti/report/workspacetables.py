@@ -915,7 +915,7 @@ class old_GateDecompTable(WorkspaceTable):
         colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
     
-        qtyNames = ('eigenvalues','decomposition')
+        qtyNames = ('decomposition',)
         qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
         qtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
         decompNames = ('fixed point',
@@ -931,14 +931,15 @@ class old_GateDecompTable(WorkspaceTable):
         formatters = (None, VecErrorBars, 'Normal', 'Normal', ErrorBars, ErrorBars)
 
         for gl in gateLabels:
+            evals = _reportables.eigenvalues(gateset, gl)
             decomp, decompEB = qtys['%s decomposition' % gl].get_value_and_err_bar()
     
             if confidenceRegionInfo is None or decompEB is None: #decompEB is None when gate decomp failed
-                evals = qtys['%s eigenvalues' % gl].get_value()
+                evals = evals.get_value()
                 rowData = [gl, (evals,None)] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
                     [(decomp.get(x,'X'),None) for x in decompNames[2:4] ]
             else:
-                evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
+                evals, evalsEB = evals.get_value_and_err_bar()
                 rowData = [gl, (evals,evalsEB)] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
                     [(decomp.get(x,'X'),decompEB.get(x,'X')) for x in decompNames[2:4] ]
     
@@ -1106,10 +1107,6 @@ class GateEigenvalueTable(WorkspaceTable):
 
         formatters = [None]*len(colHeadings)
     
-        qtyNames = ('eigenvalues',)
-        qtys_to_compute = [ '%s %s' % (gl,qty) for qty in qtyNames for gl in gateLabels ]
-        qtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, confidenceRegionInfo)
-
         def format_evals(evals,evalsEB):
             evals = evals.reshape(evals.size, 1)
             if evalsEB is not None:
@@ -1128,7 +1125,8 @@ class GateEigenvalueTable(WorkspaceTable):
             row_data = [gl]
             row_formatters = [None]
 
-            evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
+            evals, evalsEB = _reportables.eigenvalues(gateset, gl).get_value_and_err_bar()
+            #evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
 
             if targetGateset is not None:
                 gate = gateset.gates[gl]
@@ -1190,9 +1188,7 @@ class GateEigenvalueTable(WorkspaceTable):
                         self.ws,[rel_evals],["red"],["rel"],centerText=gl)
                     row_data.append( fig )
                     row_formatters.append( 'Figure' )
-    
             table.addrow(row_data, row_formatters)
-    
         table.finish()
         return table
     
