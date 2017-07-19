@@ -12,7 +12,7 @@ import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
-from . import lindbladiantools as _lt
+from . import lindbladtools as _lt
 from . import compattools as _compat
 from . import basis as _basis
 from .basis import change_basis
@@ -109,6 +109,25 @@ def frobeniusdist2(A, B):
         The resulting frobenius distance.
     """
     return _mt.frobeniusnorm2(A-B)
+
+def residuals(A, B):
+    """
+    Calculate residuals between the elements of two matrices
+
+    Parameters
+    ----------
+    A : numpy array
+        First matrix.
+
+    B : numpy array
+        Second matrix.
+
+    Returns
+    -------
+    np.array
+        residuals
+    """
+    return (A-B).flatten()
 
 
 def tracenorm(A):
@@ -580,7 +599,57 @@ def unitary_to_process_mx(U):
     return _np.kron(U,_np.conjugate(U))
 
 
-def error_generator(gate, target_gate, typ="logG-logT"):
+def process_mx_to_unitary(superop):
+    """
+    Compute the unitary corresponding to the (unitary-action!)
+    super-operator `superop` which acts on (row)-vectorized
+    density matrices.  The super-operator must be of the form
+    `kron(U,U.conj)` or an error will be thrown.
+
+    Parameters
+    ----------
+    superop : numpy array
+        The superoperator matrix which acts on vectorized 
+        density matrices (in the 'std' matrix-unit basis).
+
+    Returns
+    -------
+    numpy array
+       The unitary matrix which acts on state vectors.
+    """
+    d2 = superop.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = _np.empty( (d,d), 'complex')
+    
+    for i in range(d):
+        densitymx_i = _np.zeros( (d,d), 'd' ); densitymx_i[i,i] = 1.0 # |i><i|
+        UiiU = _np.dot(superop, densitymx_i.flat).reshape((d,d)) # U|i><i|U^dag
+        
+        if i > 0:
+            j=0
+            densitymx_ij = _np.zeros( (d,d), 'd' ); densitymx_ij[i,j] = 1.0 # |i><i|
+            UijU = _np.dot(superop, densitymx_ij.flat).reshape((d,d)) # U|i><j|U^dag
+            Uj = U[:,j]
+            Ui = _np.dot(UijU, Uj)
+        else:
+            ##method1: use random state projection
+            #rand_state = _np.random.rand(d)
+            #projected_rand_state = _np.dot(UiiU, rand_state)
+            #assert(_np.linalg.norm(projected_rand_state) > 1e-8)
+            #projected_rand_state /= _np.linalg.norm(projected_rand_state)
+            #Ui = projected_rand_state
+
+            #method2: get eigenvector corresponding to largest eigenvalue (more robust)
+            evals,evecs = _np.linalg.eig(UiiU)
+            imaxeval = _np.argmax(_np.abs(evals))
+            #TODO: assert other eigenvalues are much smaller?
+            Ui = evecs[:,imaxeval]
+            Ui /= _np.linalg.norm(Ui)
+        U[:,i] = Ui
+        
+    return U
+
+
+def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     """
     Construct the error generator from a gate and its target.
 
@@ -610,40 +679,28 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logG = _mt.custom_matrix_log(gate,"ignore",TOL,real_logarithm=True)
-        logT = _mt.custom_matrix_log(target_gate,"ignore",TOL,real_logarithm=True)
+        logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+        logG = _mt.approx_matrix_log(gate, logT)
 
-
-        # if logG and logT are both real, just take the difference,
-        #  as there are no branch cut issues in this case
+        # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
            _np.linalg.norm(_np.imag(logT)) < TOL:
-            return _np.real(logG - logT) 
+            return _np.real(logG - logT)
 
-        #Otherwise, there could be branch cut issues, so rotate
-        # the branch cut to a point in between the target's
-        # eigenvalues
-        _warnings.warn("Could not construct a real logarithms for the" +
-                       "'logG-logT' generator.  Perhaps you should use " +
-                       "the 'logTiG' generator instead?")
+        #Otherwise, there could be branch cut issues or worse, so just
+        # raise an error for now (maybe return a dummy if needed elsewhere?)
+        raise ValueError("Could not construct a real logarithms for the" +
+                         "'logG-logT' generator.  Perhaps you should use " +
+                         "the 'logTiG' generator instead?")
 
-        evals = _spl.eigvals(target_gate)
-        N = len(evals)
-        angles = _np.sort(_np.imag(_np.log(evals)))
-        deltas = [ angles[i+1]-angles[i] for i in range(N-1) ]
-        deltas.append(angles[0]+2*_np.pi - angles[N-1])
-        iMax = _np.argmax(deltas)
-        if iMax < N-1:
-            bca = (angles[iMax] + angles[iMax+1])/2 + _np.pi #branch-cut angle
-        else: #iMax == N-1
-            bca = (angles[N-1] + angles[0]+2*_np.pi)/2 - _np.pi
-        a = _np.exp(1j*bca)
-        errgen = _spl.logm(a*gate) - _spl.logm(a*target_gate)
-        
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate),TOL)
-        
+        errgen = _mt.near_identity_matrix_log(_np.dot(target_gate_inv,gate), TOL)
+        #errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate), "warn", TOL) #should also work
+        if _np.linalg.norm(errgen.imag) > TOL:
+            _warnings.warn("Falling back to approximate log for logTiG error generator")
+            errgen = _mt.approximate_matrix_log(_np.dot(target_gate_inv,gate),
+                                                _np.zeros(gate.shape,'d'), TOL=TOL)
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
@@ -652,7 +709,6 @@ def error_generator(gate, target_gate, typ="logG-logT"):
         #maybe this is actually ok, but a complex error generator will
         # need to be plotted differently, etc -- TODO
     return _np.real(errgen)
-
 
 
 
@@ -1272,7 +1328,8 @@ def project_gateset(gateset, targetGateset,
 
         
     errgens = [ error_generator(gateset.gates[gl],
-                                targetGateset.gates[gl], genType)
+                                targetGateset.gates[gl],
+                                targetGateset.basis, genType)
                 for gl in gateLabels ]
 
     for gl,errgen in zip(gateLabels,errgens):

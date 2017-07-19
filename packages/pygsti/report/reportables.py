@@ -754,7 +754,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logTiG_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logTiG")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
@@ -764,7 +764,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logGmlogT_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logG-logT")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logG-logT")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 

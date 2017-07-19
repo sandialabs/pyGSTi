@@ -1745,6 +1745,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
         minlog = _np.floor(min(log_ys))
         maxlog = _np.ceil(max(log_ys))

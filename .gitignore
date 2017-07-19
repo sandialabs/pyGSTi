@@ -16,6 +16,8 @@ hooks/etc/permissions.yml
 *comm_output*.txt
 **offline/
 **tutorial_files
+*.lprof
+*.cache
 
 # Test Metadata #
 #################
@@ -76,9 +78,12 @@ doc/build/_build/*
 
 # Customer Data #
 #################
-scripts/profiling/report_profiling/*.ipynb
-scripts/profiling/report_profiling/Analyze+2Q+data.py
-scripts/profiling/report_profiling/*.html
-scripts/profiling/report_profiling/standard_report.py
-scripts/profiling/report_profiling/tp_report.py
+scripts/profiling/report/*.ipynb
+scripts/profiling/report/Analyze+2Q+data.py
+scripts/profiling/report/*.html
+scripts/profiling/report/standard_report.py
+scripts/profiling/report/tp_report.py
+
+# Profiling data #
+scripts/profiling/output
 
