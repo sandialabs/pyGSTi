@@ -12,6 +12,7 @@ import warnings as _warnings
 from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import GateSet as _GateSet
+from ..objects import VerbosityPrinter as _VerbosityPrinter
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc
 
@@ -220,7 +221,8 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                        fidPairs=None, truncScheme="whole germ powers", nest=True,
                        keepFraction=1, keepSeed=None, includeLGST=True,
-                       gateLabelAliases=None, dscheck=None):
+                       gateLabelAliases=None, dscheck=None, actionIfMissing="raise",
+                       verbosity=0):
     """
     Create a set of gate string structures for LSGST.
 
@@ -324,8 +326,18 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
     dscheck : DataSet, optional
-        A dataset which should be checked to ensure it contains all of the 
-        returned gate strings.
+        A data set which is checked for each of the generated gate strings. When
+        a generated sequence is missing from this `DataSet`, action is taken
+        according to `actionIfMissing`.
+
+    actionIfMissing : {"raise","drop"}, optional
+        The action to take when a generated gate sequence is missing from
+        `dscheck` (only relevant when `dscheck` is not None).  "raise" causes
+        a ValueError to be raised; "drop" causes the missing sequences to be
+        dropped from the returned set.
+
+    verbosity : int, optional
+        The level of output to print to stdout.
 
 
     Returns
@@ -337,6 +349,8 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
 
+    printer = _VerbosityPrinter.build_printer(verbosity)
+    
     if nest == True and includeLGST == True and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
@@ -381,6 +395,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         running_gss.add_unindexed(lgst_list)
     
     lsgst_listOfStructs = [ ] # list of gate string structures to return
+    missing_list = []
 
     for maxLen in maxLengthList:
 
@@ -426,13 +441,30 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                     fiducialPairsThisIter = \
                         [ allPossiblePairs[k] for k in
                           sorted(rndm.choice(nPairs,nPairsToKeep,replace=False))]
-                        
-                gss.add_plaquette(germ_power, maxLen, germ, fiducialPairsThisIter, dscheck)
+
+                missing_list.extend( gss.add_plaquette(germ_power, maxLen, germ,
+                                                       fiducialPairsThisIter, dscheck) )
 
         if nest: gss = gss.copy() #pinch off a copy of running_gss
         gss.done_adding_strings()
         lsgst_listOfStructs.append( gss )
 
+    printer.log("--- Gate Sequence Creation ---", 1)
+    printer.log(" %d sequences created" % len(gss.allstrs))
+    if dscheck:
+        printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
+                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 1)
+    if len(missing_list) > 0:
+        missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
+                        for tup in missing_list]
+        printer.log("The following sequences were missing from the dataset:",4)
+        printer.log("\n".join(missing_msgs), 4)
+        if actionIfMissing == "raise":
+            raise ValueError("Missing data! %d missing gate sequences" % len(missing_msgs))
+        elif actionIfMissing == "drop":
+            pass
+        else:
+            raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
 
     for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
         if nest:
