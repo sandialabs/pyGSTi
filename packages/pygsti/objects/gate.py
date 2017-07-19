@@ -2301,14 +2301,48 @@ class LindbladParameterizedGate(GateMatrix):
         assert(d*d == d2), "Gate dim must be a perfect square"
         self.unitary_prefactor = unitaryPrefactor
 
+        self.ham_basis = ham_basis
+        self.other_basis = nonham_basis
+        self.matrix_basis = mxBasis
+
         #For now, always use pauli-product basis (should be able to use
         # gm also, but one thing at a time).
-        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, "logTiG")
+        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, mxBasis, "logTiG")
+        self._set_params_from_errgen(errgen, truncate)
+          #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
+          # and self.ham_basis_size and self.other_basis_size
+
+        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
+               _np.allclose(self.paramvals,0.0,atol=1e-6))
+
+        #Assume gate in in the pauli-product basis for now, just for
+        # simplicity.  I think everything should work fine in any other
+        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
+        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
+        self.leftTrans  = _np.linalg.inv(mxBasisToStd)
+        self.rightTrans = mxBasisToStd
+
+        #initialize intermediate storage for matrix and for deriv computation
+        bsO = self.other_basis_size
+        if bsO > 0:
+            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
+        else: self.Lmx = None
+
+        GateMatrix.__init__(self, self.unitary_prefactor)
+        self._construct_matrix() # construct base from the parameters
+
+        if not truncate:
+            assert(not _np.array_equal(gateMatrix,self.base)), \
+                   "Gate matrix must be truncated and truncate == False!"
+
+
+    def _set_params_from_errgen(self, errgen, truncate):
+        d2 = self.unitary_prefactor.shape[0]
+        
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.lindblad_errgen_projections(
-                errgen, ham_basis, nonham_basis, mxBasis, normalize=False,
-                return_generators=True, other_diagonal_only=nonham_diagonal_only) # in std basis
-
+                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
+                return_generators=True, other_diagonal_only=self.nonham_diagonal_only) # in std basis
 
         if self.hamGens is not None:
             bsH = self.hamGens.shape[0]+1 #projection-basis size (not nec. == d2)
@@ -2325,12 +2359,12 @@ class LindbladParameterizedGate(GateMatrix):
         if self.otherGens is not None:
             bsO = self.otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
 
-            if nonham_diagonal_only:
+            if self.nonham_diagonal_only:
                 assert(self.otherGens.shape == (bsO-1,d2,d2))
                 assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
                 #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
     
-                if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                if self.cptp: #otherParams is a 1D vector of the sqrts of diagonal els
                     otherC = otherC.clip(1e-16,1e100) #must be positive
                     otherParams = _np.sqrt(otherC.real) # shape (bs-1,)
                 else: #otherParams is a 1D vector of the real diagonal els of otherC
@@ -2343,7 +2377,7 @@ class LindbladParameterizedGate(GateMatrix):
     
                 otherParams = _np.empty((bsO-1,bsO-1),'d')
     
-                if cptp: #otherParams mx stores Cholesky decomp
+                if self.cptp: #otherParams mx stores Cholesky decomp
     
                     #push any slightly negative evals of otherC positive so that
                     # the Cholesky decomp will work.
@@ -2381,10 +2415,6 @@ class LindbladParameterizedGate(GateMatrix):
             otherParams = _np.empty(0,'d')
 
         self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
-
-        self.ham_basis = ham_basis
-        self.other_basis = nonham_basis
-        self.matrix_basis = mxBasis
         self.ham_basis_size = bsH
         self.other_basis_size = bsO
 
@@ -2393,29 +2423,6 @@ class LindbladParameterizedGate(GateMatrix):
         #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1),))
         #else:
         #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
-
-        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
-               _np.allclose(self.paramvals,0.0,atol=1e-6))
-
-        #Assume gate in in the pauli-product basis for now, just for
-        # simplicity.  I think everything should work fine in any other
-        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
-        self.leftTrans  = _np.linalg.inv(mxBasisToStd)
-        self.rightTrans = mxBasisToStd
-
-        #initialize intermediate storage for matrix and for deriv computation
-        if bsO > 0:
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
-        else: self.Lmx = None
-
-        GateMatrix.__init__(self, self.unitary_prefactor)
-        self._construct_matrix() # construct base from the parameters
-
-        if not truncate:
-            assert(not _np.array_equal(gateMatrix,self.base)), \
-                   "Gate matrix must be truncated and truncate == False!"
-
 
 
     def _construct_matrix(self):
@@ -2755,18 +2762,24 @@ class LindbladParameterizedGate(GateMatrix):
         if isinstance(S, _gaugegroup.UnitaryGaugeGroup.element):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
-            tMx = _np.dot(Uinv,_np.dot(self.base, U))
-            tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
-                                            self.ham_basis, self.other_basis,
-                                            self.cptp,self.nonham_diagonal_only,
-                                            True, self.matrix_basis)
-            #Note: truncate=True above because some unitary transforms seem to
-            # modify the eigenvalues to be negative beyond the tolerances
-            # checked when truncate == False.  I'm not sure why this occurs,
-            # since a true unitary should map CPTP -> CPTP...
-            
-            self.paramvals[:] = tGate.paramvals[:]
+
+            #just conjugate prefactor and Lindbladian exponent by U:
+            self.unitary_prefactor = _np.dot(Uinv,_np.dot(self.unitary_prefactor, U))
+            self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
+            self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_matrix()
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+
+            #CHECK WITH OLD (passes) TODO move to unit tests?
+            #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
+            #tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
+            #                                self.ham_basis, self.other_basis,
+            #                                self.cptp,self.nonham_diagonal_only,
+            #                                True, self.matrix_basis)
+            #assert(_np.linalg.norm(tGate.paramvals - self.paramvals) < 1e-6)
         else:
             raise ValueError("Invalid transform for this LindbladParameterizedGate")
 
