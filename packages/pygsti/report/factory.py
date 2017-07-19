@@ -627,7 +627,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, cri)
+    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
     qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
@@ -655,11 +655,11 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
         Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
                 
-    qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
-    qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, eff_ds, gsL,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc, sumUp=True)
+    #qtys['colorBoxPlotKeyPlot'] = ws.BoxKeyPlot(prepStrs, effectStrs)        
+    #qtys['bestEstimateSummedColorBoxPlot'] = ws.ColorBoxPlot(
+    #    switchBd.objective, gss, eff_ds, gsL,
+    #    linlg_pcntle=float(linlogPercentile) / 100,
+    #    minProbClipForWeighting=switchBd.mpc, sumUp=True)
 
     qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
         "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
@@ -670,11 +670,14 @@ def create_general_report(results, filename, confidenceLevel=None,
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc)
+    qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
 
     qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+    qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
+    #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
 
     if multidataset:
         #initialize a new "dataset comparison switchboard"
@@ -718,12 +721,12 @@ def create_general_report(results, filename, confidenceLevel=None,
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
 #        gateLabels = list(gateset.gates.keys())  # gate labels
-#        basisNm = gateset.get_basis_name()
-#        basisDims = gateset.get_basis_dimension()
+#        basisNm = gateset.basis.name
+#        basisDims = gateset.basis.dim.blockDims
 #    
-#        if basisNm != targetGateset.get_basis_name():
+#        if basisNm != targetGateset.basis.name:
 #            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-#                                 % (basisNm, targetGateset.get_basis_name()))
+#                                 % (basisNm, targetGateset.basis.name))
 #    
 #        #Do computation first
 #        # Note: set to "full" parameterization so we can set the gates below

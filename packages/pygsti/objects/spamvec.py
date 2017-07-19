@@ -172,6 +172,39 @@ class SPAMVec(object):
                                                   self.base), otherSpamVec)
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
 
+    def residuals(self, otherSpamVec, typ, transform=None, inv_transform=None):
+        """ 
+        Return a vector of residuals between this spam vector and
+        `otherSpamVec`, optionally transforming this vector first using
+        `transform` and `inv_transform` (depending on the value of `typ`).
+
+        Parameters
+        ----------
+        otherSpamVec : SPAMVec
+            The other spam vector
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed.
+
+        transform, inv_transform : numpy.ndarray
+            The transformation (if not None) to be performed.
+        
+        Returns
+        -------
+        float
+        """
+        if typ == 'prep':
+            if inv_transform is None:
+                return _gt.residuals(self.base,otherSpamVec)
+            else:
+                return _gt.residuals(_np.dot(inv_transform,self.base),
+                                          otherSpamVec)
+        elif typ == "effect":
+            if transform is None:
+                return _gt.residuals(self.base,otherSpamVec)
+            else:
+                return _gt.residuals(_np.dot(_np.transpose(transform),
+                                                  self.base), otherSpamVec)
 
     #Handled by derived classes
     #def __str__(self):
@@ -832,56 +865,3 @@ class TPParameterizedSPAMVec(SPAMVec):
 
     def __reduce__(self):
         return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
-
-
-
-
-
-#SCRATCH: TO REMOVE
-#    def __len__(self):
-#        return len(self.base)
-#
-#    def __add__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return self.base + x.base
-#        else:
-#            return self.base + x
-#
-#    def __radd__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return x.base + self.base
-#        else:
-#            return x + self.base
-#
-#    def __sub__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return self.base - x.base
-#        else:
-#            return self.base - x
-#
-#    def __rsub__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return x.base - self.base
-#        else:
-#            return x - self.base
-#
-#    def __mul__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return self.base * x.base
-#        else:
-#            return self.base * x
-#
-#    def __rmul__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return x.base * self.base
-#        else:
-#            return x * self.base
-#
-#    def __pow__(self,x): #same as __mul__()
-#        return self.base ** x
-#
-#    def __eq__(self,x):
-#        if isinstance(x, SPAMVec):
-#            return self.base == x.base
-#        else:
-#            return self.base == x

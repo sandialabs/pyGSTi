@@ -19,6 +19,8 @@ except:
 
 from .customcg import fmax_cg
 
+from scipy.optimize import least_squares
+
 
 def minimize(fn,x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
@@ -740,21 +742,32 @@ def create_obj_func_printer(objFunc, startTime=None):
         if f is not None and accepted is not None:
             print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
-            print("%5ds %22.10f" % (_time.time()-startTime, objFunc(x)))
+            result = objFunc(x)
+            duration = _time.time() - startTime
+            try:
+                print("%5ds %22.10f" % (duration, result))
+            except TypeError: # Objfun returns vector, not scalar
+                print('%5ds %s' % (duration,  result))
     return print_obj_func
 
 
 
 def _fwd_diff_jacobian(f, x0, eps=1e-10):
-    y0 = f(x0)
+    y0 = f(x0).copy()
     M = len(y0)
     N = len(x0)
     jac = _np.empty( (M,N), 'd' )
 
     for j in range(N):
+        #print('Adding eps to {}'.format(j))
         xj = x0.copy(); xj[j] += eps
-        yj = f(xj)
-        jac[:,j] = (yj-y0)/eps # df_dxj
+        yj = f(xj).copy()
+        #print('y0, yj')
+        #print(y0[48:52])
+        #print(yj[48:52])
+        df = (yj-y0)/eps # df_dxj
+        jac[:,j] = df
+        #print(df[48:52])
 
     return jac
 

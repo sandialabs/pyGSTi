@@ -12,24 +12,6 @@ import json as _json
 from . import stdinput as _stdinput
 from .. import objects as _objs
 
-def load_parameter_file(filename):
-    """
-    Load a json-formatted parameter file.
-
-    Parameters
-    ----------
-    filename : string
-        The name of the file to load.
-
-    Returns
-    -------
-    dict
-        The json file converted to a python dictionary.
-    """
-    with open(filename, 'r') as inputfile:
-        return _json.load(inputfile)
-    # return _json.load( open(filename, "rb") )
-
 def load_dataset(filename, cache=False, collisionAction="aggregate",
                  measurementGates=None, verbosity=1):
     """

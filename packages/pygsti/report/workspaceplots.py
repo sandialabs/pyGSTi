@@ -24,9 +24,9 @@ from . import plothelpers as _ph
 import plotly.graph_objs as go
 
 
-import time as _time  #DEBUG TIMER
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot #DEBUG
-
+#DEBUG
+#import time as _time  #DEBUG TIMER
+#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
                   prec=0, hoverLabelFn=None, hoverLabels=None):
@@ -111,6 +111,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
         heatmapArgs['text'] = hoverLabels                            
         
     trace = go.Heatmap(**heatmapArgs)
+    #trace = dict(type='heatmapgl', **heatmapArgs)
     data = [trace]
 
     xaxis = go.XAxis(
@@ -687,7 +688,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                     else:
                         texts.append(str(subMxs[iy][ix][N-1-iiy][iix]))
 
-    trace = go.Scatter(x=xs, y=ys, mode="markers",
+    trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
                                    color=[colormap.normalize(y) for y in ys],
                                    colorscale=colormap.get_colorscale(),
@@ -785,8 +786,16 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        yextra += 0.5 if (mxBasisDims > 1) else 0
-        xextra += 0.5 if (mxBasisDimsY > 1) else 0
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDims) > 1:
+                yextra += .5
+        elif mxBasisDims > 1:
+            yextra += .5
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDimsY) > 1:
+                yextra += .5
+        elif mxBasisDimsY > 1:
+            yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
@@ -800,6 +809,11 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                        colorscale=colormap.get_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
                        zmax=colormap.hmax, hoverinfo='z')
+    #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
+    #             colorscale=colormap.get_colorscale(),
+    #             showscale=colorbar, zmin=colormap.hmin,
+    #             zmax=colormap.hmax, hoverinfo='z')
+    
     data = [trace]
     
     nX = gateMatrix.shape[1]
@@ -810,7 +824,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     # Vertical lines
     for i in range(nX-1):
         #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and i-1 % 4 == 0) else 1
+        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
         
         gridlines.append(     
             {
@@ -823,7 +837,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     #Horizontal lines
     for i in range(nY-1):
         #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and i-1 % 4 == 0) else 1
+        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
 
         gridlines.append(     
             {
@@ -935,6 +949,9 @@ class BoxKeyPlot(WorkspacePlot):
         trace = go.Heatmap(z=_np.zeros((nY,nX),'d'),
                            colorscale=[ [0, 'white'], [1, 'black'] ],
                            showscale=False, zmin=0,zmax=1,hoverinfo='none')
+        #trace = dict(type='heatmapgl', z=_np.zeros((nY,nX),'d'),
+        #                   colorscale=[ [0, 'white'], [1, 'black'] ],
+        #                   showscale=False, zmin=0,zmax=1,hoverinfo='none')
         data = [trace]
 
         gridlines = []
@@ -1728,6 +1745,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
         minlog = _np.floor(min(log_ys))
         maxlog = _np.ceil(max(log_ys))

@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import warnings           as _warnings
 import numpy              as _np
 import scipy.stats        as _stats
+import scipy.linalg       as _spl
 
 from .. import algorithms as _alg
 from .. import tools      as _tools
@@ -85,9 +86,9 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             gateset = gatesets[-1] #only show HSVec for last gateset
-            mxBasis    = gateset.get_basis_name()
-            mxBasisDim = gateset.get_basis_dimension()
-            basisNm    = _tools.basis_longname(mxBasis, mxBasisDim)
+            mxBasis    = gateset.basis.name
+            mxBasisDim = gateset.basis.dim.blockDims
+            basisNm    = _objs.basis_longname(mxBasis)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
             
@@ -103,13 +104,13 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
                 rowData.append( rhoMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
                 evals = _np.linalg.eigvals(rhoMx)
                 rowData.append( evals )
@@ -135,13 +136,13 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
+                basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 evals = _np.linalg.eigvals(EMx)
                 rowData.append( evals )
@@ -257,9 +258,9 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            basisNm = gateset.get_basis_name()
-            basisDims = gateset.get_basis_dimension()
-            basisLongNm = _tools.basis_longname(basisNm, basisDims)
+            basisNm = gateset.basis.name
+            basisDims = gateset.basis.dim.blockDims
+            basisLongNm = _objs.basis_longname(basisNm)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -278,8 +279,8 @@ class GatesTable(WorkspaceTable):
             row_formatters = [None]
     
             for gateset in gatesets:
-                basisNm = gateset.get_basis_name()
-                basisDims = gateset.get_basis_dimension()
+                basisNm = gateset.basis.name
+                basisDims = gateset.basis.dim.blockDims
 
                 if display_as == "numbers":
                     row_data.append(gateset.gates[gl])
@@ -299,14 +300,14 @@ class GatesTable(WorkspaceTable):
                 if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
+                    basisNm = gatesets[-1].basis.name
+                    basisDims = gatesets[-1].basis.dim.blockDims
                     intervalMx = intervalVec.reshape(gate_dim,gate_dim)
                 elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].get_basis_name()
-                    basisDims = gatesets[-1].get_basis_dimension()
+                    basisNm = gatesets[-1].basis.name
+                    basisDims = gatesets[-1].basis.dim.blockDims
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
@@ -398,9 +399,9 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    basisNm = gateset.get_basis_name()
-                    basisDims = gateset.get_basis_dimension()
-                    basisLongNm = _tools.basis_longname(basisNm, basisDims)
+                    basisNm = gateset.basis.name
+                    basisDims = gateset.basis.dim.blockDims
+                    basisLongNm = _objs.basis_longname(basisNm)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -588,7 +589,7 @@ class SpamVsTargetTable(WorkspaceTable):
 class ErrgenTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S"), display_as="boxes",
-                 genType="logG-logT"):  #TODO: change default
+                 genType="logTiG"):
                  
         """
         Create a table listing the error generators obtained by
@@ -631,8 +632,8 @@ class ErrgenTable(WorkspaceTable):
                 confidenceRegionInfo, display, display_as, genType):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.get_basis_name()
-        basisDims = gateset.get_basis_dimension()
+        basisNm = gateset.basis.name
+        basisDims = gateset.basis.dim.blockDims
         colHeadings = ['Gate']
 
         for disp in display:
@@ -654,7 +655,7 @@ class ErrgenTable(WorkspaceTable):
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
             for mx in max_lst:
-                if 0.9999 < mx/M < 10 or (abs(mx)<1e-6 and abs(M)<1e-6):
+                if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
                     return -mx,mx
             return None
                 
@@ -667,7 +668,8 @@ class ErrgenTable(WorkspaceTable):
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
 
-            errgens[gl] = _tools.error_generator(gate, targetGate, genType)
+            errgens[gl] = _tools.error_generator(gate, targetGate,
+                                                 targetGateset.basis, genType)
             absMax = _np.max(_np.abs(errgens[gl]))
             addMax(errgens['M'], absMax)
 
@@ -785,7 +787,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
     
 #    def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 class GateDecompTable(WorkspaceTable):
-    def __init__(self, ws, gateset, confidenceRegionInfo=None):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create table for decomposing a gateset's gates.
 
@@ -796,6 +798,10 @@ class GateDecompTable(WorkspaceTable):
         ----------
         gateset : GateSet
             The estimated gate set.
+
+        targetGateset : GateSet
+            The target gate set, used to help disambiguate the matrix
+            logarithms that are used in the decomposition.
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -805,37 +811,51 @@ class GateDecompTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(GateDecompTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
+        super(GateDecompTable,self).__init__(ws, self._create, gateset,
+                                             targetGateset, confidenceRegionInfo)
 
         
-    def _create(self, gateset, confidenceRegionInfo):
+    def _create(self, gateset, targetGateset, confidenceRegionInfo):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.get_basis_name()
-        basisDims = gateset.get_basis_dimension()
+        basisNm = gateset.basis.name
+        basisDims = gateset.basis.dim
 
-        colHeadings = ('Gate','Rotn. angle','Rotn. axis') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
     
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
-        formatters = (None, 'Pi', 'Normal') + ('Pi',)*len(gateLabels)
+        formatters = (None, 'Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
-        axes = {}; angles = {}
+        axes = {}; angles = {}; inexact = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
-            logG = _tools.real_matrix_log(gate,"ignore",1e-8)
+            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl],targetGateset.basis)
+            logG = _tools.approximate_matrix_log(gate, target_logG)
+            inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
+            
             hamProjs = _tools.std_errgen_projections(
                 logG, "hamiltonian", basisNm, basisNm)
             norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs / norm
-            angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
+            axes[gl] = hamProjs / norm if (norm > 1e-15) else hamProjs
+            #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
                # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
                # least of Pauli products) and divide by 2# to be consistent with
                # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
                # theta in units of pi.
 
+            angles[gl] = norm * (2.0/gateset.dim)**0.5 / _np.pi
+               #Scratch...
+               # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
+               # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
+               # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
+               # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
+               # normalized paulis are just /sqrt(2), so need to additionally divide by
+               # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
+               # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
+
         for gl in gateLabels:            
-            rowData = [gl, angles[gl], axes[gl] ]
+            rowData = [gl, angles[gl], axes[gl], inexact[gl] ]
 
             for j,gl_other in enumerate(gateLabels):
                 rotnAngle = angles[gl]
@@ -1438,14 +1458,14 @@ class GatesSingleMetricTable(WorkspaceTable):
     def _create(self, gatesets, titles, targetGateset, metric):
     
         gateLabels = list(targetGateset.gates.keys())  # use target's gate labels
-        basisNm = targetGateset.get_basis_name()
-        basisDims = targetGateset.get_basis_dimension()
+        basisNm = targetGateset.basis.name
+        basisDims = targetGateset.basis.dim.blockDims
 
         #Check that all gatesets are in the same basis as targetGateset
         for title,gateset in zip(titles,gatesets):
-            if basisNm != gateset.get_basis_name():
+            if basisNm != gateset.basis.name:
                 raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
-                                 % (title, gateset.get_basis_name(), basisNm))
+                                 % (title, gateset.basis.name, basisNm))
 
         #Do computation first
         metricVals = [] #one element per row (gate label)

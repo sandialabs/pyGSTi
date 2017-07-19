@@ -169,6 +169,7 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
+    fig.set_render_options(click_to_display=specs['click_to_display'])
     render_out = fig.render("html",
                             resizable="handlers only" if specs['resizable'] else False,
                             autosize=specs['autosize'])

@@ -470,7 +470,7 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     but is not convenient for just computing the score of a germ set. For that,
     use :func:`calculate_germset_score`.
     """
-    if forceIndices and _np.any(weights[forceIndices] <= 0):
+    if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
         combinedDDD = _np.einsum('i,ijk', weights,
@@ -518,6 +518,7 @@ def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple "
                          "copies only!")
+
     newgatesetList = []
     if len(gatesetList) > 1:
         for gatesetnum, gateset in enumerate(gatesetList):

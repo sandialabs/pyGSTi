@@ -135,7 +135,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     if isinstance(gateLabelSrc, _GateSet):
         gateLabels = list(gateLabelSrc.gates.keys())
     else: gateLabels = gateLabelSrc
-        
+
     lgst_list = _gsc.list_lgst_gatestrings(
         _ssc.build_spam_specs(prepStrs = prepStrs,
                               effectStrs = effectStrs),
@@ -435,7 +435,10 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
 
     for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
-        assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
+        if nest:
+            assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
+        else:
+            assert(struct.Ls == maxLengthList[i:i+1]) #Make sure lengths are correct!
     return lsgst_listOfStructs
 
 

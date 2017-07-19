@@ -64,7 +64,7 @@ def create_gatestring_list(*args,**kwargs):
     """
     lst = []
 
-    loopOrder = kwargs.pop('order',[])
+    loopOrder = list(kwargs.pop('order',[]))
     loopLists = {}; loopLocals = { 'True': True, 'False': False, 'str':str, 'int': int, 'float': float}
     for key,val in kwargs.items():
         if type(val) in (list,tuple): #key describes a variable to loop over
@@ -547,7 +547,7 @@ def translate_gatestring(gatestring, aliasDict):
         return gatestring
     else:
         return _gs.GateString(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,lbl) for lbl in gatestring])))
+            *[aliasDict.get(lbl, (lbl,) ) for lbl in gatestring])))
 
 
 
@@ -576,7 +576,7 @@ def translate_gatestring_list(gatestringList, aliasDict):
         return gatestringList
     else:
         new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,lbl) for lbl in gs])))
+            *[aliasDict.get(lbl,(lbl,)) for lbl in gs])))
                             for gs in gatestringList ]
         return new_gatestrings
 
@@ -602,7 +602,7 @@ def compose_alias_dicts(aliasDict1, aliasDict2):
     """
     ret = {}
     for A,Bs in aliasDict1.items():
-        ret[A] = list(_itertools.chain(*[aliasDict2[B] for B in Bs]))
+        ret[A] = tuple(_itertools.chain(*[aliasDict2[B] for B in Bs]))
     return ret
 
 

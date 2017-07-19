@@ -3,6 +3,7 @@ import unittest
 import pygsti
 import numpy as np
 
+import pygsti.extras.rpe as rpe
 import pygsti.extras.rpe.rpeconstruction as rc
 from pygsti.extras.rpe.rpeconfig_GxPi2_GyPi2_UpDn import rpeconfig_GxPi2_GyPi2_UpDn
 
@@ -36,6 +37,10 @@ class TestRPEObjectMethods(BaseTestCase):
 
         #Just make sure this runs:
         #Removed? rc.rpe_ensemble_test(np.pi/2, np.pi/4, 0, 0.1, 2, 1000, 2)
+
+    def test_bad_rpeconfig(self):
+        #Note: this doesn't actually raise an exception, it just prints a warning message to stdout
+        badconfig = rpe.rpeconfig({'alpha': 0, 'epsilon': 1, 'theta': 2} ) #need lots more keys...
 
 
 if __name__ == "__main__":
