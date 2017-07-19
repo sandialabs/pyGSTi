@@ -439,13 +439,13 @@ class ChoiTable(WorkspaceTable):
 
             for disp in display:
                 if disp == "matrix":
-                    for gateset,qtys in zip(gatesets,qtysList):
+                    for gateset, qtys in zip(gatesets, qtysList):
                         choiMx, _ = qtys['%s choi matrix' % gl].get_value_and_err_bar()
                         row_data.append(choiMx)
                         row_formatters.append('Brackets')
         
                 elif disp == "eigenvalues":
-                    for gateset,qtys in zip(gatesets,qtysList):
+                    for gateset, qtys in zip(gatesets, qtysList):
                         evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
                         try:
                             evals = evals.reshape(evals.size//4, 4)

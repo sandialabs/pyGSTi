@@ -93,27 +93,11 @@ def _getGateSetQuantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosi
 
     return ReportableQty(f0,df)
 
-def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity=0):
-    """ For constructing a ReportableQty from a function of a spam vectors."""
-
-    if confidenceRegionInfo is None: # No Error bars
-        return ReportableQty(fnOfSpamVecs(gateset.get_preps(), gateset.get_effects()))
-
-    # make sure the gateset we're given is the one used to generate the confidence region
-    if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
-        raise ValueError("Spam quantity confidence region is being requested for " +
-                         "a different gateset than the given confidenceRegionInfo")
-
-    df, f0 = confidenceRegionInfo.get_spam_fn_confidence_interval(fnOfSpamVecs,
-                                                              eps, returnFnVal=True,
-                                                              verbosity=verbosity)
-    return ReportableQty(f0,df)
-
-@_tools.parameterized
+@_tools.parameterized # This decorator takes arguments:
 def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a spam vectors."""
-    @_functools.wraps(fnOfSpamVecs)
-    def compute_quantity(gateset, confidenceRegionInfo):
+    @_functools.wraps(fnOfSpamVecs) # Retain metadata of wrapped function
+    def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
             return ReportableQty(fnOfSpamVecs(gateset.get_preps(), gateset.get_effects()))
 
@@ -134,6 +118,237 @@ def spam_dotprods(rhoVecs, EVecs):
     for i,rhoVec in enumerate(rhoVecs):
         for j,EVec in enumerate(EVecs):
             ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
+    return ret
+
+
+@_tools.parameterized
+def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of a gate. """
+    @_functools.wraps(fnOfGate) # Retain metadata of wrapped function
+    def compute_quantity(gateset, gatelabel, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfGate(gateset.gates[gateLabel]))
+
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("Prep quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+
+        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(fnOfGate, gateLabel,
+                                                                  eps, returnFnVal=True,
+                                                                  verbosity=verbosity)
+        return ReportableQty(f0,df)
+    return compute_quantity
+
+@gate_quantity()
+def choi_matrix(gate):
+    return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+
+#choiQty   = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
+
+def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
+    """
+    Compute the named "GateSet" quantities.
+
+    Parameters
+    ----------
+    qtynames : list of strings
+        Names of the quantities to compute.
+
+    gateset : GateSet
+        Gate set used to compute the quantities.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region used to compute the error bars
+        contained in the returned quantities.  If None, then no error bars are
+        computed.
+
+    Returns
+    -------
+    dict
+        Dictionary whose keys are the requested quantity names and values are
+        ReportableQty objects.
+    """
+    print(qtynames)
+    ret = _OrderedDict()
+    possible_qtys = [ ]
+    eps = FINITE_DIFF_EPS
+    mxBasis = gateset._basisNameAndDim[0]
+
+    def choi_matrix(gate):
+        return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+
+    def choi_evals(gate):
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+        choi_eigvals = _np.linalg.eigvals(choi)
+        return _np.array(sorted(choi_eigvals))
+
+    def choi_trace(gate):
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+        return _np.trace(choi)
+
+    def decomp_angle(gate):
+        decomp = _tools.decompose_gate_matrix(gate)
+        return decomp.get('pi rotations',0)
+
+    def decomp_decay_diag(gate):
+        decomp = _tools.decompose_gate_matrix(gate)
+        return decomp.get('decay of diagonal rotation terms',0)
+
+    def decomp_decay_offdiag(gate):
+        decomp = _tools.decompose_gate_matrix(gate)
+        return decomp.get('decay of off diagonal rotation terms',0)
+
+    def decomp_cu_angle(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
+        return decomp.get('pi rotations',0)
+
+    def decomp_cu_decay_diag(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
+        return decomp.get('decay of diagonal rotation terms',0)
+
+    def decomp_cu_decay_offdiag(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        decomp = _tools.decompose_gate_matrix(closestUGateMx)
+        return decomp.get('decay of off diagonal rotation terms',0)
+
+    def upper_bound_fidelity(gate):
+        return _tools.fidelity_upper_bound(gate)[0]
+
+    def closest_ujmx(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+
+    def maximum_fidelity(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+        return _tools.fidelity(closestUJMx, choi)
+
+    def maximum_trace_dist(gate):
+        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+        #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+        return _tools.jtracedist(gate, closestUGateMx)
+
+    def spam_dotprods(rhoVecs, EVecs):
+        ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
+        for i,rhoVec in enumerate(rhoVecs):
+            for j,EVec in enumerate(EVecs):
+                ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
+        return ret
+
+    def angles_btwn_rotn_axes(gateset):
+        gateLabels = list(gateset.gates.keys())
+        angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
+
+        for i,gl in enumerate(gateLabels):
+            decomp = _tools.decompose_gate_matrix(gateset.gates[gl])
+            rotnAngle = decomp.get('pi rotations','X')
+            axisOfRotn = decomp.get('axis of rotation',None)
+
+            for j,gl_other in enumerate(gateLabels[i+1:],start=i+1):
+                decomp_other = _tools.decompose_gate_matrix(gateset.gates[gl_other])
+                rotnAngle_other = decomp_other.get('pi rotations','X')
+
+                if str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
+                   str(rotnAngle_other) == 'X' or abs(rotnAngle_other) < 1e-4:
+                    angles_btwn_rotn_axes[i,j] =  _np.nan
+                else:
+                    axisOfRotn_other = decomp_other.get('axis of rotation',None)
+                    if axisOfRotn is not None and axisOfRotn_other is not None:
+                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), -1.0, 1.0)
+                        angles_btwn_rotn_axes[i,j] = _np.arccos( real_dot ) / _np.pi
+                    else:
+                        angles_btwn_rotn_axes[i,j] = _np.nan
+
+                angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
+        return angles_btwn_rotn_axes
+
+    key = "Gateset Axis Angles"; possible_qtys.append(key)
+    if key in qtynames:
+        ret[key] = _getGateSetQuantity(angles_btwn_rotn_axes, gateset, eps, confidenceRegionInfo)
+
+    # Quantities computed per gate
+    for (label,gate) in gateset.gates.items():
+
+        #Gate quantities
+        suffixes = ('eigenvalues', 'eigenvectors', 'choi eigenvalues', 'choi trace',
+                    'choi matrix', 'decomposition')
+        gate_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
+        possible_qtys += list(gate_qtys.keys())
+
+        if any( [qtyname in gate_qtys for qtyname in qtynames] ):
+            #gate_evals,gate_evecs = _np.linalg.eig(gate)
+            evalsQty  = _getGateQuantity(_np.linalg.eigvals, gateset, label, eps, confidenceRegionInfo)
+            choiQty   = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
+            choiEvQty = _getGateQuantity(choi_evals, gateset, label, eps, confidenceRegionInfo)
+            choiTrQty = _getGateQuantity(choi_trace, gateset, label, eps, confidenceRegionInfo)
+
+            decompDict = _tools.decompose_gate_matrix(gate)
+            if decompDict['isValid']:
+                angleQty   = _getGateQuantity(decomp_angle, gateset, label, eps, confidenceRegionInfo)
+                diagQty    = _getGateQuantity(decomp_decay_diag, gateset, label, eps, confidenceRegionInfo)
+                offdiagQty = _getGateQuantity(decomp_decay_offdiag, gateset, label, eps, confidenceRegionInfo)
+                errBarDict = { 'pi rotations': angleQty.get_err_bar(),
+                               'decay of diagonal rotation terms': diagQty.get_err_bar(),
+                               'decay of off diagonal rotation terms': offdiagQty.get_err_bar() }
+                decompQty = ReportableQty(decompDict, errBarDict)
+            else:
+                decompQty = ReportableQty({})
+
+            gate_qtys[ '%s eigenvalues' % label ]      = evalsQty
+            #gate_qtys[ '%s eigenvectors' % label ]     = gate_evecs
+            gate_qtys[ '%s choi matrix' % label ]      = choiQty
+            gate_qtys[ '%s choi eigenvalues' % label ] = choiEvQty
+            gate_qtys[ '%s choi trace' % label ]       = choiTrQty
+            gate_qtys[ '%s decomposition' % label]     = decompQty
+
+            for qtyname in qtynames:
+                if qtyname in gate_qtys:
+                    ret[qtyname] = gate_qtys[qtyname]
+
+        #Closest unitary quantities
+        suffixes = ('max fidelity with unitary',
+                    'max trace dist with unitary',
+                    'upper bound on fidelity with unitary',
+                    'closest unitary choi matrix',
+                    'closest unitary decomposition')
+        closestU_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
+        possible_qtys += list(closestU_qtys.keys())
+        if any( [qtyname in closestU_qtys for qtyname in qtynames] ):
+            ubFQty = _getGateQuantity(upper_bound_fidelity, gateset, label, eps, confidenceRegionInfo)
+            closeUJMxQty = _getGateQuantity(closest_ujmx, gateset, label, eps, confidenceRegionInfo)
+            maxFQty = _getGateQuantity(maximum_fidelity, gateset, label, eps, confidenceRegionInfo)
+            maxJTDQty = _getGateQuantity(maximum_trace_dist, gateset, label, eps, confidenceRegionInfo)
+
+            closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+            decompDict = _tools.decompose_gate_matrix(closestUGateMx)
+            if decompDict['isValid']:
+                angleQty = _getGateQuantity(decomp_cu_angle, gateset, label, eps, confidenceRegionInfo)
+                diagQty = _getGateQuantity(decomp_cu_decay_diag, gateset, label, eps, confidenceRegionInfo)
+                offdiagQty = _getGateQuantity(decomp_cu_decay_offdiag, gateset, label, eps, confidenceRegionInfo)
+                errBarDict = { 'pi rotations': angleQty.get_err_bar(),
+                               'decay of diagonal rotation terms': diagQty.get_err_bar(),
+                               'decay of off diagonal rotation terms': offdiagQty.get_err_bar() }
+                decompQty = ReportableQty(decompDict, errBarDict)
+            else:
+                decompQty = ReportableQty({})
+
+            closestU_qtys[ '%s max fidelity with unitary' % label ]                  = maxFQty
+            closestU_qtys[ '%s max trace dist with unitary' % label ]                = maxJTDQty
+            closestU_qtys[ '%s upper bound on fidelity with unitary' % label ]       = ubFQty
+            closestU_qtys[ '%s closest unitary choi matrix' % label ]                = closeUJMxQty
+            closestU_qtys[ '%s closest unitary decomposition' % label ]              = decompQty
+
+            for qtyname in qtynames:
+                if qtyname in closestU_qtys:
+                    ret[qtyname] = closestU_qtys[qtyname]
+
+    if qtynames[0] is None:
+        return possible_qtys
     return ret
 
 def compute_dataset_qty(qtyname, dataset, gatestrings=None):
@@ -260,217 +475,6 @@ def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
     if qtyname is None: return ret
     elif qtyname in ret: return ret[qtyname]
     else: return None
-
-def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
-    """
-    Compute the named "GateSet" quantities.
-
-    Parameters
-    ----------
-    qtynames : list of strings
-        Names of the quantities to compute.
-
-    gateset : GateSet
-        Gate set used to compute the quantities.
-
-    confidenceRegionInfo : ConfidenceRegion, optional
-        If not None, specifies a confidence-region used to compute the error bars
-        contained in the returned quantities.  If None, then no error bars are
-        computed.
-
-    Returns
-    -------
-    dict
-        Dictionary whose keys are the requested quantity names and values are
-        ReportableQty objects.
-    """
-    print(qtynames)
-    ret = _OrderedDict()
-    possible_qtys = [ ]
-    eps = FINITE_DIFF_EPS
-    mxBasis = gateset._basisNameAndDim[0]
-
-    def choi_matrix(gate):
-        return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
-
-    def choi_evals(gate):
-        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
-        choi_eigvals = _np.linalg.eigvals(choi)
-        return _np.array(sorted(choi_eigvals))
-
-    def choi_trace(gate):
-        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
-        return _np.trace(choi)
-
-    def decomp_angle(gate):
-        decomp = _tools.decompose_gate_matrix(gate)
-        return decomp.get('pi rotations',0)
-
-    def decomp_decay_diag(gate):
-        decomp = _tools.decompose_gate_matrix(gate)
-        return decomp.get('decay of diagonal rotation terms',0)
-
-    def decomp_decay_offdiag(gate):
-        decomp = _tools.decompose_gate_matrix(gate)
-        return decomp.get('decay of off diagonal rotation terms',0)
-
-    def decomp_cu_angle(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _tools.decompose_gate_matrix(closestUGateMx)
-        return decomp.get('pi rotations',0)
-
-    def decomp_cu_decay_diag(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _tools.decompose_gate_matrix(closestUGateMx)
-        return decomp.get('decay of diagonal rotation terms',0)
-
-    def decomp_cu_decay_offdiag(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        decomp = _tools.decompose_gate_matrix(closestUGateMx)
-        return decomp.get('decay of off diagonal rotation terms',0)
-
-    def upper_bound_fidelity(gate):
-        return _tools.fidelity_upper_bound(gate)[0]
-
-    def closest_ujmx(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
-
-    def maximum_fidelity(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
-        choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
-        return _tools.fidelity(closestUJMx, choi)
-
-    def maximum_trace_dist(gate):
-        closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-        #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
-        _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
-        return _tools.jtracedist(gate, closestUGateMx)
-
-    def spam_dotprods(rhoVecs, EVecs):
-        ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
-        for i,rhoVec in enumerate(rhoVecs):
-            for j,EVec in enumerate(EVecs):
-                ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
-        return ret
-
-    def angles_btwn_rotn_axes(gateset):
-        gateLabels = list(gateset.gates.keys())
-        angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
-
-        for i,gl in enumerate(gateLabels):
-            decomp = _tools.decompose_gate_matrix(gateset.gates[gl])
-            rotnAngle = decomp.get('pi rotations','X')
-            axisOfRotn = decomp.get('axis of rotation',None)
-
-            for j,gl_other in enumerate(gateLabels[i+1:],start=i+1):
-                decomp_other = _tools.decompose_gate_matrix(gateset.gates[gl_other])
-                rotnAngle_other = decomp_other.get('pi rotations','X')
-
-                if str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
-                   str(rotnAngle_other) == 'X' or abs(rotnAngle_other) < 1e-4:
-                    angles_btwn_rotn_axes[i,j] =  _np.nan
-                else:
-                    axisOfRotn_other = decomp_other.get('axis of rotation',None)
-                    if axisOfRotn is not None and axisOfRotn_other is not None:
-                        real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), -1.0, 1.0)
-                        angles_btwn_rotn_axes[i,j] = _np.arccos( real_dot ) / _np.pi
-                    else:
-                        angles_btwn_rotn_axes[i,j] = _np.nan
-
-                angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
-        return angles_btwn_rotn_axes
-
-    # Spam quantities (computed for all spam vectors at once):
-    key = "Spam DotProds"; possible_qtys.append(key)
-    if key in qtynames:
-        ret[key] = _getSpamQuantity(spam_dotprods, gateset, eps, confidenceRegionInfo)
-
-    key = "Gateset Axis Angles"; possible_qtys.append(key)
-    if key in qtynames:
-        ret[key] = _getGateSetQuantity(angles_btwn_rotn_axes, gateset, eps, confidenceRegionInfo)
-
-    # Quantities computed per gate
-    for (label,gate) in gateset.gates.items():
-
-        #Gate quantities
-        suffixes = ('eigenvalues', 'eigenvectors', 'choi eigenvalues', 'choi trace',
-                    'choi matrix', 'decomposition')
-        gate_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
-        possible_qtys += list(gate_qtys.keys())
-
-        if any( [qtyname in gate_qtys for qtyname in qtynames] ):
-            #gate_evals,gate_evecs = _np.linalg.eig(gate)
-            evalsQty  = _getGateQuantity(_np.linalg.eigvals, gateset, label, eps, confidenceRegionInfo)
-            choiQty   = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
-            choiEvQty = _getGateQuantity(choi_evals, gateset, label, eps, confidenceRegionInfo)
-            choiTrQty = _getGateQuantity(choi_trace, gateset, label, eps, confidenceRegionInfo)
-
-            decompDict = _tools.decompose_gate_matrix(gate)
-            if decompDict['isValid']:
-                angleQty   = _getGateQuantity(decomp_angle, gateset, label, eps, confidenceRegionInfo)
-                diagQty    = _getGateQuantity(decomp_decay_diag, gateset, label, eps, confidenceRegionInfo)
-                offdiagQty = _getGateQuantity(decomp_decay_offdiag, gateset, label, eps, confidenceRegionInfo)
-                errBarDict = { 'pi rotations': angleQty.get_err_bar(),
-                               'decay of diagonal rotation terms': diagQty.get_err_bar(),
-                               'decay of off diagonal rotation terms': offdiagQty.get_err_bar() }
-                decompQty = ReportableQty(decompDict, errBarDict)
-            else:
-                decompQty = ReportableQty({})
-
-            gate_qtys[ '%s eigenvalues' % label ]      = evalsQty
-            #gate_qtys[ '%s eigenvectors' % label ]     = gate_evecs
-            gate_qtys[ '%s choi matrix' % label ]      = choiQty
-            gate_qtys[ '%s choi eigenvalues' % label ] = choiEvQty
-            gate_qtys[ '%s choi trace' % label ]       = choiTrQty
-            gate_qtys[ '%s decomposition' % label]     = decompQty
-
-            for qtyname in qtynames:
-                if qtyname in gate_qtys:
-                    ret[qtyname] = gate_qtys[qtyname]
-
-        #Closest unitary quantities
-        suffixes = ('max fidelity with unitary',
-                    'max trace dist with unitary',
-                    'upper bound on fidelity with unitary',
-                    'closest unitary choi matrix',
-                    'closest unitary decomposition')
-        closestU_qtys = _OrderedDict( [ ("%s %s" % (label,s), None) for s in suffixes ] )
-        possible_qtys += list(closestU_qtys.keys())
-        if any( [qtyname in closestU_qtys for qtyname in qtynames] ):
-            ubFQty = _getGateQuantity(upper_bound_fidelity, gateset, label, eps, confidenceRegionInfo)
-            closeUJMxQty = _getGateQuantity(closest_ujmx, gateset, label, eps, confidenceRegionInfo)
-            maxFQty = _getGateQuantity(maximum_fidelity, gateset, label, eps, confidenceRegionInfo)
-            maxJTDQty = _getGateQuantity(maximum_trace_dist, gateset, label, eps, confidenceRegionInfo)
-
-            closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
-            decompDict = _tools.decompose_gate_matrix(closestUGateMx)
-            if decompDict['isValid']:
-                angleQty = _getGateQuantity(decomp_cu_angle, gateset, label, eps, confidenceRegionInfo)
-                diagQty = _getGateQuantity(decomp_cu_decay_diag, gateset, label, eps, confidenceRegionInfo)
-                offdiagQty = _getGateQuantity(decomp_cu_decay_offdiag, gateset, label, eps, confidenceRegionInfo)
-                errBarDict = { 'pi rotations': angleQty.get_err_bar(),
-                               'decay of diagonal rotation terms': diagQty.get_err_bar(),
-                               'decay of off diagonal rotation terms': offdiagQty.get_err_bar() }
-                decompQty = ReportableQty(decompDict, errBarDict)
-            else:
-                decompQty = ReportableQty({})
-
-            closestU_qtys[ '%s max fidelity with unitary' % label ]                  = maxFQty
-            closestU_qtys[ '%s max trace dist with unitary' % label ]                = maxJTDQty
-            closestU_qtys[ '%s upper bound on fidelity with unitary' % label ]       = ubFQty
-            closestU_qtys[ '%s closest unitary choi matrix' % label ]                = closeUJMxQty
-            closestU_qtys[ '%s closest unitary decomposition' % label ]              = decompQty
-
-            for qtyname in qtynames:
-                if qtyname in closestU_qtys:
-                    ret[qtyname] = closestU_qtys[qtyname]
-
-    if qtynames[0] is None:
-        return possible_qtys
-    return ret
-
 def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):
     """
     Compute the named "GateSet & Dataset" quantity.
