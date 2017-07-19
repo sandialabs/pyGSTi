@@ -23,13 +23,13 @@ DefaultBasisInfo = _namedtuple('DefaultBasisInfo', ['constructor', 'longname', '
 
 @_parameterized # this decorator takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
-    # This decorator saves f to a dictionary for constructing default bases:
-    _basisConstructorDict[name] = DefaultBasisInfo(f, longname, real)
-    # As well as enabling caching on the basis creation function: (Important to CP/TP cases of gauge opt)
+    # This decorator saves f to a dictionary for constructing default bases,
+    #   as well as enabling caching on the basis creation function: (Important to CP/TP cases of gauge opt)
     @cache_by_hashed_args
     @_functools.wraps(f)
     def cached(*args, **kwargs):
         return f(*args, **kwargs)
+    _basisConstructorDict[name] = DefaultBasisInfo(cached, longname, real)
     return cached
 
 _basisConstructorDict = dict()
