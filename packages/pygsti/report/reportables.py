@@ -112,15 +112,6 @@ def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0,df)
     return compute_quantity
 
-@spam_quantity()
-def spam_dotprods(rhoVecs, EVecs):
-    ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
-    for i,rhoVec in enumerate(rhoVecs):
-        for j,EVec in enumerate(EVecs):
-            ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
-    return ret
-
-
 @_tools.parameterized
 def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
@@ -140,11 +131,128 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0,df)
     return compute_quantity
 
+@_tools.parameterized
+def gateset_quantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosity=0):
+    """ For constructing a ReportableQty from a function of a gate. """
+    @_functools.wraps(fnOfGateSet) 
+    def compute_quantity(gate, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfGateSet(gateset))
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+        df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
+            fnOfGateSet, eps, returnFnVal=True, verbosity=verbosity)
+        return ReportableQty(f0,df)
+    return compute_quantity
+
+@spam_quantity()
+def spam_dotprods(rhoVecs, EVecs):
+    ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
+    for i,rhoVec in enumerate(rhoVecs):
+        for j,EVec in enumerate(EVecs):
+            ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
+    return ret
+
 @gate_quantity()
 def choi_matrix(gate):
     return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
 
-#choiQty   = _getGateQuantity(choi_matrix, gateset, label, eps, confidenceRegionInfo)
+@gate_quantity()
+def choi_evals(gate):
+    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    choi_eigvals = _np.linalg.eigvals(choi)
+    return _np.array(sorted(choi_eigvals))
+
+@gate_quantity()
+def choi_trace(gate):
+    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    return _np.trace(choi)
+
+@gate_quantity()
+def decomp_angle(gate):
+    decomp = _tools.decompose_gate_matrix(gate)
+    return decomp.get('pi rotations',0)
+
+@gate_quantity()
+def decomp_decay_diag(gate):
+    decomp = _tools.decompose_gate_matrix(gate)
+    return decomp.get('decay of diagonal rotation terms',0)
+
+@gate_quantity()
+def decomp_decay_offdiag(gate):
+    decomp = _tools.decompose_gate_matrix(gate)
+    return decomp.get('decay of off diagonal rotation terms',0)
+
+@gate_quantity()
+def decomp_cu_angle(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    decomp = _tools.decompose_gate_matrix(closestUGateMx)
+    return decomp.get('pi rotations',0)
+
+@gate_quantity()
+def decomp_cu_decay_diag(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    decomp = _tools.decompose_gate_matrix(closestUGateMx)
+    return decomp.get('decay of diagonal rotation terms',0)
+
+@gate_quantity()
+def decomp_cu_decay_offdiag(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    decomp = _tools.decompose_gate_matrix(closestUGateMx)
+    return decomp.get('decay of off diagonal rotation terms',0)
+
+@gate_quantity()
+def upper_bound_fidelity(gate):
+    return _tools.fidelity_upper_bound(gate)[0]
+
+@gate_quantity()
+def closest_ujmx(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+
+@gate_quantity()
+def maximum_fidelity(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+    choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
+    return _tools.fidelity(closestUJMx, choi)
+
+@gate_quantity()
+def maximum_trace_dist(gate):
+    closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
+    #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+    _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
+    return _tools.jtracedist(gate, closestUGateMx)
+
+@gateset_quantity()
+def angles_btwn_rotn_axes(gateset):
+    gateLabels = list(gateset.gates.keys())
+    angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
+
+    for i,gl in enumerate(gateLabels):
+        decomp = _tools.decompose_gate_matrix(gateset.gates[gl])
+        rotnAngle = decomp.get('pi rotations','X')
+        axisOfRotn = decomp.get('axis of rotation',None)
+
+        for j,gl_other in enumerate(gateLabels[i+1:],start=i+1):
+            decomp_other = _tools.decompose_gate_matrix(gateset.gates[gl_other])
+            rotnAngle_other = decomp_other.get('pi rotations','X')
+
+            if str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
+               str(rotnAngle_other) == 'X' or abs(rotnAngle_other) < 1e-4:
+                angles_btwn_rotn_axes[i,j] =  _np.nan
+            else:
+                axisOfRotn_other = decomp_other.get('axis of rotation',None)
+                if axisOfRotn is not None and axisOfRotn_other is not None:
+                    real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn,axisOfRotn_other)), -1.0, 1.0)
+                    angles_btwn_rotn_axes[i,j] = _np.arccos( real_dot ) / _np.pi
+                else:
+                    angles_btwn_rotn_axes[i,j] = _np.nan
+
+            angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
+    return angles_btwn_rotn_axes
 
 def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     """
