@@ -74,8 +74,8 @@ Gx^4 20 90
 
     def test_gateset_gateset_qtys(self):
         names = pygsti.report.compute_gateset_gateset_qty(None, self.gateset_dep, self.gateset)
-        qtys = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset_dep, self.gateset, self.ci)
-        qty = pygsti.report.compute_gateset_gateset_qty("Gx fidelity", self.gateset_dep, self.gateset, self.ci)
+        qtys = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset_dep, self.gateset, self.ci_dep)
+        qty = pygsti.report.compute_gateset_gateset_qty("Gx fidelity", self.gateset_dep, self.gateset, self.ci_dep)
 
         qtys2 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset, self.gateset_rdm, self.ci)
         qtys3 = pygsti.report.compute_gateset_gateset_qtys(names, self.gateset_dep, self.gateset_rdm, self.ci_dep)

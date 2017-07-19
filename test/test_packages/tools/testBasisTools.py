@@ -5,7 +5,7 @@ import scipy
 import pygsti
 
 import pygsti.tools.basis       as basis
-import pygsti.tools.lindbladiantools as lindbladiantools
+import pygsti.tools.lindbladtools as lindbladtools
 
 from pygsti.tools.basis import Basis, Dim, change_basis
 
@@ -279,7 +279,7 @@ class BasisBaseTestCase(BaseTestCase):
                                         [ 0,  0,  0,  0]]
                                        )
 
-        self.assertArraysAlmostEqual(lindbladiantools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
+        self.assertArraysAlmostEqual(lindbladtools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
                                      expectedLindbladian)
 
     def test_vec_to_stdmx(self):
