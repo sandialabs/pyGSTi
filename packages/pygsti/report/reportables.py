@@ -19,6 +19,8 @@ from .. import tools as _tools
 from .. import algorithms as _alg
 from .reportableqty import ReportableQty
 
+import functools as _functools
+
 from pprint import pprint
 
 FINITE_DIFF_EPS = 1e-7
@@ -107,6 +109,33 @@ def _getSpamQuantity(fnOfSpamVecs, gateset, eps, confidenceRegionInfo, verbosity
                                                               verbosity=verbosity)
     return ReportableQty(f0,df)
 
+@_tools.parameterized
+def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of a spam vectors."""
+    @_functools.wraps(fnOfSpamVecs)
+    def compute_quantity(gateset, confidenceRegionInfo):
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfSpamVecs(gateset.get_preps(), gateset.get_effects()))
+
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("Spam quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+
+        df, f0 = confidenceRegionInfo.get_spam_fn_confidence_interval(fnOfSpamVecs,
+                                                                  eps, returnFnVal=True,
+                                                                  verbosity=verbosity)
+        return ReportableQty(f0,df)
+    return compute_quantity
+
+@spam_quantity()
+def spam_dotprods(rhoVecs, EVecs):
+    ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
+    for i,rhoVec in enumerate(rhoVecs):
+        for j,EVec in enumerate(EVecs):
+            ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
+    return ret
+
 def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     """
     Compute the named "Dataset" quantity.
@@ -128,7 +157,7 @@ def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     ReportableQty
         The quantity requested, or None if quantity could not be computed.
     """
-    ret = compute_dataset_qtys( [qtyname], dataset, gatestrings )
+    ret = compute_dataset_qtys([qtyname], dataset, gatestrings)
     if qtyname is None: return ret
     elif qtyname in ret: return ret[qtyname]
     else: return None
@@ -155,6 +184,7 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
         Dictionary whose keys are the requested quantity names and values are
         ReportableQty objects.
     """
+    print(qtynames)
 
     ret = _OrderedDict()
     possible_qtys = [ ]
@@ -254,6 +284,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         Dictionary whose keys are the requested quantity names and values are
         ReportableQty objects.
     """
+    print(qtynames)
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
@@ -378,8 +409,8 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
             decompDict = _tools.decompose_gate_matrix(gate)
             if decompDict['isValid']:
-                angleQty = _getGateQuantity(decomp_angle, gateset, label, eps, confidenceRegionInfo)
-                diagQty = _getGateQuantity(decomp_decay_diag, gateset, label, eps, confidenceRegionInfo)
+                angleQty   = _getGateQuantity(decomp_angle, gateset, label, eps, confidenceRegionInfo)
+                diagQty    = _getGateQuantity(decomp_decay_diag, gateset, label, eps, confidenceRegionInfo)
                 offdiagQty = _getGateQuantity(decomp_decay_offdiag, gateset, label, eps, confidenceRegionInfo)
                 errBarDict = { 'pi rotations': angleQty.get_err_bar(),
                                'decay of diagonal rotation terms': diagQty.get_err_bar(),
@@ -398,7 +429,6 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
             for qtyname in qtynames:
                 if qtyname in gate_qtys:
                     ret[qtyname] = gate_qtys[qtyname]
-
 
         #Closest unitary quantities
         suffixes = ('max fidelity with unitary',
@@ -439,8 +469,6 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
 
     if qtynames[0] is None:
         return possible_qtys
-    #pprint(qtynames)
-    #pprint(ret)
     return ret
 
 def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):

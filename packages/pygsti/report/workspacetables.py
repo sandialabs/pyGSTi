@@ -199,7 +199,8 @@ class SpamParametersTable(WorkspaceTable):
     
         table       = _ReportTable(colHeadings, formatters)
     
-        spamDotProdsQty = _reportables.compute_gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
+        #spamDotProdsQty = _reportables.compute _gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
+        spamDotProdsQty = _reportables.spam_dotprods(gateset, confidenceRegionInfo)
         DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
     
         formatters      = [ 'Rho' ] + [ ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
