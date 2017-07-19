@@ -11,6 +11,9 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
+def array_eq(a, b, tol=1e-8):
+    print(_np.linalg.norm(a-b))
+    return _np.linalg.norm(a-b) < tol
 
 def trace(M): #memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
     """
@@ -543,3 +546,4 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
         logM = _np.real(logM)
         
     return logM
+

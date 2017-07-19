@@ -753,15 +753,21 @@ def create_obj_func_printer(objFunc, startTime=None):
 
 
 def _fwd_diff_jacobian(f, x0, eps=1e-10):
-    y0 = f(x0)
+    y0 = f(x0).copy()
     M = len(y0)
     N = len(x0)
     jac = _np.empty( (M,N), 'd' )
 
     for j in range(N):
+        #print('Adding eps to {}'.format(j))
         xj = x0.copy(); xj[j] += eps
-        yj = f(xj)
-        jac[:,j] = (yj-y0)/eps # df_dxj
+        yj = f(xj).copy()
+        #print('y0, yj')
+        #print(y0[48:52])
+        #print(yj[48:52])
+        df = (yj-y0)/eps # df_dxj
+        jac[:,j] = df
+        #print(df[48:52])
 
     return jac
 

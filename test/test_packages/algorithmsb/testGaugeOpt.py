@@ -11,7 +11,6 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from ..algorithms.basecase import AlgorithmsBase
 
 class TestCoreMethods(AlgorithmsBase):
-
     def test_gaugeopt_and_contract(self):
         ds = self.ds_lgst
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
@@ -21,7 +20,7 @@ class TestCoreMethods(AlgorithmsBase):
 
         #Gauge Opt to Target
         gs_lgst_target     = self.runSilent(pygsti.optimize_gauge, gs_lgst,"target",targetGateset=self.gateset,verbosity=10) #DEPRECATED
-        gs_lgst_target     = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, verbosity=10)
+        gs_lgst_target     = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, verbosity=10, checkJac=True)
 
         gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0, useDirectCP=False) #non-direct CP contraction
 
@@ -29,22 +28,22 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetGatesMetric='fidelity', verbosity=10) #DEPRECATED
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
-                                            gatesMetric='fidelity', verbosity=10)
+                                            gatesMetric='fidelity', verbosity=10, checkJac=True)
 
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetGatesMetric='tracedist', verbosity=10) #DEPRECATED
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
-                                            gatesMetric='tracedist', verbosity=10)
+                                            gatesMetric='tracedist', verbosity=10, checkJac=True)
 
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetSpamMetric='fidelity', verbosity=10) #DEPRECATED
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
-                                            spamMetric='fidelity', verbosity=10)
+                                            spamMetric='fidelity', verbosity=10, checkJac=True)
 
         gs_lgst_targetAlt  = self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"target",targetGateset=self.gateset,
                                             targetSpamMetric='tracedist', verbosity=10) #DEPRECATED
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
-                                            spamMetric='tracedist', verbosity=10)
+                                            spamMetric='tracedist', verbosity=10, checkJac=True)
 
 
         with self.assertRaises(ValueError):
@@ -64,7 +63,6 @@ class TestCoreMethods(AlgorithmsBase):
         with self.assertRaises(ValueError):
             self.runSilent(pygsti.optimize_gauge, gs_lgst_target,"foobar",targetGateset=self.gateset,
                            targetSpamMetric='target', verbosity=10) #bad toGetTo #DEPRECATED
-
 
         #Contractions
         gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10, tol=10.0)
@@ -94,33 +92,33 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_target_cp  = self.runSilent(pygsti.optimize_gauge, gs_clgst_cptp,"target",targetGateset=self.gateset,
                                             constrainToCP=True,constrainToTP=True,constrainToValidSpam=True,verbosity=10) #DEPRECATED
         gs_lgst_target_cp  = self.runSilent(pygsti.gaugeopt_to_target, gs_clgst_cptp, self.gateset, 
-                                            CPpenalty=1.0, gauge_group=TP_gauge_group, verbosity=10)
+                                            CPpenalty=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True)
 
         gs_lgst.basis = Basis("gm",4) #so CPTP optimizations can work on gs_lgst
         gs_lgst_cptp       = self.runSilent(pygsti.optimize_gauge, gs_lgst,"CPTP",verbosity=10) #DEPRECATED
         gs_lgst_cptp       = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,
-                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10)
+                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10, checkJac=True)
 
         gs_lgst_cptp_tp    = self.runSilent(pygsti.optimize_gauge, gs_lgst,"CPTP",verbosity=10, constrainToTP=True) #DEPRECATED
         gs_lgst_cptp_tp    = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,
-                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, gauge_group=TP_gauge_group, verbosity=10) #no point? (remove?)
+                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
 
         gs_lgst_tp         = self.runSilent(pygsti.optimize_gauge, gs_lgst,"TP",verbosity=10) #DEPRECATED
         gs_lgst_tp         = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, None,
-                                            TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10)
+                                            TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10, checkJac=True)
 
         gs_lgst_tptarget   = self.runSilent(pygsti.optimize_gauge, gs_lgst,"TP and target",targetGateset=self.gateset,verbosity=10) #DEPRECATED
         gs_lgst_tptarget   = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset,
-                                            TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10)
+                                            TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10, checkJac=True)
 
         gs_lgst_cptptarget = self.runSilent(pygsti.optimize_gauge, gs_lgst,"CPTP and target",targetGateset=self.gateset,verbosity=10) #DEPRECATED
         gs_lgst_cptptarget = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset,
-                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10)
+                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, verbosity=10, checkJac=True)
 
         gs_lgst_cptptarget2= self.runSilent(pygsti.optimize_gauge, gs_lgst,"CPTP and target",targetGateset=self.gateset,
                                             verbosity=10, constrainToTP=True) #DEPRECATED
         gs_lgst_cptptarget2= self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset,
-                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, gauge_group=TP_gauge_group, verbosity=10) #no point? (remove?)
+                                            CPpenalty=1.0, TPpenalty=1.0, validSpamPenalty=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
 
         gs_lgst_cd         = self.runSilent(pygsti.optimize_gauge, gs_lgst,"Completely Depolarized",targetGateset=self.gateset,verbosity=10) #DEPRECATED
 
