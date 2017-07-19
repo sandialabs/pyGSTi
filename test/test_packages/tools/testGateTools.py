@@ -96,10 +96,10 @@ class GateBaseTestCase(BaseTestCase):
         basisNames      = ['std', 'gm', 'pp', 'qt']
 
         for gateTarget, gate in zip(gs_target.gates.values(), gs_datagen.gates.values()):
-            errgen    = gatetools.error_generator(gate, gateTarget)
-            altErrgen = gatetools.error_generator(gate, gateTarget, 'logTiG')
+            errgen    = gatetools.error_generator(gate, gateTarget, gs_target.basis)
+            altErrgen = gatetools.error_generator(gate, gateTarget, gs_target.basis, 'logTiG')
             with self.assertRaises(ValueError):
-                gatetools.error_generator(gate, gateTarget, 'adsf')
+                gatetools.error_generator(gate, gateTarget, gs_target.basis, 'adsf')
 
             #std_errgen_projections(errgen, projectionType, basisName)
 

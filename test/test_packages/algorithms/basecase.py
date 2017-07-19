@@ -36,6 +36,6 @@ class AlgorithmsBase(BaseTestCase):
 
         ##UNCOMMENT to create LGST analysis dataset
         #ds_lgst = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                         nSamples=10000,sampleError='binomial', seed=100)
+        #   nSamples=10000,sampleError='binomial', seed=100)
         #ds_lgst.save(compare_files + "/analysis_lgst.dataset")
         self.ds_lgst = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis_lgst.dataset")
