@@ -11,6 +11,9 @@ import numpy        as _np
 
 from collections    import namedtuple as _namedtuple
 from .parameterized import parameterized as _parameterized
+from .opttools      import cache_by_hashed_args
+
+import functools as _functools
 
 '''
 Functions for creating the standard sets of matrices in the standard, pauli, gell mann, and qutrit bases
@@ -18,12 +21,16 @@ Functions for creating the standard sets of matrices in the standard, pauli, gel
 
 DefaultBasisInfo = _namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
-@_parameterized # this "decorator" takes additional arguments (other than just f)
+@_parameterized # this decorator takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
-    # Really this decorator only saves f to a dictionary for constructing default bases
-    #    => No wrapper is created:
+    # This decorator saves f to a dictionary for constructing default bases:
     _basisConstructorDict[name] = DefaultBasisInfo(f, longname, real)
-    return f
+    # As well as enabling caching on the basis creation function: (Important to CP/TP cases of gauge opt)
+    @cache_by_hashed_args
+    @_functools.wraps(f)
+    def cached(*args, **kwargs):
+        return f(*args, **kwargs)
+    return cached
 
 _basisConstructorDict = dict()
 
@@ -181,7 +188,9 @@ def gm_matrices(dim):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    mxs = gm_matrices_unnormalized(dim)
+    mxs = gm_matrices_unnormalized(dim).copy()
+    for mx in mxs:
+        mx.flags.writeable = True # Safe because of above copy
     mxs[0] *= 1/_np.sqrt( mxs[0].shape[0] ) #identity mx
     for mx in mxs[1:]:
         mx *= 1/sqrt2

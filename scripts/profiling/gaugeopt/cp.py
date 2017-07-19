@@ -9,8 +9,6 @@ from load import load
 
 def main():
     gs, gs_target = load()
-    #envSettings = dict(MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1)
-
     with timed_block('Gauge opt with CP Penalty:'):
         gs_gaugeopt = pygsti.gaugeopt_to_target(gs, gs_target, 
                 itemWeights={'spam' : 0.0001, 'gates':1.0}, 
