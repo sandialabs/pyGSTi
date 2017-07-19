@@ -132,10 +132,10 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     return compute_quantity
 
 @_tools.parameterized
-def gateset_quantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosity=0):
+def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
     @_functools.wraps(fnOfGateSet) 
-    def compute_quantity(gate, confidenceRegionInfo=None):
+    def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
             return ReportableQty(fnOfGateSet(gateset))
         # make sure the gateset we're given is the one used to generate the confidence region
@@ -254,6 +254,7 @@ def angles_btwn_rotn_axes(gateset):
             angles_btwn_rotn_axes[j,i] = angles_btwn_rotn_axes[i,j]
     return angles_btwn_rotn_axes
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     """
     Compute the named "GateSet" quantities.
@@ -459,6 +460,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
         return possible_qtys
     return ret
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     """
     Compute the named "Dataset" quantity.
@@ -485,6 +487,7 @@ def compute_dataset_qty(qtyname, dataset, gatestrings=None):
     elif qtyname in ret: return ret[qtyname]
     else: return None
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
     """
     Compute the named "Dataset" quantities.
@@ -557,6 +560,7 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
     """
     Compute the named "GateSet" quantity.
@@ -583,6 +587,8 @@ def compute_gateset_qty(qtyname, gateset, confidenceRegionInfo=None):
     if qtyname is None: return ret
     elif qtyname in ret: return ret[qtyname]
     else: return None
+
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):
     """
     Compute the named "GateSet & Dataset" quantity.
@@ -612,6 +618,7 @@ def compute_gateset_dataset_qty(qtyname, gateset, dataset, gatestrings=None):
     elif qtyname in ret: return ret[qtyname]
     else: return None
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
     """
     Compute the named "GateSet & Dataset" quantities.
@@ -704,6 +711,7 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,
                                 confidenceRegionInfo=None):
     """
@@ -735,6 +743,7 @@ def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,
     elif qtyname in ret: return ret[qtyname]
     else: return None
 
+@_tools.deprecated_fn('individual functions from the reportables module')
 def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
                                  confidenceRegionInfo=None):
     """
