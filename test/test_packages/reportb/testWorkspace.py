@@ -42,7 +42,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="boxes", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logG-logT") )
-        tbls.append( w.GateDecompTable(self.gs, cr) )
+        tbls.append( w.GateDecompTable(self.gs, self.tgt, cr) )
         #tbls.append( w.RotationAxisVsTargetTable(self.gs, self.tgt, cr ) )
         #tbls.append( w.RotationAxisTable(self.gs, cr) )
         tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )

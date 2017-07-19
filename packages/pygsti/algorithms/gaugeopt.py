@@ -203,6 +203,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       found, gaugeMx is the gauge matrix used to transform the gateset, and gateset is the
       final gauge-transformed gateset.
     """
+    if itemWeights is None: itemWeights = {}
+    
     if CPpenalty         == 0 and \
         TPpenalty        == 0 and \
         validSpamPenalty == 0 and \

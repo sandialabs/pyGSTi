@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import pygsti
 
-import pygsti.tools.lindbladiantools as lt
+import pygsti.tools.lindbladtools as lt
 
 class LindbladianToolsBaseTestCase(BaseTestCase):
     def test_hamiltonian_to_lindbladian(self):

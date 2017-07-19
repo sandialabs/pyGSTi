@@ -627,7 +627,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
     qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, cri)
+    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
     qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
     qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
@@ -676,8 +676,8 @@ def create_general_report(results, filename, confidenceLevel=None,
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
-    #qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
-    #  Fast enough now thanks to scattergl
+    qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
+    #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
 
     if multidataset:
         #initialize a new "dataset comparison switchboard"

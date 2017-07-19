@@ -11,6 +11,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .jamiolkowski import *
 from .listtools import *
 from .matrixtools import *
+from .lindbladtools import *
 from .likelihoodfns import *
 from .chi2fns import *
 from .gatetools import *
