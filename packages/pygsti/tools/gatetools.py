@@ -679,7 +679,10 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+        try:
+            logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+        except AssertionError: #if not unitary, fall back to just taking the real log
+            logT = _mt.real_matrix_log(target_gate, "raise", TOL) #make a fuss if this can't be done
         logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
