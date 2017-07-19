@@ -655,7 +655,7 @@ class ErrgenTable(WorkspaceTable):
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
             for mx in max_lst:
-                if 0.9999 < mx/M < 10 or (abs(mx)<1e-6 and abs(M)<1e-6):
+                if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
                     return -mx,mx
             return None
                 
@@ -668,7 +668,8 @@ class ErrgenTable(WorkspaceTable):
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
 
-            errgens[gl] = _tools.error_generator(gate, targetGate, genType)
+            errgens[gl] = _tools.error_generator(gate, targetGate,
+                                                 targetGateset.basis, genType)
             absMax = _np.max(_np.abs(errgens[gl]))
             addMax(errgens['M'], absMax)
 
@@ -829,14 +830,14 @@ class GateDecompTable(WorkspaceTable):
         axes = {}; angles = {}; inexact = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
-            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl])
+            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl],targetGateset.basis)
             logG = _tools.approximate_matrix_log(gate, target_logG)
             inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
             
             hamProjs = _tools.std_errgen_projections(
                 logG, "hamiltonian", basisNm, basisNm)
             norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs / norm
+            axes[gl] = hamProjs / norm if (norm > 1e-15) else hamProjs
             #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
                # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
                # least of Pauli products) and divide by 2# to be consistent with

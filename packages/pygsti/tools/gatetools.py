@@ -649,7 +649,7 @@ def process_mx_to_unitary(superop):
     return U
 
 
-def error_generator(gate, target_gate, typ="logG-logT"):
+def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     """
     Construct the error generator from a gate and its target.
 
@@ -679,8 +679,8 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logT = _tools.unitary_superoperator_matrix_log(target_gate)
-        logG = _tools.approx_matrix_log(gate, logT)
+        logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+        logG = _mt.approx_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
@@ -1328,7 +1328,8 @@ def project_gateset(gateset, targetGateset,
 
         
     errgens = [ error_generator(gateset.gates[gl],
-                                targetGateset.gates[gl], genType)
+                                targetGateset.gates[gl],
+                                targetGateset.basis, genType)
                 for gl in gateLabels ]
 
     for gl,errgen in zip(gateLabels,errgens):

@@ -291,7 +291,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def unitary_superoperator_matrix_log(M):
+def unitary_superoperator_matrix_log(M, mxBasis):
     """ 
     Construct the logarithm of superoperator matrix `M` 
     that acts as a unitary on density-matrix space,
@@ -305,6 +305,10 @@ def unitary_superoperator_matrix_log(M):
     M : numpy array
         The superoperator matrix whose logarithm is taken
 
+    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
+      The basis `M` is represented in.  Allowed options are Matrix-unit
+      (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt).
+
     Returns
     -------
     numpy array
@@ -313,13 +317,19 @@ def unitary_superoperator_matrix_log(M):
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
     from . import gatetools as _gt # (would create circular imports if at top)
+    from .basis import change_basis
 
-    evals = _np.linalg.eigvals(M)
+    M_std = change_basis(M, mxBasis, "std")
+    evals = _np.linalg.eigvals(M_std)
     assert( _np.allclose(_np.abs(evals), 1.0) ) #simple but technically incomplete check for a unitary superop
                                               # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _gt.process_mx_to_unitary(M)
+    U = _gt.process_mx_to_unitary(M_std)
     H = _spl.logm(U)/-1j # U = exp(-iH)
-    return _lt.hamiltonian_to_lindbladian(H) # rho --> -i[H, rho]
+    logM_std = _lt.hamiltonian_to_lindbladian(H) # rho --> -i[H, rho]
+    logM = change_basis(logM_std, "std", mxBasis)
+    assert(_np.linalg.norm(_spl.expm(logM) - M) < 1e-8) #expensive b/c of expm - could comment for performance
+    return logM
+    
 
 
 def near_identity_matrix_log(M, TOL=1e-8):
@@ -343,15 +353,15 @@ def near_identity_matrix_log(M, TOL=1e-8):
     """    
     # A near-identity matrix should have a unique logarithm, and it should be
     # real if the original matrix is real
-    M_is_real = bool(np.linalg.norm(M.imag) < TOL)
+    M_is_real = bool(_np.linalg.norm(M.imag) < TOL)
     logM = _spl.logm(M)
     if M_is_real: 
-        assert(np.linalg.norm(logM.imag) < TOL)
+        assert(_np.linalg.norm(logM.imag) < TOL)
         logM = logM.real
     return logM
 
 
-def approximate_matrix_log(M, target_logM, targetWeight=3.0, TOL=1e-6):
+def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     """ 
     Construct an approximate logarithm of superoperator matrix `M` that is
     real and near the `target_logM`.  The equation `M = exp( logM )` is
@@ -389,8 +399,10 @@ def approximate_matrix_log(M, target_logM, targetWeight=3.0, TOL=1e-6):
     def objective(flat_logM):
         logM = flat_logM.reshape(mx_shape)
         testM = _spl.expm(logM)
-        return targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
+        ret=  targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
                 _np.linalg.norm(testM.flatten() - M.flatten(), 1)
+        #print("DEBUG: ",ret)
+        return ret
     
         #Alt objective1: puts L1 on target term
         #return _np.linalg.norm(testM-M)**2 + targetWeight*_np.linalg.norm(
@@ -399,7 +411,8 @@ def approximate_matrix_log(M, target_logM, targetWeight=3.0, TOL=1e-6):
         #Alt objective2: all L2 terms (ridge regression)
         #return targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
         #        _np.linalg.norm(testM - M)**2
-    
+
+    #from .. import optimize as _opt
     #print_obj_func = _opt.create_obj_func_printer(objective) #only ever prints to stdout!                    
     print_obj_func = None
 
@@ -407,12 +420,23 @@ def approximate_matrix_log(M, target_logM, targetWeight=3.0, TOL=1e-6):
     initial_flat_logM = logM.flatten() # + 0.1*target_logM.flatten()
       # Note: adding some of target_logM doesn't seem to help; and hurts in easy cases
 
-    #print("Initial objective fn val = ",objective(initial_flat_logM))
-    solution = _spo.minimize(objective, initial_flat_logM,  options={'maxiter': 1000},
-                                       method='BFGS',callback=print_obj_func, tol=TOL)
-    #print("Final objective fn val = ",objective(solution.x))
+    if objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
+        
+        #print("Initial objective fn val = ",objective(initial_flat_logM))
+        #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logM)**2)
     
-    return solution.x.reshape(mx_shape)
+        solution = _spo.minimize(objective, initial_flat_logM,  options={'maxiter': 1000},
+                                           method='L-BFGS-B',callback=print_obj_func, tol=TOL)
+        logM = solution.x.reshape(mx_shape)
+        #print("Final objective fn val = ",objective(solution.x))
+        #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logM)**2)
+
+    return logM
+            
 
 
 def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
