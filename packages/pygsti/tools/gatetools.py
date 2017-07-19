@@ -680,7 +680,7 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     
     if typ == "logG-logT":
         logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
-        logG = _mt.approx_matrix_log(gate, logT)
+        logG = _mt.approximate_matrix_log(gate, logT)
 
         # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
