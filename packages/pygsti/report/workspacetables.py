@@ -821,21 +821,22 @@ class GateDecompTable(WorkspaceTable):
         basisNm = gateset.basis.name
         basisDims = gateset.basis.dim
 
-        colHeadings = ('Gate','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
-    
-        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
-        formatters = (None, 'Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
-        axes = {}; angles = {}; inexact = {}
+        #PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo) #TODO: use this in 2nd column when have EBs
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
+        formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
+
+        axes = {}; angles = {}; inexact = {}; hamEvals = {}
         for gl in gateLabels:
             gate = gateset.gates[gl]
             target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl],targetGateset.basis)
             logG = _tools.approximate_matrix_log(gate, target_logG)
             inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
             
-            hamProjs = _tools.std_errgen_projections(
-                logG, "hamiltonian", basisNm, basisNm)
+            hamProjs, hamGens = _tools.std_errgen_projections(
+                logG, "hamiltonian", basisNm, basisNm, return_generators=True)
             norm = _np.linalg.norm(hamProjs)
             axes[gl] = hamProjs / norm if (norm > 1e-15) else hamProjs
             #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
@@ -854,8 +855,15 @@ class GateDecompTable(WorkspaceTable):
                # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
                # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
 
+            basis_mxs = gateset.basis.get_composite_matrices()
+            scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
+                           if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
+                         for i,mx in enumerate(basis_mxs) ]
+            hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
+            hamEvals[gl] = _np.linalg.eigvals(hamMx)
+
         for gl in gateLabels:            
-            rowData = [gl, angles[gl], axes[gl], inexact[gl] ]
+            rowData = [gl, hamEvals[gl]/_np.pi, angles[gl], axes[gl], inexact[gl] ]
 
             for j,gl_other in enumerate(gateLabels):
                 rotnAngle = angles[gl]
@@ -869,7 +877,7 @@ class GateDecompTable(WorkspaceTable):
                     real_dot = _np.clip( _np.real(_np.dot(axes[gl].flatten(), axes[gl_other].flatten())), -1.0, 1.0)
                     angle = _np.arccos( real_dot ) / _np.pi
                     rowData.append( angle )
-                    
+
             table.addrow(rowData, formatters)
     
         table.finish()
