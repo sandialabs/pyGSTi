@@ -398,7 +398,7 @@ class ChoiTable(WorkspaceTable):
         qtysList = []
         for gateset in gatesets:
             gateLabels = list(gateset.gates.keys()) # gate labels
-            qtys_to_compute = []
+            #qtys_to_compute = []
             if 'matrix' in display:
                 choiMxs = [_reportables.choi_matrix(gateset, gl) for gl in gateLabels]
             else:
@@ -407,24 +407,12 @@ class ChoiTable(WorkspaceTable):
                 evals   = [_reportables.choi_evals(gateset, gl) for gl in gateLabels]
             else:
                 evals = None
-            if "matrix" in display:
-                qtys_to_compute += [ ('%s choi matrix' % gl) for gl in gateLabels ]
-            if "eigenvalues" in display or "barplot" in display:
-                qtys_to_compute += [ ('%s choi eigenvalues' % gl) for gl in gateLabels ]
-            cri = confidenceRegionInfo if (gateset is gatesets[-1]) else None
-            gatesetQtys = _reportables.compute_gateset_qtys(qtys_to_compute, gateset, cri)
-            qtysList.append(gatesetQtys)
-            print(gatesetQtys)
-            print(choiMxs, evals)
-            1/0
-
+            qtysList.append((choiMxs, evals))
         colHeadings = ['Gate']
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    #basisNm = gateset._basisNameAndDim[0]
                     basisNm = gateset._basisNameAndDim[0]
-                    #basisDims = gateset._basisNameAndDim[1]
                     basisDims = gateset._basisNameAndDim[1]
                     basisLongNm = _objs.basis_longname(basisNm)
                     pre = (title+' ' if title else '')
@@ -444,21 +432,21 @@ class ChoiTable(WorkspaceTable):
         
         table = _ReportTable(colHeadings, formatters)
 
-        for gl in gateLabels:
+        for i, gl in enumerate(gateLabels):
             #Note: currently, we don't use confidence region...
             row_data = [gl]
             row_formatters = [None]
 
             for disp in display:
                 if disp == "matrix":
-                    for gateset, qtys in zip(gatesets, qtysList):
-                        choiMx, _ = qtys['%s choi matrix' % gl].get_value_and_err_bar()
+                    for gateset, (choiMxs, _) in zip(gatesets, qtysList):
+                        choiMx, _ = choiMxs[i].get_value_and_err_bar()
                         row_data.append(choiMx)
                         row_formatters.append('Brackets')
         
                 elif disp == "eigenvalues":
-                    for gateset, qtys in zip(gatesets, qtysList):
-                        evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
+                    for gateset, (_, evals) in zip(gatesets, qtysList):
+                        evals, evalsEB = evals[i].get_value_and_err_bar()
                         try:
                             evals = evals.reshape(evals.size//4, 4)
                               #assumes len(evals) is multiple of 4!
@@ -477,19 +465,16 @@ class ChoiTable(WorkspaceTable):
                             
                 elif disp == "barplot":
                     for gateset in gatesets:
-                        for gateset,qtys in zip(gatesets,qtysList):
-                            evals, evalsEB = qtys['%s choi eigenvalues' % gl].get_value_and_err_bar()
+                        for gateset, (_, evals) in zip(gatesets,qtysList):
+                            evals, evalsEB = evals[i].get_value_and_err_bar()
 
                             if confidenceRegionInfo is None:
                                 fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals)
                             else:
                                 fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
-                                
                             row_data.append(fig)
                             row_formatters.append('Figure')
-                            
             table.addrow(row_data, row_formatters)
-    
         table.finish()
         return table
     
