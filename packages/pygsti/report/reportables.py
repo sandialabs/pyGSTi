@@ -126,7 +126,8 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
-        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(fnOfGate, gateLabel,
+        curriedFnOfGate = _functools.partial(fnOfGate, mxBasis=mxBasis)
+        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGate, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
         return ReportableQty(f0,df)
@@ -134,7 +135,7 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
 
 @_tools.parameterized
 def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
-    """ For constructing a ReportableQty from a function of a gate. """
+    """ For constructing a ReportableQty from a function of a gateset. """
     @_functools.wraps(fnOfGateSet) 
     def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
@@ -528,8 +529,6 @@ def compute_dataset_qtys(qtynames, dataset, gatestrings=None):
         Dictionary whose keys are the requested quantity names and values are
         ReportableQty objects.
     """
-    print(qtynames)
-
     ret = _OrderedDict()
     possible_qtys = [ ]
 
@@ -729,6 +728,173 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
 
+@_tools.parameterized
+def gateset_gateset_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of two gates and a basis."""
+    @_functools.wraps(fnOfGates) # Retain metadata of wrapped function
+    def compute_quantity(gatesetA, gateLabelA, gatesetB, gateLabelB, confidenceRegionInfo=None):
+        mxBasis = gateset._basisNameAndDim[0]
+        A = gatesetA.gates[gateLabelA]
+        B = gatesetB.gates[gateLabelB]
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfGate(A, B, mxBasis))
+
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("Prep quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+
+        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(fnOfGates, gateLabel,
+                                                                  eps, returnFnVal=True,
+                                                                  verbosity=verbosity)
+        return ReportableQty(f0, df)
+    return compute_quantity
+
+def process_fidelity(A, B, mxBasis):
+    return _tools.process_fidelity(A, B, mxBasis)
+
+def process_infidelity(A, B, mxBasis):
+    return 1 - _tools.process_fidelity(A, B, mxBasis)
+
+def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    decomp1 = _tools.decompose_gate_matrix(A)
+    decomp2 = _tools.decompose_gate_matrix(B)
+
+    if decomp1['isUnitary']:
+        closestUGateMx1 = A
+    else: closestUGateMx1 = _alg.find_closest_unitary_gatemx(A)
+
+    if decomp2['isUnitary']:
+        closestUGateMx2 = B
+    else: closestUGateMx2 = _alg.find_closest_unitary_gatemx(A)
+
+    closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
+    closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
+    return _tools.fidelity(closeChoi1, closeChoi2)
+
+def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    return _tools.frobeniusdist(A, B)
+
+def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    return _tools.jtracedist(A, B, mxBasis)
+
+def half_diamond_norm(A, B, mxBasis):
+    return 0.5 * _tools.diamonddist(A, B, mxBasis)
+
+def angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
+    decomp = _tools.decompose_gate_matrix(A)
+    decomp2 = _tools.decompose_gate_matrix(B)
+    axisOfRotn = decomp.get('axis of rotation', None)
+    rotnAngle = decomp.get('pi rotations','X')
+    axisOfRotn2 = decomp2.get('axis of rotation', None)
+    rotnAngle2 = decomp2.get('pi rotations','X')
+
+    if rotnAngle == 'X' or abs(rotnAngle) < 1e-4 or \
+       rotnAngle2 == 'X' or abs(rotnAngle2) < 1e-4:
+        return _np.nan
+
+    if axisOfRotn is None or axisOfRotn2 is None:
+        return _np.nan
+
+    real_dot =  _np.clip( _np.real(_np.dot(axisOfRotn, axisOfRotn2)), -1.0, 1.0)
+    return _np.arccos( abs(real_dot) ) / _np.pi
+      #Note: abs() allows axis to be off by 180 degrees -- if showing *angle* as
+      #      well, must flip sign of angle of rotation if you allow axis to
+      #      "reverse" by 180 degrees.
+
+def rel_eigvals(A, B, mxBasis):
+    target_gate_inv = _np.linalg.inv(B)
+    rel_gate = _np.dot(target_gate_inv, A)
+    return _np.linalg.eigvals(rel_gate)
+
+def rel_logTiG_eigvals(A, B, mxBasis):
+    rel_gate = _tools.error_generator(A, B, "logTiG")
+    return _np.linalg.eigvals(rel_gate)
+
+def rel_logGmlogT_eigvals(A, B, mxBasis):
+    rel_gate = _tools.error_generator(A, B, "logG-logT")
+    return _np.linalg.eigvals(rel_gate)
+
+'''
+    ### per prep vector quantities
+    #############################################
+    for prepLabel in gateset1.get_prep_labels():
+
+        key = '%s prep state fidelity' % prepLabel; possible_qtys.append(key)
+        key2 = '%s prep state infidelity' % prepLabel; possible_qtys.append(key)
+        if key in qtynames or key2 in qtynames:
+
+            def fidelity(vec):
+                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
+                return _tools.fidelity(rhoMx1, rhoMx2)
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            FQty = _getPrepQuantity(fidelity, gateset1, prepLabel,
+                                    eps, confidenceRegionInfo)
+
+            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
+            if key in qtynames: ret[key] = FQty
+            if key2 in qtynames: ret[key2] = InFQty
+
+        key = "%s prep trace dist" % prepLabel; possible_qtys.append(key)
+        if key in qtynames:
+            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
+                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
+                return _tools.tracedist(rhoMx1, rhoMx2)
+            ret[key] = _getPrepQuantity(tr_diff, gateset1, prepLabel,
+                                        eps, confidenceRegionInfo)
+
+
+    ### per effect vector quantities
+    #############################################
+    for effectLabel in gateset1.get_effect_labels():
+
+        key = '%s effect state fidelity' % effectLabel; possible_qtys.append(key)
+        key2 = '%s effect state infidelity' % effectLabel; possible_qtys.append(key)
+        if key in qtynames or key2 in qtynames:
+
+            def fidelity(vec):
+                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
+                return _tools.fidelity(EMx1,EMx2)
+                  #vary elements of gateset1 (assume gateset2 is fixed)
+
+            FQty = _getEffectQuantity(fidelity, gateset1, effectLabel,
+                                      eps, confidenceRegionInfo)
+
+            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
+            if key in qtynames: ret[key] = FQty
+            if key2 in qtynames: ret[key2] = InFQty
+
+        key = "%s effect trace dist" % effectLabel; possible_qtys.append(key)
+        if key in qtynames:
+            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
+                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
+                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
+                return _tools.tracedist(EMx1, EMx2)
+            ret[key] = _getEffectQuantity(tr_diff, gateset1, effectLabel,
+                                          eps, confidenceRegionInfo)
+
+
+    ###  per gateset quantities
+    #############################################
+    key = "Gateset Frobenius diff"; possible_qtys.append(key)
+    if key in qtynames: ret[key] = ReportableQty( gateset1.frobeniusdist(gateset2) )
+
+    key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
+    if key in qtynames: ret[key] = ReportableQty(
+        max( [ _tools.jtracedist(gateset1.gates[l],gateset2.gates[l])
+               for l in gateset1.gates ] ) )
+
+
+    #Special case: when qtyname is None then return a list of all possible names that can be computed
+    if qtynames[0] is None:
+        return possible_qtys
+    return ret
+'''
+
 @_tools.deprecated_fn(replacement='individual functions from the reportables module')
 def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,
                                 confidenceRegionInfo=None):
@@ -789,6 +955,8 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         Dictionary whose keys are the requested quantity names and values are
         ReportableQty objects.
     """
+    print('compute_gateset_gateset_qtys:')
+    print(qtynames)
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
