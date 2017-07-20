@@ -223,7 +223,7 @@ class LsGermsStructure(GatestringStructure):
         """ Returns a list of the minor y-values"""
         return self.effectStrs
 
-    def add_plaquette(self, basestr, L, germ, fidpairs, dscheck=None):
+    def add_plaquette(self, basestr, L, germ, fidpairs, dsfilter=None):
         """
         Adds a plaquette with the given fiducial pairs at the
         `(L,germ)` location.
@@ -241,32 +241,34 @@ class LsGermsStructure(GatestringStructure):
             A list if `(i,j)` tuples of integers, where `i` is a prepation
             fiducial index and `j` is a measurement fiducial index.
 
-        dscheck : DataSet, optional
+        dsfilter : DataSet, optional
             If not None, check that this data set contains all of the 
-            gate strings being added.
-
+            gate strings being added.  If dscheck does not contain a gate
+            sequence, it is *not* added.
+        
         Returns
         -------
-        None
+        missing : list
+            A list of `(prep_fiducial, germ, L, effect_fiducial, entire_string)`
+            tuples indicating which sequences were not found in `dsfilter`.
         """
-        plaq = self.create_plaquette(basestr, fidpairs)
 
-        if dscheck:
-            missing_msgs = []
-            for i,j in fidpairs:
+        missing_list = []
+        
+        if dsfilter:
+            inds_to_remove = []
+            for k,(i,j) in enumerate(fidpairs):
                 el = self.prepStrs[i] + basestr + self.effectStrs[j]
-                if el not in dscheck:
-                    missing_msgs.append(
-                        "Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" \
-                        % (self.prepStrs[i],germ,L,self.effectStrs[j],el))
-            if len(missing_msgs) > 0:
-                raise ValueError(("Missing data! The following %d gate sequences"
-                                 % len(missing_msgs)) + " were expected but not"
-                                 + " found:\n %s" % "\n".join(missing_msgs))
-        elements = [ (j,i,)
-                     for i,j in fidpairs ] #note preps are *cols* not rows
+                if el not in dsfilter:
+                    missing_list.append( (self.prepStrs[i],germ,L,self.effectStrs[j],el) )
+                    inds_to_remove.append(k)
 
+            if len(inds_to_remove) > 0:
+                fidpairs = fidpairs[:] #copy
+                for i in reversed(inds_to_remove):
+                    del fidpairs[i]
 
+        plaq = self.create_plaquette(basestr, fidpairs)
         self.allstrs.extend( [gatestr for i,j,gatestr in plaq ] )
         _lt.remove_duplicates_in_place(self.allstrs)
 
@@ -277,6 +279,8 @@ class LsGermsStructure(GatestringStructure):
         if basestr not in self._baseStrToLGerm:
             self._firsts.append( (L,germ) )
             self._baseStrToLGerm[ basestr ] = (L,germ)
+
+        return missing_list
 
         
     def add_unindexed(self, gsList):

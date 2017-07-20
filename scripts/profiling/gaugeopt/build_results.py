@@ -78,10 +78,7 @@ assert(specs[0] == specsB[0])
 # full 71-germ list from std2Q_XYCNOT
 germs4 = pygsti.construction.gatestring_list(
     [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',) ] )
-
-germs11 = pygsti.construction.gatestring_list(
-    [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',), ('Gcnot',), ('Gxi','Gyi'), ('Gix','Giy'),
-      ('Gix','Gcnot'), ('Gxi','Gcnot'), ('Giy','Gcnot'), ('Gyi','Gcnot') ] )
+germs11 = pygsti.construction.gatestring_list( [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',), ('Gcnot',), ('Gxi','Gyi'), ('Gix','Giy'), ('Gix','Gcnot'), ('Gxi','Gcnot'), ('Giy','Gcnot'), ('Gyi','Gcnot') ] )
 
 germs71 = std2Q_XYCNOT.germs
 
@@ -123,6 +120,3 @@ print("Total time=%f hours" % ((end - start) / 3600.0))
 
 #If you wanted to, you could pickle the results for later analysis:
 pickle.dump(results, open("gaugeopt/2qbit_results.pkl", "wb"))
-
-
-
