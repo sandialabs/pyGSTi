@@ -174,7 +174,8 @@ class LsGermsStructure(GatestringStructure):
     A type of gate string structure whereby sequences can be
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
-    def __init__(self, Ls, germs, prepStrs, effectStrs, aliases):
+    def __init__(self, Ls, germs, prepStrs, effectStrs, aliases,
+                 sequenceRules):
         """
         Create an empty gate string structure.
 
