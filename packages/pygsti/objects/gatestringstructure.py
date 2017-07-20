@@ -174,8 +174,8 @@ class LsGermsStructure(GatestringStructure):
     A type of gate string structure whereby sequences can be
     indexed by L, germ, preparation-fiducial, and measurement-fiducial.
     """
-    def __init__(self, Ls, germs, prepStrs, effectStrs, aliases,
-                 sequenceRules):
+    def __init__(self, Ls, germs, prepStrs, effectStrs, aliases=None,
+                 sequenceRules=None):
         """
         Create an empty gate string structure.
 
@@ -206,7 +206,7 @@ class LsGermsStructure(GatestringStructure):
         self.prepStrs = prepStrs[:]
         self.effectStrs = effectStrs[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
-        self.sequenceRules = sequenceRules[:]
+        self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
 
         self.allstrs = []
         self._plaquettes = {}
@@ -386,7 +386,7 @@ class LsGermsStructure(GatestringStructure):
         Returns a copy of this `LsGermsStructure`.
         """
         cpy = LsGermsStructure(self.Ls, self.germs, self.prepStrs,
-                               self.effectStrs, self.aliases)
+                               self.effectStrs, self.aliases, self.sequenceRules)
         cpy.allstrs = self.allstrs[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
