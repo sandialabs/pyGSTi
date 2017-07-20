@@ -785,12 +785,12 @@ def create_general_report(results, filename, confidenceLevel=None,
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
 #        gateLabels = list(gateset.gates.keys())  # gate labels
-#        basisNm = gateset.basis.name
-#        basisDims = gateset.basis.dim.blockDims
+#        basisNm = gateset._basisNameAndDim[0]
+#        basisDims = gateset._basisNameAndDim[1]
 #    
-#        if basisNm != targetGateset.basis.name:
+#        if basisNm != targetGateset._basisNameAndDim[0]:
 #            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-#                                 % (basisNm, targetGateset.basis.name))
+#                                 % (basisNm, targetGateset._basisNameAndDim[0]))
 #    
 #        #Do computation first
 #        # Note: set to "full" parameterization so we can set the gates below

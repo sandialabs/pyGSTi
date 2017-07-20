@@ -21,8 +21,12 @@ class ReportableQty(object):
         self.errbar  = errbar
 
     def __str__(self):
-        def f(x,y): return (str(x) + " +/- " + str(y)) if y else str(x)
+        def f(x,y): 
+            return (str(x) + " +/- " + str(y)) if y else str(x)
         return self.render_with(f)
+
+    def __repr__(self):
+        return 'ReportableQty({})'.format(str(self))
 
     def __getattr__(self, attr):
         return getattr(self.value, attr)

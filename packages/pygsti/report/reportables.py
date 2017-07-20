@@ -117,8 +117,9 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
     @_functools.wraps(fnOfGate) # Retain metadata of wrapped function
     def compute_quantity(gateset, gateLabel, confidenceRegionInfo=None):
+        mxBasis = gateset._basisNameAndDim[0]
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGate(gateset.gates[gateLabel]))
+            return ReportableQty(fnOfGate(gateset.gates[gateLabel], mxBasis))
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -156,75 +157,89 @@ def spam_dotprods(rhoVecs, EVecs):
     return ret
 
 @gate_quantity()
-def choi_matrix(gate):
+def choi_matrix(gate, mxBasis):
     return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
 
 @gate_quantity()
-def choi_evals(gate):
+def choi_evals(gate, mxBasis):
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
 
 @gate_quantity()
-def choi_trace(gate):
+def choi_trace(gate, mxBasis):
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _np.trace(choi)
 
 @gate_quantity()
-def eigenvalues(gate):
+def eigenvalues(gate, mxBasis):
     return _np.linalg.eigvals(gate)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_angle(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('pi rotations',0)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_decay_diag(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('decay of diagonal rotation terms',0)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_decay_offdiag(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('decay of off diagonal rotation terms',0)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_cu_angle(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
-    return decomp.get('pi rotations',0)
+    return decomp.get('pi rotations', 0)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_cu_decay_diag(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
-    return decomp.get('decay of diagonal rotation terms',0)
+    return decomp.get('decay of diagonal rotation terms', 0)
 
-@gate_quantity()
+#@gate_quantity()
 def decomp_cu_decay_offdiag(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
-    return decomp.get('decay of off diagonal rotation terms',0)
+    return decomp.get('decay of off diagonal rotation terms', 0)
 
 @gate_quantity()
-def upper_bound_fidelity(gate):
+def decomposition(gate, mxBasis):
+    decompDict = _tools.decompose_gate_matrix(gate)
+    if decompDict['isValid']:
+        angleQty   = decomp_angle(gate)
+        diagQty    = decomp_decay_diag(gate)
+        offdiagQty = decomp_decay_offdiag(gate)
+        errBarDict = { 'pi rotations': angleQty.get_err_bar(),
+                       'decay of diagonal rotation terms': diagQty.get_err_bar(),
+                       'decay of off diagonal rotation terms': offdiagQty.get_err_bar() }
+        return ReportableQty(decompDict, errBarDict)
+    else:
+        return ReportableQty({})
+
+@gate_quantity()
+def upper_bound_fidelity(gate, mxBasis):
     return _tools.fidelity_upper_bound(gate)[0]
 
 @gate_quantity()
-def closest_ujmx(gate):
+def closest_ujmx(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
 
 @gate_quantity()
-def maximum_fidelity(gate):
+def maximum_fidelity(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _tools.fidelity(closestUJMx, choi)
 
 @gate_quantity()
-def maximum_trace_dist(gate):
+def maximum_trace_dist(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
