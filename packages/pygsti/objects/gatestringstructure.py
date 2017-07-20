@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools as _itertools
 from ..tools import listtools as _lt
+from ..construction import gatestringconstruction as _gstrc
 
     
 class GatestringPlaquette(object):
@@ -195,12 +196,18 @@ class LsGermsStructure(GatestringStructure):
 
         aliases : dict
             Gate label aliases to be propagated to all plaquettes.
+
+        sequenceRules : list, optional
+            A list of `(find,replace)` 2-tuples which specify string replacement
+            rules.  Both `find` and `replace` are tuples of gate labels 
+            (or `GateString` objects).
         """
         self.Ls = Ls[:]
         self.germs = germs[:]
         self.prepStrs = prepStrs[:]
         self.effectStrs = effectStrs[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
+        self.sequenceRules = sequenceRules[:]
 
         self.allstrs = []
         self._plaquettes = {}
@@ -260,7 +267,8 @@ class LsGermsStructure(GatestringStructure):
             inds_to_remove = []
             for k,(i,j) in enumerate(fidpairs):
                 el = self.prepStrs[i] + basestr + self.effectStrs[j]
-                if el not in dsfilter:
+                trans_el = _gstrc.translate_gatestring(el, self.aliases)
+                if trans_el not in dsfilter:
                     missing_list.append( (self.prepStrs[i],germ,L,self.effectStrs[j],el) )
                     inds_to_remove.append(k)
 
@@ -270,7 +278,8 @@ class LsGermsStructure(GatestringStructure):
                     del fidpairs[i]
 
         plaq = self.create_plaquette(basestr, fidpairs)
-        self.allstrs.extend( [gatestr for i,j,gatestr in plaq ] )
+        self.allstrs.extend( [ _gstrc.manipulate_gatestring(gatestr,self.sequenceRules)
+                               for i,j,gatestr in plaq ] )
         _lt.remove_duplicates_in_place(self.allstrs)
 
         self._plaquettes[(L,germ)] = plaq

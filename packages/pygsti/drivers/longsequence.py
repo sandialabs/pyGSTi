@@ -119,6 +119,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
         - missingDataAction = {'drop','raise'} (default = 'drop')
+        - stringManipRules = list of (find,replace) tuples
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -235,6 +236,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         nest = advancedOptions.get('nestedGateStringLists',True),
         includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
         gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
+        sequenceRules = advancedOptions.get('stringManipRules',None),
         dscheck=dschk, actionIfMissing=actionIfMissing, verbosity=verbosity)
     
     assert(len(maxLengths) == len(lsgstLists))

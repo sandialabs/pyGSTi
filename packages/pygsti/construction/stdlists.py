@@ -326,6 +326,11 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    sequenceRules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of gate labels 
+        (or `GateString` objects).
+
     dscheck : DataSet, optional
         A data set which is checked for each of the generated gate strings. When
         a generated sequence is missing from this `DataSet`, action is taken
