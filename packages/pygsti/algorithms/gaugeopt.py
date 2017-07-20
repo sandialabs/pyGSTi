@@ -238,8 +238,9 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         newGateset = result[-1] if returnAll else result
         newGateset.basis = Basis(targetGateset.basis.name,
                              targetGateset.basis.dim.blockDims)
-        print('gauge opt result distance to target')
-        print(newGateset.frobeniusdist(targetGateset))
+        #DEBUG
+        #print('gauge opt result distance to target')
+        #print(newGateset.frobeniusdist(targetGateset))
     
     return result
 

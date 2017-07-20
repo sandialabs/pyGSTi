@@ -188,7 +188,7 @@ def gm_matrices(dim):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     """
-    mxs = gm_matrices_unnormalized(dim).copy()
+    mxs = [mx.copy() for mx in gm_matrices_unnormalized(dim)]
     for mx in mxs:
         mx.flags.writeable = True # Safe because of above copy
     mxs[0] *= 1/_np.sqrt( mxs[0].shape[0] ) #identity mx
