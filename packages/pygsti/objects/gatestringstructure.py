@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools as _itertools
 from ..tools import listtools as _lt
-from ..construction import gatestringconstruction as _gstrc
 
     
 class GatestringPlaquette(object):
@@ -262,6 +261,7 @@ class LsGermsStructure(GatestringStructure):
         """
 
         missing_list = []
+        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
         
         if dsfilter:
             inds_to_remove = []
