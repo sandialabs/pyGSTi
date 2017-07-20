@@ -407,7 +407,7 @@ class TestGateStringMethods(BaseTestCase):
         result = pygsti.construction.manipulate_gatestring(tuple('AAAA'), sequenceRules)
         self.assertEqual(result, ("A","B","C","B","C","B","C"))
 
-        results = pygsti.construction.manipulate_gatestrings([tuple('ABC'),tuple('GHI')], sequenceRules)
+        results = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], sequenceRules)
 
 
 if __name__ == "__main__":
