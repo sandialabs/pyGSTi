@@ -719,4 +719,4 @@ def manipulate_gatestring_list(gatestringList, sequenceRules):
     if sequenceRules is None:
         return gatestringList
     else:
-        return [ manipulate_gatestring(gs) for gs in gatestringList ]
+        return [ manipulate_gatestring(gs, sequenceRules) for gs in gatestringList ]
