@@ -221,7 +221,8 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
 def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                        fidPairs=None, truncScheme="whole germ powers", nest=True,
                        keepFraction=1, keepSeed=None, includeLGST=True,
-                       gateLabelAliases=None, dscheck=None, actionIfMissing="raise",
+                       gateLabelAliases=None, sequenceRules=None,
+                       dscheck=None, actionIfMissing="raise",
                        verbosity=0):
     """
     Create a set of gate string structures for LSGST.
@@ -325,6 +326,11 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         structures.  Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    sequenceRules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of gate labels 
+        (or `GateString` objects).
+
     dscheck : DataSet, optional
         A data set which is checked for each of the generated gate strings. When
         a generated sequence is missing from this `DataSet`, action is taken
@@ -390,7 +396,8 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
 
     #running structure of all strings so far (LGST strings or empty)
     running_gss = _LsGermsStructure([],germList,prepStrs,
-                                    effectStrs,gateLabelAliases)
+                                    effectStrs,gateLabelAliases,
+                                    sequenceRules)
     if includeLGST:
         running_gss.add_unindexed(lgst_list)
     
@@ -404,7 +411,8 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             gss.Ls.append(maxLen)
         else: #create a new gss for just this maxLen
             gss = _LsGermsStructure([maxLen],germList,prepStrs,
-                                    effectStrs,gateLabelAliases)
+                                    effectStrs,gateLabelAliases,
+                                    sequenceRules)
         if maxLen == 0:
             #Special LGST case
             gss.add_unindexed(lgst_list)
