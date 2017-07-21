@@ -716,7 +716,7 @@ def manipulate_gatestring_list(gatestringList, sequenceRules):
     -------
     list of GateStrings
     """
-    if sequenceList is None:
+    if sequenceRules is None:
         return gatestringList
     else:
         return [ manipulate_gatestring(gs) for gs in gatestringList ]
