@@ -519,13 +519,9 @@ class GatesVsTargetTable(WorkspaceTable):
     
         formatters = [None] + [ ErrorBars ] * (len(colHeadings) - 1)
     
-        for gl, *reportableqtys in zip(gateLabels, infidelities, jt_diffs, dnorms):
-            if confidenceRegionInfo is None:
-                rowData = [gl] + [(reportableqty.get_value(), None) for reportableqty in reportableqtys]
-            else:
-                rowData = [gl] + [reportableqty.get_value_and_err_bar() for reportableqty in reportableqtys]
+        for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
+                                                      infidelities, jt_diffs, dnorms):
             table.addrow(rowData, formatters)
-    
         table.finish()
         return table
         
@@ -564,28 +560,26 @@ class SpamVsTargetTable(WorkspaceTable):
     
         table = _ReportTable(colHeadings, formatters)
     
-        qtyNames = ('state infidelity','trace dist')
-    
-        formatters = [ 'Rho' ] + [ ErrorBars ]*len(qtyNames)
-        qtys_to_compute = [ '%s prep %s' % (l,qty) for qty in qtyNames for l in prepLabels ]
-        qtys = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
-                                                confidenceRegionInfo)
-        for l in prepLabels:
-            if confidenceRegionInfo is None:
-                rowData = [l] + [ (qtys['%s prep %s' % (l,qty)].get_value(),None) for qty in qtyNames ]
-            else:
-                rowData = [l] + [ qtys['%s prep %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        formatters = [ 'Rho' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        prepInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
+                                                        'prep', confidenceRegionInfo)
+                            for l in prepLabels]
+        prepTraceDists   = [_reportables.vec_tr_diff(gateset, targetGateset, l, 
+                                                        'prep', confidenceRegionInfo)
+                            for l in prepLabels]
+        for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
+                                                      prepInfidelities, prepTraceDists):
             table.addrow(rowData, formatters)
     
-        formatters = [ 'Effect' ] + [ ErrorBars ]*len(qtyNames)
-        qtys_to_compute = [ '%s effect %s' % (l,qty) for qty in qtyNames for l in effectLabels ]
-        qtys = _reportables.compute_gateset_gateset_qtys(qtys_to_compute, gateset, targetGateset,
-                                                confidenceRegionInfo)
-        for l in effectLabels:
-            if confidenceRegionInfo is None:
-                rowData = [l] + [ (qtys['%s effect %s' % (l,qty)].get_value(),None) for qty in qtyNames ]
-            else:
-                rowData = [l] + [ qtys['%s effect %s' % (l,qty)].get_value_and_err_bar() for qty in qtyNames ]
+        formatters = [ 'Effect' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        effectInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
+                                                        'effect', confidenceRegionInfo)
+                            for l in effectLabels]
+        effectTraceDists   = [_reportables.vec_tr_diff(gateset, targetGateset, l, 
+                                                        'effect', confidenceRegionInfo)
+                            for l in effectLabels]
+        for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
+                                                      effectInfidelities, effectTraceDists):
             table.addrow(rowData, formatters)
     
         table.finish()
@@ -773,7 +767,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
     
-        anglesList = [_reportables.angles_btwn_axes(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        anglesList = [_reportables.gateset_gateset_angles_btwn_axes(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
 
         PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
     
@@ -991,8 +985,7 @@ class old_RotationAxisTable(WorkspaceTable):
     
         formatters = [None, PiErrorBars] + [ PiErrorBars ] * len(gateLabels)
     
-        qtys = _reportables.compute _gateset_qtys(['Gateset Axis Angles'], gateset, confidenceRegionInfo)
-        rotnAxisAngles, rotnAxisAnglesEB = qtys['Gateset Axis Angles'].get_value_and_err_bar()
+        rotnAxisAngles, rotnAxisAnglesEB = _reportables.angles_btwn_rotn_axes(gateset, confidenceRegionInfo)
         rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
                            for gl in gateLabels ]
     

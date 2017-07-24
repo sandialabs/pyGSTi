@@ -728,37 +728,40 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
         return possible_qtys + list(per_gatestring_qtys.keys())
     return ret
 
+
+
 @_tools.parameterized
-def gateset_gateset_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
+def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two gates and a basis."""
     @_functools.wraps(fnOfGates) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, gateLabel, confidenceRegionInfo=None):
-        mxBasis = gateset.basis.name
+        mxBasis = gatesetA.basis.name
         A = gatesetA.gates[gateLabel]
         B = gatesetB.gates[gateLabel]
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGate(A, B, mxBasis))
+            return ReportableQty(fnOfGates(A, B, mxBasis))
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
-        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(fnOfGates, gateLabel,
+        curriedFnOfGates = _functools.partial(fnOfGates, B=B, mxBasis=mxBasis)
+        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGates, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
         return ReportableQty(f0, df)
     return compute_quantity
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def process_fidelity(A, B, mxBasis):
     return _tools.process_fidelity(A, B, mxBasis)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def process_infidelity(A, B, mxBasis):
     return 1 - _tools.process_fidelity(A, B, mxBasis)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     decomp1 = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -775,20 +778,20 @@ def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fi
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
     return _tools.fidelity(closeChoi1, closeChoi2)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.frobeniusdist(A, B)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.jtracedist(A, B, mxBasis)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def half_diamond_norm(A, B, mxBasis):
     return 0.5 * _tools.diamonddist(A, B, mxBasis)
 
-@gateset_gateset_quantity()
-def angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
+@gates_quantity()
+def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
     axisOfRotn = decomp.get('axis of rotation', None)
@@ -809,101 +812,80 @@ def angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
       #      well, must flip sign of angle of rotation if you allow axis to
       #      "reverse" by 180 degrees.
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def rel_eigvals(A, B, mxBasis):
     target_gate_inv = _np.linalg.inv(B)
     rel_gate = _np.dot(target_gate_inv, A)
     return _np.linalg.eigvals(rel_gate)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def rel_logTiG_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logTiG")
     return _np.linalg.eigvals(rel_gate)
 
-@gateset_gateset_quantity()
+@gates_quantity()
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
 
-'''
-    ### per prep vector quantities
-    #############################################
-    for prepLabel in gateset1.get_prep_labels():
+@_tools.parameterized
+def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of two vectors and a basis."""
+    @_functools.wraps(fnOfVectors) # Retain metadata of wrapped function
+    def compute_quantity(gatesetA, gatesetB, gateLabel, typ='prep', confidenceRegionInfo=None):
+        mxBasis = gatesetA.basis.name
+        if typ == 'prep':
+            A = gatesetA.preps[gateLabel]
+            B = gatesetB.preps[gateLabel]
+        else:
+            assert typ == 'effect'
+            A = gatesetA.effects[gateLabel]
+            B = gatesetB.effects[gateLabel]
 
-        key = '%s prep state fidelity' % prepLabel; possible_qtys.append(key)
-        key2 = '%s prep state infidelity' % prepLabel; possible_qtys.append(key)
-        if key in qtynames or key2 in qtynames:
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfVectors(A, B, mxBasis))
 
-            def fidelity(vec):
-                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
-                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
-                return _tools.fidelity(rhoMx1, rhoMx2)
-                  #vary elements of gateset1 (assume gateset2 is fixed)
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("Prep quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
 
-            FQty = _getPrepQuantity(fidelity, gateset1, prepLabel,
-                                    eps, confidenceRegionInfo)
+        curriedFnOfVectors = _functools.partial(fnOfVectors, B=B, mxBasis=mxBasis)
+        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfVectors, gateLabel,
+                                                                  eps, returnFnVal=True,
+                                                                  verbosity=verbosity)
+        return ReportableQty(f0, df)
+    return compute_quantity
 
-            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
-            if key in qtynames: ret[key] = FQty
-            if key2 in qtynames: ret[key2] = InFQty
+@vectors_quantity()
+def vec_fidelity(A, B, mxBasis):
+    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
+    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+    return _tools.fidelity(rhoMx1, rhoMx2)
 
-        key = "%s prep trace dist" % prepLabel; possible_qtys.append(key)
-        if key in qtynames:
-            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
-                rhoMx1 = _tools.vec_to_stdmx(vec, mxBasis)
-                rhoMx2 = _tools.vec_to_stdmx(gateset2.preps[prepLabel], mxBasis)
-                return _tools.tracedist(rhoMx1, rhoMx2)
-            ret[key] = _getPrepQuantity(tr_diff, gateset1, prepLabel,
-                                        eps, confidenceRegionInfo)
+@vectors_quantity()
+def vec_infidelity(A, B, mxBasis):
+    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
+    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+    return 1 - _tools.fidelity(rhoMx1, rhoMx2)
 
+@vectors_quantity()
+def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
+    rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
+    return _tools.tracedist(rhoMx1, rhoMx2)
 
-    ### per effect vector quantities
-    #############################################
-    for effectLabel in gateset1.get_effect_labels():
-
-        key = '%s effect state fidelity' % effectLabel; possible_qtys.append(key)
-        key2 = '%s effect state infidelity' % effectLabel; possible_qtys.append(key)
-        if key in qtynames or key2 in qtynames:
-
-            def fidelity(vec):
-                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
-                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
-                return _tools.fidelity(EMx1,EMx2)
-                  #vary elements of gateset1 (assume gateset2 is fixed)
-
-            FQty = _getEffectQuantity(fidelity, gateset1, effectLabel,
-                                      eps, confidenceRegionInfo)
-
-            InFQty = ReportableQty( 1.0-FQty.get_value(), FQty.get_err_bar() )
-            if key in qtynames: ret[key] = FQty
-            if key2 in qtynames: ret[key2] = InFQty
-
-        key = "%s effect trace dist" % effectLabel; possible_qtys.append(key)
-        if key in qtynames:
-            def tr_diff(vec): # assume vary gateset1, gateset2 fixed
-                EMx1 = _tools.vec_to_stdmx(vec, mxBasis)
-                EMx2 = _tools.vec_to_stdmx(gateset2.effects[effectLabel], mxBasis)
-                return _tools.tracedist(EMx1, EMx2)
-            ret[key] = _getEffectQuantity(tr_diff, gateset1, effectLabel,
-                                          eps, confidenceRegionInfo)
-
-
-    ###  per gateset quantities
-    #############################################
-    key = "Gateset Frobenius diff"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty( gateset1.frobeniusdist(gateset2) )
-
-    key = "Max Jamiolkowski trace dist"; possible_qtys.append(key)
-    if key in qtynames: ret[key] = ReportableQty(
-        max( [ _tools.jtracedist(gateset1.gates[l],gateset2.gates[l])
-               for l in gateset1.gates ] ) )
-
-
-    #Special case: when qtyname is None then return a list of all possible names that can be computed
-    if qtynames[0] is None:
-        return possible_qtys
-    return ret
-'''
+def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
+    rows = []
+    for label, *reportableQtys in zip(labels, *reportableQtyLists):
+        rowData = [label]
+        if confidenceRegionInfo is None:
+            rowData.extend([(reportableQty.get_value(), None) for reportableQty in reportableQtys])
+        else:
+            rowData.extend([reportableqty.get_value_and_err_bar() for reportableqty in reportableqtys])
+        rows.append(rowData)
+    return rows
+        
 
 @_tools.deprecated_fn(replacement='individual functions from the reportables module')
 def compute_gateset_gateset_qty(qtyname, gateset1, gateset2,

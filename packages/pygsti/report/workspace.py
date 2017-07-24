@@ -259,10 +259,10 @@ class Workspace(object):
 
 
     def _register_components(self, autodisplay):        
-        
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+        
         makefactory = lambda cls: self._makefactory(cls,autodisplay)
 
         self.Switchboard = makefactory(Switchboard)
