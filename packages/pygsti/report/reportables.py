@@ -149,7 +149,7 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0,df)
     return compute_quantity
 
-@spam_quantity()
+@spam_quantity() # This function changes arguments to (gateset, confidenceRegionInfo)
 def spam_dotprods(rhoVecs, EVecs):
     ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
     for i,rhoVec in enumerate(rhoVecs):
@@ -157,59 +157,59 @@ def spam_dotprods(rhoVecs, EVecs):
             ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
     return ret
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def choi_matrix(gate, mxBasis):
     return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def choi_evals(gate, mxBasis):
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def choi_trace(gate, mxBasis):
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _np.trace(choi)
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def eigenvalues(gate, mxBasis):
     return _np.linalg.eigvals(gate)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_angle(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('pi rotations',0)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_decay_diag(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('decay of diagonal rotation terms',0)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_decay_offdiag(gate):
     decomp = _tools.decompose_gate_matrix(gate)
     return decomp.get('decay of off diagonal rotation terms',0)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_cu_angle(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
     return decomp.get('pi rotations', 0)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_cu_decay_diag(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
     return decomp.get('decay of diagonal rotation terms', 0)
 
-#@gate_quantity()
+#@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_cu_decay_offdiag(gate):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     decomp = _tools.decompose_gate_matrix(closestUGateMx)
     return decomp.get('decay of off diagonal rotation terms', 0)
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomposition(gate, mxBasis):
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
@@ -223,30 +223,30 @@ def decomposition(gate, mxBasis):
     else:
         return ReportableQty({})
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def upper_bound_fidelity(gate, mxBasis):
     return _tools.fidelity_upper_bound(gate)[0]
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def closest_ujmx(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def maximum_fidelity(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _tools.fidelity(closestUJMx, choi)
 
-@gate_quantity()
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def maximum_trace_dist(gate, mxBasis):
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     return _tools.jtracedist(gate, closestUGateMx)
 
-@gateset_quantity()
+@gateset_quantity() # This function changes arguments to (gateset, confidenceRegionInfo)
 def angles_btwn_rotn_axes(gateset):
     gateLabels = list(gateset.gates.keys())
     angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
@@ -753,15 +753,15 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0, df)
     return compute_quantity
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def process_fidelity(A, B, mxBasis):
     return _tools.process_fidelity(A, B, mxBasis)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def process_infidelity(A, B, mxBasis):
     return 1 - _tools.process_fidelity(A, B, mxBasis)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     decomp1 = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -778,19 +778,19 @@ def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fi
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
     return _tools.fidelity(closeChoi1, closeChoi2)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.frobeniusdist(A, B)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.jtracedist(A, B, mxBasis)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def half_diamond_norm(A, B, mxBasis):
     return 0.5 * _tools.diamonddist(A, B, mxBasis)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -812,18 +812,18 @@ def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
       #      well, must flip sign of angle of rotation if you allow axis to
       #      "reverse" by 180 degrees.
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def rel_eigvals(A, B, mxBasis):
     target_gate_inv = _np.linalg.inv(B)
     rel_gate = _np.dot(target_gate_inv, A)
     return _np.linalg.eigvals(rel_gate)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def rel_logTiG_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logTiG")
     return _np.linalg.eigvals(rel_gate)
 
-@gates_quantity()
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
@@ -832,15 +832,15 @@ def rel_logGmlogT_eigvals(A, B, mxBasis):
 def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two vectors and a basis."""
     @_functools.wraps(fnOfVectors) # Retain metadata of wrapped function
-    def compute_quantity(gatesetA, gatesetB, gateLabel, typ='prep', confidenceRegionInfo=None):
+    def compute_quantity(gatesetA, gatesetB, label, typ='prep', confidenceRegionInfo=None):
         mxBasis = gatesetA.basis.name
         if typ == 'prep':
-            A = gatesetA.preps[gateLabel]
-            B = gatesetB.preps[gateLabel]
+            A = gatesetA.preps[label]
+            B = gatesetB.preps[label]
         else:
             assert typ == 'effect'
-            A = gatesetA.effects[gateLabel]
-            B = gatesetB.effects[gateLabel]
+            A = gatesetA.effects[label]
+            B = gatesetB.effects[label]
 
         if confidenceRegionInfo is None: # No Error bars
             return ReportableQty(fnOfVectors(A, B, mxBasis))
@@ -857,19 +857,19 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0, df)
     return compute_quantity
 
-@vectors_quantity()
+@vectors_quantity() # This function changes arguments to (gatsetA, gatesetB, label, typ, confidenceRegionInfo)
 def vec_fidelity(A, B, mxBasis):
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return _tools.fidelity(rhoMx1, rhoMx2)
 
-@vectors_quantity()
+@vectors_quantity() # This function changes arguments to (gatsetA, gatesetB, label, typ, confidenceRegionInfo)
 def vec_infidelity(A, B, mxBasis):
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return 1 - _tools.fidelity(rhoMx1, rhoMx2)
 
-@vectors_quantity()
+@vectors_quantity() # This function changes arguments to (gatsetA, gatesetB, label, typ, confidenceRegionInfo)
 def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
