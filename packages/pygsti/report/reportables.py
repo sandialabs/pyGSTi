@@ -846,7 +846,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             return ReportableQty(fnOfVectors(A, B, mxBasis))
 
         # make sure the gateset we're given is the one used to generate the confidence region
-        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 

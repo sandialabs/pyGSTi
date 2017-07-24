@@ -821,9 +821,7 @@ class GateDecompTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
 
         gateLabels = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.basis.name
-        #basisNm = gateset.basis.name
-        #basisDims = gateset.basis.dim
+        basisNm   = gateset.basis.name
         basisDims = gateset.basis.dim.blockDims
 
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
