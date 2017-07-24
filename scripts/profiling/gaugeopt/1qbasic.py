@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from pygsti.construction      import std1Q_XYI
-from pygsti.algorithms        import gaugeopt_to_target
-from pygsti.tools.opttools    import timed_block
+from pygsti.construction import std1Q_XYI
+from pygsti.algorithms   import gaugeopt_to_target
+from pygsti.tools        import timed_block
 
 def main():
     gs_target  = std1Q_XYI.gs_target
