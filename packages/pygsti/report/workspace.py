@@ -17,13 +17,14 @@ import inspect as _inspect
 import sys as _sys
 import hashlib as _hashlib
 
+from .. import objects as _objs
 from ..tools import compattools as _compat
+from ..tools.opttools import timed_block
 
 from . import plotly_plot_ex as _plotly_ex
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
-
 
 def digest(obj):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
@@ -79,6 +80,11 @@ def _is_hashable(x):
         return False
     return True
 
+def get_fn_name_key(fn):
+    name = fn.__name__
+    if hasattr(fn, '__self__'):
+        name = fn.__self__.__class__.__name__ + '.' + name
+    return name
 
 def call_key(fn, args):
     """ 
@@ -96,13 +102,8 @@ def call_key(fn, args):
     -------
     tuple
     """
-    if hasattr(fn,"__self__"):
-        # hash on ClassName.methodName to avoid collisions, e.g. w/ "_create"
-        fnName = fn.__self__.__class__.__name__ + "." + fn.__name__
-    else:
-        fnName = fn.__name__
+    fnName = get_fn_name_key(fn)
     return (fnName,) + tuple(map(digest,args))
-
 
 def randomID():
     """ Returns a random DOM ID """
@@ -205,6 +206,7 @@ class Workspace(object):
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self.compCache = {}  # cache of computation function results (hashable by call_keys)
         self._register_components(False)
+        self.ineffectiveCache = set()
 
 
     def _makefactory(self,cls,autodisplay):
@@ -257,10 +259,10 @@ class Workspace(object):
 
 
     def _register_components(self, autodisplay):        
-        
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+        
         makefactory = lambda cls: self._makefactory(cls,autodisplay)
 
         self.Switchboard = makefactory(Switchboard)
@@ -632,20 +634,32 @@ class Workspace(object):
             for j,arg in nonSwitchedArgs:
                 argVals[j] = arg
 
+            name_key = get_fn_name_key(fn)
             #if any argument is a NotApplicable object, just use it as the
             # result. Otherwise, compute the result or pull it from cache.
             for v in argVals:
-                if isinstance(v,NotApplicable):
+                if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
+                if isinstance(v, (_objs.DataSet, _objs.DataComparator)):
+                    self.ineffectiveCache.add(name_key)
             else:
-                # argVals now contains all the arguments, so call the function if
-                #  we need to and add result.
-                key = call_key(fn, argVals) # cache by call key
-                if key not in self.compCache:
-                    #print("DB: computing with args = ", argVals)
-                    #print("DB: computing with arg types = ", [type(x) for x in argVals])
-                    self.compCache[key] = fn(*argVals)
-                result = self.compCache[key]
+                if name_key in self.ineffectiveCache:
+                    key = 'NA'
+                    result = fn(*argVals)
+                else:
+                    # argVals now contains all the arguments, so call the function if
+                    #  we need to and add result.
+                    times = dict()
+                    with timed_block('hash', times):
+                        key = call_key(fn, argVals) # cache by call key
+                    if key not in self.compCache:
+                        with timed_block('call', times):
+                            self.compCache[key] = fn(*argVals)
+                    if 'call' in times:
+                        if times['hash'] > times['call']:
+                            print('Added {} to hash-ineffective functions'.format(name_key))
+                            self.ineffectiveCache.add(name_key)
+                    result = self.compCache[key]
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
@@ -658,6 +672,7 @@ class Workspace(object):
         return resultValues, switchboards, switchboard_switch_indices, switchpos_map
 
 
+    '''
     def cachedCompute(self, fn, *args):
         """
         Call a function with the given arguments (if needed).
@@ -685,6 +700,7 @@ class Workspace(object):
             self.compCache[curkey] = fn(*valArgs)
             
         return self.compCache[curkey]
+    '''
     
     
 class Switchboard(_collections.OrderedDict):
@@ -1807,13 +1823,9 @@ class WorkspacePlot(WorkspaceOutput):
         #pick "master" plot, whose resizing dictates the resizing of other plots,
         # as the largest-height plot.
         iMaster = None; maxH = 0;
-        for i,fig in enumerate(self.figs):
-            if isinstance(fig,NotApplicable): continue
-            if 'height' in fig['layout']:
-                if fig['layout']['height'] > maxH:
-                    iMaster, maxH = i, fig['layout']['height'];
-        assert(iMaster is not None)
-          #maybe we'll deal with this case in the future by setting 
+        for i, fig in enumerate(self.figs):
+            if isinstance(fig, NotApplicable): 
+                continue
           # master=None below, but it's unclear whether this will is needed.
         
         divHTML = []

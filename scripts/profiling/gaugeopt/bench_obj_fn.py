@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import pygsti
 from pygsti.algorithms.gaugeopt import create_objective_fn
-from pygsti.tools.timed_block   import timed_block
+from pygsti.tools.opttools      import timed_block
 
 import pickle
 from functools  import partial
