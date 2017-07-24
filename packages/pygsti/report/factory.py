@@ -744,24 +744,33 @@ def create_general_report(results, filename, confidenceLevel=None,
                 for i in range(len(dataset_labels)):
                     for j in range(len(dataset_labels)):
                         indices.append((i, j))
-                _, indexDict, _ = _distribute_indices(indices, comm)
-                rank = comm.Get_rank()
-                for k, v in indexDict.items():
-                    if v == rank:
+                if comm is not None:
+                    _, indexDict, _ = _distribute_indices(indices, comm)
+                    rank = comm.Get_rank()
+                    for k, v in indexDict.items():
+                        if v == rank:
+                            d1, d2 = k
+                            dslbl1 = dataset_labels[d1]
+                            dslbl2 = dataset_labels[d2]
+
+                            ds1 = results_dict[dslbl1].dataset
+                            ds2 = results_dict[dslbl2].dataset
+                            dsComp[(d1, d2)] = _DataComparator(
+                                [ds1, ds2], DS_names=[dslbl1, dslbl2])
+                    dicts = comm.gather(dsComp, root=0)
+                    if rank == 0:
+                        for d in dicts:
+                            for k, v in d.items():
+                                d1, d2 = k
+                                dscmp_switchBd.dscmp[d1, d2] = v
+                else:
+                    for i, j in indices:
                         d1, d2 = k
                         dslbl1 = dataset_labels[d1]
                         dslbl2 = dataset_labels[d2]
-
                         ds1 = results_dict[dslbl1].dataset
                         ds2 = results_dict[dslbl2].dataset
-                        dsComp[(d1, d2)] = _DataComparator(
-                            [ds1, ds2], DS_names=[dslbl1,dslbl2])
-                dicts = comm.gather(dsComp, root=0)
-                if rank == 0:
-                    for d in dicts:
-                        for k, v in d.items():
-                            d1, d2 = k
-                            dscmp_switchBd.dscmp[d1, d2] = v
+                        dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
                 
             with timed('dscmpSwitchBoard'):
                 add_qty('dscmpSwitchboard', dscmp_switchBd)
@@ -774,7 +783,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     else:
         toggles['CompareDatasets'] = False
 
-    if comm.Get_rank() == 0:
+    if comm is None or comm.Get_rank() == 0:
         # 3) populate template html file => report html file
         printer.log("*** Merging into template file ***")
         template = "report_dashboard.html"
