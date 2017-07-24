@@ -876,15 +876,16 @@ def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.tracedist(rhoMx1, rhoMx2)
 
 def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
-    rows = []
-    for label, *reportableQtys in zip(labels, *reportableQtyLists):
+    for items in zip(labels, *reportableQtyLists):
+        # Python2 friendly unpacking
+        label          = items[0]
+        reportableQtys = items[1:]
         rowData = [label]
         if confidenceRegionInfo is None:
             rowData.extend([(reportableQty.get_value(), None) for reportableQty in reportableQtys])
         else:
             rowData.extend([reportableqty.get_value_and_err_bar() for reportableqty in reportableqtys])
-        rows.append(rowData)
-    return rows
+        yield rowData
         
 
 @_tools.deprecated_fn(replacement='individual functions from the reportables module')
