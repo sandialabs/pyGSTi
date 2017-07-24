@@ -531,8 +531,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix,iiy,iix):
                 if _np.isnan(val): return ""
 
+                N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = len(baseStr) // len(germ)
                 guess = germ * reps
@@ -651,8 +652,9 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix,iiy,iix):
                 if _np.isnan(val): return ""
 
+                N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = len(baseStr) // len(germ)
                 guess = germ * reps
@@ -679,7 +681,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
             plaq = g.get_plaquette(x,y)
             N = len(subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
             #TODO: if sumUp then need to sum before appending...
-            for iix,iiy,gstr in plaq:
+            for iiy,iix,gstr in plaq:
                 xs.append( len(gstr))
                 ys.append( subMxs[iy][ix][N-1-iiy][iix] )
                 if hoverInfo:
@@ -1745,6 +1747,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
         minlog = _np.floor(min(log_ys))
         maxlog = _np.ceil(max(log_ys))

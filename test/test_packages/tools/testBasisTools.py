@@ -5,7 +5,7 @@ import scipy
 import pygsti
 
 import pygsti.tools.basis       as basis
-import pygsti.tools.lindbladiantools as lindbladiantools
+import pygsti.tools.lindbladtools as lindbladtools
 
 from pygsti.tools.basis import Basis, Dim, change_basis
 
@@ -279,7 +279,7 @@ class BasisBaseTestCase(BaseTestCase):
                                         [ 0,  0,  0,  0]]
                                        )
 
-        self.assertArraysAlmostEqual(lindbladiantools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
+        self.assertArraysAlmostEqual(lindbladtools.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
                                      expectedLindbladian)
 
     def test_vec_to_stdmx(self):
@@ -305,6 +305,10 @@ class BasisBaseTestCase(BaseTestCase):
         #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
         #test  = change_basis(mxStd, std, comp)
         #test  = change_basis(mxStd, comp, std)
+
+    def test_qt(self):
+        qt = Basis('qt', 3)
+        qt = Basis('qt', [3])
 
     def test_general(self):
         Basis('pp', 2)
@@ -369,9 +373,6 @@ class BasisBaseTestCase(BaseTestCase):
         end   = Basis('std', 2)
         mxInReducedBasis = change_basis(mxInStdBasis, begin, end)
         original = change_basis(mxInReducedBasis, end, begin)
-
-
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

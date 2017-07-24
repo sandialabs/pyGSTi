@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pygsti.algorithms import gaugeopt_to_target
-from pygsti.tools.opttools import timed_block
+from pygsti.tools import timed_block
 
 import pickle
 from contextlib import contextmanager

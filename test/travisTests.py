@@ -8,6 +8,7 @@ def check_env(varname):
     return os.environ.get(varname, 'False') == 'True'
 
 doReport      = check_env('Report')
+doReportB     = check_env('ReportB')
 doDrivers     = check_env('Drivers')
 doDefault     = check_env('Default')
 doMPI         = check_env('MPI') 
@@ -26,16 +27,20 @@ if doReport:
     tests = ['report']
     package = 'pygsti.report'
 
+elif doReportB:
+    tests = ['reportb']
+    package = 'pygsti.report'
+
 elif doDrivers:
     tests = ['drivers', 'objects']
 
 elif doAlgorithms:
-    parallel = False
+    #parallel = False
     tests = ['algorithms']
     package = 'pygsti.algorithms'
 
 elif doAlgorithmsB:
-    parallel = False
+    #parallel = False
     tests = ['algorithmsb']
     package = 'pygsti.algorithms'
 

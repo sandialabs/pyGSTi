@@ -377,6 +377,38 @@ class TestGateStringMethods(BaseTestCase):
         aliasDict3 = pygsti.construction.compose_alias_dicts(aliasDict1, aliasDict2)
         self.assertEqual(aliasDict3, { 'A': ('C','C','C','C') } )
 
+    def test_manipulate_strings(self):
+        sequenceRules = [
+            (('A', 'B'), ('A', 'B\'')),
+            (('B', 'A'), ('B\'\'', 'A')),
+            (('C', 'A'), ('C', 'A\'')),
+            (('B', 'C'), ('B', 'C\'')),
+            (('D',), ('E',)),
+            (('A','A'), ('A','B','C',))]
+
+        result = pygsti.construction.manipulate_gatestring(tuple('BAB'), sequenceRules)
+        self.assertEqual(result, ("B''","A","B'"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('ABA'), sequenceRules)
+        self.assertEqual(result, ("A","B'","A"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('CAB'), sequenceRules)
+        self.assertEqual(result, ("C","A'","B'"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('ABC'), sequenceRules)
+        self.assertEqual(result, ("A","B'","C'"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('DD'), sequenceRules)
+        self.assertEqual(result, ("E","E"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('AA'), sequenceRules)
+        self.assertEqual(result, ("A","B","C"))
+
+        result = pygsti.construction.manipulate_gatestring(tuple('AAAA'), sequenceRules)
+        self.assertEqual(result, ("A","B","C","B","C","B","C"))
+
+        results = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], sequenceRules)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

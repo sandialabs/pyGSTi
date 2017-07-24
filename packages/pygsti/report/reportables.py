@@ -846,7 +846,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             return ReportableQty(fnOfVectors(A, B, mxBasis))
 
         # make sure the gateset we're given is the one used to generate the confidence region
-        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
@@ -1076,7 +1076,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logTiG_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logTiG")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
@@ -1086,7 +1086,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logGmlogT_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logG-logT")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logG-logT")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 

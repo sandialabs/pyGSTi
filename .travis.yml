@@ -9,14 +9,14 @@ branches:
     - master
     - beta
     - develop
-    - feature-report-improvements
 
 env:
     - Drivers=True    # First in build mx because long duration
     - Algorithms=True 
     - AlgorithmsB=True
-    - Default=True    # construction, io, objects, tools, optimize, algorithms
+    - Default=True    # construction, io, objects, tools, optimize
     - Report=True      
+    - ReportB=True
     - MPI=True        
 
 before_install:

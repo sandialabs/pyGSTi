@@ -2606,7 +2606,6 @@ class GateSet(object):
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset.povm_identity = self.povm_identity.copy()
         newGateset._dim = self._dim
-        newGateset.basis = self.basis
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
@@ -2614,6 +2613,10 @@ class GateSet(object):
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
         newGateset._calcClass = self._calcClass
+
+        if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
+            self.basis = Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
+        newGateset.basis = self.basis
         
         return newGateset
 

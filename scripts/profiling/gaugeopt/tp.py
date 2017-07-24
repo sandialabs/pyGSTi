@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import pygsti
-from pygsti.tools.opttools import timed_block
+from pygsti.tools import timed_block
 
 import pickle
 from contextlib import contextmanager

@@ -13,10 +13,10 @@ import scipy.linalg as _spl
 
 
 from ..tools import gatetools as _gt
+from ..tools import basis as _basis
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
-from ..objects import basis as _basis
 
 #############################################
 # Build gates based on "standard" gate names
