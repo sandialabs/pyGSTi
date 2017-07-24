@@ -117,7 +117,7 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
     @_functools.wraps(fnOfGate) # Retain metadata of wrapped function
     def compute_quantity(gateset, gateLabel, confidenceRegionInfo=None):
-        mxBasis = gateset._basisNameAndDim[0]
+        mxBasis = gateset.basis.name
         if confidenceRegionInfo is None: # No Error bars
             return ReportableQty(fnOfGate(gateset.gates[gateLabel], mxBasis))
 
@@ -301,7 +301,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
-    mxBasis = gateset._basisNameAndDim[0]
+    mxBasis = gateset.basis.name
 
     def choi_matrix(gate):
         return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -732,10 +732,10 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
 def gateset_gateset_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two gates and a basis."""
     @_functools.wraps(fnOfGates) # Retain metadata of wrapped function
-    def compute_quantity(gatesetA, gateLabelA, gatesetB, gateLabelB, confidenceRegionInfo=None):
-        mxBasis = gateset._basisNameAndDim[0]
-        A = gatesetA.gates[gateLabelA]
-        B = gatesetB.gates[gateLabelB]
+    def compute_quantity(gatesetA, gatesetB, gateLabel, confidenceRegionInfo=None):
+        mxBasis = gateset.basis.name
+        A = gatesetA.gates[gateLabel]
+        B = gatesetB.gates[gateLabel]
         if confidenceRegionInfo is None: # No Error bars
             return ReportableQty(fnOfGate(A, B, mxBasis))
 
@@ -750,12 +750,15 @@ def gateset_gateset_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
         return ReportableQty(f0, df)
     return compute_quantity
 
+@gateset_gateset_quantity()
 def process_fidelity(A, B, mxBasis):
     return _tools.process_fidelity(A, B, mxBasis)
 
+@gateset_gateset_quantity()
 def process_infidelity(A, B, mxBasis):
     return 1 - _tools.process_fidelity(A, B, mxBasis)
 
+@gateset_gateset_quantity()
 def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     decomp1 = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -772,15 +775,19 @@ def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fi
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
     return _tools.fidelity(closeChoi1, closeChoi2)
 
+@gateset_gateset_quantity()
 def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.frobeniusdist(A, B)
 
+@gateset_gateset_quantity()
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.jtracedist(A, B, mxBasis)
 
+@gateset_gateset_quantity()
 def half_diamond_norm(A, B, mxBasis):
     return 0.5 * _tools.diamonddist(A, B, mxBasis)
 
+@gateset_gateset_quantity()
 def angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -802,15 +809,18 @@ def angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
       #      well, must flip sign of angle of rotation if you allow axis to
       #      "reverse" by 180 degrees.
 
+@gateset_gateset_quantity()
 def rel_eigvals(A, B, mxBasis):
     target_gate_inv = _np.linalg.inv(B)
     rel_gate = _np.dot(target_gate_inv, A)
     return _np.linalg.eigvals(rel_gate)
 
+@gateset_gateset_quantity()
 def rel_logTiG_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logTiG")
     return _np.linalg.eigvals(rel_gate)
 
+@gateset_gateset_quantity()
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
@@ -968,10 +978,10 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
-    mxBasis = gateset1._basisNameAndDim[0]
-    if mxBasis != gateset2._basisNameAndDim[0]:
+    mxBasis = gateset1.basis.name
+    if mxBasis != gateset2.basis.name:
         raise ValueError("Basis mismatch: %s != %s" %
-                         (mxBasis, gateset2._basisNameAndDim[0]))
+                         (mxBasis, gateset2.basis.name))
 
     ### per gate quantities
     #############################################
