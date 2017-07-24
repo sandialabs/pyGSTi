@@ -621,6 +621,7 @@ def create_general_report(results, filename, confidenceLevel=None,
         add_qty('maxLSwitchboard1', switchBd.view(maxLView,"v6"))
 
     gsTgt = switchBd.gsTarget
+    print(gsTgt.base)
     ds = switchBd.ds
     eff_ds = switchBd.eff_ds
     prepStrs = switchBd.prepStrs
@@ -643,7 +644,6 @@ def create_general_report(results, filename, confidenceLevel=None,
         add_qty('bestGatesetSpamBriefTable', ws.SpamTable(switchBd.gsTargetAndFinal,
                                                          ['Target','Estimated'],
                                                          cri, includeHSVec=False))
-
     with timed('bestGatesetSpamVsTargetTable'):
         add_qty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable(gsFinal, gsTgt, cri))
     with timed('bestGatesetGaugeOptParamsTable'):
@@ -654,7 +654,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     with timed('bestGatesetChoiEvalTable'):
         add_qty('bestGatesetChoiEvalTable', ws.ChoiTable(gsFinal, None, cri, display=("barplot",)))
     with timed('bestGatesetDecompTable'):
-        add_qty('bestGatesetDecompTable', ws.GateDecompTable(gsFinal, cri))
+        add_qty('bestGatesetDecompTable', ws.GateDecompTable(gsFinal, gsTgt, cri))
     with timed('bestGatesetEvalTable'):
         add_qty('bestGatesetEvalTable', ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals')))
     with timed('bestGatesetRelEvalTable'):

@@ -208,9 +208,7 @@ class Workspace(object):
         self._register_components(False)
         self.ineffectiveCache = set()
 
-
     def _makefactory(self,cls,autodisplay):
-
         PY3 = bool(_sys.version_info > (3, 0))
 
         #Manipulate argument list of cls.__init__
@@ -671,38 +669,6 @@ class Workspace(object):
         switchboard_switch_indices = [ info['switch indices'] for info in switchBdInfo ]
         return resultValues, switchboards, switchboard_switch_indices, switchpos_map
 
-
-    '''
-    def cachedCompute(self, fn, *args):
-        """
-        Call a function with the given arguments (if needed).
-
-        If the function has already been called with the given arguments then
-        the cached return value is returned.  Otherwise, the function is
-        evaluated and the result is stored in this Workspace's cache.
-
-        Parameters
-        ----------
-        fn : function
-            The function to evaluate
-
-        args : list
-            The function's arguments
-
-        Returns
-        -------
-        object
-            Whether `fn` returns.
-        """
-        curkey = call_key(fn, args) # cache by call key
-        
-        if curkey not in self.compCache:
-            self.compCache[curkey] = fn(*valArgs)
-            
-        return self.compCache[curkey]
-    '''
-    
-    
 class Switchboard(_collections.OrderedDict):
     """
     Encapsulates a render-able set of user-interactive switches
@@ -802,7 +768,7 @@ class Switchboard(_collections.OrderedDict):
         dependencies : list or tuple
             The (0-based) switch-indices specifying which switch positions
             the new variable is dependent on.  For example, if the Switchboard
-            has two switches, one for "amplitude" and one for "frequencey", and
+            has two switches, one for "amplitude" and one for "frequency", and
             this value is only dependent on frequency, then `dependencies`
             should be set to `(1,)` or `[1]`.
         

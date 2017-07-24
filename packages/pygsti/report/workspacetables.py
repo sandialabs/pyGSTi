@@ -819,7 +819,6 @@ class GateDecompTable(WorkspaceTable):
 
         
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
-
         gateLabels = list(gateset.gates.keys())  # gate labels
         basisNm   = gateset.basis.name
         basisDims = gateset.basis.dim.blockDims
