@@ -243,7 +243,7 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
     return initialSoln, localSoln
 
 
-def grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
+def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
           finalScoreFn, iterations, feasibleThreshold=None, feasibleFn=None,
           initialElements=None, seed=None, verbosity=0):
     """Perform GRASP to come up with an optimal feasible set of elements.

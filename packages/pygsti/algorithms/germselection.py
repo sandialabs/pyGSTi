@@ -297,6 +297,9 @@ def get_gateset_params(gatesetList):
 
 def setup_gateset_list(gatesetList, randomize, randomizationStrength,
                        numCopies, seed):
+    """
+    Sets up a list of randomize gate sets (helper function).
+    """
     if not isinstance(gatesetList, (list, tuple)):
         gatesetList = [gatesetList]
     if len(gatesetList) > 1 and numCopies is not None:
@@ -467,7 +470,7 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     but is not convenient for just computing the score of a germ set. For that,
     use :func:`calculate_germset_score`.
     """
-    if forceIndices and _np.any(weights[forceIndices] <= 0):
+    if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
         combinedDDD = _np.einsum('i,ijk', weights,
@@ -485,9 +488,37 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
 
 def randomizeGatesetList(gatesetList, randomizationStrength, numCopies,
                          seed=None):
+    """
+    Applies random unitary perturbations to a gate sets.
+
+    If `gatesetList` is a length-1 list, then `numCopies` determines how
+    many randomizations to create.  If `gatesetList` containes multiple
+    gate sets, then `numCopies` must be `None` and each gate set is
+    randomized once to create the corresponding returned gate set.
+
+    Parameters
+    ----------
+    gatesetList : GateSet or list
+        A list of GateSet objects.
+
+    randomizationStrengh : float
+        The strength (input as the `scale` argument to 
+        :func:`GateSet.randomize_with_unitary`) of random unitary
+        perturbations.
+
+    numCopies : int
+        The number of random perturbations of `gatesetList[0]` to generate when
+        `len(gatesetList) == 1`.  A value of `None` will result in 1 copy.  If
+        `len(gatesetList) > 1` then `numCopies` must be set to None.
+    
+    seed : int, optional
+        Starting seed for randomization.  Successive randomizations receive
+        successive seeds.  `None` results in random seeds.
+    """
     if len(gatesetList) > 1 and numCopies is not None:
         raise ValueError("Input multiple gate sets XOR request multiple "
                          "copies only!")
+
     newgatesetList = []
     if len(gatesetList) > 1:
         for gatesetnum, gateset in enumerate(gatesetList):
@@ -953,11 +984,58 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
     Parameters
     ----------
+    gatesetList : GateSet or list
+        The gate set or list of `GateSet`s to select germs for.
+
     germsList : list of GateString
         The list of germs to contruct a germ set from.
 
-    TODO : TODO
-        docstring for more params
+    randomize : bool, optional
+        Whether or not to randomize `gatesetList` (usually just a single
+        `GateSet`) with small (see `randomizationStrengh`) unitary maps
+        in order to avoid "accidental" symmetries which could allow for 
+        fewer germs but *only* for that particular gate set.  Setting this 
+        to `True` will increase the run time by a factor equal to the 
+        numer of randomized copies (`numCopies`).
+
+    randomizationStrengh : float, optional
+        The strength (input as the `scale` argument to 
+        :func:`GateSet.randomize_with_unitary`) of random unitary
+        perturbations (used only when `randomize == True`).
+
+    numCopies : int, optional
+        The number of randomized gate sets to create when only a *single* gate
+        set is passed via `gatesetList`.  Otherwise, `numCopies` must be set
+        to `None`.
+
+    seed : int, optional
+        Seed for generating random unitary perturbations to gatesets.
+    
+    gatePenalty : float, optional
+        Coefficient for a penalty linear in the sum of the germ lengths.
+
+    scoreFunc : {'all', 'worst'}, optional
+        Sets the objective function for scoring the eigenvalues. If 'all',
+        score is ``sum(1/eigenvalues)``. If 'worst', score is
+        ``1/min(eiganvalues)``.
+
+    tol : float, optional
+        Tolerance (`eps` arg) for :func:`calc_bulk_twirled_DDD`, which sets
+        the differece between eigenvalues below which they're treated as 
+        degenerate.
+
+    threshold : float, optional
+        Value which the score (before penalties are applied) must be lower than
+        for a germ set to be considered AC.
+    
+    check : bool, optional
+        Whether to perform internal checks (will slow down run time
+        substantially).
+
+    force : list of GateStrings
+        A list of `GateString` objects which *must* be included in the final 
+        germ set.  If the special string "singletons" is given, then all of
+        the single gates (length-1 sequences) must be included.
 
     pretest : boolean, optional
         Whether germ list should be initially checked for completeness.
@@ -972,6 +1050,9 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
+
+    verbosity : int, optional
+        Level of detail printed to stdout.
     """
     if comm is not None and comm.Get_size() > 1:
         from mpi4py import MPI #not at top so pygsti doesn't require mpi4py

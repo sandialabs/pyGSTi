@@ -14,6 +14,9 @@ from numpy import random as _rndm
 from functools import reduce as _reduce
 from scipy.optimize import curve_fit as _curve_fit
 
+def is_integer(x):
+    return bool(isinstance(x,int) or isinstance(x, _np.integer))
+
 class MatrixGroup(object):
     """
     Encapsulates a group where each element is represented by a matrix
@@ -80,7 +83,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
 
     def get_matrix_inv(self, i):
@@ -96,7 +99,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
     def get_inv(self, i):
@@ -114,7 +117,7 @@ class MatrixGroup(object):
             If `i` is an integer, returns the element's index.  Otherwise
             returns the element's label.
         """
-        if isinstance(i,int):
+        if is_integer(i):
             return self.inverse_table[i]
         else:
             i = self.label_indices[i]
@@ -141,7 +144,7 @@ class MatrixGroup(object):
             index.  Otherwise returns the resulting element's label.
         """
         if len(indices) == 0: return None
-        if isinstance(indices[0],int):
+        if is_integer(indices[0]):
             return _reduce(lambda i,j: self.product_table[i,j], indices)
         else:
             indices = [ self.label_indices[i] for i in indices ]
@@ -162,13 +165,13 @@ class RBResults(object):
 
     As in other docstrings, "W&F" refers to Wallman and Flammia's 
     http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032.
-    """
-    
-    def __init__(self, dataset, result_dicts, basename, weight_data,
-                 infinite_data, one_freq_adjust=False, alias_maps=None,
-                 success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
-                 A0=[0.5], ApB0=[1.], C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.],
-                 ApB_bnd=[0.,2.], C_bnd=[-1.,1.]):
+    """    
+    def __init__(self, dataset, results, fit='standard', 
+                 success_spamlabel='plus', fit_parameters_dict=None, dim = 2, 
+                 weight_data=False, pre_avg=True, infinite_data=False, 
+                 one_freq_adjust=False):
+
+
         """
         Constructs a new RBResults object.
 
@@ -176,11 +179,6 @@ class RBResults(object):
         ----------
         dataset : dataset
             The dataset which contains all the experimental RB data.
-
-        result_dicts : dict
-            A dictionary of dictionaries of RB result values.  Keys are 
-            gate-label-sets, e.g. "clifford", "canonical", and "primivitve".
-            Values are dictionaries containing RB input and computed values.
 
         basename : str
             A name given to the "base" gate-label-set, usually "clifford",
@@ -251,40 +249,27 @@ class RBResults(object):
             default values are reasonably well-motivated and should be almost 
             always fine with sufficient data.   
             
-        """
+        """        
         self.dataset = dataset
-        self.dicts = result_dicts
-        self.basename = basename
-        self.alias_maps = alias_maps
+        self.results = results
+        self.fit = fit
+        self.success_spamlabel = success_spamlabel
+        self.fit_parameters_dict = fit_parameters_dict
         self.d = dim
-        self.pre_avg = pre_avg
         self.weight_data = weight_data
+        self.pre_avg = pre_avg
         self.infinite_data = infinite_data
         self.one_freq_adjust= one_freq_adjust,
-        self.success_spamlabel = success_spamlabel
-        self.f0 = f0
-        self.A0 = A0
-        self.ApB0 = ApB0
-        self.C0 = C0
-        self.f_bnd = f_bnd
-        self.A_bnd = A_bnd
-        self.ApB_bnd = ApB_bnd
-        self.C_bnd = C_bnd
-        self.one_freq_adjust = one_freq_adjust
 
-    def detail_str(self, gstyp, fitting='standard'):
+    def detail_str(self):
         """
         Format a string with computed RB values using the given 
-        gate-label-set, `gstyp` and order.  For example, if `gstyp` == "clifford",
-        and order == 'standard' then the per-"clifford" standard fit RB error rates 
-        and parameters are given.
+        order.  For example, if order == 'standard' then the standard 
+        fit RB error rates and parameters are given.
         
         Parameters
         ----------
-        gstyp : str
-            The gate-label-set specifying which RB error rates and parameters
-            to extract.
-            
+        
         fitting : str, optional
             Allowed values are 'standard' or 'first order'. Specifies whether the standard or
             first order fitting model results are formatted.
@@ -294,46 +279,37 @@ class RBResults(object):
         str
         """
         s = ""
-        key_list = ['A','B','f','r']
-        key_list_1st_order = ['A1','B1','C1','f1','r1']
-        if gstyp in self.dicts and self.dicts[gstyp] is not None:            
-            #print("For %ss:" % gstyp)
-            if fitting=='standard':
-                s += "RB results\n"
-                s += "\n  - Fitting to the standard function: A + B*f^m."
-                if 'A_error_BS' in self.dicts[gstyp]: 
-                    s += "\n  - Boostrapped-derived error bars (1 sigma).\n\n"
-                    for key in key_list:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_BS"]))
-                if 'A_error_WF' in self.dicts[gstyp]:
-                    s += "\n  - Wallman and Flammia-derived error bars (1 sigma).\n\n"
-                    for key in key_list:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_WF"]))
+        if self.fit == 'standard':
+            key_list = ['A','B','f','r']
+        if self.fit == 'first order':
+            key_list = ['A','B','C','f','r']
 
-                if 'A_error_BS' not in self.dicts[gstyp] and \
-                        'A_error_WF' not in self.dicts[gstyp]:
-                    s += "\n\n"
-                    for key in key_list:            
-                        s += "%s = %s\n" % (key, str(self.dicts[gstyp][key]))
-            if fitting=='first order':
-                s += "RB results \n"
-                s += "\n  - Fitting to the first order fitting function: A1 + (B1+C1m)*f1^m."
-                if 'A1_error_BS' in self.dicts[gstyp]: 
-                    s += "\n  - with boostrapped-derived error bars (1 sigma).\n\n"
-                    for key in key_list_1st_order:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_BS"]))
-                if 'A1_error_BS' not in self.dicts[gstyp]:
-                    for key in key_list_1st_order:            
-                        s += "%s = %s\n" % (key, str(self.dicts[gstyp][key]))
 
-        else:
-            s += "No %s analysis performed!\n" % gstyp
+        s += "RB results\n"
+        if self.fit == 'standard':
+            s += "\n  - Fitting to the standard function: A + B*f^m."
+        if self.fit == 'first order':
+            s += "\n  - Fitting to the first order fitting function: A + (B+Cm)*f^m."
+            
+        if 'A_error_BS' in self.results: 
+            s += "\n  - Boostrapped-derived error bars (1 sigma).\n\n"
+            for key in key_list:
+                s += "%s = %s +/- %s\n" % (key,str(self.results[key]),
+                                  str(self.results[key + "_error_BS"]))
+        if 'A_error_WF' in self.results:
+            s += "\n  - Wallman and Flammia-derived error bars (1 sigma).\n\n"
+            for key in key_list:
+                s += "%s = %s +/- %s\n" % (key,str(self.results[key]),
+                                    str(self.results[key + "_error_WF"]))
+
+        if 'A_error_BS' not in self.results and 'A_error_WF' not in self.results:
+            s += "\n\n"
+            for key in key_list:            
+                   s += "%s = %s\n" % (key, str(self.results[key]))
+
         return s
 
-    def print_detail(self, gstyp='clifford', fitting='standard'):
+    def print_results(self):
         """
         Print computed RB values using the given gate-label-set, `gstyp`,
         and order parameter.
@@ -342,44 +318,15 @@ class RBResults(object):
         the per-"clifford" RB error rates and parameters for both zeroth
         and first order fitting are printed.
 
-        Parameters
-        ----------
-        gstyp : str, optional
-            The gate-label-set specifying which RB error rates and parameters
-            to extract.
-            
-        fitting : str
-            Allowed values are 'standard', 'first order' or 'all'. Specifies whether 
-            the standard or first order fitting model results are displayed,
-            or both.
         """
-        if fitting=='all':
-            print(self.detail_str(gstyp, fitting='standard'))
-            print(self.detail_str(gstyp, fitting='first order'))
-                       
-        else:
-            print(self.detail_str(gstyp, fitting))
+        print(self.detail_str())
 
-    def print_clifford(self,fitting='standard'):
-        """
-        Display per Clifford gate RB error rate.
-        """      
-        self.print_detail('clifford',fitting)
-
-    def print_primitive(self,fitting='standard'):
-        """
-        Display per primitive gate RB error rate.  The physical
-        interpretation of these numbers may not be reliable; per Clifford 
-        error rates are recommended instead. 
-        """
-        self.print_detail('primitive',fitting)
-
-    def __str__(self):
-        s = ""
-        for gstyp in self.dicts:
-            s += self.detail_str(gstyp, fitting='standard') + "\n"
-            s += self.detail_str(gstyp, fitting='first order') + "\n"
-        return s
+#    def __str__(self):
+#        s = ""
+#        for gstyp in self.dicts:
+#            s += self.detail_str(gstyp, fitting='standard') + "\n"
+#            s += self.detail_str(gstyp, fitting='first order') + "\n"
+#        return s
     
 
     def compute_bootstrap_error_bars(self, gstyp_list = ("clifford",), resamples = 100,
@@ -417,16 +364,10 @@ class RBResults(object):
         else:
             rndm = randState
 
-        if gstyp_list == "all":
-            gstyp_list = list(self.dicts.keys())
-
         #Setup lists to hold items to take stddev of:
-        A_list = {}; B_list = {}; f_list = {}; A1_list = {}
-        B1_list = {}; C1_list = {}; f1_list = {};
-        for gstyp in gstyp_list:
-            A_list[gstyp] = []; B_list[gstyp] = []; f_list[gstyp] = []; \
-            A1_list[gstyp] = []; B1_list[gstyp] = []; C1_list[gstyp] = [];\
-            f1_list[gstyp] = []
+        A_list = []; B_list = []; f_list = []; 
+        if self.fit == 'first order':
+            C_list = []
 
         #Create bootstrap datasets
         bootstrapped_dataset_list = []
@@ -436,41 +377,36 @@ class RBResults(object):
                     self.dataset,'nonparametric'))
 
         #Run RB analysis for each dataset
-        base_gatestrings = self.dicts[self.basename]['gatestrings']
-        alias_maps = { k:mp for k,mp in self.alias_maps.items()
-                       if k in gstyp_list } #only alias maps of requested
+        gatestrings = self.results['gatestrings']
+        #alias_maps = { k:mp for k,mp in self.alias_maps.items()
+        #               if k in gstyp_list } #only alias maps of requested
         from .rbcore import do_rb_base as _do_rb_base
         for dsBootstrap in bootstrapped_dataset_list:
-            resample_results = _do_rb_base(dsBootstrap, base_gatestrings,
-                                           self.basename, self.weight_data,
-                                           self.infinite_data, 
-                                           self.one_freq_adjust, alias_maps,
-                                           self.success_spamlabel, self.d,
-                                           self.pre_avg,self.f0, self.A0,
-                                           self.ApB0, self.C0, self.f_bnd,
-                                           self.A_bnd, self.ApB_bnd, 
-                                           self.C_bnd)
-            for gstyp in gstyp_list:
-                A_list[gstyp].append(resample_results.dicts[gstyp]['A'])
-                B_list[gstyp].append(resample_results.dicts[gstyp]['B'])
-                f_list[gstyp].append(resample_results.dicts[gstyp]['f'])
-                A1_list[gstyp].append(resample_results.dicts[gstyp]['A1'])
-                B1_list[gstyp].append(resample_results.dicts[gstyp]['B1'])
-                C1_list[gstyp].append(resample_results.dicts[gstyp]['C1'])
-                f1_list[gstyp].append(resample_results.dicts[gstyp]['f1'])
+            resample_results = _do_rb_base(dsBootstrap, gatestrings,
+                                           self.fit, 
+                                           self.fit_parameters_dict,
+                                           self.success_spamlabel,
+                                           self.d,
+                                           self.weight_data,
+                                           self.pre_avg,
+                                           self.infinite_data,
+                                           self.one_freq_adjust)
+                
+            A_list.append(resample_results.results['A'])
+            B_list.append(resample_results.results['B'])
+            f_list.append(resample_results.results['f'])
+            if self.fit == 'first order':
+                C_list.append(resample_results.results['C'])
                
-        for gstyp in gstyp_list:
-            self.dicts[gstyp]['A_error_BS'] = _np.std(A_list[gstyp],ddof=1)
-            self.dicts[gstyp]['B_error_BS'] = _np.std(B_list[gstyp],ddof=1)
-            self.dicts[gstyp]['f_error_BS'] = _np.std(f_list[gstyp],ddof=1)
-            self.dicts[gstyp]['A1_error_BS'] = _np.std(A1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['B1_error_BS'] = _np.std(B1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['C1_error_BS'] = _np.std(C1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['f1_error_BS'] = _np.std(f1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['r_error_BS'] = (self.d-1.) / self.d \
-                                         * self.dicts[gstyp]['f_error_BS']
-            self.dicts[gstyp]['r1_error_BS'] = (self.d-1.) / self.d \
-                                         * self.dicts[gstyp]['f1_error_BS']
+
+        self.results['A_error_BS'] = _np.std(A_list,ddof=1)
+        self.results['B_error_BS'] = _np.std(B_list,ddof=1)
+        self.results['f_error_BS'] = _np.std(f_list,ddof=1)
+        if self.fit == 'first order':
+            self.results['C_error_BS'] = _np.std(C_list,ddof=1)
+
+        self.results['r_error_BS'] = (self.d-1.) / self.d \
+                                         * self.results['f_error_BS']
 
         print("Bootstrapped error bars computed.  Use print methods to access.")
 

@@ -5,6 +5,7 @@ import pygsti
 import numpy as np
 import warnings
 import os
+import collections
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -20,30 +21,46 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
 
     def test_constructGates(self):
-        b = "gm" #basis -- "gm" (Gell-Mann) or "std" (Standard)
-        prm = "full" #parameterization "full" or "linear"
-        ue = True #unitary embedding
-        #TODO: loop over different b, prm
+        # args = basis, parameterization, unitary-embedding
+        for basis in ('std','gm','pp'): #do 'qt' test separately
+            if basis == 'std': #complex mxs, so can't be TP
+                params = ('full', 'linear', 'static')
+            else:
+                params = ('full', 'TP', 'linear', 'linearTP', 'static')
+                            
+            for param in params:
+                self.helper_constructGates(basis, param, False)
 
+            #unitary embedding case only works for param == "full"
+            self.helper_constructGates(basis, "full", True)
+
+
+    def helper_constructGates(self, b, prm, ue):
+        
         old_build_gate = pygsti.construction.gatesetconstruction._oldBuildGate
+
+        # All of the following use blockDims that are unsupported by the Pauli Product basis
         leakA_old   = old_build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b)
+        rotLeak_old = old_build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b)
+        leakB_old   = old_build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b)
+        rotXb_old   = old_build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b)
+        CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b)
+
         ident_old   = old_build_gate( [2],[('Q0',)], "I(Q0)",b)
         rotXa_old   = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b)
         rotX2_old   = old_build_gate( [2],[('Q0',)], "X(pi,Q0)",b)
         rotYa_old   = old_build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b)
         rotZa_old   = old_build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b)
-        rotLeak_old = old_build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b)
-        leakB_old   = old_build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b)
         iwL_old     = old_build_gate( [2],[('Q0','L0')], "I(Q0,L0)",b)
-        rotXb_old   = old_build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b)
         CnotA_old   = old_build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b)
-        CnotB_old   = old_build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b)
         CY_old      = old_build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b)
         CZ_old      = old_build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b)
-        rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std")
-        rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp")
+        CNOT_old    = old_build_gate( [4],[('Q0','Q1')], "CNOT(Q0,Q1)",b)
+        CPHASE_old  = old_build_gate( [4],[('Q0','Q1')], "CPHASE(Q0,Q1)",b)
+        #rotXstd_old = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std")
+        #rotXpp_old  = old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             old_build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar") #bad basis specifier
         with self.assertRaises(ValueError):
             old_build_gate( [2],[('Q0',)], "FooBar(Q0)",b) #bad gate name
@@ -52,27 +69,48 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             old_build_gate( [4],[('Q0',)], "I(Q0)",b) #state space dim mismatch
 
+        #CNOT gate
+        Ucnot = np.array( [[1, 0, 0, 0],
+                           [0, 1, 0, 0],
+                           [0, 0, 0, 1],
+                           [0, 0, 1, 0]], 'd')
+        cnotMx = pygsti.tools.unitary_to_process_mx(Ucnot)
+        CNOT_chk = pygsti.tools.change_basis(cnotMx, "std", b)
 
+        #CPHASE gate
+        Ucphase = np.array( [[1, 0, 0, 0],
+                             [0, 1, 0, 0],
+                             [0, 0, 1, 0],
+                             [0, 0, 0, -1]], 'd')
+        cphaseMx = pygsti.tools.unitary_to_process_mx(Ucphase)
+        CPHASE_chk = pygsti.tools.change_basis(cphaseMx, "std", b)
+
+        print((b,prm,ue))
         build_gate = pygsti.construction.build_gate
+
+        # Block matrix items
         leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
+        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
+        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
+        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
+        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
+
         ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue)
         rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
         rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
         rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
         rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
         rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
-        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
-        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
         iwL     = build_gate( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
-        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
         CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
-        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
         CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
         CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
-        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
-        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
+        CNOT    = build_gate( [4],[('Q0','Q1')], "CNOT(Q0,Q1)",b,prm,ue)
+        CPHASE  = build_gate( [4],[('Q0','Q1')], "CPHASE(Q0,Q1)",b,prm,ue)
+        #rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
+        #rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
         with self.assertRaises(ValueError):
             build_gate( [2],[('Q0',)], "FooBar(Q0)",b,prm,ue) #bad gate name
@@ -86,158 +124,140 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             build_gate( [2,2],[('Q0',),('Q1',)], "CZ(pi,Q0,Q1)",b,prm,ue) # Q0 & Q1 must be in same tensor-prod block of state space
 
-        with self.assertRaises(ValueError):
-            build_gate( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
-        with self.assertRaises(ValueError):
+        if ue == True:
+            with self.assertRaises(ValueError):
+                build_gate( [2],[('Q0',)], "D(Q0)",b,prm,ue) # D gate only for ue=False
+        with self.assertRaises(NotImplementedError):
             build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)","foobar",prm,ue)
               #LX with bad basis spec
 
-
+        # Block matrix asserts
         self.assertArraysAlmostEqual(leakA  , leakA_old  )
+        self.assertArraysAlmostEqual(leakB  , leakB_old  )
+        self.assertArraysAlmostEqual(rotXb  , rotXb_old  )
+        self.assertArraysAlmostEqual(CnotB  , CnotB_old  )
+        self.assertArraysAlmostEqual(rotLeak, rotLeak_old)
+
         self.assertArraysAlmostEqual(ident  , ident_old  )
         self.assertArraysAlmostEqual(rotXa  , rotXa_old  )
         self.assertArraysAlmostEqual(rotX2  , rotX2_old  )
         self.assertArraysAlmostEqual(rotYa  , rotYa_old  )
         self.assertArraysAlmostEqual(rotZa  , rotZa_old  )
-        self.assertArraysAlmostEqual(rotLeak, rotLeak_old)
-        self.assertArraysAlmostEqual(leakB  , leakB_old  )
         self.assertArraysAlmostEqual(iwL    , iwL_old  )
-        self.assertArraysAlmostEqual(rotXb  , rotXb_old  )
         self.assertArraysAlmostEqual(CnotA  , CnotA_old  )
-        self.assertArraysAlmostEqual(CnotB  , CnotB_old  )
         self.assertArraysAlmostEqual(CY     , CY_old     )
         self.assertArraysAlmostEqual(CZ     , CZ_old     )
+        self.assertArraysAlmostEqual(CPHASE , CPHASE_chk )
+        self.assertArraysAlmostEqual(CNOT   , CNOT_chk   )
+
+        if b != "pp":
+            self.assertArraysAlmostEqual(leakA  , leakA_old  )
+            leakA_ans = np.array( [[ 0.,  1.,  0.],
+                                   [ 1.,  0.,  0.],
+                                   [ 0.,  0.,  1.]], 'd')
+            self.assertArraysAlmostEqual(leakA, leakA_ans)
+
+        if b == "gm": #only Gell-Mann answers right now
+            rotXa_ans = np.array([[ 1.,  0.,  0.,  0.],
+                                  [ 0.,  1.,  0.,  0.],
+                                  [ 0.,  0.,  0,  -1.],
+                                  [ 0.,  0.,  1.,  0]], 'd')
+            self.assertArraysAlmostEqual(rotXa, rotXa_ans)
+    
+            rotX2_ans = np.array([[ 1.,  0.,  0.,  0.],
+                                  [ 0.,  1.,  0.,  0.],
+                                  [ 0.,  0., -1.,  0.],
+                                  [ 0.,  0.,  0., -1.]], 'd')
+            self.assertArraysAlmostEqual(rotX2, rotX2_ans)
+    
+            rotLeak_ans = np.array([[ 0.5,         0.,          0.,         -0.5,         0.70710678],
+                                    [ 0.,          0.,          0.,          0.,          0.        ],
+                                    [ 0.,          0.,          0.,          0.,          0.        ],
+                                    [ 0.5,         0.,          0.,         -0.5,        -0.70710678],
+                                    [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
+            self.assertArraysAlmostEqual(rotLeak, rotLeak_ans)
+    
+            leakB_ans = np.array(  [[ 0.5,         0.,          0.,         -0.5,         0.70710678],
+                                    [ 0.,          0.,          0.,          0.,          0.        ],
+                                    [ 0.,          0.,          0.,          0.,          0.        ],
+                                    [-0.5,         0.,          0.,          0.5,         0.70710678],
+                                    [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
+            self.assertArraysAlmostEqual(leakB, leakB_ans)
+    
+            rotXb_ans = np.array( [[ 1.,  0.,  0.,  0.,  0.,  0.],
+                                   [ 0.,  1.,  0.,  0.,  0.,  0.],
+                                   [ 0.,  0., -1.,  0.,  0.,  0.],
+                                   [ 0.,  0.,  0., -1.,  0.,  0.],
+                                   [ 0.,  0.,  0.,  0.,  1.,  0.],
+                                   [ 0.,  0.,  0.,  0.,  0.,  1.]], 'd')
+            self.assertArraysAlmostEqual(rotXb, rotXb_ans)
+    
+            A = 9.42809042e-01
+            B = 3.33333333e-01
+            CnotA_ans = np.array( [[ 1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    B,    A ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,   -B ]], 'd')
+            self.assertArraysAlmostEqual(CnotA, CnotA_ans)
+    
+            CnotB_ans = np.array( [[ 1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    B,    A,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,   -B,    0 ],
+                                   [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 ]], 'd')
+            self.assertArraysAlmostEqual(CnotB, CnotB_ans)
 
 
-        #Do it all again with unitary embedding == False
-        ue = False #unitary embedding
-        leakA   = build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "LX(pi,0,1)",b,prm,ue)
-        ident   = build_gate( [2],[('Q0',)], "I(Q0)",b,prm,ue)
-        rotXa   = build_gate( [2],[('Q0',)], "X(pi/2,Q0)",b,prm,ue)
-        rotX2   = build_gate( [2],[('Q0',)], "X(pi,Q0)",b,prm,ue)
-        rotYa   = build_gate( [2],[('Q0',)], "Y(pi/2,Q0)",b,prm,ue)
-        rotZa   = build_gate( [2],[('Q0',)], "Z(pi/2,Q0)",b,prm,ue)
-        rotNa   = build_gate( [2],[('Q0',)], "N(pi/2,1.0,0.5,0,Q0)",b,prm,ue)
-        rotLeak = build_gate( [2,1],[('Q0',),('L0',)], "X(pi,Q0):LX(pi,0,2)",b,prm,ue)
-        leakB   = build_gate( [2,1],[('Q0',),('L0',)], "LX(pi,0,2)",b,prm,ue)
-        iwL     = build_gate( [2],[('Q0','L0')], "I(Q0)",b,prm,ue)
-        rotXb   = build_gate( [2,1,1],[('Q0',),('L0',),('L1',)], "X(pi,Q0)",b,prm,ue)
-        CnotA   = build_gate( [4],[('Q0','Q1')], "CX(pi,Q0,Q1)",b,prm,ue)
-        CnotB   = build_gate( [4,1],[('Q0','Q1'),('L0',)], "CX(pi,Q0,Q1)",b,prm,ue)
-        CY      = build_gate( [4],[('Q0','Q1')], "CY(pi,Q0,Q1)",b,prm,ue)
-        CZ      = build_gate( [4],[('Q0','Q1')], "CZ(pi,Q0,Q1)",b,prm,ue)
-        rotXstd = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","std",prm,ue)
-        rotXpp  = build_gate( [2],[('Q0',)], "X(pi/2,Q0)","pp",prm,ue)
+    def test_qutrit_gateset(self):
+        gs = pygsti.construction.qutrit.make_qutrit_gateset(
+            errorScale = 0.1,
+            similarity=False, seed=1234, basis='qt')
+        gs2 = pygsti.construction.qutrit.make_qutrit_gateset(
+            errorScale = 0.1,
+            similarity=True, seed=1234, basis='qt')
 
-        with self.assertRaises(ValueError):
-            build_gate( [2],[('Q0',)], "X(pi/2,Q0)","FooBar",prm,ue) #bad basis specifier
+        #just test building a gate in the qutrit basis
+        # Can't do this b/c need a 'T*' triplet space designator for "triplet space" and it doesn't seem
+        # worth adding this now...
+        #qutrit_gate = pygsti.construction.build_gate( [1,1,1], [('L0',),('L1',),('L2',)], "I()", 'qt', 'full')
 
-        self.assertArraysAlmostEqual(leakA  , leakA_old  )
-        self.assertArraysAlmostEqual(ident  , ident_old  )
-        self.assertArraysAlmostEqual(rotXa  , rotXa_old  )
-        self.assertArraysAlmostEqual(rotX2  , rotX2_old  )
-        self.assertArraysAlmostEqual(rotYa  , rotYa_old  )
-        self.assertArraysAlmostEqual(rotZa  , rotZa_old  )
-        self.assertArraysAlmostEqual(rotLeak, rotLeak_old)
-        self.assertArraysAlmostEqual(leakB  , leakB_old  )
-        self.assertArraysAlmostEqual(iwL    , iwL_old  )
-        self.assertArraysAlmostEqual(rotXb  , rotXb_old  )
-        self.assertArraysAlmostEqual(CnotA  , CnotA_old  )
-        self.assertArraysAlmostEqual(CnotB  , CnotB_old  )
-        self.assertArraysAlmostEqual(CY     , CY_old     )
-        self.assertArraysAlmostEqual(CZ     , CZ_old     )
-
-
-
-
-        leakA_ans = np.array( [[ 0.,  1.,  0.],
-                               [ 1.,  0.,  0.],
-                               [ 0.,  0.,  1.]], 'd')
-        self.assertArraysAlmostEqual(leakA, leakA_ans)
-
-        rotXa_ans = np.array([[ 1.,  0.,  0.,  0.],
-                              [ 0.,  1.,  0.,  0.],
-                              [ 0.,  0.,  0,  -1.],
-                              [ 0.,  0.,  1.,  0]], 'd')
-        self.assertArraysAlmostEqual(rotXa, rotXa_ans)
-
-        rotX2_ans = np.array([[ 1.,  0.,  0.,  0.],
-                              [ 0.,  1.,  0.,  0.],
-                              [ 0.,  0., -1.,  0.],
-                              [ 0.,  0.,  0., -1.]], 'd')
-        self.assertArraysAlmostEqual(rotX2, rotX2_ans)
-
-        rotLeak_ans = np.array([[ 0.5,         0.,          0.,         -0.5,         0.70710678],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.5,         0.,          0.,         -0.5,        -0.70710678],
-                                [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
-        self.assertArraysAlmostEqual(rotLeak, rotLeak_ans)
-
-        leakB_ans = np.array(  [[ 0.5,         0.,          0.,         -0.5,         0.70710678],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [ 0.,          0.,          0.,          0.,          0.        ],
-                                [-0.5,         0.,          0.,          0.5,         0.70710678],
-                                [ 0.70710678,  0.,          0.,          0.70710678,  0.        ]], 'd')
-        self.assertArraysAlmostEqual(leakB, leakB_ans)
-
-        rotXb_ans = np.array( [[ 1.,  0.,  0.,  0.,  0.,  0.],
-                               [ 0.,  1.,  0.,  0.,  0.,  0.],
-                               [ 0.,  0., -1.,  0.,  0.,  0.],
-                               [ 0.,  0.,  0., -1.,  0.,  0.],
-                               [ 0.,  0.,  0.,  0.,  1.,  0.],
-                               [ 0.,  0.,  0.,  0.,  0.,  1.]], 'd')
-        self.assertArraysAlmostEqual(rotXb, rotXb_ans)
-
-        A = 9.42809042e-01
-        B = 3.33333333e-01
-        CnotA_ans = np.array( [[ 1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    B,    A ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,   -B ]], 'd')
-        self.assertArraysAlmostEqual(CnotA, CnotA_ans)
-
-        CnotB_ans = np.array( [[ 1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0, -1.0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, -1.0,    0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  1.0,    0,    0,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    B,    A,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    A,   -B,    0 ],
-                               [   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1 ]], 'd')
-        self.assertArraysAlmostEqual(CnotB, CnotB_ans)
 
     def test_parameterized_gate(self):
 
         # A single-qubit gate on a 2-qubit space, parameterizes so that there are only 16 gate parameters
         gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
                                                parameterization="linear")
-        gate2 = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate2  = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linear")
+        gate2b = pygsti.construction.build_gate( [2],[('Q0',)], "D(Q0)","gm", parameterization="linearTP")
         gate3 = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0):D(Q1)","gm",
                                                parameterization="linear") #composes parameterized gates
 
-
+        #Test L's in spec
+        gateL  = pygsti.construction.build_gate( [2,1],[('Q0',),('L0',)], "D(Q0)","gm", parameterization="linear")
 
         with self.assertRaises(ValueError):
             gate = pygsti.construction.build_gate( [4],[('Q0','Q1')], "X(pi,Q0)","gm",
@@ -360,7 +380,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         #with self.assertRaises(ValueError):
         #    gateset1.spamdefs['bade'] = ('rho0','ENonExistent') # bad E index
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
@@ -382,7 +402,18 @@ class TestGateSetConstructionMethods(BaseTestCase):
                                                       effectLabels=['E0'], effectExpressions=["1"],
                                                       spamdefs={'plus': ('rho0','E0'),
                                                                 'minus': ('rho0','remainder') })
+        
+        ordered_spamdefs = collections.OrderedDict( [('plus',  ('rho0','E0')),
+                                                     ('minus', ('rho0','remainder'))] )
+        gateset2b = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
+                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                       prepLabels=['rho0'], prepExpressions=["0"],
+                                                       effectLabels=['E0'], effectExpressions=["1"],
+                                                       spamdefs=ordered_spamdefs)
+        self.assertEqual(list(gateset2b.spamdefs.keys())[0], 'plus')
+        self.assertEqual(list(gateset2b.spamdefs.keys())[1], 'minus')
 
+        
         #gateset3 = self.assertWarns(pygsti.construction.build_gateset,
         #                            [2], [('Q0',)],['Gi','Gx','Gy'],
         #                            [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
@@ -478,7 +509,7 @@ SPAMLABEL minus = rho remainder
                                                               'minus': ('rho0','remainder') })
                                                # state space dimension mismatch (4 != 2)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                prepLabels=['rho0'], prepExpressions=["0"],
@@ -1013,6 +1044,11 @@ SPAMLABEL minus = rho remainder
             deriv = svec.deriv_wrt_params()
             #test results?
 
+            a = svec[:]
+            b = svec[0]
+            #with self.assertRaises(ValueError):
+            #    svec.shape = (2,2) #something that would affect the shape??
+
             svec_as_str = str(svec)
             a1 = svec[:] #invoke getslice method
 
@@ -1056,6 +1092,34 @@ SPAMLABEL minus = rho remainder
             result = V - svec
             self.assertEqual(type(result), np.ndarray)
 
+        #Run a few methods that won't work on static spam vecs
+        for svec in (full_spamvec, tp_spamvec):
+            v = svec.copy()
+            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            v.transform(S, 'prep')
+            v.transform(S, 'effect')
+            with self.assertRaises(ValueError):
+                v.transform(S,'foobar')
+                
+            v.depolarize(0.9)
+            v.depolarize([0.9,0.8,0.7])
+
+        #Ensure we aren't allowed to tranform or depolarize a static vector
+        with self.assertRaises(ValueError):
+            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            static_spamvec.transform(S,'prep')
+
+        with self.assertRaises(ValueError):
+            static_spamvec.depolarize(0.9)
+
+        #Test conversions to own type (not tested elsewhere)
+        conv = pygsti.obj.spamvec.convert(full_spamvec, "full")
+        conv = pygsti.obj.spamvec.convert(tp_spamvec, "TP")
+        conv = pygsti.obj.spamvec.convert(static_spamvec, "static")
+        with self.assertRaises(ValueError):
+            pygsti.obj.spamvec.convert(full_spamvec, "foobar")
+
+            
 
 
     def test_labeldicts(self):

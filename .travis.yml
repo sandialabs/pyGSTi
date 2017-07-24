@@ -11,12 +11,14 @@ branches:
     - develop
 
 env:
-    - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
-    - Default=True  # construction, io, objects, tools, optimize, algorithms
-    - ReportA=True  # Only testReport.py (none of the other reports tests)
-    - ReportB=True  # test the other reports tests
-    - MPI=True  # All of MPI
-   
+    - Drivers=True    # First in build mx because long duration
+    - Algorithms=True 
+    - AlgorithmsB=True
+    - Default=True    # construction, io, objects, tools, optimize
+    - Report=True      
+    - ReportB=True
+    - MPI=True        
+
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null

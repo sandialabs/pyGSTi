@@ -81,6 +81,11 @@ class EvalTreeTestCase(BaseTestCase):
 
         unpermuted_list = t.generate_gatestring_list(permute=False)
         self.assertTrue(t.is_split())
+
+        dummy = np.random.rand(len(gsl1))
+        dummy_computational = t.permute_original_to_computation(dummy)
+        dummy2 = t.permute_computation_to_original(dummy_computational)
+        self.assertArraysAlmostEqual(dummy,dummy2)
         
         subtrees = t.get_sub_trees()
         for i,st in enumerate(subtrees):

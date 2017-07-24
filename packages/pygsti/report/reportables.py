@@ -17,54 +17,9 @@ from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
+from .reportableqty import ReportableQty
 
 FINITE_DIFF_EPS = 1e-7
-
-class ReportableQty(object):
-    """
-    Encapsulates a computed quantity and possibly its error bars,
-    primarily for use in reports.
-    """
-
-    def __init__(self, value, errbar=None):
-        """
-        Initialize a new ReportableQty object, which
-        is essentially a container for a value and error bars.
-
-        Parameters
-        ----------
-        value : anything
-           The value to store
-
-        errbar : anything
-           The error bar(s) to store
-        """
-        self.value = value
-        self.errbar = errbar
-
-    def get_value(self):
-        """
-        Returns the quantity's value
-        """
-        return self.value
-
-    def get_err_bar(self):
-        """
-        Returns the quantity's error bar(s)
-        """
-        return self.errbar
-
-    def get_value_and_err_bar(self):
-        """
-        Returns the quantity's value and error bar(s)
-        """
-        return self.value, self.errbar
-
-    def __str__(self):
-        if self.errbar is not None:
-            return str(self.value) + " +/- " + str(self.errbar)
-        else: return str(self.value)
-
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
@@ -307,7 +262,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
-    mxBasis = gateset.get_basis_name()
+    mxBasis = gateset.basis.name
 
     def choi_matrix(gate):
         return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -684,10 +639,10 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
-    mxBasis = gateset1.get_basis_name()
-    if mxBasis != gateset2.get_basis_name():
+    mxBasis = gateset1.basis.name
+    if mxBasis != gateset2.basis.name:
         raise ValueError("Basis mismatch: %s != %s" %
-                         (mxBasis, gateset2.get_basis_name()))
+                         (mxBasis, gateset2.basis.name))
 
     ### per gate quantities
     #############################################
@@ -761,7 +716,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s angle btwn rotn axes' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
 
-            def angle_btwn_axes(gate): #Note: default 'gm' basis
+            def angles_btwn_axes(gate): #Note: default 'gm' basis
                 decomp = _tools.decompose_gate_matrix(gate)
                 decomp2 = _tools.decompose_gate_matrix(gateset2.gates[gateLabel])
                 axisOfRotn = decomp.get('axis of rotation',None)
@@ -782,7 +737,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
                   #      well, must flip sign of angle of rotation if you allow axis to
                   #      "reverse" by 180 degrees.
 
-            ret[key] = _getGateQuantity(angle_btwn_axes, gateset1, gateLabel,
+            ret[key] = _getGateQuantity(angles_btwn_axes, gateset1, gateLabel,
                                     eps, confidenceRegionInfo)
 
         key = '%s relative eigenvalues' % gateLabel; possible_qtys.append(key)
@@ -799,7 +754,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logTiG eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logTiG_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logTiG")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logTiG")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 
@@ -809,7 +764,7 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         key = '%s logG-logT eigenvalues' % gateLabel; possible_qtys.append(key)
         if key in qtynames:
             def rel_logGmlogT_eigvals(gate):
-                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], "logG-logT")
+                rel_gate = _tools.error_generator(gate, gateset2.gates[gateLabel], gateset2.basis, "logG-logT")
                 return _np.linalg.eigvals(rel_gate)
                   #vary elements of gateset1 (assume gateset2 is fixed)
 

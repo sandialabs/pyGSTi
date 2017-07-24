@@ -3,6 +3,7 @@ import pygsti
 import os
 import numpy as np
 from pygsti.construction import std1Q_XYI as std
+import pygsti.tools.basis as basis
 
 class JamiolkowskiTestCase(unittest.TestCase):
 
@@ -23,9 +24,9 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate( self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)","std")
-        self.testGateGM_mx = pygsti.std_to_gm(self.testGate, self.stateSpaceDims)
-        self.expTestGate_mx = pygsti.expand_from_std_direct_sum_mx(self.testGate, self.stateSpaceDims)
-        self.expTestGateGM_mx = pygsti.std_to_gm(self.expTestGate_mx)
+        self.testGateGM_mx = basis.change_basis(self.testGate, 'std', 'gm', self.stateSpaceDims)
+        self.expTestGate_mx = basis.resize_mx(self.testGate, self.stateSpaceDims, resize='expand')
+        self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, 'std', 'gm')
 
     def tearDown(self):
         os.chdir(self.old)
@@ -58,7 +59,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
                                                                       gateMxBasis='std')
-        self.assertArraysAlmostEqual( pygsti.contract_to_std_direct_sum_mx(revExpTestGate_mx,self.stateSpaceDims),
+        self.assertArraysAlmostEqual( basis.resize_mx(revExpTestGate_mx,self.stateSpaceDims, resize='contract'),
                                       self.testGate)
 
 
@@ -82,8 +83,8 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
                           [0,-1, 0, 0],
                           [0, 0, 0, 1]], 'complex')
 
-        mxStd = pygsti.gm_to_std(mxGM)
-        mxPP  = pygsti.gm_to_pp(mxGM)
+        mxStd = basis.change_basis(mxGM, 'gm', 'std')
+        mxPP  = basis.change_basis(mxGM, 'gm', 'pp')
 
         choiStd = pygsti.jamiolkowski_iso(mxStd, "std","std")
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, "gm","std")
@@ -142,15 +143,14 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         self.assertArraysAlmostEqual( fastGatePP, mxPP)
 
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso(mxStd, "foobar","gm") #invalid gate basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso(mxStd, "std","foobar") #invalid choi basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso_inv(choiStd, "foobar","gm") #invalid choi basis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(NotImplementedError):
             pygsti.jamiolkowski_iso_inv(choiStd, "std","foobar") #invalid gate basis
-
 
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std.gs_target)
         sumsOfNeg = pygsti.sums_of_negative_choi_evals(std.gs_target)

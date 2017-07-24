@@ -611,7 +611,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
 
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
-    Computes matrix of log-likelihood-ratios comparting the 
+    Computes matrix of 2*log-likelihood-ratios comparing the 
     datasets of `dscomparator`.
 
     Parameters

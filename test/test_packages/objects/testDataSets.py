@@ -5,6 +5,7 @@ import pygsti
 import numpy as np
 import warnings
 import os
+from pygsti.construction import std1Q_XYI as std
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -81,6 +82,9 @@ class TestDataSetMethods(BaseTestCase):
             pygsti.objects.DataSet(gateStrings=gstrs, spamLabels=['plus','minus'], bStatic=True)
               #must specify counts when creating static DataSet
 
+        #Test has_key methods
+        self.assertTrue( ds2.has_key(('Gx',)) )
+        self.assertTrue(ds2[('Gx',)].has_key('plus'))
 
         #Test indexing methods
         cnt = 0
@@ -143,6 +147,11 @@ class TestDataSetMethods(BaseTestCase):
         nStrs = len(ds)
         cntDict = ds[('Gx',)].as_dict()
         asStr = str(ds[('Gx',)])
+        
+        ds[('Gx',)].scale(2.0)
+        self.assertEqual(ds[('Gx',)]['plus'], 20)
+        self.assertEqual(ds[('Gx',)]['minus'], 180)
+        
 
         #Test loading a deprecated dataset file
         dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
@@ -380,8 +389,82 @@ Gx^4 20 80 0.2 100
         self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
         self.assertEqual( ds.keys(stripOccuranceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
+        ds.set_row( ('Gx','Gx'), {'plus': 5, 'minus': 95}, occurance=1 ) #test set_row with occurance arg
 
-    def test_tddataset(self):
+
+    def test_tddataset_construction(self):
+
+        #Create an empty dataset
+        #(Tests done_adding_data without adding any data)
+        dsEmpty = pygsti.objects.TDDataSet(spamLabels=['plus','minus'])
+        dsEmpty.done_adding_data()
+        
+        #Create an empty dataset and add data
+        ds = pygsti.objects.TDDataSet(spamLabels=['plus','minus'])
+        ds.add_series_data( ('Gx',), #gate sequence
+                            ['plus','plus','minus','plus','minus','plus','minus','minus','minus','plus'], #spam labels
+                            [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], #time stamps
+                            None) #no repeats
+
+        sli = collections.OrderedDict([('plus',0), ('minus',1)])
+        ds2 = pygsti.objects.TDDataSet(spamLabelIndices=sli)
+        ds2.add_series_data( ('Gy',),  #gate sequence
+                             ['plus','minus'], #spam labels
+                             [0.0, 1.0], #time stamps
+                             [3,7]) #repeats
+
+
+        #Create a non-static already initialized dataset
+        gatestrings = pygsti.construction.gatestring_list([('Gx',), ('Gy','Gx')])
+        gatestringIndices = collections.OrderedDict([ (gs,i) for i,gs in enumerate(gatestrings)])
+        sliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
+        timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
+        repData = [ np.array([1,1,1]), np.array([2,2,2]) ]
+        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, gatestrings, None,
+                                      ['plus','minus'], None,  bStatic=False)
+        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
+                                      None, sli, bStatic=False) #provide gate string & spam label index dicts instead of lists
+        ds = pygsti.objects.TDDataSet(sliData, timeData, None, None, gatestringIndices,
+                                      None, sli) #no rep data is OK - just assumes 1; bStatic=False is default
+
+        #Test loading a non-static set from a saved file
+        ds.save(temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.objects.TDDataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
+
+
+        #Create an static already initialized dataset
+        ds = pygsti.objects.TDDataSet(spamLabels=['plus','minus'])
+        GS = pygsti.objects.GateString #no auto-convert to GateStrings when using gateStringIndices
+        gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
+            ( GS(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
+            ( GS(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
+        sliData = np.array([0,1,0,1,1,0])
+        timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0]) 
+        repData = np.array([1,1,1,2,2,2])
+        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
+                                      ['plus','minus'], None,  bStatic=True)
+        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
+                                      None, sli, bStatic=True) #provide spam label index dict instead of list
+        ds = pygsti.objects.TDDataSet(sliData, timeData, None, None, gatestringIndices,
+                                      None, sli, bStatic=True) #no rep data is OK - just assumes 1
+
+        with self.assertRaises(ValueError):
+            pygsti.objects.TDDataSet(sliData, timeData, repData, gatestrings, None,
+                                     ['plus','minus'], None,  bStatic=True) # NEEDS gatestringIndices b/c static
+
+        with self.assertRaises(ValueError):
+            pygsti.objects.TDDataSet(gateStringIndices=gatestringIndices,
+                                     spamLabelIndices=sli, bStatic=True) #must specify data when creating a static dataset
+            
+        with self.assertRaises(ValueError):
+            pygsti.objects.TDDataSet() #need at least spamLabels or spamLabelIndices
+        
+        
+        #Test loading a static set from a saved file
+        ds.save(temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.objects.TDDataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
+        
+    def test_tddataset_methods(self):
         # Create a dataset from scratch
 
         def printInfo(ds, gstr):
@@ -405,22 +488,36 @@ Gx^4 20 80 0.2 100
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
         printInfo(ds, ('Gx',) )
 
+        ds[('Gy','Gy')] = (['plus','minus'], [0.0, 1.0]) #add via spam-labels, times
+        dsNoReps = ds.copy() #tests copy() before any rep-data is added
+
         ds.add_series_data( ('Gy',),['plus','minus'],[0.0, 1.0], [3,7]) #using repetitions
+        ds[('Gx','Gx')] = (['plus','minus'], [0.0, 1.0], [10,10]) #add via spam-labels, times, reps
+        ds[('Gx','Gy')] = (['plus','minus'], [0.0, 1.0]) #add via spam-labels, times *after* we've added rep data
+
         printInfo(ds, ('Gy',) )
 
-        #Setting data
+        ds.add_series_data( ('Gx','Gx'),['plus','minus'],[0.0, 1.0], [6,14], overwriteExisting=True) #the default
+        ds.add_series_data( ('Gx','Gx'),['plus','minus'],[1.0, 2.0], [5,10], overwriteExisting=False)
+
+        #Setting (spamlabel,time,count) data
         ds[('Gx',)][0] = ('minus',0.1,1)
         ds[('Gy',)][1] = ('plus',0.4,3)
+        dsNoReps[('Gx',)][0]     = ('minus',0.1,1) # reps must == 1
+        dsNoReps[('Gy','Gy')][1] = ('plus',0.4)    # or be omitted
         printInfo(ds, ('Gx',) )
         printInfo(ds, ('Gy',) )
-        
+
         ds.done_adding_data()
+        dsNoReps.done_adding_data()
 
         #Setting data while static is not allowed
         #with self.assertRaises(ValueError):
         #    ds[('Gx',)][0] = ('minus',0.1,1) #this is OK b/c doesn't add data...
         with self.assertRaises(ValueError):
             ds.add_series_data( ('Gy','Gx'),['plus','minus'],[0.0, 1.0], [2,2])
+        with self.assertRaises(ValueError):
+            ds.add_series_from_dataset(ds) #can't add to a static dataset
 
         #test contents
         self.assertTrue( ('Gx',) in ds)
@@ -432,8 +529,22 @@ Gx^4 20 80 0.2 100
         #test iteration
         for gstr,dsRow in ds.iteritems():
             print(gstr, dsRow)
+            dsRow2 = ds[gstr]
+            spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
+            for spamLblIndex, timestamp, reps in dsRow: # or iterate over
+                print(spamLblIndex, timestamp, reps)
         for dsRow in ds.itervalues():
             print(dsRow)
+
+        for gstr,dsRow in dsNoReps.iteritems():
+            print(gstr, dsRow)
+            dsRow2 = dsNoReps[gstr]
+            spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
+            for spamLblIndex, timestamp, reps in dsRow: # or iterate over
+                print(spamLblIndex, timestamp, reps)                
+        for dsRow in dsNoReps.itervalues():
+            print(dsRow)
+
             
         #Later: add_series_from_dataset(otherTDDataSet)
 
@@ -443,6 +554,8 @@ Gx^4 20 80 0.2 100
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gx',)][0] = ('minus',0.1,1)
         dsWritable.add_series_data( ('Gy','Gx'),['plus','minus'],[0.0, 1.0], [2,2])
+        dsWritable.add_series_from_dataset(ds)
+        
         
         dsWritable2 = dsWritable.copy_nonstatic()
          #test copy_nonstatic on already non-static dataset
@@ -514,6 +627,49 @@ Gy 11001100
         self.assertEqual(ds[()].fraction('minus'), 0.5)
         self.assertEqual(ds[('Gy',)].fraction('minus'), 0.5)
         self.assertEqual(ds[('Gx',)].total(), 9)
+
+
+    def test_intermediate_measurements(self):
+        gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
+        E = gs.effects['E0']
+        Erem = gs.effects['remainder']
+        gs.gates['Gmz_plus'] = np.dot(E,E.T)
+        gs.gates['Gmz_minus'] = np.dot(Erem,Erem.T)
+        #print(gs['Gmz_plus'] + gs['Gmz_minus'])
+
+        gatestring_list = pygsti.construction.gatestring_list([ 
+            (),
+            ('Zmeas',),
+            ('Gx','Zmeas') 
+        ])
+        
+        ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
+                                                        sampleError="multinomial", seed=0,
+                                                        measurementGates={'Zmeas': ['Gmz_plus', 'Gmz_minus']})
+        #Test copy operations
+        ds_gen2 = ds_gen.copy()
+        ds_gen3 = ds_gen.copy_nonstatic()
+
+        #create manually so no randomness
+        ds = pygsti.objects.DataSet(spamLabels=['plus','minus'],
+                                    measurementGates={'Zmeas': ['Gmz_plus', 'Gmz_minus']})
+        ds.add_count_list( (), [10,90] )
+        ds.add_count_list( ('Gmz_plus',), [9,1] )
+        ds.add_count_list( ('Gmz_minus',), [9,81] )
+        ds.add_count_list( ('Gx','Gmz_plus'), [37,4] )
+        ds.add_count_list( ('Gx','Gmz_minus'), [5,54] )
+        ds.done_adding_data()
+        
+        self.assertAlmostEqual( ds[('Gmz_plus',)].fraction('plus'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
+        self.assertAlmostEqual( ds[('Gx','Gmz_minus')].fraction('minus'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
+
+        ds_gen[('Gmz_plus',)]['plus'] = 20
+        self.assertEqual(ds_gen[('Gmz_plus',)]['plus'], 20)
+        self.assertEqual(ds_gen[('Gmz_plus',)].total(), (20.0 + 1.0 + 9.0 + 81.0) )
+        ds_gen[('Gmz_plus',)].scale(0.5)
+        self.assertEqual(ds_gen[('Gmz_plus',)]['plus'], 10)
+        self.assertEqual(ds_gen[('Gmz_plus',)].total(), (10.0 + 0.5 + 9.0 + 81.0) )
+
         
 
 

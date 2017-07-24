@@ -64,7 +64,7 @@ def create_gatestring_list(*args,**kwargs):
     """
     lst = []
 
-    loopOrder = kwargs.pop('order',[])
+    loopOrder = list(kwargs.pop('order',[]))
     loopLists = {}; loopLocals = { 'True': True, 'False': False, 'str':str, 'int': int, 'float': float}
     for key,val in kwargs.items():
         if type(val) in (list,tuple): #key describes a variable to loop over
@@ -547,7 +547,7 @@ def translate_gatestring(gatestring, aliasDict):
         return gatestring
     else:
         return _gs.GateString(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,lbl) for lbl in gatestring])))
+            *[aliasDict.get(lbl, (lbl,) ) for lbl in gatestring])))
 
 
 
@@ -576,7 +576,7 @@ def translate_gatestring_list(gatestringList, aliasDict):
         return gatestringList
     else:
         new_gatestrings = [ _gs.GateString(tuple(_itertools.chain(
-            *[aliasDict.get(lbl,lbl) for lbl in gs])))
+            *[aliasDict.get(lbl,(lbl,)) for lbl in gs])))
                             for gs in gatestringList ]
         return new_gatestrings
 
@@ -602,75 +602,121 @@ def compose_alias_dicts(aliasDict1, aliasDict2):
     """
     ret = {}
     for A,Bs in aliasDict1.items():
-        ret[A] = list(_itertools.chain(*[aliasDict2[B] for B in Bs]))
+        ret[A] = tuple(_itertools.chain(*[aliasDict2[B] for B in Bs]))
     return ret
 
 
+def manipulate_gatestring(gatestring, sequenceRules):
+    """
+    Manipulates a GateString object according to `sequenceRules`.
 
-#Unneeded
-#def list_periodic_gatestrings(gateLabels, max_period, minlength, maxlength, left_bookends=[()], right_bookends=[()]):
-#    ret = [ ]
-#    for lb in left_bookends:
-#        for rb in right_bookends:
-#            for l in range(minlength, maxlength+1):
-#                pdic = list_periodic_gatestrings_onelen(gateLabels, max_period, l)
-#                ret += [ tuple(lb) + tuple(p) + tuple(rb) for p in pdic ]
-#    return _lt.remove_duplicates(ret)
-#
-#def list_periodic_gatestrings_onelen(gateLabels, max_period, length):
-#    ret = [ ]
-#    if max_period >= 0: ret.append( [] )
-#    for period_length in range(1,min(max_period,length)+1):
-#        nPeriods = _np.ceil(length / float(period_length))
-#        for period in list_all_gatestrings_onelen(gateLabels, period_length):
-#            for k in range(1,period_length):
-#                if period_length % k > 0: continue
-#                if period in list_periodic_gatestrings_onelen(gateLabels, k, period_length):
-#                    break # period is itself periodic with period k < len(period), so don't use it as the string it generates has already been found
-#            else:
-#                s = period * nPeriods
-#                ret.append( tuple(s[0:length]) )
-#    return _lt.remove_duplicates(ret)
-#
-#
-#
-#def list_exponentiated_germ_gatestrings(germs, exponents, ends=None, left_ends=None, right_ends=None):
-#    if ends is not None:
-#        if not left_ends and not right_ends:
-#            left_ends = right_ends = ends
-#        else: raise ValueError("Conflicting arguments to list_exponentiated_germ_gatestrings - specify either" + \
-#                                   "'ends' or 'left_ends' and/or 'right_ends', not both")
-#    if left_ends is None: left_ends = [()]
-#    elif () not in left_ends: left_ends = [()] + left_ends
-#    if right_ends is None: right_ends = [()]
-#    elif () not in right_ends: right_ends = [()] + right_ends
-#
-#    ret = create_gatestring_list("lb+germ*exp+rb", germ=germs, exp=exponents,lb=left_ends, rb=right_ends,
-#                               order=['germ','exp','lb','rb'] )
-#    return ret
-#
-#
-#def read_gatestring_list(filename,**kwargs):
-#    emptyCode = kwargs.get("empty_code","") # code for the empty string
-#    mode = kwargs.get("mode", "comma-delim") #or const-length
-#    L = kwargs.get("length", 0)
-#    if mode == "const-length": assert(L > 0)
-#
-#    ret = [ ]
-#    for line in open(filename):
-#        if line[0][0]=='#': continue
-#        splitline = line.split()
-#        if len(splitline) == 0: continue
-#        charStr = splitline[0]
-#        if charStr == emptyCode:
-#            gateString = ()
-#        elif mode == "comma-delim":
-#            gateString = tuple( charStr.split(",") )
-#        elif mode == "const-length":
-#            gateString = tuple( [ charStr[i:i+L] for i in range(0,len(charStr),L) ] )
-#        else:
-#            raise ValueError("Invalid mode passed to read_gatestring_list: %s" % mode)
-#
-#        ret.append(gateString)
-#
-#    return ret
+    Each element of `sequenceRules` is of the form `(find,replace)`,
+    and specifies a replacement rule.  For example,
+    `('A',), ('B','C')` simply replaces each `A` with `B,C`.
+    `('A', 'B'), ('A', 'B2'))` replaces `B` with `B2` when it follows `A`.
+    `('B', 'A'), ('B2', 'A'))` replaces `B` with `B2` when it precedes `A`.
+
+    Parameters
+    ----------
+    gatestring : GateString or tuple
+        The gate string to manipulate.
+
+    sequenceRules : list
+        A list of `(find,replace)` 2-tuples which specify the replacement
+        rules.  Both `find` and `replace` are tuples of gate labels 
+        (or `GateString` objects).  If `sequenceRules is None` then
+        `gatestring` is returned.
+
+    Returns
+    -------
+    list of GateStrings
+    """
+    if sequenceRules is None:
+        return gatestring #avoids doing anything to gatestring
+
+    # flag labels as modified so signal they cannot be processed
+    # by any further rules
+    gatestring = tuple(gatestring) #make sure this is a tuple
+    modified = _np.array([False]*len(gatestring))
+    actions = [ [] for i in range(len(gatestring)) ]
+
+    #Step 0: compute prefixes and postfixes of rules
+    ruleInfo = []
+    for rule, replacement in sequenceRules:
+        n_pre = 0 #length of shared prefix btwn rule & replacement
+        for a,b in zip(rule,replacement):
+            if a==b: n_pre += 1
+            else: break
+        n_post = 0 #length of shared prefix btwn rule & replacement (if no prefix)
+        if n_pre == 0:
+            for a,b in zip(reversed(rule),reversed(replacement)):
+                if a==b: n_post += 1
+                else: break
+        n = len(rule)
+        ruleInfo.append( (n_pre,n_post,n) )
+        #print("Rule%d " % k, rule, "n_pre = ",n_pre," n_post = ",n_post) #DEBUG
+
+    #print("Gatestring = ",gatestring) #DEBUG
+    
+    #Step 1: figure out which actions (replacements) need to be performed at
+    # which indices.  During this step, gatestring is unchanged, but regions
+    # of it are marked as having been modified to avoid double-modifications.
+    for i in range(len(gatestring)):    
+        #print(" **** i = ",i) #DEBUG
+        for k,(rule,replacement) in enumerate(sequenceRules):
+            n_pre, n_post, n = ruleInfo[k]
+            
+            #if there's a match that doesn't double-modify
+            if rule == gatestring[i:i+n] and not any(modified[i+n_pre:i+n-n_post]):
+                # queue this replacement action
+                actions[i].append(k)
+                #print("MATCH! ==> acting rule %d at index %d" % (k,i)) #DEBUG
+
+                # and mark the modified region of the original string
+                modified[i+n_pre:i+n-n_post] = True
+        i += 1
+
+
+    #Step 2: perform the actions (in reverse order so indices don't get messed up!)
+    N = len(gatestring)
+    for i in range(N-1,-1,-1):
+        for k in actions[i]:
+            #apply rule k at index i of gatestring
+            rule, replacement = sequenceRules[k]
+            n_pre,n_post,n = ruleInfo[k]
+
+            begin = gatestring[:i+n_pre]
+            repl = replacement[n_pre:len(replacement)-n_post]
+            end   = gatestring[i+n-n_post:]
+
+            gatestring = begin + repl + end
+            #print("Applied rule %d at index %d: " % (k,i), begin, repl, end, " ==> ", gatestring) #DEBUG
+
+    return _gs.GateString(gatestring)
+
+
+def manipulate_gatestring_list(gatestringList, sequenceRules):
+    """
+    Creates a new list of GateString objects from an existing one by performing
+    replacements according to `sequenceRules` (see :func:`manipulate_gatestring`).
+
+    Parameters
+    ----------
+    gatestringList : list of GateStrings
+        The list of gate strings to use as the base for find & replace
+        operations.
+
+    sequenceRules : list
+        A list of `(find,replace)` 2-tuples which specify the replacement
+        rules.  Both `find` and `replace` are tuples of gate labels 
+        (or `GateString` objects).  If `sequenceRules is None` then
+        `gatestringList` is returned.
+
+    Returns
+    -------
+    list of GateStrings
+    """
+    if sequenceRules is None:
+        return gatestringList
+    else:
+        return [ manipulate_gatestring(gs, sequenceRules) for gs in gatestringList ]
