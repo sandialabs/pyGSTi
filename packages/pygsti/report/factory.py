@@ -733,6 +733,7 @@ def create_general_report(results, filename, confidenceLevel=None,
         _merge_template(qtys, template, filename, auto_open, precision,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+        ws.smartCache.status(printer)
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

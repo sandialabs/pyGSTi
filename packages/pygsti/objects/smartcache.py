@@ -1,20 +1,99 @@
-import hashlib as _hashlib
+import hashlib   as _hashlib
 import functools as _functools
-import sys as _sys
-import numpy as _np
+import sys       as _sys
+import numpy     as _np
 import functools as _functools
-import inspect as _inspect
+import inspect   as _inspect
 
-from .dataset import DataSet
-from .datacomparator import DataComparator
+from collections import Counter, defaultdict
+from pprint      import pprint
+
+from .dataset          import DataSet
+from .datacomparator   import DataComparator
+from .verbosityprinter import VerbosityPrinter
+
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
-'''
-elif isinstance(v,NotApplicable):
-    md5.update("NOTAPPLICABLE".encode('utf-8'))
-elif isinstance(v, SwitchValue):
-    md5.update(v.base.tostring()) #don't recurse to parent switchboard
-'''
+
+class SmartCache:
+    def __init__(self):
+        self.cache       = dict()
+        self.ineffective = set()
+
+        self.effectiveTimes   = defaultdict(list)
+        self.ineffectiveTimes = defaultdict(list)
+
+        self.misses = Counter()
+        self.hits   = Counter()
+
+        self.requests            = Counter()
+        self.ineffectiveRequests = Counter()
+
+    def cached_compute(self, fn, argVals, custom_digest=None):
+        name_key = get_fn_name_key(fn)
+        self.requests[name_key] += 1 
+        if name_key in self.ineffective:
+            key = 'NA'
+            result = fn(*argVals)
+            self.ineffectiveRequests[name_key] += 1
+            self.misses[key] += 1
+        else:
+            times = dict()
+            with _timed_block('hash', times):
+                key = call_key(fn, argVals, custom_digest) # cache by call key
+            if key not in self.cache:
+                with _timed_block('call', times):
+                    self.cache[key] = fn(*argVals)
+                self.misses[key] += 1
+            else:
+                self.hits[key] += 1
+            if 'call' in times:
+                hashtime = times['hash']
+                calltime = times['call']
+                if hashtime > calltime:
+                    self.ineffective.add(name_key)
+                    self.ineffectiveTimes[name_key].append(hashtime - calltime)
+                else:
+                    self.effectiveTimes[name_key].append(calltime - hashtime)
+            result = self.cache[key]
+        return key, result
+
+    def status(self, printer=VerbosityPrinter(1)):
+        size = lambda counter : len(list(counter.elements()))
+        nRequests = size(self.requests)
+        nHits     = size(self.hits)
+        nMisses   = size(self.misses)
+        printer.log('Status of smart cache:\n')
+        printer.log('    {:<10} requests'.format(nRequests))
+        printer.log('    {:<10} hits'.format(nHits))
+        printer.log('    {:<10} misses'.format(nMisses))
+        printer.log('    {}% effective\n'.format(int((nHits/nRequests) * 100)))
+
+        printer.log('Most common requests:\n')
+        for k, v in self.requests.most_common():
+            printer.log('    {:<40} {}'.format(k, v))
+        printer.log('')
+        printer.log('Ineffective requests:\n')
+        for k, v in self.ineffectiveRequests.most_common():
+            printer.log('    {:<40} {}'.format(k, v))
+
+        printer.log('')
+        def saved_time(kv):
+            k, v = kv
+            nCalls = max(1, len(v))
+            avg = sum(v) / nCalls
+            return avg * nCalls
+
+        printer.log('Effective total saved time, on average:\n')
+        for k, v in sorted(self.effectiveTimes.items(), 
+                           key=saved_time, reverse=True):
+            printer.log('    {:<45} {}'.format(k, saved_time((k, v))))
+        printer.log('')
+
+        printer.log('Ineffective differences:\n')
+        for k, v in sorted(self.ineffectiveTimes.items(), 
+                           key=saved_time):
+            printer.log('    {:<45} {}'.format(k, saved_time((k, v))))
 
 class CustomDigestError(Exception):
     pass
@@ -93,30 +172,3 @@ def call_key(fn, args, custom_digest):
     fnName = get_fn_name_key(fn)
     inner_digest = _functools.partial(digest, custom_digest=custom_digest)
     return (fnName,) + tuple(map(inner_digest,args))
-
-class SmartCache:
-    def __init__(self):
-        self.cache       = dict()
-        self.ineffective = set()
-
-    def cached_compute(self, fn, argVals, custom_digest=None):
-        name_key = get_fn_name_key(fn)
-        if name_key in self.ineffective:
-            key = 'NA'
-            result = fn(*argVals)
-        else:
-            # argVals now contains all the arguments, so call the function if
-            #  we need to and add result.
-            times = dict()
-            with _timed_block('hash', times):
-                key = call_key(fn, argVals, custom_digest) # cache by call key
-            if key not in self.cache:
-                with _timed_block('call', times):
-                    self.cache[key] = fn(*argVals)
-            if 'call' in times:
-                if times['hash'] > times['call']:
-                    print('Added {} to hash-ineffective functions'.format(name_key))
-                    self.ineffective.add(name_key)
-            result = self.cache[key]
-        return key, result
-
