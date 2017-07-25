@@ -58,7 +58,7 @@ def digest(obj):
             md5.update("NONE".encode('utf-8'))
         elif isinstance(v,NotApplicable):
             md5.update("NOTAPPLICABLE".encode('utf-8'))
-        elif isinstance(v, _objs.DataSet):
+        elif isinstance(v, (_objs.DataSet, _objs.DataComparator)):
             md5.update(v.timestamp.encode('utf-8'))
         else:
             #print("Encoding type: ",str(type(v)))
@@ -640,8 +640,6 @@ class Workspace(object):
             for v in argVals:
                 if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
-                if isinstance(v, _objs.DataComparator):
-                    self.ineffectiveCache.add(name_key)
             else:
                 if name_key in self.ineffectiveCache:
                     key = 'NA'
