@@ -436,7 +436,6 @@ def generate_boxplot(subMxs,
     #                             'nUsedYs': len(yvals) } )
     return fig
 
-
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
                              sumUp=False,invert=False,scale=1.0,addl_hover_subMxs=None):

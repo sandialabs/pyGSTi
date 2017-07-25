@@ -58,16 +58,5 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
                 label = formatStr.format(label)
             put('{} took {} seconds\n'.format(label, str(round(t, roundPlaces))))
 
-def self_profiling_cache(f, call_key=str, *args, **kwargs):
-    if len(kwargs) > 0:
-        raise ValueError('Cannot currently memoize on kwargs')
-    times = dict()
-    with timed_block('hash', times):
-        key = call_key(args)
-    with timed_block('call', times):
-        cache[key] = f(*args, **kwargs)
-    print(times['call'] - times['hash'])
-    return cache[key]
-
 def time_hash():
     return str(datetime.now())

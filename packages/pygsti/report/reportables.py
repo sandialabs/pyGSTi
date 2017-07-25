@@ -17,6 +17,7 @@ from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
+from ..objects import smart_cached as _smart_cached
 from .reportableqty import ReportableQty
 
 import functools as _functools
@@ -96,6 +97,8 @@ def _getGateSetQuantity(fnOfGateSet, gateset, eps, confidenceRegionInfo, verbosi
 @_tools.parameterized # This decorator takes arguments:
 def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a spam vectors."""
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfSpamVecs) # Retain metadata of wrapped function
     def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
@@ -115,6 +118,8 @@ def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
 @_tools.parameterized
 def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfGate) # Retain metadata of wrapped function
     def compute_quantity(gateset, gateLabel, confidenceRegionInfo=None):
         mxBasis = gateset.basis.name
@@ -136,6 +141,8 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
 @_tools.parameterized
 def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gateset. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfGateSet) 
     def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
@@ -733,6 +740,8 @@ def compute_gateset_dataset_qtys(qtynames, gateset, dataset, gatestrings=None):
 @_tools.parameterized
 def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two gates and a basis."""
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfGates) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, gateLabel, confidenceRegionInfo=None):
         mxBasis = gatesetA.basis.name
@@ -831,6 +840,8 @@ def rel_logGmlogT_eigvals(A, B, mxBasis):
 @_tools.parameterized
 def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two vectors and a basis."""
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfVectors) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, label, typ='prep', confidenceRegionInfo=None):
         assert typ in ['prep', 'effect'], 'type must be either "prep" or "effect", got {}'.format(typ)

@@ -15,17 +15,19 @@ import webbrowser as _webbrowser
 import zipfile as _zipfile
 from scipy.stats import chi2 as _chi2
 
-from ..objects      import VerbosityPrinter
-from ..objects      import DataComparator as _DataComparator
-from ..tools        import compattools as _compat
-from ..             import tools as _tools
-from .              import workspace as _ws
+from ..objects import VerbosityPrinter, Basis
+from ..objects import DataComparator as _DataComparator
+from ..tools   import compattools as _compat
+from ..tools   import timed_block as _timed_block
 
-from ..tools.opttools import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
-import functools as _functools
+from .. import tools as _tools
 
+from . import workspace as _ws
+from .reportables import half_diamond_norm as _hdn
+
+import functools as _functools
 
 def _read_and_preprocess_template(templateFilename, toggles):
     template = ''
@@ -734,6 +736,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
         ws.smartCache.status(printer)
+        _hdn.cache.status(printer)
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

@@ -156,46 +156,6 @@ class Workspace(object):
                     plot.display()
             return plot
         return factory_function
-        '''
-        factoryfn_argnames = argnames[2:] #strip off self & ws args
-        newargspec = (factoryfn_argnames,) + argspec[1:]
-
-        #Define a new factory function with appropriate signature
-        signature = _inspect.formatargspec(
-            formatvalue=lambda val: "", *newargspec)
-        signature = signature[1:-1] #strip off parenthesis from ends of "(signature)"
-        
-        if autodisplay:
-            factory_func_def = (
-                    'def factoryfn(%(signature)s):\n' 
-                    '    ret = cls(self, %(signature)s); ret.display(); return ret' % 
-                    {'signature':signature } )
-        else:
-            factory_func_def = (
-                    'def factoryfn(%(signature)s):\n' 
-                    '    return cls(self, %(signature)s)' % 
-                    {'signature':signature } )
-
-        #print("FACTORY FN DEF = \n",new_func)
-        exec_globals = {'cls' : cls, 'self': self}
-        if _sys.version_info > (3, 0):
-            exec(factory_func_def, exec_globals) #Python 3
-        else:
-            exec("""exec factory_func_def in exec_globals""") #Python 2
-        factoryfn = exec_globals['factoryfn']
-
-        #Copy cls.__init__ info over to factory function
-        factoryfn.__name__   = cls.__init__.__name__
-        factoryfn.__doc__    = cls.__init__.__doc__
-        factoryfn.__module__ = cls.__init__.__module__
-        factoryfn.__dict__   = cls.__init__.__dict__            
-        if PY3:
-            factoryfn.__defaults__ = cls.__init__.__defaults__
-        else:
-            factoryfn.func_defaults = cls.__init__.func_defaults
-
-        return factoryfn
-        '''
 
 
     def _register_components(self, autodisplay):        

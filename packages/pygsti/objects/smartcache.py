@@ -20,14 +20,14 @@ class SmartCache:
         self.cache       = dict()
         self.ineffective = set()
 
-        self.effectiveTimes   = defaultdict(list)
-        self.ineffectiveTimes = defaultdict(list)
-
         self.misses = Counter()
         self.hits   = Counter()
 
         self.requests            = Counter()
         self.ineffectiveRequests = Counter()
+
+        self.effectiveTimes   = defaultdict(list)
+        self.ineffectiveTimes = defaultdict(list)
 
     def cached_compute(self, fn, argVals, custom_digest=None):
         name_key = get_fn_name_key(fn)
@@ -84,16 +84,37 @@ class SmartCache:
             avg = sum(v) / nCalls
             return avg * nCalls
 
-        printer.log('Effective total saved time, on average:\n')
+        printer.log('Effective total saved time, on average (potentially theoretical, if no cache hits):\n')
+        saved = 0
         for k, v in sorted(self.effectiveTimes.items(), 
                            key=saved_time, reverse=True):
-            printer.log('    {:<45} {}'.format(k, saved_time((k, v))))
+            v = saved_time((k, v))
+            printer.log('    {:<45} {}'.format(k, v))
+            saved += v
         printer.log('')
 
         printer.log('Ineffective differences:\n')
+        overhead = 0
         for k, v in sorted(self.ineffectiveTimes.items(), 
                            key=saved_time):
-            printer.log('    {:<45} {}'.format(k, saved_time((k, v))))
+            v = saved_time((k, v))
+            printer.log('    {:<45} {}'.format(k, v))
+            overhead += v
+        printer.log('')
+        printer.log('overhead : {}'.format(overhead))
+        printer.log('saved    : {}'.format(saved))
+        printer.log('')
+        printer.log('net benefit : {}'.format(saved - overhead))
+
+def smart_cached(obj):
+    cache = obj.cache = SmartCache()
+    @_functools.wraps(obj)
+    def cacher(*args, **kwargs):
+        if len(kwargs) > 0:
+            raise ValueError('Cannot currently cache on kwargs')
+        k, v = cache.cached_compute(obj, args)
+        return v
+    return cacher
 
 class CustomDigestError(Exception):
     pass
