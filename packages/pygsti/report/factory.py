@@ -29,6 +29,8 @@ from . import workspace as _ws
 
 import functools as _functools
 
+from pprint import pprint as _pprint
+
 def _read_and_preprocess_template(templateFilename, toggles):
     template = ''
     with open(templateFilename, 'r') as templatefile:

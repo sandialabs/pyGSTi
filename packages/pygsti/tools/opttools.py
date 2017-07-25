@@ -31,7 +31,6 @@ def cache_by_hashed_args(obj):
             return obj(*args, **kwargs)
     return memoizer
 
-
 @contextmanager
 def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, preMessage=None, formatStr=None):
     def put(message):
@@ -57,6 +56,16 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
             if formatStr is not None:
                 label = formatStr.format(label)
             put('{} took {} seconds\n'.format(label, str(round(t, roundPlaces))))
+
+@contextmanager
+def fast_timed_block(label, timeDict):
+    start = time()
+    try:
+        yield
+    finally:
+        end = time()
+        t = end - start
+        timeDict[label] = t
 
 def time_hash():
     return str(datetime.now())
