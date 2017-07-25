@@ -571,11 +571,6 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     qtys = {} # stores strings to be inserted into report template
 
-    def add_qty(key, value):
-        # At first, I meant for this function to time adding elements, but this doesn't work:
-        # The 'value' argument is evaluated during the function call
-        qtys[key] = value
-
     # Timing is done with these blocks instead:
     timed = _functools.partial(_timed_block, formatStr='{:45}', printer=printer, preMessage='Adding {}:')
     printer.log('Adding metadata', 2)
@@ -612,13 +607,13 @@ def create_general_report(results, filename, confidenceLevel=None,
     maxLView = [False,False,False,multiL]
 
     with timed('topSwitchboard'):
-        add_qty('topSwitchboard', switchBd)
+        qtys['topSwitchboard'] = switchBd
     with timed('goSwitchboard1'):
-        add_qty('goSwitchboard1', switchBd.view(goView,"v1"))
+        qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
     with timed('goSwitchboard2'):
-        add_qty('goSwitchboard2', switchBd.view(goView,"v2"))
+        qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
     with timed('maxLSwitchboard1'):
-        add_qty('maxLSwitchboard1', switchBd.view(maxLView,"v6"))
+        qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -629,83 +624,83 @@ def create_general_report(results, filename, confidenceLevel=None,
     strs = switchBd.strs
 
     with timed('targetSpamBriefTable'):
-        add_qty('targetSpamBriefTable', ws.SpamTable(gsTgt, None, includeHSVec=False))
+        qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
     with timed('targetGatesBoxTable'):
-        add_qty('targetGatesBoxTable', ws.GatesTable(gsTgt, display_as="boxes"))
+        qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
     with timed('datasetOverviewTable'):
-        add_qty('datasetOverviewTable', ws.DataSetOverviewTable(ds))
+        qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
     with timed('bestGatesetSpamParametersTable'):
-        add_qty('bestGatesetSpamParametersTable', ws.SpamParametersTable(gsFinal, cri))
+        qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
     with timed('bestGatesetSpamBriefTable'):
-        add_qty('bestGatesetSpamBriefTable', ws.SpamTable(switchBd.gsTargetAndFinal,
+        qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
                                                          ['Target','Estimated'],
-                                                         cri, includeHSVec=False))
+                                                         cri, includeHSVec=False)
     with timed('bestGatesetSpamVsTargetTable'):
-        add_qty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable(gsFinal, gsTgt, cri))
+        qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
     with timed('bestGatesetGaugeOptParamsTable'):
-        add_qty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable(switchBd.goparams))
+        qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
     with timed('bestGatesetGatesBoxTable'):
-        add_qty('bestGatesetGatesBoxTable', ws.GatesTable(switchBd.gsTargetAndFinal,
-                                                         ['Target','Estimated'], "boxes", cri))
+        qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+                                                         ['Target','Estimated'], "boxes", cri)
     with timed('bestGatesetChoiEvalTable'):
-        add_qty('bestGatesetChoiEvalTable', ws.ChoiTable(gsFinal, None, cri, display=("barplot",)))
+        qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
     with timed('bestGatesetDecompTable'):
-        add_qty('bestGatesetDecompTable', ws.GateDecompTable(gsFinal, gsTgt, cri))
+        qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
     with timed('bestGatesetEvalTable'):
-        add_qty('bestGatesetEvalTable', ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals')))
+        qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
     with timed('bestGatesetRelEvalTable'):
-        add_qty('bestGatesetRelEvalTable', ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel')))
+        qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
     with timed('bestGatesetVsTargetTable'):
-        add_qty('bestGatesetVsTargetTable', ws.GatesVsTargetTable(gsFinal, gsTgt, cri))
+        qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     with timed('bestGatesetVsTargetTable_sum'):
-        add_qty('bestGatesetVsTargetTable_sum', ws.GatesVsTargetTable(gsFinal, gsTgt, cri))
+        qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     with timed('bestGatesetErrGenBoxTable'):
-        add_qty('bestGatesetErrGenBoxTable', ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
-                                                           "boxes", errgen_type))
+        qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
+                                                           "boxes", errgen_type)
     with timed('metadataTable'):
-        add_qty('metadataTable', ws.MetadataTable(gsFinal, switchBd.params))
+        qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
     with timed('softwareEnvTable'):
-        add_qty('softwareEnvTable', ws.SoftwareEnvTable())
+        qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gssAllL = switchBd.gssAllL
     with timed('fiducialListTable'):
-        add_qty('fiducialListTable', ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials"))
+        qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
     with timed('prepStrListTable'):
-        add_qty('prepStrListTable', ws.GatestringTable(prepStrs,"Preparation Fiducials"))
+        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
     with timed('effectStrListTable'):
-        add_qty('effectStrListTable', ws.GatestringTable(effectStrs,"Measurement Fiducials"))
+        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
     with timed('germList2ColTable'):
-        add_qty('germList2ColTable', ws.GatestringTable(germs, "Germ", nCols=2))
+        qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
     with timed('progressTable'):
-        add_qty('progressTable', ws.FitComparisonTable(
-                        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L'))
+        qtys['progressTable'] = ws.FitComparisonTable(
+                        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
     with timed('gramBarPlot'):
-        add_qty('gramBarPlot', ws.GramMatrixBarPlot(ds,gsTgt,10,strs))
+        qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
     with timed('progressBarPlot'):
-        add_qty('progressBarPlot', ws.FitComparisonBarPlot(
-            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L'))
+        qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
+            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
                 
     with timed('dataScalingColorBoxPlot'):
-        add_qty('dataScalingColorBoxPlot', ws.ColorBoxPlot(
+        qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
             "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
-            submatrices=switchBd.scaledSubMxsDict))
+            submatrices=switchBd.scaledSubMxsDict)
     
     #Not pagniated currently... just set to same full plot
     with timed('bestEstimateColorScatterPlot'):
-        add_qty('bestEstimateColorScatterPlot', ws.ColorBoxPlot(
+        qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, scatter=True)) #TODO: L-switchboard on summary page?
+            minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
     qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
 
@@ -758,12 +753,12 @@ def create_general_report(results, filename, confidenceLevel=None,
                         dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
                 
             with timed('dscmpSwitchBoard'):
-                add_qty('dscmpSwitchboard', dscmp_switchBd)
+                qtys['dscmpSwitchboard'] = dscmp_switchBd
             with timed('dsComparisonHistogram'):
-                add_qty('dsComparisonHistogram', ws.DatasetComparisonPlot(dscmp_switchBd.dscmp))
+                qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
             with timed('dsComparisonBoxPlot'):
-                add_qty('dsComparisonBoxPlot', ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
-                                                              None, None, dscomparator=dscmp_switchBd.dscmp))
+                qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
+                                                              None, None, dscomparator=dscmp_switchBd.dscmp)
             toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False
