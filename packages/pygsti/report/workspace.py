@@ -16,10 +16,11 @@ import random as _random
 import inspect as _inspect
 import sys as _sys
 import hashlib as _hashlib
+import functools as _functools
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from ..tools.opttools import timed_block
+from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
 #from IPython.display import clear_output as _clear_output
@@ -203,7 +204,7 @@ class Workspace(object):
         self._register_components(False)
         self.ineffectiveCache = set()
 
-    def _makefactory(self,cls,autodisplay):
+    def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
 
         #Manipulate argument list of cls.__init__
@@ -211,6 +212,18 @@ class Workspace(object):
         argnames = argspec[0]
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
+
+        @_functools.wraps(cls.__init__)
+        def factory_function(*args, **kwargs):
+            name = cls.__name__
+            with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Creating {}:'):
+                plot = cls(self, *args, **kwargs)
+            if autodisplay:
+                with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:'):
+                    plot.display()
+            return plot
+        return factory_function
+        '''
         factoryfn_argnames = argnames[2:] #strip off self & ws args
         newargspec = (factoryfn_argnames,) + argspec[1:]
 
@@ -247,8 +260,9 @@ class Workspace(object):
             factoryfn.__defaults__ = cls.__init__.__defaults__
         else:
             factoryfn.func_defaults = cls.__init__.func_defaults
-            
+
         return factoryfn
+        '''
 
 
     def _register_components(self, autodisplay):        
@@ -641,10 +655,10 @@ class Workspace(object):
                     # argVals now contains all the arguments, so call the function if
                     #  we need to and add result.
                     times = dict()
-                    with timed_block('hash', times):
+                    with _timed_block('hash', times):
                         key = call_key(fn, argVals) # cache by call key
                     if key not in self.compCache:
-                        with timed_block('call', times):
+                        with _timed_block('call', times):
                             self.compCache[key] = fn(*argVals)
                     if 'call' in times:
                         if times['hash'] > times['call']:
