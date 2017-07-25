@@ -15,13 +15,14 @@ from .verbosityprinter import VerbosityPrinter
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
-class SmartCache:
+class SmartCache(object):
     def __init__(self):
         self.cache       = dict()
         self.ineffective = set()
 
         self.misses = Counter()
         self.hits   = Counter()
+        self.fhits  = Counter()
 
         self.requests            = Counter()
         self.ineffectiveRequests = Counter()
@@ -50,6 +51,7 @@ class SmartCache:
                 self.misses[key] += 1
             else:
                 self.hits[key] += 1
+                self.fhits[name_key] += 1
             if 'call' in times:
                 hashtime = times['hash']
                 calltime = times['call']
@@ -80,6 +82,11 @@ class SmartCache:
         printer.log('')
         printer.log('Ineffective requests:\n')
         for k, v in self.ineffectiveRequests.most_common():
+            printer.log('    {:<40} {}'.format(k, v))
+
+        printer.log('')
+        printer.log('Hits by name:\n')
+        for k, v in self.fhits.most_common():
             printer.log('    {:<40} {}'.format(k, v))
 
         printer.log('')

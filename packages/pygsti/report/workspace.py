@@ -6,17 +6,18 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the Workspace class and supporting functionality."""
 
-import itertools as _itertools
+import itertools   as _itertools
 import collections as _collections
-import os as _os
-import shutil as _shutil
-import numpy as _np
-import uuid as _uuid
-import random as _random
-import inspect as _inspect
-import sys as _sys
-import hashlib as _hashlib
-import functools as _functools
+import os          as _os
+import shutil      as _shutil
+import numpy       as _np
+import uuid        as _uuid
+import random      as _random
+import inspect     as _inspect
+import sys         as _sys
+import hashlib     as _hashlib
+import functools   as _functools
+import pickle      as _pickle
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
@@ -128,14 +129,20 @@ class Workspace(object):
     a script to build a hardcoded ("fixed") report/dashboard.
     """
 
-    def __init__(self):
+    def __init__(self, cachefile=None):
         """
         Initialize a Workspace object.
-        """
 
+        Parameters
+        ----------
+        cachefile : str (optional)
+            cache file to load from
+        """
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self._register_components(False)
         self.smartCache = _objs.SmartCache()
+        if cachefile is not None:
+            self.load_cache(cachefile)
 
     def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -155,6 +162,7 @@ class Workspace(object):
                 with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:'):
                     plot.display()
             return plot
+        factory_function.__name__ = '{}.__alt_init__'.format(cls.__name__)
         return factory_function
 
 
@@ -551,6 +559,14 @@ class Workspace(object):
 
         switchboard_switch_indices = [ info['switch indices'] for info in switchBdInfo ]
         return resultValues, switchboards, switchboard_switch_indices, switchpos_map
+
+    def save_cache(self, filename):
+        with open(filename, 'wb') as outfile:
+            _pickle.dump(self.smartCache, outfile, protocol=2)
+
+    def load_cache(self, filename):
+        with open(filename, 'rb') as outfile:
+            self.smartCache = _pickle.load(outfile, protocol=2)
 
 class Switchboard(_collections.OrderedDict):
     """

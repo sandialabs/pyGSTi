@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Report generation functions. """
 
+import pickle as _pickle
 import os  as _os
 import sys as _sys
 import time as _time
@@ -558,7 +559,8 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     Returns
     -------
-    None
+    Workspace
+        The workspace object used to create the report
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     printer.log('*** Creating workspace ***')
@@ -735,6 +737,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
         ws.smartCache.status(printer)
+    return ws
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
