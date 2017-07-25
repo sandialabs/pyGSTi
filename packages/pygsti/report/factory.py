@@ -572,7 +572,6 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys = {} # stores strings to be inserted into report template
 
     # Timing is done with these blocks instead:
-    timed = _functools.partial(_timed_block, formatStr='{:45}', printer=printer, preMessage='Adding {}:')
     printer.log('Adding metadata', 2)
 
     qtys['title'] = title
@@ -606,14 +605,10 @@ def create_general_report(results, filename, confidenceLevel=None,
     goView = [False,False,multiGO,False]
     maxLView = [False,False,False,multiL]
 
-    with timed('topSwitchboard'):
-        qtys['topSwitchboard'] = switchBd
-    with timed('goSwitchboard1'):
-        qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
-    with timed('goSwitchboard2'):
-        qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
-    with timed('maxLSwitchboard1'):
-        qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
+    qtys['topSwitchboard'] = switchBd
+    qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
+    qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
+    qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -623,143 +618,111 @@ def create_general_report(results, filename, confidenceLevel=None,
     germs = switchBd.germs
     strs = switchBd.strs
 
-    with timed('targetSpamBriefTable'):
-        qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
-    with timed('targetGatesBoxTable'):
-        qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    with timed('datasetOverviewTable'):
-        qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
+    qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
+    qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
+    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
-    with timed('bestGatesetSpamParametersTable'):
-        qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
-    with timed('bestGatesetSpamBriefTable'):
-        qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
+    qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
+    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
                                                          ['Target','Estimated'],
                                                          cri, includeHSVec=False)
-    with timed('bestGatesetSpamVsTargetTable'):
-        qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
-    with timed('bestGatesetGaugeOptParamsTable'):
-        qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
-    with timed('bestGatesetGatesBoxTable'):
-        qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
-                                                         ['Target','Estimated'], "boxes", cri)
-    with timed('bestGatesetChoiEvalTable'):
-        qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    with timed('bestGatesetDecompTable'):
-        qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
-    with timed('bestGatesetEvalTable'):
-        qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
-    with timed('bestGatesetRelEvalTable'):
-        qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    with timed('bestGatesetVsTargetTable'):
-        qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    with timed('bestGatesetVsTargetTable_sum'):
-        qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    with timed('bestGatesetErrGenBoxTable'):
-        qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
+    qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
+    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+                                                     ['Target','Estimated'], "boxes", cri)
+    qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
+    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
+    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
+    qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
-    with timed('metadataTable'):
-        qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
-    with timed('softwareEnvTable'):
-        qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
+    qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
+    qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gssAllL = switchBd.gssAllL
-    with timed('fiducialListTable'):
-        qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
-    with timed('prepStrListTable'):
-        qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
-    with timed('effectStrListTable'):
-        qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
-    with timed('germList2ColTable'):
-        qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
-    with timed('progressTable'):
-        qtys['progressTable'] = ws.FitComparisonTable(
+    qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+    qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
+    qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
+    qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
+    qtys['progressTable'] = ws.FitComparisonTable(
                         Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    with timed('gramBarPlot'):
-        qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
-    with timed('progressBarPlot'):
-        qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
-            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
+    qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
+        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
                 
-    with timed('dataScalingColorBoxPlot'):
-        qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
-            "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
+    qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+        "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
             submatrices=switchBd.scaledSubMxsDict)
     
     #Not pagniated currently... just set to same full plot
-    with timed('bestEstimateColorScatterPlot'):
-        qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+    qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
     qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
 
     if multidataset:
-        with timed('multidataset'):
-            #initialize a new "dataset comparison switchboard"
-            with timed('dataset comparison switchboard'):
-                dscmp_switchBd = ws.Switchboard(
-                    ["Dataset1","Dataset2"],
-                    [dataset_labels, dataset_labels],
-                    ["buttons","buttons"], [0,1]
-                )
-                dscmp_switchBd.add("dscmp",(0,1))
-                dscmp_switchBd.add("dscmp_gss",(0,))
+        #initialize a new "dataset comparison switchboard"
+        dscmp_switchBd = ws.Switchboard(
+            ["Dataset1","Dataset2"],
+            [dataset_labels, dataset_labels],
+            ["buttons","buttons"], [0,1]
+        )
+        dscmp_switchBd.add("dscmp",(0,1))
+        dscmp_switchBd.add("dscmp_gss",(0,))
 
-            with timed('datacomparators'):
-                for d1, dslbl1 in enumerate(dataset_labels):
-                    dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+        for d1, dslbl1 in enumerate(dataset_labels):
+            dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
 
-                dsComp = dict()
-                indices = []
-                for i in range(len(dataset_labels)):
-                    for j in range(len(dataset_labels)):
-                        indices.append((i, j))
-                if comm is not None:
-                    _, indexDict, _ = _distribute_indices(indices, comm)
-                    rank = comm.Get_rank()
-                    for k, v in indexDict.items():
-                        if v == rank:
-                            d1, d2 = k
-                            dslbl1 = dataset_labels[d1]
-                            dslbl2 = dataset_labels[d2]
+        dsComp = dict()
+        indices = []
+        for i in range(len(dataset_labels)):
+            for j in range(len(dataset_labels)):
+                indices.append((i, j))
+        if comm is not None:
+            _, indexDict, _ = _distribute_indices(indices, comm)
+            rank = comm.Get_rank()
+            for k, v in indexDict.items():
+                if v == rank:
+                    d1, d2 = k
+                    dslbl1 = dataset_labels[d1]
+                    dslbl2 = dataset_labels[d2]
 
-                            ds1 = results_dict[dslbl1].dataset
-                            ds2 = results_dict[dslbl2].dataset
-                            dsComp[(d1, d2)] = _DataComparator(
-                                [ds1, ds2], DS_names=[dslbl1, dslbl2])
-                    dicts = comm.gather(dsComp, root=0)
-                    if rank == 0:
-                        for d in dicts:
-                            for k, v in d.items():
-                                d1, d2 = k
-                                dscmp_switchBd.dscmp[d1, d2] = v
-                else:
-                    for d1, d2 in indices:
-                        dslbl1 = dataset_labels[d1]
-                        dslbl2 = dataset_labels[d2]
-                        ds1 = results_dict[dslbl1].dataset
-                        ds2 = results_dict[dslbl2].dataset
-                        dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
-                
-            with timed('dscmpSwitchBoard'):
-                qtys['dscmpSwitchboard'] = dscmp_switchBd
-            with timed('dsComparisonHistogram'):
-                qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
-            with timed('dsComparisonBoxPlot'):
-                qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
-                                                              None, None, dscomparator=dscmp_switchBd.dscmp)
-            toggles['CompareDatasets'] = True
+                    ds1 = results_dict[dslbl1].dataset
+                    ds2 = results_dict[dslbl2].dataset
+                    dsComp[(d1, d2)] = _DataComparator(
+                        [ds1, ds2], DS_names=[dslbl1, dslbl2])
+            dicts = comm.gather(dsComp, root=0)
+            if rank == 0:
+                for d in dicts:
+                    for k, v in d.items():
+                        d1, d2 = k
+                        dscmp_switchBd.dscmp[d1, d2] = v
+        else:
+            for d1, d2 in indices:
+                dslbl1 = dataset_labels[d1]
+                dslbl2 = dataset_labels[d2]
+                ds1 = results_dict[dslbl1].dataset
+                ds2 = results_dict[dslbl2].dataset
+                dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
+        
+        qtys['dscmpSwitchboard'] = dscmp_switchBd
+        qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
+        qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
+                                                      None, None, dscomparator=dscmp_switchBd.dscmp)
+        toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False
 

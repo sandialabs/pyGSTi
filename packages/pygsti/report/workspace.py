@@ -211,7 +211,7 @@ class Workspace(object):
         self._register_components(False)
         self.ineffectiveCache = set()
 
-    def _makefactory(self,cls,autodisplay):
+    def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
 
         #Manipulate argument list of cls.__init__
@@ -222,10 +222,11 @@ class Workspace(object):
 
         @_functools.wraps(cls.__init__)
         def factory_function(*args, **kwargs):
-            with _timed_block('test', formatStr='{:45}', preMessage='Creating {}:'):
+            name = cls.__name__
+            with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Creating {}:'):
                 plot = cls(self, *args, **kwargs)
             if autodisplay:
-                with _timed_block('test', formatStr='{:45}', preMessage='Displaying {}:'):
+                with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:'):
                     plot.display()
             return plot
         return factory_function
@@ -661,10 +662,10 @@ class Workspace(object):
                     # argVals now contains all the arguments, so call the function if
                     #  we need to and add result.
                     times = dict()
-                    with timed_block('hash', times):
+                    with _timed_block('hash', times):
                         key = call_key(fn, argVals) # cache by call key
                     if key not in self.compCache:
-                        with timed_block('call', times):
+                        with _timed_block('call', times):
                             self.compCache[key] = fn(*argVals)
                     if 'call' in times:
                         if times['hash'] > times['call']:
