@@ -21,6 +21,35 @@ def main():
                                           maxLengths, verbosity=0)
     with open('data/example_report_results.pkl', 'wb') as outfile:
         pickle.dump(results, outfile, protocol=2)
+
+    # Case1: TP-constrained GST
+    tpTarget = gs_target.copy()
+    tpTarget.set_all_parameterizations("TP")
+    results_tp = pygsti.do_long_sequence_gst(ds, tpTarget, fiducials, fiducials, germs,
+                                          maxLengths, gaugeOptParams=False, verbosity=0)
+    # Gauge optimize
+    est = results_tp.estimates['default']
+    gsFinal = est.gatesets['final iteration estimate']
+    gsTarget = est.gatesets['target']
+    for spamWt in [1e-4,1e-3,1e-2,1e-1,1.0]:
+        gs = pygsti.gaugeopt_to_target(gsFinal,gsTarget,{'gates':1, 'spam':spamWt})
+        est.add_gaugeoptimized({'itemWeights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt) 
+
+    #Case2: "Full" GST
+    fullTarget = gs_target.copy()
+    fullTarget.set_all_parameterizations("full")
+    results_full = pygsti.do_long_sequence_gst(ds, fullTarget, fiducials, fiducials, germs,
+                                          maxLengths, gaugeOptParams=False, verbosity=0)
+    #Gauge optimize
+    est = results_full.estimates['default']
+    gsFinal = est.gatesets['final iteration estimate']
+    gsTarget = est.gatesets['target']
+    for spamWt in [1e-4,1e-3,1e-2,1e-1,1.0]:
+        gs = pygsti.gaugeopt_to_target(gsFinal,gsTarget,{'gates':1, 'spam':spamWt})
+        est.add_gaugeoptimized({'itemWeights': {'gates':1, 'spam':spamWt}}, gs, "Spam %g" % spamWt)
+
+    with open('data/full_report_results.pkl', 'wb') as outfile:
+        pickle.dump((results_tp, results_full), outfile, protocol=2)
         
 if __name__ == '__main__':
     main()

@@ -12,6 +12,7 @@ from functools   import partial, wraps
 from time        import time
 from contextlib  import contextmanager
 from collections import defaultdict
+from datetime    import datetime
 
 # note that this decorator ignores **kwargs
 def cache_by_hashed_args(obj):
@@ -68,3 +69,5 @@ def self_profiling_cache(f, call_key=str, *args, **kwargs):
     print(times['call'] - times['hash'])
     return cache[key]
 
+def time_hash():
+    return str(datetime.now())
