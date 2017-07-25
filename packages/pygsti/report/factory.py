@@ -25,7 +25,6 @@ from ..tools.mpitools import distribute_indices as _distribute_indices
 from .. import tools as _tools
 
 from . import workspace as _ws
-from .reportables import half_diamond_norm as _hdn
 
 import functools as _functools
 
@@ -736,7 +735,6 @@ def create_general_report(results, filename, confidenceLevel=None,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
         ws.smartCache.status(printer)
-        _hdn.cache.status(printer)
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

@@ -29,6 +29,9 @@ class SmartCache:
         self.effectiveTimes   = defaultdict(list)
         self.ineffectiveTimes = defaultdict(list)
 
+        self.hashTimes = defaultdict(list)
+        self.callTimes = defaultdict(list)
+
     def cached_compute(self, fn, argVals, custom_digest=None):
         name_key = get_fn_name_key(fn)
         self.requests[name_key] += 1 
@@ -55,6 +58,8 @@ class SmartCache:
                     self.ineffectiveTimes[name_key].append(hashtime - calltime)
                 else:
                     self.effectiveTimes[name_key].append(calltime - hashtime)
+                self.hashTimes[name_key].append(hashtime)
+                self.callTimes[name_key].append(calltime)
             result = self.cache[key]
         return key, result
 
@@ -100,6 +105,18 @@ class SmartCache:
             v = saved_time((k, v))
             printer.log('    {:<45} {}'.format(k, v))
             overhead += v
+        printer.log('')
+
+        printer.log('Hash v call differences:\n')
+        for name_key in self.requests:
+            keyHashTimes = self.hashTimes[name_key]
+            hAvg = sum(keyHashTimes) / max(1, len(keyHashTimes))
+            printer.log('    {:<45} hash avg: {}'.format(name_key, hAvg))
+            keyCallTimes = self.callTimes[name_key]
+            cAvg = sum(keyCallTimes) / max(1, len(keyCallTimes))
+            printer.log('    {:<45} call avg: {}'.format(name_key, cAvg))
+            printer.log('    {:<45} diff    : {}'.format(name_key, cAvg - hAvg))
+            printer.log('')
         printer.log('')
         printer.log('overhead : {}'.format(overhead))
         printer.log('saved    : {}'.format(saved))

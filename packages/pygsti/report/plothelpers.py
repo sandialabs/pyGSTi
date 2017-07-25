@@ -12,6 +12,8 @@ import warnings          as _warnings
 from .. import tools     as _tools
 from .. import objects   as _objs
 
+from ..objects import smart_cached
+
 
 def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
                        gatestring_filter=None, gateLabelAliases=None):
@@ -256,7 +258,6 @@ def probability_matrices(gsplaq, gateset, spamlabels,
             probs = probs_precomp_dict[gstr]
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
-
 
 def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                 probs_precomp_dict=None):
