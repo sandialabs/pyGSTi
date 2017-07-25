@@ -90,6 +90,7 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
     return tuples,len(effectStrs),len(prepStrs)
 
 
+
 def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     """
     Returns a new gate string map whose strings have been 
@@ -128,6 +129,7 @@ def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     return new_gatestring_tuples, rows, cols
 
 
+
 def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
@@ -154,6 +156,7 @@ def total_count_matrix(gsplaq, dataset):
     for i,j,gstr in gsplaq:
         ret[i,j] = dataset[ gstr ].total()
     return ret
+
 
 
 def count_matrices(gsplaq, dataset, spamlabels):
@@ -187,6 +190,7 @@ def count_matrices(gsplaq, dataset, spamlabels):
     return ret
 
 
+
 def frequency_matrices(gsplaq, dataset, spamlabels):
     """
     Computes spamLabel's frequency matrix for a base gatestring.
@@ -214,6 +218,7 @@ def frequency_matrices(gsplaq, dataset, spamlabels):
     """
     return count_matrices(gsplaq, dataset, spamlabels) \
            / total_count_matrix( gsplaq, dataset)[None,:,:]
+
 
 
 
@@ -259,6 +264,7 @@ def probability_matrices(gsplaq, gateset, spamlabels,
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
 
+
 def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                 probs_precomp_dict=None):
     """
@@ -301,6 +307,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
     chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
                                      minProbClipForWeighting)
     return chiSqMxs.sum(axis=0) # sum over spam labels
+
 
 
 def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
@@ -349,6 +356,7 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
     return logLMxs.sum(axis=0) # sum over spam labels
 
 
+
 def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     """
     Compute per-gate error rate.
@@ -377,6 +385,7 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     gs_direct = directGSTgatesets[sigma]
     minEigval = min(abs(_np.linalg.eigvals( gs_direct.gates["GsigmaLbl"] )))
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
+
 
 
 def _eformat(f, prec):
@@ -420,6 +429,7 @@ def _eformat(f, prec):
         return "%g" % f #fallback to general format
 
 #OLD
+#
 #def _computeGateStringMaps(gss, dataset):
 ##    xvals, yvals, xyGateStringDict
 ##    strs, fidpair_filters, gatestring_filters,
@@ -434,12 +444,15 @@ def _eformat(f, prec):
 #                                    gss.aliases)
 #             for x in gss.used_xvals for y in gss.used_yvals }
 
+
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
     return int(len(ixs))
 
+
 def _all_same(items):
     return all(x == items[0] for x in items)
+
 
 def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     """
@@ -482,6 +495,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     return n_boxes, dof_per_box
 
     
+
 def _computeProbabilities(gss, gateset, dataset):
     """ 
     Returns a dictionary of probabilities for each gate sequence in
@@ -499,12 +513,13 @@ def _computeProbabilities(gss, gateset, dataset):
     return probs_dict
 
     
-
+@smart_cached
 def _computeSubMxs(gss, subMxCreationFn, sumUp):
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
+
 
 
 def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
@@ -559,6 +574,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
+
 def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClip=1e-6):
     """
@@ -607,6 +623,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
     freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
     logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
     return logLMxs.sum(axis=0) # sum over spam labels
+
 
 
 

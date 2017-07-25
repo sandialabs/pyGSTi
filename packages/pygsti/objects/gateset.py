@@ -31,6 +31,8 @@ from .gatemapcalc import GateMapCalc as _GateMapCalc
 from .verbosityprinter import VerbosityPrinter
 from ..tools.basis import Basis, change_basis, _mut
 
+from .. import tools as _tools
+
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
 # should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
@@ -81,6 +83,7 @@ class GateSet(object):
             identity vector.
 
         """
+        self.timestamp = _tools.time_hash()
 
         assert(default_param in ('full','TP','static'))
         default_e_param = "full" if default_param == "TP" else default_param

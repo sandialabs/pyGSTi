@@ -50,6 +50,7 @@ class SmartCache(object):
                     self.cache[key] = fn(*argVals)
                 self.misses[key] += 1
             else:
+                print('The function {} experienced a cache hit'.format(name_key))
                 self.hits[key] += 1
                 self.fhits[name_key] += 1
             if 'call' in times:
