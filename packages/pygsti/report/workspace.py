@@ -16,10 +16,11 @@ import random as _random
 import inspect as _inspect
 import sys as _sys
 import hashlib as _hashlib
+import functools as _functools
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from ..tools.opttools import timed_block
+from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
 #from IPython.display import clear_output as _clear_output
@@ -216,6 +217,17 @@ class Workspace(object):
         argnames = argspec[0]
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
+
+        @_functools.wraps(cls.__init__)
+        def factory_function(*args, **kwargs):
+            with _timed_block('test', formatStr='{:45}', preMessage='Creating {}:'):
+                plot = cls(self, *args, **kwargs)
+            if autodisplay:
+                with _timed_block('test', formatStr='{:45}', preMessage='Displaying {}:'):
+                    plot.display()
+            return plot
+        return factory_function
+        '''
         factoryfn_argnames = argnames[2:] #strip off self & ws args
         newargspec = (factoryfn_argnames,) + argspec[1:]
 
@@ -252,8 +264,9 @@ class Workspace(object):
             factoryfn.__defaults__ = cls.__init__.__defaults__
         else:
             factoryfn.func_defaults = cls.__init__.func_defaults
-            
+
         return factoryfn
+        '''
 
 
     def _register_components(self, autodisplay):        
