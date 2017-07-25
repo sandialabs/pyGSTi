@@ -621,7 +621,6 @@ def create_general_report(results, filename, confidenceLevel=None,
         add_qty('maxLSwitchboard1', switchBd.view(maxLView,"v6"))
 
     gsTgt = switchBd.gsTarget
-    print(gsTgt.base)
     ds = switchBd.ds
     eff_ds = switchBd.eff_ds
     prepStrs = switchBd.prepStrs
@@ -751,8 +750,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                                 d1, d2 = k
                                 dscmp_switchBd.dscmp[d1, d2] = v
                 else:
-                    for i, j in indices:
-                        d1, d2 = k
+                    for d1, d2 in indices:
                         dslbl1 = dataset_labels[d1]
                         dslbl2 = dataset_labels[d2]
                         ds1 = results_dict[dslbl1].dataset

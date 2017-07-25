@@ -742,7 +742,7 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
             return ReportableQty(fnOfGates(A, B, mxBasis))
 
         # make sure the gateset we're given is the one used to generate the confidence region
-        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
@@ -833,12 +833,12 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two vectors and a basis."""
     @_functools.wraps(fnOfVectors) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, label, typ='prep', confidenceRegionInfo=None):
+        assert typ in ['prep', 'effect'], 'type must be either "prep" or "effect", got {}'.format(typ)
         mxBasis = gatesetA.basis.name
         if typ == 'prep':
             A = gatesetA.preps[label]
             B = gatesetB.preps[label]
         else:
-            assert typ == 'effect'
             A = gatesetA.effects[label]
             B = gatesetB.effects[label]
 
@@ -851,9 +851,15 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
                              "a different gateset than the given confidenceRegionInfo")
 
         curriedFnOfVectors = _functools.partial(fnOfVectors, B=B, mxBasis=mxBasis)
-        df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfVectors, gateLabel,
-                                                                  eps, returnFnVal=True,
-                                                                  verbosity=verbosity)
+        if typ == 'prep':
+            df, f0 = confidenceRegionInfo.get_prep_fn_confidence_interval(curriedFnOfVectors, label,
+                                                                      eps, returnFnVal=True,
+                                                                      verbosity=verbosity)
+        else:
+            df, f0 = confidenceRegionInfo.get_effect_fn_confidence_interval(curriedFnOfVectors, label,
+                                                                      eps, returnFnVal=True,
+                                                                      verbosity=verbosity)
+
         return ReportableQty(f0, df)
     return compute_quantity
 
@@ -884,7 +890,7 @@ def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
         if confidenceRegionInfo is None:
             rowData.extend([(reportableQty.get_value(), None) for reportableQty in reportableQtys])
         else:
-            rowData.extend([reportableqty.get_value_and_err_bar() for reportableqty in reportableqtys])
+            rowData.extend([reportableQty.get_value_and_err_bar() for reportableQty in reportableQtys])
         yield rowData
         
 
