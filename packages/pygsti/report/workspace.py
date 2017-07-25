@@ -640,6 +640,8 @@ class Workspace(object):
                     key="NA"; result = v; break
                 if isinstance(v, (_objs.DataSet, _objs.DataComparator)):
                     self.ineffectiveCache.add(name_key)
+                    if isinstance(v, _objs.DataSet):
+                        print(v.timestamp)
             else:
                 if name_key in self.ineffectiveCache:
                     key = 'NA'
