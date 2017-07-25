@@ -75,13 +75,6 @@ def digest(obj):
     add(M, obj)
     return M.digest() #return the MD5 digest
 
-def _is_hashable(x):
-    try:
-        dct = { x: 0 }
-    except TypeError:
-        return False
-    return True
-
 def get_fn_name_key(fn):
     name = fn.__name__
     if hasattr(fn, '__self__'):
