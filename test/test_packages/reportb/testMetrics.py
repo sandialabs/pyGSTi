@@ -52,8 +52,6 @@ Gx^4 20 90
         qty = pygsti.report.compute_dataset_qty('max logl', self.ds, self.gatestrings)
         #TODO: test quantities
 
-
-
     def test_gateset_qtys(self):
         names = pygsti.report.compute_gateset_qty(None, self.gateset)
         qtys = pygsti.report.compute_gateset_qtys(names, self.gateset, self.ci)
