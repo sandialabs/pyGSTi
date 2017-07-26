@@ -194,7 +194,6 @@ class SpamParametersTable(WorkspaceTable):
         super(SpamParametersTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
 
     def _create(self, gateset, confidenceRegionInfo):
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
         colHeadings = [''] + list(gateset.get_effect_labels())
         formatters  = [None] + [ 'Effect' ]*len(gateset.get_effect_labels())
     
@@ -204,7 +203,7 @@ class SpamParametersTable(WorkspaceTable):
         spamDotProdsQty = _reportables.spam_dotprods(gateset, confidenceRegionInfo)
         DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
     
-        formatters      = [ 'Rho' ] + [ ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
+        formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
     
         for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
             rowData = [prepLabel]
@@ -514,11 +513,9 @@ class GatesVsTargetTable(WorkspaceTable):
         jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
         dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
 
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
-    
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
-        formatters = [None] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
     
         for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
                                                       infidelities, jt_diffs, dnorms):
@@ -557,11 +554,10 @@ class SpamVsTargetTable(WorkspaceTable):
     
         colHeadings  = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
         formatters   = (None,'Conversion','Conversion')
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
     
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
-        formatters = [ 'Rho' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         prepInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
                                                         'prep', confidenceRegionInfo)
                             for l in prepLabels]
@@ -572,7 +568,7 @@ class SpamVsTargetTable(WorkspaceTable):
                                                       prepInfidelities, prepTraceDists):
             table.addrow(rowData, formatters)
     
-        formatters = [ 'Effect' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         effectInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
                                                         'effect', confidenceRegionInfo)
                             for l in effectLabels]
@@ -924,12 +920,11 @@ class old_GateDecompTable(WorkspaceTable):
                        'decay of diagonal rotation terms',
                        'decay of off diagonal rotation terms')
 
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
         VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
     
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
-        formatters = (None, VecErrorBars, 'Normal', 'Normal', ErrorBars, ErrorBars)
+        formatters = (None, VecErrorBars, 'Normal', 'Normal', 'Normal', 'Normal')
 
         for decomp, gl in zip(decomps, gateLabels):
             evals = _reportables.eigenvalues(gateset, gl)

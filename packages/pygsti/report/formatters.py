@@ -57,8 +57,11 @@ formatDict['Effect'] = {
 
 # Normal replacements
 formatDict['Normal'] = {
-    'html'  : Formatter(html),
-    'latex' : Formatter(latex)}
+    'html'  : Formatter(html, 
+                        ebstring='%s <span class="errorbar">+/- %s</span>', 
+                        nmebstring='%s <span class="nmerrorbar">+/- %s</span>'),
+    'latex' : Formatter(latex,
+                        ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')} #nmebstring will match
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 formatDict['Rounded'] = {
@@ -129,15 +132,8 @@ formatDict['NMEBConversion'] = {
     'latex' : Formatter(convert_latex)}
 
 EB_html   = Formatter(html, ebstring='%s <span class="errorbar">+/- %s</span>')
-NMEB_html = Formatter(html, ebstring='%s <span class="nmerrorbar">+/- %s</span>')
+NMEB_html = Formatter(html, nmebstring='%s <span class="nmerrorbar">+/- %s</span>')
 EB_latex  = Formatter(latex, ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
-
-formatDict['ErrorBars'] = {
-    'html'  : EB_html,
-    'latex' : EB_latex}
-formatDict['NMErrorBars'] = {
-    'html'  : NMEB_html,
-    'latex' : EB_latex}
 
 VEB_latex = Formatter(latex, ebstring='%s $\pm$ %s')
 
