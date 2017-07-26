@@ -190,7 +190,6 @@ def count_matrices(gsplaq, dataset, spamlabels):
     return ret
 
 
-
 def frequency_matrices(gsplaq, dataset, spamlabels):
     """
     Computes spamLabel's frequency matrix for a base gatestring.
@@ -218,7 +217,6 @@ def frequency_matrices(gsplaq, dataset, spamlabels):
     """
     return count_matrices(gsplaq, dataset, spamlabels) \
            / total_count_matrix( gsplaq, dataset)[None,:,:]
-
 
 
 
@@ -264,7 +262,7 @@ def probability_matrices(gsplaq, gateset, spamlabels,
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
 
-
+@smart_cached
 def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                 probs_precomp_dict=None):
     """
@@ -309,7 +307,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
-
+@smart_cached
 def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
                 probs_precomp_dict=None):
     """
@@ -521,7 +519,7 @@ def _computeSubMxs(gss, subMxCreationFn, sumUp):
     return subMxs
 
 
-
+@smart_cached
 def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClipForWeighting=1e-4):
     """
@@ -574,7 +572,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
-
+@smart_cached
 def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClip=1e-6):
     """
@@ -626,7 +624,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
-
+@smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
     Computes matrix of 2*log-likelihood-ratios comparing the 

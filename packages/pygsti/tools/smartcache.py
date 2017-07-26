@@ -14,14 +14,15 @@ from .opttools import timed_block as _timed_block
 
 DIGEST_TIMES = defaultdict(list)
 
+csize = lambda counter : len(list(counter.elements()))
+
 def average(l):
     nCalls = max(1, len(l))
     return sum(l) / nCalls
 
 def show_cache_percents(hits, misses, printer):
-    size = lambda counter : len(list(counter.elements()))
-    nHits     = size(hits)
-    nMisses   = size(misses)
+    nHits     = csize(hits)
+    nMisses   = csize(misses)
     nRequests = nHits + nMisses 
     printer.log('    {:<10} requests'.format(nRequests))
     printer.log('    {:<10} hits'.format(nHits))
@@ -127,6 +128,8 @@ class SmartCache(object):
         totalMisses = Counter()
 
         suggestRemove = set()
+        warnNoHits    = set()
+        notCalled     = set()
 
         for cache in SmartCache.StaticCacheList:
             cache.status(printer)
@@ -134,9 +137,17 @@ class SmartCache(object):
             totalMisses += cache.misses
             totalSaved  += cache.saved
 
+            fullname = '{}.{}'.format(cache.decoratingModule, cache.decoratingFn)
+
             if cache.decoratingFn is not None and \
                     cache.decoratingFn in cache.ineffective:
-                suggestRemove.add(cache.decoratingModule + '.' + cache.decoratingFn)
+                suggestRemove.add(fullname)
+
+            if csize(cache.hits) == 0:
+                warnNoHits.add(fullname)
+
+            if csize(cache.requests) == 0:
+                notCalled.add(fullname)
 
         with printer.verbosity_env(2):
             printer.log('Average hash times by object:')
@@ -147,13 +158,23 @@ class SmartCache(object):
                 printer.log('    {:<65} tot | {}s'.format('', total))
                 printer.log('-'*100)
 
-        printer.log('')
-        printer.log('Because they take longer to hash than to calculate, \n' + \
+        printer.log('\nBecause they take longer to hash than to calculate, \n' + \
                     'the following functions may be unmarked for caching:')
         for name in suggestRemove:
             printer.log('    {}'.format(name))
 
-        printer.log('Global cache overview:')
+        with printer.verbosity_env(2):
+            printer.log('\nThe following functions would provide a speedup, \n' + \
+                        'but currently do not experience any cache hits:')
+            for name in warnNoHits:
+                printer.log('    {}'.format(name))
+
+        with printer.verbosity_env(4):
+            printer.log('\nThe following functions are not called:')
+            for name in notCalled:
+                printer.log('    {}'.format(name))
+
+        printer.log('\nGlobal cache overview:')
         show_cache_percents(totalHits, totalMisses, printer)
         printer.log('    {} seconds saved total'.format(totalSaved))
 

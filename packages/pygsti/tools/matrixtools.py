@@ -11,6 +11,8 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
+from .smartcache import smart_cached
+
 def array_eq(a, b, tol=1e-8):
     print(_np.linalg.norm(a-b))
     return _np.linalg.norm(a-b) < tol
@@ -363,7 +365,7 @@ def near_identity_matrix_log(M, TOL=1e-8):
         logM = logM.real
     return logM
 
-
+@smart_cached
 def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     """ 
     Construct an approximate logarithm of superoperator matrix `M` that is

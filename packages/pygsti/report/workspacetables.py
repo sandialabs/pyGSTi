@@ -1322,11 +1322,14 @@ class FitComparisonTable(WorkspaceTable):
                                     minProbClipForWeighting=1e-4,
                                     gateLabelAliases=gss.aliases )
             elif objective == "logl":
+                fitQty = _tools.two_delta_logl(gs, dataset, gstrs, gateLabelAliases=gss.aliases)
+                '''
                 logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
                 logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gss.aliases)
                 fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
                 if(logL_upperbound < logl):
                     raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+                '''
 
             Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
             k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
