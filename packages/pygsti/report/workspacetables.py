@@ -21,12 +21,6 @@ from .table import ReportTable as _ReportTable
 from .workspace import WorkspaceTable
 from . import workspaceplots as _wp
 
-def _getEBFmt(typ, confidenceRegionInfo):
-    if (confidenceRegionInfo is not None and
-        confidenceRegionInfo.nonMarkRadiusSq > 0):
-        return 'NM' + typ
-    else: return typ
-
 class BlankTable(WorkspaceTable):
     def __init__(self, ws):
         """A completely blank placeholder table."""
@@ -1186,7 +1180,7 @@ class DataSetOverviewTable(WorkspaceTable):
         colHeadings = ('Quantity','Value')
         formatters = (None,None)
     
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters)
     
         minN = round(min([ row.total() for row in dataset.itervalues()]))
         maxN = round(max([ row.total() for row in dataset.itervalues()]))
@@ -1356,7 +1350,7 @@ class GatestringTable(WorkspaceTable):
         formatters = (('Conversion',) + ('Normal',)*len(titles))*nCols
     
         if commonTitle is None:
-            table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+            table = _ReportTable(colHeadings, formatters)
         else:
             table = "tabular"
             colHeadings = ('#',) + tuple(titles)
@@ -1368,7 +1362,7 @@ class GatestringTable(WorkspaceTable):
             html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(colHeadings)-1,commonTitle)
             html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
             html_head += "</thead><tbody>"
-            table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
+            table = _ReportTable(colHeadings, formatters,
                                  customHeader={'latex': latex_head,
                                                'html': html_head})
     
@@ -1484,7 +1478,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         html_head += "<tr><th>" +  " </th><th> ".join([mknice(t) for t in titles]) + "</th></tr>\n"
         html_head += "</thead><tbody>"
     
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
+        table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head,
                                            'html': html_head} )
 
@@ -1571,7 +1565,7 @@ class StandardErrgenTable(WorkspaceTable):
         xLabels = _tools.basis_element_labels(projection_basis,xd)
         yLabels = _tools.basis_element_labels(projection_basis,yd)
     
-        table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1), confidenceRegionInfo=confidenceRegionInfo)
+        table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
             
         iCur = 0
         for i,ylabel  in enumerate(yLabels):
@@ -1619,7 +1613,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         colHeadings = ('Quantity','Value')
         formatters = ('Bold','Bold')
     
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters)
         
         if gaugeOptArgs == False: #signals *no* gauge optimization
             gaugeOptArgs = {'Method': "No gauge optimization was performed" }
@@ -1677,7 +1671,7 @@ class MetadataTable(WorkspaceTable):
         #custom latex header for maximum width imposed on 2nd col
         latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
         latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
+        table = _ReportTable(colHeadings, formatters,
                              customHeader={'latex': latex_head} )
         
         for key in sorted(list(params_dict.keys())):
@@ -1782,7 +1776,7 @@ class SoftwareEnvTable(WorkspaceTable):
         #custom latex header for maximum width imposed on 2nd col
         latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
         latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
+        table = _ReportTable(colHeadings, formatters, 
                              customHeader={'latex': latex_head} )
         
         #Python package information
