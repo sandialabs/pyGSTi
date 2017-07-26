@@ -55,41 +55,48 @@ formatDict['Effect'] = {
     'latex' : Formatter(stringreturn=('remainder', '$E_C$'),
                          regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$')}
 
+NormalHTML = Formatter(html, 
+                        ebstring='%s <span class="errorbar">+/- %s</span>', 
+                        nmebstring='%s <span class="nmerrorbar">+/- %s</span>')
+NormalLatex = Formatter(latex,
+                        ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $') #nmebstring will match
+
 # Normal replacements
 formatDict['Normal'] = {
-    'html'  : Formatter(html),
-    'latex' : Formatter(latex)}
+    'html'  : NormalHTML,
+    'latex' : NormalLatex} #nmebstring will match
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 formatDict['Rounded'] = {
-    'html'  : Formatter(html,  defaults={'precision' : 2, 'sciprecision': 0}),
-    'latex' : Formatter(latex, defaults={'precision' : 2, 'sciprecision': 0})}
+    'html'  : NormalHTML.variant(defaults={'precision' : 2, 'sciprecision': 0}),
+    'latex' : NormalLatex.variant(defaults={'precision' : 2, 'sciprecision': 0})}
 
 # 'small' formating - make text smaller
 formatDict['Small'] = {
-    'html'  : Formatter(html),
-    'latex' : Formatter(latex, formatstring='\\small%s')}
+    'html'  : NormalHTML,
+    'latex' : NormalLatex.variant(formatstring='\\small%s')}
 
 # 'small' formating - make text smaller
 formatDict['Verbatim'] = {
-    'html'  : Formatter(html),
-    'latex' : Formatter(formatstring='\\spverb!%s!')}
+    'html'  : NormalHTML,
+    'latex' : NormalLatex.variant(formatstring='\\spverb!%s!')}
 
 # Pi formatters
 formatDict['Pi'] = {
-    'html'  : Formatter(html,  formatstring='%s&pi;'),
-    'latex' : Formatter(latex, formatstring='%s$\\pi$')}
+    'html'  : NormalHTML.variant(formatstring='%s&pi;'),
+    'latex' : NormalLatex.variant(formatstring='%s$\\pi$',
+                                  ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $')}
 
 # BracketFormatters
 formatDict['Brackets'] = {
-    'html'  : Formatter(html,  defaults={'brackets' : True}),
-    'latex' : Formatter(latex, defaults={'brackets' : True})}
+    'html'  : NormalHTML.variant(defaults={'brackets' : True}),
+    'latex' : NormalLatex.variant(defaults={'brackets' : True})}
 
 ##################################################################################
 # 'conversion' formatting: catch all for find/replacing specially formatted text #
 ##################################################################################
 
-convert_html = Formatter(stringreplacers=[
+convert_html = NormalHTML.variant(stringreplacers=[
     ('\\', '&#92'),
     ('|', ' '),
     ('<STAR>', '&#9733;')])
@@ -114,50 +121,15 @@ def special_convert_latex(x, specs):
     else:
         return x
 
-convert_latex = Formatter(special_convert_latex)
+convert_latex = NormalLatex.variant(custom=special_convert_latex)
 
 formatDict['Conversion'] = {
-    'html'  : Formatter(convert_html),
-    'latex' : Formatter(convert_latex)}
+    'html'  : convert_html,
+    'latex' : convert_latex}
 
-formatDict['EBConversion'] = {
-    'html'  : Formatter(convert_html, formatstring='<span class="errorbar">%s</span>'),
-    'latex' : Formatter(convert_latex)}
-
-formatDict['NMEBConversion'] = {
-    'html'  : Formatter(convert_html, formatstring='<span class="nmerrorbar">%s</span>'),
-    'latex' : Formatter(convert_latex)}
-
-EB_html   = Formatter(html, ebstring='%s <span class="errorbar">+/- %s</span>')
-NMEB_html = Formatter(html, ebstring='%s <span class="nmerrorbar">+/- %s</span>')
-EB_latex  = Formatter(latex, ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')
-
-formatDict['ErrorBars'] = {
-    'html'  : EB_html,
-    'latex' : EB_latex}
-formatDict['NMErrorBars'] = {
-    'html'  : NMEB_html,
-    'latex' : EB_latex}
-
-VEB_latex = Formatter(latex, ebstring='%s $\pm$ %s')
-
-formatDict['VecErrorBars'] = {
-    'html'  : EB_html,
-    'latex' : VEB_latex}
-formatDict['NMVecErrorBars'] = {
-    'html'  : NMEB_html,
-    'latex' : VEB_latex}
-
-PiEB_latex = Formatter(latex, ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $', formatstring='%s$\\pi$')
-
-# 'errorbars with pi' formatting: display (scalar_value +/- error bar) * pi
-formatDict['PiErrorBars'] = {
-    'html'  : Formatter(html, ebstring='(%s <span class="errorbar">+/- %s</span>)&pi'),
-    'latex' : PiEB_latex}
-
-formatDict['NMPiErrorBars'] = {
-    'html'  : Formatter(html, ebstring='(%s <span class="nmerrorbar">+/- %s</span>)&pi'),
-    'latex' : PiEB_latex}
+formatDict['Vec'] = {
+    'html'  : NormalHTML,
+    'latex' : Formatter(latex, ebstring='%s $\pm$ %s')}
 
 formatDict['GateString'] = {
     'html'  : Formatter(lambda s,specs : '.'.join(s) if s is not None else ''),

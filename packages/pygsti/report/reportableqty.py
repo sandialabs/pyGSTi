@@ -4,7 +4,7 @@ class ReportableQty(object):
     primarily for use in reports.
     """
 
-    def __init__(self, value, errbar=None):
+    def __init__(self, value, errbar=None, nonMarkovianEBs=False):
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -16,9 +16,14 @@ class ReportableQty(object):
 
         errbar : anything
            The error bar(s) to store
+
+        nonMarkovianEBs : bool
+            boolean indicating if non markovian error bars should be used
         """
         self.value   = value
         self.errbar  = errbar
+
+        self.nonMarkovianEBs = nonMarkovianEBs
 
     def __str__(self):
         def f(x,y): 
@@ -32,7 +37,7 @@ class ReportableQty(object):
         return getattr(self.value, attr)
 
     @staticmethod
-    def from_val(value):
+    def from_val(value, nonMarkovianEBs=False):
         '''
         Convert Table values into ReportableQtys or leave them be if they are well-formed types
         Well-formed types include:
@@ -44,10 +49,12 @@ class ReportableQty(object):
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, tuple):
-            assert len(value) == 2, 'Tuple does not have eb field'
-            return ReportableQty(value[0], value[1])
+            assert len(value) == 2, 'Tuple does not have eb field ' + \
+                                    'or has too many fields: len = {}'.format(
+                                            len(value))
+            return ReportableQty(value[0], value[1], nonMarkovianEBs=nonMarkovianEBs)
         else:
-            return ReportableQty(value)
+            return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
 
     def has_eb(self):
         return self.errbar is not None
@@ -70,13 +77,19 @@ class ReportableQty(object):
         """
         return self.value, self.errbar
 
-    def render_with(self, f, specs=None, ebstring='%s +/- %s'):
+    def render_with(self, f, specs=None, ebstring='%s +/- %s', nmebstring=None):
+        if nmebstring is None:
+            nmebstring = ebstring
         if specs is None:
             specs = dict()
         if self.errbar is not None:
             specs['formatstring'] = '%s' # Don't recursively apply format strings to inside error bars
-            rendered = ebstring % (f(self.value,  specs), 
-                                   f(self.errbar, specs))
+            if self.nonMarkovianEBs:
+                rendered = nmebstring % (f(self.value,  specs), 
+                                         f(self.errbar, specs))
+            else:
+                rendered = ebstring % (f(self.value,  specs), 
+                                       f(self.errbar, specs))
         else:
             rendered = f(self.value, specs)
         return rendered

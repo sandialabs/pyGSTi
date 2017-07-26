@@ -18,7 +18,8 @@ class ReportTable(object):
     '''
     Table representation, renderable in multiple formats
     '''
-    def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
+    def __init__(self, colHeadings, formatters, customHeader=None, 
+                 colHeadingLabels=None, confidenceRegionInfo=None):
         '''
         Create a table object
 
@@ -33,7 +34,14 @@ class ReportTable(object):
             dictionary of overriden headers
         colHeadingLabels : list
             labels for column headings (tooltips)
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+            Specifically, tells reportableqtys if
+            they should use non markovian error bars or not
         '''
+        self.nonMarkovianEBs = bool(confidenceRegionInfo is not None 
+                               and confidenceRegionInfo.nonMarkRadiusSq > 0)
         self._customHeadings = customHeader
         self._rows           = []
         self._override       = isinstance(colHeadings, dict)
@@ -48,12 +56,15 @@ class ReportTable(object):
 
         if self._override:
             # Dictionary of overridden formats
-            self._headings    = {k : Row(v, labels=colHeadingLabels) for k, v in colHeadings.items()}
+            self._headings    = {k : Row(v, labels=colHeadingLabels, nonMarkovianEBs=self.nonMarkovianEBs) 
+                                 for k, v in colHeadings.items()}
         else:
-            self._headings    = Row(colHeadings, formatters, colHeadingLabels)
+            self._headings    = Row(colHeadings, formatters, colHeadingLabels, self.nonMarkovianEBs)
 
-    def addrow(self, data, formatters=None, labels=None):
-        self._rows.append(Row(data, formatters, labels))
+    def addrow(self, data, formatters=None, labels=None, nonMarkovianEBs=None):
+        if nonMarkovianEBs is None:
+            nonMarkovianEBs = self.nonMarkovianEBs
+        self._rows.append(Row(data, formatters, labels, nonMarkovianEBs))
 
     def finish(self):
         pass #nothing to do currently

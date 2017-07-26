@@ -95,12 +95,11 @@ class SpamTable(WorkspaceTable):
             formatters.append( None )
             
             if confidenceRegionInfo is not None:
-                Conversion = _getEBFmt('EBConversion', confidenceRegionInfo)
                 colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
-                formatters.append( Conversion )
+                formatters.append( 'Conversion' )
 
                 
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
         for lbl in rhoLabels:
             rowData = [lbl]; rowFormatters = ['Rho']
@@ -194,17 +193,16 @@ class SpamParametersTable(WorkspaceTable):
         super(SpamParametersTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
 
     def _create(self, gateset, confidenceRegionInfo):
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
         colHeadings = [''] + list(gateset.get_effect_labels())
         formatters  = [None] + [ 'Effect' ]*len(gateset.get_effect_labels())
     
-        table       = _ReportTable(colHeadings, formatters)
+        table       = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
         #spamDotProdsQty = _reportables.compute _gateset_qty("Spam DotProds", gateset, confidenceRegionInfo)
         spamDotProdsQty = _reportables.spam_dotprods(gateset, confidenceRegionInfo)
         DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
     
-        formatters      = [ 'Rho' ] + [ ErrorBars ]*len(gateset.get_effect_labels()) #for rows below
+        formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
     
         for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
             rowData = [prepLabel]
@@ -277,11 +275,10 @@ class GatesTable(WorkspaceTable):
 
         if confidenceRegionInfo is not None:
             #Only use confidence region for the *final* gateset.
-            Conversion = _getEBFmt('EBConversion', confidenceRegionInfo)
             colHeadings.append('%g%% C.I. half-width' % confidenceRegionInfo.level)
-            formatters.append(Conversion)
+            formatters.append('Conversion')
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         for gl in gateLabels:
             #Note: currently, we don't use confidence region...
@@ -391,7 +388,6 @@ class ChoiTable(WorkspaceTable):
             gatesets = [gatesets]
 
         gateLabels = list(gatesets[0].gates.keys()) #use labels of 1st gateset
-        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
 
         if titles is None:
             titles = ['']*len(gatesets)
@@ -431,7 +427,7 @@ class ChoiTable(WorkspaceTable):
         formatters = [None]*len(colHeadings)
 
         
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         for i, gl in enumerate(gateLabels):
             #Note: currently, we don't use confidence region...
@@ -462,7 +458,7 @@ class ChoiTable(WorkspaceTable):
                             try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
                             except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
                             row_data.append( (evals,evalsEB) )
-                            row_formatters.append(VecErrorBars)
+                            row_formatters.append('Vec')
                             
                 elif disp == "barplot":
                     for gateset in gatesets:
@@ -514,11 +510,9 @@ class GatesVsTargetTable(WorkspaceTable):
         jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
         dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
 
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
-        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)
-    
-        formatters = [None] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
     
         for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
                                                       infidelities, jt_diffs, dnorms):
@@ -557,11 +551,10 @@ class SpamVsTargetTable(WorkspaceTable):
     
         colHeadings  = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
         formatters   = (None,'Conversion','Conversion')
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
-        formatters = [ 'Rho' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         prepInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
                                                         'prep', confidenceRegionInfo)
                             for l in prepLabels]
@@ -572,7 +565,7 @@ class SpamVsTargetTable(WorkspaceTable):
                                                       prepInfidelities, prepTraceDists):
             table.addrow(rowData, formatters)
     
-        formatters = [ 'Effect' ] + [ ErrorBars ] * (len(colHeadings) - 1)
+        formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         effectInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
                                                         'effect', confidenceRegionInfo)
                             for l in effectLabels]
@@ -651,7 +644,7 @@ class ErrgenTable(WorkspaceTable):
             else: raise ValueError("Invalid display element: %s" % disp)
 
         assert(display_as == "boxes" or display_as == "numbers")
-        table = _ReportTable(colHeadings, (None,)*len(colHeadings) )
+        table = _ReportTable(colHeadings, (None,)*len(colHeadings) , confidenceRegionInfo=confidenceRegionInfo)
 
         errgens = {'M': []}
         hamProjs = {'M': []}
@@ -771,11 +764,9 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
     
         anglesList = [_reportables.gateset_gateset_angles_btwn_axes(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
 
-        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
-        table = _ReportTable(colHeadings, formatters)
-    
-        formatters = [None] + [ PiErrorBars ]
+        formatters = [None] + ['Pi']
     
         for gl, angle in zip(gateLabels, anglesList):
             if confidenceRegionInfo is None:
@@ -826,8 +817,8 @@ class GateDecompTable(WorkspaceTable):
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
 
-        #PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo) #TODO: use this in 2nd column when have EBs
-        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings)    
+        table = _ReportTable(colHeadings, formatters, 
+                             colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
         formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
         axes = {}; angles = {}; inexact = {}; hamEvals = {}
@@ -923,12 +914,9 @@ class old_GateDecompTable(WorkspaceTable):
                        'decay of diagonal rotation terms',
                        'decay of off diagonal rotation terms')
 
-        ErrorBars = _getEBFmt('ErrorBars', confidenceRegionInfo)
-        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
-        table = _ReportTable(colHeadings, formatters)
-    
-        formatters = (None, VecErrorBars, 'Normal', 'Normal', ErrorBars, ErrorBars)
+        formatters = (None, 'Vec', 'Normal', 'Normal', 'Normal', 'Normal')
 
         for decomp, gl in zip(decomps, gateLabels):
             evals = _reportables.eigenvalues(gateset, gl)
@@ -987,8 +975,6 @@ class old_RotationAxisTable(WorkspaceTable):
         nCols = len(colHeadings)
         formatters = [None] * nCols
 
-        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
-    
         table = "tabular"
         latex_head =  "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
         latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
@@ -996,9 +982,9 @@ class old_RotationAxisTable(WorkspaceTable):
         latex_head += " & & %s \\\\ \hline\n" % (" & ".join(gateLabels))
     
         table = _ReportTable(colHeadings, formatters,
-                             customHeader={'latex': latex_head} )
+                             customHeader={'latex': latex_head}, confidenceRegionInfo=confidenceRegionInfo)
     
-        formatters = [None, PiErrorBars] + [ PiErrorBars ] * len(gateLabels)
+        formatters = [None, 'Pi'] + ['Pi'] * len(gateLabels)
     
         rotnAxisAngles, rotnAxisAnglesEB = _reportables.angles_btwn_rotn_axes(gateset, confidenceRegionInfo)
         rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
@@ -1080,9 +1066,6 @@ class GateEigenvalueTable(WorkspaceTable):
                 confidenceRegionInfo, display):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
-        VecErrorBars = _getEBFmt('VecErrorBars', confidenceRegionInfo)
-        PiErrorBars = _getEBFmt('PiErrorBars', confidenceRegionInfo)
-
         colHeadings = ['Gate']
         for disp in display:
             if disp == "evals":
@@ -1118,7 +1101,7 @@ class GateEigenvalueTable(WorkspaceTable):
             #    except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
             return evals, evalsEB
     
-        table = _ReportTable(colHeadings, formatters)            
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
         for gl in gateLabels:
             row_data = [gl]
@@ -1138,12 +1121,12 @@ class GateEigenvalueTable(WorkspaceTable):
                 if disp == "evals":
                     evals,evalsEB = format_evals(evals,evalsEB)
                     row_data.append( (evals,evalsEB) )
-                    row_formatters.append( VecErrorBars )
+                    row_formatters.append('Vec')
 
                 elif disp == "rel" and targetGateset is not None:
                     rel_evals,_ = format_evals(rel_evals,None)
                     row_data.append( (rel_evals,None) )
-                    row_formatters.append( VecErrorBars)
+                    row_formatters.append('Vec')
 
                 elif disp == "log-evals":
                     evals,evalsEB = format_evals(evals,evalsEB)
@@ -1151,15 +1134,15 @@ class GateEigenvalueTable(WorkspaceTable):
                         logevals, logevalsEB = _np.log(evals), _np.log(evalsEB)
                         row_data.append( (_np.real(logevals),_np.real(logevalsEB)) )
                         row_data.append( (_np.imag(logevals)/_np.pi,_np.imag(logevalsEB)/_np.pi) )
-                        row_formatters.append( VecErrorBars )
-                        row_formatters.append( PiErrorBars )
+                        row_formatters.append('Vec')
+                        row_formatters.append('Pi')
             
                     else:
                         logevals = _np.log(evals)
                         row_data.append( (_np.real(logevals),None) )
                         row_data.append( (_np.imag(logevals)/_np.pi,None) )
-                        row_formatters.append( VecErrorBars ) # this is fine without EBs too...
-                        row_formatters.append( "Pi" )  # but PiErrorBars isn't (yet) -- TODO: fix this
+                        row_formatters.append('Vec') 
+                        row_formatters.append('Pi')  
 
 
                 elif disp == "log-rel":
@@ -1167,8 +1150,8 @@ class GateEigenvalueTable(WorkspaceTable):
                     log_relevals = _np.log(rel_evals)
                     row_data.append( (_np.real(log_relevals),None) )
                     row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
-                    row_formatters.append( VecErrorBars ) # this is fine without EBs too...
-                    row_formatters.append( "Pi" )  # but PiErrorBars isn't (yet) -- TODO: fix this
+                    row_formatters.append('Vec') 
+                    row_formatters.append('Pi')  
 
                     
                 elif disp == "polar":
@@ -1180,13 +1163,13 @@ class GateEigenvalueTable(WorkspaceTable):
                             self.ws,[target_evals,evals],
                             ["black","blue"],["target","gate"], centerText=gl)
                     row_data.append( fig )
-                    row_formatters.append( 'Figure' )
+                    row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws,[rel_evals],["red"],["rel"],centerText=gl)
                     row_data.append( fig )
-                    row_formatters.append( 'Figure' )
+                    row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
@@ -1219,7 +1202,7 @@ class DataSetOverviewTable(WorkspaceTable):
         colHeadings = ('Quantity','Value')
         formatters = (None,None)
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
         minN = round(min([ row.total() for row in dataset.itervalues()]))
         maxN = round(max([ row.total() for row in dataset.itervalues()]))
@@ -1389,7 +1372,7 @@ class GatestringTable(WorkspaceTable):
         formatters = (('Conversion',) + ('Normal',)*len(titles))*nCols
     
         if commonTitle is None:
-            table = _ReportTable(colHeadings, formatters)
+            table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
         else:
             table = "tabular"
             colHeadings = ('#',) + tuple(titles)
@@ -1401,7 +1384,7 @@ class GatestringTable(WorkspaceTable):
             html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(colHeadings)-1,commonTitle)
             html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))
             html_head += "</thead><tbody>"
-            table = _ReportTable(colHeadings, formatters,
+            table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
                                  customHeader={'latex': latex_head,
                                                'html': html_head})
     
@@ -1517,7 +1500,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         html_head += "<tr><th>" +  " </th><th> ".join([mknice(t) for t in titles]) + "</th></tr>\n"
         html_head += "</thead><tbody>"
     
-        table = _ReportTable(colHeadings, formatters,
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
                              customHeader={'latex': latex_head,
                                            'html': html_head} )
 
@@ -1604,7 +1587,7 @@ class StandardErrgenTable(WorkspaceTable):
         xLabels = _tools.basis_element_labels(projection_basis,xd)
         yLabels = _tools.basis_element_labels(projection_basis,yd)
     
-        table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1))
+        table = _ReportTable(colHeadings,["Conversion"]+[None]*(len(colHeadings)-1), confidenceRegionInfo=confidenceRegionInfo)
             
         iCur = 0
         for i,ylabel  in enumerate(yLabels):
@@ -1652,7 +1635,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         colHeadings = ('Quantity','Value')
         formatters = ('Bold','Bold')
     
-        table = _ReportTable(colHeadings, formatters)
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
         
         if gaugeOptArgs == False: #signals *no* gauge optimization
             gaugeOptArgs = {'Method': "No gauge optimization was performed" }
@@ -1710,7 +1693,7 @@ class MetadataTable(WorkspaceTable):
         #custom latex header for maximum width imposed on 2nd col
         latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
         latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
-        table = _ReportTable(colHeadings, formatters,
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
                              customHeader={'latex': latex_head} )
         
         for key in sorted(list(params_dict.keys())):
@@ -1815,7 +1798,7 @@ class SoftwareEnvTable(WorkspaceTable):
         #custom latex header for maximum width imposed on 2nd col
         latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
         latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
-        table = _ReportTable(colHeadings, formatters,
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo,
                              customHeader={'latex': latex_head} )
         
         #Python package information
