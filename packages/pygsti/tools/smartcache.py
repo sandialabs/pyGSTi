@@ -37,10 +37,10 @@ def show_kvs(title, kvs, printer):
 class SmartCache(object):
     StaticCacheList = []
 
-    def __init__(self, decorating=None):
+    def __init__(self, decorating=(None, None)):
         self.cache       = dict()
         self.ineffective = set()
-        self.decorating    = decorating
+        self.decoratingModule, self.decoratingFn = decorating
         self.customDigests = []
 
         self.misses = Counter()
@@ -126,19 +126,32 @@ class SmartCache(object):
         totalHits   = Counter()
         totalMisses = Counter()
 
+        suggestRemove = set()
+
         for cache in SmartCache.StaticCacheList:
             cache.status(printer)
             totalHits   += cache.hits
             totalMisses += cache.misses
             totalSaved  += cache.saved
 
-        printer.log('Average hash times by object:')
-        for k, v in sorted(DIGEST_TIMES.items(), key=lambda t : sum(t[1])):
-            total = sum(v)
-            avg   = average(v)
-            printer.log('    {:<65} avg | {}s'.format(k, avg))
-            printer.log('    {:<65} tot | {}s'.format('', total))
-            printer.log('-'*100)
+            if cache.decoratingFn is not None and \
+                    cache.decoratingFn in cache.ineffective:
+                suggestRemove.add(cache.decoratingModule + '.' + cache.decoratingFn)
+
+        with printer.verbosity_env(2):
+            printer.log('Average hash times by object:')
+            for k, v in sorted(DIGEST_TIMES.items(), key=lambda t : sum(t[1])):
+                total = sum(v)
+                avg   = average(v)
+                printer.log('    {:<65} avg | {}s'.format(k, avg))
+                printer.log('    {:<65} tot | {}s'.format('', total))
+                printer.log('-'*100)
+
+        printer.log('')
+        printer.log('Because they take longer to hash than to calculate, \n' + \
+                    'the following functions may be unmarked for caching:')
+        for name in suggestRemove:
+            printer.log('    {}'.format(name))
 
         printer.log('Global cache overview:')
         show_cache_percents(totalHits, totalMisses, printer)
@@ -155,7 +168,8 @@ class SmartCache(object):
         return ret
 
     def status(self, printer):
-        printer.log('Status of smart cache decorating {}:\n'.format(self.decorating))
+        printer.log('Status of smart cache decorating {}.{}:\n'.format(
+            self.decoratingModule, self.decoratingFn))
         show_cache_percents(self.hits, self.misses, printer)
 
         with printer.verbosity_env(2):
@@ -189,7 +203,7 @@ class SmartCache(object):
         self.saved = saved - overhead
 
 def smart_cached(obj):
-    cache = obj.cache = SmartCache(decorating=obj.__name__)
+    cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
     @_functools.wraps(obj)
     def cacher(*args, **kwargs):
         k, v = cache.cached_compute(obj, args, kwargs)
