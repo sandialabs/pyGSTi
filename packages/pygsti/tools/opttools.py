@@ -57,15 +57,5 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
                 label = formatStr.format(label)
             put('{} took {} seconds\n'.format(label, str(round(t, roundPlaces))))
 
-@contextmanager
-def fast_timed_block(label, timeDict):
-    start = time()
-    try:
-        yield
-    finally:
-        end = time()
-        t = end - start
-        timeDict[label] = t
-
 def time_hash():
     return str(datetime.now())

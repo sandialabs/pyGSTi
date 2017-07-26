@@ -15,7 +15,12 @@ from .verbosityprinter import VerbosityPrinter
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
-DIGEST_TIMES = dict()
+DIGEST_TIMES = defaultdict(list)
+
+def average(l):
+    nCalls = max(1, len(l))
+    avg = sum(l) / nCalls
+    return avg
 
 class SmartCache(object):
     StaticHits = set()
@@ -39,7 +44,7 @@ class SmartCache(object):
             self.hashTimes = defaultdict(list)
             self.callTimes = defaultdict(list)
 
-    def _no_overhead_cached_compute(self, fn, argVals, custom_digest=None):
+    def low_overhead_cached_compute(self, fn, argVals, custom_digest=None):
         name_key = get_fn_name_key(fn)
         if name_key in self.ineffective:
             key = 'NA'
@@ -51,6 +56,10 @@ class SmartCache(object):
             if key not in self.cache:
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals)
+                if times['hash'] > times['call']:
+                    self.ineffective.add(name_key)
+            else:
+                SmartCache.StaticHits.add(name_key)
             result = self.cache[key]
         return key, result
 
@@ -72,12 +81,6 @@ class SmartCache(object):
                 with _timed_block('call', times):
                     self.cache[key] = fn(*argVals)
                 self.misses[key] += 1
-            else:
-                #print('The function {} experienced a cache hit'.format(name_key))
-                self.hits[key] += 1
-                self.fhits[name_key] += 1
-                SmartCache.StaticHits.add(name_key)
-            if 'call' in times:
                 hashtime = times['hash']
                 calltime = times['call']
                 if hashtime > calltime:
@@ -87,6 +90,11 @@ class SmartCache(object):
                     self.effectiveTimes[name_key].append(calltime - hashtime)
                 self.hashTimes[name_key].append(hashtime)
                 self.callTimes[name_key].append(calltime)
+            else:
+                #print('The function {} experienced a cache hit'.format(name_key))
+                self.hits[key] += 1
+                self.fhits[name_key] += 1
+                SmartCache.StaticHits.add(name_key)
             result = self.cache[key]
         return key, result
 
@@ -121,9 +129,7 @@ class SmartCache(object):
             k, v = kv
             if k not in self.fhits:
                 return 0
-            nCalls = max(1, len(v))
-            avg = sum(v) / nCalls
-            return avg * nCalls
+            return average(v) * len(v)
 
         printer.log('Effective total saved time:\n')
         saved = 0
@@ -156,14 +162,24 @@ class SmartCache(object):
             printer.log('')
         printer.log('')
         '''
+
         printer.log('overhead : {}'.format(overhead))
         printer.log('saved    : {}'.format(saved))
         printer.log('')
         printer.log('net benefit : {}'.format(saved - overhead))
 
         printer.log('')
-        printer.log(SmartCache.StaticHits)
-        printer.log(DIGEST_TIMES)
+        printer.log('Global set of functions that hit cache:')
+        for hitname in SmartCache.StaticHits:
+            printer.log('    {}'.format(hitname))
+        printer.log('')
+        printer.log('Average hash times by object:')
+        for k, v in sorted(DIGEST_TIMES.items(), key=lambda t : average(t[1])):
+            total = sum(v)
+            avg   = average(v)
+            printer.log('    {:<65} | {}s'.format(k, avg))
+            printer.log('    {:<65} | {}s'.format('', total))
+            printer.log('-'*100)
 
 def smart_cached(obj):
     cache = obj.cache = SmartCache(selfProfiling=True)
@@ -171,7 +187,7 @@ def smart_cached(obj):
     def cacher(*args, **kwargs):
         if len(kwargs) > 0:
             raise ValueError('Cannot currently cache on kwargs')
-        k, v = cache.cached_compute(obj, args)
+        k, v = cache.low_overhead_cached_compute(obj, args)
         return v
     return cacher
 
@@ -180,7 +196,7 @@ class CustomDigestError(Exception):
 
 def digest(obj, custom_digest=None):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
-    with _timed_block(type(obj), DIGEST_TIMES):
+    with _timed_block(str(type(obj)), DIGEST_TIMES):
         if _sys.version_info > (3, 0): # Python3?
             longT = int      # define long and unicode
             unicodeT = str   #  types to mimic Python2
