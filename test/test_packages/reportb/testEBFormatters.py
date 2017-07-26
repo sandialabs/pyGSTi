@@ -43,15 +43,23 @@ class PiEBFormatterTest(FormatterBaseTestCase):
 
         formatters  = ['PiErrorBars']
         self.piebtable1 = pygsti.report.table.ReportTable([(self.arbitraryNum, self.arbitraryNum)],
-        formatters)
+                                                            formatters)
         self.piebtable2 = pygsti.report.table.ReportTable([(self.arbitraryNum, None)],
-        formatters)
+                                                            formatters)
+
+        # Pretend to create a confidence region that wants non markovian error bars
+        class MockCRI(object):
+            def __init__(self):
+                self.nonMarkRadiusSq  = 1
+        self.piebtable3 = pygsti.report.table.ReportTable([(self.arbitraryNum, .1)],
+            formatters, confidenceRegionInfo=MockCRI())
 
     def test_PiEB_formatter(self):
         self.assertEqual(self.piPrecise1,   self.piebtable1.render('latex', precision=6)['latex'])
         self.assertEqual(self.piPrecise2,   self.piebtable2.render('latex', precision=6)['latex'])
         self.assertEqual(self.piImprecise1, self.piebtable1.render('latex', precision=2)['latex'])
         self.assertEqual(self.piImprecise2, self.piebtable2.render('latex', precision=2)['latex'])
+        print(self.piebtable3.render('html', precision=6)['html'])
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

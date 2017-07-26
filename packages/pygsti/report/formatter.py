@@ -29,6 +29,7 @@ class Formatter(object):
             regexreplace=None,
             formatstring='%s',
             ebstring='%s +/- %s',
+            nmebstring=None,
             stringreturn=None,
             defaults=None):
         '''
@@ -61,6 +62,10 @@ class Formatter(object):
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
         self.ebstring        = ebstring
+        if nmebstring is None:
+            nmebstring = ebstring
+        self.nmebstring      = nmebstring
+
         if defaults is None:
             self.defaults = dict()
         else:
@@ -89,7 +94,7 @@ class Formatter(object):
             s = str(item.get_value())
             if s == '--' or s == '':
                 return s
-            return item.render_with(self, specs, self.ebstring)
+            return item.render_with(self, specs, self.ebstring, self.nmebstring)
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
         elif self.custom is not None: 
