@@ -51,7 +51,6 @@ class GateString(object):
             A dictionary with keys == labels and values == tuples of gate labels
             which can be used for substitutions using the S<label> syntax.
         """
-        self.timestamp = _tools.time_hash()
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");

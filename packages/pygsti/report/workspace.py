@@ -132,20 +132,17 @@ class Workspace(object):
     a script to build a hardcoded ("fixed") report/dashboard.
     """
 
-    def __init__(self, cachefile=None):
+    def __init__(self):
         """
         Initialize a Workspace object.
 
         Parameters
         ----------
-        cachefile : str (optional)
-            cache file to load from
         """
         self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self._register_components(False)
         self.smartCache = _objs.SmartCache()
-        if cachefile is not None:
-            self.load_cache(cachefile)
+        self.smartCache.add_digest(ws_custom_digest)
 
     def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -551,7 +548,7 @@ class Workspace(object):
                     result = v
                     break
             else:
-                key, result = self.smartCache.cached_compute(fn, argVals, ws_custom_digest)
+                key, result = self.smartCache.cached_compute(fn, argVals)
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
@@ -562,14 +559,6 @@ class Workspace(object):
 
         switchboard_switch_indices = [ info['switch indices'] for info in switchBdInfo ]
         return resultValues, switchboards, switchboard_switch_indices, switchpos_map
-
-    def save_cache(self, filename):
-        with open(filename, 'wb') as outfile:
-            _pickle.dump(self.smartCache, outfile, protocol=2)
-
-    def load_cache(self, filename):
-        with open(filename, 'rb') as outfile:
-            self.smartCache = _pickle.load(outfile, protocol=2)
 
 class Switchboard(_collections.OrderedDict):
     """
