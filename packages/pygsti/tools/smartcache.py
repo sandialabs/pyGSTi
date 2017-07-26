@@ -158,31 +158,30 @@ class SmartCache(object):
         printer.log('Status of smart cache decorating {}:\n'.format(self.decorating))
         show_cache_percents(self.hits, self.misses, printer)
 
-        show_kvs('Most common requests:\n', self.requests.most_common(), printer)
-        show_kvs('Ineffective requests:\n', self.ineffectiveRequests.most_common(), printer)
-        show_kvs('Hits:\n', self.fhits.most_common(), printer)
+        with printer.verbosity_env(2):
+            show_kvs('Most common requests:\n', self.requests.most_common(), printer)
+            show_kvs('Ineffective requests:\n', self.ineffectiveRequests.most_common(), printer)
+            show_kvs('Hits:\n', self.fhits.most_common(), printer)
 
-        printer.log('Type signatures of functions and their hash times:\n')
-        for k, v in self.typesigs.items():
-            avg = average(self.hashTimes[k])
-            printer.log('    {:<40} {}'.format(k, v))
-            printer.log('    {:<40} {}'.format(k, avg))
+            printer.log('Type signatures of functions and their hash times:\n')
+            for k, v in self.typesigs.items():
+                avg = average(self.hashTimes[k])
+                printer.log('    {:<40} {}'.format(k, v))
+                printer.log('    {:<40} {}'.format(k, avg))
+                printer.log('')
             printer.log('')
-        printer.log('')
 
+            savedTimes = self.avg_timedict(self.effectiveTimes)
+            saved = sum(savedTimes.values())
+            show_kvs('Effective total saved time:\n', 
+                    sorted(savedTimes.items(), key=lambda t : t[1], reverse=True), 
+                    printer)
 
-        printer.log('Effective total saved time:\n')
-        savedTimes = self.avg_timedict(self.effectiveTimes)
-        saved = sum(savedTimes.values())
-        show_kvs('Effective total saved time:\n', 
-                sorted(savedTimes.items(), key=lambda t : t[1], reverse=True), 
-                printer)
-
-        overTimes = self.avg_timedict(self.ineffectiveTimes)
-        overhead = sum(overTimes.values())
-        show_kvs('Ineffective differences:\n', 
-                sorted(overTimes.items(), key=lambda t : t[1]),
-                printer)
+            overTimes = self.avg_timedict(self.ineffectiveTimes)
+            overhead = sum(overTimes.values())
+            show_kvs('Ineffective differences:\n', 
+                    sorted(overTimes.items(), key=lambda t : t[1]),
+                    printer)
 
         printer.log('overhead    : {}'.format(overhead))
         printer.log('saved       : {}'.format(saved))
