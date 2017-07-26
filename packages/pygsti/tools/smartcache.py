@@ -16,8 +16,23 @@ DIGEST_TIMES = defaultdict(list)
 
 def average(l):
     nCalls = max(1, len(l))
-    avg = sum(l) / nCalls
-    return avg
+    return sum(l) / nCalls
+
+def show_cache_percents(hits, misses, printer):
+    size = lambda counter : len(list(counter.elements()))
+    nHits     = size(hits)
+    nMisses   = size(misses)
+    nRequests = nHits + nMisses 
+    printer.log('    {:<10} requests'.format(nRequests))
+    printer.log('    {:<10} hits'.format(nHits))
+    printer.log('    {:<10} misses'.format(nMisses))
+    printer.log('    {}% effective\n'.format(round((nHits/max(1, nRequests)) * 100, 2)))
+
+def show_kvs(title, kvs, printer):
+    printer.log(title)
+    for k, v in kvs:
+        printer.log('    {:<40} {}'.format(k, v))
+    printer.log('')
 
 class SmartCache(object):
     StaticCacheList = []
@@ -42,6 +57,7 @@ class SmartCache(object):
         self.callTimes = defaultdict(list)
 
         self.typesigs = dict()
+        self.saved = 0
         
         SmartCache.StaticCacheList.append(self)
 
@@ -106,8 +122,16 @@ class SmartCache(object):
 
     @staticmethod
     def global_status(printer):
+        totalSaved  = 0
+        totalHits   = Counter()
+        totalMisses = Counter()
+
         for cache in SmartCache.StaticCacheList:
             cache.status(printer)
+            totalHits   += cache.hits
+            totalMisses += cache.misses
+            totalSaved  += cache.saved
+
         printer.log('Average hash times by object:')
         for k, v in sorted(DIGEST_TIMES.items(), key=lambda t : sum(t[1])):
             total = sum(v)
@@ -116,31 +140,28 @@ class SmartCache(object):
             printer.log('    {:<65} tot | {}s'.format('', total))
             printer.log('-'*100)
 
+        printer.log('Global cache overview:')
+        show_cache_percents(totalHits, totalMisses, printer)
+        printer.log('    {} seconds saved total'.format(totalSaved))
+
+    def avg_timedict(self, d):
+        ret = dict()
+        for k, v in d.items():
+            if k not in self.fhits:
+                time = 0
+            else:
+                time = average(v) * len(v)
+            ret[k] = time
+        return ret
+
     def status(self, printer):
-        size = lambda counter : len(list(counter.elements()))
-        nRequests = size(self.requests)
-        nHits     = size(self.hits)
-        nMisses   = size(self.misses)
         printer.log('Status of smart cache decorating {}:\n'.format(self.decorating))
-        printer.log('    {:<10} requests'.format(nRequests))
-        printer.log('    {:<10} hits'.format(nHits))
-        printer.log('    {:<10} misses'.format(nMisses))
-        printer.log('    {}% effective\n'.format(int((nHits/max(1, nRequests)) * 100)))
+        show_cache_percents(self.hits, self.misses, printer)
 
-        printer.log('Most common requests:\n')
-        for k, v in self.requests.most_common():
-            printer.log('    {:<40} {}'.format(k, v))
-        printer.log('')
-        printer.log('Ineffective requests:\n')
-        for k, v in self.ineffectiveRequests.most_common():
-            printer.log('    {:<40} {}'.format(k, v))
+        show_kvs('Most common requests:\n', self.requests.most_common(), printer)
+        show_kvs('Ineffective requests:\n', self.ineffectiveRequests.most_common(), printer)
+        show_kvs('Hits:\n', self.fhits.most_common(), printer)
 
-        printer.log('')
-        printer.log('Hits by name:\n')
-        for k, v in self.fhits.most_common():
-            printer.log('    {:<40} {}'.format(k, v))
-
-        printer.log('')
         printer.log('Type signatures of functions and their hash times:\n')
         for k, v in self.typesigs.items():
             avg = average(self.hashTimes[k])
@@ -148,33 +169,25 @@ class SmartCache(object):
             printer.log('    {:<40} {}'.format(k, avg))
             printer.log('')
         printer.log('')
-        def saved_time(kv):
-            k, v = kv
-            if k not in self.fhits:
-                return 0
-            return average(v) * len(v)
+
 
         printer.log('Effective total saved time:\n')
-        saved = 0
-        for k, v in sorted(self.effectiveTimes.items(), 
-                           key=saved_time, reverse=True):
-            v = saved_time((k, v))
-            printer.log('    {:<45} {}'.format(k, v))
-            saved += v
-        printer.log('')
+        savedTimes = self.avg_timedict(self.effectiveTimes)
+        saved = sum(savedTimes.values())
+        show_kvs('Effective total saved time:\n', 
+                sorted(savedTimes.items(), key=lambda t : t[1], reverse=True), 
+                printer)
 
-        printer.log('Ineffective differences:\n')
-        overhead = 0
-        for k, v in sorted(self.ineffectiveTimes.items(), 
-                           key=saved_time):
-            v = sum(v) / max(1, len(v))
-            printer.log('    {:<45} {}'.format(k, v))
-            overhead += v
-        printer.log('')
-        printer.log('overhead : {}'.format(overhead))
-        printer.log('saved    : {}'.format(saved))
-        printer.log('')
+        overTimes = self.avg_timedict(self.ineffectiveTimes)
+        overhead = sum(overTimes.values())
+        show_kvs('Ineffective differences:\n', 
+                sorted(overTimes.items(), key=lambda t : t[1]),
+                printer)
+
+        printer.log('overhead    : {}'.format(overhead))
+        printer.log('saved       : {}'.format(saved))
         printer.log('net benefit : {}'.format(saved - overhead))
+        self.saved = saved - overhead
 
 def smart_cached(obj):
     cache = obj.cache = SmartCache(decorating=obj.__name__)
