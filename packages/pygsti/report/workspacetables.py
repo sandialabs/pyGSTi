@@ -207,10 +207,7 @@ class SpamParametersTable(WorkspaceTable):
         for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
             rowData = [prepLabel]
             for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
-                if confidenceRegionInfo is None:
-                    rowData.append((DPs[ii,jj],None))
-                else:
-                    rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
+                rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
             table.addrow(rowData, formatters)
     
         table.finish()
@@ -464,11 +461,7 @@ class ChoiTable(WorkspaceTable):
                     for gateset in gatesets:
                         for gateset, (_, evals) in zip(gatesets,qtysList):
                             evals, evalsEB = evals[i].get_value_and_err_bar()
-
-                            if confidenceRegionInfo is None:
-                                fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals)
-                            else:
-                                fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
+                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
                             row_data.append(fig)
                             row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
@@ -769,10 +762,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         formatters = [None] + ['Pi']
     
         for gl, angle in zip(gateLabels, anglesList):
-            if confidenceRegionInfo is None:
-                rowData = [gl] + [(angle.get_value(), None)]
-            else:
-                rowData = [gl] + [angle.get_value_and_err_bar()]
+            rowData = [gl] + [angle]
             table.addrow(rowData, formatters)
     
         table.finish()
@@ -922,14 +912,8 @@ class old_GateDecompTable(WorkspaceTable):
             evals = _reportables.eigenvalues(gateset, gl)
             decomp, decompEB = decomp.get_value_and_err_bar()
     
-            if confidenceRegionInfo is None or decompEB is None: #decompEB is None when gate decomp failed
-                evals = evals.get_value()
-                rowData = [gl, (evals,None)] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
-                    [(decomp.get(x,'X'),None) for x in decompNames[2:4] ]
-            else:
-                evals, evalsEB = evals.get_value_and_err_bar()
-                rowData = [gl, (evals,evalsEB)] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
-                    [(decomp.get(x,'X'),decompEB.get(x,'X')) for x in decompNames[2:4] ]
+            rowData = [gl, evals] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
+                [(decomp.get(x,'X'),decompEB) for x in decompNames[2:4] ]
     
             table.addrow(rowData, formatters)
     
