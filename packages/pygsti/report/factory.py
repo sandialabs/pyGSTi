@@ -16,7 +16,7 @@ import webbrowser as _webbrowser
 import zipfile as _zipfile
 from scipy.stats import chi2 as _chi2
 
-from ..objects import VerbosityPrinter, Basis
+from ..objects import VerbosityPrinter, Basis, SmartCache
 from ..objects import DataComparator as _DataComparator
 from ..tools   import compattools as _compat
 from ..tools   import timed_block as _timed_block
@@ -738,7 +738,7 @@ def create_general_report(results, filename, confidenceLevel=None,
         _merge_template(qtys, template, filename, auto_open, precision,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
-        ws.smartCache.status(printer)
+        SmartCache.global_status(printer)
     return ws
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to

@@ -83,6 +83,7 @@ class GateSet(object):
             identity vector.
 
         """
+        self.timestamp = _tools.time_hash()
         assert(default_param in ('full','TP','static'))
         default_e_param = "full" if default_param == "TP" else default_param
 

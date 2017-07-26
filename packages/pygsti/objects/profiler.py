@@ -12,6 +12,8 @@ import inspect as _inspect
 import itertools as _itertools
 import numpy as _np
 
+from .. import tools as _tools
+
 try:
     import psutil as _psutil
     def _get_mem_usage():
@@ -62,6 +64,7 @@ class Profiler(object):
         comm : mpi4py.MPI.Comm, optional
            MPI communicator so only profile and print messages on root proc.
         """
+        self.timestamp = _tools.time_hash()
         self.comm = comm
         self.timers = {}
         self.counters = {}

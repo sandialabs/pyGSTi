@@ -10,6 +10,7 @@ import collections as _collections
 import itertools as _itertools
 from ..tools import listtools as _lt
 
+from .. import tools as _tools
     
 class GatestringPlaquette(object):
     """
@@ -40,6 +41,7 @@ class GatestringPlaquette(object):
             A dictionary of gate label aliases that is carried along 
             for calls to :func:`expand_aliases`.
         """
+        self.timestamp = _tools.time_hash()
         self.base = base
         self.rows = rows
         self.cols = cols
@@ -207,6 +209,8 @@ class LsGermsStructure(GatestringStructure):
         self.effectStrs = effectStrs[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
         self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
+
+        self.timestamp = _tools.time_hash()
 
         self.allstrs = []
         self._plaquettes = {}
