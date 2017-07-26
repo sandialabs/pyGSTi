@@ -16,7 +16,7 @@ class EBFormatterTest(FormatterBaseTestCase):
         self.ebImprecise1 = self.ebLatexString1 % (self.roundedNum, self.roundedNum)
         self.ebImprecise2 = self.ebLatexString2 % self.roundedNum
 
-        formatters = ['ErrorBars']
+        formatters = ['Normal']
         self.ebtable1 = pygsti.report.table.ReportTable([(self.arbitraryNum, self.arbitraryNum)],
         formatters)
         self.ebtable2 = pygsti.report.table.ReportTable([(self.arbitraryNum, None)],
@@ -41,7 +41,7 @@ class PiEBFormatterTest(FormatterBaseTestCase):
         self.piImprecise1 = self.piLatexString1 % (self.roundedNum, self.roundedNum)
         self.piImprecise2 = self.piLatexString2 % self.roundedNum
 
-        formatters  = ['PiErrorBars']
+        formatters  = ['Pi'] # Just 'Pi' should work.... 
         self.piebtable1 = pygsti.report.table.ReportTable([(self.arbitraryNum, self.arbitraryNum)],
                                                             formatters)
         self.piebtable2 = pygsti.report.table.ReportTable([(self.arbitraryNum, None)],

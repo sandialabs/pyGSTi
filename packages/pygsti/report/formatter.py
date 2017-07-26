@@ -119,3 +119,25 @@ class Formatter(object):
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
         return formatstring % item
+
+    def variant(self, **kwargs):
+        '''
+        Create a Formatter object from an existing formatter object, tweaking it slightly
+
+        Parameters
+        ----------
+        Same as Formatter.__init__()
+        '''
+        ret = deepcopy(self)
+        for k, v in kwargs.items():
+            if k not in ret.__dict__:
+                raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(k, v,
+                    'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
+            if k == 'ebstring' and ret.ebstring == ret.nmebstring:
+                ret.__dict__[k] = v
+                ret.__dict__['nmebstring'] = v
+            elif k == 'defaults':
+                ret.__dict__['defaults'].update(v)
+            else:
+                ret.__dict__[k] = v
+        return ret
