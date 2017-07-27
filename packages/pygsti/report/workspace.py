@@ -33,9 +33,10 @@ def ws_custom_digest(md5, v):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
         md5.update(v.base.tostring()) #don't recurse to parent switchboard
+    # TODO: Replace with more elegant uuid/immutability likely hashing
     # Since these two cases are somewhat mutable, only digest them by timestamp during report, not during general computation
-    elif isinstance(v, (_objs.GateSet, _objs.GateString)):
-        md5.update(v.timestamp.encode('utf-8'))
+    #elif isinstance(v, (_objs.GateSet, _objs.GateString)):
+    #md5.update(v.timestamp.encode('utf-8'))
     else:
         raise _objs.CustomDigestError()
 

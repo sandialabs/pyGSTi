@@ -265,8 +265,8 @@ def digest(obj, custom_digests=None):
                     add(md5,v[k])
             elif v is None:
                 md5.update("NONE".encode('utf-8'))
-            elif hasattr(v, 'timestamp'):
-                md5.update(v.timestamp.encode('utf-8'))
+            elif hasattr(v, 'uuid') and v.uuid is not None:
+                md5.update(str(v.uuid).encode('utf-8'))
             else:
                 for custom_digest in custom_digests:
                     try:

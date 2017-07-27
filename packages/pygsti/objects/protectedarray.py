@@ -2,7 +2,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ..tools import compattools as _compat
 
-from .. import tools as _tools
 
 class ProtectedArray(object):
     """
@@ -11,7 +10,6 @@ class ProtectedArray(object):
     """
 
     def __init__(self, input_array, indicesToProtect=None):
-        self.timestamp = _tools.time_hash()
         self.base = input_array
 
         #Get protected indices, a specified as:

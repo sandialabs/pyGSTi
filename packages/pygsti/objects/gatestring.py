@@ -9,8 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ..tools import compattools as _compat
 
-from .. import tools as _tools
-
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
     return ''.join(seq)
@@ -51,7 +49,6 @@ class GateString(object):
             A dictionary with keys == labels and values == tuples of gate labels
             which can be used for substitutions using the S<label> syntax.
         """
-        self.timestamp = _tools.time_hash()
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
