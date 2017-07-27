@@ -13,6 +13,7 @@ import uuid     as _uuid
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
+from ..tools import digest as _digest
 from . import gatestring as _gs
 
 
@@ -295,6 +296,12 @@ class DataSet(object):
 
     def __contains__(self, gatestring):
         return gatestring in self.gsIndex
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            return hash(digest(self))
 
     def _total_key(self, gatestring):
         """ 

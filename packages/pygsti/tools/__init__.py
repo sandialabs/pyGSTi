@@ -24,3 +24,4 @@ from .opttools import *
 from .legacytools import *
 from .dim import Dim
 from .opttools import *
+from .smartcache import *

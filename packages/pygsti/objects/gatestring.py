@@ -183,7 +183,7 @@ class GateString(object):
         return self._tup.__gt__(tuple(x))
 
     def __hash__(self):
-        return self._tup.__hash__()
+        return hash(self.uuid)
 
     def __copy__(self):
         return GateString( self._tup, self.str, bCheck=False)
