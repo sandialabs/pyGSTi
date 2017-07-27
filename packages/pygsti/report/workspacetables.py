@@ -201,7 +201,10 @@ class SpamParametersTable(WorkspaceTable):
         for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
             rowData = [prepLabel]
             for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
-                rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
+                if confidenceRegionInfo is None:
+                    rowData.append((DPs[ii,jj],None))
+                else:
+                    rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
             table.addrow(rowData, formatters)
     
         table.finish()
