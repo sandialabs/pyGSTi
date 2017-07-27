@@ -234,7 +234,35 @@ def smart_cached(obj):
 class CustomDigestError(Exception):
     pass
 
+def _attributes_of(v):
+    attribs = list(sorted(dir(v)))
+    for k in attribs:
+        if k.startswith('__'): 
+            continue
+        a = getattr(v, k)
+        if _inspect.isroutine(a): 
+            continue
+        yield native_hash(k)
+        yield native_hash(a)
+
+def general_hash(obj):
+    return hash(tuple(_attributes_of(obj)))
+
+def native_hash(v):
+    print(type(v))
+    try:
+        return hash(v)
+    except TypeError as hashException:
+        if isinstance(v, _np.ndarray):
+            return hash(v.tostring())
+        if isinstance(v, list):
+            return hash(tuple(native_hash(item) for item in v))
+        elif isinstance(v, dict):
+            return hash(tuple((native_hash(k), native_hash(v)) for k, v in sorted(v.items())))
+        return general_hash(v)
+
 def digest(obj, custom_digests=None):
+    return native_hash(obj)
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
     if custom_digests is None:
         custom_digests = []
@@ -252,36 +280,36 @@ def digest(obj, custom_digests=None):
             md5.update(str(type(v)).encode('utf-8'))
             if isinstance(v, bytes):
                 md5.update(v)  #can add bytes directly
-            elif isinstance(v, float) or _compat.isstr(v) or _compat.isint(v):
-                md5.update(str(v).encode('utf-8')) #need to encode strings
-            elif isinstance(v, _np.ndarray):
-                md5.update(v.tostring()) # numpy gives us bytes
-            elif isinstance(v, (tuple, list)):
-                for el in v:  add(md5,el)
-            elif isinstance(v, dict):
-                keys = list(v.keys())
-                for k in sorted(keys):
-                    add(md5,k)
-                    add(md5,v[k])
-            elif v is None:
-                md5.update("NONE".encode('utf-8'))
-            elif hasattr(v, 'uuid') and v.uuid is not None:
-                md5.update(str(v.uuid).encode('utf-8'))
             else:
-                for custom_digest in custom_digests:
-                    try:
-                        custom_digest(md5, v)
-                        break
-                    except CustomDigestError:
-                        pass
-                else:
-                    attribs = list(sorted(dir(v)))
-                    for k in attribs:
-                        if k.startswith('__'): continue
-                        a = getattr(v, k)
-                        if _inspect.isroutine(a): continue
-                        add(md5,k)
-                        add(md5,a)
+                try:
+                    md5.update(str(hash(v)).encode('utf-8'))
+                except TypeError as hashException:
+                    if isinstance(v, _np.ndarray):
+                        md5.update(v.tostring()) # numpy gives us bytes
+                    elif isinstance(v, (tuple, list)):
+                        for el in v:  add(md5,el)
+                    elif isinstance(v, dict):
+                        keys = list(v.keys())
+                        for k in sorted(keys):
+                            add(md5,k)
+                            add(md5,v[k])
+                    else:
+                        for custom_digest in custom_digests:
+                            try:
+                                custom_digest(md5, v)
+                                break
+                            except CustomDigestError:
+                                pass
+                        else:
+                            attribs = list(sorted(dir(v)))
+                            for k in attribs:
+                                if k.startswith('__'): 
+                                    continue
+                                a = getattr(v, k)
+                                if _inspect.isroutine(a): 
+                                    continue
+                                add(md5,k)
+                                add(md5,a)
             return
 
     M = _hashlib.md5()
