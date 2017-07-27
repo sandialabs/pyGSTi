@@ -29,6 +29,7 @@ class Formatter(object):
             regexreplace=None,
             formatstring='%s',
             ebstring='%s +/- %s',
+            nmebstring=None,
             stringreturn=None,
             defaults=None):
         '''
@@ -61,6 +62,10 @@ class Formatter(object):
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
         self.ebstring        = ebstring
+        if nmebstring is None:
+            nmebstring = ebstring
+        self.nmebstring      = nmebstring
+
         if defaults is None:
             self.defaults = dict()
         else:
@@ -89,7 +94,7 @@ class Formatter(object):
             s = str(item.get_value())
             if s == '--' or s == '':
                 return s
-            return item.render_with(self, specs, self.ebstring)
+            return item.render_with(self, specs, self.ebstring, self.nmebstring)
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
         elif self.custom is not None: 
@@ -114,3 +119,25 @@ class Formatter(object):
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
         return formatstring % item
+
+    def variant(self, **kwargs):
+        '''
+        Create a Formatter object from an existing formatter object, tweaking it slightly
+
+        Parameters
+        ----------
+        Same as Formatter.__init__()
+        '''
+        ret = deepcopy(self)
+        for k, v in kwargs.items():
+            if k not in ret.__dict__:
+                raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(k, v,
+                    'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
+            if k == 'ebstring' and ret.ebstring == ret.nmebstring:
+                ret.__dict__[k] = v
+                ret.__dict__['nmebstring'] = v
+            elif k == 'defaults':
+                ret.__dict__['defaults'].update(v)
+            else:
+                ret.__dict__[k] = v
+        return ret
