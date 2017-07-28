@@ -11,10 +11,14 @@ def main():
         ws = pygsti.report.create_general_report({'TP': results_tp, "Full": results_full},
                                                 "tutorial_files/exampleMultiGenReport.html",verbosity=3,
                                                 auto_open=False)
+    with open('data/testws.pkl', 'wb') as infile:
+        pickle.dump(ws.smartCache, infile, protocol=2)
+    '''
     with timed_block('reused ws'):
         pygsti.report.create_general_report({'TP': results_tp, "Full": results_full},
                                                 "tutorial_files/exampleMultiGenReport.html",verbosity=3,
                                                 auto_open=False, ws=ws)
+    '''
 
 if __name__ == '__main__':
     main()

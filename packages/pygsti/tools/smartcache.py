@@ -7,6 +7,7 @@ import inspect   as _inspect
 
 from collections import Counter, defaultdict
 from pprint      import pprint
+from copy        import deepcopy
 
 from . import compattools as _compat
 
@@ -61,6 +62,20 @@ class SmartCache(object):
         self.saved = 0
         
         SmartCache.StaticCacheList.append(self)
+
+    def __setstate__(self, d):
+        return self.__dict__.update(d)
+
+    def __getstate__(self):
+        d = dict()
+        for k, v in self.cache.items():
+            if str(type(v)) == '<class \'plotly.graph_objs.graph_objs.Figure\'>':
+                continue
+            if hasattr(v, 'ws'):
+                #v = deepcopy(original)
+                v.ws = None
+            d[k] = v
+        return {'cache' : d}
 
     def add_digest(self, custom):
         self.customDigests.append(custom)
@@ -286,7 +301,7 @@ def digest(obj, custom_digests=None):
 
     M = _hashlib.md5()
     add(M, obj)
-    return M.digest() #return the MD5 digest
+    return M.digest() #return native hash of the MD5 digest
 
 def get_fn_name_key(fn):
     name = fn.__name__

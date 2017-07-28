@@ -1198,6 +1198,14 @@ class WorkspaceOutput(object):
         self.ws = ws
         #self.widget = None #don't build until 1st display()
 
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
+    def __getstate__(self):
+        d = dict(self.__dict__)
+        del d['ws']
+        return d
+
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
