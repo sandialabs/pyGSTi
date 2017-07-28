@@ -173,13 +173,14 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     A, B : numpy array
         The *gate* matrices to use when computing the diamond norm.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit respectively.
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     dimOrStateSpaceDims : int or list of ints, optional
         Structure of the density-matrix space, which further specifies the basis
-        of gateMx (see BasisTools).
+        of gateMx (see basis.py). Inferred through matrices if not provided.
 
     Returns
     -------
@@ -310,9 +311,10 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     A, B : numpy array
         The matrices to compute the distance between.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit, respectively.
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
@@ -334,9 +336,10 @@ def process_fidelity(A, B, mxBasis="gm"):
     A, B : numpy array
         The matrices to compute the fidelity between.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit, respectively.
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
@@ -665,6 +668,11 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     target_gate : ndarray
       The target gate matrix
 
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
     typ : {"logG-logT", "logTiG"}
       The type of error generator to compute.  Allowed values are:
       
@@ -828,14 +836,15 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       then use the Stochastic error generators which take rho -> P*rho*P for
       Pauli-product matrix P (recall P is self adjoint).
 
-    projection_basis : {'std', 'gm', 'pp', 'qt'}
-      The basis is used to construct the error generators onto which the gate
-      error generator is projected onto.  Allowed values are Matrix-unit (std),
-      Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+    projection_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      The basis `errgen` is represented in.  Allowed options are Matrix-unit
-      (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     return_generators : bool, optional
       If True, return the error generators projected against along with the
@@ -1076,24 +1085,20 @@ def lindblad_errgen_projections(errgen, ham_basis,
     errgen: : ndarray
       The error generator matrix to project.
 
-    ham_basis : {'std', 'gm', 'pp', 'qt'} or list
-      The basis is used to construct the Hamiltonian-type lindblad error
-      generators onto which the gate  error generator is projected onto.
-      Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
-      and Qutrit (qt), or you may specify a list of the basis matrices
-      (numpy arrays) themselves.
+    ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis is used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-    other_basis : {'std', 'gm', 'pp', 'qt'} or list
-      The basis is used to construct the Stochastic-type lindblad error
-      generators onto which the gate  error generator is projected onto.
-      Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
-      and Qutrit (qt), or you may specify a list of the basis matrices
-      (numpy arrays) themselves.
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis is used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
       
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      Which basis `errgen` is represented in.  Allowed
-      options are Matrix-unit (std), Gell-Mann (gm),
-      Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source basis. Allowed values are Matrix-unit (std), 
+        Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     normalize : bool, optional
       Whether or not the generators being projected onto are normalized, so
@@ -1138,15 +1143,28 @@ def lindblad_errgen_projections(errgen, ham_basis,
     
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    if _compat.isstr(ham_basis):
+    '''
+    if isinstance(ham_basis, _basis.Basis):
+        hamBasisMxs = ham_basis.get_composite_matrices()
+    elif _compat.isstr(ham_basis):
         hamBasisMxs = _basis.basis_matrices(ham_basis, d)
-    else: hamBasisMxs = ham_basis
+    else: 
+        hamBasisMxs = ham_basis
         
-    if _compat.isstr(other_basis):
+    if isinstance(ham_basis, _basis.Basis):
+        hamBasisMxs = ham_basis.get_composite_matrices()
+    elif _compat.isstr(other_basis):
         otherBasisMxs = _basis.basis_matrices(other_basis, d)
-    else: otherBasisMxs = other_basis
+    else: 
+        otherBasisMxs = other_basis
+    '''
+    hamBasis   = _basis.Basis(ham_basis)
+    otherBasis = _basis.Basis(other_basis)
+
+    hamBasisMxs   = hamBasis.get_composite_matrices()
+    otherBasisMxs = otherBasis.get_composite_matrices()
     
-    hamGens,otherGens = lindblad_error_generators(
+    hamGens, otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
 
     if hamBasisMxs is not None:
@@ -1241,10 +1259,10 @@ def rotation_gate_mx(r, mxBasis="gm"):
         A tuple of coeffiecients, one per non-identity
         Pauli-product basis element
 
-    mxBasis : {'std', 'gm','pp'}, optional
-      Which basis returned matrix is represented in.
-      Allowed options are Matrix-unit (std), Gell-Mann
-      (gm) and Pauli-product (pp).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 .
     Returns
     -------

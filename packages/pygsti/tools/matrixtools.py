@@ -308,9 +308,10 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     M : numpy array
         The superoperator matrix whose logarithm is taken
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      The basis `M` is represented in.  Allowed options are Matrix-unit
-      (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------

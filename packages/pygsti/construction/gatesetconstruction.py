@@ -51,13 +51,10 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
         space, and is independent of the direct-sum decomposition of density
         matrix space.
 
-    basis : {'gm','pp','std','qt'}, optional
-       the basis of the returned vector.
-
-        - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann
-        - 'pp' == Pauli-product
-        - 'qt' == Qutrit
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
@@ -98,13 +95,10 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
         the standard basis, and the density-matrix space is the direct sum of
         linear spaces of dimension block-dimension^2.
 
-    basis : {'gm','pp','std','qt'}, optional
-        the basis of the returned vector.
-
-        - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann
-        - 'pp' == Pauli-product
-        - 'qt' == Qutrit
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
@@ -144,13 +138,10 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     gateExpr : string containing an expression for the gate to build
 
-    basis : string
-      - "std" = gate matrix operates on density mx expressed as sum of matrix
-        units
-      - "gm"  = gate matrix operates on dentity mx expressed as sum of
-        normalized Gell-Mann matrices
-      - "pp"  = gate matrix operates on density mx expresses as sum of
-        tensor-prod of pauli matrices
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
     # gateExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
     #                      two qubit ops: CNOT
@@ -412,17 +403,10 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
-    basis : {'gm','pp','std','qt'}, optional
-        the basis of the returned gate.
-
-        - "std" = gate matrix operates on density mx expressed as sum of matrix
-          units
-        - "gm"  = gate matrix operates on dentity mx expressed as sum of
-          normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expressed as sum of
-          tensor-product of Pauli matrices
-        - "qt"  = gate matrix operates on density mx expressed as sum of
-          Qutrit basis matrices
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
@@ -917,17 +901,10 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
             that generates probabilities that are 1.0 - (sum of probabilities
             from all other spam labels).
 
-    basis : {'gm','pp','std','qt'}, optional
-        the basis of the matrices in the returned GateSet
-
-        - "std" = gate matrix operates on density mx expressed as sum of matrix
-          units
-        - "gm"  = gate matrix operates on dentity mx expressed as sum of
-          normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expresses as sum of
-          tensor-product of Pauli matrices
-        - "qt"  = gate matrix operates on density mx expressed as sum of
-          Qutrit basis matrices
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see

@@ -69,13 +69,15 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     gateMx : numpy array
         the gate matrix to compute Choi matrix of.
 
-    gateMxBasis : {"std","gm","pp","qt"}, optional
-        the basis of gateMx: standard (matrix units), Gell-Mann, Pauli-product,
-        or Qutrit, respectively.
+    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-    choiMxBasis : {"std","gm","pp","qt"}, optional
-        the basis for the returned Choi matrix: standard (matrix units), Gell-Mann,
-        Pauli-product, or Qutrit, respectively.
+    choiMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     dimOrStateSpaceDims : int or list of ints, optional
         Structure of the density-matrix space, which further specifies the basis
@@ -129,13 +131,15 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateS
     choiMx : numpy array
         the Choi matrix, normalized to have trace == 1, to compute gate matrix for.
 
-    choiMxBasis : {"std","gm","pp","qt"}, optional
-        the basis of choiMx: standard (matrix units), Gell-Mann, Pauli-product,
-        or Qutrit, respectively.
+    choiMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-    gateMxBasis : {"std","gm","pp","qt"}, optional
-        the basis for the returned gate matrix: standard (matrix units), Gell-Mann,
-        Pauli-product, or Qutrit, respectively.
+    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     dimOrStateSpaceDims : int or list of ints, optional
         Structure of the density-matrix space, which further specifies the basis
@@ -184,9 +188,10 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis="gm", dimOrStateSpaceDims=None
     gateMx : numpy array
         the gate matrix to compute Choi matrix of.
 
-    gateMxBasis : {"std","gm","pp","qt"}, optional
-        the basis of gateMx: standard (matrix units), Gell-Mann,
-        Pauli-product, or Qutrit, respectively.
+    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     dimOrStateSpaceDims : int or list of ints, optional
         Structure of the density-matrix space, which further specifies the basis
@@ -226,9 +231,10 @@ def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis="gm", dimOrStateSpaceDims=
         the Choi matrix in the standard (matrix units) basis, normalized to
         have trace == 1, to compute gate matrix for.
 
-    gateMxBasis : {"std","gm","pp","qt"}, optional
-        the basis for the returned gate matrix: standard (matrix units), Gell-Mann,
-        Pauli-product, or Qutrit, respectively.
+    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     dimOrStateSpaceDims : int or list of ints, optional
         Structure of the density-matrix space, which further specifies the basis
