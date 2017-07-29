@@ -4,6 +4,7 @@ import sys       as _sys
 import numpy     as _np
 import functools as _functools
 import inspect   as _inspect
+import pickle    as _pickle
 
 from collections import Counter, defaultdict
 from pprint      import pprint
@@ -67,15 +68,17 @@ class SmartCache(object):
         return self.__dict__.update(d)
 
     def __getstate__(self):
-        d = dict()
+        d = dict(self.__dict__)
+        #d = dict()
+        pickleableCache = dict()
         for k, v in self.cache.items():
-            if str(type(v)) == '<class \'plotly.graph_objs.graph_objs.Figure\'>':
-                continue
-            if hasattr(v, 'ws'):
-                #v = deepcopy(original)
-                v.ws = None
-            d[k] = v
-        return {'cache' : d}
+            try:
+                _pickle.dumps(v)
+                pickleableCache[k] = v
+            except TypeError:
+                pass
+        d['cache'] = pickleableCache
+        return d
 
     def add_digest(self, custom):
         self.customDigests.append(custom)
@@ -237,6 +240,7 @@ class SmartCache(object):
         printer.log('saved       : {}'.format(saved))
         printer.log('net benefit : {}'.format(saved - overhead))
         self.saved = saved - overhead
+
 
 def smart_cached(obj):
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
