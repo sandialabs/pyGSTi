@@ -133,17 +133,28 @@ class Workspace(object):
     a script to build a hardcoded ("fixed") report/dashboard.
     """
 
-    def __init__(self):
+    def __init__(self, cachefile=None):
         """
         Initialize a Workspace object.
 
         Parameters
         ----------
         """
-        self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
         self._register_components(False)
-        self.smartCache = _objs.SmartCache()
+        if cachefile is None:
+            self.smartCache = _objs.SmartCache()
+        else:
+            with open(cachefile, 'rb') as infile:
+                self.smartCache = _pickle.load(infile)
         self.smartCache.add_digest(ws_custom_digest)
+
+    def save_cache(self, cachefile):
+        with open(cachefile, 'wb') as outfile:
+            _pickle.dump(self.smartCache, outfile)
+
+    def load_cache(self, cachefile):
+        with open(cachefile, 'rb') as infile:
+            self.smartCache.cache.update(_pickle.load(infile).cache)
 
     def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -1198,13 +1209,6 @@ class WorkspaceOutput(object):
         self.ws = ws
         #self.widget = None #don't build until 1st display()
 
-    def __setstate__(self, d):
-        self.__dict__.update(d)
-
-    def __getstate__(self):
-        d = dict(self.__dict__)
-        del d['ws']
-        return d
 
         
     # Note: hashing not needed because these objects are not *inputs* to
