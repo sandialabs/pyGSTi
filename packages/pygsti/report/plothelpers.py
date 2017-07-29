@@ -511,7 +511,7 @@ def _computeProbabilities(gss, gateset, dataset):
     return probs_dict
 
     
-@smart_cached
+#@smart_cached
 def _computeSubMxs(gss, subMxCreationFn, sumUp):
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]

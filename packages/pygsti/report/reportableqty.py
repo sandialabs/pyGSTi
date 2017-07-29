@@ -43,7 +43,6 @@ class ReportableQty(object):
         return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errbar, memo))
 
     def __getattr__(self, attr):
-        print(attr)
         return getattr(self.value, attr)
 
     @staticmethod
