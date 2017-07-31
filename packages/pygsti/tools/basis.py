@@ -286,6 +286,9 @@ class Basis(object):
         '''
         return _inv(self.get_to_std())
 
+    def get_std_equivalent(self):
+        return Basis('std', self.dim.blockDims)
+
 def _build_composite_basis(bases):
     '''
     Build a composite basis from a list of tuples or Basis objects 
@@ -531,34 +534,34 @@ def basis_matrices(name, dimOrBlockDims):
     return f(dimOrBlockDims)
 
 def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
-    if resize == 'expand':
-        try:
-            right = _np.dot(mx, stdBasis2.get_expand_mx())
-            mid   = _np.dot(stdBasis2.get_contract_mx(), right)
-        except ValueError:
-            right = _np.dot(mx, stdBasis1.get_expand_mx())
-            mid   = _np.dot(stdBasis1.get_contract_mx(), right)
-    elif resize == 'contract':
-        try:
-            mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(mx, stdBasis1.get_contract_mx()))
-        except ValueError:
-            mid = _np.dot(stdBasis2.get_expand_mx(), _np.dot(mx, stdBasis2.get_contract_mx()))
-    return mid
-
-def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
     if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
         return mx
-    print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
-    print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
+    #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
+    #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
         assert stdBasis1.gateDim < stdBasis2.gateDim
         right = _np.dot(mx, stdBasis1.get_expand_mx())
         mid   = _np.dot(stdBasis1.get_contract_mx(), right)
     elif resize == 'contract':
         assert stdBasis1.gateDim > stdBasis2.gateDim
-        mid = _np.dot(stdBasis2.get_expand_mx(), _np.dot(mx, stdBasis2.get_contract_mx()))
+        right = _np.dot(mx, stdBasis2.get_contract_mx())
+        mid = _np.dot(stdBasis2.get_expand_mx(), right)
     return mid
+
+def flexible_change_basis(mx, startBasis, endBasis):
+    if startBasis.dim.gateDim == endBasis.dim.gateDim:
+        return change_basis(mx, startBasis, endBasis)
+    if startBasis.gateDim < endBasis.gateDim:
+        resize = 'expand'
+    else:
+        resize = 'contract'
+    stdBasis1 = startBasis.get_std_equivalent()
+    stdBasis2 = endBasis.get_std_equivalent()
+    start = change_basis(mx, startBasis, stdBasis1)
+    mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
+    end   = change_basis(mid, stdBasis2, endBasis)
+    return end
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
     # TEMPORARY

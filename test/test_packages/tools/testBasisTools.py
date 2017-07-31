@@ -7,7 +7,7 @@ import pygsti
 import pygsti.tools.basis       as basis
 import pygsti.tools.lindbladtools as lindbladtools
 
-from pygsti.tools.basis import Basis, Dim, change_basis, resize_std_mx
+from pygsti.tools.basis import Basis, Dim, change_basis, resize_std_mx, flexible_change_basis
 
 from functools import partial
 
@@ -301,12 +301,18 @@ class BasisBaseTestCase(BaseTestCase):
         comp = Basis(matrices=[('std', 2,), ('std', 1)])
         std  = Basis('std', 3)
         mxStd = np.identity(5)
-        #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', std, comp)
         test   = basis.resize_std_mx(mxStd, 'expand', comp, std)
         test2  = basis.resize_std_mx(test, 'contract', std, comp)
         self.assertArraysAlmostEqual(test2, mxStd)
-        #test  = change_basis(mxStd, std, comp)
-        #test  = change_basis(mxStd, comp, std)
+
+    def test_flexible_change_basis(self):
+        comp  = Basis(matrices=[('gm', 2,), ('gm', 1)])
+        std   = Basis('std', 3)
+        mx    = np.identity(5)
+        test  = flexible_change_basis(mx, comp, std)
+        self.assertEqual(test.shape[0], sum(comp.dim.blockDims) ** 2)
+        test2 = flexible_change_basis(test, std, comp)
+        self.assertArraysAlmostEqual(test2, mx)
 
     def test_change_between_composites(self):
         a = Basis('std', [2, 1])
