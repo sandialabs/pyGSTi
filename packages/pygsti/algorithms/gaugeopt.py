@@ -210,7 +210,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         validSpamPenalty == 0 and \
         targetGateset is not None and \
         gatesMetric == "frobenius" and \
-        spamMetric  == "frobenius":
+        spamMetric  == "frobenius" and \
+        gateset.dim < 64:
 
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
@@ -226,7 +227,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                 validSpamPenalty, gatesMetric, 
                 spamMetric)
         algorithm = 'min'
-        
 
     result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
             maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm, 
@@ -248,6 +248,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights,
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
     def jacobian(vec):
+        print('Calling jacobian', flush=True)
         '''
         The derivative of the objective function with respect the input parameter vector, v
         This is UNSQUARED, because the residuals are unsquared.
@@ -372,6 +373,7 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights,
                 fig.colorbar(im, cax=cbar_ax)
                 plt.show()
                 '''
+        print('Done calling jacobian', flush=True)
         return jacMx
     return jacobian
 
@@ -479,6 +481,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
     if bToStdout: 
         print_obj_func(x0) #print initial point
+
 
     if algorithm == 'min':
         minSol = _opt.minimize(call_objective_fn, x0,
