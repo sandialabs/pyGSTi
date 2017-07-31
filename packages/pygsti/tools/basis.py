@@ -553,11 +553,11 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
         return mx
     if resize == 'expand':
         assert stdBasis1.gateDim < stdBasis2.gateDim
-        right = _np.dot(mx, stdBasis2.get_expand_mx())
-        mid   = _np.dot(stdBasis2.get_contract_mx(), right)
+        right = _np.dot(mx, stdBasis1.get_expand_mx())
+        mid   = _np.dot(stdBasis1.get_contract_mx(), right)
     elif resize == 'contract':
         assert stdBasis1.gateDim > stdBasis2.gateDim
-        mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(mx, stdBasis1.get_contract_mx()))
+        mid = _np.dot(stdBasis2.get_expand_mx(), _np.dot(mx, stdBasis2.get_contract_mx()))
     return mid
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
