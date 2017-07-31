@@ -1,3 +1,4 @@
+dist: precise
 language: python
 
 python:
@@ -21,7 +22,7 @@ env:
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null
+  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev
   - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
   - sudo bash CI/install.sh # Only install texlive and extensions if we need them
   - "export DISPLAY=:99.0"

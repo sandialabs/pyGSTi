@@ -11,6 +11,7 @@ import pickle as _pickle
 import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
+from .. import tools as _tools
 from ..tools import listtools as _lt
 
 from . import gatestring as _gs
@@ -210,7 +211,7 @@ class DataSet(object):
         DataSet
            a new data set object.
         """
-
+        self.timestamp = _tools.time_hash()
         #Optionally load from a file
         if fileToLoadFrom is not None:
             assert(counts is None and gateStrings is None and gateStringIndices is None and spamLabels is None and spamLabelIndices is None)
@@ -696,7 +697,8 @@ class DataSet(object):
                      'collisionAction': self.collisionAction,
                      'measurementGates': self.measurementGates,
                      'measurementLabels': self.measurementLabels,
-                     'totals': self.totals}
+                     'totals': self.totals,
+                     'timestamp' : self.timestamp}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -709,6 +711,7 @@ class DataSet(object):
         self.measurementGates = state_dict.get('measurementGates',None)
         self.measurementLabels = state_dict.get('measurementLabels',None)
         self.totals = state_dict.get('totals',None)
+        self.timestamp = state_dict.get('timestamp', _tools.time_hash())
 
 
     def save(self, fileOrFilename):
@@ -734,7 +737,8 @@ class DataSet(object):
                      'comment': self.comment,
                      'measurementGates': self.measurementGates,
                      'measurementLabels': self.measurementLabels,
-                     'totals': self.totals} 
+                     'totals': self.totals,
+                     'timestamp' : self.timestamp} 
                      #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
@@ -809,6 +813,9 @@ class DataSet(object):
             for i in range(state_dict['nRows']): #pylint: disable=unused-variable
                 self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
         if bOpen: f.close()
+        if 'timestamp' in state_dict:
+            self.timestamp = state_dict['timestamp']
+        # Otherwise timestamp is already set
 
 
 #def upgrade_old_dataset(oldDataset):

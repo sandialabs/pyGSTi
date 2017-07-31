@@ -14,7 +14,7 @@ class Row(object):
     '''
     Representation of a table row
     '''
-    def __init__(self, rowData=None, formatters=None, labels=None):
+    def __init__(self, rowData=None, formatters=None, labels=None, nonMarkovianEBs=False):
         '''
         Create a row object 
 
@@ -26,11 +26,13 @@ class Row(object):
             formatting options for each cell
         labels : optional list[string]
             labeling options for each cell
+        nonMarkovianEBs : bool
+            boolean indicating if non markovian error bars should be used
         '''
         if rowData is None:
             rowData = []
         else:
-            rowData = [_ReportableQty.from_val(item) for item in rowData]
+            rowData = [_ReportableQty.from_val(item, nonMarkovianEBs) for item in rowData]
         if formatters is None:
             formatters = []
         if labels is None:

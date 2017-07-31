@@ -1,10 +1,15 @@
+#!/usr/bin/env python3
 import pickle
 import pygsti
 
-def main():
-    with open('2qbit_results.pkl', 'rb') as infile:
-        results = pickle.load(infile)
-    pygsti.report.create_general_report(results, "tutorial_files/exampleGenReport.html",
-                                        verbosity=0, auto_open=False)
+from pygsti.tools import timed_block
 
-main()
+def main():
+    with open('data/example_report_results.pkl', 'rb') as infile:
+        results = pickle.load(infile)
+    with timed_block('example report creation'):
+        pygsti.report.create_general_report(results, "report/exampleGenReport.html",
+                                            verbosity=0, auto_open=False)
+
+if __name__ == '__main__':
+    main()
