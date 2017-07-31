@@ -248,7 +248,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights,
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
     def jacobian(vec):
-        print('Calling jacobian', flush=True)
         '''
         The derivative of the objective function with respect the input parameter vector, v
         This is UNSQUARED, because the residuals are unsquared.
@@ -373,7 +372,6 @@ def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights,
                 fig.colorbar(im, cax=cbar_ax)
                 plt.show()
                 '''
-        print('Done calling jacobian', flush=True)
         return jacMx
     return jacobian
 
