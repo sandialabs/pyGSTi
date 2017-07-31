@@ -671,8 +671,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "full" : full (completely unconstrained)
         - "TP"   : TP-constrained
         - "CPTP" : Lindbladian CPTP-constrained
-        - "H+S"  : Only Hamiltonian + Stochastic errors allowd (CPTP)
-        - "S"    : Only Stochastic errors allowd (CPTP)
+        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate
 
     comm : mpi4py.MPI.Comm, optional
