@@ -18,14 +18,18 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
         self.stateSpaceDims = [2,1]
+        self.std = pygsti.Basis('std', 3)
+        self.gm  = pygsti.Basis('gm',  3)
+        self.stdSmall = pygsti.Basis('std', [2, 1])
+        self.gmSmall  = pygsti.Basis('gm',  [2, 1])
 
         #labels which give a tensor product interp. for the states within each density matrix block
         self.stateSpaceLabels = [('Qhappy',),('Lsad',)]
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate( self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)","std")
-        self.testGateGM_mx = basis.change_basis(self.testGate, 'std', 'gm', self.stateSpaceDims)
-        self.expTestGate_mx = basis.resize_mx(self.testGate, self.stateSpaceDims, resize='expand')
+        self.testGateGM_mx = basis.change_basis(self.testGate, self.std, self.gm, self.stateSpaceDims)
+        self.expTestGate_mx = basis.resize_std_mx(self.testGate, 'expand', self.stdSmall, self.std)
         self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, 'std', 'gm')
 
     def tearDown(self):
@@ -59,7 +63,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
                                                                       gateMxBasis='std')
-        self.assertArraysAlmostEqual( basis.resize_mx(revExpTestGate_mx,self.stateSpaceDims, resize='contract'),
+        self.assertArraysAlmostEqual( basis.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
                                       self.testGate)
 
 

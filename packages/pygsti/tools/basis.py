@@ -143,6 +143,9 @@ class Basis(object):
     def __hash__(self):
         return hash((self.name, self.dim))
 
+    def __getattr__(self, attr):
+        return getattr(self.dim, attr)
+
     def transform_matrix(self, to_basis):
         '''
         Retrieve a list of matrices by index 
@@ -376,15 +379,20 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
 
-    if from_basis.dim.gateDim != to_basis.dim.gateDim or \
-            resize is not None:
+    if from_basis.dim.gateDim != to_basis.dim.gateDim: 
+        raise ValueError('Automatic basis expanding/contracting temporarily disabled')
+        #or \
+        #    resize is not None:
         if resize is None:
             assert len(to_basis.dim.blockDims) == 1 or len(from_basis.dim.blockDims) == 1, \
                     'Cannot convert from composite basis {} to another composite basis {}'.format(from_basis, to_basis)
+            '''
+            WRONG
             if from_basis.dim.gateDim < to_basis.dim.gateDim:
                 resize = 'contract'
             else:
                 resize = 'expand'
+            '''
         return resize_mx(mx, resize=resize, startBasis=from_basis, endBasis=to_basis)
 
     if from_basis.name == to_basis.name:
@@ -535,6 +543,21 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
             mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(mx, stdBasis1.get_contract_mx()))
         except ValueError:
             mid = _np.dot(stdBasis2.get_expand_mx(), _np.dot(mx, stdBasis2.get_contract_mx()))
+    return mid
+
+def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
+    assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
+    print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
+    print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
+    if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
+        return mx
+    if resize == 'expand':
+        assert stdBasis1.gateDim < stdBasis2.gateDim
+        right = _np.dot(mx, stdBasis2.get_expand_mx())
+        mid   = _np.dot(stdBasis2.get_contract_mx(), right)
+    elif resize == 'contract':
+        assert stdBasis1.gateDim > stdBasis2.gateDim
+        mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(mx, stdBasis1.get_contract_mx()))
     return mid
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
