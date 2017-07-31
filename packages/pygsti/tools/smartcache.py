@@ -69,13 +69,14 @@ class SmartCache(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        #d = dict()
         pickleableCache = dict()
         for k, v in self.cache.items():
             try:
                 _pickle.dumps(v)
                 pickleableCache[k] = v
             except TypeError:
+                pass
+            except _pickle.PicklingError:
                 pass
         d['cache'] = pickleableCache
         return d

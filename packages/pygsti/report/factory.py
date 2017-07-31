@@ -478,6 +478,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logTiG",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
+                          cachefile=None,
                           connected=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
@@ -549,6 +550,9 @@ def create_general_report(results, filename, confidenceLevel=None,
         If True, automatically open the report in a web browser after it
         has been generated.
 
+    cachefile : str, optional
+        filename with cached workspace results
+
     connected : bool, optional
         Whether output HTML should assume an active internet connection.  If
         True, then the resulting HTML file size will be reduced because it
@@ -566,7 +570,7 @@ def create_general_report(results, filename, confidenceLevel=None,
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     printer.log('*** Creating workspace ***')
-    if ws is None: ws = _ws.Workspace()
+    if ws is None: ws = _ws.Workspace(cachefile)
         
     if title == "auto":
         title = "GST report for %s" % datasetLabel

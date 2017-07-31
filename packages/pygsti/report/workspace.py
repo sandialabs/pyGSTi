@@ -139,8 +139,11 @@ class Workspace(object):
 
         Parameters
         ----------
+        cachefile : str, optional
+            filename with cached workspace results
         """
         self._register_components(False)
+        self.cachefile = cachefile
         if cachefile is None:
             self.smartCache = _objs.SmartCache()
         else:
@@ -561,6 +564,8 @@ class Workspace(object):
                     break
             else:
                 key, result = self.smartCache.cached_compute(fn, argVals)
+                if self.cachefile is not None:
+                    self.save_cache(self.cachefile)
 
             if key not in storedKeys:
                 switchpos_map[pos] = len(resultValues)
