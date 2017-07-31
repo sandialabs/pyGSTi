@@ -23,7 +23,6 @@ from . import plothelpers as _ph
 
 import plotly.graph_objs as go
 
-
 #DEBUG
 #import time as _time  #DEBUG TIMER
 #from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot

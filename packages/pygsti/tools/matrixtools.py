@@ -363,7 +363,6 @@ def near_identity_matrix_log(M, TOL=1e-8):
         logM = logM.real
     return logM
 
-
 def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     """ 
     Construct an approximate logarithm of superoperator matrix `M` that is
