@@ -7,7 +7,7 @@ import pygsti
 import pygsti.tools.basis       as basis
 import pygsti.tools.lindbladtools as lindbladtools
 
-from pygsti.tools.basis import Basis, Dim, change_basis
+from pygsti.tools.basis import Basis, Dim, change_basis, resize_std_mx
 
 from functools import partial
 
@@ -308,6 +308,15 @@ class BasisBaseTestCase(BaseTestCase):
         #test  = change_basis(mxStd, std, comp)
         #test  = change_basis(mxStd, comp, std)
 
+    def test_change_between_composites(self):
+        a = Basis('std', [2, 1])
+        b = Basis('gm',  [2, 1])
+        mxStd = np.identity(5)
+        test = change_basis(mxStd, a, b)
+        self.assertEqual(test.shape, mxStd.shape)
+        test2 = change_basis(test, b, a)
+        self.assertArraysAlmostEqual(test2, mxStd)
+
     def test_qt(self):
         qt = Basis('qt', 3)
         qt = Basis('qt', [3])
@@ -373,8 +382,8 @@ class BasisBaseTestCase(BaseTestCase):
 
         begin = Basis('std', [1,1])
         end   = Basis('std', 2)
-        #mxInReducedBasis = change_basis(mxInStdBasis, begin, end)
-        #original = change_basis(mxInReducedBasis, end, begin)
+        mxInReducedBasis = resize_std_mx(mxInStdBasis, 'contract', end, begin)
+        original         = resize_std_mx(mxInReducedBasis, 'expand', begin, end)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
