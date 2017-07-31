@@ -379,13 +379,13 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     if from_basis.dim.gateDim != to_basis.dim.gateDim or \
             resize is not None:
         if resize is None:
+            assert len(to_basis.dim.blockDims) == 1 or len(from_basis.dim.blockDims) == 1, \
+                    'Cannot convert from composite basis {} to another composite basis {}'.format(from_basis, to_basis)
             if from_basis.dim.gateDim < to_basis.dim.gateDim:
                 resize = 'contract'
-                assert len(to_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
             else:
                 resize = 'expand'
-                assert len(from_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
-        return resize_mx(mx, from_basis.dim.blockDims, resize, from_basis, to_basis)
+        return resize_mx(mx, resize=resize, startBasis=from_basis, endBasis=to_basis)
 
     if from_basis.name == to_basis.name:
         return mx.copy()
@@ -522,7 +522,22 @@ def basis_matrices(name, dimOrBlockDims):
 
     return f(dimOrBlockDims)
 
-def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
+def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
+    if resize == 'expand':
+        try:
+            right = _np.dot(mx, stdBasis2.get_expand_mx())
+            mid   = _np.dot(stdBasis2.get_contract_mx(), right)
+        except ValueError:
+            right = _np.dot(mx, stdBasis1.get_expand_mx())
+            mid   = _np.dot(stdBasis1.get_contract_mx(), right)
+    elif resize == 'contract':
+        try:
+            mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(mx, stdBasis1.get_contract_mx()))
+        except ValueError:
+            mid = _np.dot(stdBasis2.get_expand_mx(), _np.dot(mx, stdBasis2.get_contract_mx()))
+    return mid
+
+def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
     '''
     Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
     space to a matrix in the same basis in the opposite space.
@@ -543,25 +558,33 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
         embedding density matrix space, i.e.
         sum( dimOrBlockDims_i )^2
     '''
+    bothBases = isinstance(startBasis, Basis) and isinstance(endBasis, Basis)
     if resize is not None and \
-            (isinstance(startBasis, Basis) and isinstance(endBasis, Basis)) or \
+            bothBases or \
             (dimOrBlockDims is not None):
-        dim = Dim(dimOrBlockDims)
-        startBasis = Basis(startBasis, dim)
-        endBasis   = Basis(endBasis, dim)
+        if dimOrBlockDims is not None:# not bothBases:
+            dim = Dim(dimOrBlockDims)
+            startBasis = Basis(startBasis, dim)
+            endBasis   = Basis(endBasis, dim)
+        else:
+            assert bothBases
         stdBasis1  = Basis('std', startBasis.dim.blockDims)
         stdBasis2  = Basis('std', endBasis.dim.blockDims)
+        try:
+            assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
 
-        assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
-
-        start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
-        if resize == 'expand':
-            right = _np.dot(start, stdBasis2.get_expand_mx())
-            mid   = _np.dot(stdBasis2.get_contract_mx(), right)
-        elif resize == 'contract':
-            mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(start, stdBasis1.get_contract_mx()))
-        # No else case needed, see assert
-        return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
+            start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
+            mid = resize_std_mx(start, resize, stdBasis1, stdBasis2)
+            # No else case needed, see assert
+            return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
+        except ValueError:
+            print('startBasis: {}'.format(startBasis))
+            print('endBasis: {}'.format(endBasis))
+            print('stdBasis1: {}'.format(stdBasis1))
+            print(stdBasis1.dim)
+            print('stdBasis2: {}'.format(stdBasis2))
+            print(stdBasis2.dim)
+            raise
     else:
         return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 

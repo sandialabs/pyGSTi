@@ -302,7 +302,7 @@ class BasisBaseTestCase(BaseTestCase):
         std  = Basis('std', 3)
         mxStd = np.identity(5)
         # def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
-        #test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
+        test  = basis.resize_mx(mxStd, comp.dim.blockDims, 'expand', comp, std)
         #test  = change_basis(mxStd, std, comp)
         #test  = change_basis(mxStd, comp, std)
 
