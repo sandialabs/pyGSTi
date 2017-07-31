@@ -28,8 +28,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate(self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)", "std")
-        print(self.testGate.shape)
-        self.testGateGM_mx = basis.change_basis(self.testGate, self.std, self.gm, self.stateSpaceDims)
+        self.testGateGM_mx = basis.change_basis(self.testGate, self.stdSmall, self.gmSmall, self.stateSpaceDims)
         self.expTestGate_mx = basis.resize_std_mx(self.testGate, 'expand', self.stdSmall, self.std)
         self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, 'std', 'gm')
 

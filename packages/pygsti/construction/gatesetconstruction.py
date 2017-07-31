@@ -818,7 +818,12 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
             gateTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            gateTermInReducedStdBasis = _basis.resize_mx(gateTermInStdBasis, blockDims, resize='contract')
+            print(blockDims)
+            # contract [3] to [2, 1]
+            gateTermInReducedStdBasis = _basis.resize_std_mx(gateTermInStdBasis, 
+                                                             'contract', 
+                                                             _basis.Basis('std', 3), 
+                                                             _basis.Basis('std', blockDims))
 
             gateMxInFinalBasis = _basis.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
             gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)

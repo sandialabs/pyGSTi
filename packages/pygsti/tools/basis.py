@@ -547,10 +547,10 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
 
 def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
-    print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
-    print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
         return mx
+    print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
+    print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
         assert stdBasis1.gateDim < stdBasis2.gateDim
         right = _np.dot(mx, stdBasis1.get_expand_mx())
@@ -561,6 +561,20 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     return mid
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
+    # TEMPORARY
+    #gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='expand')
+    if dimOrBlockDims is None:
+        return mx
+    print(dimOrBlockDims)
+    if resize == 'expand':
+        a = Basis('std', dimOrBlockDims)
+        b = Basis('std', sum(dimOrBlockDims))
+    else:
+        a = Basis('std', sum(dimOrBlockDims))
+        b = Basis('std', dimOrBlockDims)
+    return resize_std_mx(mx, resize, a, b)
+
+
     '''
     Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
     space to a matrix in the same basis in the opposite space.
