@@ -23,6 +23,18 @@ def average(l):
     return sum(l) / nCalls
 
 def show_cache_percents(hits, misses, printer):
+    """
+    Shows effectiveness of a cache
+
+    Parameters
+    ----------
+    hits : Counter
+        cache hits
+    misses : Counter
+        cache misses
+    printer : pygsti.objects.VerbosityPrinter
+        logging object
+    """
     nHits     = csize(hits)
     nMisses   = csize(misses)
     nRequests = nHits + nMisses 
@@ -32,15 +44,29 @@ def show_cache_percents(hits, misses, printer):
     printer.log('    {}% effective\n'.format(round((nHits/max(1, nRequests)) * 100, 2)))
 
 def show_kvs(title, kvs, printer):
+    '''
+    Pretty-print key-value pairs w/ a title and printer Object
+    '''
     printer.log(title)
     for k, v in kvs:
         printer.log('    {:<40} {}'.format(k, v))
     printer.log('')
 
 class SmartCache(object):
+    '''
+    Cache object that profiles itself
+    '''
     StaticCacheList = []
 
     def __init__(self, decorating=(None, None)):
+        '''
+        Construct a smart cache object
+
+        Parameters
+        ----------
+        decorating : tuple
+            module and function being decorated by the smart cache
+        '''
         self.cache       = dict()
         self.ineffective = set()
         self.decoratingModule, self.decoratingFn = decorating
@@ -85,6 +111,10 @@ class SmartCache(object):
         self.customDigests.append(custom)
 
     def low_overhead_cached_compute(self, fn, argVals, kwargs=None):
+        '''
+        Cached compute with less profiling: 
+            see cached_compute docstring
+        '''
         if kwargs is None:
             kwargs = dict()
         name_key = get_fn_name_key(fn)
@@ -104,6 +134,26 @@ class SmartCache(object):
         return key, result
 
     def cached_compute(self, fn, argVals, kwargs=None):
+        '''
+        Shows effectiveness of a cache
+
+        Parameters
+        ----------
+        fn : function
+            Cached function
+
+        argVals : tuple or list
+            Arguments to cached function
+
+        kwargs : dictionary
+            Keyword arguments to cached function
+
+        Returns
+        -------
+        result : result of fn called with argVals and kwargs
+
+        '''
+
         if kwargs is None:
             kwargs = dict()
         name_key = get_fn_name_key(fn)
@@ -142,6 +192,9 @@ class SmartCache(object):
 
     @staticmethod
     def global_status(printer):
+        '''
+        Show the statuses of all Cache objects
+        '''
         totalSaved  = 0
         totalHits   = Counter()
         totalMisses = Counter()
@@ -208,6 +261,9 @@ class SmartCache(object):
         return ret
 
     def status(self, printer):
+        '''
+        Show the status of a cache object instance
+        '''
         printer.log('Status of smart cache decorating {}.{}:\n'.format(
             self.decoratingModule, self.decoratingFn))
         show_cache_percents(self.hits, self.misses, printer)
@@ -244,6 +300,10 @@ class SmartCache(object):
 
 
 def smart_cached(obj):
+    '''
+    Decorator for applying a smart cache to a single
+    function or method
+    '''
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
     @_functools.wraps(obj)
     def cacher(*args, **kwargs):
