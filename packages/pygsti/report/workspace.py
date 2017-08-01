@@ -211,7 +211,7 @@ class Workspace(object):
         self._register_components(False)
         self.ineffectiveCache = set()
 
-    def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
+    def _makefactory(self, cls, autodisplay):#, printer=_objs.VerbosityPrinter(1)):
         PY3 = bool(_sys.version_info > (3, 0))
 
         #Manipulate argument list of cls.__init__
@@ -220,16 +220,20 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        @_functools.wraps(cls.__init__)
-        def factory_function(*args, **kwargs):
-            name = cls.__name__
-            with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Creating {}:'):
-                plot = cls(self, *args, **kwargs)
-            if autodisplay:
-                with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:'):
-                    plot.display()
-            return plot
-        return factory_function
+        '''
+        if PY3:
+            @_functools.wraps(cls.__init__)
+            def factory_function(*args, **kwargs):
+                #with printer.verbosity_env(2): use this once merged w/ report_opt
+                name = cls.__name__
+                with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Creating {}:', verbosity=2):
+                    plot = cls(self, *args, **kwargs)
+                if autodisplay:
+                    with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:', verbosity=2):
+                        plot.display()
+                return plot
+            return factory_function
+        else:
         '''
         factoryfn_argnames = argnames[2:] #strip off self & ws args
         newargspec = (factoryfn_argnames,) + argspec[1:]
@@ -269,7 +273,6 @@ class Workspace(object):
             factoryfn.func_defaults = cls.__init__.func_defaults
 
         return factoryfn
-        '''
 
 
     def _register_components(self, autodisplay):        
