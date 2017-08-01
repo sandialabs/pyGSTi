@@ -672,7 +672,7 @@ class Workspace(object):
                             self.compCache[key] = fn(*argVals)
                     if 'call' in times:
                         if times['hash'] > times['call']:
-                            print('Added {} to hash-ineffective functions'.format(name_key))
+                            #print('Added {} to hash-ineffective functions'.format(name_key))
                             self.ineffectiveCache.add(name_key)
                     result = self.compCache[key]
 
