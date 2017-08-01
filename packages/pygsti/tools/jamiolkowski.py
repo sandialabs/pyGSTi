@@ -57,7 +57,7 @@ from . import matrixtools as _mt
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
 
-def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpaceDims=None):
+def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis):
     """
     Given a gate matrix, return the corresponding Choi matrix that is normalized
     to have trace == 1.
@@ -67,43 +67,30 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     gateMx : numpy array
         the gate matrix to compute Choi matrix of.
 
-    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    gateMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    choiMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    choiMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
-
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of gateMx (see BasisTools).
 
     Returns
     -------
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-    if not (isinstance(gateMxBasis, _basis.Basis) and \
-            isinstance(choiMxBasis, _basis.Basis) and \
-            dimOrStateSpaceDims is None):
-        print('Warning: jamiolkowski called with old arguments')
-    if dimOrStateSpaceDims is None:
-        dimOrStateSpaceDims = [int(round(_np.sqrt(gateMx.shape[0])))]
-    #first, get gate matrix into std basis
-
     gateMx = _np.asarray(gateMx)
-    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, 'std', dimOrStateSpaceDims)
+    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
     #expand gate matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='expand')
-    #gateMxInStdBasis2 = _basis.flexible_change_basis(gateMx, gateMxBasis, _basis.Basis(gateMxBasis, sum(dim)))
-    #assert _mt.array_eq(gateMxInStdBasis, gateMxInStdBasis2)
+    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'expand', gateMxBasis.std_equivalent(), gateMxBasis.expanded_std_equivalent())
 
     N = gateMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
+    print(N)
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #Note: we need to use the *full* basis of Matrix Unit, Gell-Mann, or Pauli-product matrices when
@@ -111,9 +98,9 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     # This is because even when the original gate matrix doesn't include a certain basis element (B0 say),
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Gate * B0), is not necessarily zero.
 
-    #get full list of basis matrices (in std basis) -- i.e. we use dmDim not dimOrStateSpaceDims
-    choiMxBasis = _basis.Basis(choiMxBasis, dimOrStateSpaceDims)
+    #get full list of basis matrices (in std basis) -- i.e. we use dmDim 
     BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
+
     assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
 
     choiMx = _np.empty( (N,N), 'complex')
@@ -130,7 +117,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     return choiMx_normalized
 
 # GStd = sum_ij Jij (BSi x BSj^*)
-def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateSpaceDims=None):
+def jamiolkowski_iso_inv(choiMx, choiMxBasis, gateMxBasis):
     """
     Given a choi matrix, return the corresponding gate matrix.  This function
     performs the inverse of jamiolkowski_iso(...).
@@ -140,36 +127,25 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateS
     choiMx : numpy array
         the Choi matrix, normalized to have trace == 1, to compute gate matrix for.
 
-    choiMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    choiMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    gateMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
-
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of the returned gateMx (see BasisTools).
 
     Returns
     -------
     numpy array
         gate matrix in the desired basis.
     """
-    if not (isinstance(gateMxBasis, _basis.Basis) and \
-            isinstance(choiMxBasis, _basis.Basis) and \
-            dimOrStateSpaceDims is None):
-        print('Warning: jamiolkowski_iso_inv called with old arguments')
-    if dimOrStateSpaceDims is None:
-        dimOrStateSpaceDims = [int(round(_np.sqrt(choiMx.shape[0])))]
     N = choiMx.shape[0] #dimension of full-basis (expanded) gate matrix
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    choiMxBasis = _basis.Basis(choiMxBasis, dimOrStateSpaceDims)
     BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
 
@@ -183,13 +159,14 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateS
             gateMxInStdBasis += choiMx_unnorm[i,j] * BiBj
 
     #project gate matrix so it acts only on the space given by the desired state space blocks
-    gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='contract')
+    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'contract', 
+            gateMxBasis.expanded_std_equivalent(), gateMxBasis.std_equivalent())
 
     #transform gate matrix into appropriate basis
-    return _basis.change_basis(gateMxInStdBasis, "std", gateMxBasis, dimOrStateSpaceDims)
+    return _basis.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
 
 
-def fast_jamiolkowski_iso_std(gateMx, gateMxBasis="gm", dimOrStateSpaceDims=None):
+def fast_jamiolkowski_iso_std(gateMx, gateMxBasis):
     """
     Given a gate matrix, return the corresponding Choi matrix in the standard
     basis that is normalized to have trace == 1.
@@ -204,14 +181,10 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis="gm", dimOrStateSpaceDims=None
     gateMx : numpy array
         the gate matrix to compute Choi matrix of.
 
-    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    gateMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
-
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of gateMx (see BasisTools).
 
     Returns
     -------
@@ -221,7 +194,7 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis="gm", dimOrStateSpaceDims=None
 
     #first, get gate matrix into std basis
     gateMx = _np.asarray(gateMx)
-    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, "std", dimOrStateSpaceDims)
+    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = gateMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
@@ -235,8 +208,7 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis="gm", dimOrStateSpaceDims=None
     Jmx_norm = Jmx / N
     return Jmx_norm
 
-
-def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis="gm", dimOrStateSpaceDims=None):
+def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis):
     """
     Given a choi matrix in the standard basis, return the corresponding gate matrix.
     This function performs the inverse of fast_jamiolkowski_iso_std(...).
@@ -247,14 +219,10 @@ def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis="gm", dimOrStateSpaceDims=
         the Choi matrix in the standard (matrix units) basis, normalized to
         have trace == 1, to compute gate matrix for.
 
-    gateMxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    gateMxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
-
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of the returned gateMx (see BasisTools).
 
     Returns
     -------
@@ -270,10 +238,11 @@ def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis="gm", dimOrStateSpaceDims=
     gateMxInStdBasis = gateMxInStdBasis.reshape((N2,N2))
 
     #project gate matrix so it acts only on the space given by the desired state space blocks
-    gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='contract')
+    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'contract', 
+            gateMxBasis.expanded_std_equivalent(), gateMxBasis.std_equivalent())
 
     #transform gate matrix into appropriate basis
-    return _basis.change_basis(gateMxInStdBasis, "std", gateMxBasis, dimOrStateSpaceDims)
+    return _basis.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
 
 
 def sum_of_negative_choi_evals(gateset, weights=None):
@@ -322,9 +291,8 @@ def sums_of_negative_choi_evals(gateset):
         for the corresponding gate (as ordered  by gateset.gates.iteritems()).
     """
     ret = []
-    mxBasis = gateset.basis.name
     for (_, gate) in gateset.gates.items():
-        J = fast_jamiolkowski_iso_std(gate, mxBasis) #Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate, gateset.basis) #Choi mx basis doesn't matter
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:
@@ -351,9 +319,8 @@ def mags_of_negative_choi_evals(gateset):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
-    mxBasis = gateset.basis.name
     for (_, gate) in gateset.gates.items():
-        J = jamiolkowski_iso( gate, mxBasis, choiMxBasis="std" )
+        J = jamiolkowski_iso( gate, gateset.basis, choiMxBasis=gateset.basis.expanded_std_equivalent())
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append( -ev.real if ev.real < 0 else 0.0 )

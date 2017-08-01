@@ -289,6 +289,9 @@ class Basis(object):
     def std_equivalent(self):
         return Basis('std', self.dim.blockDims)
 
+    def expanded_std_equivalent(self):
+        return Basis('std', sum(self.dim.blockDims))
+
     def expanded_equivalent(self):
         return Basis(self.name, sum(self.dim.blockDims))
 
