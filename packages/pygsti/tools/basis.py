@@ -356,6 +356,21 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
         from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
+def build_basis_pair(mx, from_basis, to_basis):
+    if isinstance(from_basis, Basis) and not isinstance(to_basis, Basis):
+        to_basis = from_basis.equivalent(to_basis)
+    elif isinstance(to_basis, Basis) and not isinstance(from_basis, Basis):
+        from_basis = to_basis.equivalent(from_basis)
+    else:
+        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        to_basis = Basis(to_basis, dimOrBlockDims)
+        from_basis = Basis(from_basis, dimOrBlockDims)
+    return from_basis, to_basis
+
+def build_basis_for_matrix(mx, basis):
+    dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+    return Basis(basis, dimOrBlockDims)
+
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     """
     Convert a gate matrix from one basis of a density matrix space

@@ -57,7 +57,7 @@ from . import matrixtools as _mt
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
 
-def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis=None):
+def jamiolkowski_iso(gateMx, gateMxBasis='gm', choiMxBasis='gm'):
     """
     Given a gate matrix, return the corresponding Choi matrix that is normalized
     to have trace == 1.
@@ -82,8 +82,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis=None):
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-    if choiMxBasis is None:
-        choiMxBasis = gateMxBasis.equivalent('gm')
+    gateMxBasis, choiMxBasis = _basis.build_basis_pair(gateMx, gateMxBasis, choiMxBasis)
     gateMx = _np.asarray(gateMx)
     gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
@@ -118,7 +117,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis=None):
     return choiMx_normalized
 
 # GStd = sum_ij Jij (BSi x BSj^*)
-def jamiolkowski_iso_inv(choiMx, choiMxBasis, gateMxBasis):
+def jamiolkowski_iso_inv(choiMx, choiMxBasis='gm', gateMxBasis='gm'):
     """
     Given a choi matrix, return the corresponding gate matrix.  This function
     performs the inverse of jamiolkowski_iso(...).
@@ -143,6 +142,7 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis, gateMxBasis):
     numpy array
         gate matrix in the desired basis.
     """
+    gateMxBasis, choiMxBasis = _basis.build_basis_pair(choiMx, gateMxBasis, choiMxBasis)
     N = choiMx.shape[0] #dimension of full-basis (expanded) gate matrix
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 

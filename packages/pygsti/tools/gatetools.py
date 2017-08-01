@@ -183,6 +183,7 @@ def diamonddist(A, B, mxBasis):
     float
        Diamond norm
     """
+    mxBasis = _basis.build_basis_for_matrix(A, mxBasis)
 
     #currently cvxpy is only needed for this function, so don't import until here
     import cvxpy as _cvxpy
@@ -292,7 +293,7 @@ def diamonddist(A, B, mxBasis):
         return -2
     return prob.value
 
-def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
     Compute the Jamiolkowski trace distance between gate matrices A and B,
     given by:
@@ -312,12 +313,14 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
+    if mxBasis is None:
+        mxBasis = _basis.Basis('gm', int(round(_np.sqrt(A.shape[0]))))
     JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
     JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
     return tracedist(JA,JB)
 
 
-def process_fidelity(A, B, mxBasis="gm"):
+def process_fidelity(A, B, mxBasis=None):
     """
     Returns the process fidelity between gate
       matrices A and B given by :
@@ -337,6 +340,8 @@ def process_fidelity(A, B, mxBasis="gm"):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
+    if mxBasis is None:
+        mxBasis = _basis.Basis('gm', int(round(_np.sqrt(A.shape[0]))))
     JA = _jam.jamiolkowski_iso(A, mxBasis)
     JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
