@@ -93,7 +93,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     if dimOrStateSpaceDims is None:
         dimOrStateSpaceDims = [int(round(_np.sqrt(gateMx.shape[0])))]
     #first, get gate matrix into std basis
-    gateMxBasis = _basis.Basis(gateMxBasis, dimOrStateSpaceDims)
+
     gateMx = _np.asarray(gateMx)
     gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, 'std', dimOrStateSpaceDims)
 
