@@ -159,11 +159,18 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis="gm", gateMxBasis="gm", dimOrStateS
     numpy array
         gate matrix in the desired basis.
     """
+    if not (isinstance(gateMxBasis, _basis.Basis) and \
+            isinstance(choiMxBasis, _basis.Basis) and \
+            dimOrStateSpaceDims is None):
+        print('Warning: jamiolkowski_iso_inv called with old arguments')
+    if dimOrStateSpaceDims is None:
+        dimOrStateSpaceDims = [int(round(_np.sqrt(choiMx.shape[0])))]
     N = choiMx.shape[0] #dimension of full-basis (expanded) gate matrix
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
+    choiMxBasis = _basis.Basis(choiMxBasis, dimOrStateSpaceDims)
+    BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization

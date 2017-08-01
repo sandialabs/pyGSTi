@@ -38,11 +38,9 @@ class JamiolkowskiTestCase(unittest.TestCase):
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
         Jmx1 = pygsti.jamiolkowski_iso(self.testGate, gateMxBasis=self.stdSmall,
-                                       choiMxBasis=basis.Basis(cmb, sum(self.stateSpaceDims)), dimOrStateSpaceDims=self.stateSpaceDims)
-        Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis='gm',
                                        choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
         Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis=self.gmSmall,
-                                       choiMxBasis=basis.Basis(cmb, sum(self.stateSpaceDims)), dimOrStateSpaceDims=self.stateSpaceDims)
+                                       choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
 
         #Make sure these yield the same trace == 1 matrix
         self.assertArraysAlmostEqual(Jmx1,Jmx2)
@@ -75,11 +73,11 @@ class JamiolkowskiTestCase(unittest.TestCase):
 class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
     def test_std_basis(self):
-        cmb = 'std' #choi matrix basis
+        cmb = basis.Basis('std', sum(self.stateSpaceDims))
         self.checkBasis(cmb)
 
     def test_gm_basis(self):
-        cmb = 'gm' #choi matrix basis
+        cmb = basis.Basis('gm', sum(self.stateSpaceDims))
         self.checkBasis(cmb)
 
 
