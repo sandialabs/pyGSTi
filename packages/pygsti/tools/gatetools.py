@@ -161,7 +161,7 @@ def tracedist(A, B):
 
 
 
-def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
+def diamonddist(A, B, mxBasis):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -173,14 +173,10 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     A, B : numpy array
         The *gate* matrices to use when computing the diamond norm.
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+    mxBasis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
-
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of gateMx (see basis.py). Inferred through matrices if not provided.
 
     Returns
     -------
@@ -223,8 +219,8 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     assert(dim == A.shape[1] == B.shape[0] == B.shape[1])
 
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
-    JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, "std", dimOrStateSpaceDims)
-    JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, "std", dimOrStateSpaceDims)
+    JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, mxBasis.std_equivalent())
+    JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, mxBasis.std_equivalent())
 
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
     #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
@@ -341,8 +337,8 @@ def process_fidelity(A, B, mxBasis="gm"):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
-    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
-    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
+    JA = _jam.jamiolkowski_iso(A, mxBasis)
+    JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
 
 

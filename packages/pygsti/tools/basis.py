@@ -286,14 +286,19 @@ class Basis(object):
         '''
         return _inv(self.get_to_std())
 
+    def equivalent(self, otherName):
+        return Basis(otherName, self.dim.blockDims)
+
+    def expanded_equivalent(self, otherName=None):
+        if otherName is None:
+            otherName = self.name
+        return Basis(otherName, sum(self.dim.blockDims))
+
     def std_equivalent(self):
-        return Basis('std', self.dim.blockDims)
+        return self.equivalent('std')
 
     def expanded_std_equivalent(self):
-        return Basis('std', sum(self.dim.blockDims))
-
-    def expanded_equivalent(self):
-        return Basis(self.name, sum(self.dim.blockDims))
+        return self.expanded_equivalent('std')
 
 def _build_composite_basis(bases):
     '''
@@ -570,11 +575,8 @@ def flexible_change_basis(mx, startBasis, endBasis):
     return end
 
 def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
-    # TEMPORARY
-    #gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='expand')
     if dimOrBlockDims is None:
         return mx
-    print(dimOrBlockDims)
     if resize == 'expand':
         a = Basis('std', dimOrBlockDims)
         b = Basis('std', sum(dimOrBlockDims))

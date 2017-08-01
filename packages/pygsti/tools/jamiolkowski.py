@@ -57,7 +57,7 @@ from . import matrixtools as _mt
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
 
-def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis):
+def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis=None):
     """
     Given a gate matrix, return the corresponding Choi matrix that is normalized
     to have trace == 1.
@@ -82,6 +82,8 @@ def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis):
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
+    if choiMxBasis is None:
+        choiMxBasis = gateMxBasis.equivalent('gm')
     gateMx = _np.asarray(gateMx)
     gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
@@ -90,7 +92,6 @@ def jamiolkowski_iso(gateMx, gateMxBasis, choiMxBasis):
     gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'expand', gateMxBasis.std_equivalent(), gateMxBasis.expanded_std_equivalent())
 
     N = gateMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
-    print(N)
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #Note: we need to use the *full* basis of Matrix Unit, Gell-Mann, or Pauli-product matrices when
