@@ -29,18 +29,20 @@ class JamiolkowskiTestCase(unittest.TestCase):
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate(self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)", "std")
         self.testGateGM_mx = basis.change_basis(self.testGate, self.stdSmall, self.gmSmall, self.stateSpaceDims)
-        self.expTestGate_mx = basis.resize_std_mx(self.testGate, 'expand', self.stdSmall, self.std)
-        self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, 'std', 'gm')
+        self.expTestGate_mx = basis.flexible_change_basis(self.testGate, self.stdSmall, self.std)
+        self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, self.std, self.gm)
 
     def tearDown(self):
         os.chdir(self.old)
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = pygsti.jamiolkowski_iso(self.testGate, gateMxBasis='std',
-                                       choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
+        Jmx1 = pygsti.jamiolkowski_iso(self.testGate, gateMxBasis=self.stdSmall,
+                                       choiMxBasis=basis.Basis(cmb, sum(self.stateSpaceDims)), dimOrStateSpaceDims=self.stateSpaceDims)
         Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis='gm',
                                        choiMxBasis=cmb, dimOrStateSpaceDims=self.stateSpaceDims)
+        Jmx2 = pygsti.jamiolkowski_iso(self.testGateGM_mx, gateMxBasis=self.gmSmall,
+                                       choiMxBasis=basis.Basis(cmb, sum(self.stateSpaceDims)), dimOrStateSpaceDims=self.stateSpaceDims)
 
         #Make sure these yield the same trace == 1 matrix
         self.assertArraysAlmostEqual(Jmx1,Jmx2)

@@ -57,8 +57,6 @@ from . import matrixtools as _mt
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|
 
-
-
 def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpaceDims=None):
     """
     Given a gate matrix, return the corresponding Choi matrix that is normalized
@@ -88,13 +86,23 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
+    if not (isinstance(gateMxBasis, _basis.Basis) and \
+            isinstance(choiMxBasis, _basis.Basis) and \
+            dimOrStateSpaceDims is None):
+        print('Warning: jamiolkowski called with old arguments')
+    if dimOrStateSpaceDims is None:
+        dimOrStateSpaceDims = [int(round(_np.sqrt(gateMx.shape[0])))]
     #first, get gate matrix into std basis
+    gateMxBasis = _basis.Basis(gateMxBasis, dimOrStateSpaceDims)
     gateMx = _np.asarray(gateMx)
-    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, "std", dimOrStateSpaceDims)
+    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, 'std', dimOrStateSpaceDims)
 
     #expand gate matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
     gateMxInStdBasis = _basis.resize_mx(gateMxInStdBasis, dimOrStateSpaceDims, resize='expand')
+    #gateMxInStdBasis2 = _basis.flexible_change_basis(gateMx, gateMxBasis, _basis.Basis(gateMxBasis, sum(dim)))
+    #assert _mt.array_eq(gateMxInStdBasis, gateMxInStdBasis2)
+
     N = gateMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
@@ -104,8 +112,9 @@ def jamiolkowski_iso(gateMx, gateMxBasis="gm", choiMxBasis="gm", dimOrStateSpace
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Gate * B0), is not necessarily zero.
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim not dimOrStateSpaceDims
-    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
-    assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the gate given
+    choiMxBasis = _basis.Basis(choiMxBasis, dimOrStateSpaceDims)
+    BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
+    assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
 
     choiMx = _np.empty( (N,N), 'complex')
     for i in range(N):

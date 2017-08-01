@@ -286,8 +286,11 @@ class Basis(object):
         '''
         return _inv(self.get_to_std())
 
-    def get_std_equivalent(self):
+    def std_equivalent(self):
         return Basis('std', self.dim.blockDims)
+
+    def expanded_equivalent(self):
+        return Basis(self.name, sum(self.dim.blockDims))
 
 def _build_composite_basis(bases):
     '''
@@ -556,8 +559,8 @@ def flexible_change_basis(mx, startBasis, endBasis):
         resize = 'expand'
     else:
         resize = 'contract'
-    stdBasis1 = startBasis.get_std_equivalent()
-    stdBasis2 = endBasis.get_std_equivalent()
+    stdBasis1 = startBasis.std_equivalent()
+    stdBasis2 = endBasis.std_equivalent()
     start = change_basis(mx, startBasis, stdBasis1)
     mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
     end   = change_basis(mid, stdBasis2, endBasis)
