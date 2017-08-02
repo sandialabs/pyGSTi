@@ -326,64 +326,66 @@ class MatrixEvalTree(EvalTree):
                 #   - iteratively add the tree that has the least intersection
                 #       with the trees in the existing set
                 iStartingTrees = []
-                start_select_method = "fast"
 
-                if start_select_method == "best":
-                    availableIndices = list(range(nSingleItemTrees))
-                    i_min,_ = min( enumerate(  #index of a tree in the minimal intersection
-                            ( min((len(s1.intersection(s2)) for s2 in singleItemTreeSetList[i+1:]))
-                              for i,s1 in enumerate(singleItemTreeSetList[:-1]) )),
-                                   key=lambda x: x[1]) #argmin using generators (np.argmin doesn't work)
-                    iStartingTrees.append(i_min)
-                    startingTreeEls = singleItemTreeSetList[i_min].copy()
-                    del availableIndices[i_min]
-                                        
-                    while len(iStartingTrees) < numSubTrees:
-                        ii_min,_ = min( enumerate(
-                            ( len(startingTreeEls.intersection(singleItemTreeSetList[i])) 
-                              for i in availableIndices )), key=lambda x: x[1]) #argmin
-                        i_min = availableIndices[ii_min]
-                        iStartingTrees.append(i_min)
-                        startingTreeEls.update( singleItemTreeSetList[i_min] )
-                        del availableIndices[ii_min]
-                    
-                    printer.log("EvalTree.split found starting trees in %.0fs" %
-                                (_time.time()-tm)); tm = _time.time()
+                #Another possible Algorithm (but was very slow...)
+                #start_select_method = "fast"
+                #if start_select_method == "best":
+                #    availableIndices = list(range(nSingleItemTrees))
+                #    i_min,_ = min( enumerate(  #index of a tree in the minimal intersection
+                #            ( min((len(s1.intersection(s2)) for s2 in singleItemTreeSetList[i+1:]))
+                #              for i,s1 in enumerate(singleItemTreeSetList[:-1]) )),
+                #                   key=lambda x: x[1]) #argmin using generators (np.argmin doesn't work)
+                #    iStartingTrees.append(i_min)
+                #    startingTreeEls = singleItemTreeSetList[i_min].copy()
+                #    del availableIndices[i_min]
+                #                        
+                #    while len(iStartingTrees) < numSubTrees:
+                #        ii_min,_ = min( enumerate(
+                #            ( len(startingTreeEls.intersection(singleItemTreeSetList[i])) 
+                #              for i in availableIndices )), key=lambda x: x[1]) #argmin
+                #        i_min = availableIndices[ii_min]
+                #        iStartingTrees.append(i_min)
+                #        startingTreeEls.update( singleItemTreeSetList[i_min] )
+                #        del availableIndices[ii_min]
+                #    
+                #    printer.log("EvalTree.split found starting trees in %.0fs" %
+                #                (_time.time()-tm)); tm = _time.time()
+                #
+                #elif start_select_method == "fast":
+                
+                def get_start_indices(maxIntersect):
+                    starting = [0] #always start with 0th tree
+                    startingSet = singleItemTreeSetList[0].copy() 
+                    for i,s in enumerate(singleItemTreeSetList[1:],start=1):
+                        if len(startingSet.intersection(s)) <= maxIntersect:
+                            starting.append(i)
+                            startingSet.update(s)
+                    return starting,startingSet
 
-                elif start_select_method == "fast":
-                    def get_start_indices(maxIntersect):
-                        starting = [0] #always start with 0th tree
-                        startingSet = singleItemTreeSetList[0].copy() 
-                        for i,s in enumerate(singleItemTreeSetList[1:],start=1):
-                            if len(startingSet.intersection(s)) <= maxIntersect:
-                                starting.append(i)
-                                startingSet.update(s)
-                        return starting,startingSet
+                left,right = 0, max(map(len,singleItemTreeSetList))
+                while left < right:
+                    mid = (left+right) // 2
+                    iStartingTrees,startingTreeEls = get_start_indices(mid)
+                    nStartingTrees = len(iStartingTrees)
+                    if nStartingTrees < numSubTrees:
+                        left = mid + 1
+                    elif nStartingTrees > numSubTrees:
+                        right = mid
+                    else: break # nStartingTrees == numSubTrees!
 
-                    left,right = 0, max(map(len,singleItemTreeSetList))
-                    while left < right:
-                        mid = (left+right) // 2
-                        iStartingTrees,startingTreeEls = get_start_indices(mid)
-                        nStartingTrees = len(iStartingTrees)
-                        if nStartingTrees < numSubTrees:
-                            left = mid + 1
-                        elif nStartingTrees > numSubTrees:
-                            right = mid
-                        else: break # nStartingTrees == numSubTrees!
+                if len(iStartingTrees) < numSubTrees:
+                    iStartingTrees,startingTreeEls = get_start_indices(mid+1)
+                if len(iStartingTrees) > numSubTrees:
+                    iStartingTrees = iStartingTrees[0:numSubTrees]
+                    startingTreeEls = set()
+                    for i in iStartingTrees:
+                        startingTreeEls.update(singleItemTreeSetList[i])
+                                    
+                printer.log("EvalTree.split fast-found starting trees in %.0fs" %
+                            (_time.time()-tm)); tm = _time.time()
 
-                    if len(iStartingTrees) < numSubTrees:
-                        iStartingTrees,startingTreeEls = get_start_indices(mid+1)
-                    if len(iStartingTrees) > numSubTrees:
-                        iStartingTrees = iStartingTrees[0:numSubTrees]
-                        startingTreeEls = set()
-                        for i in iStartingTrees:
-                            startingTreeEls.update(singleItemTreeSetList[i])
-                                        
-                    printer.log("EvalTree.split fast-found starting trees in %.0fs" %
-                                (_time.time()-tm)); tm = _time.time()
-
-                else:
-                    raise ValueError("Invalid start select method: %s" % start_select_method)
+                #else:
+                #    raise ValueError("Invalid start select method: %s" % start_select_method)
 
 
                 #Merge all the non-starting trees into the starting trees
@@ -399,44 +401,45 @@ class MatrixEvalTree(EvalTree):
                             (_time.time()-tm)); tm = _time.time()
                 merge_method = "fast"
 
-                if merge_method == "best":
-                    while len(indicesLeft) > 0:
-                        iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
-                                             key=lambda x: x[1]) #argmin
-                        setToMergeInto = subTreeSetList[iToMergeInto]
-                        #intersectionSizes = [ len(setToMergeInto.intersection(
-                        #            singleItemTreeSetList[i])) for i in indicesLeft ]
-                        #iMaxIntsct = _np.argmax(intersectionSizes)
-                        iMaxIntsct,_ = max( enumerate( ( len(setToMergeInto.intersection(
-                                            singleItemTreeSetList[i])) for i in indicesLeft )),
-                                          key=lambda x: x[1]) #argmax
+                #Another possible algorith (but slower)
+                #if merge_method == "best":
+                #    while len(indicesLeft) > 0:
+                #        iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
+                #                             key=lambda x: x[1]) #argmin
+                #        setToMergeInto = subTreeSetList[iToMergeInto]
+                #        #intersectionSizes = [ len(setToMergeInto.intersection(
+                #        #            singleItemTreeSetList[i])) for i in indicesLeft ]
+                #        #iMaxIntsct = _np.argmax(intersectionSizes)
+                #        iMaxIntsct,_ = max( enumerate( ( len(setToMergeInto.intersection(
+                #                            singleItemTreeSetList[i])) for i in indicesLeft )),
+                #                          key=lambda x: x[1]) #argmax
+                #        setToMerge = singleItemTreeSetList[indicesLeft[iMaxIntsct]]
+                #        subTreeSetList[iToMergeInto] = \
+                #              subTreeSetList[iToMergeInto].union(setToMerge)
+                #        del indicesLeft[iMaxIntsct]
+                #        
+                #elif merge_method == "fast":
+                most_at_once = 10
+                desiredLength = int(len(self) / numSubTrees)
+                while len(indicesLeft) > 0:
+                    iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
+                                         key=lambda x: x[1]) #argmin
+                    setToMergeInto = subTreeSetList[iToMergeInto]
+                    intersectionSizes = sorted( [ (ii,len(setToMergeInto.intersection(
+                                    singleItemTreeSetList[i]))) for ii,i in enumerate(indicesLeft) ],
+                                                key=lambda x: x[1], reverse=True)
+                    toDelete = []
+                    for i in range(min(most_at_once,len(indicesLeft))):
+                        #if len(subTreeSetList[iToMergeInto]) >= desiredLength: break
+                        iMaxIntsct,_ = intersectionSizes[i]
                         setToMerge = singleItemTreeSetList[indicesLeft[iMaxIntsct]]
-                        subTreeSetList[iToMergeInto] = \
-                              subTreeSetList[iToMergeInto].union(setToMerge)
-                        del indicesLeft[iMaxIntsct]
-                        
-                elif merge_method == "fast":
-                    most_at_once = 10
-                    desiredLength = int(len(self) / numSubTrees)
-                    while len(indicesLeft) > 0:
-                        iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
-                                             key=lambda x: x[1]) #argmin
-                        setToMergeInto = subTreeSetList[iToMergeInto]
-                        intersectionSizes = sorted( [ (ii,len(setToMergeInto.intersection(
-                                        singleItemTreeSetList[i]))) for ii,i in enumerate(indicesLeft) ],
-                                                    key=lambda x: x[1], reverse=True)
-                        toDelete = []
-                        for i in range(min(most_at_once,len(indicesLeft))):
-                            #if len(subTreeSetList[iToMergeInto]) >= desiredLength: break
-                            iMaxIntsct,_ = intersectionSizes[i]
-                            setToMerge = singleItemTreeSetList[indicesLeft[iMaxIntsct]]
-                            subTreeSetList[iToMergeInto].update(setToMerge)
-                            toDelete.append(iMaxIntsct)
-                        for i in sorted(toDelete,reverse=True):
-                            del indicesLeft[i]
+                        subTreeSetList[iToMergeInto].update(setToMerge)
+                        toDelete.append(iMaxIntsct)
+                    for i in sorted(toDelete,reverse=True):
+                        del indicesLeft[i]
 
-                else:
-                    raise ValueError("Invalid merge method: %s" % merge_method)
+                #else:
+                #    raise ValueError("Invalid merge method: %s" % merge_method)
 
 
                 assert(len(subTreeSetList) == numSubTrees)

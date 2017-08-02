@@ -136,7 +136,7 @@ class Estimate(object):
             gateset = _gaugeopt_to_target(**goparams)
 
 
-        #sort te parameters by name for consistency
+        #sort the parameters by name for consistency
         ordered_goparams = _collections.OrderedDict( 
             [(k,goparams[k]) for k in sorted(list(goparams.keys()))])
 

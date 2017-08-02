@@ -24,7 +24,7 @@ class TestWriteAndLoad(BaseTestCase):
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
 
-        ds = pygsti.obj.DataSet(spamLabels=['plus','minus'])
+        ds = pygsti.obj.DataSet(spamLabels=['plus','minus'], comment="Hello")
         ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
         ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
         ds.done_adding_data()
@@ -52,7 +52,9 @@ class TestWriteAndLoad(BaseTestCase):
                                            headerString='## Columns = ds1 plus count, ds1 minus count, ds2 plus count, ds2 minus count')
 
         multi_dataset_txt = \
-"""## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
+"""# My Comment
+## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
+# My Comment2
 {} 0 100 0 100
 Gx 10 90 0.1 100
 GxGy 40 60 0.4 100

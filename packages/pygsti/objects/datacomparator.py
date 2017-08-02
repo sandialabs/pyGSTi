@@ -10,6 +10,7 @@ import numpy as _np
 import scipy as _scipy
 from scipy import stats as _stats
 
+from .. import tools as _tools
 from .multidataset import MultiDataSet as _MultiDataSet
 
 
@@ -46,8 +47,8 @@ def loglikelihoodRatioTest(nListList):
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
 
-def pval(llrval,dof):
-    return 1-_stats.chi2.cdf(llrval,dof)
+def pval(llrval, dof):
+    return 1 - _stats.chi2.cdf(llrval, dof)
 
 def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
     for gate in gate_exclusions:
@@ -71,6 +72,7 @@ class DataComparator():
     def __init__(self, dataset_list_or_multidataset,gatestrings = 'all',
                  gate_exclusions = None, gate_inclusions = None,
                  DS_names = None):
+        self.timestamp = _tools.time_hash()
         
         if DS_names is not None:
             if len(DS_names) != len(dataset_list_or_multidataset):

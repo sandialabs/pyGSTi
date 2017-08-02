@@ -5,9 +5,11 @@ import unittest
 
 
 class Chi2LogLTestCase(BaseTestCase):
-    ###########################################################
-    ## Chi2 TESTS   ##################################
-    ###########################################################
+
+    def test_chi2_terms(self):
+        gs = pygsti.io.load_gateset(compare_files + '/analysis.gateset')
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + '/analysis.dataset')
+        terms = pygsti.chi2_terms(ds, gs)
 
     def test_chi2_fn(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")

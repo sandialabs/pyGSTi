@@ -13,9 +13,10 @@ import scipy.stats    as _stats
 import warnings       as _warnings
 import time           as _time
 
-from .. import optimize as _opt
-from .. import tools    as _tools
-from .. import objects  as _objs
+from .. import optimize     as _opt
+from .. import tools        as _tools
+from .. import objects      as _objs
+from .. import construction as _pc
 _dummy_profiler = _objs.profiler.DummyProfiler()
 
 CUSTOMLM = True
@@ -1008,8 +1009,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
     gs = startGateset.copy()
-    gateBasis = startGateset.get_basis_name()
-    basisDim = startGateset.get_basis_dimension()
+    gateBasis = startGateset.basis.name
+    basisDim = startGateset.basis.dim.blockDims
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -1801,8 +1802,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                     if gatestr in stringsToEstimate:
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
-            lsgstGateset.set_basis(startGateset.get_basis_name(),
-                                   startGateset.get_basis_dimension())
+            lsgstGateset.basis = startGateset.basis
 
             minErr, lsgstGateset = \
                 do_mc2gst( dataset, lsgstGateset, stringsToEstimate,
@@ -2181,8 +2181,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     tStart = _time.time()
 
     gs = startGateset.copy()
-    gateBasis = startGateset.get_basis_name()
-    basisDim = startGateset.get_basis_dimension()
+    gateBasis = startGateset.basis.name
+    basisDim = startGateset.basis.dim.blockDims
 
     if maxfev is None: maxfev = maxiter
 
@@ -2232,8 +2232,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
     
-    if evaltree_cache and evaltree_cache.has_key('evTree') \
-            and evaltree_cache.has_key('wrtBlkSize'):
+    if evaltree_cache and 'evTree' in evaltree_cache \
+            and 'wrtBlkSize' in evaltree_cache:
         #use cache dictionary to speed multiple calls which use
         # the same gateset, gate strings, comm, memlim, etc.
         evTree = evaltree_cache['evTree']
@@ -2766,8 +2766,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         gatestringWeights[ stringsToEstimate.index(gatestr) ] = weight
             else: gatestringWeights = None
 
-            mleGateset.set_basis(startGateset.get_basis_name(),
-                                   startGateset.get_basis_dimension()) 
+            mleGateset.basis = startGateset.basis 
               #set basis in case of CPTP constraints
 
             _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
@@ -2804,8 +2803,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             if i == len(gateStringLists)-1 and not alwaysPerformMLE: #on the last iteration, do ML
                 printer.log("Switching to ML objective (last iteration)",2)
 
-                mleGateset.set_basis(startGateset.get_basis_name(),
-                                     startGateset.get_basis_dimension()) 
+                mleGateset.basis = startGateset.basis 
     
                 maxLogL_p, mleGateset_p = do_mlgst(
                   dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
@@ -2945,7 +2943,7 @@ def find_closest_unitary_gatemx(gateMx):
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def get_gate_mx_1q(basisVec):  # 1 qubit version
-        return _tools.single_qubit_gate(basisVec[0],
+        return _pc.single_qubit_gate(basisVec[0],
                                         basisVec[1],
                                         basisVec[2])
 

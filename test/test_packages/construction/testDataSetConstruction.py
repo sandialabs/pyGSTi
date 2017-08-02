@@ -3,6 +3,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import pygsti
 import pygsti.construction as pc
+import numpy as np
 
 class DataSetConstructionTestCase(BaseTestCase):
 
@@ -50,6 +51,10 @@ class DataSetConstructionTestCase(BaseTestCase):
     def test_generate_fake_data(self):
         dataset = pc.generate_fake_data(self.dataset, self.gatestring_list, nSamples=None, sampleError='multinomial', seed=100)
         dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='round', seed=100)
+
+        randState = np.random.RandomState(1234)
+        dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='binomial', randState=randState)
+
 
     def test_merge_outcomes(self):
         merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['plus', 'minus']})

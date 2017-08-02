@@ -14,7 +14,7 @@ def chi2_terms(dataset, gateset, gateStrings=None,
                useFreqWeightedChiSq=False, check=False,
                memLimit=None, gateLabelAliases=None):
     """
-    Computes the chi^2 contriburtions from a set of gate strings.
+    Computes the chi^2 contributions from a set of gate strings.
 
     This function returns the same value as :func:`chi2` with
     `returnGradient=False` and `returnHessian=False`, except the

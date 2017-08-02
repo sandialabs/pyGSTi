@@ -6,8 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Gate Set Tomography Object Construction Python Package """
 
-#Import the most important/useful routines of each module into
-# the package namespace
+from .gateconstruction import *
 from .gatesetconstruction import *
 from .gatestringconstruction import *
 from .spamspecconstruction import *

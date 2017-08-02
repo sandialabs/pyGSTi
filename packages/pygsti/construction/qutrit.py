@@ -9,8 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy import linalg as _linalg
 
-from ..tools import basistools as _bt
-from ..      import objects    as _objs
+from .. import objects as _objs
+from ..tools import change_basis, Basis
 
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
@@ -89,7 +89,7 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
                      [0,0,0]]))
 
     identity3 = arrType(_np.identity(3))
-    identity3final = _bt.change_basis(_np.reshape(identity3,(9,1)), "std", basis)
+    identity3final = change_basis(_np.reshape(identity3,(9,1)), "std", basis)
 
     E0 = arrType(_np.diag([1,0,0]))
     E1 = arrType(_np.diag([0,1,0]))
@@ -124,18 +124,18 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISO = _np.kron(_np.conj(gateImx),gateImx)
-    gateISOfinal = _bt.change_basis(gateISO, "std", basis)
+    gateISOfinal = change_basis(gateISO, "std", basis)
     gateXSO = _np.kron(_np.conj(gateXmx),gateXmx)
-    gateXSOfinal = _bt.change_basis(gateXSO, "std", basis)
+    gateXSOfinal = change_basis(gateXSO, "std", basis)
     gateYSO = _np.kron(_np.conj(gateYmx),gateYmx)
-    gateYSOfinal = _bt.change_basis(gateYSO, "std", basis)
+    gateYSOfinal = change_basis(gateYSO, "std", basis)
     gateMSO = _np.kron(_np.conj(gateMmx),gateMmx)
-    gateMSOfinal = _bt.change_basis(gateMSO, "std", basis)
+    gateMSOfinal = change_basis(gateMSO, "std", basis)
 
-    rho0final = _bt.change_basis(_np.reshape(rho0,(9,1)), "std", basis)
-    E0final =  _bt.change_basis(_np.reshape(E0,(9,1)), "std", basis)
-    E1final = _bt.change_basis(_np.reshape(E1,(9,1)), "std", basis)
-    E2final = _bt.change_basis(_np.reshape(E2,(9,1)), "std", basis)
+    rho0final = change_basis(_np.reshape(rho0,(9,1)), "std", basis)
+    E0final =  change_basis(_np.reshape(E0,(9,1)), "std", basis)
+    E1final = change_basis(_np.reshape(E1,(9,1)), "std", basis)
+    E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
     qutritGS = _objs.GateSet()
     qutritGS['rho0'] = rho0final
@@ -150,7 +150,7 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
     qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
     qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
-    qutritGS.set_basis(basis,3)
+    qutritGS.basis = Basis(basis,3)
     qutritGS.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritGS.dim)
     
     return qutritGS
