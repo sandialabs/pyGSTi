@@ -9,6 +9,7 @@ branches:
     - master
     - beta
     - develop
+    - feature-report-optimization
 
 env:
     - Drivers=True    # First in build mx because long duration
