@@ -195,6 +195,7 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis):
 
     #first, get gate matrix into std basis
     gateMx = _np.asarray(gateMx)
+    gateMxBasis = _basis.build_basis_for_matrix(gateMx, gateMxBasis)
     gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
@@ -237,6 +238,7 @@ def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis):
     gateMxInStdBasis = choiMx.reshape((N,N,N,N)) * N
     gateMxInStdBasis = _np.swapaxes(gateMxInStdBasis,1,2).flatten()
     gateMxInStdBasis = gateMxInStdBasis.reshape((N2,N2))
+    gateMxBasis = _basis.build_basis_for_matrix(gateMxInStdBasis, gateMxBasis)
 
     #project gate matrix so it acts only on the space given by the desired state space blocks
     gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'contract', 

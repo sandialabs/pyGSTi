@@ -143,8 +143,8 @@ class Basis(object):
     def __hash__(self):
         return hash((self.name, self.dim))
 
-    def __getattr__(self, attr):
-        return getattr(self.dim, attr)
+    #def __getattr__(self, attr):
+    #return getattr(self.dim, attr)
 
     def transform_matrix(self, to_basis):
         '''
@@ -566,11 +566,11 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
     #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
     if resize == 'expand':
-        assert stdBasis1.gateDim < stdBasis2.gateDim
+        assert stdBasis1.dim.gateDim < stdBasis2.dim.gateDim
         right = _np.dot(mx, stdBasis1.get_expand_mx())
         mid   = _np.dot(stdBasis1.get_contract_mx(), right)
     elif resize == 'contract':
-        assert stdBasis1.gateDim > stdBasis2.gateDim
+        assert stdBasis1.dim.gateDim > stdBasis2.dim.gateDim
         right = _np.dot(mx, stdBasis2.get_contract_mx())
         mid = _np.dot(stdBasis2.get_expand_mx(), right)
     return mid
@@ -578,7 +578,7 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
 def flexible_change_basis(mx, startBasis, endBasis):
     if startBasis.dim.gateDim == endBasis.dim.gateDim:
         return change_basis(mx, startBasis, endBasis)
-    if startBasis.gateDim < endBasis.gateDim:
+    if startBasis.dim.gateDim < endBasis.dim.gateDim:
         resize = 'expand'
     else:
         resize = 'contract'

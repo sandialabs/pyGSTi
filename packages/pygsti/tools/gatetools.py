@@ -161,7 +161,7 @@ def tracedist(A, B):
 
 
 
-def diamonddist(A, B, mxBasis):
+def diamonddist(A, B, mxBasis='gm'):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -1144,7 +1144,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
     
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    '''
     if isinstance(ham_basis, _basis.Basis):
         hamBasisMxs = ham_basis.get_composite_matrices()
     elif _compat.isstr(ham_basis):
@@ -1158,12 +1157,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
         otherBasisMxs = _basis.basis_matrices(other_basis, d)
     else: 
         otherBasisMxs = other_basis
-    '''
-    hamBasis   = _basis.Basis(ham_basis)
-    otherBasis = _basis.Basis(other_basis)
-
-    hamBasisMxs   = hamBasis.get_composite_matrices()
-    otherBasisMxs = otherBasis.get_composite_matrices()
     
     hamGens, otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
