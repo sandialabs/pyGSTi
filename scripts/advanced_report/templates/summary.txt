@@ -1,12 +1,19 @@
 @@markdown
-### progressBarPlot:
-Model Violation summary: The aggregate log-likelihood as a function of GST iterations''')
+### Model Violation summary: 
+The aggregate log-likelihood as a function of GST iterations''')
 @@code
 #progressBarPlot
 @@markdown
-### bestEstimateColorScatterPlot
-Per-sequence model violation: Each point displays the goodness of fit for a single gate sequence.''')
+### Per-sequence model violation: 
+Each point displays the goodness of fit for a single gate sequence.''')
 @@code
+'''
+colorScatterPlot = ws.ColorBoxPlot(
+    switchBd.objective, gss, eff_ds, gsL,
+    linlg_pcntle=float(linlogPercentile) / 100,
+    minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+colorScatterPlot.set_render_options(click_to_display=True)
+'''
 #bestEstimateColorScatterPlot
 @@markdown
 ### bestGatesetVsTargetTable_sum

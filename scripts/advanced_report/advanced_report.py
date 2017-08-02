@@ -8,7 +8,6 @@ def main():
     nb.add_markdown('# Pygsti report\n(Created on {})'.format(time.strftime("%B %d, %Y")))
     nb.add_code_file('templates/setup.py')
     nb.add_code_file('templates/workspace.py')
-
     nb.add_notebook_text_files([
         'templates/summary.txt',
         'templates/goodness.txt',
@@ -17,7 +16,6 @@ def main():
         'templates/data_comparison.txt',
         'templates/input.txt',
         'templates/meta.txt'])
-
     nb.launch_as('AdvancedReport.ipynb')
 
 if __name__ == '__main__':
