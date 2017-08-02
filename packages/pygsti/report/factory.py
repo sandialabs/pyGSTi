@@ -742,7 +742,7 @@ def create_general_report(results, filename, confidenceLevel=None,
         _merge_template(qtys, template, filename, auto_open, precision,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
-        SmartCache.global_status(printer)
+        #SmartCache.global_status(printer)
     return ws
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to

@@ -24,6 +24,8 @@ from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
+
+from pprint import pprint as _pprint
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
@@ -151,9 +153,12 @@ class Workspace(object):
                 self.smartCache = _pickle.load(infile)
         self.smartCache.add_digest(ws_custom_digest)
 
-    def save_cache(self, cachefile):
+    def save_cache(self, cachefile, showUnpickled=False):
         with open(cachefile, 'wb') as outfile:
             _pickle.dump(self.smartCache, outfile)
+        if showUnpickled:
+            print('Unpickled keys:')
+            _pprint(self.smartCache.unpickleable)
 
     def load_cache(self, cachefile):
         with open(cachefile, 'rb') as infile:

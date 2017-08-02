@@ -87,6 +87,8 @@ class SmartCache(object):
 
         self.typesigs = dict()
         self.saved = 0
+
+        self.unpickleable = set()
         
         SmartCache.StaticCacheList.append(self)
 
@@ -100,9 +102,11 @@ class SmartCache(object):
             try:
                 _pickle.dumps(v)
                 pickleableCache[k] = v
-            except TypeError:
+            except TypeError as e:
+                self.unpickleable.add(str(k[0]) + str(type(v)))
                 pass
             except _pickle.PicklingError:
+                self.unpickleable.add(str(k[0]) + str(type(v)))
                 pass
         d['cache'] = pickleableCache
         return d
@@ -297,7 +301,7 @@ class SmartCache(object):
         printer.log('saved       : {}'.format(saved))
         printer.log('net benefit : {}'.format(saved - overhead))
         self.saved = saved - overhead
-
+        printer.log(self.unpickleable)
 
 def smart_cached(obj):
     '''
