@@ -3,6 +3,7 @@
 The raw estimated gate set, and then some useful derived quantities.  These quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom using the parameters in Table
 
 @@code
+# Choose G.O. params
 # goSwitchBoard2
 
 @@markdown
@@ -11,12 +12,16 @@ A list of the parameters used when performing the gauge optimization that produc
 
 @@code
 # bestGatesetGaugeOptParamsTable
+#qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
 
 @@markdown
 ### The GST estimate of the SPAM operations. Compares the estimated SPAM operations to those desired for convenience.
 
 @@code
 # bestGatesetSpamBriefTable
+# qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
+#                                                      ['Target','Estimated'],
+#                                                      cri, includeHSVec=False)
 
 @@markdown
 ### GST estimate of SPAM probabilities.
@@ -24,12 +29,14 @@ Computed by taking the dot products of vectors in bestGatesetSpamTable. The symb
 
 @@code
 #bestGatesetSpamParametersTable
+#qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
 
 @@markdown
 ### Decomposition of estimated gates.
 A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto a the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle respectively.
 @@code
 # bestGatesetDecompTable
+# qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
 
 @@markdown
 ### Relative Eigenvalues of estimated gates.
@@ -37,6 +44,8 @@ The spectrum of each estimated gate pre-multiplied by the inverse of it's ideal 
 
 @@code
 # bestGatesetRelEvalTable
+# qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
+
 
 @@markdown
 ### Comparison of GST estimated gates to target gates:
@@ -44,13 +53,15 @@ This table presents, for each of the gates, three different measures of distance
 
 @@code
 # bestGatesetVsTargetTable
+# qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
 
 @@markdown
 ### Comparison of GST estimated SPAM to target SPAM.
 This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.
 
 @@code
-#bestGatesetSpamVsTargetTable
+# bestGatesetSpamVsTargetTable
+# qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
 
 @@markdown
 ### The GST estimate of the logic gate operations.
@@ -58,3 +69,5 @@ Compares the *ideal* (generally unitary) logic gates (second column, also in tar
 
 @@code
 #bestGatesetGatesBoxTable
+# qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+#                                                  ['Target','Estimated'], "boxes", cri)

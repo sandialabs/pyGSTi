@@ -7,8 +7,8 @@ This report contains information for more than one data set.  This page shows co
 Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.
 
 @@code
-# dsComparisonHistogram
-# dscmpSwitchboard
+# qtys['dscmpSwitchboard'] = dscmp_switchBd
+# qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
 
 @@markdown
 # Per-sequence $2\Delta\log(\mathcal{L})$ values comparing two data sets.
@@ -16,3 +16,5 @@ In a similar fashion to other color box plots, this plot shows two times the log
 
 @@code
 # dsComparisonBoxPlot
+# qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
+#                                               None, None, dscomparator=dscmp_switchBd.dscmp)
