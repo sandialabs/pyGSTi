@@ -660,7 +660,7 @@ class Workspace(object):
                     key="NA"; result = v; break
             else:
                 if name_key in self.ineffectiveCache:
-                    key = 'NA'
+                    key = 'INEFFECTIVE'
                     result = fn(*argVals)
                 else:
                     # argVals now contains all the arguments, so call the function if
@@ -677,7 +677,7 @@ class Workspace(object):
                             self.ineffectiveCache.add(name_key)
                     result = self.compCache[key]
 
-            if key not in storedKeys:
+            if key not in storedKeys or key == 'INEFFECTIVE':                
                 switchpos_map[pos] = len(resultValues)
                 storedKeys[key] = len(resultValues)
                 resultValues.append( result )
