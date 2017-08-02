@@ -733,9 +733,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     m, M : float
         Minimum and maximum of the color scale.
 
-    mxBasis : str
+    mxBasis : str, optional
       The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-      Used to label the rows & columns.  If you don't want labels, set to None.
+      Used to label the rows & columns.  If you don't want labels, leave as
+      None.
 
     mxBasisDims, mxBasisDimsY : int or list, optional
       The dimension of the density matrix space, or a list specifying the
