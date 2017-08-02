@@ -6,35 +6,30 @@ Information pertaining to the target gate set and data set.
 The *ideal* input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.
 
 @@code
-# targetSpamBriefTable
-# qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
+ws.SpamTable(gs_target, None, includeHSVec=False)
 @@markdown
 ### Fiducial sequences.
 A list of the preparation and measurement <q>fiducial</q> gate sequences. See discussion in text.
 @@code 
-#fiducialListTable
-# qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
 
 @@markdown
 ### Germ sequences.
 A list of the <q>germ</q> gate sequences.  See discussion in text.
 
 @@code
-# germList2ColTable
-# qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
+ws.GatestringTable(germs, "Germ", nCols=2)
 
 @@markdown
 ### General dataset properties.
 See discussion in text.
 
 @@code
-# datasetOverviewTable
-# qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
+ws.DataSetOverviewTable(ds)
 
 @@markdown
 ### Target gate set: logic gates.
 The *ideal* (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a $d^2\times d^2$ *superoperator* that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).
 
 @@code
-# targetGatesBoxTable
-# qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
+ws.GatesTable(gs_target, display_as="boxes")

@@ -11,19 +11,19 @@ The rating from 1 to 5 stars gives a very crude indication of goodness of fit.
   <!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
 
 @@code
-# qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
-#   Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+ws.FitComparisonBarPlot(Ls, gs_finalAllL, switchBd.gsAllL, 
+                        eff_ds, switchBd.objective, 'L')
 @@markdown
 ### bestEstimateColorBoxPlot:
 @@code
 '''
 colorScatterPlot = ws.ColorBoxPlot(
-    switchBd.objective, gss, eff_ds, gsL,
+    switchBd.objective, gs_final, eff_ds, gsL,
     linlg_pcntle=float(linlogPercentile) / 100,
     minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
 colorScatterPlot.set_render_options(click_to_display=True)
 '''
-# qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
+#switchBd.view(maxLView,"v6")
 
 @@markdown
 ### $2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset.
@@ -34,7 +34,7 @@ Each pixel represents a single experiment (gate sequence), and its color indicat
 @@code
 '''
     qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
-        "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
+        "scaling", switchBd.gs_finalFinal, eff_ds, switchBd.gs_finalIter,
             submatrices=switchBd.scaledSubMxsDict)
 '''
 @@markdown

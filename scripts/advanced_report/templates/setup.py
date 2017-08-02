@@ -25,17 +25,3 @@ gs_target.set_all_parameterizations("TP")
 results1 = pygsti.do_long_sequence_gst(ds1, gs_target, fiducials, fiducials, germs, maxLengths, verbosity=0)
 results2 = pygsti.do_long_sequence_gst(ds2, gs_target, fiducials, fiducials, germs, maxLengths, verbosity=0)
 results3 = pygsti.do_long_sequence_gst(ds3, gs_target, fiducials, fiducials, germs, maxLengths, verbosity=0)
-
-print(results1)
-
-#make some shorthand variable names for later
-tgt = results1.estimates['default'].gatesets['target']
-
-ds1 = results1.dataset
-ds2 = results2.dataset
-ds3 = results3.dataset
-
-gs1 = results1.estimates['default'].gatesets['go0']
-gs2 = results2.estimates['default'].gatesets['go0']
-gs3 = results3.estimates['default'].gatesets['go0']
-gss = results1.gatestring_structs['final']
