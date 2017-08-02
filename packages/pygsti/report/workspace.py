@@ -322,6 +322,7 @@ class Workspace(object):
         #Plots
         self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot)
         self.BoxKeyPlot = makefactory(_wp.BoxKeyPlot)
+        self.MatrixPlot = makefactory(_wp.MatrixPlot)
         self.GateMatrixPlot = makefactory(_wp.GateMatrixPlot)
         self.PolarEigenvaluePlot = makefactory(_wp.PolarEigenvaluePlot)
         self.ProjectionsBoxPlot = makefactory(_wp.ProjectionsBoxPlot)
