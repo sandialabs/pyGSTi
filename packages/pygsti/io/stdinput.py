@@ -23,12 +23,12 @@ from .gstplyparser import GateStringParser
 _sys.setrecursionlimit(10000)
 
 class StdInputParser(object):
+    _string_parser = GateStringParser()
     """
     Encapsulates a text parser for reading GST input files.
     """
-
     def __init__(self):
-        self._string_parser = GateStringParser()
+        pass
 
     def parse_gatestring(self, s, lookup={}):
         """

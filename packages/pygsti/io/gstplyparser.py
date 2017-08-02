@@ -32,7 +32,6 @@ class GateStringLexer:
         'EXPOP',
         'MULTOP',
         'INTEGER',
-        'REAL',
         'NOP',
         'GATE',
         'REFLBL',
@@ -77,12 +76,6 @@ class GateStringLexer:
         return t
 
     @staticmethod
-    def t_REAL(t):
-        r'[-+]?[0-9]*\.[0-9]+([eE][-+]?[0-9]+)?'
-        t.value = float(t.value)
-        return t
-
-    @staticmethod
     def t_INTEGER(t):
         r'\d+'
         t.value = int(t.value)
@@ -103,7 +96,7 @@ class GateStringParser:
     def __init__(self, lexer_object=None, lookup={}):
         self._lookup = lookup
         self._lexer = lex.lex(object=lexer_object if lexer_object else GateStringLexer())
-        self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='parsetab_string')
+        self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='pygsti.io.parsetab_string')
 
     @property
     def lookup(self):
