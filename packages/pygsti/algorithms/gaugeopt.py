@@ -210,8 +210,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         validSpamPenalty == 0 and \
         targetGateset is not None and \
         gatesMetric == "frobenius" and \
-        spamMetric  == "frobenius":# and \
-        #gateset.dim < 64:
+        spamMetric  == "frobenius" and \
+        gateset.dim < 64: # least squares optimization is uneffective if more than 3 qubits
 
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
