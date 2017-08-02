@@ -143,9 +143,6 @@ class Basis(object):
     def __hash__(self):
         return hash((self.name, self.dim))
 
-    #def __getattr__(self, attr):
-    #return getattr(self.dim, attr)
-
     def transform_matrix(self, to_basis):
         '''
         Retrieve a list of matrices by index 
