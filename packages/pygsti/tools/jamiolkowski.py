@@ -295,7 +295,7 @@ def sums_of_negative_choi_evals(gateset):
     """
     ret = []
     for (_, gate) in gateset.gates.items():
-        J = fast_jamiolkowski_iso_std(gate, gateset.basis) #Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate, gateset.basis.name) #Choi mx basis doesn't matter
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:
