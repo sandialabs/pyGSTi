@@ -30,7 +30,6 @@ class BlankTable(WorkspaceTable):
         table = _ReportTable(['Blank'], [None])
         table.finish()
         return table
-
     
 class SpamTable(WorkspaceTable):
     def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None,
@@ -99,8 +98,6 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                # basisNm = gateset.basis.name
-                # TEMPORARY: TO USE DEPRECATED RIGETTI DATA FOR REPORT
                 basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
                 rowData.append( rhoMx )
@@ -108,7 +105,6 @@ class SpamTable(WorkspaceTable):
 
             for gateset in gatesets:
                 basisNm = gateset.basis.name
-                #basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
                 evals = _np.linalg.eigvals(rhoMx)
                 rowData.append( evals )
@@ -134,14 +130,12 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 evals = _np.linalg.eigvals(EMx)
@@ -258,9 +252,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            #basisNm = gateset.basis.name
             basisNm = gateset.basis.name
-            #basisDims = gateset.basis.dim.blockDims
             basisDims = gateset.basis.dim.blockDims
             basisLongNm = _objs.basis_longname(basisNm)
             pre = (title+' ' if title else '')
@@ -280,9 +272,7 @@ class GatesTable(WorkspaceTable):
             row_formatters = [None]
     
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
-                #basisDims = gateset.basis.dim.blockDims
                 basisDims = gateset.basis.dim.blockDims
 
                 if display_as == "numbers":
@@ -619,8 +609,6 @@ class ErrgenTable(WorkspaceTable):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.basis.name
-        #basisNm = gateset.basis.name
-        #basisDims = gateset.basis.dim.blockDims
         basisDims = gateset.basis.dim.blockDims
         colHeadings = ['Gate']
 
