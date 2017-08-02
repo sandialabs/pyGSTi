@@ -1,0 +1,15 @@
+@@markdown
+### progressBarPlot:
+Model Violation summary: The aggregate log-likelihood as a function of GST iterations''')
+@@code
+#progressBarPlot
+@@markdown
+### bestEstimateColorScatterPlot
+Per-sequence model violation: Each point displays the goodness of fit for a single gate sequence.''')
+@@code
+#bestEstimateColorScatterPlot
+@@markdown
+### bestGatesetVsTargetTable_sum
+Comparison of GST estimated gates to target gates: This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.''')
+@@code
+#bestGatesetVsTargetTable_sum

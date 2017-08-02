@@ -1,0 +1,20 @@
+@@markdown
+  #iftoggle(CompareDatasets)
+  <div id="DataComparison" class="tabcontent">
+<h1>Dataset comparisons</h1>
+<p>This report contains information for more than one data set.  This page shows comparisons between different data sets.</p>
+
+<figure id="dsComparisonHistogram">
+  %(dsComparisonHistogram)s
+  %(dscmpSwitchboard)s
+  <figcaption><span class="captiontitle">Histogram of p-values comparing two data sets.</span> <span class="captiondetail">  Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
+</figure>
+
+<figure id="dsComparisonBoxPlot">
+  %(dsComparisonBoxPlot)s
+  <figcaption><span class="captiontitle">Per-sequence <span class="math">2\Delta\log(\mathcal{L})</span> values comparing two data sets.</span> <span class="captiondetail"> In a similar fashion to other color box plots, this plot shows two times the log-likelihood-ratio for each gate sequence corresponding to how consistent that sequences' counts are between the two selected data sets.  The likelihood ratio is between a models that supposes there is either one or two separate probability distributions from which the data counts are drawn.</span></figcaption>
+</figure>
+
+<p class="clear"></p>
+
+  </div> <!-- end tab content -->

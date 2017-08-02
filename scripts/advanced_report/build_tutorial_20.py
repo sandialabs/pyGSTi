@@ -4,12 +4,9 @@ from pygsti.report import Notebook
 def main():
     nb = Notebook()
     nb.add_markdown('# Replica of tutorial 20, built using Python')
-    nb.add_code_file('setup.py')
+    nb.add_code_file('templates/setup.py')
+    nb.add_code_file('templates/workspace.py')
     nb.add_markdown('After running GST, a `Workspace` object can be used to interpret the results:')
-    nb.add_code(
-'''from pygsti.report import workspace
-ws = workspace.Workspace()
-ws.init_notebook_mode(connected=False, autodisplay=True)''')
     nb.add_code('ws.GatesVsTargetTable(gs1, tgt)')
     nb.add_code('ws.SpamVsTargetTable(gs2, tgt)')
     nb.add_code('ws.ColorBoxPlot(("chi2","logl"), gss, ds1, gs1, boxLabels=True)')
