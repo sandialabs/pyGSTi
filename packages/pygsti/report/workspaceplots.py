@@ -23,10 +23,9 @@ from . import plothelpers as _ph
 
 import plotly.graph_objs as go
 
-
-import time as _time  #DEBUG TIMER
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot #DEBUG
-
+#DEBUG
+#import time as _time  #DEBUG TIMER
+#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
                   prec=0, hoverLabelFn=None, hoverLabels=None):
@@ -531,8 +530,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix,iiy,iix):
                 if _np.isnan(val): return ""
 
+                N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = len(baseStr) // len(germ)
                 guess = germ * reps
@@ -651,8 +651,9 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
             def hoverLabelFn(val,iy,ix,iiy,iix):
                 if _np.isnan(val): return ""
 
+                N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = len(baseStr) // len(germ)
                 guess = germ * reps
@@ -679,7 +680,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
             plaq = g.get_plaquette(x,y)
             N = len(subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
             #TODO: if sumUp then need to sum before appending...
-            for iix,iiy,gstr in plaq:
+            for iiy,iix,gstr in plaq:
                 xs.append( len(gstr))
                 ys.append( subMxs[iy][ix][N-1-iiy][iix] )
                 if hoverInfo:
@@ -770,13 +771,6 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     plotly.Figure
     """
 
-    def one_sigfig(x):
-        if abs(x) < 1e-9: return 0
-        if x < 0: return -one_sigfig(-x)
-        e = -int(_np.floor(_np.log10(abs(x)))) #exponent
-        trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
-        return round(trunc_x, e) #round to truncation point just to be sure
-
     xextra = 2.25 if ylabel is None else 2.5
     yextra = 2.25 if xlabel is None else 2.5
 
@@ -786,21 +780,109 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
         ylabels=[("<i>%s</i>" % x) if len(x) else "" \
                  for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        yextra += 0.5 if (mxBasisDims > 1) else 0
-        xextra += 0.5 if (mxBasisDimsY > 1) else 0
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDims) > 1:
+                yextra += .5
+        elif mxBasisDims > 1:
+            yextra += .5
+        if isinstance(mxBasisDims, list):
+            if len(mxBasisDimsY) > 1:
+                yextra += .5
+        elif mxBasisDimsY > 1:
+            yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
+    thickLineInterval = 4 if mxBasis == "pp" else None
+    return matrix_color_boxplot(gateMatrix, m, M, xlabels, ylabels,
+                                xlabel, ylabel, xextra, yextra,
+                                boxLabels, thickLineInterval,
+                                colorbar, colormap, prec, scale)
+
+
+def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
+                         xlabel=None, ylabel=None, xextra=2.5, yextra=2.5,
+                         boxLabels=False, thickLineInterval=None,
+                         colorbar=None, colormap=None,
+                         prec=0, scale=1.0):
+    """
+    Creates a color box plot for visualizing a single matrix.
+
+    Parameters
+    ----------
+    gateMatrix : numpy array
+        The matrix to visualize.
+
+    m, M : float
+        Minimum and maximum of the color scale.
+
+    xlabels, ylabels: list, optional
+        List of (str) axis labels.
+
+    xlabel, ylabel : str, optional
+        Axis labels for the plot.
+
+    xextra, yextra : float, optional
+        Amount of extra horizontal and vertical padding used when
+        computing the width and height of the box (in internal units).
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.
+
+    thickLineInterval : int, optional
+        If not None, the interval at thicker (darker) lines should be placed.
+        For example, if 2 then every other grid line will be thick.
+    
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `boxLabels == False`.
+
+    colormap : Colormap, optional
+        An a color map object used to convert the numerical matrix values into
+        colors.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+    if xlabels is None:  xlabels = [""] * matrix.shape[1]
+    if ylabels is None:  ylabels = [""] * matrix.shape[0]
+
     colorbar = colorbar if (colorbar is not None) else (not boxLabels)
     
-    flipped_mx = _np.flipud(gateMatrix)  # FLIP so [0,0] matrix el is at *top* left
+    flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
+
+    #Create hoverlabels manually, since hoverinfo='z' arg to Heatmap
+    # doesn't work for certain (e.g. linear-log) color maps
+    def hoverLabelFn(val):
+        if _np.isnan(val): return ""
+        return "%s" % val #TODO: something better - or user-specifiable
+    
+    hoverLabels = []
+    for i in range(matrix.shape[0]):
+        hoverLabels.append([ hoverLabelFn(flipped_mx[i, j]) 
+                             for j in range(matrix.shape[1]) ] )
+        
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
                        colorscale=colormap.get_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
-                       zmax=colormap.hmax, hoverinfo='z')
+                       zmax=colormap.hmax, hoverinfo='text',
+                       text=hoverLabels)
     #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
     #             colorscale=colormap.get_colorscale(),
     #             showscale=colorbar, zmin=colormap.hmin,
@@ -808,15 +890,15 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     
     data = [trace]
     
-    nX = gateMatrix.shape[1]
-    nY = gateMatrix.shape[0]
+    nX = matrix.shape[1]
+    nY = matrix.shape[0]
     
     gridlines = []
     
     # Vertical lines
     for i in range(nX-1):
-        #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
+        #add darker lines at multiples of thickLineInterval boxes
+        w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
         
         gridlines.append(     
             {
@@ -828,8 +910,8 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         
     #Horizontal lines
     for i in range(nY-1):
-        #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
+        #add darker lines at multiples of thickLineInterval boxes
+        w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
 
         gridlines.append(     
             {
@@ -846,16 +928,16 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
             for iy in range(nY):
                 annotations.append(
                     dict(
-                    text=_ph._eformat(gateMatrix[iy,ix],prec),
+                    text=_ph._eformat(matrix[iy,ix],prec),
                     x=ix, y=nY-1-iy, xref='x1', yref='y1',
                     font=dict(size=scale*10,
-                              color=colormap.besttxtcolor(gateMatrix[iy,ix])),
+                              color=colormap.besttxtcolor(matrix[iy,ix])),
                         showarrow=False)
                 )
                 
     layout = go.Layout(
-        width = 35*(gateMatrix.shape[1]+xextra)*scale,
-        height = 35*(gateMatrix.shape[0]+yextra)*scale,
+        width = 35*(matrix.shape[1]+xextra)*scale,
+        height = 35*(matrix.shape[0]+yextra)*scale,
         xaxis=dict(
             side="top",
             title=xlabel,
@@ -1464,6 +1546,73 @@ class GateMatrixPlot(WorkspacePlot):
 
 
 
+class MatrixPlot(WorkspacePlot):
+    def __init__(self, ws, matrix, m=-1.0, M=1.0,
+                 xlabels=None, ylabels=None, xlabel=None, ylabel=None,
+                 boxLabels=False, colorbar=None, colormap=None, prec=0, scale=1.0):
+        """
+        Creates a color box plot of a matrix using the given color map.
+    
+        This can be a useful way to display large matrices which have so many
+        entries that their entries cannot easily fit within the width of a page.
+    
+        Parameters
+        ----------
+        matrix : ndarray
+          The gate matrix data to display.
+        
+        m, M : float, optional
+          Min and max values of the color scale.
+    
+        xlabels, ylabels: list, optional
+          List of (str) axis labels.
+    
+        xlabel : str, optional
+          An x-axis label for the plot.
+    
+        ylabel : str, optional
+          A y-axis label for the plot.
+    
+        boxLabels : bool, optional
+          Whether box labels are displayed.
+
+        colorbar : bool optional
+          Whether to display a color bar to the right of the box plot.  If None,
+          then a colorbar is displayed when `boxLabels == False`.
+
+        colormap : Colormap, optional
+          An a color map object used to convert the numerical matrix values into
+          colors.
+    
+        prec : int or {'compact','compacthp'}, optional
+            Precision for box labels.  Only relevant when boxLabels == True. Allowed
+            values are:
+    
+            - 'compact' = round to nearest whole number using at most 3 characters
+            - 'compacthp' = show as much precision as possible using at most 3 characters
+            - int >= 0 = fixed precision given by int
+            - int <  0 = number of significant figures given by -int
+    
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
+        super(MatrixPlot,self).__init__(ws, self._create, matrix, m, M,
+                                        xlabels, ylabels, xlabel, ylabel,
+                                        boxLabels, colorbar, colormap, prec, scale)
+          
+    def _create(self, matrix, m, M,
+                xlabels, ylabels, xlabel, ylabel,
+                boxLabels, colorbar, colormap, prec, scale):
+
+        if colormap is None:
+            colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
+            
+        return matrix_color_boxplot(
+            matrix, m, M, xlabels, ylabels, xlabel, ylabel,
+            2.5, 2.5, boxLabels, None, colorbar, colormap, prec, scale)
+
+
+
 #    evals = _np.linalg.eigvals(gate)
 #    target_evals = _np.linalg.eigvals(targetGate)
 #    rel_gate = _np.dot(_np.linalg.inv(targetGate), gate)
@@ -1737,6 +1886,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
         minlog = _np.floor(min(log_ys))
         maxlog = _np.ceil(max(log_ys))

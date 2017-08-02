@@ -49,11 +49,34 @@ class GraspTestCase(BaseTestCase):
 
         def feasibleFn(elements_subset):
             return bool(len(elements_subset) > 2)
-        
+
+        #no initial elements => all zeros => no neighbors
         pygsti.algorithms.grasp.do_grasp(elements, greedyScoreFn=someScoreFn, rclFn=indices_of_candidates,
                                          localScoreFn=someScoreFn, getNeighborsFn=getNeighbors,
                                          finalScoreFn=someScoreFn, iterations=10, feasibleThreshold=None,
                                          feasibleFn=feasibleFn, initialElements=None, seed=1234, verbosity=3)
+
+        initial_elements = np.zeros(len(elements))
+        initial_elements[0] = initial_elements[2] = initial_elements[10] = 1.0 #some initial state
+        pygsti.algorithms.grasp.do_grasp(elements, greedyScoreFn=someScoreFn, rclFn=indices_of_candidates,
+                                         localScoreFn=someScoreFn, getNeighborsFn=getNeighbors,
+                                         finalScoreFn=someScoreFn, iterations=10, feasibleThreshold=None,
+                                         feasibleFn=feasibleFn, initialElements=initial_elements, seed=1234, verbosity=3)
+
+        with self.assertRaises(ValueError):
+            #bad initialElements (not len(elements) long)
+            pygsti.algorithms.grasp.do_grasp(elements, greedyScoreFn=someScoreFn, rclFn=indices_of_candidates,
+                                             localScoreFn=someScoreFn, getNeighborsFn=getNeighbors,
+                                             finalScoreFn=someScoreFn, iterations=10, feasibleThreshold=None,
+                                             feasibleFn=feasibleFn, initialElements=[0], seed=1234, verbosity=3)
+
+        with self.assertRaises(ValueError):
+            #need feasibleFn or feasibleThreshold
+            pygsti.algorithms.grasp.do_grasp(elements, greedyScoreFn=someScoreFn, rclFn=indices_of_candidates,
+                                             localScoreFn=someScoreFn, getNeighborsFn=getNeighbors,
+                                             finalScoreFn=someScoreFn, iterations=10, feasibleThreshold=None,
+                                             feasibleFn=None, initialElements=None, seed=1234, verbosity=3)
+
 
 
 if __name__ == '__main__':

@@ -1,6 +1,10 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
+
 import pygsti
 import pygsti.tools.gatetools as gatetools
+
+from pygsti.construction import std2Q_XXYYII
+
 import numpy as np
 import unittest
 
@@ -84,6 +88,30 @@ class GateBaseTestCase(BaseTestCase):
         processMx = gatetools.unitary_to_process_mx(identity)
         self.assertArraysAlmostEqual(processMx, np.identity(4))
 
+    def test_err_gen(self):
+        gs_target = std2Q_XXYYII.gs_target
+        gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+
+        projectionTypes = ['hamiltonian', 'stochastic']
+        basisNames      = ['std', 'gm', 'pp', 'qt']
+
+        for gateTarget, gate in zip(gs_target.gates.values(), gs_datagen.gates.values()):
+            errgen    = gatetools.error_generator(gate, gateTarget, gs_target.basis)
+            altErrgen = gatetools.error_generator(gate, gateTarget, gs_target.basis, 'logTiG')
+            with self.assertRaises(ValueError):
+                gatetools.error_generator(gate, gateTarget, gs_target.basis, 'adsf')
+
+            #std_errgen_projections(errgen, projectionType, basisName)
+
+            originalGate    = gatetools.gate_from_error_generator(errgen, gateTarget)
+            altOriginalGate = gatetools.gate_from_error_generator(altErrgen, gateTarget, 'logTiG')
+            with self.assertRaises(ValueError):
+                gatetools.gate_from_error_generator(errgen, gateTarget, 'adsf')
+        '''
+        for projectionType in projectionTypes:
+            for basisName in basisNames:
+                std_error_generators(4, projectionType, basisName)
+        '''
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

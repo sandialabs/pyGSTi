@@ -16,7 +16,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
     def setUp(self):
         super(AutoExperimentDesignTestCase, self).setUp()
 
-    def test_auto_experiment_desgin(self):
+    def test_auto_experiment_design(self):
         # Let's construct a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ gateset for which we will need to find germs and fiducials.
 
         gs_target = constr.build_gateset([2], [('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -41,6 +41,9 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
 
         prepFiducials, measFiducials = fidsel.generate_fiducials(gs_target)
+
+        #test returnAll - this just prints more info...
+        p,m = fidsel.generate_fiducials(gs_target, algorithm_kwargs={'returnAll': True})
 
 
         # Now that we have germs and fiducials, we can construct the list of experiments we need to perform in

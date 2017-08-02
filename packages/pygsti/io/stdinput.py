@@ -10,6 +10,7 @@ import re
 
 import os as _os
 import sys as _sys
+import time as _time
 import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
@@ -21,6 +22,27 @@ from .. import tools as _tools
 from .gstplyparser import GateStringParser
 
 _sys.setrecursionlimit(10000)
+
+def get_display_progress_fn(showProgress):
+    
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__')
+
+    if is_interactive() and showProgress:
+        try:
+            from IPython.display import clear_output
+            def display_progress(i,N,filename):
+                _time.sleep(0.001); clear_output()
+                print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
+                _sys.stdout.flush()
+        except:
+            def display_progress(i,N,f): pass
+    else:
+        def display_progress(i,N,f): pass
+        
+    return display_progress
+
 
 class StdInputParser(object):
     _string_parser = GateStringParser()
@@ -250,27 +272,12 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         countDict = {}
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -406,26 +413,11 @@ class StdInputParser(object):
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0),1)
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -509,7 +501,7 @@ class StdInputParser(object):
         return countDicts
 
 
-    def parse_tddatafile(self, filename):
+    def parse_tddatafile(self, filename, showProgress=True):
         """ 
         Parse a data set file into a TDDataSet object.
 
@@ -517,6 +509,9 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
 
         Returns
         -------
@@ -556,25 +551,10 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive():
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N): 
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
             line = line.strip()
             if len(line) == 0 or line[0] == '#': continue
@@ -624,13 +604,13 @@ def read_gateset(filename):
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                spam_vecs[cur_label] = _objs.basis.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                spam_vecs[cur_label] = _objs.basis.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
@@ -640,20 +620,20 @@ def read_gateset(filename):
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q(ar))
+                        _tools.unitary_to_pauligate(ar))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q(ar))
+                        _tools.unitary_to_pauligate(ar))
             else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliMx":
@@ -734,7 +714,7 @@ def read_gateset(filename):
             raise ValueError("Cannot infer basis dimension!")
 
     #Set basis
-    gs.set_basis(basis_abbrev, basis_dims)
+    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:

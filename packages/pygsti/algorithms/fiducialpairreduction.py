@@ -485,6 +485,115 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     return pairListDict
 
 
+def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
+                        testLs=(256,2048), spamLabels="all", tol=0.75,
+                        verbosity=0, memLimit=None):
+    """
+    Tests a set of global or per-germ fiducial pairs.
+
+    Determines how many gate set parameters (of `targetGateset`) are
+    amplified by the fiducial pairs given by `fidPairs`, which can be
+    either a list of 2-tuples (for global-FPR) or a dictionary (for
+    per-germ FPR).
+
+    Parameters
+    ----------
+    fidPairs : list or dict
+        Either a single list of fiducial-index pairs (2-tuples) that is applied
+        to every germ (global FPR) OR a per-germ dictionary of lists, each
+        containing the fiducial-index pairs (2-tuples) for that germ (for
+        per-germ FPR).
+
+    targetGateset : GateSet
+        The target gateset used to determine amplificational completeness.
+
+    prepStrs, effectStrs, germList : list of GateStrings
+        The (full) fiducial and germ gate sequences.
+
+    testLs : (L1,L2) tuple of ints, optional
+        A tuple of integers specifying the germ-power lengths to use when
+        checking for amplificational completeness.
+
+    spamLabels : list or "all", optional
+        A list of the SPAM labels to consider when checking for completeness.
+        Usually this should be left as the special (and default) value "all",
+        which considers all of the SPAM labels.
+
+    tol : float, optional
+        The tolerance for the fraction of the expected amplification that must
+        be observed to call a parameter "amplified".
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    memLimit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    numAmplified : int
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    if spamLabels == "all":
+        spamLabels = targetGateset.get_spam_labels()
+        spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
+
+    nGatesetParams = targetGateset.num_params()
+
+    #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
+    def get_derivs(L):
+        gatestrings = []
+        for germ in germList:
+            expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
+            pairList = fidPairs[germ] if isinstance(fidPairs,dict) else fidPairs
+            gatestrings += _gsc.create_gatestring_list("p[0]+expGerm+p[1]",
+                                                       p=[ (prepStrs[i],effectStrs[j]) for i,j in pairList ],
+                                                       expGerm=expGerm, order=['p'])
+        gatestrings = _remove_duplicates(gatestrings)
+
+        dP = _np.empty( (len(spamLabels),len(gatestrings), nGatesetParams) )
+           #indexed by [iSpamLabel,iGateString,iGatesetParam] : gives d(<SP|GateString|AM>)/d(iGatesetParam)
+
+        evTree,wrtSize,_ = targetGateset.bulk_evaltree_from_resources(
+            gatestrings, memLimit=memLimit, distributeMethod="deriv",
+            subcalls=['bulk_fill_dprobs'], verbosity=0)
+        
+        targetGateset.bulk_fill_dprobs(dP, spam_lbl_rows, evTree, wrtBlockSize=wrtSize)
+        return dP
+
+    def get_number_amplified(M0,M1,L0,L1):
+        L_ratio = float(L1)/float(L0)
+        try:
+            s0 = _np.linalg.svd(M0, compute_uv=False)
+            s1 = _np.linalg.svd(M1, compute_uv=False)
+        except:
+            printer.warning("SVD error!!"); return 0
+            #SVD did not converge -> just say no amplified params...
+
+        numAmplified = 0
+        printer.log("Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape), 4)
+        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol), 4)
+        for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
+            if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol:
+                numAmplified += 1
+                printer.log("%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+            printer.log("%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+        return numAmplified
+
+    L0,L1 = testLs
+    
+    printer.log("----------  Testing Fiducial Pairs ----------")
+    printer.log("Getting jacobian at L=%d" % L0,2)
+    dP0 = get_derivs(L0); dP0.shape = (dP0.shape[0]*dP0.shape[1],nGatesetParams)
+    printer.log("Getting jacobian at L=%d" % L1,2)
+    dP1 = get_derivs(L1); dP1.shape = (dP1.shape[0]*dP1.shape[1],nGatesetParams)
+    printer.log("Computing number amplified",2)
+    nAmplified = get_number_amplified(dP0, dP1, L0, L1)
+    printer.log("Number of amplified parameters = %s" % nAmplified)
+    
+    return nAmplified
+
 
 
 

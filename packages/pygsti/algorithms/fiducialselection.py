@@ -90,7 +90,7 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                             for n in range(gs_target.get_dimension())]
         Identity = _constr.build_gate(stateSpaceDims, stateSpaceLabels,
                                       'I(L0)',
-                                      basis=gs_target.get_basis_name())
+                                      basis=gs_target.basis.name)
         for gate in fidGates:
             if frobeniusdist2(gs_target.gates[gate], Identity) < eqThresh:
                 fidGates.remove(gate)

@@ -414,7 +414,7 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
 
     if do_consistency_check:
         if k_list is None:
-            raise Exception("Consistency check requested, but no k List given!")
+            raise ValueError("Consistency check requested, but no k List given!")
         else:
             num_ks = len(k_list)
             resultsD['alphaCheckMat'] = _np.zeros([num_ks,num_ks],float)

@@ -318,6 +318,9 @@ class ConfidenceRegion(object):
             One-dimensional array of (positive) interval half-widths which specify
             a symmetric confidence interval.
         """
+        if self.profLCI is None:
+            raise NotImplementedError("Profile-likelihood confidence intervals" + \
+                                      "are not implemented for this type of confidence region")
         if label is None:
             return self.profLCI
         else:
@@ -659,6 +662,10 @@ class ConfidenceRegion(object):
 
         if hasattr(f0,'dtype') and f0.dtype == _np.dtype("complex"):
             raise NotImplementedError("Can't handle complex-valued functions yet")
+
+        if hasattr(f0,'shape') and len(f0.shape) > 2:
+            raise ValueError("Unsupported number of dimensions returned by fnOfGate or fnOfGateset: %d" % len(f0.shape))
+              #May not be needed here, but gives uniformity with Hessian case
 
         #massage gradF, which has shape (nParams,) + f0.shape
         # to that expected by _do_mlgst_base, which is

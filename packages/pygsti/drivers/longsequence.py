@@ -118,6 +118,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                         or "length as exponent"
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
+        - missingDataAction = {'drop','raise'} (default = 'drop')
+        - stringManipRules = list of (find,replace) tuples
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -225,6 +227,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     else: dschk = None
 
     #Construct gate sequences
+    actionIfMissing = advancedOptions.get('missingDataAction','drop')
     gateLabels = advancedOptions.get(
         'gateLabels', list(gs_target.gates.keys()))
     lsgstLists = _construction.stdlists.make_lsgst_structs(
@@ -233,7 +236,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         nest = advancedOptions.get('nestedGateStringLists',True),
         includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
         gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
-        dscheck=dschk)
+        sequenceRules = advancedOptions.get('stringManipRules',None),
+        dscheck=dschk, actionIfMissing=actionIfMissing, verbosity=verbosity)
     
     assert(len(maxLengths) == len(lsgstLists))
     
@@ -667,8 +671,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "full" : full (completely unconstrained)
         - "TP"   : TP-constrained
         - "CPTP" : Lindbladian CPTP-constrained
-        - "H+S"  : Only Hamiltonian + Stochastic errors allowd (CPTP)
-        - "S"    : Only Stochastic errors allowd (CPTP)
+        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate
 
     comm : mpi4py.MPI.Comm, optional

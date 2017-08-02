@@ -46,6 +46,15 @@ class TestRPEMethods(BaseTestCase):
         
         #Analyze dataset
         resultsRPE = RPE.analyze_rpe_data(DS,gs_real,stringListsRPE,rpeconfig_inst)
+
+        # again, with consistency checks
+        dummy_k_list = [ 1 ] #EGN: not sure what this should really be...
+        resultsRPE_2 = RPE.analyze_rpe_data(DS,gs_real,stringListsRPE,rpeconfig_inst,
+                                            do_consistency_check=True, k_list=dummy_k_list)
+
+        with self.assertRaises(ValueError):
+            RPE.analyze_rpe_data(DS,gs_real,stringListsRPE,rpeconfig_inst,
+                                 do_consistency_check=True) #no k_list given
         
         #Print results
         print('alpha_true - pi/2 =',true_alpha-np.pi/2)

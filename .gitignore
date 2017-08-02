@@ -6,6 +6,7 @@
 *.out
 *.coverage*
 *.serial
+*.cache
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
@@ -13,6 +14,10 @@ jupyter_notebooks/Tutorials/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
+**offline/
+**tutorial_files
+*.lprof
+*.cache
 
 # Test Metadata #
 #################
@@ -70,3 +75,17 @@ HighImpactPaper1/texFiles/.DS_Store
 doc/html/*
 doc/build/*.rst
 doc/build/_build/*
+
+# Customer Data #
+#################
+scripts/profiling/report/*.ipynb
+scripts/profiling/report/Analyze+2Q+data.py
+scripts/profiling/report/*.html
+scripts/profiling/*.html
+scripts/profiling/report/standard_report.py
+scripts/profiling/report/tp_report.py
+scripts/profiling/report/rigetti_nocache.py
+
+# Profiling data #
+scripts/profiling/output
+
