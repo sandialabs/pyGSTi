@@ -359,8 +359,11 @@ def near_identity_matrix_log(M, TOL=1e-8):
     # real if the original matrix is real
     M_is_real = bool(_np.linalg.norm(M.imag) < TOL)
     logM = _spl.logm(M)
-    if M_is_real: 
-        assert(_np.linalg.norm(logM.imag) < TOL)
+    if M_is_real:
+        assert(_np.linalg.norm(logM.imag) < TOL), \
+            "near_identity_matrix_log has failed to construct a real logarithm!\n" \
+            + "This is probably because M is not near the identity.\n" \
+            + "Its eigenvalues are: " + str(_np.linalg.eigvals(M))
         logM = logM.real
     return logM
 
