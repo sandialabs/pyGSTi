@@ -718,7 +718,7 @@ class DataSet(object):
         self.measurementGates = state_dict.get('measurementGates',None)
         self.measurementLabels = state_dict.get('measurementLabels',None)
         self.totals = state_dict.get('totals',None)
-        self.uuid = state_dict.get('uuid', None)
+        self.uuid = state_dict.get('uuid', _uuid.uuid4() if self.bStatic else None)
 
     def save(self, fileOrFilename):
         """
