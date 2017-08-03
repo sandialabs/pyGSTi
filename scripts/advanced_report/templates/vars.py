@@ -1,7 +1,7 @@
 results   = results1
 estimates = results.estimates
 default   = estimates['default']
-gatesets  = default.gatests
+gatesets  = default.gatesets
 
 tgt      = gatesets['target']
 ds       = results.dataset

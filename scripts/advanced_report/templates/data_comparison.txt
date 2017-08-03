@@ -7,7 +7,6 @@ This report contains information for more than one data set.  This page shows co
 Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.
 
 @@code
-# qtys['dscmpSwitchboard'] = dscmp_switchBd
 ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
 
 @@markdown

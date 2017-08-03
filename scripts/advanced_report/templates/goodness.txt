@@ -32,11 +32,8 @@ Each pixel represents a single experiment (gate sequence), and its color indicat
 @@markdown
 ### dataScalingColorBoxPlot
 @@code
-'''
-    qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
-        "scaling", switchBd.gs_finalFinal, eff_ds, switchBd.gs_finalIter,
-            submatrices=switchBd.scaledSubMxsDict)
-'''
+ws.ColorBoxPlot("scaling", switchBd.gs_finalFinal, eff_ds, switchBd.gs_finalIter,
+        submatrices=switchBd.scaledSubMxsDict)
 @@markdown
 ### Data scaling factor for every individual experiment in the dataset.
 Each pixel represents a single experiment (gate sequence), and its color indicates the amount of scaling that was applied to the original data counts when computing the log-likelihood or $\chi^2$ for this estimate.  
