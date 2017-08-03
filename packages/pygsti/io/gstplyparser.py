@@ -87,7 +87,9 @@ class GateStringLexer:
     # Error handling rule
     @staticmethod
     def t_error(t):
-        raise ValueError("Illegal character '{}' at position {} of string '{}'".format(t.value[0], t.lexpos, t.lexer.lexdata))
+        if t is not None:
+            raise ValueError("Illegal character '{}' at position {} of string '{}'".format(t.value[0], t.lexpos, t.lexer.lexdata))
+        raise ValueError("Lexer error")
 
 
 class GateStringParser:
@@ -167,7 +169,10 @@ class GateStringParser:
 
     @staticmethod
     def p_error(p):
-        raise ValueError("Syntax error at pos {} of input {}".format(p.lexpos, p.lexer.lexdata))
+        message = "Syntax error"
+        if p is not None:
+            message += " at pos {} of input {}".format(p.lexpos, p.lexer.lexdata)
+        raise ValueError(message)
 
     def parse(self, code):
         self._lexer.input(code)
