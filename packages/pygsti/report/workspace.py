@@ -609,23 +609,8 @@ class Workspace(object):
                 if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
             else:
-                if name_key in self.ineffectiveCache:
-                    key = 'INEFFECTIVE'
-                    result = fn(*argVals)
-                else:
-                    # argVals now contains all the arguments, so call the function if
-                    #  we need to and add result.
-                    times = dict()
-                    with _timed_block('hash', times):
-                        key = call_key(fn, argVals) # cache by call key
-                    if key not in self.compCache:
-                        with _timed_block('call', times):
-                            self.compCache[key] = fn(*argVals)
-                    if 'call' in times:
-                        if times['hash'] > times['call']:
-                            #print('Added {} to hash-ineffective functions'.format(name_key))
-                            self.ineffectiveCache.add(name_key)
-                    result = self.compCache[key]
+                key, result = self.smartCache.cached_compute(fn, argVals)
+
             if key not in storedKeys or key == 'INEFFECTIVE':                
                 switchpos_map[pos] = len(resultValues)
                 storedKeys[key] = len(resultValues)

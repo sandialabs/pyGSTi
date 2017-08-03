@@ -163,7 +163,7 @@ class SmartCache(object):
         name_key = get_fn_name_key(fn)
         self.requests[name_key] += 1 
         if name_key in self.ineffective:
-            key = 'NA'
+            key = 'INEFFECTIVE'
             result = fn(*argVals, **kwargs)
             self.ineffectiveRequests[name_key] += 1
             self.misses[key] += 1
