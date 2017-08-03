@@ -19,7 +19,6 @@ def main():
                 'dnupup': ('rho0','E4'), 'dnupdn': ('rho0','E5'), 'dndnup': ('rho0','E6'), 'dndndn': ('rho0','remainder')},
             basis="pp")
     gs = load_3q()
-    #envSettings = dict(MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1)
 
     with timed_block('Basic gauge opt (3Q)'):
         gs_gaugeopt = gaugeopt_to_target(gs, gs_target, 

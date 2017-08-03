@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Report generation functions. """
 
+import pickle as _pickle
 import os  as _os
 import sys as _sys
 import time as _time
@@ -15,17 +16,20 @@ import webbrowser as _webbrowser
 import zipfile as _zipfile
 from scipy.stats import chi2 as _chi2
 
-from ..objects      import VerbosityPrinter
-from ..objects      import DataComparator as _DataComparator
-from ..tools        import compattools as _compat
-from ..             import tools as _tools
-from .              import workspace as _ws
+from ..objects import VerbosityPrinter, Basis, SmartCache
+from ..objects import DataComparator as _DataComparator
+from ..tools   import compattools as _compat
+from ..tools   import timed_block as _timed_block
 
-from ..tools.opttools import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
+
+from .. import tools as _tools
+
+from . import workspace as _ws
 
 import functools as _functools
 
+from pprint import pprint as _pprint
 
 def _read_and_preprocess_template(templateFilename, toggles):
     template = ''
@@ -474,6 +478,7 @@ def create_general_report(results, filename, confidenceLevel=None,
                           linlogPercentile=5, errgen_type="logTiG",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
+                          cachefile=None,
                           connected=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
@@ -545,6 +550,9 @@ def create_general_report(results, filename, confidenceLevel=None,
         If True, automatically open the report in a web browser after it
         has been generated.
 
+    cachefile : str, optional
+        filename with cached workspace results
+
     connected : bool, optional
         Whether output HTML should assume an active internet connection.  If
         True, then the resulting HTML file size will be reduced because it
@@ -557,11 +565,12 @@ def create_general_report(results, filename, confidenceLevel=None,
 
     Returns
     -------
-    None
+    Workspace
+        The workspace object used to create the report
     """
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     printer.log('*** Creating workspace ***')
-    if ws is None: ws = _ws.Workspace()
+    if ws is None: ws = _ws.Workspace(cachefile)
         
     if title == "auto":
         title = "GST report for %s" % datasetLabel
@@ -666,6 +675,13 @@ def create_general_report(results, filename, confidenceLevel=None,
             submatrices=switchBd.scaledSubMxsDict)
     
     #Not pagniated currently... just set to same full plot
+    qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc)
+    print("DB: render plots = ", len(qtys['bestEstimateColorBoxPlotPages'].figs))
+    qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
+    
     qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
@@ -733,6 +749,8 @@ def create_general_report(results, filename, confidenceLevel=None,
         _merge_template(qtys, template, filename, auto_open, precision,
                         connected=connected, toggles=toggles, verbosity=printer,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+        #SmartCache.global_status(printer)
+    return ws
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

@@ -599,4 +599,34 @@ def mpidot(a,b,loc_slice,comm):
     #comm.Allgatherv([CTelsLoc, size, MPI.F_DOUBLE_COMPLEX], \
     #                [CTels, (sizes,displacements[:-1]), MPI.F_DOUBLE_COMPLEX])
 
-    
+def parallel_apply(f, l, comm):
+    '''
+    Apply a function, f to every element of a list, l in parallel, using MPI
+    Parameters
+    ----------
+    f : function
+        function of an item in the list l
+    l : list
+        list of items as arguments to f
+
+    Returns
+    -------
+    results : list
+        list of items after f has been applied
+    '''
+    locIndices, owners, locComm = distribute_indices(l, comm)
+    locResults = [f(l[i]) for i in locIndices]
+    results = comm.gather(locResults, root=0) # Certain there is a better way to do this (see above)
+    return results
+
+def get_comm():
+    '''
+    Get a comm object
+
+    Returns
+    -------
+    MPI.Comm
+        Comm object to be passed down to parallel pygsti routines
+    '''
+    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
+    return MPI.COMM_WORLD

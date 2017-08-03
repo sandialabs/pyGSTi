@@ -210,7 +210,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         validSpamPenalty == 0 and \
         targetGateset is not None and \
         gatesMetric == "frobenius" and \
-        spamMetric  == "frobenius":
+        spamMetric  == "frobenius" and \
+        gateset.dim < 64: # least squares optimization is uneffective if more than 3 qubits
 
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
@@ -226,7 +227,6 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                 validSpamPenalty, gatesMetric, 
                 spamMetric)
         algorithm = 'min'
-        
 
     result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
             maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm, 
@@ -479,6 +479,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
     if bToStdout: 
         print_obj_func(x0) #print initial point
+
 
     if algorithm == 'min':
         minSol = _opt.minimize(call_objective_fn, x0,

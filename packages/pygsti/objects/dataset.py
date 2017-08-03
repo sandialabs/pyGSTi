@@ -6,14 +6,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the DataSet class and supporting classes and functions """
 
-import numpy as _np
-import pickle as _pickle
+import numpy    as _np
+import pickle   as _pickle
 import warnings as _warnings
+import uuid     as _uuid
 from collections import OrderedDict as _OrderedDict
 
-from .. import tools as _tools
 from ..tools import listtools as _lt
-
+from ..tools import digest as _digest
 from . import gatestring as _gs
 
 
@@ -211,7 +211,7 @@ class DataSet(object):
         DataSet
            a new data set object.
         """
-        self.timestamp = _tools.time_hash()
+        self.uuid = None
         #Optionally load from a file
         if fileToLoadFrom is not None:
             assert(counts is None and gateStrings is None and gateStringIndices is None and spamLabels is None and spamLabelIndices is None)
@@ -296,6 +296,12 @@ class DataSet(object):
 
     def __contains__(self, gatestring):
         return gatestring in self.gsIndex
+
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
 
     def _total_key(self, gatestring):
         """ 
@@ -686,6 +692,7 @@ class DataSet(object):
         else:
             newCounts = _np.empty( (0,len(self.slIndex)), 'd')
         self.counts, self.bStatic = newCounts, True
+        self.uuid = _uuid.uuid4()
 
 
     def __getstate__(self):
@@ -698,7 +705,7 @@ class DataSet(object):
                      'measurementGates': self.measurementGates,
                      'measurementLabels': self.measurementLabels,
                      'totals': self.totals,
-                     'timestamp' : self.timestamp}
+                     'uuid' : self.uuid}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -711,8 +718,7 @@ class DataSet(object):
         self.measurementGates = state_dict.get('measurementGates',None)
         self.measurementLabels = state_dict.get('measurementLabels',None)
         self.totals = state_dict.get('totals',None)
-        self.timestamp = state_dict.get('timestamp', _tools.time_hash())
-
+        self.uuid = state_dict.get('uuid', None)
 
     def save(self, fileOrFilename):
         """
@@ -738,7 +744,7 @@ class DataSet(object):
                      'measurementGates': self.measurementGates,
                      'measurementLabels': self.measurementLabels,
                      'totals': self.totals,
-                     'timestamp' : self.timestamp} 
+                     'uuid' : self.uuid} 
                      #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
@@ -813,9 +819,9 @@ class DataSet(object):
             for i in range(state_dict['nRows']): #pylint: disable=unused-variable
                 self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
         if bOpen: f.close()
-        if 'timestamp' in state_dict:
-            self.timestamp = state_dict['timestamp']
-        # Otherwise timestamp is already set
+        if 'uuid' in state_dict:
+            self.uuid= state_dict['uuid']
+        # Otherwise uuid is already set
 
 
 #def upgrade_old_dataset(oldDataset):
