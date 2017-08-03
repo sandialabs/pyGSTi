@@ -178,7 +178,7 @@ class Workspace(object):
                 with _timed_block(name, formatStr='{:45}', printer=printer, preMessage='Displaying {}:'):
                     plot.display()
             return plot
-        factory_function.__name__ = '{}.__alt_init__'.format(cls.__name__)
+        #factory_function.__name__ = '{}.__alt_init__'.format(cls.__name__)
         return factory_function
 
 
