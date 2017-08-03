@@ -199,6 +199,16 @@ class GateString(object):
 
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            if k == 'tup':                    # backwards compatibility
+                self._tup = state_dict['tup'] # backwards compatibility
+            else:
+                self.__dict__[k] = v
     
     @property
     def tup(self):
