@@ -10,7 +10,6 @@ import numpy as _np
 import scipy as _scipy
 from scipy import stats as _stats
 
-from .. import tools as _tools
 from .multidataset import MultiDataSet as _MultiDataSet
 
 
@@ -72,7 +71,6 @@ class DataComparator():
     def __init__(self, dataset_list_or_multidataset,gatestrings = 'all',
                  gate_exclusions = None, gate_inclusions = None,
                  DS_names = None):
-        self.timestamp = _tools.time_hash()
         
         if DS_names is not None:
             if len(DS_names) != len(dataset_list_or_multidataset):

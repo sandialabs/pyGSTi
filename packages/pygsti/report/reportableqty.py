@@ -1,3 +1,6 @@
+from copy import deepcopy as _deepcopy
+import pickle as _pickle
+
 class ReportableQty(object):
     """
     Encapsulates a computed quantity and possibly its error bars,
@@ -33,8 +36,22 @@ class ReportableQty(object):
     def __repr__(self):
         return 'ReportableQty({})'.format(str(self))
 
-    def __getattr__(self, attr):
-        return getattr(self.value, attr)
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
+    def __copy__(self):
+        return ReportableQty(self.value, self.errbar)
+
+    def __deepcopy__(self, memo):
+        return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errbar, memo))
+
+    #def __getattr__(self, attr):
+        #print(self.value)
+        #return getattr(self.value, attr)
 
     @staticmethod
     def from_val(value, nonMarkovianEBs=False):
@@ -48,6 +65,8 @@ class ReportableQty(object):
           holding the first field as a value and second field as an error bar
         Anything else will be converted to a ReportableQty with no error bars
         '''
+        if isinstance(value, ReportableQty):
+            return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(

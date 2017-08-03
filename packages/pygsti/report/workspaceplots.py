@@ -435,7 +435,6 @@ def generate_boxplot(subMxs,
     #                             'nUsedYs': len(yvals) } )
     return fig
 
-
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
                              sumUp=False,invert=False,scale=1.0,addl_hover_subMxs=None):
@@ -1536,6 +1535,7 @@ class GateMatrixPlot(WorkspacePlot):
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
                                             mxBasis, mxBasisDims, xlabel, ylabel,
                                             boxLabels, colorbar, prec, mxBasisDimsY, scale)
+
           
     def _create(self, gateMatrix, m, M, 
                 mxBasis, mxBasisDims, xlabel, ylabel,
@@ -1805,7 +1805,6 @@ class ProjectionsBoxPlot(WorkspacePlot):
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
                                                  projection_basis, m, M,
                                                  boxLabels, colorbar, prec, scale)
-        
     def _create(self, projections,
                 projection_basis, m, M,
                 boxLabels, colorbar, prec, scale):

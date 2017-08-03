@@ -10,7 +10,6 @@ import collections as _collections
 import itertools as _itertools
 from ..tools import listtools as _lt
 
-    
 class GatestringPlaquette(object):
     """
     Encapsulates a single "plaquette" or "sub-matrix" within a
@@ -207,6 +206,7 @@ class LsGermsStructure(GatestringStructure):
         self.effectStrs = effectStrs[:]
         self.aliases = aliases.copy() if (aliases is not None) else None
         self.sequenceRules = sequenceRules[:] if (sequenceRules is not None) else None
+
 
         self.allstrs = []
         self._plaquettes = {}

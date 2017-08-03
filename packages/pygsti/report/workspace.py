@@ -6,107 +6,38 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the Workspace class and supporting functionality."""
 
-import itertools as _itertools
+import itertools   as _itertools
 import collections as _collections
-import os as _os
-import shutil as _shutil
-import numpy as _np
-import uuid as _uuid
-import random as _random
-import inspect as _inspect
-import sys as _sys
-import hashlib as _hashlib
-import functools as _functools
+import os          as _os
+import shutil      as _shutil
+import numpy       as _np
+import uuid        as _uuid
+import random      as _random
+import inspect     as _inspect
+import sys         as _sys
+import hashlib     as _hashlib
+import functools   as _functools
+import pickle      as _pickle
+import json        as _json
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
+
+from pprint import pprint as _pprint
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
-def digest(obj):
-    """Returns an MD5 digest of an arbitary Python object, `obj`."""
-    if _sys.version_info > (3, 0): # Python3?
-        longT = int      # define long and unicode
-        unicodeT = str   #  types to mimic Python2
+def ws_custom_digest(md5, v):
+    if isinstance(v,NotApplicable):
+        md5.update("NOTAPPLICABLE".encode('utf-8'))
+    elif isinstance(v, SwitchValue):
+        md5.update(v.base.tostring()) #don't recurse to parent switchboard
     else:
-        longT = long
-        unicodeT = unicode
-
-    # a function to recursively serialize 'v' into an md5 object
-    def add(md5, v):
-        """Add `v` to the hash, recursively if needed."""
-        md5.update(str(type(v)).encode('utf-8'))
-        if isinstance(v, bytes):
-            md5.update(v)  #can add bytes directly
-        elif isinstance(v, float) or _compat.isstr(v) or _compat.isint(v):
-            md5.update(str(v).encode('utf-8')) #need to encode strings
-        elif isinstance(v, _np.ndarray):
-            md5.update(v.tostring()) # numpy gives us bytes
-        elif isinstance(v, (tuple, list)):
-            for el in v:  add(md5,el)
-        elif isinstance(v, dict):
-            keys = list(v.keys())
-            for k in sorted(keys):
-                add(md5,k)
-                add(md5,v[k])
-        elif isinstance(v, SwitchValue):
-            md5.update(v.base.tostring()) #don't recurse to parent switchboard
-        elif v is None:
-            md5.update("NONE".encode('utf-8'))
-        elif isinstance(v,NotApplicable):
-            md5.update("NOTAPPLICABLE".encode('utf-8'))
-        elif isinstance(v, (_objs.DataSet, _objs.DataComparator)):
-            md5.update(v.timestamp.encode('utf-8'))
-        else:
-            #print("Encoding type: ",str(type(v)))
-            attribs = list(sorted(dir(v)))
-            for k in attribs:
-                if k.startswith('__'): continue
-                a = getattr(v, k)
-                if _inspect.isroutine(a): continue
-                add(md5,k)
-                add(md5,a)
-        return
-
-    M = _hashlib.md5()
-    add(M, obj)
-    return M.digest() #return the MD5 digest
-
-def _is_hashable(x):
-    try:
-        dct = { x: 0 }
-    except TypeError:
-        return False
-    return True
-
-def get_fn_name_key(fn):
-    name = fn.__name__
-    if hasattr(fn, '__self__'):
-        name = fn.__self__.__class__.__name__ + '.' + name
-    return name
-
-def call_key(fn, args):
-    """ 
-    Returns a hashable key for caching the result of a function call.
-
-    Parameters
-    ----------
-    fn : function
-       The function itself
-
-    args : list or tuple
-       The function's arguments.
-
-    Returns
-    -------
-    tuple
-    """
-    fnName = get_fn_name_key(fn)
-    return (fnName,) + tuple(map(digest,args))
+        raise _objs.CustomDigestError()
 
 def randomID():
     """ Returns a random DOM ID """
@@ -201,15 +132,37 @@ class Workspace(object):
     a script to build a hardcoded ("fixed") report/dashboard.
     """
 
-    def __init__(self):
+    def __init__(self, cachefile=None):
         """
         Initialize a Workspace object.
-        """
 
-        self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
-        self.compCache = {}  # cache of computation function results (hashable by call_keys)
+        Parameters
+        ----------
+        cachefile : str, optional
+            filename with cached workspace results
+        """
         self._register_components(False)
-        self.ineffectiveCache = set()
+        self.cachefile = cachefile
+        self.smartCache = _objs.SmartCache()
+        if cachefile is not None:
+            self.load_cache(cachefile)
+        self.smartCache.add_digest(ws_custom_digest)
+
+    def save_cache(self, cachefile, showUnpickled=False):
+        with open(cachefile, 'wb') as outfile:
+            _pickle.dump(self.smartCache, outfile)
+        if showUnpickled:
+            print('Unpickled keys:')
+            _pprint(self.smartCache.unpickleable)
+
+    def load_cache(self, cachefile):
+        with open(cachefile, 'rb') as infile:
+            oldCache = _pickle.load(infile).cache
+            for v in oldCache.values():
+                if hasattr(v, 'ws'):
+                    print('Updated {} object to set ws to self'.format(type(v)))
+                    v.ws = self
+            self.smartCache.cache.update(oldCache)
 
     def _makefactory(self, cls, autodisplay):#, printer=_objs.VerbosityPrinter(1)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -652,9 +605,6 @@ class Workspace(object):
             for j,arg in nonSwitchedArgs:
                 argVals[j] = arg
 
-            name_key = get_fn_name_key(fn)
-            #if any argument is a NotApplicable object, just use it as the
-            # result. Otherwise, compute the result or pull it from cache.
             for v in argVals:
                 if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
@@ -676,7 +626,6 @@ class Workspace(object):
                             #print('Added {} to hash-ineffective functions'.format(name_key))
                             self.ineffectiveCache.add(name_key)
                     result = self.compCache[key]
-
             if key not in storedKeys or key == 'INEFFECTIVE':                
                 switchpos_map[pos] = len(resultValues)
                 storedKeys[key] = len(resultValues)
@@ -1324,6 +1273,26 @@ class WorkspaceOutput(object):
         self.ws = ws
         #self.widget = None #don't build until 1st display()
 
+    def __getstate__(self):
+        state_dict = dict()
+        for k, v in self.__dict__.items():
+            if k not in ['ws', 'figs']:
+                '''
+                try:
+                    _pickle.dumps(v)
+                except:
+                    print('{} does not pickle'.format(k))
+                    raise
+                '''
+                state_dict[k] = v
+        return state_dict
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        if 'ws' not in self.__dict__:
+            self.__dict__['ws'] = None
+        if 'figs' not in self.__dict__:
+            self.__dict__['figs'] = []
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
@@ -1738,10 +1707,16 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        '''
+        # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
+        '''
+        self.initargs = args
+        self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
+            self.ws.switchedCompute(fn, *self.initargs)
         self.options = { 'click_to_display': False }
 
     def set_render_options(self, click_to_display=None):

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import pickle
 import pygsti
+import plotly
+import json
 
 from pygsti.tools import timed_block
 
@@ -11,6 +13,11 @@ def main():
         ws = pygsti.report.create_general_report({'TP': results_tp, "Full": results_full},
                                                 "tutorial_files/exampleMultiGenReport.html",verbosity=3,
                                                 auto_open=False)
+    ws.save_cache('data/wscache.pkl')
+    with timed_block('reused ws'):
+        pygsti.report.create_general_report({'TP': results_tp, "Full": results_full},
+                                                "tutorial_files/exampleMultiGenReport.html",verbosity=3,
+                                                auto_open=False, cachefile='data/wscache.pkl')
 
 if __name__ == '__main__':
     main()

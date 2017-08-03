@@ -365,7 +365,6 @@ class ChoiTable(WorkspaceTable):
         """
         super(ChoiTable,self).__init__(ws, self._create, gatesets, titles,
                                        confidenceRegionInfo, display)
-
         
     def _create(self, gatesets, titles, confidenceRegionInfo, display):
         if isinstance(gatesets, _objs.GateSet):
