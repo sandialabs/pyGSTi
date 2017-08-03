@@ -16,13 +16,11 @@ ws.FitComparisonBarPlot(Ls, gs_finalAllL, switchBd.gsAllL,
 @@markdown
 ### bestEstimateColorBoxPlot:
 @@code
-'''
 colorScatterPlot = ws.ColorBoxPlot(
     switchBd.objective, gs_final, eff_ds, gsL,
     linlg_pcntle=float(linlogPercentile) / 100,
     minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
 colorScatterPlot.set_render_options(click_to_display=True)
-'''
 #switchBd.view(maxLView,"v6")
 
 @@markdown

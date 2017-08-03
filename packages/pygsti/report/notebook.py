@@ -242,9 +242,9 @@ class Notebook(object):
             filename to build this notebook from (see save_to)
         '''
         self.save_to(outputFilename, templateFilename)
-        _call('& jupyter notebook {}'.format(outputFilename), shell=True) 
+        _call('jupyter notebook {}'.format(outputFilename), shell=True) 
 
-    def launch(self, outputFilename, templateFilename=DefaultTemplate):
+    def launch(self, outputFilename, templateFilename=DefaultTemplate, port='8888'):
         '''
         Save and then launch this notebook
 
@@ -255,5 +255,6 @@ class Notebook(object):
         templateFilename : str, optional
             filename to build this notebook from (see save_to)
         '''
+        print('Launching notebook, assuming port={}'.format(port))
         self.save_to(outputFilename, templateFilename)
-        _browser.open('http://localhost:8888/notebooks/{}'.format(outputFilename))
+        _browser.open('http://localhost:{}/notebooks/{}'.format(port, outputFilename))
