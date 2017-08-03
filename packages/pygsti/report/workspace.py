@@ -18,6 +18,7 @@ import sys         as _sys
 import hashlib     as _hashlib
 import functools   as _functools
 import pickle      as _pickle
+import json        as _json
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
@@ -142,11 +143,9 @@ class Workspace(object):
         """
         self._register_components(False)
         self.cachefile = cachefile
-        if cachefile is None:
-            self.smartCache = _objs.SmartCache()
-        else:
-            with open(cachefile, 'rb') as infile:
-                self.smartCache = _pickle.load(infile)
+        self.smartCache = _objs.SmartCache()
+        if cachefile is not None:
+            self.load_cache(cachefile)
         self.smartCache.add_digest(ws_custom_digest)
 
     def save_cache(self, cachefile, showUnpickled=False):
@@ -158,7 +157,12 @@ class Workspace(object):
 
     def load_cache(self, cachefile):
         with open(cachefile, 'rb') as infile:
-            self.smartCache.cache.update(_pickle.load(infile).cache)
+            oldCache = _pickle.load(infile).cache
+            for v in oldCache.values():
+                if hasattr(v, 'ws'):
+                    print('Updated {} object to set ws to self'.format(type(v)))
+                    v.ws = self
+            self.smartCache.cache.update(oldCache)
 
     def _makefactory(self, cls, autodisplay, printer=_objs.VerbosityPrinter(2)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -1219,16 +1223,22 @@ class WorkspaceOutput(object):
         state_dict = dict()
         for k, v in self.__dict__.items():
             if k not in ['ws', 'figs']:
+                '''
                 try:
                     _pickle.dumps(v)
                 except:
                     print('{} does not pickle'.format(k))
                     raise
+                '''
                 state_dict[k] = v
         return state_dict
 
     def __setstate__(self, d):
         self.__dict__.update(d)
+        if 'ws' not in self.__dict__:
+            self.__dict__['ws'] = None
+        if 'figs' not in self.__dict__:
+            self.__dict__['figs'] = []
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
