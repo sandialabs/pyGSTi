@@ -1261,7 +1261,7 @@ class WorkspaceOutput(object):
     def __getstate__(self):
         state_dict = dict()
         for k, v in self.__dict__.items():
-            if k not in ['ws', 'figs']:
+            if k not in ['ws']:#, 'figs']:
                 '''
                 try:
                     _pickle.dumps(v)
