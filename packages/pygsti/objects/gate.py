@@ -85,10 +85,10 @@ def compose(gate1, gate2, basis, parameterization="auto"):
     gate2 : Gate
         Gate to compose as right term of matrix product (applied first).
 
-    basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret the gate matrices.
-        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-         "qt" = qutrit, or standard).
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     parameterization : {"auto","full","TP","linear","static"}, optional
         The parameterization of the resulting gates.  The default, "auto",
@@ -148,10 +148,10 @@ def convert(gate, toType, basis):
     toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND"}
         The type of parameterizaton to convert to.
 
-    basis : {"std", "gm", "pp", "qt"}
-        The abbreviation for the basis used to interpret the gate matrix.
-        ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-         "qt" = qutrit, or standard).
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
@@ -780,10 +780,10 @@ class StaticGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1011,10 +1011,10 @@ class FullyParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1260,10 +1260,10 @@ class TPParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1601,10 +1601,10 @@ class LinearlyParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -2172,10 +2172,10 @@ class EigenvalueParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -2253,19 +2253,15 @@ class LindbladParameterizedGate(GateMatrix):
             relative to the target), which should be close to the identity,
             is parameterized.  If none, the identity is used by default.
 
-        ham_basis : {'std', 'gm', 'pp', 'qt'} or list
-            The basis is used to construct the Hamiltonian-type lindblad error
-            generators onto whose coefficients (partially) parameterize this gate.
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
-            and Qutrit (qt), or you may specify a list of the basis matrices
-            (numpy arrays) themselves.
-    
-        other_basis : {'std', 'gm', 'pp', 'qt'} or list
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
             The basis is used to construct the Stochastic-type lindblad error
-            generators onto whose coefficients (partially) parameterize this gate.
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp)
-            and Qutrit (qt), or you may specify a list of the basis matrices
-            (numpy arrays) themselves.
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
         cptp : bool, optional
             Whether or not the new gate should be constrained to CPTP.
@@ -2282,10 +2278,10 @@ class LindbladParameterizedGate(GateMatrix):
             result in a non-positive-definite matrix of non-Hamiltonian term
             coefficients.
 
-        mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-            Which basis `gateMatrix` is represented in.  Allowed values are
-            Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and
-            Qutrit (qt).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
         """
         if gateMatrix is None:
             assert(unitaryPrefactor is not None), "arguments cannot both be None"
@@ -2841,10 +2837,10 @@ class LindbladParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------

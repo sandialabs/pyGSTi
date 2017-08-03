@@ -1,5 +1,6 @@
 dist: precise
 language: python
+dist: precise
 
 python:
   - "2.7"
@@ -10,6 +11,7 @@ branches:
     - master
     - beta
     - develop
+    - feature-basis-dim-removal-working
 
 env:
     - Drivers=True    # First in build mx because long duration

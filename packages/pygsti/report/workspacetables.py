@@ -30,7 +30,6 @@ class BlankTable(WorkspaceTable):
         table = _ReportTable(['Blank'], [None])
         table.finish()
         return table
-
     
 class SpamTable(WorkspaceTable):
     def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None,
@@ -99,8 +98,6 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                # basisNm = gateset.basis.name
-                # TEMPORARY: TO USE DEPRECATED RIGETTI DATA FOR REPORT
                 basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
                 rowData.append( rhoMx )
@@ -108,7 +105,6 @@ class SpamTable(WorkspaceTable):
 
             for gateset in gatesets:
                 basisNm = gateset.basis.name
-                #basisNm = gateset.basis.name
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
                 evals = _np.linalg.eigvals(rhoMx)
                 rowData.append( evals )
@@ -134,14 +130,12 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
                 evals = _np.linalg.eigvals(EMx)
@@ -258,9 +252,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            #basisNm = gateset.basis.name
             basisNm = gateset.basis.name
-            #basisDims = gateset.basis.dim.blockDims
             basisDims = gateset.basis.dim.blockDims
             basisLongNm = _objs.basis_longname(basisNm)
             pre = (title+' ' if title else '')
@@ -280,9 +272,7 @@ class GatesTable(WorkspaceTable):
             row_formatters = [None]
     
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
                 basisNm = gateset.basis.name
-                #basisDims = gateset.basis.dim.blockDims
                 basisDims = gateset.basis.dim.blockDims
 
                 if display_as == "numbers":
@@ -619,8 +609,6 @@ class ErrgenTable(WorkspaceTable):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
         basisNm = gateset.basis.name
-        #basisNm = gateset.basis.name
-        #basisDims = gateset.basis.dim.blockDims
         basisDims = gateset.basis.dim.blockDims
         colHeadings = ['Gate']
 
@@ -1293,8 +1281,9 @@ class FitComparisonTable(WorkspaceTable):
                     raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
             Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
             Nsig = (fitQty-k)/_np.sqrt(2*k)
+            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
             #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
     
             if   (fitQty-k) < _np.sqrt(2*k): rating = 5

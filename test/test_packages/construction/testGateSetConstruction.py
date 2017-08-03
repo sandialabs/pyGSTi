@@ -301,6 +301,23 @@ class TestGateSetConstructionMethods(BaseTestCase):
         vec_ans = np.array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., 0.,  0.,  0.,  0.,  0., 0.], 'd')
         self.assertArraysAlmostEqual(vec, vec_ans)
 
+    def test_build_basis_gateset(self):
+        gatesetA = pygsti.construction.build_gateset([2], [('Q0',)], ['Gi','Gx','Gy'],
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                     prepLabels=['rho0'], prepExpressions=["0"],
+                                                     effectLabels=['E0'], effectExpressions=["1"],
+                                                     spamdefs={'plus': ('rho0','E0'),
+                                                               'minus': ('rho0','remainder')})
+        gatesetB = pygsti.construction.basis_build_gateset([('Q0',)], ['Gi','Gx','Gy'],
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                     prepLabels=['rho0'], prepExpressions=["0"],
+                                                     effectLabels=['E0'], effectExpressions=["1"],
+                                                     spamdefs={'plus': ('rho0','E0'),
+                                                               'minus': ('rho0','remainder') }, 
+                                                     basis=pygsti.Basis('gm', 2))
+        
+        self.assertAlmostEqual(gatesetA.frobeniusdist(gatesetB), 0)
+
 
     def test_iter_gatesets(self):
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
