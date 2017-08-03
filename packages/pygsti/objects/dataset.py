@@ -301,7 +301,7 @@ class DataSet(object):
         if self.uuid is not None:
             return hash(self.uuid)
         else:
-            return hash(_digest(self))
+            raise TypeError('Use digest hash')
 
     def _total_key(self, gatestring):
         """ 
