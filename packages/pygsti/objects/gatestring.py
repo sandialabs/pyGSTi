@@ -319,6 +319,16 @@ class CompressedGateString(object):
             gatestring.tup, minLenToCompress, maxPeriodToLookFor)
         self.str = gatestring.str
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            if k == 'tup':                    # backwards compatibility
+                self._tup = state_dict['tup'] # backwards compatibility
+            else:
+                self.__dict__[k] = v
+
     def expand(self):
         """
         Expands this compressed gate string into a GateString object.
@@ -429,3 +439,4 @@ class CompressedGateString(object):
 #    gs = GateString(('Gx',) )
 #    print ((gs + wgs)*2).weight
 #    print (wgs + gs).weight
+
