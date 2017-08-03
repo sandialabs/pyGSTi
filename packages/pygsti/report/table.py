@@ -200,6 +200,13 @@ class ReportTable(object):
     def __contains__(self, key):
         return key in list(self.keys())
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
     def keys(self):
         """
         Return a list of the first element of each row, which can be

@@ -1,4 +1,5 @@
 from copy import deepcopy as _deepcopy
+import pickle as _pickle
 
 class ReportableQty(object):
     """
@@ -31,7 +32,8 @@ class ReportableQty(object):
         return 'ReportableQty({})'.format(str(self))
 
     def __getstate__(self):
-        return self.__dict__
+        state_dict = self.__dict__.copy()
+        return state_dict 
 
     def __setstate__(self, d):
         self.__dict__.update(d)
@@ -42,8 +44,9 @@ class ReportableQty(object):
     def __deepcopy__(self, memo):
         return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errbar, memo))
 
-    def __getattr__(self, attr):
-        return getattr(self.value, attr)
+    #def __getattr__(self, attr):
+        #print(self.value)
+        #return getattr(self.value, attr)
 
     @staticmethod
     def from_val(value):

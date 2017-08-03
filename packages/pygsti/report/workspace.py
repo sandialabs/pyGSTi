@@ -35,10 +35,6 @@ def ws_custom_digest(md5, v):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
         md5.update(v.base.tostring()) #don't recurse to parent switchboard
-    # TODO: Replace with more elegant uuid/immutability likely hashing
-    # Since these two cases are somewhat mutable, only digest them by timestamp during report, not during general computation
-    #elif isinstance(v, (_objs.GateSet, _objs.GateString)):
-    #md5.update(v.timestamp.encode('utf-8'))
     else:
         raise _objs.CustomDigestError()
 
@@ -1219,7 +1215,20 @@ class WorkspaceOutput(object):
         self.ws = ws
         #self.widget = None #don't build until 1st display()
 
+    def __getstate__(self):
+        state_dict = dict()
+        for k, v in self.__dict__.items():
+            if k not in ['ws', 'figs']:
+                try:
+                    _pickle.dumps(v)
+                except:
+                    print('{} does not pickle'.format(k))
+                    raise
+                state_dict[k] = v
+        return state_dict
 
+    def __setstate__(self, d):
+        self.__dict__.update(d)
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
@@ -1634,10 +1643,16 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        '''
+        # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
+        '''
+        self.initargs = args
+        self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
+            self.ws.switchedCompute(fn, *self.initargs)
         self.options = { 'click_to_display': False }
 
     def set_render_options(self, click_to_display=None):

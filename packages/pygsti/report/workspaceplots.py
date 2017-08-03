@@ -1462,6 +1462,7 @@ class GateMatrixPlot(WorkspacePlot):
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
                                             mxBasis, mxBasisDims, xlabel, ylabel,
                                             boxLabels, colorbar, prec, mxBasisDimsY, scale)
+
           
     def _create(self, gateMatrix, m, M, 
                 mxBasis, mxBasisDims, xlabel, ylabel,
@@ -1664,18 +1665,6 @@ class ProjectionsBoxPlot(WorkspacePlot):
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
                                                  projection_basis, m, M,
                                                  boxLabels, colorbar, prec, scale)
-    def __setstate__(self, d):
-        pass
-        #self.__dict__.update(d)
-
-    def __getstate__(self):
-        return {}
-        '''
-        d = dict(self.__dict__)
-        del d['ws']
-        return d
-        '''
-        
     def _create(self, projections,
                 projection_basis, m, M,
                 boxLabels, colorbar, prec, scale):

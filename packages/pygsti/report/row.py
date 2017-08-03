@@ -46,6 +46,13 @@ class Row(object):
                 for item, formatter, label in 
                 zip(rowData, formatters, labels)]
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
     def add(self, data, formatter=None, label=None):
         self.cells.append(Cell(data, formatter, label))
 
