@@ -242,7 +242,7 @@ class Notebook(object):
             filename to build this notebook from (see save_to)
         '''
         self.save_to(outputFilename, templateFilename)
-        _call('jupyter notebook {}'.format(outputFilename), shell=True) 
+        _call('& jupyter notebook {}'.format(outputFilename), shell=True) 
 
     def launch(self, outputFilename, templateFilename=DefaultTemplate):
         '''
