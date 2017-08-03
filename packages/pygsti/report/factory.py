@@ -666,6 +666,13 @@ def create_general_report(results, filename, confidenceLevel=None,
             submatrices=switchBd.scaledSubMxsDict)
     
     #Not pagniated currently... just set to same full plot
+    qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc)
+    print("DB: render plots = ", len(qtys['bestEstimateColorBoxPlotPages'].figs))
+    qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
+    
     qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,

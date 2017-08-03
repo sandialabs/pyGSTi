@@ -2038,8 +2038,9 @@ class FitComparisonBarPlot(WorkspacePlot):
                     raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
             Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
             Nsig = (fitQty-k)/_np.sqrt(2*k)
+            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
             #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
     
             if   (fitQty-k) < _np.sqrt(2*k):
