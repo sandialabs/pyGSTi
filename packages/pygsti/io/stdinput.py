@@ -21,7 +21,6 @@ from .. import tools as _tools
 
 from .gstplyparser import GateStringParser
 
-_sys.setrecursionlimit(10000)
 
 def get_display_progress_fn(showProgress):
     
@@ -45,10 +44,13 @@ def get_display_progress_fn(showProgress):
 
 
 class StdInputParser(object):
-    _string_parser = GateStringParser()
     """
     Encapsulates a text parser for reading GST input files.
     """
+
+    #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
+    _string_parser = GateStringParser()
+
     def __init__(self):
         pass
 
