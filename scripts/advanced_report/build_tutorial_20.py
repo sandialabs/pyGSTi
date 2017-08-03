@@ -19,7 +19,7 @@ ws.GateMatrixPlot(pygsti.tools.error_generator(gs1['Gx'], tgt['Gx']), scale=1.5)
     nb.add_code('ws.ErrgenTable(gs3,tgt)')
     nb.add_code('''ws.PolarEigenvaluePlot([np.linalg.eigvals(gs2['Gx'])],["purple"],scale=1.5)''')
     nb.add_code('''ws.GateEigenvalueTable(gs2, display=('evals','polar'))''')
-    nb.launch_as('20Replica.ipynb')
+    nb.launch_new('20Replica.ipynb')
 
 if __name__ == '__main__':
     main()

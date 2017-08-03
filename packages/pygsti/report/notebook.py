@@ -204,7 +204,7 @@ class Notebook(object):
         for filename in filenames:
             self.add_notebook_text_file(filename)
 
-    def add_notebook_file(filename):
+    def add_notebook_file(self, filename):
         '''
         Append an .ipynb file to this notebook
 
@@ -213,12 +213,12 @@ class Notebook(object):
         filename : str
             ipynb file to append 
         '''
-        with open(templateFilename, 'r') as infile:
+        with open(filename, 'r') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
             self.cells.append(NotebookCell(cell['cell_type'], cell['source']))
 
-    def add_notebook_files(filenames):
+    def add_notebook_files(self, filenames):
         '''
         Add multiple notebook files to the notebook, in order
 
@@ -230,7 +230,21 @@ class Notebook(object):
         for filename in filenames:
             self.add_notebook_file(filename)
 
-    def launch_as(self, outputFilename, templateFilename=DefaultTemplate):
+    def launch_new(self, outputFilename, templateFilename=DefaultTemplate):
+        '''
+        Save and then launch this notebook with a new jupyter server
+
+        Parameters
+        ----------
+        outputFilename : str
+            filename to save this notebook to
+        templateFilename : str, optional
+            filename to build this notebook from (see save_to)
+        '''
+        self.save_to(outputFilename, templateFilename)
+        _call('jupyter notebook {}'.format(outputFilename), shell=True) 
+
+    def launch(self, outputFilename, templateFilename=DefaultTemplate):
         '''
         Save and then launch this notebook
 
@@ -242,7 +256,4 @@ class Notebook(object):
             filename to build this notebook from (see save_to)
         '''
         self.save_to(outputFilename, templateFilename)
-        try:
-            _browser.open('http://localhost:8888/notebooks/{}'.format(outputFilename))
-        except:
-            _call('jupyter notebook {}'.format(outputFilename), shell=True) 
+        _browser.open('http://localhost:8888/notebooks/{}'.format(outputFilename))

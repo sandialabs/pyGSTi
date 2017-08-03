@@ -17,7 +17,7 @@ def main():
         'templates/data_comparison.txt',
         'templates/input.txt',
         'templates/meta.txt'])
-    nb.launch_as('AdvancedReport.ipynb')
+    nb.launch_new('AdvancedReport.ipynb')
 
 if __name__ == '__main__':
     main()
