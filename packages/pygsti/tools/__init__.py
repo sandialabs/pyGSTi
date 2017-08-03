@@ -24,3 +24,5 @@ from .opttools import *
 from .legacytools import *
 from .dim import Dim
 from .opttools import *
+from .smartcache import *
+from .mpitools import parallel_apply, get_comm

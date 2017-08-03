@@ -88,4 +88,5 @@ scripts/profiling/report/rigetti_nocache.py
 
 # Profiling data #
 scripts/profiling/output
+scripts/profiling/data
 

@@ -11,7 +11,6 @@ branches:
     - master
     - beta
     - develop
-    - feature-basis-dim-removal-working
 
 env:
     - Drivers=True    # First in build mx because long duration

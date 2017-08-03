@@ -15,9 +15,9 @@ from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
 from . import slicetools as _slct
+from .smartcache import smart_cached
 
 TOL = 1e-20
-
 
 # Functions for computing the log liklihood function and its derivatives
 
@@ -169,7 +169,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 
 
-
+@smart_cached
 def logl_terms(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
@@ -249,7 +249,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     return v
 
 
-
+@smart_cached
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
@@ -743,7 +743,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     return final_hessian # (N,N)
 
-
+@smart_cached
 def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
              poissonPicture=True, check=False, gateLabelAliases=None):
     """
@@ -814,7 +814,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
 
     return maxLogL
 
-
+@smart_cached
 def logl_max_terms(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
                    poissonPicture=True, check=False, gateLabelAliases=None):
     """
@@ -994,7 +994,7 @@ def cptp_penalty(gateset, include_spam_penalty=True):
         ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
     return ret
 
-
+@smart_cached
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding

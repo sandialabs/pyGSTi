@@ -11,6 +11,8 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
+from .smartcache import smart_cached
+
 def array_eq(a, b, tol=1e-8):
     print(_np.linalg.norm(a-b))
     return _np.linalg.norm(a-b) < tol

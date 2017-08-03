@@ -12,6 +12,7 @@ import inspect as _inspect
 import itertools as _itertools
 import numpy as _np
 
+
 try:
     import psutil as _psutil
     def _get_mem_usage():

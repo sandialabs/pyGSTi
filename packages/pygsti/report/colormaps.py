@@ -9,6 +9,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.stats import chi2 as _chi2
 
+from ..objects import smart_cached
+
+@smart_cached
 def _vnorm(x, vmin, vmax):
     #Perform linear mapping from [vmin,vmax] to [0,1]
     # (which is just a *part* of the full mapping performed)
@@ -90,6 +93,7 @@ class LinlogColormap(Colormap):
               [0.5, c], [1.0, mx] ], hmin,hmax)
 
 
+    @smart_cached
     def normalize(self, value):
         """ 
         Scale value to a value between self.hmin and self.hmax (heatmap endpoints).
