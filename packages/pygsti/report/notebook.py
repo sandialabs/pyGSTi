@@ -6,9 +6,22 @@ import json as _json
 from subprocess import call as _call
 
 class Notebook(object):
+    '''
+    Python representation of an IPython notebook
+    '''
     DefaultTemplate = 'Empty.ipynb'
 
     def __init__(self, cells=None, notebookTextFiles=None):
+        '''
+        Create an IPython notebook from a list of cells, list of notebookTextFiles, or both.
+        
+        Parameters
+        ----------
+        cells : list, optional
+            List of NotebookCell objects
+        notebookTextFiles : list, optional
+            List of filenames (text files with '@@markdown' or '@@code' designating cells)
+        '''
         if cells is None:
             cells = []
         self.cells = cells
@@ -17,6 +30,14 @@ class Notebook(object):
                 self.add_notebook_text_file(filename)
 
     def to_json_dict(self, templateFilename=DefaultTemplate):
+        '''
+        Using an existing (usually empty) notebook as a template, generate the json for a new notebook.
+
+        Parameters
+        ----------
+        templateFilename : str, optional
+            Name of an existing notebook file to build from
+        '''
         templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                           'templates', templateFilename )
         with open(templateFilename, 'r') as infile:
@@ -25,42 +46,124 @@ class Notebook(object):
         return notebookDict
 
     def save_to(self, outputFilename, templateFilename=DefaultTemplate):
+        '''
+        Save this class to a file as a jupyter notebook
+
+        Parameters
+        ----------
+        outputFilename : str
+            File to save the output jupyter notebook to
+
+        templateFilename : str, optional
+            Name of an existing notebook file to build from
+        '''
         jsonDict = self.to_json_dict(templateFilename)
         with open(outputFilename, 'w') as outfile:
             _json.dump(jsonDict, outfile)
 
     def add(self, cell):
+        '''
+        Add a cell to the notebook
+
+        Parameters
+        ----------
+        cell : NotebookCell object
+        '''
         self.cells.append(cell)
 
     def add_block(self, block, cellType):
+        '''
+        Add a block to the notebook
+
+        Parameters
+        ----------
+        block : str
+            block of either code or markdown
+        cellType : str
+            tag for the cell. Either 'code' or 'markdown'
+        '''
         lines = block.splitlines(True)
         self.cells.append(NotebookCell(cellType, lines))
 
     def add_file(self, filename, cellType):
+        '''
+        Read in a cell block from a file
+
+        Parameters
+        ----------
+        filename: str
+            filename containing either code or markdown
+        cellType : str
+            tag for the cell. Either 'code' or 'markdown'
+        '''
         with open(filename, 'r') as infile:
             block = infile.read()
         self.add_block(block, cellType)
 
     def add_code(self, block):
+        '''
+        Add code to notebook
+
+        Parameters
+        ----------
+        block : str
+            Block of python code
+        '''
         self.add_block(block, 'code')
 
     def add_markdown(self, block):
+        '''
+        Add markdown to notebook
+
+        Parameters
+        ----------
+        block : str
+            Block of markdown (or HTML) 
+        '''
         self.add_block(block, 'markdown')
 
     def add_code_file(self, filename):
+        '''
+        Add a code file to the notebook 
+
+        Parameters
+        ----------
+        filename : str
+            name of file containing python code
+        '''
         self.add_file(filename, 'code')
 
     def add_markdown_file(self, filename):
+        '''
+        Add a markdown file to the notebook 
+
+        Parameters
+        ----------
+        filename : str
+            name of file containing markdown 
+        '''
         self.add_file(filename, 'markdown')
 
     def add_notebook_text(self, text):
+        '''
+        Add custom formatted text to the notebook
+        Text contains both python and markdown, with
+        cells differentiated by @@code and @@markdown tags.
+        At least one cell tag must be present for the file to be correctly parsed
+
+        Parameters
+        ----------
+        text : str
+            notebook formatted text 
+        '''
+        assert '@@' in text, 'At least one cell tag must be present for the file to be correctly parsed'
         for block in text.split('@@'):
             if block == '':
                 continue
             if block.startswith('code'):
                 block = block.replace('code', '', 1)
                 '''
-                TODO: Move comments to markdown
+                TODO: Auto-move comments to markdown
                 lines = []
                 for line in block.splitlines():
                     if '#' in line:
@@ -74,20 +177,68 @@ class Notebook(object):
                 raise ValueError('Invalid notebook text block heading:\n{}'.format(block))
 
     def add_notebook_text_file(self, filename):
+        '''
+        Add a custom formatted text file to the notebook
+        Text file contains both python and markdown, with
+        cells differentiated by @@code and @@markdown tags.
+        At least one cell tag must be present for the file to be correctly parsed
+
+        Parameters
+        ----------
+        filename : str
+            name of file containing notebook formatted text 
+        '''
         with open(filename, 'r') as infile:
             self.add_notebook_text(infile.read())
 
     def add_notebook_text_files(self, filenames):
+        '''
+        Add multiple notebook text files to the notebook, in order
+
+        Parameters
+        ----------
+        filenames : list(str)
+            names of file containing notebook formatted text 
+        '''
         for filename in filenames:
             self.add_notebook_text_file(filename)
 
     def add_notebook_file(filename):
+        '''
+        Append an .ipynb file to this notebook
+
+        Parameters
+        ----------
+        filename : str
+            ipynb file to append 
+        '''
         with open(templateFilename, 'r') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
             self.cells.append(NotebookCell(cell['cell_type'], cell['source']))
 
+    def add_notebook_files(filenames):
+        '''
+        Add multiple notebook files to the notebook, in order
+
+        Parameters
+        ----------
+        filenames : list(str)
+            names of file containing ipynb json
+        '''
+        for filename in filenames:
+            self.add_notebook_file(filename)
 
     def launch_as(self, outputFilename, templateFilename=DefaultTemplate):
+        '''
+        Save and then launch this notebook
+
+        Parameters
+        ----------
+        outputFilename : str
+            filename to save this notebook to
+        templateFilename : str, optional
+            filename to build this notebook from (see save_to)
+        '''
         self.save_to(outputFilename, templateFilename)
         _call('jupyter notebook {}'.format(outputFilename), shell=True) 
