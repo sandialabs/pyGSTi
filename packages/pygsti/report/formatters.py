@@ -83,7 +83,9 @@ formatDict['Verbatim'] = {
 
 # Pi formatters
 formatDict['Pi'] = {
-    'html'  : NormalHTML.variant(formatstring='%s&pi;'),
+    'html'  : NormalHTML.variant(formatstring='%s&pi;',
+                                 ebstring='%s <span class="errorbar">+/- %s</span>&pi;', 
+                                 nmebstring='%s <span class="nmerrorbar">+/- %s</span>&pi;'),
     'latex' : NormalLatex.variant(formatstring='%s$\\pi$',
                                   ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $')}
 
