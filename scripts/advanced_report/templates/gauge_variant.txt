@@ -1,0 +1,65 @@
+@@markdown
+### Gauge Variant Outputs
+The raw estimated gate set, and then some useful derived quantities.  These quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom using the parameters in Table
+
+@@code
+# Choose G.O. params
+# goSwitchBoard2
+
+@@markdown
+### Gauge Optimization Details. 
+A list of the parameters used when performing the gauge optimization that produced the final GST results found in subsequent tables and figures.
+
+@@code
+ws.GaugeOptParamsTable(switchBd.goparams)
+
+@@markdown
+### The GST estimate of the SPAM operations. Compares the estimated SPAM operations to those desired for convenience.
+
+@@code
+ws.SpamTable(switchBd.gsTargetAndFinal,
+             ['Target','Estimated'],
+             cri, includeHSVec=False)
+
+@@markdown
+### GST estimate of SPAM probabilities.
+Computed by taking the dot products of vectors in bestGatesetSpamTable. The symbol $E_C$, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.
+
+@@code
+ws.SpamParametersTable(gs_final, cri)
+
+@@markdown
+### Decomposition of estimated gates.
+A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto a the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle respectively.
+@@code
+ws.GateDecompTable(gs_final, gs_target, cri)
+
+@@markdown
+### Relative Eigenvalues of estimated gates.
+The spectrum of each estimated gate pre-multiplied by the inverse of it's ideal (target) counterpart.  The second column displays these eigenvalues over the complex disc.
+
+@@code
+ws.GateEigenvalueTable(gs_final, gs_target, cri, display=('rel','log-rel'))
+
+
+@@markdown
+### Comparison of GST estimated gates to target gates:
+This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.
+
+@@code
+ws.GatesVsTargetTable(gs_final, gs_target, cri)
+
+@@markdown
+### Comparison of GST estimated SPAM to target SPAM.
+This table presents, for each state preparation and POVM effect, two different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.
+
+@@code
+ws.SpamVsTargetTable(gs_final, gs_target, cri)
+
+@@markdown
+### The GST estimate of the logic gate operations.
+Compares the *ideal* (generally unitary) logic gates (second column, also in targetGatesetTable) with those *estimated* by GST (third column).  Each gate is represented as a $d^2\times d^2$ *superoperator* that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.
+
+@@code
+ws.GatesTable(switchBd.gsTargetAndFinal,
+              ['Target','Estimated'], "boxes", cri)
