@@ -13,6 +13,7 @@ Named quantities as well as their confidence-region error bars are
  "reportables".
 """
 import numpy as _np
+import scipy.linalg as _spl
 from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
@@ -112,7 +113,13 @@ def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
         df, f0 = confidenceRegionInfo.get_spam_fn_confidence_interval(fnOfSpamVecs,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        return ReportableQty(f0,df)
+        if isinstance(f0,dict):
+            #special processing for dict -> df is dict of error bars
+            # and we return a dict of ReportableQtys
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+
     return compute_quantity
 
 @_tools.parameterized
@@ -135,7 +142,11 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
         df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGate, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        return ReportableQty(f0,df)
+        if isinstance(f0,dict):
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+
     return compute_quantity
 
 @_tools.parameterized
@@ -153,7 +164,38 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
                              "a different gateset than the given confidenceRegionInfo")
         df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
             fnOfGateSet, eps, returnFnVal=True, verbosity=verbosity)
-        return ReportableQty(f0,df)
+
+        if isinstance(f0,dict):
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+
+    return compute_quantity
+
+
+@_tools.parameterized
+def gatesets_quantity(fnOfGateSets, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of two gatesets. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
+    @_functools.wraps(fnOfGateSets) 
+    def compute_quantity(gatesetA, gatesetB, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return ReportableQty(fnOfGateSets(gatesetA, gatesetB))
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+
+        curriedFnOfGateSets = _functools.partial(fnOfGateSets, gatesetB=gatesetB)
+        df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
+            curriedFnOfGateSets, eps, returnFnVal=True, verbosity=verbosity)
+
+        if isinstance(f0,dict):
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+
     return compute_quantity
 
 @spam_quantity() # This function changes arguments to (gateset, confidenceRegionInfo)
@@ -744,7 +786,7 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
     @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfGates) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, gateLabel, confidenceRegionInfo=None):
-        mxBasis = gatesetA.basis.name
+        mxBasis = gatesetB.basis #because gatesetB is usually the target which has a well defined basis
         A = gatesetA.gates[gateLabel]
         B = gatesetB.gates[gateLabel]
         if confidenceRegionInfo is None: # No Error bars
@@ -759,7 +801,11 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
         df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGates, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        return ReportableQty(f0, df)
+        if isinstance(f0,dict):
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+        
     return compute_quantity
 
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
@@ -837,6 +883,67 @@ def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
 
+@gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
+def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but must be "gatsetB" b/c of decorator coding...
+    decomp = {}
+    gateLabels = list(gatesetA.gates.keys())  # gate labels
+    mxBasis = gatesetB.basis # B is usually the target which has a well-defined basis
+    
+    for gl in gateLabels:
+        gate = gatesetA.gates[gl]
+        targetGate = gatesetB.gates[gl]
+
+        target_logG = _tools.unitary_superoperator_matrix_log(targetGate, mxBasis)
+        logG = _tools.approximate_matrix_log(gate, target_logG)
+        decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG)-gate)
+    
+        hamProjs, hamGens = _tools.std_errgen_projections(
+            logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
+        norm = _np.linalg.norm(hamProjs)
+        decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
+        
+        #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
+        # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
+        # least of Pauli products) and divide by 2# to be consistent with
+        # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
+        # theta in units of pi.
+    
+        dim = gatesetA.dim
+        decomp[gl + ' angle'] = norm * (2.0/dim)**0.5 / _np.pi
+        #Scratch...
+        # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
+        # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
+        # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
+        # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
+        # normalized paulis are just /sqrt(2), so need to additionally divide by
+        # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
+        # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
+    
+        basis_mxs = mxBasis.get_composite_matrices()
+        scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
+                       if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
+                     for i,mx in enumerate(basis_mxs) ]
+        hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
+        decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
+
+    for gl in gateLabels:
+        for gl_other in gateLabels:            
+            rotnAngle = decomp[gl + ' angle']
+            rotnAngle_other = decomp[gl_other + ' angle']
+
+            if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
+                decomp[gl + "," + gl_other + " axis angle"] = 10000.0 #sentinel for irrelevant angle
+    
+            real_dot = _np.clip(
+                _np.real(_np.dot(decomp[gl + ' axis'].flatten(),
+                                 decomp[gl_other + ' axis'].flatten())),
+            -1.0, 1.0)
+            angle = _np.arccos( real_dot ) / _np.pi
+            decomp[gl + "," + gl_other + " axis angle"] = angle
+
+    return decomp
+
+
 @_tools.parameterized
 def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two vectors and a basis."""
@@ -871,7 +978,11 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
                                                                       eps, returnFnVal=True,
                                                                       verbosity=verbosity)
 
-        return ReportableQty(f0, df)
+        if isinstance(f0,dict):
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return ReportableQty(f0, df)
+
     return compute_quantity
 
 @vectors_quantity() # This function changes arguments to (gatsetA, gatesetB, label, typ, confidenceRegionInfo)

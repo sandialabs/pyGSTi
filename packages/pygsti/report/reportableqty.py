@@ -78,6 +78,13 @@ class ReportableQty(object):
     def has_eb(self):
         return self.errbar is not None
 
+    def scale(self, factor):
+        """
+        Scale the value and error bar (if present) by `factor`.
+        """
+        self.value *= factor
+        if self.has_eb(): self.errbar *= factor
+
     def get_value(self):
         """
         Returns the quantity's value
