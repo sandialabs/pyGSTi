@@ -526,19 +526,21 @@ def _build_default_block_matrices(name, dim):
         blockMatrices.append(f(blockDim))
     return blockMatrices
 
-def basis_matrices(name, dimOrBlockDims):
+def basis_matrices(nameOrBasis, dim):
     '''
     Get the elements of the specifed basis-type which
-    spans the density-matrix space given by dimOrBlockDims.
+    spans the density-matrix space given by dim.
 
     Parameters
     ----------
-    name : {'std', 'gm', 'pp', 'qt'}
+    name : {'std', 'gm', 'pp', 'qt'} or Basis
         The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).
+        Pauli-product (pp), and Qutrit (qt).  If a Basis object, then 
+        the basis matrices are contained therein, and its dimension is checked to
+        match dim.
 
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+    dim : int 
+        The dimension of the density-matrix space.
 
     Returns
     -------
@@ -549,12 +551,19 @@ def basis_matrices(name, dimOrBlockDims):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     '''
+    if isinstance(nameOrBasis, Basis):
+        basis = nameOrBasis
+        assert(basis.dim.dmDim == dim), "Basis object has wrong dimension ({}) for requested basis matrices ({})".format(
+            basis.dim.dmDim, dim)
+        return basis.get_composite_matrices()
+
+    name = nameOrBasis
     if name not in _basisConstructorDict:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
-            name, dimOrBlockDims))
+            name, dim))
     f = _basisConstructorDict[name].constructor
 
-    return f(dimOrBlockDims)
+    return f(dim)
 
 def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
