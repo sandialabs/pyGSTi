@@ -32,6 +32,22 @@ def _projectToValidProb(p, tol=1e-9):
     if p > 1-tol: return 1-tol
     return p
 
+def _make_reportable_qty_or_dict(f0, df=None):
+    """ Just adds special processing with f0 is a dict, where we 
+        return a dict or ReportableQtys rather than a single
+        ReportableQty of the dict.
+    """
+    if isinstance(f0,dict):
+        #special processing for dict -> df is dict of error bars
+        # and we return a dict of ReportableQtys
+        if df:
+            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+        else:
+            return { ky: ReportableQty(f0[ky]) for ky in f0 }
+    else:
+        return ReportableQty(f0, df)
+
+
 def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, verbosity=0):
     """ For constructing a ReportableQty from a function of a gate. """
 
@@ -103,7 +119,8 @@ def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
     @_functools.wraps(fnOfSpamVecs) # Retain metadata of wrapped function
     def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfSpamVecs(gateset.get_preps(), gateset.get_effects()))
+            f0 = fnOfSpamVecs(gateset.get_preps(), gateset.get_effects())
+            return _make_reportable_qty_or_dict(f0)
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -131,7 +148,8 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     def compute_quantity(gateset, gateLabel, confidenceRegionInfo=None):
         mxBasis = gateset.basis.name
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGate(gateset.gates[gateLabel], mxBasis))
+            f0 = fnOfGate(gateset.gates[gateLabel], mxBasis)
+            return _make_reportable_qty_or_dict(f0)
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -157,7 +175,7 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
     @_functools.wraps(fnOfGateSet) 
     def compute_quantity(gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGateSet(gateset))
+            return _make_reportable_qty_or_dict( fnOfGateSet(gateset) )
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("GateSet quantity confidence region is being requested for " +
@@ -181,7 +199,7 @@ def gatesets_quantity(fnOfGateSets, eps=FINITE_DIFF_EPS, verbosity=0):
     @_functools.wraps(fnOfGateSets) 
     def compute_quantity(gatesetA, gatesetB, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGateSets(gatesetA, gatesetB))
+            return _make_reportable_qty_or_dict( fnOfGateSets(gatesetA, gatesetB) )
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("GateSet quantity confidence region is being requested for " +
