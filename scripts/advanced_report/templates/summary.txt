@@ -1,0 +1,20 @@
+@@markdown
+### Model Violation summary: 
+The aggregate log-likelihood as a function of GST iterations''')
+@@code
+ws.FitComparisonBarPlot(Ls, gs_finalAllL, switchBd.gsAllL, 
+                        eff_ds, switchBd.objective, 'L')
+@@markdown
+### Per-sequence model violation: 
+Each point displays the goodness of fit for a single gate sequence.''')
+@@code
+colorScatterPlot = ws.ColorBoxPlot(
+    switchBd.objective, gs_final, eff_ds, gsL,
+    linlg_pcntle=float(linlogPercentile) / 100,
+    minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+colorScatterPlot.set_render_options(click_to_display=True)
+@@markdown
+### Comparison of GST estimated gates to target gates: 
+This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.''')
+@@code
+ws.GatesVsTargetTable(gs_final, gs_target, cri)

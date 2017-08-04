@@ -1078,7 +1078,7 @@ class Switchboard(_collections.OrderedDict):
     def __getattr__(self, attr):
         if attr in self:
             return self[attr]
-        return getattr(self.__dict__,attr)
+        return getattr(self.__dict__, attr)
 
 
 class SwitchboardView(object):
