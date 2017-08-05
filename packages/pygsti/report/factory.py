@@ -26,6 +26,7 @@ from ..tools.mpitools import distribute_indices as _distribute_indices
 from .. import tools as _tools
 
 from . import workspace as _ws
+from .notebook import Notebook as _Notebook
 
 import functools as _functools
 
@@ -751,6 +752,148 @@ def create_general_report(results, filename, confidenceLevel=None,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
         #SmartCache.global_status(printer)
     return ws
+
+
+def create_report_notebook(results, filename, confidenceLevel=None,
+                           title="auto",
+                           datasetLabel="<span class='math'>\\mathcal{D}</span>",
+                           auto_open=False, connected=False, verbosity=0):
+    
+    printer = VerbosityPrinter.build_printer(verbosity)
+    templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                 "templates")
+    assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
+    outputDir = _os.path.dirname(filename)
+    
+    #Copy offline directory into position
+    if not connected:
+        _ws.rsync_offline_dir(outputDir)
+
+    #Save results to file
+    basename = _os.path.splitext(_os.path.basename(filename))[0]
+    results_file_base = basename + '_results.pkl'
+    results_file = _os.path.join(outputDir, results_file_base)
+    with open(results_file,'wb') as f:
+        _pickle.dump(results, f)
+
+
+    nb = _Notebook()
+    nb.add_markdown('# Pygsti report\n(Created on {})'.format(_time.strftime("%B %d, %Y")))
+
+    nb.add_code("""\
+        from __future__ import print_function
+        import pickle
+        import pygsti""")
+
+    if isinstance(results, dict):
+        dsKeys = list(results.keys())
+        results = results[dsKeys[0]]
+          #Note: `results` is always a single Results obj from here down
+          
+        nb.add_code("""\
+        #Load results dictionary
+        with open('{infile}', 'rb') as infile:
+            results_dict = pickle.load(infile)
+        print("Available dataset keys: ", ', '.join(results_dict.keys()))
+        """.format(infile = results_file_base))
+
+        nb.add_code("""\
+        #Set which dataset should be used below
+        results = results_dict['{dsKey}']
+        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        """.format(dsKey=dsKeys[0]))
+
+    else:
+        dsKeys = []
+        nb.add_code("""\
+        #Load results
+        with open('{infile}', 'rb') as infile:
+            results = pickle.load(infile)
+        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        """.format(infile = results_file_base))
+
+    estLabels = list(results.estimates.keys())
+    estimate = results.estimates[estLabels[0]]
+    nb.add_code("""\
+    #Set which estimate is to be used below
+    estimate = results.estimates['{estLabel}']
+    print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))
+    """.format(estLabel=estLabels[0]))
+
+    goLabels = list(estimate.goparameters.keys())
+    nb.add_code("""\
+        gopt      = '{goLabel}'
+        ds        = results.dataset
+
+        gssFinal  = results.gatestring_structs['final']
+        Ls        = results.gatestring_structs['final'].Ls
+        gssPerIter = results.gatestring_structs['iteration'] #ALL_L
+
+        prepStrs = results.gatestring_lists['prep fiducials']
+        effectStrs = results.gatestring_lists['effect fiducials']
+        germs = results.gatestring_lists['germs']
+        strs = (prepStrs, effectStrs)
+
+        params = estimate.parameters
+        objective = estimate.parameters['objective']
+        if objective == "logl":
+            mpc = estimate.parameters['minProbClip']
+        else:
+            mpc = estimate.parameters['minProbClipForWeighting']
+
+        effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
+        scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
+
+        gatesets   = estimate.gatesets
+        gs         = gatesets[gopt] #FINAL
+        gs_final   = gatesets['final iteration estimate'] #ITER
+        gs_target  = gatesets['target']
+        gsPerIter  = gatesets['iteration estimates']
+
+        goparams = estimate.goparameters[gopt]
+
+        confidenceLevel = {CL}
+        if confidenceLevel is None:
+            cri = None
+        else:
+            cri = estimate.get_confidence_region(confidenceLevel, gopt)
+    """.format(goLabel=goLabels[0], CL=confidenceLevel))
+            
+    nb.add_code_file(_os.path.join(templatePath,'workspace.py'))
+    
+    nb.add_notebook_text_files([
+        _os.path.join(templatePath,'summary.txt'),
+        _os.path.join(templatePath,'goodness.txt'),
+        _os.path.join(templatePath,'gauge_invariant.txt'),
+        _os.path.join(templatePath,'gauge_variant.txt')])
+
+    #Insert multi-dataset specific analysis
+    if len(dsKeys) > 1:
+        nb.add_markdown( ('# Dataset comparisons\n',
+                          'This report contains information for more than one data set.',
+                          'This page shows comparisons between different data sets.') )
+        
+        nb.add_code("""\
+        dslbl1 = '{dsLbl1}'
+        dslbl2 = '{dsLbl2}'
+        dscmp_gss = results_dict[dslbl1].gatestring_structs['final']
+        ds1 = results_dict[dslbl1].dataset
+        ds2 = results_dict[dslbl2].dataset
+        dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+        """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
+        _os.path.join(templatePath,'data_comparison.txt')
+
+    #Add reference material
+    nb.add_notebook_text_files([
+        _os.path.join(templatePath,'input.txt'),
+        _os.path.join(templatePath,'meta.txt')])
+
+    if auto_open:
+        nb.launch_new(filename)
+    else:
+        nb.save_to(filename)
+
+
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

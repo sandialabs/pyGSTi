@@ -1,18 +1,13 @@
 @@markdown
-# Dataset comparisons
-This report contains information for more than one data set.  This page shows comparisons between different data sets.
-
-@@markdown
 ### Histogram of p-values comparing two data sets. 
 Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.
 
 @@code
-ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
+ws.DatasetComparisonPlot(dscmp)
 
 @@markdown
 # Per-sequence $2\Delta\log(\mathcal{L})$ values comparing two data sets.
 In a similar fashion to other color box plots, this plot shows two times the log-likelihood-ratio for each gate sequence corresponding to how consistent that sequences' counts are between the two selected data sets.  The likelihood ratio is between a models that supposes there is either one or two separate probability distributions from which the data counts are drawn.
 
 @@code
-ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gs_final,
-                None, None, dscomparator=dscmp_switchBd.dscmp)
+ws.ColorBoxPlot('dscmp', dscmp_gss, None, None, dscomparator=dscmp_switchBd.dscmp)

@@ -8,20 +8,16 @@ The quantity $2\Delta\log(\mathcal{L})$ measures the goodness of fit of the GST 
 $N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}$ is the number of standard deviations from the mean (a $p$-value can be straightforwardly derived from $N_\sigma$).  
 The rating from 1 to 5 stars gives a very crude indication of goodness of fit.
 
-  <!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
-
 @@code
-ws.FitComparisonBarPlot(Ls, gs_finalAllL, switchBd.gsAllL, 
-                        eff_ds, switchBd.objective, 'L')
+ws.FitComparisonTable(Ls, gssPerIter, gsPerIter,
+                      effective_ds, objective, 'L')
 @@markdown
 ### bestEstimateColorBoxPlot:
 @@code
+k = -1 #iteration index
 colorScatterPlot = ws.ColorBoxPlot(
-    switchBd.objective, gs_final, eff_ds, gsL,
-    linlg_pcntle=float(linlogPercentile) / 100,
-    minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
-colorScatterPlot.set_render_options(click_to_display=True)
-#switchBd.view(maxLView,"v6")
+    objective, gssPerIter[k], effective_ds, gsPerIter[k],
+    linlg_pcntle=0.95, minProbClipForWeighting=mpc)
 
 @@markdown
 ### $2\Delta\log(\mathcal{L})$ contributions for every individual experiment in the dataset.
@@ -30,8 +26,8 @@ Each pixel represents a single experiment (gate sequence), and its color indicat
 @@markdown
 ### dataScalingColorBoxPlot
 @@code
-ws.ColorBoxPlot("scaling", switchBd.gs_finalFinal, eff_ds, switchBd.gs_finalIter,
-        submatrices=switchBd.scaledSubMxsDict)
+ws.ColorBoxPlot("scaling", gssFinal, effective_ds, gs_final,
+        submatrices=scaledSubMxsDict)
 @@markdown
 ### Data scaling factor for every individual experiment in the dataset.
 Each pixel represents a single experiment (gate sequence), and its color indicates the amount of scaling that was applied to the original data counts when computing the log-likelihood or $\chi^2$ for this estimate.  
