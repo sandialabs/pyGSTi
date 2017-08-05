@@ -13,15 +13,23 @@ from scipy.stats import chi2 as _chi2
 from scipy.optimize import leastsq as _leastsq
 
 #### Full time-series analysis with minimal user specification
-def spectral_analysis(x, N, outcomes, test_thresholds, expected_power, filter_confidence=0.99, global_threshold=None,
-                      sequence_sets=None, power_estimator_index=None, sequence_sets_thresholds=None):
+def spectral_analysis(x, N, outcomes, test_thresholds, expected_power, filter_confidence=0.99, 
+                      global_threshold=None, sequence_sets=None, sequence_sets_thresholds=None):
     """
+    Implements a spectral analysis on time-series data from a set of circuits (e.g., time-stamped
+    GST data). The analysis assumes a fixed time-step between each measurement outcome in the
+    time-series for each gate sequence.
+    
+    Parameters
+    ----------
     x : dict 
-        The full dataset as a dictionary, with the key the gate sequence and the value a string 
-        of measurement outcomes. 
+        The full dataset as a dictionary, with the key normally the gate sequence, and the values always
+        a string of measurement outcomes. Note that time-stamps are not required, as the analysis assumes
+        that the time-step between each measurement outcome in each string is the same (and that this time-step
+        is the same for all gate sequences).
             
     N : int,
-        The number of datapoints for each gate sequence.
+        The number of datapoints for each gate sequence, which must be the same for all sequences.
             
     test_thresholds : 
         The thresholds for the ....
@@ -38,6 +46,13 @@ def spectral_analysis(x, N, outcomes, test_thresholds, expected_power, filter_co
         
     sequence_sets_threholds : dict, optional
         A dictionary of floats. Threshold values ....
+        
+    Returns
+    -------
+    dict
+        A dictionary containing a range of spectral-analysis results. This includes drift-detection
+        test outcomes and statistics, drift probability reconstructions, power spectra and a global
+        averaged power spectra.
        
     """
     
@@ -250,71 +265,46 @@ def global_threshold(largest_power,confidence=0.95):
                         
     return threshold
 
-def DCT(x,null_hypothesis=None,standardize_variance='pre_dct'):
+def DCT(x,null_hypothesis=None):
     """
-    Implements the Type-II orthogonal DCT on y where y[k] = (x[k] - null_hypothesis[k])/pre[k], and 
-    multiplies the kth frequency space mode by post[k]. If null_hypothesis = None, then it defaults
-    to the mean of x. `pre` and `post` are functions of `null_hypothesis`, with the form of the
-    functions depending on `standardize_variance`.
+    Returns the Type-II orthogonal discrete cosine transform of y where 
+    
+    y[k] = (x[k] - null_hypothesis[k])/sqrt(null_hypothesis[k]*(1-null_hypothesis[k])).
+    
+    If null_hypothesis is None, then null_hypothesis[k] is mean(x), for all k. This is
+    with the exception that when mean(x) = 0 or 1 (when the above y[k] is ill-defined),
+    in which case the zero vector is returned.
     
     Parameters
     ----------
     x : array
-        Bit string.
+        Bit string, on which the normalization and discrete cosine transformation is performed.
         
     null_hypothesis : array, optional
-        If not None, the array of values for the coin bias at each time which is to be used as the 
-        null hypothesis. If None, the null hypothesis is taken to be a constant bias given by the 
-        mean of x.
-        
-    standardize_variance : str, optional
-        If 'pre_dct', then pre[k] = sqrt(null_hypothesis[k]*(1-null_hypothesis[k])), and post[k]=1.
-        If 'post_dct', then pre[k] = 1, and post[k]=...... .
-        If None, then pre[k] = 1 and post[k]=1.
+        If not None, an array to use in the normalization before the DCT. If None, it is
+        taken to be an array in which every element is the mean of x.
                 
     Returns
     -------
-    modes
-        The DCT amplitudes described above.
-        
+    array
+        The DCT modes described above.
+
+
     """
-    # PROPERLY TEST THIS FUNCTION - IT WENT MAD WITH MY RB STUFF!!!
     if null_hypothesis is None:
-        p = _np.mean(x)
-        null_hypothesis = p * _np.ones(len(x),float)      
-        modes = _dct(x - null_hypothesis,norm='ortho')
-   
-        if standardize_variance == 'pre_dct' or standardize_variance == 'post_dct':
-        # pre and post standardization are equivalent for constant null_hypothesis.
-            if p <= 0 or p >= 1:
-                print(0)
-                print('Warning: mean of the data is not in (0,1). Variance standardization will fail.') 
-            normalizer = _np.sqrt(p * (1 - p))
-            modes = modes/normalizer
-    
+        null_hypothesis = _np.mean(x)
+        if null_hypothesis<=0 or null_hypothesis>=1:
+            return _np.zeros(len(x))
+        
     else:
-        y = x - null_hypothesis
-        
-        if standardize_variance == 'pre_dct':
-            normalizer =  _np.sqrt(null_hypothesis * (1 - null_hypothesis))
-            y = y/normalizer
-       
-        modes = _dct(y,norm='ortho')
-        
-        if standardize_variance == 'post_dct':
-            N = len(x)
-            normalizer = [sum([_np.cos(k*_np.pi*(n+0.5)/N)**2*null_hypothesis[n]*
-                                       (1-null_hypothesis[n]) for n in range (0, N)]) 
-                                  for k in range (0, N)]
-            normalizer[0] = normalizer[0]/2.
-            modes = modes/_np.sqrt(2*_np.array(normalizer)/N)
-    
-    return modes
+        if min(null_hypothesis)<=0 or max(null_hypothesis)>=1:
+            raise ValueError("All element of null_hypothesis should be in (0,1)")
 
+    return _dct((x - null_hypothesis)/_np.sqrt(null_hypothesis * (1 - null_hypothesis)),norm='ortho')
 
-def IDCT(modes,null_hypothesis,standardize_variance='pre_dct'):
+def IDCT(modes,null_hypothesis):
     """
-    Inverts the DCT function. See the DCT function for details.
+    Inverts the DCT function.
     
     Parameters
     ----------
@@ -322,34 +312,19 @@ def IDCT(modes,null_hypothesis,standardize_variance='pre_dct'):
         The fourier modes to be transformed to time-domain.
         
     null_hypothesis : array
-        The null_hypothesis vector. For the IDCT it is not optional.
-        
-    post_standardize : bool, optional
-        Whether this is the inverse of the DCT that pre or post standarized the
-        variances of the Fourier modes, or didn't standarize them at all.
+        The null_hypothesis vector. For the IDCT it is not optional, and all
+        elements of this array must be in (0,1).
         
     Returns
     -------
-    x inverse of the fourier modes.
+    array
+        Inverse of the DCT function
         
     """
-    if standardize_variance == 'post_dct':
-        N = len(x)
-        normalizer = [sum([_np.cos(k*_np.pi*(n+0.5)/N)**2*null_hypothesis[n]*
-                                  (1-null_hypothesis[n]) for n in range (0, N)]) 
-                                  for k in range (0, N)]
-        normalizer[0] = normalizer[0]/2.
-        modes = modes*_np.sqrt(2*_np.array(normalizer)/N)
-
-    y = _idct(modes,norm='ortho')
+    if min(null_hypothesis)<=0 or max(null_hypothesis)>=1:
+            raise ValueError("All element of null_hypothesis should be in (0,1)")
     
-    if standardize_variance == 'pre_dct':
-        normalizer =  _np.sqrt(null_hypothesis * (1 - null_hypothesis))
-        y = y*normalizer
-  
-    x = y + null_hypothesis
-    
-    return x
+    return  _idct(modes,norm='ortho')*_np.sqrt(null_hypothesis * (1 - null_hypothesis)) + null_hypothesis
 
 
 def one_sparse_threshold(n,confidence=0.95):
@@ -417,94 +392,109 @@ def estimated_threshold(p, confidence):
     return -1*(p[1] + _np.log(1 - confidence) / p[0])
         
 
-def one_to_k_sparse_threshold(null_hypothesis,k=1,confidence=0.95,N=None,repeats=5,
-                              method=None,return_aux=False):
+def one_to_k_sparse_unadjusted_thresholds(null_hypothesis, n, k, confidence=0.95,
+                              bootstraps=None, method=None, repeats=5, return_aux=False):
     """
-    .....
-    """
-    n = len(null_hypothesis)
+    null_hypothesis : float or array
+        The null hypothesis that we are looking for statistically significant evidence to reject.
+        This will often be constant probability, in which case this should be a float. If it is
+        not a constant probability, this should be an array of probabilities in [0,1] of length
+        n.
     
+    n: int
+        The number of data points on which we are performing the analysis. Defines the size of the
+        DCT.
+        
+    k: int
+        The maximum k-sparse test to return the trhesold for. Thresholds are returned for all 1 - k
+        sparse tests.
+        
+    confidence: float, opt
+        The confidence level for the thresholds
+        
+    bootstraps: int, opt
+        The number of bootstraps to use to calculate the thresholds. If None, this is set to a
+        suitable default value which depends on whether `method` is 'basic' or 'fitted'. In the
+        case of 'fitted', the default value does not scale with any parameters, but in the case
+        of 'basic' it scales with 'confidence' and for very small '1-confidence' this will make
+        the runtime of the function very long.
+        
+    method: str, opt
+        Allow values are 'None', 'basic' or 'fitted. If 'basic' the thresholds are based on
+        taking many bootstraps of the k test statistics under the given null hypothesis, and then
+        taking the thresholds as a fraction of 'confidence' of the way through an ordered array
+        of the bootstrapped test statistics. This requires 'bootstraps' >> 1/(1-'confidence') to 
+        be reliable. If 'fitted' the thresholds are based on fitting the 1 - CDF of the test
+        statistics to an exponential decay. If None then it defaults to one of these two options
+        based on the size of confidence.
+        
+    repeats: int, opt
+        The number of times the full threshold-finding bootstrap is repeated. The returned threshold
+        is the mean of the found thresholds. If 'return_aux' is True then the list of all thresholds
+        is returned, which can be used to check the stability of the obtained thresholds.
+        
+    return_aux: bool, opt
+        Whether to return auxillary information about the thresholding bootstraps.
+        
+    
+              
+    """
+    p = None
+    if type(null_hypothesis) is float:
+        p = null_hypothesis
+        null_hypothesis = p*_np.ones(n)
+
     if method is None:
         if confidence <= 0.95:
-            method='basic_bootstrap'
+            method='basic'
         else:
-            method='fitted_bootstrap'
- 
-    if method=='basic_bootstrap':
-        
-        threshold_set = _np.zeros((k,repeats),float)
-        if N is None:
-                N = int(_np.ceil(500/(1-confidence)))
+            method='fitted'            
+    else:
+        if method != 'basic' and method != 'fitted':
+            raise ValueError("'method' should be None, 'basic' or 'fitted'")
+         
+    if bootstraps is None:
+        if method == 'basic':
+            bootstraps = int(_np.ceil(500/(1-confidence)))
                 
-        for j in range (0,repeats):
-          
-            bs = _np.array([_np.random.binomial(1,p,size=N) for p in null_hypothesis])
-            power = _np.zeros((n,N),float)
-            test_statistic = _np.zeros((n,N),float)
-
-            for i in range (0,N):
-                # the sorted power array, from highest to lowest.
-                power[:,i] = _np.flip(_np.sort(DCT(bs[:,i],null_hypothesis=null_hypothesis)**2),axis=0)
-                test_statistic[:,i] = _np.cumsum(power[:,i])
-                            
-            # The 'threshold_index' largest value for each order
-            # statistic, from N boostraps will be taken as the
-            # estimated threshold value.
-            threshold_index = int(_np.ceil((1-confidence)*N))
-            test_statistic = _np.flip(_np.sort(test_statistic,axis=1),axis=1)
-            threshold_instance  = test_statistic[:,threshold_index]
+        if method=='fitted':
+            bootstraps = 50000
+                                
+    threshold_set = _np.zeros((k,repeats),float)   
+    fail = []
+    soln = None
     
-            # Keep only the requested threshold values.
-            index = _np.zeros(n,bool)
-            for i in range(0,k):
-                index[i] = True
-       
-            threshold_set[:,j]  = threshold_instance[index]
-
-        threshold = _np.mean(threshold_set,axis=1)
-        if repeats > 1:
-            threshold_var = _np.std(threshold_set,axis=1)**2
-            threshold_max = _np.amax(threshold_set,axis=1)
-            threshold_min = _np.amin(threshold_set,axis=1)            
-        else:
-            threshold_var = None
-            threshold_max = None
-            threshold_min = None
-    
-    # ....
-    if method=='fitted_bootstrap':
-        threshold_set = _np.zeros((k,repeats),float)
-
-        if N is None:
-                N = 10000
-        
-        for j in range (0,repeats):
-                
-            bs = _np.array([_np.random.binomial(1,p,size=N) for p in null_hypothesis])        
-            power = _np.zeros((n,N),float)
-            test_statistic = _np.zeros((n,N),float)
-
-            for i in range (0,N):
-                # the sorted power array, from highest to lowest.
-                power[:,i] = _np.flip(_np.sort(DCT(bs[:,i],null_hypothesis=null_hypothesis)**2),axis=0)
-                test_statistic[:,i] = _np.cumsum(power[:,i])
+    for j in range (0,repeats):
             
-            # Empirical test statistics from highest to lowest,
-            # and the corresponding values of the empirical 1 - cdf.
+        if p is not None:
+            bs = _np.random.binomial(1,p,size=(n,bootstraps))
+        else:
+            if len(null_hypothesis) == n:
+                bs = _np.array([_np.random.binomial(1,p,size=bootstraps) for p in null_hypothesis])
+            else:
+                raise ValueError("If null_hypothesis is not a float, it must be an array of length n.")
+
+        test_statistic = _np.zeros((n,bootstraps),float)
+        for i in range (0,bootstraps):
+            test_statistic[:,i] = _np.cumsum(_np.flip(_np.sort(DCT(bs[:,i],null_hypothesis=null_hypothesis)**2),axis=0))
+            
+
+        if method == 'basic':
+            threshold_index = int(_np.ceil((1-confidence)*bootstraps))
+            test_statistic = _np.flip(_np.sort(test_statistic,axis=1),axis=1)
+            threshold_set[:,j]  = test_statistic[:k,threshold_index]
+            
+        if method == 'fitted':         
             test_statistic = _np.sort(test_statistic,axis=1)
-            oneminuscdf = 1 - _np.arange(1,N+1)/(N+1)
+            oneminuscdf = 1 - _np.arange(1,bootstraps+1)/(bootstraps+1)
         
             # Truncate the empirical 1 - cdf  to the smallest 0.95 values
-            fraction_index = int(_np.ceil(N*0.95))
-            index = _np.zeros(N,bool)
-            for i in range(fraction_index,N):
-                index[i] = True
-        
-            truncated_test_statistic = test_statistic[:,index]
-            truncated_oneminuscdf = oneminuscdf[index]
-            
+            fraction_index = int(_np.ceil(bootstraps*0.95))       
+            truncated_test_statistic = test_statistic[:,fraction_index:]
+            truncated_oneminuscdf = oneminuscdf[fraction_index:]
+                
+            # Fit to an exponential decay
             soln = _np.zeros((k,2),float)
-            fail = []
             for i in range(0,k):
                 p0 = [1.,-1*_np.amin(truncated_test_statistic[i,:])]
                 soln[i,:], success = _leastsq(threshold_errfunc, p0, 
@@ -512,39 +502,25 @@ def one_to_k_sparse_threshold(null_hypothesis,k=1,confidence=0.95,N=None,repeats
                 if success !=1 and success !=2 and success !=3 and success!=4:
                     fail.append(i+1)
                 threshold_set[i,j] = estimated_threshold(soln[i,:],confidence)
-        
-        threshold = _np.mean(threshold_set,axis=1)
-        if repeats > 1:
-            threshold_var = _np.std(threshold_set,axis=1)**2
-            threshold_max = _np.amax(threshold_set,axis=1)
-            threshold_min = _np.amin(threshold_set,axis=1)            
-        else:
-            threshold_var = None
-            threshold_max = None
-            threshold_min = None
-    
-    validate_threshold = one_sparse_threshold(n,confidence=confidence)
-    consistency = validate_threshold - threshold[0]
+     
+    threshold = _np.mean(threshold_set,axis=1)
+    consistency = one_sparse_threshold(n,confidence=confidence) - threshold[0]
     
     if return_aux:
         aux_out = {}
         aux_out['null_hypothesis'] = null_hypothesis
         aux_out['confidence'] = confidence
         aux_out['threshold'] = threshold
-        aux_out['variance'] = threshold_var
-        aux_out['maximum'] = threshold_max
-        aux_out['minimum'] = threshold_min
+        aux_out['thresholds'] = threshold_set
         aux_out['consistency'] =  consistency
-        aux_out['N'] = N
+        aux_out['bootstraps'] = bootstraps
         aux_out['repeats'] = repeats
-        aux_out['samples'] = N*repeats
+        aux_out['samples'] = bootstraps*repeats
         aux_out['method'] = method
-        if method=='basic_bootstrap':
-            soln = None
-            fail = None
         aux_out['threshold_function_params'] = soln
         aux_out['fail'] = fail
-        return aux_out
+        
+        return threshold, aux_out
     else:
         return threshold
 
@@ -609,6 +585,12 @@ def one_to_k_sparse_test(modes,null_hypothesis,k=1,confidence=0.95,N=None,repeat
 
 ### Probability function reconstruction + error bar finding functions 
 
+def renormalizer(x):
+    
+    p = _np.mean(x)
+    nu = min([1-p,p])                       
+    return p - nu + (2*nu)/(1 + _np.exp(-2*(estimated_x-p)/nu))
+
 def low_pass_filter(data,max_freq = None):
     if max_freq is None:
         max_freq = int(len(data)/10)
@@ -632,7 +614,7 @@ def DCT_filter(x,confidence=0.99,null_hypothesis=None,method='chi2',max_keep_mod
         if null_hypothesis is None:
             null_hypothesis = x_mean*_np.ones(len(x),float)
             
-        y = DCT(x,null_hypothesis=null_hypothesis,standardize_variance='pre_dct')
+        y = DCT(x,null_hypothesis=null_hypothesis)
         if method=='chi2':
             threshold = one_sparse_threshold(len(x),confidence)
         else:
@@ -654,7 +636,7 @@ def DCT_filter(x,confidence=0.99,null_hypothesis=None,method='chi2',max_keep_mod
         power[power < 0] = 0.
         y = _np.sign(y)*_np.sqrt(power)
         
-        filtered_x = IDCT(y,null_hypothesis,standardize_variance='pre_dct')
+        filtered_x = IDCT(y,null_hypothesis)
  
         if return_aux:
             out_aux = {}
@@ -829,3 +811,31 @@ def estimate_power(modes, data_mean, expected_power=None, cut_off=True):
             estimated_power = 0.
 
     return out
+
+
+def k_sparse_signal_generator(n,power,k,freq_cutoff=None,base = 0.5,verbose=True):
+    if freq_cutoff is None:
+        freq_cutoff = n-1
+    amp_per_mode = _np.sqrt(power/k)
+    all_modes = _np.arange(1,freq_cutoff+1)
+    sampled_modes = _np.random.choice(all_modes, size=k, replace=False, p=None)
+    
+    modes = _np.zeros(n,float)
+    for i in range (0,k):
+        modes[sampled_modes[i]] = amp_per_mode*(-1)**_np.random.binomial(1,0.5)
+        
+        x =  _idct(modes,norm='ortho')    
+    x = x + base
+    if verbose:
+        if _np.amax(x) > 1 or _np.amin(x) < 0:
+            print("--- Elements of generated signal outside [0,1]: Run again, reduce power, or change `base` ---")
+    return x
+
+from scipy import convolve
+from scipy import ones
+
+def moving_average(sequence, width=100):
+    seq_length = len(sequence)
+    base = convolve(ones(seq_length), ones((int(width),))/float(width), mode='same')
+    signal = convolve(sequence, ones((int(width),))/float(width), mode='same')
+    return signal/base 
