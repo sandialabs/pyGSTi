@@ -3,6 +3,7 @@ from .notebookcell import NotebookCell
 import os   as _os
 import json as _json
 import webbrowser as _browser
+import textwrap as _textwrap
 
 from subprocess import call as _call
 
@@ -110,7 +111,7 @@ class Notebook(object):
         block : str
             Block of python code
         '''
-        self.add_block(block, 'code')
+        self.add_block(_textwrap.dedent(block), 'code')
 
     def add_markdown(self, block):
         '''
