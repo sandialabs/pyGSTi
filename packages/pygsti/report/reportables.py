@@ -911,8 +911,12 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
         gate = gatesetA.gates[gl]
         targetGate = gatesetB.gates[gl]
 
-        target_logG = _tools.unitary_superoperator_matrix_log(targetGate, mxBasis)
-        logG = _tools.approximate_matrix_log(gate, target_logG)
+        target_evals = _np.linalg.eigvals(targetGate)
+        if _np.any(_np.isclose(target_evals,-1.0)):
+            target_logG = _tools.unitary_superoperator_matrix_log(targetGate, mxBasis)        
+            logG = _tools.approximate_matrix_log(gate, target_logG)
+        else:
+            logG = _tools.real_matrix_log(gate)
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG)-gate)
     
         hamProjs, hamGens = _tools.std_errgen_projections(
