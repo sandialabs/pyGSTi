@@ -104,10 +104,8 @@ class SmartCache(object):
                 pickleableCache[k] = v
             except TypeError as e:
                 self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
-                pass
             except _pickle.PicklingError as e:
                 self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
-                pass
         d['cache'] = pickleableCache
         return d
 

@@ -1,0 +1,16 @@
+@@markdown
+# System and pyGSTi parameters
+This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.
+
+@@markdown
+### Listing of GST parameters and meta-data.
+These parameters and related metadata describe how the GST computation was performed which led to this report.
+@@code
+ws.MetadataTable(gs, params)
+
+@@markdown 
+### Listing of the software environment.
+Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimation.
+
+@@code
+ws.SoftwareEnvTable()

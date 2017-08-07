@@ -66,6 +66,7 @@ class ReportableQty(object):
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, ReportableQty):
+            value.nonMarkovianEBs = bool(nonMarkovianEBs)
             return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
@@ -77,6 +78,13 @@ class ReportableQty(object):
 
     def has_eb(self):
         return self.errbar is not None
+
+    def scale(self, factor):
+        """
+        Scale the value and error bar (if present) by `factor`.
+        """
+        self.value *= factor
+        if self.has_eb(): self.errbar *= factor
 
     def get_value(self):
         """

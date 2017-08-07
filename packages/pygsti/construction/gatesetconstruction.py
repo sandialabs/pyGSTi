@@ -14,7 +14,6 @@ import scipy.linalg as _spl
 
 from ..tools import gatetools as _gt
 from ..tools import basis as _basis
-from ..tools import deprecated_fn as _deprecated_fn
 from ..objects import gate as _gate
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
@@ -69,7 +68,6 @@ def basis_build_vector(vecExpr, basis):
 
     return _basis.change_basis(vecInReducedStdBasis, 'std', basis)
 
-@_deprecated_fn(replacement='basis_build_vector w/ Basis object')
 def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
     return basis_build_vector(vecExpr, _basis.Basis(basis, stateSpaceDims))
 
@@ -102,7 +100,6 @@ def basis_build_identity_vec(basis):
         start += blockDim
     return _basis.change_basis(vecInReducedStdBasis, "std", basis)
 
-@_deprecated_fn(replacement='basis_identity_vec w/ Basis object')
 def build_identity_vec(stateSpaceDims, basis="gm"):
     return basis_build_identity_vec(_basis.Basis(basis, stateSpaceDims))
 
@@ -414,8 +411,6 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
     #                      clevel qubit ops: Leak
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
-    print(basis)
-
     dmDim, gateDim, blockDims = basis.dim
     #fullOpDim = dmDim**2
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -815,7 +810,6 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
     return gateInFinalBasis # a Gate object
 
-@_deprecated_fn(replacement='basis_build_gate w/ Basis object')
 def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
     return basis_build_gate(stateSpaceLabels, gateExpr, _basis.Basis(basis, stateSpaceDims), parameterization, unitaryEmbedding)
 
@@ -938,7 +932,6 @@ def basis_build_gateset(stateSpaceLabels,
 
     return ret
 
-@_deprecated_fn(replacement='basis_build_gateset w/ Basis object')
 def build_gateset(stateSpaceDims, stateSpaceLabels,
                   gateLabels, gateExpressions,
                   prepLabels, prepExpressions,

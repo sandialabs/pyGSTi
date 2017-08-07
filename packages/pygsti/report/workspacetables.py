@@ -795,55 +795,25 @@ class GateDecompTable(WorkspaceTable):
                              colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
         formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
-        axes = {}; angles = {}; inexact = {}; hamEvals = {}
+        decomp = _reportables.general_decomposition(
+            gateset, targetGateset, confidenceRegionInfo)
+
         for gl in gateLabels:
-            gate = gateset.gates[gl]
-            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl],targetGateset.basis)
-            logG = _tools.approximate_matrix_log(gate, target_logG)
-            inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
-            
-            hamProjs, hamGens = _tools.std_errgen_projections(
-                logG, "hamiltonian", basisNm, basisNm, return_generators=True)
-            norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs / norm if (norm > 1e-15) else hamProjs
-            #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
-               # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
-               # least of Pauli products) and divide by 2# to be consistent with
-               # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
-               # theta in units of pi.
-
-            angles[gl] = norm * (2.0/gateset.dim)**0.5 / _np.pi
-               #Scratch...
-               # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
-               # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
-               # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
-               # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
-               # normalized paulis are just /sqrt(2), so need to additionally divide by
-               # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
-               # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
-
-            basis_mxs = gateset.basis.get_composite_matrices()
-            scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
-                           if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
-                         for i,mx in enumerate(basis_mxs) ]
-            hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
-            hamEvals[gl] = _np.linalg.eigvals(hamMx)
-
-        for gl in gateLabels:            
-            rowData = [gl, hamEvals[gl]/_np.pi, angles[gl], axes[gl], inexact[gl] ]
+            decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
+            rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
+                       decomp[gl + ' angle'], decomp[gl + ' axis'],
+                       decomp[gl + ' log inexactness'] ]
 
             for j,gl_other in enumerate(gateLabels):
-                rotnAngle = angles[gl]
-                rotnAngle_other = angles[gl_other]
+                rotnAngle = decomp[gl + ' angle'].get_value()
+                rotnAngle_other = decomp[gl_other + ' angle'].get_value()
     
                 if gl_other == gl:
                     rowData.append( "" )
                 elif abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                     rowData.append( "--" )
                 else:
-                    real_dot = _np.clip( _np.real(_np.dot(axes[gl].flatten(), axes[gl_other].flatten())), -1.0, 1.0)
-                    angle = _np.arccos( real_dot ) / _np.pi
-                    rowData.append( angle )
+                    rowData.append(decomp[gl + ',' + gl_other + ' axis angle'])
 
             table.addrow(rowData, formatters)
     

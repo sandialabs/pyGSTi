@@ -11,6 +11,7 @@ import os  as _os
 import sys as _sys
 import time as _time
 import numpy as _np
+import warnings as _warnings
 import collections as _collections
 import webbrowser as _webbrowser
 import zipfile as _zipfile
@@ -26,6 +27,8 @@ from ..tools.mpitools import distribute_indices as _distribute_indices
 from .. import tools as _tools
 
 from . import workspace as _ws
+from . import autotitle as _autotitle
+from .notebook import Notebook as _Notebook
 
 import functools as _functools
 
@@ -472,13 +475,12 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
 
 
-def create_general_report(results, filename, confidenceLevel=None,
-                          title="auto",
-                          datasetLabel="<span class='math'>\\mathcal{D}</span>",
+def create_general_report(results, filename, title="auto",
+                          confidenceLevel=None,                          
                           linlogPercentile=5, errgen_type="logTiG",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
-                          cachefile=None,
+                          cachefile=None, brief=False,
                           connected=False, verbosity=0):
     """
     Create a "general" GST report.  This report is "general" in that it is
@@ -499,17 +501,14 @@ def create_general_report(results, filename, confidenceLevel=None,
     filename : string, optional
        The output filename where the report file(s) will be saved.
 
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
     confidenceLevel : int, optional
        If not None, then the confidence level (between 0 and 100) used in
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
-
-    title : string, optional
-       The title of the report.  "auto" uses a default title which
-       specifyies the label of the dataset as well.
-
-    datasetLabel : string, optional
-       A label given to the dataset.
 
     linlogPercentile : float, optional
         Specifies the colorscale transition point for any logL or chi2 color
@@ -553,6 +552,9 @@ def create_general_report(results, filename, confidenceLevel=None,
     cachefile : str, optional
         filename with cached workspace results
 
+    brief : bool, optional
+        Whether large, disk-space-consuming plots are omitted.
+
     connected : bool, optional
         Whether output HTML should assume an active internet connection.  If
         True, then the resulting HTML file size will be reduced because it
@@ -571,24 +573,31 @@ def create_general_report(results, filename, confidenceLevel=None,
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
-        
-    if title == "auto":
-        title = "GST report for %s" % datasetLabel
+
+    if isinstance(title,int): #to catch backward compatibility issues
+        raise ValueError(("'title' argument must be a string.  You may be accidentally"
+                          " specifying an int here because in older versions of pyGSTi"
+                          " the third argument to create_general_report was the"
+                          " confidence interval - please note the updated function signature"))
+    
+    if title is None or title == "auto":
+        autoname = _autotitle.generate_name()
+        title = "GST Report for " + autoname
+        _warnings.warn( ("You should really specify `title=` when generating reports,"
+                         "as this makes it much easier to identify them later on.  "
+                         "Since you didn't, pyGSTi will has generated a random one"
+                         " for you: '{}'.").format(autoname))
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     toggles = _set_toggles(results_dict)
 
     qtys = {} # stores strings to be inserted into report template
 
-    # Timing is done with these blocks instead:
-    printer.log('Adding metadata', 2)
-
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
     qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
-    qtys['datasetLabel'] = datasetLabel
     qtys['errorgenformula'] = _errgen_formula(errgen_type)
 
     # Generate Tables
@@ -669,25 +678,25 @@ def create_general_report(results, filename, confidenceLevel=None,
     qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
     qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
         Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
-                
-    qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
-        "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
-            submatrices=switchBd.scaledSubMxsDict)
+
+    if not brief: 
+        qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+            "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
+                submatrices=switchBd.scaledSubMxsDict)
     
-    #Not pagniated currently... just set to same full plot
-    qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, eff_ds, gsL,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc)
-    print("DB: render plots = ", len(qtys['bestEstimateColorBoxPlotPages'].figs))
-    qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
-    
-    qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
-        switchBd.objective, gss, eff_ds, gsL,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
-    qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
-    #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
+        #Not pagniated currently... just set to same full plot
+        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+            switchBd.objective, gss, eff_ds, gsL,
+            linlg_pcntle=float(linlogPercentile) / 100,
+            minProbClipForWeighting=switchBd.mpc)
+        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
+        
+        qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
+            switchBd.objective, gss, eff_ds, gsL,
+            linlg_pcntle=float(linlogPercentile) / 100,
+            minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
+        qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
+        #  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation 
 
     if multidataset:
         #initialize a new "dataset comparison switchboard"
@@ -751,6 +760,159 @@ def create_general_report(results, filename, confidenceLevel=None,
                         CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
         #SmartCache.global_status(printer)
     return ws
+
+
+def create_report_notebook(results, filename, title="auto",
+                           confidenceLevel=None,    
+                           auto_open=False, connected=False, verbosity=0):
+    """ TODO: docstring - but just a subset of args for create_general_report"""
+    printer = VerbosityPrinter.build_printer(verbosity)
+    templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                 "templates")
+    assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
+    outputDir = _os.path.dirname(filename)
+    
+    #Copy offline directory into position
+    if not connected:
+        _ws.rsync_offline_dir(outputDir)
+
+    #Save results to file
+    basename = _os.path.splitext(_os.path.basename(filename))[0]
+    results_file_base = basename + '_results.pkl'
+    results_file = _os.path.join(outputDir, results_file_base)
+    with open(results_file,'wb') as f:
+        _pickle.dump(results, f)
+
+    if title is None or title == "auto":
+        autoname = _autotitle.generate_name()
+        title = "GST Report for " + autoname
+        _warnings.warn( ("You should really specify `title=` when generating reports,"
+                         "as this makes it much easier to identify them later on.  "
+                         "Since you didn't, pyGSTi will has generated a random one"
+                         " for you: '{}'.").format(autoname))
+
+    nb = _Notebook()
+    nb.add_markdown('# {title}\n(Created on {date})'.format(
+        title=title, date=_time.strftime("%B %d, %Y")))
+
+    nb.add_code("""\
+        from __future__ import print_function
+        import pickle
+        import pygsti""")
+
+    if isinstance(results, dict):
+        dsKeys = list(results.keys())
+        results = results[dsKeys[0]]
+          #Note: `results` is always a single Results obj from here down
+          
+        nb.add_code("""\
+        #Load results dictionary
+        with open('{infile}', 'rb') as infile:
+            results_dict = pickle.load(infile)
+        print("Available dataset keys: ", ', '.join(results_dict.keys()))
+        """.format(infile = results_file_base))
+
+        nb.add_code("""\
+        #Set which dataset should be used below
+        results = results_dict['{dsKey}']
+        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        """.format(dsKey=dsKeys[0]))
+
+    else:
+        dsKeys = []
+        nb.add_code("""\
+        #Load results
+        with open('{infile}', 'rb') as infile:
+            results = pickle.load(infile)
+        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        """.format(infile = results_file_base))
+
+    estLabels = list(results.estimates.keys())
+    estimate = results.estimates[estLabels[0]]
+    nb.add_code("""\
+    #Set which estimate is to be used below
+    estimate = results.estimates['{estLabel}']
+    print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))
+    """.format(estLabel=estLabels[0]))
+
+    goLabels = list(estimate.goparameters.keys())
+    nb.add_code("""\
+        gopt      = '{goLabel}'
+        ds        = results.dataset
+
+        gssFinal  = results.gatestring_structs['final']
+        Ls        = results.gatestring_structs['final'].Ls
+        gssPerIter = results.gatestring_structs['iteration'] #ALL_L
+
+        prepStrs = results.gatestring_lists['prep fiducials']
+        effectStrs = results.gatestring_lists['effect fiducials']
+        germs = results.gatestring_lists['germs']
+        strs = (prepStrs, effectStrs)
+
+        params = estimate.parameters
+        objective = estimate.parameters['objective']
+        if objective == "logl":
+            mpc = estimate.parameters['minProbClip']
+        else:
+            mpc = estimate.parameters['minProbClipForWeighting']
+
+        effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
+        scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
+
+        gatesets   = estimate.gatesets
+        gs         = gatesets[gopt] #FINAL
+        gs_final   = gatesets['final iteration estimate'] #ITER
+        gs_target  = gatesets['target']
+        gsPerIter  = gatesets['iteration estimates']
+
+        goparams = estimate.goparameters[gopt]
+
+        confidenceLevel = {CL}
+        if confidenceLevel is None:
+            cri = None
+        else:
+            cri = estimate.get_confidence_region(confidenceLevel, gopt)
+    """.format(goLabel=goLabels[0], CL=confidenceLevel))
+            
+    nb.add_code("""\
+        from pygsti.report import Workspace
+        ws = Workspace()
+        ws.init_notebook_mode(connected={conn}, autodisplay=True)
+        """.format(conn=str(connected)))
+    
+    nb.add_notebook_text_files([
+        _os.path.join(templatePath,'summary.txt'),
+        _os.path.join(templatePath,'goodness.txt'),
+        _os.path.join(templatePath,'gauge_invariant.txt'),
+        _os.path.join(templatePath,'gauge_variant.txt')])
+
+    #Insert multi-dataset specific analysis
+    if len(dsKeys) > 1:
+        nb.add_markdown( ('# Dataset comparisons\n',
+                          'This report contains information for more than one data set.',
+                          'This page shows comparisons between different data sets.') )
+        
+        nb.add_code("""\
+        dslbl1 = '{dsLbl1}'
+        dslbl2 = '{dsLbl2}'
+        dscmp_gss = results_dict[dslbl1].gatestring_structs['final']
+        ds1 = results_dict[dslbl1].dataset
+        ds2 = results_dict[dslbl2].dataset
+        dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+        """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
+        _os.path.join(templatePath,'data_comparison.txt')
+
+    #Add reference material
+    nb.add_notebook_text_files([
+        _os.path.join(templatePath,'input.txt'),
+        _os.path.join(templatePath,'meta.txt')])
+
+    if auto_open:
+        nb.launch_new(filename)
+    else:
+        nb.save_to(filename)
+
+
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

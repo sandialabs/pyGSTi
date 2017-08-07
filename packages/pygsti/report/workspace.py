@@ -142,7 +142,6 @@ class Workspace(object):
             filename with cached workspace results
         """
         self._register_components(False)
-        self.cachefile = cachefile
         self.smartCache = _objs.SmartCache()
         if cachefile is not None:
             self.load_cache(cachefile)
@@ -1078,7 +1077,7 @@ class Switchboard(_collections.OrderedDict):
     def __getattr__(self, attr):
         if attr in self:
             return self[attr]
-        return getattr(self.__dict__,attr)
+        return getattr(self.__dict__, attr)
 
 
 class SwitchboardView(object):
@@ -1259,25 +1258,14 @@ class WorkspaceOutput(object):
         #self.widget = None #don't build until 1st display()
 
     def __getstate__(self):
-        state_dict = dict()
-        for k, v in self.__dict__.items():
-            if k not in ['ws', 'figs']:
-                '''
-                try:
-                    _pickle.dumps(v)
-                except:
-                    print('{} does not pickle'.format(k))
-                    raise
-                '''
-                state_dict[k] = v
+        state_dict = self.__dict__.copy()
+        del state_dict['ws']
         return state_dict
 
     def __setstate__(self, d):
         self.__dict__.update(d)
         if 'ws' not in self.__dict__:
             self.__dict__['ws'] = None
-        if 'figs' not in self.__dict__:
-            self.__dict__['figs'] = []
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
