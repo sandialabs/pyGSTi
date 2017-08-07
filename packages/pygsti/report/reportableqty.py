@@ -66,6 +66,7 @@ class ReportableQty(object):
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, ReportableQty):
+            value.nonMarkovianEBs = bool(nonMarkovianEBs)
             return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
