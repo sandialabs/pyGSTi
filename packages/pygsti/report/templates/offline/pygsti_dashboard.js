@@ -102,12 +102,12 @@ function openTab(evt, tabID) {
 /* Set the width of the side navigation to 250px and the left margin of the page content to 250px */
 function openNav() {
     document.getElementById("theSidenav").style.width = "250px";
-    // for push: document.getElementById("main").style.marginLeft = "250px";
+    document.getElementById("main").style.marginLeft = "250px"; // for push: 
 }
 
 /* Set the width of the side navigation to 0 and the left margin of the page content to 0 */
 function closeNav() {
     document.getElementById("theSidenav").style.width = "10px";
-    // for push: document.getElementById("main").style.marginLeft = "10px";
+    document.getElementById("main").style.marginLeft = "10px"; // for push: 
 }
 
