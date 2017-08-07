@@ -35,4 +35,5 @@ gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gz'],
                                 [ "X(pi/2,Q0)", "Z(pi/2,Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
                                 effectLabels=["E0"], effectExpressions=["1"],
-                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') },
+                                basis='pp')
