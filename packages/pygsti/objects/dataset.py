@@ -649,6 +649,32 @@ class DataSet(object):
 
         return trunc_dataset
 
+    def process_gate_strings(self, processor_fn):
+        """ 
+        Manipulate this DataSet's gate sequences according to `processor_fn`.
+
+        All of the DataSet's gate sequence labels are updated by running each
+        through `processor_fn`.  This can be useful when "tracing out" qubits
+        in a dataset containing multi-qubit data.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single GateString argument and returns
+            another (or the same) GateString.
+
+        Returns
+        -------
+        None
+        """
+        new_gsIndex = _OrderedDict()
+        for gstr,indx in self.gsIndex.items():
+            new_gstr = processor_fn(gstr)
+            assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
+            new_gsIndex[ new_gstr  ] = indx
+        self.gsIndex = new_gsIndex
+        
+
     def copy(self):
         """ Make a copy of this DataSet. """
         if self.bStatic:
