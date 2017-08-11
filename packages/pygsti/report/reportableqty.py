@@ -96,6 +96,19 @@ class ReportableQty(object):
             return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
         else:
             return ReportableQty( _np.real(self.value) )
+
+    def reshape(self, *args):
+        """ Returns a ReportableQty whose underlying values are reshaped."""
+        if self.has_eb():
+            return ReportableQty( self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( self.value.reshape(*args) )
+
+    @property
+    def size(self):
+        """ Returns the size of this ReportableQty's value. """
+        return self.value.size
+        
         
 
         
@@ -113,7 +126,6 @@ class ReportableQty(object):
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, ReportableQty):
-            # value.nonMarkovianEBs = bool(nonMarkovianEBs) #TODO: REMOVE (not needed anymore)
             return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
