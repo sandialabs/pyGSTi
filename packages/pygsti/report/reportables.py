@@ -32,7 +32,7 @@ def _projectToValidProb(p, tol=1e-9):
     if p > 1-tol: return 1-tol
     return p
 
-def _make_reportable_qty_or_dict(f0, df=None):
+def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
     """ Just adds special processing with f0 is a dict, where we 
         return a dict or ReportableQtys rather than a single
         ReportableQty of the dict.
@@ -41,11 +41,11 @@ def _make_reportable_qty_or_dict(f0, df=None):
         #special processing for dict -> df is dict of error bars
         # and we return a dict of ReportableQtys
         if df:
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
+            return { ky: ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0 }
         else:
-            return { ky: ReportableQty(f0[ky]) for ky in f0 }
+            return { ky: ReportableQty(f0[ky], None, False) for ky in f0 }
     else:
-        return ReportableQty(f0, df)
+        return ReportableQty(f0, df, nonMarkovianEBs)
 
 
 def _getGateQuantity(fnOfGate, gateset, gateLabel, eps, confidenceRegionInfo, verbosity=0):
@@ -127,15 +127,11 @@ def spam_quantity(fnOfSpamVecs, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("Spam quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         df, f0 = confidenceRegionInfo.get_spam_fn_confidence_interval(fnOfSpamVecs,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        if isinstance(f0,dict):
-            #special processing for dict -> df is dict of error bars
-            # and we return a dict of ReportableQtys
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
 
@@ -156,14 +152,12 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         curriedFnOfGate = _functools.partial(fnOfGate, mxBasis=mxBasis)
         df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGate, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        if isinstance(f0,dict):
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
 
@@ -180,13 +174,11 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("GateSet quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
             fnOfGateSet, eps, returnFnVal=True, verbosity=verbosity)
 
-        if isinstance(f0,dict):
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
 
@@ -205,14 +197,12 @@ def gatesets_quantity(fnOfGateSets, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("GateSet quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         curriedFnOfGateSets = _functools.partial(fnOfGateSets, gatesetB=gatesetB)
         df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
             curriedFnOfGateSets, eps, returnFnVal=True, verbosity=verbosity)
 
-        if isinstance(f0,dict):
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
 
@@ -815,14 +805,13 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         curriedFnOfGates = _functools.partial(fnOfGates, B=B, mxBasis=mxBasis)
         df, f0 = confidenceRegionInfo.get_gate_fn_confidence_interval(curriedFnOfGates, gateLabel,
                                                                   eps, returnFnVal=True,
                                                                   verbosity=verbosity)
-        if isinstance(f0,dict):
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
         
     return compute_quantity
 
@@ -990,6 +979,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             raise ValueError("Prep quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
 
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         curriedFnOfVectors = _functools.partial(fnOfVectors, B=B, mxBasis=mxBasis)
         if typ == 'prep':
             df, f0 = confidenceRegionInfo.get_prep_fn_confidence_interval(curriedFnOfVectors, label,
@@ -999,11 +989,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             df, f0 = confidenceRegionInfo.get_effect_fn_confidence_interval(curriedFnOfVectors, label,
                                                                       eps, returnFnVal=True,
                                                                       verbosity=verbosity)
-
-        if isinstance(f0,dict):
-            return { ky: ReportableQty(f0[ky], df[ky]) for ky in f0 }
-        else:
-            return ReportableQty(f0, df)
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
 

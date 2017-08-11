@@ -420,28 +420,33 @@ class ChoiTable(WorkspaceTable):
             for disp in display:
                 if disp == "matrix":
                     for gateset, (choiMxs, _) in zip(gatesets, qtysList):
-                        choiMx, _ = choiMxs[i].get_value_and_err_bar()
-                        row_data.append(choiMx)
+                        #OLD: choiMx, _ = choiMxs[i].get_value_and_err_bar()
+                        row_data.append(choiMxs[i])
                         row_formatters.append('Brackets')
         
                 elif disp == "eigenvalues":
                     for gateset, (_, evals) in zip(gatesets, qtysList):
-                        evals, evalsEB = evals[i].get_value_and_err_bar()
-                        try:
-                            evals = evals.reshape(evals.size//4, 4)
-                              #assumes len(evals) is multiple of 4!
-                        except: # if it isn't try 3 (qutrits)
-                            evals = evals.reshape(evals.size//3, 3)
-                              #assumes len(evals) is multiple of 3!
 
-                        if confidenceRegionInfo is None:
-                            row_data.append(evals)
-                            row_formatters.append('Normal')
-                        else:
-                            try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
-                            except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
-                            row_data.append( (evals,evalsEB) )
-                            row_formatters.append('Vec')
+                        #TODO: REMOVE comments
+                        #evals, evalsEB = evals[i].get_value_and_err_bar()
+                        #try:
+                        #    evals = evals.reshape(evals.size//4, 4)
+                        #      #assumes len(evals) is multiple of 4!
+                        #except: # if it isn't try 3 (qutrits)
+                        #    evals = evals.reshape(evals.size//3, 3)
+                        #      #assumes len(evals) is multiple of 3!
+
+                        ##TODO: add 'compactvec' formatter
+                        row_data.append(evals[i])
+                        row_formatters.append('Normal')
+                        
+                        #if confidenceRegionInfo is None:
+                        #
+                        #else:
+                        #    try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
+                        #    except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
+                        #    row_data.append( (evals,evalsEB) )
+                        #    row_formatters.append('Vec')
                             
                 elif disp == "barplot":
                     for gateset in gatesets:
@@ -864,7 +869,7 @@ class old_GateDecompTable(WorkspaceTable):
 
         for decomp, gl in zip(decomps, gateLabels):
             evals = _reportables.eigenvalues(gateset, gl)
-            decomp, decompEB = decomp.get_value_and_err_bar()
+            decomp, decompEB = decomp.get_value_and_err_bar() #OLD
     
             rowData = [gl, evals] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
                 [(decomp.get(x,'X'),decompEB) for x in decompNames[2:4] ]
@@ -926,15 +931,15 @@ class old_RotationAxisTable(WorkspaceTable):
     
         rotnAxisAngles, rotnAxisAnglesEB = _reportables.angles_btwn_rotn_axes(gateset, confidenceRegionInfo)
         rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
-                           for gl in gateLabels ]
+                           for gl in gateLabels ] #OLD
     
         for i,gl in enumerate(gateLabels):
-            decomp, decompEB = decomps[i].get_value_and_err_bar()
+            decomp, decompEB = decomps[i].get_value_and_err_bar() #OLD
             rotnAngle = decomp.get('pi rotations','X')
     
             angles_btwn_rotn_axes = []
             for j,gl_other in enumerate(gateLabels):
-                decomp_other, _ = decomps[j].get_value_and_err_bar()
+                decomp_other, _ = decomps[j].get_value_and_err_bar() #OLD
                 rotnAngle_other = decomp_other.get('pi rotations','X')
     
                 if gl_other == gl:
@@ -1026,18 +1031,19 @@ class GateEigenvalueTable(WorkspaceTable):
                 raise ValueError("Invalid display element: %s" % disp)
 
         formatters = [None]*len(colHeadings)
-    
-        def format_evals(evals,evalsEB):
-            evals = evals.reshape(evals.size, 1)
-            if evalsEB is not None:
-                evalsEB = evalsEB.reshape(evalsEB.size, 1)
-            #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
-            #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
-            #except: evals = evals.reshape(evals.size, 1)
-            #if evalsEB is not None:
-            #    try: evalsEB = evalsEB.reshape(evalsEB.size//2, 2)
-            #    except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
-            return evals, evalsEB
+
+        #OLD: now do this in a formatter if needed
+        #def format_evals(evals,evalsEB):
+        #    evals = evals.reshape(evals.size, 1)
+        #    if evalsEB is not None:
+        #        evalsEB = evalsEB.reshape(evalsEB.size, 1)
+        #    #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
+        #    #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
+        #    #except: evals = evals.reshape(evals.size, 1)
+        #    #if evalsEB is not None:
+        #    #    try: evalsEB = evalsEB.reshape(evalsEB.size//2, 2)
+        #    #    except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
+        #    return evals, evalsEB
     
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
@@ -1045,8 +1051,7 @@ class GateEigenvalueTable(WorkspaceTable):
             row_data = [gl]
             row_formatters = [None]
 
-            evals, evalsEB = _reportables.eigenvalues(gateset, gl).get_value_and_err_bar()
-            #evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
+            evals = _reportables.eigenvalues(gateset, gl)
 
             if targetGateset is not None:
                 gate = gateset.gates[gl]
@@ -1057,34 +1062,38 @@ class GateEigenvalueTable(WorkspaceTable):
 
             for disp in display:
                 if disp == "evals":
-                    evals,evalsEB = format_evals(evals,evalsEB)
-                    row_data.append( (evals,evalsEB) )
-                    row_formatters.append('Vec')
+                    #OLD evals,evalsEB = format_evals(evals,evalsEB) #TODO REMOVE
+                    row_data.append( evals )
+                    row_formatters.append('Normal') #OLD 'Vec')
 
                 elif disp == "rel" and targetGateset is not None:
-                    rel_evals,_ = format_evals(rel_evals,None)
-                    row_data.append( (rel_evals,None) )
-                    row_formatters.append('Vec')
+                    #OLD rel_evals,_ = format_evals(rel_evals,None) #TODO REMOVE
+                    row_data.append( rel_evals )
+                    row_formatters.append('Normal') #OLD 'Vec')
 
                 elif disp == "log-evals":
-                    evals,evalsEB = format_evals(evals,evalsEB)
-                    if evalsEB is not None:
-                        logevals, logevalsEB = _np.log(evals), _np.log(evalsEB)
-                        row_data.append( (_np.real(logevals),_np.real(logevalsEB)) )
-                        row_data.append( (_np.imag(logevals)/_np.pi,_np.imag(logevalsEB)/_np.pi) )
-                        row_formatters.append('Vec')
-                        row_formatters.append('Pi')
-            
-                    else:
-                        logevals = _np.log(evals)
-                        row_data.append( (_np.real(logevals),None) )
-                        row_data.append( (_np.imag(logevals)/_np.pi,None) )
-                        row_formatters.append('Vec') 
-                        row_formatters.append('Pi')  
+                    #OLD evals,evalsEB = format_evals(evals,evalsEB)
+                    #if evalsEB is not None:
+                    logevals = evals.log()
+                    row_data.append( logevals.real() )
+                    row_data.append( logevals.imag()/_np.pi )
+                    #OLD logevals, logevalsEB = _np.log(evals), _np.log(evalsEB)
+                    #row_data.append( (_np.real(logevals),_np.real(logevalsEB)) )
+                    #row_data.append( (_np.imag(logevals)/_np.pi,_np.imag(logevalsEB)/_np.pi) )
+                    row_formatters.append('Vec')
+                    row_formatters.append('Pi')
+
+                    #OLD: TODO REMOVE
+                    #else:
+                    #    logevals = _np.log(evals)
+                    #    row_data.append( (_np.real(logevals),None) )
+                    #    row_data.append( (_np.imag(logevals)/_np.pi,None) )
+                    #    row_formatters.append('Vec') 
+                    #    row_formatters.append('Pi')  
 
 
                 elif disp == "log-rel":
-                    rel_evals,_ = format_evals(rel_evals,None)
+                    #OLD: rel_evals,_ = format_evals(rel_evals,None)
                     log_relevals = _np.log(rel_evals)
                     row_data.append( (_np.real(log_relevals),None) )
                     row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
@@ -1093,12 +1102,13 @@ class GateEigenvalueTable(WorkspaceTable):
 
                     
                 elif disp == "polar":
+                    evals_val = evals.get_value()
                     if targetGateset is None:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[evals],["blue"],centerText=gl)
+                            self.ws,[evals_val],["blue"],centerText=gl)
                     else:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[target_evals,evals],
+                            self.ws,[target_evals,evals_val],
                             ["black","blue"],["target","gate"], centerText=gl)
                     row_data.append( fig )
                     row_formatters.append('Figure')
