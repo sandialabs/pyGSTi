@@ -437,7 +437,7 @@ class GateSet(object):
         elif typ == 'TP': 
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basisname)
         else: # typ in ('static','H+S','S')
             self.default_gauge_group = None
         
