@@ -589,6 +589,11 @@ class StdInputParser(object):
                     dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, iTotal) )
+                if '0' in spamLabels and '1' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('1')
+                    iTotal = colLabels.index( '%s count total' % dsLabel )
+                    impliedCounts1Q.append( (dsLabel, iTotal) )
+
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
@@ -611,7 +616,11 @@ class StdInputParser(object):
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
         for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            if '1' in countDicts[dsLabel]:
+                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            elif '0' in countDicts[dsLabel]:
+                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+                
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
