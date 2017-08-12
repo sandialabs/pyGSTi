@@ -340,7 +340,7 @@ class StdInputParser(object):
             labels" and whose values are lists if gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
         Returns
         -------
@@ -371,7 +371,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
             spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -428,8 +428,8 @@ class StdInputParser(object):
                 freqCols.append( (spamLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if 'plus' in spamLabels and 'minus' not in spamLabels:
-                spamLabels.append('minus')
+            if '1' in spamLabels and '0' not in spamLabels:
+                spamLabels.append('0')
                 impliedCountTotCol1Q = colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
@@ -453,7 +453,7 @@ class StdInputParser(object):
             countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
 
         if impliedCountTotCol1Q >= 0:
-            countDict['minus'] = colValues[impliedCountTotCol1Q] - countDict['plus']
+            countDict['0'] = colValues[impliedCountTotCol1Q] - countDict['1']
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -508,7 +508,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
+            else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
             dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -585,8 +585,8 @@ class StdInputParser(object):
 
         for dsLabel,spamLabels in dsSpamLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if 'plus' in spamLabels and 'minus' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('minus')
+                if '1' in spamLabels and '0' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, iTotal) )
             #TODO - add standard count completion for 2Qubit case?
@@ -611,7 +611,7 @@ class StdInputParser(object):
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
         for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['minus'] = colValues[iTotCol] - countDicts[dsLabel]['plus']
+            countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
@@ -833,8 +833,8 @@ def read_gateset(filename):
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['plus'] = [ 'rho', 'E' ]
-        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        spam_labels['1'] = [ 'rho', 'E' ]
+        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
         # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 
