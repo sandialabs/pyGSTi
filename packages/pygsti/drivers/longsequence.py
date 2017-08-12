@@ -621,7 +621,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       comm=None, memLimit=None, verbosity=2):
+                       comm=None, memLimit=None, advancedOptions=None, verbosity=2):
 
     """
     Perform end-to-end GST analysis using standard practices.
@@ -683,6 +683,14 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
 
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  Keys of this 
+        dictionary can be any of the modes being computed (see the `modes`
+        argument) or 'all', which applies to all modes.  Values are
+        dictionaries of advanced arguements - see :func:`do_long_sequence_gst`
+        for a list of the allowed keys for each such dictionary.
+
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
@@ -728,7 +736,13 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 
                 est_label = parameterization = mode #for now, 1-1 correspondence
                 tgt = gs_target.copy(); tgt.set_all_parameterizations(parameterization)
-                advanced = {'appendTo': ret, 'estimateLabel': est_label }
+
+                #prepare advanced options dictionary
+                if advancedOptions is not None:
+                    advanced = advancedOptions.get('all',{})
+                    advanced.update( advancedOptions.get(mode,{}) )
+                else: advanced = {}
+                advanced.update( {'appendTo': ret, 'estimateLabel': est_label } )
                 
                 ret = do_long_sequence_gst(ds, tgt, prepStrsListOrFilename,
                                            effectStrsListOrFilename, germsListOrFilename,
