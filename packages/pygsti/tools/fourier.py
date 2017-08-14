@@ -56,6 +56,9 @@ def spectral_analysis(x, N, outcomes, test_thresholds, expected_power, filter_co
        
     """
     
+    power_estimator_index = int(N/10)
+    num_tests = len(test_thresholds)
+    
     results = {}
     results['input'] = {}
     results['input']['data'] = x
@@ -84,7 +87,7 @@ def spectral_analysis(x, N, outcomes, test_thresholds, expected_power, filter_co
     if power_estimator_index is None:
         power_estimator_index = int(_np.ceil(N/2.))
      
-    # Create 0,1 datasets for all measurement outcomes.
+    # Create bit string datasets for all measurement outcomes.
     for key in x.keys():
         results['individual'][key] = {}
         results['individual'][key]['data'] = {}
@@ -390,6 +393,79 @@ def estimated_threshold(p, confidence):
     
     """
     return -1*(p[1] + _np.log(1 - confidence) / p[0])
+    
+
+def outavg_one_to_k_sparse_unadjusted_thresholds(probs, num_outcomes, n, k, 
+                                                 confidence=0.95, bootstraps=None, method='fitted', 
+                                                 repeats=5, return_aux=False):
+        
+    if method != 'basic' and method != 'fitted':
+        raise ValueError("'method' should be None, 'basic' or 'fitted'")
+         
+    if bootstraps is None:
+        if method == 'basic':
+            bootstraps = int(_np.ceil(500/(1-confidence)))
+                
+        if method=='fitted':
+            bootstraps = 50000
+                                
+    threshold_set = _np.zeros((k,repeats),float)   
+    fail = []
+    soln = None
+    
+    for j in range (0,repeats):
+                      
+        bs = _np.random.multinomial(1,probs,size=(n,bootstraps))        
+        test_statistic = _np.zeros((n,bootstraps),float)
+        
+        for i in range (0,bootstraps):
+            
+            powers = _np.zeros((num_outcomes,n),float)
+            avg_powers = _np.zeros(n,float)
+            
+            for m in range (0, num_outcomes):
+                p = _np.mean(bs[:,i,m])
+                
+                if p == 1 or p == 0:
+                    powers[m,:] =  _np.zeros(n,float)                    
+                else:
+                    powers[m,:] = _dct((bs[:,i,m] - p)/(_np.sqrt(p * (1 - p))),norm='ortho')**2
+                    
+            avg_powers = _np.mean(powers,axis=0)                       
+            test_statistic[:,i] = _np.cumsum(_np.flip(_np.sort(avg_powers),axis=0))
+            
+
+        if method == 'basic':
+            threshold_index = int(_np.ceil((1-confidence)*bootstraps))
+            test_statistic = _np.flip(_np.sort(test_statistic,axis=1),axis=1)
+            threshold_set[:,j]  = test_statistic[:k,threshold_index]
+            
+        if method == 'fitted':         
+            test_statistic = _np.sort(test_statistic,axis=1)
+            oneminuscdf = 1 - _np.arange(1,bootstraps+1)/(bootstraps+1)
+        
+            # Truncate the empirical 1 - cdf  to the smallest 0.95 values
+            fraction_index = int(_np.ceil(bootstraps*0.95))       
+            truncated_test_statistic = test_statistic[:,fraction_index:]
+            truncated_oneminuscdf = oneminuscdf[fraction_index:]
+                
+            # Fit to an exponential decay
+            soln = _np.zeros((k,2),float)
+            for i in range(0,k):
+                p0 = [1.,-1*_np.amin(truncated_test_statistic[i,:])]
+                soln[i,:], success = _leastsq(threshold_errfunc, p0, 
+                                        args=(truncated_test_statistic[i,:],truncated_oneminuscdf))
+                if success !=1 and success !=2 and success !=3 and success!=4:
+                    fail.append(i+1)
+                threshold_set[i,j] = estimated_threshold(soln[i,:],confidence)
+     
+    threshold = _np.mean(threshold_set,axis=1)
+   
+    return threshold
+
+
+    
+    
         
 
 def one_to_k_sparse_unadjusted_thresholds(null_hypothesis, n, k, confidence=0.95,
