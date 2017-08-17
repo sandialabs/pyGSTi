@@ -1151,8 +1151,8 @@ def lindblad_errgen_projections(errgen, ham_basis,
     else: 
         hamBasisMxs = ham_basis
         
-    if isinstance(ham_basis, _basis.Basis):
-        hamBasisMxs = ham_basis.get_composite_matrices()
+    if isinstance(other_basis, _basis.Basis):
+        otherBasisMxs = other_basis.get_composite_matrices()
     elif _compat.isstr(other_basis):
         otherBasisMxs = _basis.basis_matrices(other_basis, d)
     else: 
@@ -1326,12 +1326,11 @@ def project_gateset(gateset, targetGateset,
     """
     
     gateLabels = list(gateset.gates.keys())  # gate labels
-    basisNm = gateset.basis.name
-    basisDims = gateset.basis.dim.blockDims
+    mxBasis = gateset.basis
     
-    if basisNm != targetGateset.basis.name:
+    if basis.name != targetGateset.basis.name:
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-                         % (basisNm, targetGateset.basis.name))
+                         % (basis.name, targetGateset.basis.name))
     
     # Note: set to "full" parameterization so we can set the gates below
     #  regardless of what parameterization the original gateset had.
@@ -1350,25 +1349,25 @@ def project_gateset(gateset, targetGateset,
     for gl,errgen in zip(gateLabels,errgens):
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
             hamProj, hamGens = std_errgen_projections(
-                errgen, "hamiltonian", basisNm, basisNm, True)
+                errgen, "hamiltonian", basis.name, basis, True)
             ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
-            ham_error_gen = change_basis(ham_error_gen,"std",basisNm)
+            ham_error_gen = change_basis(ham_error_gen,"std",basis)
             
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
             stoProj, stoGens = std_errgen_projections(
-                errgen, "stochastic", basisNm, basisNm, True)
+                errgen, "stochastic", basis.name, basis, True)
             sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-            sto_error_gen = change_basis(sto_error_gen,"std",basisNm)
+            sto_error_gen = change_basis(sto_error_gen,"std",basis)
             
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
             HProj, OProj, HGens, OGens = \
                 lindblad_errgen_projections(
-                    errgen, basisNm, basisNm, basisNm, normalize=False,
+                    errgen, basis.name, basis.name, basis, normalize=False,
                     return_generators=True)
             #Note: return values *can* be None if an empty/None basis is given
             lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
                             _np.einsum('ij,ijkl', OProj, OGens)
-            lnd_error_gen = change_basis(lnd_error_gen,"std",basisNm)
+            lnd_error_gen = change_basis(lnd_error_gen,"std",basis)
 
         if 'H' in projectiontypes:
             gsDict['H'].gates[gl] = gate_from_error_generator(
@@ -1397,7 +1396,7 @@ def project_gateset(gateset, targetGateset,
               #OProj_cp is now a pos-def matrix
             lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
                                _np.einsum('ij,ijkl', OProj_cp, OGens)
-            lnd_error_gen_cp = change_basis(lnd_error_gen_cp,"std",basisNm)
+            lnd_error_gen_cp = change_basis(lnd_error_gen_cp,"std",basis)
 
             gsDict['LND'].gates[gl] = gate_from_error_generator(
                 lnd_error_gen_cp, targetGate, genType)

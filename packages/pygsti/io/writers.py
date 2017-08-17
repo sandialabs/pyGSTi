@@ -12,7 +12,7 @@ from .. import tools as _tools
 from .. import objects as _objs
 
 def write_empty_dataset(filename, gatestring_list,
-                        headerString='## Columns = plus frequency, count total', numZeroCols=None,
+                        headerString='## Columns = 1 frequency, count total', numZeroCols=None,
                         appendWeightsColumn=False):
     """
     Write an empty dataset file to be used as a template.

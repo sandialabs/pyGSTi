@@ -41,7 +41,7 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         labels" and whose values are lists if gate labels.  The gate labels 
         in each list define the set of gates which describe the the operation
         that is performed contingent on a *specific outcome* of the measurement
-        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,

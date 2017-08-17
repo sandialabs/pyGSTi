@@ -99,7 +99,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis='gm', choiMxBasis='gm'):
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Gate * B0), is not necessarily zero.
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim 
-    BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
+    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
 
     assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
 
@@ -147,7 +147,7 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='gm', gateMxBasis='gm'):
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _basis.basis_matrices(choiMxBasis.name, dmDim)
+    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
@@ -295,7 +295,7 @@ def sums_of_negative_choi_evals(gateset):
     """
     ret = []
     for (_, gate) in gateset.gates.items():
-        J = fast_jamiolkowski_iso_std(gate, gateset.basis.name) #Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate, gateset.basis) #Choi mx basis doesn't matter
         evals = _np.linalg.eigvals( J )  #could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:

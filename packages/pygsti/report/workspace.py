@@ -31,6 +31,35 @@ from pprint import pprint as _pprint
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
+def enable_plotly_pickling():
+    """ 
+    Hacks the plotly python library so that figures may be pickled and
+    un-pickled.  This hack should be used only temporarily - so all pickling
+    and un-pickling should be done between calls to
+    :func:`enable_plotly_pickling` and :func:`disable_plotly_pickling`.
+    """
+    import plotly
+    def setitem(self, key, value, _raise=True):
+        return dict.__setitem__(self,key,value)
+    
+    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+    plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
+    plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
+    plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
+    del plotlyDictClass.__getattr__
+    del plotlyDictClass.__setattr__
+    plotlyDictClass.__setitem__ = setitem
+    
+def disable_plotly_pickling():
+    """ Reverses the effect of :func:`enable_plotly_pickling` """
+    import plotly
+    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+    plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
+    plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
+    plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
+    del plotlyDictClass.__saved_getattr__
+    del plotlyDictClass.__saved_setattr__
+
 def ws_custom_digest(md5, v):
     if isinstance(v,NotApplicable):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
@@ -149,16 +178,20 @@ class Workspace(object):
 
     def save_cache(self, cachefile, showUnpickled=False):
         with open(cachefile, 'wb') as outfile:
+            enable_plotly_pickling()
             _pickle.dump(self.smartCache, outfile)
+            disable_plotly_pickling()
         if showUnpickled:
             print('Unpickled keys:')
             _pprint(self.smartCache.unpickleable)
 
     def load_cache(self, cachefile):
         with open(cachefile, 'rb') as infile:
+            enable_plotly_pickling()
             oldCache = _pickle.load(infile).cache
+            disable_plotly_pickling()
             for v in oldCache.values():
-                if hasattr(v, 'ws'):
+                if isinstance(v, WorkspaceOutput): # hasattr(v,'ws') == True for plotly dicts (why?)
                     print('Updated {} object to set ws to self'.format(type(v)))
                     v.ws = self
             self.smartCache.cache.update(oldCache)

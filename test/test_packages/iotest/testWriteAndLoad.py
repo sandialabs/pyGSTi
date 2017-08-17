@@ -24,9 +24,9 @@ class TestWriteAndLoad(BaseTestCase):
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
 
-        ds = pygsti.obj.DataSet(spamLabels=['plus','minus'], comment="Hello")
-        ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
-        ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
+        ds = pygsti.obj.DataSet(spamLabels=['0','1'], comment="Hello")
+        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
+        ds.add_count_dict( ('Gx','Gy'), {'0': 40, '1': 60} )
         ds.done_adding_data()
 
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",
@@ -36,12 +36,12 @@ class TestWriteAndLoad(BaseTestCase):
         ds4 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #loads from cache file
 
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt", ds,
-                                spamLabelOrder=['plus','minus'])
+                                spamLabelOrder=['0','1'])
         ds5 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
-            self.assertEqual(ds[s]['plus'],ds5[s]['plus'])
-            self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
+            self.assertEqual(ds[s]['0'],ds5[s]['0'])
+            self.assertEqual(ds[s]['1'],ds5[s]['1'])
 
         with self.assertRaises(ValueError):
             pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
@@ -49,11 +49,11 @@ class TestWriteAndLoad(BaseTestCase):
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_empty_dataset(temp_files + "/emptyMultiDataset.txt", strList,
-                                           headerString='## Columns = ds1 plus count, ds1 minus count, ds2 plus count, ds2 minus count')
+                                           headerString='## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count')
 
         multi_dataset_txt = \
 """# My Comment
-## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
+## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total
 # My Comment2
 {} 0 100 0 100
 Gx 10 90 0.1 100
@@ -71,12 +71,12 @@ Gx^4 20 80 0.2 100
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset2.txt", ds, strList)
         ds_copy = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset2.txt")
 
-        self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
-        self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )
+        self.assertEqual(ds_copy['DS0'][('Gx',)]['0'], ds['DS0'][('Gx',)]['0'] )
+        self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['1'], ds['DS1'][('Gx','Gy')]['1'] )
 
         #write all strings in ds to file with given spam label ordering
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset3.txt",
-                                     ds, spamLabelOrder=('plus','minus'))
+                                     ds, spamLabelOrder=('0','1'))
 
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
@@ -116,9 +116,9 @@ Gx^4 20 80 0.2 100
         gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                          prepLabels=['rho0'], prepExpressions=["0"],
-                                                         effectLabels=['E0'], effectExpressions=["1"],
-                                                         spamdefs={'plus': ('rho0','E0'),
-                                                                        'minus': ('remainder','remainder') })
+                                                         effectLabels=['E0'], effectExpressions=["0"],
+                                                         spamdefs={'0': ('rho0','E0'),
+                                                                   '1': ('remainder','remainder') })
         pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
         gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
         self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
@@ -135,7 +135,7 @@ DensityMx
 
 E
 StateVec
-0 1
+1 0
 
 Gi
 UnitaryMx
@@ -164,9 +164,9 @@ UnitaryMx
 
 
 IDENTITYVEC sqrt(2) 0 0 0
-SPAMLABEL plus0 = rho0 E
-SPAMLABEL plus1 = rho1 E
-SPAMLABEL minus = remainder
+SPAMLABEL 00 = rho0 E
+SPAMLABEL 10 = rho1 E
+SPAMLABEL 11 = remainder
 """
         with open(temp_files + "/formatExample.gateset","w") as output:
             output.write(gateset_txt)
@@ -186,7 +186,7 @@ SPAMLABEL minus = remainder
 
         self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
         self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )

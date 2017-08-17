@@ -421,10 +421,10 @@ class GateSet(object):
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
         etyp = "static" if typ == "static" else "full"
 
-        basisname = self.basis.name
+        basis = self.basis
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basisname)
+            self.gates[lbl] = _gate.convert(gate, typ, basis)
 
         for lbl,vec in self.preps.items():
             self.preps[lbl] = _sv.convert(vec, rtyp)
@@ -437,7 +437,7 @@ class GateSet(object):
         elif typ == 'TP': 
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
         else: # typ in ('static','H+S','S')
             self.default_gauge_group = None
         
@@ -2789,7 +2789,7 @@ class GateSet(object):
         """
         newGateset = self.copy() # start by just copying gateset
         dim = self.get_dimension()
-        myBasis = self.basis.name
+        myBasis = self.basis
 
         if max_rotate is not None:
             if rotate is not None:
@@ -2860,7 +2860,7 @@ class GateSet(object):
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
             randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = change_basis(randGate, "std", self.basis.name)
+            randGate = change_basis(randGate, "std", self.basis)
 
             gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randGate,gate))
@@ -3029,10 +3029,9 @@ class GateSet(object):
         -------
         None
         """
-        mxBasis = self.basis.name
         print(self)
         print("\n")
-        print("Basis = ",mxBasis)
+        print("Basis = ",self.basis.name)
         print("Choi Matrices:")
         for (label,gate) in self.gates.items():
             print(("Choi(%s) in pauli basis = \n" % label,
@@ -3042,9 +3041,9 @@ class GateSet(object):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
-        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,mxBasis)
+        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,self.basis)
                                 for rhoVec in list(self.preps.values()) ] )
-        effect_penalty   = sum( [ _lf.effect_penalty(EVec,mxBasis)
+        effect_penalty   = sum( [ _lf.effect_penalty(EVec,self.basis)
                                 for EVec in list(self.effects.values()) ] )
         print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
         print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))

@@ -1,5 +1,6 @@
 from copy import deepcopy as _deepcopy
 import pickle as _pickle
+import numpy as _np
 
 class ReportableQty(object):
     """
@@ -36,6 +37,24 @@ class ReportableQty(object):
     def __repr__(self):
         return 'ReportableQty({})'.format(str(self))
 
+    def __add__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value + x, self.errbar, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value + x)
+
+    def __mul__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value * x, self.errbar * x, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value * x)
+
+    def __truediv__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value / x, self.errbar / x, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value / x)
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         return state_dict 
@@ -53,6 +72,47 @@ class ReportableQty(object):
         #print(self.value)
         #return getattr(self.value, attr)
 
+    def log(self):
+        """ Returns a ReportableQty that is the logarithm of this one."""
+        # log(1 + x) ~ x
+        # x + dx        
+        # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
+        if self.has_eb():
+            return ReportableQty( _np.log(self.value), _np.log(self.value + self.errbar) - _np.log(self.value),
+                                  self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.log(self.value) )
+
+    def real(self):
+        """ Returns a ReportableQty that is the real part of this one."""
+        if self.has_eb():
+            return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.real(self.value) )
+        
+    def imag(self):
+        """ Returns a ReportableQty that is the imaginary part of this one."""
+        if self.has_eb():
+            return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.real(self.value) )
+
+    def reshape(self, *args):
+        """ Returns a ReportableQty whose underlying values are reshaped."""
+        if self.has_eb():
+            return ReportableQty( self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( self.value.reshape(*args) )
+
+    @property
+    def size(self):
+        """ Returns the size of this ReportableQty's value. """
+        return self.value.size
+        
+        
+
+        
+
     @staticmethod
     def from_val(value, nonMarkovianEBs=False):
         '''
@@ -66,7 +126,6 @@ class ReportableQty(object):
         Anything else will be converted to a ReportableQty with no error bars
         '''
         if isinstance(value, ReportableQty):
-            value.nonMarkovianEBs = bool(nonMarkovianEBs)
             return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \

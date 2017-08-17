@@ -56,23 +56,23 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             [2], [('Q0',)],['Gi','Gx','Gz'],
             [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
     else:
         outputGateset = _setc.build_gateset(
             [2], [('Q0',)],['Gx','Gz'],
             [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
 
     if Yrot != 0:
         gatesetAux1 = _setc.build_gateset(
             [2], [('Q0',)],['Gi','Gy','Gz'],
             [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
 
         outputGateset.gates['Gx'] = _objs.FullyParameterizedGate(
             _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),
@@ -355,15 +355,15 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'],
                                       [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                       prepLabels=["rho0"], prepExpressions=["0"],
-                                      effectLabels=["E0"], effectExpressions=["1"],
-                                      spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                      effectLabels=["E0"], effectExpressions=["0"],
+                                      spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
 
 
     gatesetAux1 = _setc.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'],
                                        [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                        prepLabels=["rho0"], prepExpressions=["0"],
-                                       effectLabels=["E0"], effectExpressions=["1"],
-                                       spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                       effectLabels=["E0"], effectExpressions=["0"],
+                                       spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
 
     simGateset.gates['Gx'] =  _objs.FullyParameterizedGate(
         _np.dot(_np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),simGateset.gates['Gx']),

@@ -125,6 +125,10 @@ class Basis(object):
         self.longname = longname
         self.real     = real
 
+    def copy(self):
+        """Make a copy of this Basis object."""
+        return Basis(self, longname=self.longname, real=self.real, labels=self.labels)
+
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
 
@@ -404,6 +408,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
+    #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
     if from_basis.dim.gateDim != to_basis.dim.gateDim: 
         raise ValueError('Automatic basis expanding/contracting temporarily disabled')

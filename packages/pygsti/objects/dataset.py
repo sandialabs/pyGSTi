@@ -203,7 +203,7 @@ class DataSet(object):
             labels" and whose values are lists of gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
 
         Returns
@@ -535,10 +535,10 @@ class DataSet(object):
             if totalKey not in self.totals: self.totals[totalKey] = 0
             self.totals[totalKey] += countArray.sum()
 
-    def add_counts_1q(self, gateString, nPlus, nMinus):
+    def add_counts_1q(self, gateString, nZeros, nOnes):
         """
         Single-qubit version of addCountsDict, for convenience when
-          the DataSet contains two spam labels, 'plus' and 'minus'.
+          the DataSet contains two spam labels, '0' and '1'.
 
         Parameters
         ----------
@@ -546,11 +546,11 @@ class DataSet(object):
           A tuple of gate labels specifying the gate string or a GateString object,
             e.g. ('I','x')
 
-        nPlus : int
-          The number of counts for the 'plus' spam label.
+        nZeros : int
+          The number of counts for the '0' spam label.
 
-        nMinus : int
-          The number of counts for the 'minus' spam label.
+        nOnes : int
+          The number of counts for the '1' spam label.
 
         Returns
         -------
@@ -562,15 +562,15 @@ class DataSet(object):
 
         if gateString in self.gsIndex and self.collisionAction == "aggregate":
             current_dsRow = self[ gateString ]
-            oldP = current_dsRow['plus'] / float( current_dsRow['plus'] + current_dsRow['minus'] )
-            newP = nPlus / float(nPlus + nMinus)
+            oldP = current_dsRow['1'] / float( current_dsRow['1'] + current_dsRow['0'] )
+            newP = nOnes / float(nOnes + nZeros)
             if abs(oldP-newP) > 0.1:
                 print('Warning! When attempting to combine data for the gate string '+ \
                     str(gateString) +', I encountered a discrepency of '+ str(abs(oldP-newP)*100.0) + \
                     ' percent! To resolve this issue, I am not going to ignore the latter data.')
                 return
 
-        self.add_count_dict(gateString, {'plus':nPlus, 'minus':nMinus} )
+        self.add_count_dict(gateString, {'0':nZeros, '1':nOnes} )
 
     def add_counts_from_dataset(self, otherDataSet):
         """

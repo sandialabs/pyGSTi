@@ -95,9 +95,9 @@ class TestCoreMethods(AlgorithmsBase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'),
-            'minus': ('remainder','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('remainder','remainder') } )
         gs_lgst = pygsti.do_lgst(ds, self.specs, old_style_gateset,
                                  svdTruncateTo=4, verbosity=0)
 
@@ -265,6 +265,10 @@ class TestCoreMethods(AlgorithmsBase):
 
         self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=4)
         self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=4)
+
+        # RUN BELOW LINES TO SEED SAVED GATESET FILES
+        #gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, self.gateset, {'spam':1.0})
+        #pygsti.io.write_gateset(gs_lsgst_go,compare_files + "/analysis.gateset", "Saved LSGST Analysis Gateset")
 
 
     def test_MLGST(self):

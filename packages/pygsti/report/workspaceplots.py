@@ -718,8 +718,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     return go.Figure(data=[trace], layout=layout)
 
 
-def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
-                             mxBasisDimsY=None, xlabel=None, ylabel=None,
+def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
+                             xlabel=None, ylabel=None,
                              boxLabels=False, colorbar=None, prec=0, scale=1.0):
     """
     Creates a color box plot for visualizing a single matrix.
@@ -732,17 +732,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     m, M : float
         Minimum and maximum of the color scale.
 
-    mxBasis : str, optional
-      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-      Used to label the rows & columns.  If you don't want labels, leave as
-      None.
-
-    mxBasisDims, mxBasisDimsY : int or list, optional
-      The dimension of the density matrix space, or a list specifying the
-      dimensions of terms in a direct-sum decomposition of the density matrix
-      space, for the X and Y axes (columns and rows).  Used to label the 
-      columns and rows, respectively.  If `myBasisDimsY` is None if will 
-      default to `mxBasisDims`.
+    mxBasis, mxBasisY : str or Basis, optional
+      The name abbreviation for the basis or a Basis object. Used to label the
+      columns & rows (x- and y-ticklabels).  Typically in
+      {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
     xlabel, ylabel : str, optional
       Axis labels for the plot.
@@ -774,28 +767,29 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     xextra = 2.25 if ylabel is None else 2.5
     yextra = 2.25 if xlabel is None else 2.5
 
-    if mxBasis is not None and mxBasisDims is not None:
-        if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
-        xlabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
-        ylabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDims) > 1:
-                yextra += .5
-        elif mxBasisDims > 1:
-            yextra += .5
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDimsY) > 1:
-                yextra += .5
-        elif mxBasisDimsY > 1:
-            yextra += .5
+    if _tools.isstr(mxBasis):
+        if mxBasisY is None:
+            mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[0]))))
+        mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[1]))))
+
+    if _tools.isstr(mxBasisY):
+        mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(gateMatrix.shape[0]))))
+
+    if mxBasis is not None:
+        xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
+        if mxBasis.dim.gateDim > 1: yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
+        
+    if mxBasisY is not None:
+        ylabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasisY.labels]
+        if mxBasisY.dim.gateDim > 1: yextra += .5
+    else:
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
-    thickLineInterval = 4 if mxBasis == "pp" else None
+    thickLineInterval = 4 if (mxBasis is not None and mxBasis.name == "pp") \
+                        else None #TODO: separate X and Y thick lines?
     return matrix_color_boxplot(gateMatrix, m, M, xlabels, ylabels,
                                 xlabel, ylabel, xextra, yextra,
                                 boxLabels, thickLineInterval,
@@ -1474,8 +1468,8 @@ class ColorBoxPlot(WorkspacePlot):
 class GateMatrixPlot(WorkspacePlot):
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
-                 mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
-                 boxLabels=False, colorbar=None, prec=0, mxBasisDimsY=None,
+                 mxBasis=None, xlabel=None, ylabel=None,
+                 boxLabels=False, colorbar=None, prec=0, mxBasisY=None,
                  scale=1.0):
         """
         Creates a color box plot of a gate matrix using a diverging color map.
@@ -1491,17 +1485,11 @@ class GateMatrixPlot(WorkspacePlot):
         m, M : float, optional
           Min and max values of the color scale.
     
-        mxBasis : str, optional
-          The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-          Used to label the rows & columns.  If you don't want labels, leave as
-          None.
-    
-        mxBasisDims : int or list, optional
-          The dimension of the density matrix space this basis spans, or a
-          list specifying the dimensions of terms in a direct-sum
-          decomposition of the density matrix space.  Used to label the
-          rows & columns.  If you don't want labels, leave as None.
-    
+        mxBasis : str or Basis object, optional
+          The basis, often of `gateMatrix`, used to create the x-labels (and
+          y-labels when `mxBasisY` is None). Typically in {"pp","gm","std","qt"}.
+          If you don't want labels, leave as None.
+        
         xlabel : str, optional
           An x-axis label for the plot.
     
@@ -1524,25 +1512,25 @@ class GateMatrixPlot(WorkspacePlot):
             - int >= 0 = fixed precision given by int
             - int <  0 = number of significant figures given by -int
     
-        mxBasisDimsY : int or list, optional
-            Specifies the dimension of the basis along the Y-axis direction
-            if and when this is *different* from the X-axis direction.  If
-            the two are the same, this parameter can be set to None.
+        mxBasisY : int or list, optional
+          The basis, used to create the y-labels (for rows) when these are
+          *different* from the x-labels.  Typically in
+          {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
         """
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
-                                            mxBasis, mxBasisDims, xlabel, ylabel,
-                                            boxLabels, colorbar, prec, mxBasisDimsY, scale)
+                                            mxBasis, xlabel, ylabel,
+                                            boxLabels, colorbar, prec, mxBasisY, scale)
 
           
     def _create(self, gateMatrix, m, M, 
-                mxBasis, mxBasisDims, xlabel, ylabel,
-                boxLabels, colorbar, prec, mxBasisDimsY, scale):
+                mxBasis, xlabel, ylabel,
+                boxLabels, colorbar, prec, mxBasisY, scale):
         
         return gatematrix_color_boxplot(
-            gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
+            gateMatrix, m, M, mxBasis, mxBasisY,
             xlabel, ylabel, boxLabels, colorbar, prec, scale)
 
 
@@ -1835,7 +1823,9 @@ class ProjectionsBoxPlot(WorkspacePlot):
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
     
         return gatematrix_color_boxplot(
-            projections, m, M, projection_basis, xd, yd,
+            projections, m, M,
+            _objs.Basis(projection_basis,xd),
+            _objs.Basis(projection_basis,yd),
             xlabel, ylabel, boxLabels, colorbar, prec,  scale)
 
 

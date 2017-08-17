@@ -82,7 +82,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         labels" and whose values are lists of gate labels.  The gate labels 
         in each list define the set of gates which describe the the operation
         that is performed contingent on a *specific outcome* of the measurement
-        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
 
     Returns
@@ -214,9 +214,9 @@ def merge_outcomes(dataset,label_merge_dict):
     label_merge_dict : dictionary
         The dictionary whose keys define the new DataSet outcomes, and whose items 
         are lists of input DataSet outcomes that are to be summed together.  For example,
-        if a two-qubit DataSet has outcome labels "upup", "updn", "dnup", and "dndn", and
+        if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''trace out'' the second qubit, we could use label_merge_dict =
-        {'plus':['upup','updn'],'minus':['dnup','dndn']}.
+        {'0':['00','01'],'1':['10','11']}.
     
     Returns
     -------
@@ -269,7 +269,7 @@ def expand_intermediate_measurements(gatestring, measurementGates):
         labels in each list define the set of gates which describe the the
         operation that is performed contingent on a *specific outcome* of the
         measurement labelled by the key.  
-        For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+        For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
     Returns
     -------

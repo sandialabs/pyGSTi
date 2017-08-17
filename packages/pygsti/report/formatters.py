@@ -171,7 +171,8 @@ formatDict['Bold'] = {
 #Special formatting for Hamiltonian and Stochastic gateset types
 formatDict['GatesetType'] = {
     'html'  : Formatter(),
-    'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}
+    'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}    
+
 
 '''
 # 'pre' formatting, where the user gives the data in separate formats

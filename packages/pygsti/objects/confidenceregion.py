@@ -305,6 +305,11 @@ class ConfidenceRegion(object):
         """
         return bool(self.invRegionQuadcForm is not None)
 
+    def get_errobar_type(self):
+        if self.nonMarkRadiusSq > 0:
+            return "non-markovian"
+        else:
+            return "standard"
 
     def get_gateset(self):
         """
