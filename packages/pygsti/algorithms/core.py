@@ -1009,8 +1009,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if profiler is None: profiler = _dummy_profiler
     tStart = _time.time()
     gs = startGateset.copy()
-    gateBasis = startGateset.basis.name
-    basisDim = startGateset.basis.dim.blockDims
+    gateBasis = startGateset.basis
     if maxfev is None: maxfev = maxiter
 
     #printer.log('', 2)
@@ -2181,8 +2180,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     tStart = _time.time()
 
     gs = startGateset.copy()
-    gateBasis = startGateset.basis.name
-    basisDim = startGateset.basis.dim.blockDims
+    gateBasis = startGateset.basis
 
     if maxfev is None: maxfev = maxiter
 

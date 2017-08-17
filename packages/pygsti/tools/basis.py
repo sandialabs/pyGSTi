@@ -125,6 +125,10 @@ class Basis(object):
         self.longname = longname
         self.real     = real
 
+    def copy(self):
+        """Make a copy of this Basis object."""
+        return Basis(self, longname=self.longname, real=self.real, labels=self.labels)
+
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
 

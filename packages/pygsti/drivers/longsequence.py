@@ -219,12 +219,14 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         startingPt = advancedOptions.get('starting point',"target")
 
     #Get dataset for checking below
-    if comm is None or comm.Get_rank() == 0:
-        if _compat.isstr(dataFilenameOrSet):
+    if _compat.isstr(dataFilenameOrSet):
+        if comm is None or comm.Get_rank() == 0:
             dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
+            if comm is not None: comm.bcast(dschk, root=0)
         else:
-            dschk = dataFilenameOrSet
-    else: dschk = None
+            dschk = comm.bcast(None, root=0)
+    else:
+        dschk = dataFilenameOrSet
 
     #Construct gate sequences
     actionIfMissing = advancedOptions.get('missingDataAction','drop')

@@ -917,12 +917,11 @@ def create_report_notebook(results, filename, title="auto",
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
 #        gateLabels = list(gateset.gates.keys())  # gate labels
-#        basisNm = gateset.basis.name
-#        basisDims = gateset.basis.dim.blockDims
+#        basis = gateset.basis
 #    
-#        if basisNm != targetGateset.basis.name:
+#        if basis.name != targetGateset.basis.name:
 #            raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-#                                 % (basisNm, targetGateset.basis.name))
+#                                 % (basis.name, targetGateset.basis.name))
 #    
 #        #Do computation first
 #        # Note: set to "full" parameterization so we can set the gates below
@@ -939,12 +938,12 @@ def create_report_notebook(results, filename, title="auto",
 #    
 #            errgen = _tools.error_generator(gate, targetGate, genType)
 #            hamProj, hamGens = _tools.std_errgen_projections(
-#                errgen, "hamiltonian", basisNm, basisNm, True)
+#                errgen, "hamiltonian", basis.name, basis, True)
 #            stoProj, stoGens = _tools.std_errgen_projections(
-#                errgen, "stochastic", basisNm, basisNm, True)
+#                errgen, "stochastic", basis.name, basis, True)
 #            HProj, OProj, HGens, OGens = \
 #                _tools.lindblad_errgen_projections(
-#                    errgen, basisNm, basisNm, basisNm, normalize=False,
+#                    errgen, basis, basis, basis, normalize=False,
 #                    return_generators=True)
 #                #Note: return values *can* be None if an empty/None basis is given
 #    
@@ -953,9 +952,9 @@ def create_report_notebook(results, filename, title="auto",
 #            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
 #                _np.einsum('ij,ijkl', OProj, OGens)
 #    
-#            ham_error_gen = _tools.change_basis(ham_error_gen,"std",basisNm)
-#            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basisNm)
-#            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basisNm)
+#            ham_error_gen = _tools.change_basis(ham_error_gen,"std",basis)
+#            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basis)
+#            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basis)
 #    
 #            gsH.gates[gl]  = _tools.gate_from_error_generator(
 #                ham_error_gen, targetGate, genType)
@@ -980,7 +979,7 @@ def create_report_notebook(results, filename, title="auto",
 #            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
 #            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
 #                _np.einsum('ij,ijkl', OProj_cp, OGens)
-#            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basisNm)
+#            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basis)
 #    
 #            gsLNDCP.gates[gl] = _tools.gate_from_error_generator(
 #                lnd_error_gen_cp, targetGate, genType)

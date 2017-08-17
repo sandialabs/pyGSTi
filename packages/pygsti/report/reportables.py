@@ -142,7 +142,7 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
     @_smart_cached # nested decorators = decOut(decIn(f(x)))
     @_functools.wraps(fnOfGate) # Retain metadata of wrapped function
     def compute_quantity(gateset, gateLabel, confidenceRegionInfo=None):
-        mxBasis = gateset.basis.name
+        mxBasis = gateset.basis
         if confidenceRegionInfo is None: # No Error bars
             f0 = fnOfGate(gateset.gates[gateLabel], mxBasis)
             return _make_reportable_qty_or_dict(f0)
@@ -358,7 +358,7 @@ def compute_gateset_qtys(qtynames, gateset, confidenceRegionInfo=None):
     ret = _OrderedDict()
     possible_qtys = [ ]
     eps = FINITE_DIFF_EPS
-    mxBasis = gateset.basis.name
+    mxBasis = gateset.basis
 
     def choi_matrix(gate):
         return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -909,7 +909,7 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG)-gate)
     
         hamProjs, hamGens = _tools.std_errgen_projections(
-            logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
+            logG, "hamiltonian", mxBasis.name, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
         
@@ -963,7 +963,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     @_functools.wraps(fnOfVectors) # Retain metadata of wrapped function
     def compute_quantity(gatesetA, gatesetB, label, typ='prep', confidenceRegionInfo=None):
         assert typ in ['prep', 'effect'], 'type must be either "prep" or "effect", got {}'.format(typ)
-        mxBasis = gatesetA.basis.name
+        mxBasis = gatesetA.basis
         if typ == 'prep':
             A = gatesetA.preps[label]
             B = gatesetB.preps[label]
@@ -1097,10 +1097,10 @@ def compute_gateset_gateset_qtys(qtynames, gateset1, gateset2,
         if gateLabel not in gateset1.gates:
             raise ValueError("%s gate is missing from first gateset - cannot compare gatesets", gateLabel)
 
-    mxBasis = gateset1.basis.name
-    if mxBasis != gateset2.basis.name:
+    mxBasis = gateset1.basis
+    if mxBasis.name != gateset2.basis.name:
         raise ValueError("Basis mismatch: %s != %s" %
-                         (mxBasis, gateset2.basis.name))
+                         (mxBasis.name, gateset2.basis.name))
 
     ### per gate quantities
     #############################################
