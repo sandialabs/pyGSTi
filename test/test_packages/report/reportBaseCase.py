@@ -42,14 +42,14 @@ class ReportBaseCase(BaseTestCase):
 
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
-        try:
-            basestring #Only defined in Python 2
-            cls.versionsuffix = "" #Python 2
-        except NameError:
-            cls.versionsuffix = "v3" #Python 3
-        ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
-                                                    sampleError='binomial', seed=100)
-        ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+        #try:
+        #    basestring #Only defined in Python 2
+        #    cls.versionsuffix = "" #Python 2
+        #except NameError:
+        #    cls.versionsuffix = "v3" #Python 3
+        #ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
+        #                                            sampleError='binomial', seed=100)
+        #ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
 
         cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
 
