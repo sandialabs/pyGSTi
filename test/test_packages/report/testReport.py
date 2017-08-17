@@ -153,7 +153,7 @@ class TestReport(ReportBaseCase):
         #test ignoring gate strings not in dataset
         qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
                                                             pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(plus) diff", self.gs_clgst, self.ds,
+        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
                                                             pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
         qty_str = str(qty) #test __str__
 

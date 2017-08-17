@@ -35,10 +35,12 @@ class MatrixBaseTestCase(BaseTestCase):
 
     def test_all(self):
         a = np.array([[1,1], [1,1]])
+        print("Nullspace = ",mt.nullspace(a))
+        
         self.assertArraysAlmostEqual(mt.nullspace(a), 
                 np.array(
-                [[-0.70710678],
-                 [ 0.70710678]]))
+                [[ 0.70710678],
+                 [-0.70710678]]))
         self.assertArraysAlmostEqual(mt.nullspace_qr(a), 
                 np.array(
                 [[-0.70710678],

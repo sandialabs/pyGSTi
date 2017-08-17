@@ -6,7 +6,7 @@ import pygsti
 class LogLTestCase(BaseTestCase):
 
     def test_logl_fn(self):
-        ds          = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds          = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
         spam_labels = std.gs_target.get_spam_labels()
         pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
@@ -50,17 +50,20 @@ class LogLTestCase(BaseTestCase):
         twoDelta2 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=False)
 
     def test_no_gatestrings(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gateset = std.gs_target #could use pygsti.io.load_gateset(compare_files + "/analysis.gateset"), but then change hardcoded #'s
         L1 = pygsti.logl(gateset, ds,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
-        self.assertAlmostEqual(L1, -4531934.43735, 2)
+        self.assertAlmostEqual(L1,-21579292.1837, 2)
+        #self.assertAlmostEqual(L1, -4531934.43735, 2) #OLD
+        
         L2 = pygsti.logl_max(ds)
-        self.assertAlmostEqual(L2, -1329179.7675, 5)
+        self.assertAlmostEqual(L2, -13402461.9294, 2)
+        #self.assertAlmostEqual(L2, -1329179.7675, 5) #OLD
 
     def test_memory(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(gateset, ds,
@@ -92,17 +95,17 @@ class LogLTestCase(BaseTestCase):
         #            print("[%d,%d] diff = %g - %g = %g" % (i,j,L3[i,j],L[i,j],L3[i,j]-L[i,j]))
         self.assertArraysAlmostEqual(L, L1)
         self.assertArraysAlmostEqual(L, L2)
-        self.assertArraysAlmostEqual(L, L3)
+        self.assertArraysAlmostEqual(L, L3, places=6) # roundoff?
 
     def test_forbidden_probablity(self):
-        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         prob = pygsti.forbidden_prob(std.gs_target, ds)
         self.assertAlmostEqual(prob, 1.276825378318927e-13)
 
     def test_hessian_mpi(self):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
-        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds   = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         L = pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6), memLimit=25000000,

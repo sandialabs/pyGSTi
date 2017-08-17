@@ -40,12 +40,18 @@ class ReportBaseCase(BaseTestCase):
         cls.lsgstStructs = pygsti.construction.make_lsgst_structs(
             gateLabels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
-        #ds = pygsti.construction.generate_fake_data(datagen_gateset, lsgstStrings[-1], nSamples=1000,
-        #                                            sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/reportgen.dataset")
+        try:
+            basestring #Only defined in Python 2
+            cls.versionsuffix = "" #Python 2
+        except NameError:
+            cls.versionsuffix = "v3" #Python 3
+        ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
+                                                    sampleError='binomial', seed=100)
+        ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
 
         gs_lgst = pygsti.do_lgst(cls.ds, cls.specs, targetGateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, targetGateset, {'gates': 1.0, 'spam': 0.0})
@@ -127,9 +133,3 @@ class ReportBaseCase(BaseTestCase):
 
         self.results = cls.results.copy()
         self.results_logL = cls.results_logL.copy()
-
-        try:
-            basestring #Only defined in Python 2
-            self.versionsuffix = "" #Python 2
-        except NameError:
-            self.versionsuffix = "v3" #Python 3

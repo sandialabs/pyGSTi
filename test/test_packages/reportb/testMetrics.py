@@ -16,7 +16,7 @@ class TestMetrics(BaseTestCase):
         self.gatestrings = [ (), ('Gx',), ('Gx','Gy') ]
 
         dataset_txt = \
-"""## Columns = plus count, count total
+"""## Columns = 0 count, count total
 {} 0 100
 Gx 10 90
 GxGy 40 60
@@ -44,7 +44,7 @@ Gx^4 20 90
 
     def test_dataset_qtys(self):
         names = ('gate string', 'gate string index', 'gate string length', 'count total',
-                 'Exp prob(plus)', 'Exp count(plus)', 'max logl', 'number of gate strings')
+                 'Exp prob(0)', 'Exp count(0)', 'max logl', 'number of gate strings')
         qtys = pygsti.report.compute_dataset_qtys(names, self.ds, self.gatestrings)
 
         possible_names = pygsti.report.compute_dataset_qty(None, self.ds, self.gatestrings)

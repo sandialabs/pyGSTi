@@ -1,4 +1,4 @@
-## Columns = minus count, plus count
+## Columns = 0 count, 1 count
 (Gi)^3  852  148
 (Gi)^3Gx  807  193
 (Gi)^3Gy  806  194
@@ -14,15 +14,15 @@ Gy(Gi)^3GxGx  676  324
 GxGx(Gi)^3  701  299
 GxGx(Gi)^3Gx  609  391
 GxGx(Gi)^3Gy  699  301
-GxGx(Gi)^3GxGx  474  526
+GxGx(Gi)^3GxGx  526  474
 (Gx)^3  647  353
 (Gx)^3Gx  514  486
 (Gx)^3Gy  629  371
 (Gx)^3GxGx  418  582
-Gx(Gx)^3Gy  503  497
+Gx(Gx)^3Gy  497  503
 Gx(Gx)^3GxGx  317  683
 Gy(Gx)^3  615  385
-Gy(Gx)^3Gx  514  486
+Gy(Gx)^3Gx  486  514
 Gy(Gx)^3Gy  555  445
 Gy(Gx)^3GxGx  430  570
 GxGx(Gx)^3Gy  421  579
@@ -33,12 +33,12 @@ GxGx(Gx)^3GxGx  289  711
 (Gy)^3GxGx  601  399
 Gx(Gy)^3  626  374
 Gx(Gy)^3Gx  533  467
-Gx(Gy)^3Gy  508  492
+Gx(Gy)^3Gy  492  508
 Gx(Gy)^3GxGx  502  498
-Gy(Gy)^3Gx  506  494
+Gy(Gy)^3Gx  494  506
 Gy(Gy)^3Gy  402  598
-Gy(Gy)^3GxGx  505  495
+Gy(Gy)^3GxGx  495  505
 GxGx(Gy)^3  580  420
 GxGx(Gy)^3Gx  486  514
-GxGx(Gy)^3Gy  512  488
+GxGx(Gy)^3Gy  488  512
 GxGx(Gy)^3GxGx  444  556

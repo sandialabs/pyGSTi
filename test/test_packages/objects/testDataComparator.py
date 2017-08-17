@@ -84,7 +84,7 @@ class DataComparatorTestCase(BaseTestCase):
         N=100
         DS_0 = pygsti.construction.generate_fake_data(gs_exp_0,gate_sequences,N,'binomial',seed=10)
         DS_1 = pygsti.construction.generate_fake_data(gs_exp_0,gate_sequences,N,'binomial',seed=20)
-        mds = pygsti.objects.MultiDataSet(spamLabels=['minus','plus'])
+        mds = pygsti.objects.MultiDataSet(spamLabels=['0','1'])
         mds.add_dataset('D0', DS_0)
         mds.add_dataset('D1', DS_1)
         
