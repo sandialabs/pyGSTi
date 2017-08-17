@@ -109,7 +109,7 @@ class TestWorkspace(ReportBaseCase):
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                   colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
-        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", 2, "in", "out", boxLabels=True) )
+        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", boxLabels=True) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],scale=1.5) )
 
         projections = np.zeros(16,'d')
