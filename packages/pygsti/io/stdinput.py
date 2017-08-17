@@ -412,7 +412,7 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = -1
+        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
                 spamLabel = colLabel[:-len(' count')]
@@ -430,7 +430,10 @@ class StdInputParser(object):
         if 'count total' in colLabels:
             if '1' in spamLabels and '0' not in spamLabels:
                 spamLabels.append('0')
-                impliedCountTotCol1Q = colLabels.index( 'count total' )
+                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
+            elif '0' in spamLabels and '1' not in spamLabels:
+                spamLabels.append('1')
+                impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
@@ -452,8 +455,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        if impliedCountTotCol1Q >= 0:
-            countDict['0'] = colValues[impliedCountTotCol1Q] - countDict['1']
+        if impliedCountTotCol1Q[1] >= 0:
+            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedSpamLabel == '0':
+                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            else:
+                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -588,11 +595,11 @@ class StdInputParser(object):
                 if '1' in spamLabels and '0' not in spamLabels:
                     dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '0', iTotal) )
                 if '0' in spamLabels and '1' not in spamLabels:
                     dsSpamLabels[dsLabel].append('1')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '1', iTotal) )
 
             #TODO - add standard count completion for 2Qubit case?
 
@@ -615,12 +622,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,iTotCol in impliedCounts1Q:
-            if '1' in countDicts[dsLabel]:
+        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
+            if spamLabel == '0':
                 countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
-            elif '0' in countDicts[dsLabel]:
+            elif spamLabel == '1':
                 countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
-                
+
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
