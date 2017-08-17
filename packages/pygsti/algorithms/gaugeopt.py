@@ -643,6 +643,12 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
     firstRowForTP = _np.zeros(gateDim); firstRowForTP[0] = 1.0
     mxBasis = gateset.basis
 
+    #Use the target gateset's basis if gateset's is unknown
+    # (as it can often be if it's just come from an logl opt,
+    #  since from_vector will clear any basis info)
+    if mxBasis.name == "unknown" and targetGateset is not None: 
+        mxBasis = targetGateset.basis
+
     if toGetTo == "target":
         if targetGateset is None: raise ValueError("Must specify a targetGateset != None")
 

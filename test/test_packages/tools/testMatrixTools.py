@@ -36,15 +36,18 @@ class MatrixBaseTestCase(BaseTestCase):
     def test_all(self):
         a = np.array([[1,1], [1,1]])
         print("Nullspace = ",mt.nullspace(a))
-        
-        self.assertArraysAlmostEqual(mt.nullspace(a), 
-                np.array(
-                [[ 0.70710678],
-                 [-0.70710678]]))
-        self.assertArraysAlmostEqual(mt.nullspace_qr(a), 
-                np.array(
-                [[-0.70710678],
-                 [ 0.70710678]]))
+        expected = np.array(
+            [[ 0.70710678],
+             [-0.70710678]] )
+
+        diff1 = np.linalg.norm(mt.nullspace(a) - expected)
+        diff2 = np.linalg.norm(mt.nullspace(a) + expected) # -1*expected is OK too (just an eigenvector)
+        self.assertTrue( np.isclose(diff1,0) or np.isclose(diff2,0) )
+
+
+        diff1 = np.linalg.norm(mt.nullspace_qr(a) - expected)
+        diff2 = np.linalg.norm(mt.nullspace_qr(a) + expected) # -1*expected is OK too (just an eigenvector)
+        self.assertTrue( np.isclose(diff1,0) or np.isclose(diff2,0) )
 
         mt.print_mx(a)
 
