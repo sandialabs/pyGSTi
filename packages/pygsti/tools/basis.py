@@ -404,6 +404,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
+    #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
     if from_basis.dim.gateDim != to_basis.dim.gateDim: 
         raise ValueError('Automatic basis expanding/contracting temporarily disabled')
