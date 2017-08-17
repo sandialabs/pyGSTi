@@ -1151,8 +1151,8 @@ def lindblad_errgen_projections(errgen, ham_basis,
     else: 
         hamBasisMxs = ham_basis
         
-    if isinstance(ham_basis, _basis.Basis):
-        hamBasisMxs = ham_basis.get_composite_matrices()
+    if isinstance(other_basis, _basis.Basis):
+        otherBasisMxs = other_basis.get_composite_matrices()
     elif _compat.isstr(other_basis):
         otherBasisMxs = _basis.basis_matrices(other_basis, d)
     else: 
