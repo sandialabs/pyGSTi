@@ -707,8 +707,13 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
 
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        errgen = _mt.near_identity_matrix_log(_np.dot(target_gate_inv,gate), TOL)
-        #errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate), "warn", TOL) #should also work
+        try:
+            errgen = _mt.near_identity_matrix_log(_np.dot(target_gate_inv,gate), TOL)
+        except AssertionError: #not near the identity, fall back to the real log
+            _warnings.warn(("Near-identity matrix log failed; falling back "
+                            "to approximate log for logTiG error generator"))
+            errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate), "warn", TOL)
+            
         if _np.linalg.norm(errgen.imag) > TOL:
             _warnings.warn("Falling back to approximate log for logTiG error generator")
             errgen = _mt.approximate_matrix_log(_np.dot(target_gate_inv,gate),
