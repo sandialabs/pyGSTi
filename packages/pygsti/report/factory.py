@@ -499,7 +499,9 @@ def create_general_report(results, filename, title="auto",
         in the report.
 
     filename : string, optional
-       The output filename where the report file(s) will be saved.
+       The output filename where the report file(s) will be saved.  If
+       None, then no output file is produced (but returned Workspace
+       still caches all intermediate results).
 
     title : string, optional
        The title of the report.  "auto" causes a random title to be
@@ -751,14 +753,18 @@ def create_general_report(results, filename, title="auto",
     else:
         toggles['CompareDatasets'] = False
 
-    if comm is None or comm.Get_rank() == 0:
-        # 3) populate template html file => report html file
-        printer.log("*** Merging into template file ***")
-        template = "report_dashboard.html"
-        _merge_template(qtys, template, filename, auto_open, precision,
-                        connected=connected, toggles=toggles, verbosity=printer,
-                        CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
-        #SmartCache.global_status(printer)
+    if filename is not None:
+        if comm is None or comm.Get_rank() == 0:
+            # 3) populate template html file => report html file
+            printer.log("*** Merging into template file ***")
+            template = "report_dashboard.html"
+            _merge_template(qtys, template, filename, auto_open, precision,
+                            connected=connected, toggles=toggles, verbosity=printer,
+                            CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+            #SmartCache.global_status(printer)
+    else:
+        printer.log("*** NOT Merging into template file (filename is None) ***")
+        
     return ws
 
 
