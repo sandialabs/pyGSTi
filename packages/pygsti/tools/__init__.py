@@ -21,5 +21,7 @@ from .basis import *
 from .basisconstructors import *
 from .dim import Dim
 from .opttools import *
-from .fourier import *
+from .fourier_core import *
+from .fourier_utils import *
+from .fourier_thresholds import *
 
