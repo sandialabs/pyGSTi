@@ -164,6 +164,7 @@ class Notebook(object):
                 continue
             if block.startswith('code'):
                 block = block.replace('code', '', 1)
+                block = block.strip('\n')
                 '''
                 TODO: Auto-move comments to markdown
                 lines = []
@@ -174,6 +175,7 @@ class Notebook(object):
                 self.add_code(block)
             elif block.startswith('markdown'):
                 block = block.replace('markdown', '', 1)
+                block = block.strip('\n')
                 self.add_markdown(block)
             else:
                 raise ValueError('Invalid notebook text block heading:\n{}'.format(block))
@@ -233,7 +235,9 @@ class Notebook(object):
 
     def launch_new(self, outputFilename, templateFilename=DefaultTemplate):
         '''
-        Save and then launch this notebook with a new jupyter server
+        Save and then launch this notebook with a new jupyter server.  Note that
+        this function waits to return until the notebook server exists, and so
+        is difficult to work with.
 
         Parameters
         ----------
@@ -243,9 +247,12 @@ class Notebook(object):
             filename to build this notebook from (see save_to)
         '''
         self.save_to(outputFilename, templateFilename)
-        _call('jupyter notebook {}'.format(outputFilename), shell=True) 
+        _call('jupyter notebook {}'.format(outputFilename), shell=True) #this waits for notebook to complete
+        #_os.system('jupyter notebook {}'.format(outputFilename)) # same behavior as above
+        #processid = _os.spawnlp(_os.P_NOWAIT, 'jupyter', 'notebook', _os.path.abspath(outputFilename)) #DOESN'T WORK
+        #print("DB: spawned notebook %d!" % processid)
 
-    def launch(self, outputFilename, templateFilename=DefaultTemplate, port='8888'):
+    def launch(self, outputFilename, templateFilename=DefaultTemplate, port='auto'):
         '''
         Save and then launch this notebook
 
@@ -256,6 +263,17 @@ class Notebook(object):
         templateFilename : str, optional
             filename to build this notebook from (see save_to)
         '''
-        print('Launching notebook, assuming port={}'.format(port))
         self.save_to(outputFilename, templateFilename)
-        _browser.open('http://localhost:{}/notebooks/{}'.format(port, outputFilename))
+        outputFilename = _os.path.abspath(outputFilename) #for path manips below
+
+        from notebook import notebookapp
+        servers = list(notebookapp.list_running_servers())
+        for serverinfo in servers:
+            rel = _os.path.relpath(outputFilename, serverinfo['notebook_dir'])
+            if ".." not in rel: # notebook servers don't allow moving up directories
+                if port == 'auto'or int(serverinfo['port']) == port:
+                    url = _os.path.join( serverinfo['url'], 'notebooks', rel)
+                    _browser.open(url); break
+        else:
+            print("No running notebook server found that is rooted above %s" %
+                  outputFilename)

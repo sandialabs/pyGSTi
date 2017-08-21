@@ -504,7 +504,8 @@ class DataSet(object):
         if not isinstance(gateString, _gs.GateString):
             gateString = _gs.GateString(gateString) #make sure we have a GateString
 
-        if round(sum(countList)) == 0: return #don't add zero counts to a dataset
+        if round(sum(countList)) == 0 and self.measurementLabels is None:
+            _warnings.warn("Adding zero counts to DataSet for gate string %s" % str(gateString))
 
         assert( len(countList) == len(self.slIndex))
         countArray = _np.array(countList, 'd')

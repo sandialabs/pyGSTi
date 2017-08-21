@@ -809,13 +809,13 @@ def create_report_notebook(results, filename, title="auto",
         #Load results dictionary
         with open('{infile}', 'rb') as infile:
             results_dict = pickle.load(infile)
-        print("Available dataset keys: ", ', '.join(results_dict.keys()))
+        print("Available dataset keys: ", ', '.join(results_dict.keys()))\
         """.format(infile = results_file_base))
 
         nb.add_code("""\
         #Set which dataset should be used below
         results = results_dict['{dsKey}']
-        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        print("Available estimates: ", ', '.join(results.estimates.keys()))\
         """.format(dsKey=dsKeys[0]))
 
     else:
@@ -824,7 +824,7 @@ def create_report_notebook(results, filename, title="auto",
         #Load results
         with open('{infile}', 'rb') as infile:
             results = pickle.load(infile)
-        print("Available estimates: ", ', '.join(results.estimates.keys()))
+        print("Available estimates: ", ', '.join(results.estimates.keys()))\
         """.format(infile = results_file_base))
 
     estLabels = list(results.estimates.keys())
@@ -832,7 +832,7 @@ def create_report_notebook(results, filename, title="auto",
     nb.add_code("""\
     #Set which estimate is to be used below
     estimate = results.estimates['{estLabel}']
-    print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))
+    print("Available gauge opts: ", ', '.join(estimate.goparameters.keys()))\
     """.format(estLabel=estLabels[0]))
 
     goLabels = list(estimate.goparameters.keys())
@@ -871,13 +871,13 @@ def create_report_notebook(results, filename, title="auto",
         if confidenceLevel is None:
             cri = None
         else:
-            cri = estimate.get_confidence_region(confidenceLevel, gopt)
+            cri = estimate.get_confidence_region(confidenceLevel, gopt)\
     """.format(goLabel=goLabels[0], CL=confidenceLevel))
             
     nb.add_code("""\
         from pygsti.report import Workspace
         ws = Workspace()
-        ws.init_notebook_mode(connected={conn}, autodisplay=True)
+        ws.init_notebook_mode(connected={conn}, autodisplay=True)\
         """.format(conn=str(connected)))
     
     nb.add_notebook_text_files([
@@ -908,7 +908,8 @@ def create_report_notebook(results, filename, title="auto",
         _os.path.join(templatePath,'meta.txt')])
 
     if auto_open:
-        nb.launch_new(filename)
+        port = "auto" if auto_open == True else int(auto_open)
+        nb.launch(filename, port=port)
     else:
         nb.save_to(filename)
 
