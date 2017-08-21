@@ -3,7 +3,7 @@
 Each gate sequence is assigned a p-value based on how consistent that sequence's counts are between the two selected data sets.  The line shows what would be expected for perfectly consistent data.
 
 @@code
-ws.DatasetComparisonPlot(dscmp)
+ws.DatasetComparisonHistogramPlot(dscmp)
 
 @@markdown
 # Per-sequence $2\Delta\log(\mathcal{L})$ values comparing two data sets.

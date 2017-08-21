@@ -714,6 +714,7 @@ def create_general_report(results, filename, title="auto",
             dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
 
         dsComp = dict()
+        all_dsComps = dict()        
         indices = []
         for i in range(len(dataset_labels)):
             for j in range(len(dataset_labels)):
@@ -737,18 +738,22 @@ def create_general_report(results, filename, title="auto",
                     for k, v in d.items():
                         d1, d2 = k
                         dscmp_switchBd.dscmp[d1, d2] = v
+                        all_dsComps[(d1,d2)] = v
         else:
             for d1, d2 in indices:
                 dslbl1 = dataset_labels[d1]
                 dslbl2 = dataset_labels[d2]
                 ds1 = results_dict[dslbl1].dataset
                 ds2 = results_dict[dslbl2].dataset
-                dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
+                all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])                
+                dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
         
         qtys['dscmpSwitchboard'] = dscmp_switchBd
-        qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
-        qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
-                                                      None, None, dscomparator=dscmp_switchBd.dscmp)
+        qtys['dsComparisonSummary'] = ws.DatasetComparisonSummaryPlot(dataset_labels, all_dsComps)
+        qtys['dsComparisonHistogram'] = ws.DatasetComparisonHistogramPlot(dscmp_switchBd.dscmp)
+        if not brief: 
+            qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
+                                                          None, None, dscomparator=dscmp_switchBd.dscmp)
         toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False
@@ -906,7 +911,8 @@ def create_report_notebook(results, filename, title="auto",
         ds2 = results_dict[dslbl2].dataset
         dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
         """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
-        _os.path.join(templatePath,'data_comparison.txt')
+        nb.add_notebook_text_files([
+            _os.path.join(templatePath,'data_comparison.txt')])
 
     #Add reference material
     nb.add_notebook_text_files([

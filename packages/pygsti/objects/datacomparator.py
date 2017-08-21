@@ -138,6 +138,11 @@ class DataComparator():
         worst_strings = _np.array(self.pVals_and_strings,dtype='object')
         worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
         return worst_strings
+
+    def get_composite_nsigma(self):
+        composite_score = _np.sum(self.llrVals)
+        k = self.num_strs*self.dof
+        return (composite_score - k) / _np.sqrt(2*k)
             
     def report(self,confidence_level=0.95):
         single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
