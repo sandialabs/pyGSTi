@@ -185,6 +185,28 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
 
 
 @_tools.parameterized
+def gatestring_quantity(fnOfGateSetAndString, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of a GateSet and a GateString. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
+    @_functools.wraps(fnOfGateSetAndString)
+    def compute_quantity(gateset, gatestring, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return _make_reportable_qty_or_dict( fnOfGateSetAndString(gateset, gatestring) )
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
+        df, f0 = confidenceRegionInfo.get_gatestring_fn_confidence_interval(
+            fnOfGateSetAndString, gatestring, eps, returnFnVal=True, verbosity=verbosity)
+
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
+
+    return compute_quantity
+
+
+@_tools.parameterized
 def gatesets_quantity(fnOfGateSets, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two gatesets. """
     # Since smart_cached is unparameterized, it needs no following parens
@@ -233,6 +255,10 @@ def choi_trace(gate, mxBasis):
 @gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def eigenvalues(gate, mxBasis):
     return _np.linalg.eigvals(gate)
+
+@gatestring_quantity() # This function changes arguments to (gateset, gatestring, confidenceRegionInfo)
+def gatestring_eigenvalues(gateset, gatestring):
+    return _np.linalg.eigvals(gateset.product(gatestring))
 
 #@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_angle(gate):

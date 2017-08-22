@@ -942,7 +942,8 @@ class old_RotationAxisTable(WorkspaceTable):
 class GateEigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
-                 display=('evals','rel','log-evals','log-rel','polar','relpolar') ):
+                 display=('evals','rel','log-evals','log-rel','polar','relpolar'),
+                 virtual_gates=None):
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a gateset's gates.
@@ -961,13 +962,18 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "rel", "log-evals", "log-rel", "polar", "relpolar"}
+        display : tuple of {"evals", "target", "rel", "log-evals", "log-rel", "polar", "relpolar"}
             Specifies which columns are displayed in the table: a list of the
-            eigenvalues, a list of the relative eigenvalues, the (complex)
+            eigenvalues, target eigenvalues, relative eigenvalues, the (complex)
             logarithm of the eigenvalues and relative eigenvalues, a polar plot of
             the eigenvalues, and/or a polar plot of the relative eigenvalues.
-            If `targetGateset` is None, then `"rel"`, `"log-rel"` and `"relpolar"`
-            will be silently ignored.
+            If `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
+            and `"relpolar"` will be silently ignored.
+
+        virtual_gates : list, optional
+            If not None, a list of `GateString` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+            automatically discarded so they are not displayed twice.
     
         Returns
         -------
@@ -975,16 +981,20 @@ class GateEigenvalueTable(WorkspaceTable):
         """
         super(GateEigenvalueTable,self).__init__(ws, self._create, gateset,
                                                  targetGateset,
-                                                 confidenceRegionInfo, display)
+                                                 confidenceRegionInfo, display,
+                                                 virtual_gates)
         
     def _create(self, gateset, targetGateset,               
-                confidenceRegionInfo, display):
+                confidenceRegionInfo, display,
+                virtual_gates):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
-        colHeadings = ['Gate']
+        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
             if disp == "evals":
                 colHeadings.append('Eigenvalues')
+            elif disp == "target":
+                colHeadings.append('Target Evals.')
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
@@ -1005,20 +1015,36 @@ class GateEigenvalueTable(WorkspaceTable):
         formatters = [None]*len(colHeadings)
     
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        if virtual_gates is None:
+            iterOver = gateLabels
+        else:
+            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
     
-        for gl in gateLabels:
-            row_data = [gl]
+        for gl in iterOver:
+            #Note: gl may be a gate label (a string) or a GateString
+            row_data = [ str(gl) ]
             row_formatters = [None]
 
-            evals = _reportables.eigenvalues(gateset, gl)
+            if _tools.isstr(gl):
+                evals = _reportables.eigenvalues(gateset, gl)
+            else:
+                evals = _reportables.gatestring_eigenvalues(gateset, gl)
+                
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
             #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             #except: evals = evals.reshape(evals.size, 1)
 
             if targetGateset is not None:
-                gate = gateset.gates[gl]
-                targetGate = targetGateset.gates[gl]
+                #TODO: move this to a reportable qty to get error bars?
+                if _tools.isstr(gl):
+                    gate = gateset.gates[gl]
+                    targetGate = targetGateset.gates[gl]
+                else:
+                    gate = gateset.product(gl)
+                    targetGate = targetGateset.product(gl)
+                    
                 target_evals = _np.linalg.eigvals(targetGate)
                 rel_gate = _np.dot(_np.linalg.inv(targetGate), gate) #TODO: function for this?
                 rel_evals = _np.linalg.eigvals(rel_gate)
@@ -1026,6 +1052,10 @@ class GateEigenvalueTable(WorkspaceTable):
             for disp in display:
                 if disp == "evals":
                     row_data.append( evals )
+                    row_formatters.append('Normal')
+
+                elif disp == "target" and targetGateset is not None:
+                    row_data.append( target_evals )
                     row_formatters.append('Normal')
 
                 elif disp == "rel" and targetGateset is not None:
@@ -1050,17 +1080,17 @@ class GateEigenvalueTable(WorkspaceTable):
                     evals_val = evals.get_value()
                     if targetGateset is None:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[evals_val],["blue"],centerText=gl)
+                            self.ws,[evals_val],["blue"],centerText=str(gl))
                     else:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws,[target_evals,evals_val],
-                            ["black","blue"],["target","gate"], centerText=gl)
+                            ["black","blue"],["target","gate"], centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
                     fig = _wp.PolarEigenvaluePlot(
-                        self.ws,[rel_evals],["red"],["rel"],centerText=gl)
+                        self.ws,[rel_evals],["red"],["rel"],centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)

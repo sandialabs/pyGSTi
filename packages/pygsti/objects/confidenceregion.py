@@ -412,6 +412,66 @@ class ConfidenceRegion(object):
         return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
+    def get_gatestring_fn_confidence_interval(self, fnOfGateSetAndString,
+                                        gatestring, eps=1e-7,
+                                        returnFnVal=False, verbosity=0):
+        """
+        Compute the confidence interval for a function of a single gate string.
+
+        Parameters
+        ----------
+        fnOfGateSetAndString : function
+            A function which takes two arguments: a `GateSet` and a `GateString`.
+            The returned confidence interval is based on linearizing this
+            function and propagating the gateset-space confidence region.
+
+        gatestring : GateString
+            The gate label sequence passed to fnOfGateSetAndString.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives.
+
+        returnFnVal : bool, optional
+            If True, return the value of fnOfGateSetAndString along with it's
+            confidence region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfGate.  Thus, shape of
+            df matches that returned by fnOfGate.
+
+        f0 : float or numpy array
+            Only returned when returnFnVal == True. Value of fnOfGate
+            at the gate specified by gateLabel.
+        """
+
+        nParams = self.gateset.num_params()
+        gateset = self.gateset.copy() # copy because we add eps to this gateset
+
+        f0 = fnOfGateSetAndString(gateset, gatestring) #function value at "base point"
+        gatesetVec0 = gateset.to_vector()
+        assert(len(gatesetVec0) == nParams)
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        gradF = _create_empty_gradF(f0, nParams)
+
+        for i in range(nParams):
+            gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
+            gateset.from_vector(gatesetVec)
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][i] = ( fnOfGatesetAndString( gateset, gatestring )[ky] - f0[ky] ) / eps
+            else:
+                gradF[i] = ( fnOfGatesetAndString(gateset, gatestring) - f0 ) / eps
+
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
+
+
     def get_prep_fn_confidence_interval(self, fnOfPrep, prepLabel, eps=1e-7,
                                         returnFnVal=False, verbosity=0):
         """
