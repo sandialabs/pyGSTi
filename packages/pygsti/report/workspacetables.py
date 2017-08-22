@@ -433,14 +433,54 @@ class ChoiTable(WorkspaceTable):
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
+
+
+class GatesetVsTargetTable(WorkspaceTable):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+        """
+        Create a table comparing a gateset (as a whole) to a target gateset
+        using metrics that can be evaluatd for an entire gate set.
     
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The gate sets to compare
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.    
+    
+        Returns
+        -------
+        ReportTable
+        """
+        super(GatesetVsTargetTable,self).__init__(ws, self._create, gateset,
+                                                targetGateset, confidenceRegionInfo)
+    
+    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    
+        colHeadings = ('Metric', "Value")
+        formatters  = (None,None)
+
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+    
+        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset)
+        table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
+
+        RBnum = _reportables.predicted_rb_number(gateset, targetGateset)
+        table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
+        
+        table.finish()
+        return table
+
     
 #    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset's gates to a target gateset using
-        the infidelity, diamond-norm distance, and trace distance.
+        the infidelity, diamond-norm distance, trace distance, and other
+        metrics.
     
         Parameters
         ----------
@@ -461,20 +501,25 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-    
-        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
-        formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+        
+        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm",
+                       "Unitarity|Infidelity", "Gauge Inv.|Infidelity", "Avg. Gate|Infidelity") #, "Frobenius|Distance"
+        formatters  = (None,'Conversion','Conversion','Conversion','Conversion','Conversion','Conversion')
     
         infidelities = [_reportables.process_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
         jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
         dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
+        unitarityIF  = [_reportables.unitarity_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        gaugeInvIF   = [_reportables.gaugeinv_infidelity(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        AGI          = [_reportables.avg_gate_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
 
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
     
         for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
-                                                      infidelities, jt_diffs, dnorms):
+                                                      infidelities, jt_diffs, dnorms,
+                                                      unitarityIF, gaugeInvIF, AGI):
             table.addrow(rowData, formatters)
         table.finish()
         return table

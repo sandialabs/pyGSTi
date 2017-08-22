@@ -39,10 +39,11 @@ ws.GateEigenvalueTable(gs, gs_target, cri, display=('rel','log-rel'))
 
 
 @@markdown
-### Comparison of GST estimated gates to target gates:
-This table presents, for each of the gates, three different measures of distance or discrepancy from the GST estimate to the ideal target operation.  See text for more detail.
+### Comparison of GST estimated gate set and gates to target operations:
+These tables present different measures of distance or discrepancy from the GST estimate to the ideal target operations.
 
 @@code
+ws.GatesetVsTargetTable(gs, gs_target, cri)
 ws.GatesVsTargetTable(gs, gs_target, cri)
 
 @@markdown

@@ -20,6 +20,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..objects import smart_cached as _smart_cached
+from ..extras.rb import rbutils as _rbutils
 from .reportableqty import ReportableQty
 
 import functools as _functools
@@ -161,6 +162,7 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
     return compute_quantity
+
 
 @_tools.parameterized
 def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
@@ -880,6 +882,31 @@ def half_diamond_norm(A, B, mxBasis):
     return 0.5 * _tools.diamonddist(A, B, mxBasis)
 
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def unitarity_infidelity(A, B, mxBasis):
+    """ Returns 1 - sqrt(U), where U is the unitarity of A*B^{-1} """
+    return 1.0 - _np.sqrt( _rbutils.unitarity( _np.dot(A, _np.linalg.inv(B)), mxBasis) )
+
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
+def gaugeinv_infidelity(gate, mxBasis):
+    """ 
+    Returns gauge-invariant "version" of the unitary fidelity in which
+    the unitarity is replaced with the gauge-invariant quantity
+    `(lambda^dagger lambda - 1) / (d**2 - 1)`, where `lambda` is the spectrum 
+    of A, which equals the unitarity in at least one particular gauge.
+    """
+    d2 = gate.shape[0]
+    lmb = _np.linalg.eigvals(gate)
+    Uproxy = (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
+    return 1.0 - _np.sqrt( Uproxy )
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def avg_gate_infidelity(A, B, mxBasis):
+    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
+    d = _np.sqrt(A.shape[0])
+    return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
+
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
@@ -985,6 +1012,14 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
 
     return decomp
 
+
+@gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
+def average_gateset_infidelity(gatesetA, gatesetB): # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
+    return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
+
+@gatesets_quantity()
+def predicted_rb_number(gatesetA, gatesetB):
+    return _rbutils.predicted_RB_number(gatesetA, gatesetB)
 
 @_tools.parameterized
 def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):

@@ -657,8 +657,9 @@ def create_general_report(results, filename, title="auto",
     qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
                                                           virtual_gates=germs)
     qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesetVsTargetTable'] = ws.GatesetVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
+    qtys['bestGatesVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
     qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
     qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)

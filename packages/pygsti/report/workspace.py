@@ -282,6 +282,7 @@ class Workspace(object):
 
           # Spam & Gates vs. a target
         self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
+        self.GatesetVsTargetTable = makefactory(_wt.GatesetVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
