@@ -248,7 +248,7 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             qtys_html[key] = val
 
         else:
-            #print("DB: rendering ",key)
+            printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
                 out = val.render("html", precision=precision, resizable=True, autosize=False)

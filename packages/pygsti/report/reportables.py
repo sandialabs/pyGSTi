@@ -187,21 +187,43 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
 
 
 @_tools.parameterized
-def gatestring_quantity(fnOfGateSetAndString, eps=FINITE_DIFF_EPS, verbosity=0):
-    """ For constructing a ReportableQty from a function of a GateSet and a GateString. """
+def gatestring_quantity(fnOfGatestringAndSet, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of a GateString and a GateSet. """
     # Since smart_cached is unparameterized, it needs no following parens
     @_smart_cached # nested decorators = decOut(decIn(f(x)))
-    @_functools.wraps(fnOfGateSetAndString)
-    def compute_quantity(gateset, gatestring, confidenceRegionInfo=None):
+    @_functools.wraps(fnOfGatestringAndSet)
+    def compute_quantity(gatestring, gateset, confidenceRegionInfo=None):
         if confidenceRegionInfo is None: # No Error bars
-            return _make_reportable_qty_or_dict( fnOfGateSetAndString(gateset, gatestring) )
+            return _make_reportable_qty_or_dict( fnOfGatestringAndSet(gatestring, gateset) )
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
             raise ValueError("GateSet quantity confidence region is being requested for " +
                              "a different gateset than the given confidenceRegionInfo")
         nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         df, f0 = confidenceRegionInfo.get_gatestring_fn_confidence_interval(
-            fnOfGateSetAndString, gatestring, eps, returnFnVal=True, verbosity=verbosity)
+            fnOfGatestringAndSet, gatestring, eps, returnFnVal=True, verbosity=verbosity)
+
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
+
+    return compute_quantity
+
+@_tools.parameterized
+def gatestrings_quantity(fnOfGatestringAndSets, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of two GateSets and a GateString. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
+    @_functools.wraps(fnOfGatestringAndSets)
+    def compute_quantity(gatestring, gatesetA, gatesetB, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return _make_reportable_qty_or_dict( fnOfGatestringAndSets(gatestring, gatesetA, gatesetB) )
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
+        curriedFnOfGateString = _functools.partial(fnOfGatestringAndSets, gatesetB=gatesetB)
+        df, f0 = confidenceRegionInfo.get_gatestring_fn_confidence_interval(
+            curriedFnOfGateString, gatestring, eps, returnFnVal=True, verbosity=verbosity)
 
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
@@ -258,9 +280,16 @@ def choi_trace(gate, mxBasis):
 def eigenvalues(gate, mxBasis):
     return _np.linalg.eigvals(gate)
 
-@gatestring_quantity() # This function changes arguments to (gateset, gatestring, confidenceRegionInfo)
-def gatestring_eigenvalues(gateset, gatestring):
+@gatestring_quantity() # This function changes arguments to (gatestring, gateset, confidenceRegionInfo)
+def gatestring_eigenvalues(gatestring, gateset):
     return _np.linalg.eigvals(gateset.product(gatestring))
+
+@gatestrings_quantity() # This function changes arguments to (gatestring, gatesetA, gatesetB, confidenceRegionInfo)
+def rel_gatestring_eigenvalues(gatestring, gatesetA, gatesetB):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
+    return _np.linalg.eigvals(rel_gate)
 
 #@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_angle(gate):
@@ -943,6 +972,45 @@ def rel_logTiG_eigvals(A, B, mxBasis):
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def rel_gate_eigenvalues(A, B, mxBasis):
+    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
+    return _np.linalg.eigvals(rel_gate)
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def logTiG_and_projections(A, B, mxBasis):
+    ret = {}
+    ret['error generator'] = \
+        _tools.error_generator(A, B, mxBasis, "logTiG")
+    ret['hamiltonian projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "hamiltonian",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    ret['stochastic projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "stochastic",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    return ret
+
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def logGmlogT_and_projections(A, B, mxBasis):
+    ret = {}
+    ret['error generator'] = \
+        _tools.error_generator(A, B, mxBasis, "logG-logT")
+    ret['hamiltonian projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "hamiltonian",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    ret['stochastic projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "stochastic",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    return ret
+
+
+
 
 @gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
 def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but must be "gatsetB" b/c of decorator coding...

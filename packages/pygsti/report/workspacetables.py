@@ -374,7 +374,7 @@ class ChoiTable(WorkspaceTable):
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
-                evals   = [_reportables.choi_evals(gateset, gl) for gl in gateLabels]
+                evals   = [_reportables.choi_evals(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
@@ -425,8 +425,8 @@ class ChoiTable(WorkspaceTable):
                 elif disp == "barplot":
                     for gateset in gatesets:
                         for gateset, (_, evals) in zip(gatesets,qtysList):
-                            evals, evalsEB = evals[i].get_value_and_err_bar()
-                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
+                            evs, evsEB = evals[i].get_value_and_err_bar()
+                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                             row_data.append(fig)
                             row_formatters.append('Figure')
                             
@@ -464,10 +464,10 @@ class GatesetVsTargetTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
-        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset)
+        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
         table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
 
-        RBnum = _reportables.predicted_rb_number(gateset, targetGateset)
+        RBnum = _reportables.predicted_rb_number(gateset, targetGateset, confidenceRegionInfo)
         table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
         
         table.finish()
@@ -647,9 +647,10 @@ class ErrgenTable(WorkspaceTable):
         assert(display_as == "boxes" or display_as == "numbers")
         table = _ReportTable(colHeadings, (None,)*len(colHeadings) , confidenceRegionInfo=confidenceRegionInfo)
 
-        errgens = {'M': []}
-        hamProjs = {'M': []}
-        stoProjs = {'M': []}
+        errgenAndProjs = { }
+        errgensM = []
+        hamProjsM = []
+        stoProjsM = []
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
@@ -667,34 +668,40 @@ class ErrgenTable(WorkspaceTable):
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
 
-            errgens[gl] = _tools.error_generator(gate, targetGate,
-                                                 targetGateset.basis, genType)
-            absMax = _np.max(_np.abs(errgens[gl]))
-            addMax(errgens['M'], absMax)
+            if genType == "logG-logT":
+                info = _reportables.logGmlogT_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            elif genType == "logTiG":
+                info = _reportables.logTiG_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            else: raise ValueError("Invalid generator type: %s" % genType)
+            errgenAndProjs[gl] = info
+            
+            errgen = info['error generator'].get_value()
+            absMax = _np.max(_np.abs(errgen))
+            addMax(errgensM, absMax)
 
             if "H" in display:
-                hamProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "hamiltonian", basis.name, basis) # basis.name because projector dim is not the same as gate dim
-                absMax = _np.max(_np.abs(hamProjs[gl]))
-                addMax(hamProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].get_value()))
+                addMax(hamProjsM, absMax)
 
             if "S" in display:
-                stoProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "stochastic", basis.name, basis) # basis.name because projector dim is not the same as gate dim
-                absMax = _np.max(_np.abs(stoProjs[gl]))
-                addMax(stoProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
+                addMax(stoProjsM, absMax)
     
         #Do plotting
         for gl in gateLabels:
             row_data = [gl]
             row_formatters = [None]
+            info = errgenAndProjs[gl]
             
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
-                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgens[gl], m,M,
-                                                         basis)
+                        errgen, EB = info['error generator'].get_value_and_err_bar()
+                        m,M = getMinMax(errgensM, _np.max(_np.abs(errgen)))
+                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgen, m,M,
+                                                         basis, EBmatrix=EB)
                         row_data.append(errgen_fig)
                         row_formatters.append('Figure')
                     else:
@@ -703,9 +710,11 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
+                        hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
+                        m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs[gl], basis.name, m, M, boxLabels=True) # basis.name because projector dim is not the same as gate dim
+                            self.ws, hamProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -715,9 +724,11 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
+                        stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
+                        m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs[gl], basis.name, m, M, boxLabels=True) # basis.name because projector dim is not the same as gate dim
+                            self.ws, stoProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1072,9 +1083,9 @@ class GateEigenvalueTable(WorkspaceTable):
             row_formatters = [None]
 
             if _tools.isstr(gl):
-                evals = _reportables.eigenvalues(gateset, gl)
+                evals = _reportables.eigenvalues(gateset, gl, confidenceRegionInfo)
             else:
-                evals = _reportables.gatestring_eigenvalues(gateset, gl)
+                evals = _reportables.gatestring_eigenvalues(gl, gateset, confidenceRegionInfo)
                 
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
@@ -1084,15 +1095,11 @@ class GateEigenvalueTable(WorkspaceTable):
             if targetGateset is not None:
                 #TODO: move this to a reportable qty to get error bars?
                 if _tools.isstr(gl):
-                    gate = gateset.gates[gl]
-                    targetGate = targetGateset.gates[gl]
+                    rel_evals = _reportables.rel_gate_eigenvalues(gateset, targetGateset, gl, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
                 else:
-                    gate = gateset.product(gl)
-                    targetGate = targetGateset.product(gl)
-                    
-                target_evals = _np.linalg.eigvals(targetGate)
-                rel_gate = _np.dot(_np.linalg.inv(targetGate), gate) #TODO: function for this?
-                rel_evals = _np.linalg.eigvals(rel_gate)
+                    rel_evals = _reportables.rel_gatestring_eigenvalues(gl, gateset, targetGateset, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
             for disp in display:
                 if disp == "evals":
@@ -1115,9 +1122,9 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Pi')
 
                 elif disp == "log-rel":
-                    log_relevals = _np.log(rel_evals)
-                    row_data.append( (_np.real(log_relevals),None) )
-                    row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
+                    log_relevals = rel_evals.log()
+                    row_data.append( log_relevals.real() )
+                    row_data.append( log_relevals.imag()/_np.pi )
                     row_formatters.append('Vec') 
                     row_formatters.append('Pi')  
                     
@@ -1134,8 +1141,9 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
+                    rel_evaals_val = rel_evals.get_value()
                     fig = _wp.PolarEigenvaluePlot(
-                        self.ws,[rel_evals],["red"],["rel"],centerText=str(gl))
+                        self.ws,[rel_evals_val],["red"],["rel"],centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
@@ -1568,7 +1576,6 @@ class StandardErrgenTable(WorkspaceTable):
                 m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
                 fig = _wp.GateMatrixPlot(self.ws, projector, m,M,
                                          projection_basis, d)
-    
                 rowData.append(fig)
                 rowFormatters.append('Figure')
     
