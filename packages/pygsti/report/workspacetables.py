@@ -374,7 +374,7 @@ class ChoiTable(WorkspaceTable):
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
-                evals   = [_reportables.choi_evals(gateset, gl) for gl in gateLabels]
+                evals   = [_reportables.choi_evals(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
@@ -425,22 +425,62 @@ class ChoiTable(WorkspaceTable):
                 elif disp == "barplot":
                     for gateset in gatesets:
                         for gateset, (_, evals) in zip(gatesets,qtysList):
-                            evals, evalsEB = evals[i].get_value_and_err_bar()
-                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
+                            evs, evsEB = evals[i].get_value_and_err_bar()
+                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                             row_data.append(fig)
                             row_formatters.append('Figure')
                             
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
+
+
+class GatesetVsTargetTable(WorkspaceTable):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+        """
+        Create a table comparing a gateset (as a whole) to a target gateset
+        using metrics that can be evaluatd for an entire gate set.
     
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The gate sets to compare
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.    
+    
+        Returns
+        -------
+        ReportTable
+        """
+        super(GatesetVsTargetTable,self).__init__(ws, self._create, gateset,
+                                                targetGateset, confidenceRegionInfo)
+    
+    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    
+        colHeadings = ('Metric', "Value")
+        formatters  = (None,None)
+
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+    
+        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
+
+        RBnum = _reportables.predicted_rb_number(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
+        
+        table.finish()
+        return table
+
     
 #    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset's gates to a target gateset using
-        the infidelity, diamond-norm distance, and trace distance.
+        the infidelity, diamond-norm distance, trace distance, and other
+        metrics.
     
         Parameters
         ----------
@@ -461,20 +501,25 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-    
-        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
-        formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+        
+        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm",
+                       "Unitarity|Infidelity", "Gauge Inv.|Infidelity", "Avg. Gate|Infidelity") #, "Frobenius|Distance"
+        formatters  = (None,'Conversion','Conversion','Conversion','Conversion','Conversion','Conversion')
     
         infidelities = [_reportables.process_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
         jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
         dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
+        unitarityIF  = [_reportables.unitarity_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        gaugeInvIF   = [_reportables.gaugeinv_infidelity(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        AGI          = [_reportables.avg_gate_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
 
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
     
         for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
-                                                      infidelities, jt_diffs, dnorms):
+                                                      infidelities, jt_diffs, dnorms,
+                                                      unitarityIF, gaugeInvIF, AGI):
             table.addrow(rowData, formatters)
         table.finish()
         return table
@@ -602,9 +647,10 @@ class ErrgenTable(WorkspaceTable):
         assert(display_as == "boxes" or display_as == "numbers")
         table = _ReportTable(colHeadings, (None,)*len(colHeadings) , confidenceRegionInfo=confidenceRegionInfo)
 
-        errgens = {'M': []}
-        hamProjs = {'M': []}
-        stoProjs = {'M': []}
+        errgenAndProjs = { }
+        errgensM = []
+        hamProjsM = []
+        stoProjsM = []
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
@@ -622,61 +668,71 @@ class ErrgenTable(WorkspaceTable):
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
 
-            errgens[gl] = _tools.error_generator(gate, targetGate,
-                                                 targetGateset.basis, genType)
-            absMax = _np.max(_np.abs(errgens[gl]))
-            addMax(errgens['M'], absMax)
+            if genType == "logG-logT":
+                info = _reportables.logGmlogT_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            elif genType == "logTiG":
+                info = _reportables.logTiG_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            else: raise ValueError("Invalid generator type: %s" % genType)
+            errgenAndProjs[gl] = info
+            
+            errgen = info['error generator'].get_value()
+            absMax = _np.max(_np.abs(errgen))
+            addMax(errgensM, absMax)
 
             if "H" in display:
-                hamProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "hamiltonian", basis.name, basis) # basis.name because projector dim is not the same as gate dim
-                absMax = _np.max(_np.abs(hamProjs[gl]))
-                addMax(hamProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].get_value()))
+                addMax(hamProjsM, absMax)
 
             if "S" in display:
-                stoProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "stochastic", basis.name, basis) # basis.name because projector dim is not the same as gate dim
-                absMax = _np.max(_np.abs(stoProjs[gl]))
-                addMax(stoProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
+                addMax(stoProjsM, absMax)
     
         #Do plotting
         for gl in gateLabels:
             row_data = [gl]
             row_formatters = [None]
+            info = errgenAndProjs[gl]
             
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
-                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgens[gl], m,M,
-                                                         basis)
+                        errgen, EB = info['error generator'].get_value_and_err_bar()
+                        m,M = getMinMax(errgensM, _np.max(_np.abs(errgen)))
+                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgen, m,M,
+                                                         basis, EBmatrix=EB)
                         row_data.append(errgen_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(errgens[gl])
+                        row_data.append(info['error generator'])
                         row_formatters.append('Brackets')
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
+                        hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
+                        m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs[gl], basis.name, m, M, boxLabels=True) # basis.name because projector dim is not the same as gate dim
+                            self.ws, hamProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(hamProjs[gl])
+                        row_data.append(info['hamiltonian projections'])
                         row_formatters.append('Brackets')
 
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
+                        stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
+                        m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs[gl], basis.name, m, M, boxLabels=True) # basis.name because projector dim is not the same as gate dim
+                            self.ws, stoProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(stoProjs[gl])
+                        row_data.append(info['stochastic projections'])
                         row_formatters.append('Brackets')
 
             table.addrow(row_data, row_formatters)
@@ -942,7 +998,8 @@ class old_RotationAxisTable(WorkspaceTable):
 class GateEigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
-                 display=('evals','rel','log-evals','log-rel','polar','relpolar') ):
+                 display=('evals','rel','log-evals','log-rel','polar','relpolar'),
+                 virtual_gates=None):
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a gateset's gates.
@@ -961,13 +1018,18 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "rel", "log-evals", "log-rel", "polar", "relpolar"}
+        display : tuple of {"evals", "target", "rel", "log-evals", "log-rel", "polar", "relpolar"}
             Specifies which columns are displayed in the table: a list of the
-            eigenvalues, a list of the relative eigenvalues, the (complex)
+            eigenvalues, target eigenvalues, relative eigenvalues, the (complex)
             logarithm of the eigenvalues and relative eigenvalues, a polar plot of
             the eigenvalues, and/or a polar plot of the relative eigenvalues.
-            If `targetGateset` is None, then `"rel"`, `"log-rel"` and `"relpolar"`
-            will be silently ignored.
+            If `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
+            and `"relpolar"` will be silently ignored.
+
+        virtual_gates : list, optional
+            If not None, a list of `GateString` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+            automatically discarded so they are not displayed twice.
     
         Returns
         -------
@@ -975,16 +1037,20 @@ class GateEigenvalueTable(WorkspaceTable):
         """
         super(GateEigenvalueTable,self).__init__(ws, self._create, gateset,
                                                  targetGateset,
-                                                 confidenceRegionInfo, display)
+                                                 confidenceRegionInfo, display,
+                                                 virtual_gates)
         
     def _create(self, gateset, targetGateset,               
-                confidenceRegionInfo, display):
+                confidenceRegionInfo, display,
+                virtual_gates):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
-        colHeadings = ['Gate']
+        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
             if disp == "evals":
                 colHeadings.append('Eigenvalues')
+            elif disp == "target":
+                colHeadings.append('Target Evals.')
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
@@ -1005,27 +1071,43 @@ class GateEigenvalueTable(WorkspaceTable):
         formatters = [None]*len(colHeadings)
     
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        if virtual_gates is None:
+            iterOver = gateLabels
+        else:
+            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
     
-        for gl in gateLabels:
-            row_data = [gl]
+        for gl in iterOver:
+            #Note: gl may be a gate label (a string) or a GateString
+            row_data = [ str(gl) ]
             row_formatters = [None]
 
-            evals = _reportables.eigenvalues(gateset, gl)
+            if _tools.isstr(gl):
+                evals = _reportables.eigenvalues(gateset, gl, confidenceRegionInfo)
+            else:
+                evals = _reportables.gatestring_eigenvalues(gl, gateset, confidenceRegionInfo)
+                
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
             #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             #except: evals = evals.reshape(evals.size, 1)
 
             if targetGateset is not None:
-                gate = gateset.gates[gl]
-                targetGate = targetGateset.gates[gl]
-                target_evals = _np.linalg.eigvals(targetGate)
-                rel_gate = _np.dot(_np.linalg.inv(targetGate), gate) #TODO: function for this?
-                rel_evals = _np.linalg.eigvals(rel_gate)
+                #TODO: move this to a reportable qty to get error bars?
+                if _tools.isstr(gl):
+                    rel_evals = _reportables.rel_gate_eigenvalues(gateset, targetGateset, gl, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
+                else:
+                    rel_evals = _reportables.rel_gatestring_eigenvalues(gl, gateset, targetGateset, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
             for disp in display:
                 if disp == "evals":
                     row_data.append( evals )
+                    row_formatters.append('Normal')
+
+                elif disp == "target" and targetGateset is not None:
+                    row_data.append( target_evals )
                     row_formatters.append('Normal')
 
                 elif disp == "rel" and targetGateset is not None:
@@ -1040,9 +1122,9 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Pi')
 
                 elif disp == "log-rel":
-                    log_relevals = _np.log(rel_evals)
-                    row_data.append( (_np.real(log_relevals),None) )
-                    row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
+                    log_relevals = rel_evals.log()
+                    row_data.append( log_relevals.real() )
+                    row_data.append( log_relevals.imag()/_np.pi )
                     row_formatters.append('Vec') 
                     row_formatters.append('Pi')  
                     
@@ -1050,17 +1132,18 @@ class GateEigenvalueTable(WorkspaceTable):
                     evals_val = evals.get_value()
                     if targetGateset is None:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[evals_val],["blue"],centerText=gl)
+                            self.ws,[evals_val],["blue"],centerText=str(gl))
                     else:
                         fig = _wp.PolarEigenvaluePlot(
                             self.ws,[target_evals,evals_val],
-                            ["black","blue"],["target","gate"], centerText=gl)
+                            ["black","blue"],["target","gate"], centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
+                    rel_evals_val = rel_evals.get_value()
                     fig = _wp.PolarEigenvaluePlot(
-                        self.ws,[rel_evals],["red"],["rel"],centerText=gl)
+                        self.ws,[rel_evals_val],["red"],["rel"],centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
@@ -1493,7 +1576,6 @@ class StandardErrgenTable(WorkspaceTable):
                 m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
                 fig = _wp.GateMatrixPlot(self.ws, projector, m,M,
                                          projection_basis, d)
-    
                 rowData.append(fig)
                 rowFormatters.append('Figure')
     

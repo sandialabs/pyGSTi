@@ -213,6 +213,16 @@ class VerbosityPrinter():
         p.extra_indents += other
         return p
 
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle Comm object
+        to_pickle = self.__dict__.copy()
+        del to_pickle['_comm'] # one *cannot* pickle Comm objects
+        return  to_pickle
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        self._comm = None # initialize to None upon unpickling
+
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
     def _append_to(self, filename, message):
         with open(filename, 'a') as output:

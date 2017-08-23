@@ -94,7 +94,7 @@ def r_to_p(r,d=2):
     p = 1 - d * r / (d - 1)
     return p
 
-def average_gate_infidelity(A,B,d=2,mxBasis="gm"):
+def average_gate_infidelity(A,B,d=None,mxBasis="gm"):
     """
     Computes the average gate infidelity (AGI) between an actual and a target
     gate. This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2)).
@@ -110,7 +110,10 @@ def average_gate_infidelity(A,B,d=2,mxBasis="gm"):
     B : array or gate
         The target gate against which "actual" is being compared.
         
-    mxBasis : {"std","gm","pp"}, optional
+    d : int
+        Dimension of Hilbert space.  Taken to be `sqrt(A.shape[0])` if None.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
 
     Returns
@@ -118,6 +121,7 @@ def average_gate_infidelity(A,B,d=2,mxBasis="gm"):
     AGI : float
         The AGI of the noisy to the target gate.
     """
+    if d is None: d = int(round(_np.sqrt(A.shape[0])))
     process_fidelity = _tls.process_fidelity(A,B,mxBasis=mxBasis)
     AGF = (d*process_fidelity + 1)/(1+d)
     AGI = 1 - AGF
@@ -139,7 +143,7 @@ def unitarity(A,mxBasis="gm",d=2):
     gate : array or gate
         The gate for which the unitarity is to be computed. 
                     
-    mxBasis : {"std","gm","pp"}, optional
+    mxBasis : {"std","gm","pp"} or a Basis object, optional
         The basis of the matrix.
         
     d : int, optional
@@ -151,17 +155,19 @@ def unitarity(A,mxBasis="gm",d=2):
         The unitarity of the gate.
         
     """
-    if mxBasis == "gm" or mxBasis == "pp":
+    d = int(round(_np.sqrt(A.shape[0])))
+    basisMxs = _tls.basis_matrices(mxBasis, d)
+
+    if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
         B = A
     else:
-        assert mxBasis == "std", "mxBasis must be 'gm', 'pp', or 'std'."
-        B =  _tls.change_basis(A, 'std', 'gm')
+        B = _tls.change_basis(A, mxBasis, "gm") #everything should be able to be put in the "gm" basis
     
     unital = B[1:d**2,1:d**2]
     u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
     return u
 
-def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=2):
+def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=None):
     """
     Computes the average gateset infidelity (AGsI) between noisy gates and target gates.
     This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2) and below), and is 
@@ -175,26 +181,28 @@ def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=2):
     gs_target : GateSet
         Target gateset.
         
-    mxBasis : {"std","gm","pp"}, optional
+    mxBasis : {"std","gm","pp"} or Basis object, optional
         The basis of the gatesets. If None, the basis is obtained from
         the gateset.
         
     d : int, optional
-        The dimension of the Hilbert space.
+        The dimension of the Hilbert space.  If Nine, it is obtained
+        from the gateset.
 
     Returns
     -------
     AGsI : float
         The AGsI of the actual gateset to the target gateset.    
     """
-    if mxBasis is None:
-        mxBasis = gs_actual.get_basis_name()
-    assert(mxBasis=='pp' or mxBasis=='gm' or mxBasis=='std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    if mxBasis is None: mxBasis = gs_actual.basis
+    if d is None: d = int(round(_np.sqrt(gs_actual.dim)))
     
     AGI_list = []
     for gate in list(gs_target.gates.keys()):
-        AGI_list.append(average_gate_infidelity(gs_actual.gates[gate],
-                gs_target.gates[gate],d=d,mxBasis=mxBasis))
+        AGI_list.append(average_gate_infidelity(
+            gs_actual.gates[gate],
+            gs_target.gates[gate],d=d,
+            mxBasis=mxBasis))
     AGsI = _np.mean(AGI_list)
     return AGsI
 
@@ -288,7 +296,7 @@ def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond',
     return delta_avg
 
 # ----- Predicting the RB parameters and curve from a gateset ---- #
-def predicted_RB_number(gs,gs_target,d=2):
+def predicted_RB_number(gs,gs_target,d=None):
     """
     Predicts the RB number (RB error rate) from a gateset, using the
     essentially exact formula from arXiv:1702.01853. The gateset should
@@ -305,7 +313,7 @@ def predicted_RB_number(gs,gs_target,d=2):
         The target gateset.
     
     d : int, optional
-        The dimension.
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
 
     Returns
     -------
@@ -314,7 +322,8 @@ def predicted_RB_number(gs,gs_target,d=2):
         The predicted RB number. This is valid for various types of 
         RB, including standard Clifford RB.
         
-    """  
+    """
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
     r_predicted = p_to_r(predicted_RB_decay_parameter(gs,gs_target,d))
     return r_predicted
 
@@ -924,7 +933,7 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
         PRA 85 042311 2012 (taking the case of time-independent noise therein).    
     """
     Magesan_theory_params = {}
-    Magesan_theory_params['r'] = average_gateset_infidelity(gs_actual,gs_target,d)    
+    Magesan_theory_params['r'] = average_gateset_infidelity(gs_actual,gs_target,None,d)    
     Magesan_theory_params['p'] = r_to_p(Magesan_theory_params['r'],d)
     Magesan_theory_params['delta'] = gatedependence_of_errormaps(gs_actual, 
                                                                  gs_target, norm,d)

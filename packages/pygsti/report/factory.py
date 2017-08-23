@@ -248,7 +248,7 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             qtys_html[key] = val
 
         else:
-            #print("DB: rendering ",key)
+            printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
                 out = val.render("html", precision=precision, resizable=True, autosize=False)
@@ -481,7 +481,7 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False,
-                          connected=False, verbosity=0):
+                          connected=False, verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -499,7 +499,9 @@ def create_general_report(results, filename, title="auto",
         in the report.
 
     filename : string, optional
-       The output filename where the report file(s) will be saved.
+       The output filename where the report file(s) will be saved.  If
+       None, then no output file is produced (but returned Workspace
+       still caches all intermediate results).
 
     title : string, optional
        The title of the report.  "auto" causes a random title to be
@@ -592,6 +594,9 @@ def create_general_report(results, filename, title="auto",
     toggles = _set_toggles(results_dict)
 
     qtys = {} # stores strings to be inserted into report template
+    def addqty(name, fn, *args, **kwargs):
+        with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+            qtys[name] = fn(*args, **kwargs)
 
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -636,62 +641,64 @@ def create_general_report(results, filename, title="auto",
     germs = switchBd.germs
     strs = switchBd.strs
 
-    qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
-    qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
+    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, includeHSVec=False)
+    addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+    addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
-    qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
-    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
+    addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, gsFinal, cri)
+    addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
                                                          ['Target','Estimated'],
                                                          cri, includeHSVec=False)
-    qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
-    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+    addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+    addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
-    qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','log-evals'))
-    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    qtys['bestGatesetVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
+    addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
+    addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
+                                                          virtual_gates=germs)
+    addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
+    addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
-    qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
-    qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
+    addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty('softwareEnvTable', ws.SoftwareEnvTable)
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gssAllL = switchBd.gssAllL
-    qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
-    qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
-    qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
-    qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
-    qtys['progressTable'] = ws.FitComparisonTable(
-                        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    addqty('fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    addqty('prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
+    addqty('effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty('germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty('progressTable', ws.FitComparisonTable, 
+           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
-    qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
-        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    addqty('gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+    addqty('progressBarPlot', ws.FitComparisonBarPlot, 
+           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
 
     if not brief: 
-        qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+        addqty('dataScalingColorBoxPlot', ws.ColorBoxPlot, 
             "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
                 submatrices=switchBd.scaledSubMxsDict)
     
         #Not pagniated currently... just set to same full plot
-        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+        addqty('bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
         qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
         
-        qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
+        addqty('bestEstimateColorScatterPlot', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
@@ -712,6 +719,7 @@ def create_general_report(results, filename, title="auto",
             dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
 
         dsComp = dict()
+        all_dsComps = dict()        
         indices = []
         for i in range(len(dataset_labels)):
             for j in range(len(dataset_labels)):
@@ -735,30 +743,38 @@ def create_general_report(results, filename, title="auto",
                     for k, v in d.items():
                         d1, d2 = k
                         dscmp_switchBd.dscmp[d1, d2] = v
+                        all_dsComps[(d1,d2)] = v
         else:
             for d1, d2 in indices:
                 dslbl1 = dataset_labels[d1]
                 dslbl2 = dataset_labels[d2]
                 ds1 = results_dict[dslbl1].dataset
                 ds2 = results_dict[dslbl2].dataset
-                dscmp_switchBd.dscmp[d1, d2] = _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])
+                all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])                
+                dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
         
         qtys['dscmpSwitchboard'] = dscmp_switchBd
-        qtys['dsComparisonHistogram'] = ws.DatasetComparisonPlot(dscmp_switchBd.dscmp)
-        qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
-                                                      None, None, dscomparator=dscmp_switchBd.dscmp)
+        addqty('dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+        addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp)
+        if not brief: 
+            addqty('dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+                   None, None, dscomparator=dscmp_switchBd.dscmp)
         toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False
 
-    if comm is None or comm.Get_rank() == 0:
-        # 3) populate template html file => report html file
-        printer.log("*** Merging into template file ***")
-        template = "report_dashboard.html"
-        _merge_template(qtys, template, filename, auto_open, precision,
-                        connected=connected, toggles=toggles, verbosity=printer,
-                        CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
-        #SmartCache.global_status(printer)
+    if filename is not None:
+        if comm is None or comm.Get_rank() == 0:
+            # 3) populate template html file => report html file
+            printer.log("*** Merging into template file ***")
+            template = "report_dashboard.html"
+            _merge_template(qtys, template, filename, auto_open, precision,
+                            connected=connected, toggles=toggles, verbosity=printer,
+                            CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+            #SmartCache.global_status(printer)
+    else:
+        printer.log("*** NOT Merging into template file (filename is None) ***")
+        
     return ws
 
 
@@ -900,7 +916,8 @@ def create_report_notebook(results, filename, title="auto",
         ds2 = results_dict[dslbl2].dataset
         dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
         """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
-        _os.path.join(templatePath,'data_comparison.txt')
+        nb.add_notebook_text_files([
+            _os.path.join(templatePath,'data_comparison.txt')])
 
     #Add reference material
     nb.add_notebook_text_files([

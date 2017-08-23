@@ -40,8 +40,10 @@ class rpeconfig:
                 unspecified_keys.append(nm)
                 
         if unspecified_keys == []:
-            print("Fully specified RPE configuration.")
+            #print("Fully specified RPE configuration.")
+            pass #no error
         else:
-            print("RPE configuration not fully specified.  Missing following keys:")
-            print('\n'.join(unspecified_keys))
+            raise ValueError(("RPE configuration not fully specified.  "
+                              "Missing following keys:\n") + \
+                              '\n'.join(unspecified_keys))
         
