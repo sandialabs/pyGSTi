@@ -905,9 +905,14 @@ def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.jtracedist(A, B, mxBasis)
 
-@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
-def half_diamond_norm(A, B, mxBasis):
-    return 0.5 * _tools.diamonddist(A, B, mxBasis)
+try:
+    import cvxpy as _cvxpy
+    @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+    def half_diamond_norm(A, B, mxBasis):
+        return 0.5 * _tools.diamonddist(A, B, mxBasis)
+except ImportError:
+    def half_diamond_norm(gatesetA, gatesetB, gatelabel, confidenceRegionInfo):
+        return ReportableQty(_np.nan) # report NAN for diamond norms
 
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def unitarity_infidelity(A, B, mxBasis):
