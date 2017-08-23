@@ -481,7 +481,7 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False,
-                          connected=False, verbosity=0):
+                          connected=False, verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -594,6 +594,9 @@ def create_general_report(results, filename, title="auto",
     toggles = _set_toggles(results_dict)
 
     qtys = {} # stores strings to be inserted into report template
+    def addqty(name, fn, *args, **kwargs):
+        with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+            qtys[name] = fn(*args, **kwargs)
 
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -638,64 +641,64 @@ def create_general_report(results, filename, title="auto",
     germs = switchBd.germs
     strs = switchBd.strs
 
-    qtys['targetSpamBriefTable'] = ws.SpamTable(gsTgt, None, includeHSVec=False)
-    qtys['targetGatesBoxTable'] = ws.GatesTable(gsTgt, display_as="boxes")
-    qtys['datasetOverviewTable'] = ws.DataSetOverviewTable(ds)
+    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, includeHSVec=False)
+    addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+    addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
-    qtys['bestGatesetSpamParametersTable'] = ws.SpamParametersTable(gsFinal, cri)
-    qtys['bestGatesetSpamBriefTable'] = ws.SpamTable(switchBd.gsTargetAndFinal,
+    addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, gsFinal, cri)
+    addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
                                                          ['Target','Estimated'],
                                                          cri, includeHSVec=False)
-    qtys['bestGatesetSpamVsTargetTable'] = ws.SpamVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetGaugeOptParamsTable'] = ws.GaugeOptParamsTable(switchBd.goparams)
-    qtys['bestGatesetGatesBoxTable'] = ws.GatesTable(switchBd.gsTargetAndFinal,
+    addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+    addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
-    qtys['bestGatesetChoiEvalTable'] = ws.ChoiTable(gsFinal, None, cri, display=("barplot",))
-    qtys['bestGatesetDecompTable'] = ws.GateDecompTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
+    addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
+    addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
                                                           virtual_gates=germs)
-    qtys['bestGatesetRelEvalTable'] = ws.GateEigenvalueTable(gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    qtys['bestGatesetVsTargetTable'] = ws.GatesetVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesVsTargetTable'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesVsTargetTable_sum'] = ws.GatesVsTargetTable(gsFinal, gsTgt, cri)
-    qtys['bestGatesetErrGenBoxTable'] = ws.ErrgenTable(gsFinal, gsTgt, cri, ("errgen","H","S"),
+    addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
+    addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
-    qtys['metadataTable'] = ws.MetadataTable(gsFinal, switchBd.params)
-    qtys['softwareEnvTable'] = ws.SoftwareEnvTable()
+    addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty('softwareEnvTable', ws.SoftwareEnvTable)
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gssAllL = switchBd.gssAllL
-    qtys['fiducialListTable'] = ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
-    qtys['prepStrListTable'] = ws.GatestringTable(prepStrs,"Preparation Fiducials")
-    qtys['effectStrListTable'] = ws.GatestringTable(effectStrs,"Measurement Fiducials")
-    qtys['germList2ColTable'] = ws.GatestringTable(germs, "Germ", nCols=2)
-    qtys['progressTable'] = ws.FitComparisonTable(
-                        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    addqty('fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    addqty('prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
+    addqty('effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty('germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty('progressTable', ws.FitComparisonTable, 
+           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    qtys['gramBarPlot'] = ws.GramMatrixBarPlot(ds,gsTgt,10,strs)
-    qtys['progressBarPlot'] = ws.FitComparisonBarPlot(
-        Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    addqty('gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+    addqty('progressBarPlot', ws.FitComparisonBarPlot, 
+           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
 
     if not brief: 
-        qtys['dataScalingColorBoxPlot'] = ws.ColorBoxPlot(
+        addqty('dataScalingColorBoxPlot', ws.ColorBoxPlot, 
             "scaling", switchBd.gssFinal, eff_ds, switchBd.gsFinalIter,
                 submatrices=switchBd.scaledSubMxsDict)
     
         #Not pagniated currently... just set to same full plot
-        qtys['bestEstimateColorBoxPlotPages'] = ws.ColorBoxPlot(
+        addqty('bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
         qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
         
-        qtys['bestEstimateColorScatterPlot'] = ws.ColorBoxPlot(
+        addqty('bestEstimateColorScatterPlot', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc, scatter=True) #TODO: L-switchboard on summary page?
@@ -751,11 +754,11 @@ def create_general_report(results, filename, title="auto",
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
         
         qtys['dscmpSwitchboard'] = dscmp_switchBd
-        qtys['dsComparisonSummary'] = ws.DatasetComparisonSummaryPlot(dataset_labels, all_dsComps)
-        qtys['dsComparisonHistogram'] = ws.DatasetComparisonHistogramPlot(dscmp_switchBd.dscmp)
+        addqty('dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+        addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp)
         if not brief: 
-            qtys['dsComparisonBoxPlot'] = ws.ColorBoxPlot('dscmp', dscmp_switchBd.dscmp_gss,
-                                                          None, None, dscomparator=dscmp_switchBd.dscmp)
+            addqty('dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+                   None, None, dscomparator=dscmp_switchBd.dscmp)
         toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False

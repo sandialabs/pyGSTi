@@ -55,7 +55,7 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
         else:
             if formatStr is not None:
                 label = formatStr.format(label)
-            put('{} took {} seconds\n'.format(label, str(round(t, roundPlaces))))
+            put('{} took {} seconds'.format(label, str(round(t, roundPlaces))))
 
 def time_hash():
     return str(datetime.now())
