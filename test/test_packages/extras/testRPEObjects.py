@@ -40,7 +40,8 @@ class TestRPEObjectMethods(BaseTestCase):
 
     def test_bad_rpeconfig(self):
         #Note: this doesn't actually raise an exception, it just prints a warning message to stdout
-        badconfig = rpe.rpeconfig({'alpha': 0, 'epsilon': 1, 'theta': 2} ) #need lots more keys...
+        with self.assertRaises(ValueError):
+            badconfig = rpe.rpeconfig({'alpha': 0, 'epsilon': 1, 'theta': 2} ) #need lots more keys...
 
 
 if __name__ == "__main__":
