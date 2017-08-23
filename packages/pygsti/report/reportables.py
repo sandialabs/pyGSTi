@@ -20,7 +20,6 @@ from collections import OrderedDict as _OrderedDict
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..objects import smart_cached as _smart_cached
-from ..extras.rb import rbutils as _rbutils
 from .reportableqty import ReportableQty
 
 import functools as _functools
@@ -913,6 +912,7 @@ def half_diamond_norm(A, B, mxBasis):
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def unitarity_infidelity(A, B, mxBasis):
     """ Returns 1 - sqrt(U), where U is the unitarity of A*B^{-1} """
+    from ..extras.rb import rbutils as _rbutils
     return 1.0 - _np.sqrt( _rbutils.unitarity( _np.dot(A, _np.linalg.inv(B)), mxBasis) )
 
 @gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
@@ -932,6 +932,7 @@ def gaugeinv_infidelity(gate, mxBasis):
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])
+    from ..extras.rb import rbutils as _rbutils
     return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
 
 
@@ -1083,10 +1084,12 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
 
 @gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
 def average_gateset_infidelity(gatesetA, gatesetB): # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
+    from ..extras.rb import rbutils as _rbutils
     return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
 
 @gatesets_quantity()
 def predicted_rb_number(gatesetA, gatesetB):
+    from ..extras.rb import rbutils as _rbutils
     return _rbutils.predicted_RB_number(gatesetA, gatesetB)
 
 @_tools.parameterized
