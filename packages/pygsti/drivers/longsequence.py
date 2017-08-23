@@ -55,7 +55,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -226,7 +227,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #Get dataset for checking below
     if _compat.isstr(dataFilenameOrSet):
         if comm is None or comm.Get_rank() == 0:
-            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    dschk = _pickle.load(pklfile)
+            else:
+                dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
             if comm is not None: comm.bcast(dschk, root=0)
         else:
             dschk = comm.bcast(None, root=0)
@@ -272,7 +277,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -365,7 +371,11 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
         default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]        
         if comm is None or comm.Get_rank() == 0:
-            ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    ds = _pickle.load(pklfile)
+            else:
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
             if comm is not None: comm.bcast(ds, root=0)
         else:
             ds = comm.bcast(None, root=0)            
@@ -663,7 +673,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -739,7 +750,15 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
 
     #Get/load dataset
     if _compat.isstr(dataFilenameOrSet):
-        ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+        if comm is None or comm.Get_rank() == 0:
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    ds = _pickle.load(pklfile)
+            else:
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+            if comm is not None: comm.bcast(ds, root=0)
+        else:
+            ds = comm.bcast(None, root=0)            
     else:
         ds = dataFilenameOrSet #assume a Dataset object
 
