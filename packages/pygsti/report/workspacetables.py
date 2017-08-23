@@ -705,7 +705,7 @@ class ErrgenTable(WorkspaceTable):
                         row_data.append(errgen_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(errgens[gl])
+                        row_data.append(info['error generator'])
                         row_formatters.append('Brackets')
 
                 elif disp == "H":
@@ -718,7 +718,7 @@ class ErrgenTable(WorkspaceTable):
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(hamProjs[gl])
+                        row_data.append(info['hamiltonian projections'])
                         row_formatters.append('Brackets')
 
 
@@ -732,7 +732,7 @@ class ErrgenTable(WorkspaceTable):
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(stoProjs[gl])
+                        row_data.append(info['stochastic projections'])
                         row_formatters.append('Brackets')
 
             table.addrow(row_data, row_formatters)
