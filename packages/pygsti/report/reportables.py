@@ -855,7 +855,7 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
         A = gatesetA.gates[gateLabel]
         B = gatesetB.gates[gateLabel]
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGates(A, B, mxBasis))
+            return _make_reportable_qty_or_dict( fnOfGates(A, B, mxBasis) )
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -1114,7 +1114,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             B = gatesetB.effects[label]
 
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfVectors(A, B, mxBasis))
+            return _make_reportable_qty_or_dict( fnOfVectors(A, B, mxBasis) )
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
