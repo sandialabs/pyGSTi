@@ -1141,7 +1141,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
-                    rel_evaals_val = rel_evals.get_value()
+                    rel_evals_val = rel_evals.get_value()
                     fig = _wp.PolarEigenvaluePlot(
                         self.ws,[rel_evals_val],["red"],["rel"],centerText=str(gl))
                     row_data.append( fig )
