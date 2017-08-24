@@ -205,19 +205,22 @@ class Basis(object):
 
         Returns
         -------
-        list of matrices
+        numpy array
+            array of matrices, shape == (nMatrices, d, d) where
+            d is the composite matrix dimension.
         '''
-        compMxs = []
-        start   = 0
+        nMxs = sum([len(mxs) for mxs in self._blockMatrices])
         length  = sum(mxs[0].shape[0] for mxs in self._blockMatrices)
+        compMxs = _np.zeros( (nMxs, length, length), 'complex')
+        i, start   = 0, 0
+
         for mxs in self._blockMatrices:
             d = mxs[0].shape[0]
             for mx in mxs:
-                compMx = _np.zeros((length, length), 'complex' )
-                compMx[start:start+d,start:start+d] = mx
-                compMxs.append(compMx)
-            start += d
-        assert(start == length)
+                compMxs[i][start:start+d,start:start+d] = mx
+                i += 1
+            start += d 
+        assert(start == length and i == nMxs)
         return compMxs
 
     @cache_by_hashed_args

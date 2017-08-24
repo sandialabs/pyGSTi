@@ -419,6 +419,7 @@ class GateSet(object):
         typ = parameterization_type
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+        #TESTING: rtyp = "CPTP" if typ in ("H+S","S") else typ
         etyp = "static" if typ == "static" else "full"
 
         basis = self.basis
@@ -427,10 +428,10 @@ class GateSet(object):
             self.gates[lbl] = _gate.convert(gate, typ, basis)
 
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, rtyp)
+            self.preps[lbl] = _sv.convert(vec, rtyp, basis)
 
         for lbl,vec in self.effects.items():
-            self.effects[lbl] = _sv.convert(vec, etyp)
+            self.effects[lbl] = _sv.convert(vec, etyp, basis)
 
         if typ == 'full': 
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)

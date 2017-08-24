@@ -14,8 +14,10 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import compattools as _compat
+from ..tools import basis as _basis
 from .protectedarray import ProtectedArray as _ProtectedArray
 
+IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
 def optimize_spamvec(vecToOptimize, targetVec):
     """
@@ -53,7 +55,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
 
     assert(targetVec.dim == vecToOptimize.dim) #vectors must have the same overall dimension
     targetVector = _np.asarray(targetVec)
-    import sys
+
     def objective_func(param_vec):
         vecToOptimize.from_vector(param_vec)
         return _mt.frobeniusnorm(vecToOptimize-targetVector)
@@ -66,7 +68,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
     #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
 
 
-def convert(spamvec, toType):
+def convert(spamvec, toType, basis):
     """
     Convert SPAM vector to a new type of parameterization, potentially
     creating a new SPAMVec object.  Raises ValueError for invalid conversions.
@@ -78,6 +80,11 @@ def convert(spamvec, toType):
 
     toType : {"full","TP","static"}
         The type of parameterizaton to convert to.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for `spamvec`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
 
     Returns
     -------
@@ -98,6 +105,13 @@ def convert(spamvec, toType):
             return TPParameterizedSPAMVec( spamvec )
               # above will raise ValueError if conversion cannot be done
 
+    elif toType == "CPTP":
+        if isinstance(spamvec, CPTPParameterizedSPAMVec):
+            return spamvec #no conversion necessary
+        else:
+            return CPTPParameterizedSPAMVec( spamvec, basis )
+              # above will raise ValueError if conversion cannot be done
+
     elif toType == "static":
         if isinstance(spamvec, StaticSPAMVec):
             return spamvec #no conversion necessary
@@ -107,6 +121,95 @@ def convert(spamvec, toType):
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
+
+def finite_difference_deriv_wrt_params(spamvec, eps=1e-7):
+    """
+    Computes a finite-difference Jacobian for a SPAMVec object.
+
+    The returned value is a matrix whose columns are the vectorized
+    derivatives of the spam vector with respect to a single
+    parameter, matching the format expected from the spam vectors's
+    `deriv_wrt_params` method.
+
+    Parameters
+    ----------
+    spamvec : SPAMVec
+        The spam vector object to compute a Jacobian for.
+        
+    eps : float, optional
+        The finite difference step to use.
+
+    Returns
+    -------
+    numpy.ndarray
+        An M by N matrix where M is the number of gate elements and
+        N is the number of gate parameters. 
+    """
+    dim = spamvec.get_dimension()
+    spamvec2 = spamvec.copy()
+    p = spamvec.to_vector()
+    fd_deriv = _np.empty((dim,spamvec.num_params()), 'd') #assume real (?)
+
+    for i in range(spamvec.num_params()):
+        p_plus_dp = p.copy()
+        p_plus_dp[i] += eps
+        spamvec2.from_vector(p_plus_dp)
+        fd_deriv[:,i:i+1] = (spamvec2-spamvec)/eps
+
+    fd_deriv.shape = [dim,spamvec.num_params()]
+    return fd_deriv
+
+
+def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
+    """
+    Checks the `deriv_wrt_params` method of a SPAMVec object.
+
+    This routine is meant to be used as an aid in testing and debugging
+    SPAMVec classes by comparing the finite-difference Jacobian that
+    *should* be returned by `spamvec.deriv_wrt_params` with the one that
+    actually is.  A ValueError is raised if the two do not match.
+
+    Parameters
+    ----------
+    spamvec : SPAMVec
+        The gate object to test.
+
+    deriv_to_check : numpy.ndarray or None, optional
+        If not None, the Jacobian to compare against the finite difference
+        result.  If None, `spamvec.deriv_wrt_parms()` is used.  Setting this
+        argument can be useful when the function is called *within* a Gate
+        class's `deriv_wrt_params()` method itself as a part of testing.
+        
+    eps : float, optional
+        The finite difference step to use.
+
+    Returns
+    -------
+    None
+    """
+    fd_deriv = finite_difference_deriv_wrt_params(spamvec, eps)
+    if deriv_to_check is None:
+        deriv_to_check = spamvec.deriv_wrt_params()
+
+    #print("Deriv shapes = %s and %s" % (str(fd_deriv.shape),
+    #                                    str(deriv_to_check.shape)))
+    #print("finite difference deriv = \n",fd_deriv)
+    #print("deriv_wrt_params deriv = \n",deriv_to_check)
+    #print("deriv_wrt_params - finite diff deriv = \n",
+    #      deriv_to_check - fd_deriv)
+    
+    d2 = spamvec.dim
+    for i in range(deriv_to_check.shape[0]):
+        for j in range(deriv_to_check.shape[1]):
+            diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])
+            if diff > 5*eps:
+                print("deriv_chk_mismatch: (%d,%d): %g (comp) - %g (fd) = %g" %
+                      (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff))
+
+    if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
+        raise ValueError("Failed check of deriv_wrt_params:\n" +
+                         " norm diff = %g" % 
+                         _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
 class SPAMVec(object):
@@ -289,7 +392,10 @@ class SPAMVec(object):
                     raise ValueError("%s is 2-dimensional but 2nd dim != 1" % V)
 
                 typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
-                vector = _np.array(V, typ) #vec is already a 2-D column vector
+                try:
+                    vector = _np.array(V, typ) #vec is already a 2-D column vector
+                except TypeError:
+                    raise ValueError("%s doesn't look like an array/list" % V)
             else:
                 typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
                 vector = _np.array(V, typ)[:,None] # make into a 2-D column vec
@@ -483,7 +589,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
 
     def __init__(self, vec):
         """
-        Initialize a FullyParameterizedSPAMOp object.
+        Initialize a FullyParameterizedSPAMVec object.
 
         Parameters
         ----------
@@ -684,7 +790,7 @@ class TPParameterizedSPAMVec(SPAMVec):
 
     def __init__(self, vec):
         """
-        Initialize a TPParameterizedSPAMOp object.
+        Initialize a TPParameterizedSPAMVec object.
 
         Parameters
         ----------
@@ -865,3 +971,361 @@ class TPParameterizedSPAMVec(SPAMVec):
 
     def __reduce__(self):
         return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
+
+
+
+class CPTPParameterizedSPAMVec(SPAMVec):
+    """
+    Encapsulates a SPAM vector that is parameterized through the Cholesky
+    decomposition of it's standard-basis representation as a density matrix
+    (not a Liouville vector).  The resulting SPAM vector thus represents a
+    positive density matrix, and additional constraints on the parameters
+    also guarantee that the trace == 1.  This SPAM vector is meant for
+    use with CPTP processes, hence the name.
+    """
+
+    def __init__(self, vec, basis, truncate=False):
+        """
+        Initialize a CPTPParameterizedSPAMVec object.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            a 1D numpy array representing the SPAM operation.  The
+            shape of this array sets the dimension of the SPAM op.
+
+        basis : {"std", "gm", "pp", "qt"} or Basis
+            The basis `vec` is in.  Needed because this parameterization
+            requires we construct the density matrix corresponding to
+            the Lioville vector `vec`.
+
+        trunctate : bool, optional
+            Whether or not a non-positive, trace=1 `vec` should
+            be truncated to force a successful construction.
+        """
+        vector = SPAMVec.convert_to_vector(vec)
+        basis = _basis.Basis(basis, int(round(_np.sqrt(len(vector)))))
+
+        self.basis = basis
+        self.basis_mxs = basis.get_composite_matrices()   #shape (len(vec), dmDim, dmDim)
+        self.basis_mxs = _np.rollaxis(self.basis_mxs,0,3) #shape (dmDim, dmDim, len(vec))
+        assert( self.basis_mxs.shape[-1] == len(vector) )
+
+        # set self.params and self.dmDim
+        self._set_params_from_vector(vector, truncate) 
+
+        #scratch space
+        self.Lmx = _np.zeros((self.dmDim,self.dmDim),'complex')
+
+        SPAMVec.__init__(self, vector)
+
+    def _set_params_from_vector(self, vector, truncate):
+        density_mx = _np.dot( self.basis_mxs, vector )
+        density_mx = density_mx.squeeze() 
+        dmDim = density_mx.shape[0]
+        assert(dmDim == density_mx.shape[1]), "Density matrix must be square!"
+
+        trc = _np.trace(density_mx)
+        assert(truncate or _np.isclose(trc, 1.0)), \
+            "`vec` must correspond to a trace-1 density matrix (truncate == False)!"
+            
+        if not _np.isclose(trc, 1.0): #truncate to trace == 1
+            density_mx -= _np.identity(dmDim, 'd') / dmDim * (trc - 1.0)
+
+        #push any slightly negative evals of density_mx positive
+        # so that the Cholesky decomp will work.
+        evals,U = _np.linalg.eig(density_mx)
+        Ui = _np.linalg.inv(U)
+    
+        assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+            "`vec` must correspond to a positive density matrix (truncate == False)!"
+    
+        pos_evals = evals.clip(1e-16,1e100)
+        density_mx = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+        try:
+            Lmx = _np.linalg.cholesky(density_mx)
+        except _np.linalg.LinAlgError: #Lmx not postitive definite?
+            pos_evals = evals.clip(1e-12,1e100) #try again with 1e-12
+            density_mx = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+            Lmx = _np.linalg.cholesky(density_mx)
+
+        #check TP condition: that diagonal els of Lmx squared add to 1.0
+        Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx)) # sum of magnitude^2 of all els
+        assert(_np.isclose( Lmx_norm, 1.0 )), \
+            "Cholesky decomp doesn't seem to preserve trace=1!"        
+        
+        self.dmDim = dmDim
+        self.params = _np.empty( dmDim**2 - 1, 'd')
+        for i in range(dmDim):
+            assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+            if i < dmDim-1: #don't parameterize the final diagonal el (TP constraint)
+                self.params[i*dmDim+i] = Lmx[i,i].real # / diagNorm == 1 as asserted above
+            for j in range(i):
+                self.params[i*dmDim+j] = Lmx[i,j].real
+                self.params[j*dmDim+i] = Lmx[i,j].imag
+        
+        
+
+    def _construct_vector(self):
+        dmDim = self.dmDim
+        
+        #  params is an array of length dmDim^2-1 that
+        #  encodes a lower-triangular matrix "Lmx" via:
+        #  Lmx[i,i] = params[i*dmDim + i] / param-norm  # i = 0...dmDim-2
+        #     *last diagonal el is given by sqrt(1.0 - sum(L[i,j]**2))
+        #  Lmx[i,j] = params[i*dmDim + j] + 1j*params[j*dmDim+i] (i > j)
+
+        param2Sum = _np.vdot(self.params, self.params)
+        lastDiagEl = _np.sqrt( max(0,1.0-param2Sum) ) #will be zero if params are too large
+        paramNorm = _np.sqrt( param2Sum + lastDiagEl**2 ) #norm of *all* Lmx els
+         # Note: parmNorm != 1 only iff params are too large and lastDiagEl == 0
+
+        for i in range(dmDim):
+            if i < dmDim-1:
+                self.Lmx[i,i] = self.params[i*dmDim + i] / paramNorm
+            else:
+                self.Lmx[i,i] = lastDiagEl # / paramNorm also fine since lastDiagEl == 0 when paramNorm != 1
+
+            for j in range(i):
+                self.Lmx[i,j] = (self.params[i*dmDim+j] + 1j*self.params[j*dmDim+i]) / paramNorm
+
+        Lmx_norm = _np.trace(_np.dot(self.Lmx.T.conjugate(), self.Lmx)) # sum of magnitude^2 of all els
+        assert(_np.isclose(Lmx_norm, 1.0)), "Violated trace=1 condition!"        
+                
+        #The (complex, Hermitian) density matrix is build by
+        # assuming Lmx is its Cholesky decomp, which makes
+        # the density matrix is pos-def.
+        density_mx = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+        assert( _np.isclose(_np.trace(density_mx), 1.0 )), "density matrix must be trace == 1"
+
+        # write density matrix in given basis: = sum_i alpha_i B_i
+        # ASSUME that basis is orthogonal, i.e. Tr(Bi^dag*Bj) = delta_ij
+        basis_mxs = _np.rollaxis(self.basis_mxs,2) #shape (dmDim, dmDim, len(vec))
+        vec = _np.array( [ _np.trace(_np.dot(M.T.conjugate(), density_mx)) for M in basis_mxs ] )
+
+        #for now, assume Liouville vector should always be real (TODO: add 'real' flag later?)
+        assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)
+        vec = _np.real(vec)
+        
+        self.base = vec[:,None] # so shape is (dim,1) - the convention for spam vectors
+        self.base.flags.writeable = False
+
+
+    def set_vector(self, vec):
+        """
+        Attempts to modify SPAMVec parameters so that the specified raw
+        SPAM vector becomes vec.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            A numpy array representing a SPAM vector, or a SPAMVec object.
+
+        Returns
+        -------
+        None
+        """
+        try:
+            self._set_params_from_vector(vec, truncate=False)
+        except AssertionError as e:
+            raise ValueError("Error initializing the parameters of this " +
+                         " CPTPParameterizedSPAMVec object: " + str(e))
+        
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroup.element
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        if typ == 'prep':
+            Si  = S.get_transform_matrix_inverse()
+            self.set_vector(_np.dot(Si, self))
+        elif typ == 'effect':
+            Smx = S.get_transform_matrix()
+            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+              #Evec^T --> ( Evec^T * S )^T
+        else:
+            raise ValueError("Invalid typ argument: %s" % typ)
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        if isinstance(amount,float) or _compat.isint(amount):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
+        self.set_vector(_np.dot(D,self)) 
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        assert(self.dmDim**2-1 == self.dim-1) #should at least be true without composite bases...
+        return self.dmDim**2-1
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return self.params
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.params[:] = v[:]
+        self._construct_vector()
+
+    def deriv_wrt_params(self):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        dmDim = self.dmDim
+        nP = len(self.params)
+        assert(nP == dmDim**2-1) #number of parameters
+        
+        # v_i = trace( B_i^dag * Lmx * Lmx^dag )
+        # d(v_i) = trace( B_i^dag * (dLmx * Lmx^dag + Lmx * (dLmx)^dag) )  #trace = linear so commutes w/deriv
+        #               / 
+        # where dLmx/d[ab] = {
+        #               \
+        L,Lbar = self.Lmx,self.Lmx.conjugate()
+        F1 = _np.tril(_np.ones((dmDim,dmDim),'d'))
+        F2 = _np.triu(_np.ones((dmDim,dmDim),'d'),1) * 1j
+        conj_basis_mxs = self.basis_mxs.conjugate()
+        
+          # Derivative of vector wrt params; shape == [vecLen,dmDim,dmDim] *not dealing with TP condition yet*
+          # (first get derivative assuming last diagonal el of Lmx *is* a parameter, then use chain rule)
+        dVdp  = _np.einsum('aml,mb,ab->lab', conj_basis_mxs, Lbar, F1) #only a >= b nonzero (F1)
+        dVdp += _np.einsum('mal,mb,ab->lab', conj_basis_mxs, L, F1)    # ditto
+        dVdp += _np.einsum('bml,ma,ab->lab', conj_basis_mxs, Lbar, F2) #only b > a nonzero (F2)
+        dVdp += _np.einsum('mbl,ma,ab->lab', conj_basis_mxs, L, F2.conjugate()) # ditto
+
+        dVdp.shape = [ dVdp.shape[0], nP+1 ] # jacobian with one extra param
+
+        #Now get jacobian of actual dmDim**2-1 params wrt the dmDim**2 params used above
+        # (the last of the dmDim**2 params == sqrt(1.0 - sum(param[i,j]**2)), and paramNorm may
+        #  come into play).  Denote the actual params "P" in variable names.
+        param2Sum = _np.vdot(self.params, self.params)
+        lastDiagEl = _np.sqrt( max(0,1.0-param2Sum) ) #will be zero if params are too large
+        dpdP = _np.identity(nP+1, 'd' )[:, 0:nP] # shape (dmDim^2, dmDim^2-1)
+        
+        if param2Sum < 1: # the nice, normal case, diagNorm == 1 and can be ignored
+            if _np.isclose(lastDiagEl,0): lastDiagEl = 1e-6 # regularize in boundary case
+            pre = -1.0 / lastDiagEl
+            for i in range(nP):
+                dpdP[-1,i] = pre * self.params[i]
+                  # dp_last / dP_ab = -Pab / sqrt(1.0-sum_ij(Pij**2))
+
+        else: # all p_ij params ==  P_ij / paramNorm = P_ij / sqrt(sum(P_xy**2))
+              # and so have derivs wrt *all* Pxy elements.  The last diagonal p_dd == 0
+            paramNorm = _np.sqrt( param2Sum ) #norm of *all* Lmx els (note lastDiagEl
+                                              # == 0 in this case and so isn't included in sqrt)
+            for ij in range(nP):
+                for kl in range(nP):
+                    if ij == kl:  # dp_ij / dP_ij = 1.0 / (sum(P_xy**2))^(1/2) - 0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_ij
+                                  #               = 1.0 / (sum(P_xy**2))^(1/2) - P_ij^2 / (sum(P_xy**2))^(3/2)
+                        dpdP[ij,ij] = 1.0/paramNorm - self.params[ij]**2 / paramNorm**3
+                    else:   # dp_ij / dP_kl = -0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_kl
+                            #               = - P_ij * P_kl / (sum(P_xy**2))^(3/2)
+                        dpdP[ij,kl] = - self.params[ij] * self.params[kl] / paramNorm**3
+            dpdP[-1,:] = 0 # dp_dd / dP_xy == 0 b/c dp_dd === 0
+
+        #Apply the chain rule to get dVdP:
+        dVdP = _np.dot(dVdp, dpdP) #shape (vecLen, nP) - the jacobian!
+        dVdp = dpdP = None # free memory!
+
+        assert(_np.linalg.norm(_np.imag(dVdP)) < IMAG_TOL)
+        return _np.real(dVdP)
+
+    
+    def copy(self):
+        """
+        Copy this SPAM vector.
+
+        Returns
+        -------
+        TPParameterizedSPAMVec
+            A copy of this SPAM operation.
+        """
+        copyOfMe = CPTPParameterizedSPAMVec(self.base, self.basis.copy())
+        copyOfMe.params = self.params.copy() #ensure params are exactly the same
+        return copyOfMe
+
+    def __str__(self):
+        s = "CPTP-Parameterized spam vector with length %d\n" % self.dim
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
+
+    def __reduce__(self):
+        return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self.__dict__)

@@ -28,6 +28,7 @@ from .gate import LindbladParameterizedGate
 from .spamvec import SPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
+from .spamvec import CPTPParameterizedSPAMVec
 from .spamvec import StaticSPAMVec
 
 from .gateset import GateSet
