@@ -192,6 +192,15 @@ class TestCoreMethods(AlgorithmsBase):
                                            probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                            verbosity=0) #uses cptp_penalty_factor
 
+        gs_single_lsgst_sp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                              probClipInterval=(-1e6,1e6), spam_penalty_factor=1.0,
+                                              verbosity=0) #uses spam_penalty_factor
+
+        gs_single_lsgst_cpsp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                                probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
+                                                spam_penalty_factor=1.0, verbosity=0) #uses both penalty factors
+
+        
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                              memLimit=CM + 1024**3)
