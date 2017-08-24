@@ -407,8 +407,8 @@ def generate_boxplot(subMxs,
                                    prec, hoverLabelFn)
         assert(fig is not None), "No data to display!"
         
-        fig['layout'].update(width=30*(nXs*nIXs+5)*scale,
-                             height=30*(nYs*nIYs+5)*scale)
+        fig['layout'].update(width=30*(nXs*nIXs+15)*scale,
+                             height=30*(nYs*nIYs+15)*scale)
         
     if xlabel: fig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})

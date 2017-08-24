@@ -33,9 +33,18 @@ th .errorbar {
     color: red;
 }
 
+/* Plotly mode-bar styles: only show download button */
 .modebar {
+    /* display: none; */
+}
+.modebar-btn {
     display: none;
 }
+.modebar-btn[data-title="Download plot as a png"] {
+    display: inline;
+}
+
+
 
 .katex {
     font-size: 1em !important;
