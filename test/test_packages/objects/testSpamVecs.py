@@ -64,7 +64,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         #Nice cases - when parameters are small
         nRandom = 1000
-        for randvec in random((nRandom,3)):
+        for randvec in random((nRandom,4)):
             r = 2*(randvec-0.5)
             vec.from_vector(r)
             evs = analyze(vec)
@@ -74,7 +74,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         #Mean cases - when parameters are large
         nRandom = 1000
-        for randvec in random((nRandom,3)):
+        for randvec in random((nRandom,4)):
             r = 10*(randvec-0.5)
             vec.from_vector(r)
             evs = analyze(vec)

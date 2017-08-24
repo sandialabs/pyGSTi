@@ -206,7 +206,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
                 print("deriv_chk_mismatch: (%d,%d): %g (comp) - %g (fd) = %g" %
                       (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff))
 
-    if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
+    if _np.linalg.norm(fd_deriv - deriv_to_check) > 100*eps:
         raise ValueError("Failed check of deriv_wrt_params:\n" +
                          " norm diff = %g" % 
                          _np.linalg.norm(fd_deriv - deriv_to_check))
@@ -1052,14 +1052,13 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         #check TP condition: that diagonal els of Lmx squared add to 1.0
         Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx)) # sum of magnitude^2 of all els
         assert(_np.isclose( Lmx_norm, 1.0 )), \
-            "Cholesky decomp doesn't seem to preserve trace=1!"        
+            "Cholesky decomp didn't preserve trace=1!"        
         
         self.dmDim = dmDim
-        self.params = _np.empty( dmDim**2 - 1, 'd')
+        self.params = _np.empty( dmDim**2, 'd')
         for i in range(dmDim):
             assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
-            if i < dmDim-1: #don't parameterize the final diagonal el (TP constraint)
-                self.params[i*dmDim+i] = Lmx[i,i].real # / diagNorm == 1 as asserted above
+            self.params[i*dmDim+i] = Lmx[i,i].real # / paramNorm == 1 as asserted above
             for j in range(i):
                 self.params[i*dmDim+j] = Lmx[i,j].real
                 self.params[j*dmDim+i] = Lmx[i,j].imag
@@ -1075,17 +1074,11 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         #     *last diagonal el is given by sqrt(1.0 - sum(L[i,j]**2))
         #  Lmx[i,j] = params[i*dmDim + j] + 1j*params[j*dmDim+i] (i > j)
 
-        param2Sum = _np.vdot(self.params, self.params)
-        lastDiagEl = _np.sqrt( max(0,1.0-param2Sum) ) #will be zero if params are too large
-        paramNorm = _np.sqrt( param2Sum + lastDiagEl**2 ) #norm of *all* Lmx els
-         # Note: parmNorm != 1 only iff params are too large and lastDiagEl == 0
+        param2Sum = _np.vdot(self.params, self.params) #or "dot" would work, since params are real
+        paramNorm = _np.sqrt( param2Sum ) #also the norm of *all* Lmx els
 
         for i in range(dmDim):
-            if i < dmDim-1:
-                self.Lmx[i,i] = self.params[i*dmDim + i] / paramNorm
-            else:
-                self.Lmx[i,i] = lastDiagEl # / paramNorm also fine since lastDiagEl == 0 when paramNorm != 1
-
+            self.Lmx[i,i] = self.params[i*dmDim + i] / paramNorm
             for j in range(i):
                 self.Lmx[i,j] = (self.params[i*dmDim+j] + 1j*self.params[j*dmDim+i]) / paramNorm
 
@@ -1205,8 +1198,8 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         int
            the number of independent parameters.
         """
-        assert(self.dmDim**2-1 == self.dim-1) #should at least be true without composite bases...
-        return self.dmDim**2-1
+        assert(self.dmDim**2 == self.dim) #should at least be true without composite bases...
+        return self.dmDim**2
 
 
     def to_vector(self):
@@ -1252,7 +1245,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         """
         dmDim = self.dmDim
         nP = len(self.params)
-        assert(nP == dmDim**2-1) #number of parameters
+        assert(nP == dmDim**2) #number of parameters
         
         # v_i = trace( B_i^dag * Lmx * Lmx^dag )
         # d(v_i) = trace( B_i^dag * (dLmx * Lmx^dag + Lmx * (dLmx)^dag) )  #trace = linear so commutes w/deriv
@@ -1271,35 +1264,25 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         dVdp += _np.einsum('bml,ma,ab->lab', conj_basis_mxs, Lbar, F2) #only b > a nonzero (F2)
         dVdp += _np.einsum('mbl,ma,ab->lab', conj_basis_mxs, L, F2.conjugate()) # ditto
 
-        dVdp.shape = [ dVdp.shape[0], nP+1 ] # jacobian with one extra param
+        dVdp.shape = [ dVdp.shape[0], nP ] # jacobian with respect to "p" params,
+                            # which don't include normalization for TP-constraint
 
-        #Now get jacobian of actual dmDim**2-1 params wrt the dmDim**2 params used above
-        # (the last of the dmDim**2 params == sqrt(1.0 - sum(param[i,j]**2)), and paramNorm may
-        #  come into play).  Denote the actual params "P" in variable names.
+        #Now get jacobian of actual params wrt the params used above. Denote the actual
+        # params "P" in variable names, so p_ij = P_ij / sqrt(sum(P_xy**2))
         param2Sum = _np.vdot(self.params, self.params)
-        lastDiagEl = _np.sqrt( max(0,1.0-param2Sum) ) #will be zero if params are too large
-        dpdP = _np.identity(nP+1, 'd' )[:, 0:nP] # shape (dmDim^2, dmDim^2-1)
+        paramNorm = _np.sqrt( param2Sum ) #norm of *all* Lmx els (note lastDiagEl
+        dpdP = _np.identity(nP, 'd' )
         
-        if param2Sum < 1: # the nice, normal case, diagNorm == 1 and can be ignored
-            if _np.isclose(lastDiagEl,0): lastDiagEl = 1e-6 # regularize in boundary case
-            pre = -1.0 / lastDiagEl
-            for i in range(nP):
-                dpdP[-1,i] = pre * self.params[i]
-                  # dp_last / dP_ab = -Pab / sqrt(1.0-sum_ij(Pij**2))
-
-        else: # all p_ij params ==  P_ij / paramNorm = P_ij / sqrt(sum(P_xy**2))
-              # and so have derivs wrt *all* Pxy elements.  The last diagonal p_dd == 0
-            paramNorm = _np.sqrt( param2Sum ) #norm of *all* Lmx els (note lastDiagEl
-                                              # == 0 in this case and so isn't included in sqrt)
-            for ij in range(nP):
-                for kl in range(nP):
-                    if ij == kl:  # dp_ij / dP_ij = 1.0 / (sum(P_xy**2))^(1/2) - 0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_ij
-                                  #               = 1.0 / (sum(P_xy**2))^(1/2) - P_ij^2 / (sum(P_xy**2))^(3/2)
-                        dpdP[ij,ij] = 1.0/paramNorm - self.params[ij]**2 / paramNorm**3
-                    else:   # dp_ij / dP_kl = -0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_kl
-                            #               = - P_ij * P_kl / (sum(P_xy**2))^(3/2)
-                        dpdP[ij,kl] = - self.params[ij] * self.params[kl] / paramNorm**3
-            dpdP[-1,:] = 0 # dp_dd / dP_xy == 0 b/c dp_dd === 0
+        # all p_ij params ==  P_ij / paramNorm = P_ij / sqrt(sum(P_xy**2))
+        # and so have derivs wrt *all* Pxy elements.
+        for ij in range(nP):
+            for kl in range(nP):
+                if ij == kl:  # dp_ij / dP_ij = 1.0 / (sum(P_xy**2))^(1/2) - 0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_ij
+                              #               = 1.0 / (sum(P_xy**2))^(1/2) - P_ij^2 / (sum(P_xy**2))^(3/2)
+                    dpdP[ij,ij] = 1.0/paramNorm - self.params[ij]**2 / paramNorm**3
+                else:   # dp_ij / dP_kl = -0.5 * P_ij / (sum(P_xy**2))^(3/2) * 2*P_kl
+                        #               = - P_ij * P_kl / (sum(P_xy**2))^(3/2)
+                    dpdP[ij,kl] = - self.params[ij] * self.params[kl] / paramNorm**3
 
         #Apply the chain rule to get dVdP:
         dVdP = _np.dot(dVdp, dpdP) #shape (vecLen, nP) - the jacobian!

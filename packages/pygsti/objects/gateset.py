@@ -419,7 +419,7 @@ class GateSet(object):
         typ = parameterization_type
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
-        #TESTING: rtyp = "CPTP" if typ in ("H+S","S") else typ
+        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
         etyp = "static" if typ == "static" else "full"
 
         basis = self.basis
