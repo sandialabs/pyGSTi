@@ -139,28 +139,30 @@ class DataComparator():
         worst_strings = sorted(worst_strings, key=lambda x: x[1])[:number]
         return worst_strings
             
-    def report(self,confidence_level=0.95):
+    def report(self,confidence_level=0.95,verbosity=1):
         single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
         number_of_single_thresh_violators = _np.sum(_np.where(self.llrVals>single_string_thresh,1,0))
         composite_thresh = find_thresh(confidence_level,1,self.num_strs*self.dof)
         composite_score = _np.sum(self.llrVals)
         
-        print("Consistency report- datasets are inconsistent at given confidence level if EITHER of the following scores report inconsistency.")
-        print()
-        print("Threshold for individual gatestring scores is {0}".format(single_string_thresh))
-        if number_of_single_thresh_violators > 0:
-            print("As measured by worst-performing gate strings, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-            print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_single_thresh_violators))
-        else:
-            print("As measured by worst-performing gate strings, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-            print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_single_thresh_violators))
-        print()
-        print("Threshold for sum of gatestring scores is {0}.".format(composite_thresh))
-        if composite_score > composite_thresh:
-            print("As measured by sum of gatestring scores, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        else:
-            print("As measured by sum of gatestring scores, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
-        print("Total loglikelihood is {0}".format(composite_score))
+        if verbosity > 0:
+        
+            print("Consistency report- datasets are inconsistent at given confidence level if EITHER of the following scores report inconsistency.")
+            print()
+            print("Threshold for individual gatestring scores is {0}".format(single_string_thresh))
+            if number_of_single_thresh_violators > 0:
+                print("As measured by worst-performing gate strings, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
+                print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_single_thresh_violators))
+            else:
+                print("As measured by worst-performing gate strings, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
+                print("{0} gate string(s) have loglikelihood scores greater than the threshold.".format(number_of_single_thresh_violators))
+            print()
+            print("Threshold for sum of gatestring scores is {0}.".format(composite_thresh))
+            if composite_score > composite_thresh:
+                print("As measured by sum of gatestring scores, data sets are INCONSISTENT at the {0}% confidence level.".format(confidence_level*100))
+            else:
+                print("As measured by sum of gatestring scores, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
+            print("Total loglikelihood is {0}".format(composite_score))
         
         self.single_string_thresh = single_string_thresh
         self.number_of_single_thresh_violators = number_of_single_thresh_violators
