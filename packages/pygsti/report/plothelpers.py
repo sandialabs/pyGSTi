@@ -391,6 +391,7 @@ def _eformat(f, prec):
     Formatting routine for writing compact representations of
     numbers in plot boxes
     """
+    if _np.isnan(f): return "" #show NAN as blanks
     if prec == 'compact' or prec == 'compacthp':
         if f < 0:
             return "-" + _eformat(-f,prec)

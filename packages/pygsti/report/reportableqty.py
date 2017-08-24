@@ -77,11 +77,15 @@ class ReportableQty(object):
         # log(1 + x) ~ x
         # x + dx        
         # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
+        v = self.value
+        if _np.any(_np.isreal(v)) and _np.any(v < 0):
+            v = v.astype(complex) # so logarithm can be complex
+
         if self.has_eb():
-            return ReportableQty( _np.log(self.value), _np.log(self.value + self.errbar) - _np.log(self.value),
+            return ReportableQty( _np.log(v), _np.log(v + self.errbar) - _np.log(v),
                                   self.nonMarkovianEBs)
         else:
-            return ReportableQty( _np.log(self.value) )
+            return ReportableQty( _np.log(v) )
 
     def real(self):
         """ Returns a ReportableQty that is the real part of this one."""
@@ -93,9 +97,9 @@ class ReportableQty(object):
     def imag(self):
         """ Returns a ReportableQty that is the imaginary part of this one."""
         if self.has_eb():
-            return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
+            return ReportableQty( _np.imag(self.value), _np.imag(self.errbar), self.nonMarkovianEBs)
         else:
-            return ReportableQty( _np.real(self.value) )
+            return ReportableQty( _np.imag(self.value) )
 
     def reshape(self, *args):
         """ Returns a ReportableQty whose underlying values are reshaped."""

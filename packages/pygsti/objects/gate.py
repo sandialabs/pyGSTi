@@ -149,9 +149,9 @@ def convert(gate, toType, basis):
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+        The basis for `gate`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
 
     Returns
     -------
@@ -2452,18 +2452,23 @@ class LindbladParameterizedGate(GateMatrix):
     
                 if self.cptp:
                     #  otherParams is an array of length (bs-1)*(bs-1) that
-                    #  encodes a lower-triangular matrix "Lmx" with positive (real)
-                    #  elements along its diagonal via:
-                    #  Lmx[i,i] = otherParams[i,i]**2  (so it's positive)
+                    #  encodes a lower-triangular matrix "Lmx" via:
+                    #  Lmx[i,i] = otherParams[i,i]
                     #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
                     for i in range(bsO-1):
-                        self.Lmx[i,i] = otherParams[i,i]
+                        self.Lmx[i,i] = otherParams[i,i]**2
                         for j in range(i):
                             self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
             
                     #The matrix of (complex) "other"-coefficients is build by
-                    # assuming Lmx is its Cholesky decomp, which since Lmx has
-                    # positive diagonal elements means otherCoeffs is pos-def.
+                    # assuming Lmx is its Cholesky decomp; means otherCoeffs
+                    # is pos-def.
+
+                    # NOTE that the Cholesky decomp with all positive real diagonal
+                    # elements is *unique* for a given positive-definite otherCoeffs
+                    # matrix, but we don't care about this uniqueness criteria and so
+                    # the diagonal els of Lmx can be negative and that's fine -
+                    # otherCoeffs will still be posdef.
                     otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
     
                     #DEBUG - test for pos-def

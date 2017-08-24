@@ -6,7 +6,7 @@ Quantities which are *gauge-invariant* are the most reliable means of assessing 
 ### Eigenvalues of estimated gates: 
 The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.
 @@code
-ws.GateEigenvalueTable(gs_final, gs_target, cri, display=('evals','log-evals'))
+ws.GateEigenvalueTable(gs_final, gs_target, cri, display=('evals','target','log-evals'), virtual_gates=germs)
 
 @@markdown
 ### Gram Matrix Eigenvalues: 

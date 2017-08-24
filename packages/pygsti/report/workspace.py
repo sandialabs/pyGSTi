@@ -282,6 +282,7 @@ class Workspace(object):
 
           # Spam & Gates vs. a target
         self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
+        self.GatesetVsTargetTable = makefactory(_wt.GatesetVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
@@ -314,7 +315,8 @@ class Workspace(object):
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
         self.GramMatrixBarPlot = makefactory(_wp.GramMatrixBarPlot)
         self.FitComparisonBarPlot = makefactory(_wp.FitComparisonBarPlot)
-        self.DatasetComparisonPlot = makefactory(_wp.DatasetComparisonPlot)
+        self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
+        self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 
         

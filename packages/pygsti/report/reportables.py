@@ -162,6 +162,7 @@ def gate_quantity(fnOfGate, eps=FINITE_DIFF_EPS, verbosity=0):
 
     return compute_quantity
 
+
 @_tools.parameterized
 def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of a gateset. """
@@ -178,6 +179,50 @@ def gateset_quantity(fnOfGateSet, eps=FINITE_DIFF_EPS, verbosity=0):
         nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
         df, f0 = confidenceRegionInfo.get_gateset_fn_confidence_interval(
             fnOfGateSet, eps, returnFnVal=True, verbosity=verbosity)
+
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
+
+    return compute_quantity
+
+
+@_tools.parameterized
+def gatestring_quantity(fnOfGatestringAndSet, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of a GateString and a GateSet. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
+    @_functools.wraps(fnOfGatestringAndSet)
+    def compute_quantity(gatestring, gateset, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return _make_reportable_qty_or_dict( fnOfGatestringAndSet(gatestring, gateset) )
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gateset.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
+        df, f0 = confidenceRegionInfo.get_gatestring_fn_confidence_interval(
+            fnOfGatestringAndSet, gatestring, eps, returnFnVal=True, verbosity=verbosity)
+
+        return _make_reportable_qty_or_dict(f0, df, nmEBs)
+
+    return compute_quantity
+
+@_tools.parameterized
+def gatestrings_quantity(fnOfGatestringAndSets, eps=FINITE_DIFF_EPS, verbosity=0):
+    """ For constructing a ReportableQty from a function of two GateSets and a GateString. """
+    # Since smart_cached is unparameterized, it needs no following parens
+    @_smart_cached # nested decorators = decOut(decIn(f(x)))
+    @_functools.wraps(fnOfGatestringAndSets)
+    def compute_quantity(gatestring, gatesetA, gatesetB, confidenceRegionInfo=None):
+        if confidenceRegionInfo is None: # No Error bars
+            return _make_reportable_qty_or_dict( fnOfGatestringAndSets(gatestring, gatesetA, gatesetB) )
+        # make sure the gateset we're given is the one used to generate the confidence region
+        if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
+            raise ValueError("GateSet quantity confidence region is being requested for " +
+                             "a different gateset than the given confidenceRegionInfo")
+        nmEBs = bool(confidenceRegionInfo.get_errobar_type() == "non-markovian")
+        curriedFnOfGateString = _functools.partial(fnOfGatestringAndSets, gatesetB=gatesetB)
+        df, f0 = confidenceRegionInfo.get_gatestring_fn_confidence_interval(
+            curriedFnOfGateString, gatestring, eps, returnFnVal=True, verbosity=verbosity)
 
         return _make_reportable_qty_or_dict(f0, df, nmEBs)
 
@@ -233,6 +278,17 @@ def choi_trace(gate, mxBasis):
 @gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def eigenvalues(gate, mxBasis):
     return _np.linalg.eigvals(gate)
+
+@gatestring_quantity() # This function changes arguments to (gatestring, gateset, confidenceRegionInfo)
+def gatestring_eigenvalues(gatestring, gateset):
+    return _np.linalg.eigvals(gateset.product(gatestring))
+
+@gatestrings_quantity() # This function changes arguments to (gatestring, gatesetA, gatesetB, confidenceRegionInfo)
+def rel_gatestring_eigenvalues(gatestring, gatesetA, gatesetB):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
+    return _np.linalg.eigvals(rel_gate)
 
 #@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
 def decomp_angle(gate):
@@ -799,7 +855,7 @@ def gates_quantity(fnOfGates, eps=FINITE_DIFF_EPS, verbosity=0):
         A = gatesetA.gates[gateLabel]
         B = gatesetB.gates[gateLabel]
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfGates(A, B, mxBasis))
+            return _make_reportable_qty_or_dict( fnOfGates(A, B, mxBasis) )
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
@@ -849,9 +905,41 @@ def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.jtracedist(A, B, mxBasis)
 
+try:
+    import cvxpy as _cvxpy
+    @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+    def half_diamond_norm(A, B, mxBasis):
+        return 0.5 * _tools.diamonddist(A, B, mxBasis)
+except ImportError:
+    def half_diamond_norm(gatesetA, gatesetB, gatelabel, confidenceRegionInfo):
+        return ReportableQty(_np.nan) # report NAN for diamond norms
+
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
-def half_diamond_norm(A, B, mxBasis):
-    return 0.5 * _tools.diamonddist(A, B, mxBasis)
+def unitarity_infidelity(A, B, mxBasis):
+    """ Returns 1 - sqrt(U), where U is the unitarity of A*B^{-1} """
+    from ..extras.rb import rbutils as _rbutils
+    return 1.0 - _np.sqrt( _rbutils.unitarity( _np.dot(A, _np.linalg.inv(B)), mxBasis) )
+
+@gate_quantity() # This function changes arguments to (gateset, gateLabel, confidenceRegionInfo)
+def gaugeinv_infidelity(gate, mxBasis):
+    """ 
+    Returns gauge-invariant "version" of the unitary fidelity in which
+    the unitarity is replaced with the gauge-invariant quantity
+    `(lambda^dagger lambda - 1) / (d**2 - 1)`, where `lambda` is the spectrum 
+    of A, which equals the unitarity in at least one particular gauge.
+    """
+    d2 = gate.shape[0]
+    lmb = _np.linalg.eigvals(gate)
+    Uproxy = (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
+    return 1.0 - _np.sqrt( Uproxy )
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def avg_gate_infidelity(A, B, mxBasis):
+    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
+    d = _np.sqrt(A.shape[0])
+    from ..extras.rb import rbutils as _rbutils
+    return _rbutils.average_gate_infidelity(A,B, d, mxBasis)
+
 
 @gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
 def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
@@ -890,6 +978,45 @@ def rel_logTiG_eigvals(A, B, mxBasis):
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate)
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def rel_gate_eigenvalues(A, B, mxBasis):
+    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
+    return _np.linalg.eigvals(rel_gate)
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def logTiG_and_projections(A, B, mxBasis):
+    ret = {}
+    ret['error generator'] = \
+        _tools.error_generator(A, B, mxBasis, "logTiG")
+    ret['hamiltonian projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "hamiltonian",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    ret['stochastic projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "stochastic",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    return ret
+
+
+@gates_quantity() # This function changes arguments to (gatesetA, gatesetB, gateLabel, confidenceRegionInfo)
+def logGmlogT_and_projections(A, B, mxBasis):
+    ret = {}
+    ret['error generator'] = \
+        _tools.error_generator(A, B, mxBasis, "logG-logT")
+    ret['hamiltonian projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "hamiltonian",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    ret['stochastic projections'] = \
+        _tools.std_errgen_projections(
+            ret['error generator'], "stochastic",
+            mxBasis.name, mxBasis) # mxBasis.name because projector dim is not the same as gate dim
+    return ret
+
+
+
 
 @gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
 def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but must be "gatsetB" b/c of decorator coding...
@@ -960,6 +1087,16 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
     return decomp
 
 
+@gatesets_quantity() # This function changes arguments to (gatesetA, gatesetB, confidenceRegionInfo)
+def average_gateset_infidelity(gatesetA, gatesetB): # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
+    from ..extras.rb import rbutils as _rbutils
+    return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
+
+@gatesets_quantity()
+def predicted_rb_number(gatesetA, gatesetB):
+    from ..extras.rb import rbutils as _rbutils
+    return _rbutils.predicted_RB_number(gatesetA, gatesetB)
+
 @_tools.parameterized
 def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
     """ For constructing a ReportableQty from a function of two vectors and a basis."""
@@ -977,7 +1114,7 @@ def vectors_quantity(fnOfVectors, eps=FINITE_DIFF_EPS, verbosity=0):
             B = gatesetB.effects[label]
 
         if confidenceRegionInfo is None: # No Error bars
-            return ReportableQty(fnOfVectors(A, B, mxBasis))
+            return _make_reportable_qty_or_dict( fnOfVectors(A, B, mxBasis) )
 
         # make sure the gateset we're given is the one used to generate the confidence region
         if(gatesetA.frobeniusdist(confidenceRegionInfo.get_gateset()) > 1e-6):
