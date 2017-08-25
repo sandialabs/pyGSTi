@@ -1130,11 +1130,12 @@ SPAMLABEL 1 = rho remainder
             static_spamvec.depolarize(0.9)
 
         #Test conversions to own type (not tested elsewhere)
-        conv = pygsti.obj.spamvec.convert(full_spamvec, "full")
-        conv = pygsti.obj.spamvec.convert(tp_spamvec, "TP")
-        conv = pygsti.obj.spamvec.convert(static_spamvec, "static")
+        basis = pygsti.obj.Basis("pp",2)
+        conv = pygsti.obj.spamvec.convert(full_spamvec, "full", basis)
+        conv = pygsti.obj.spamvec.convert(tp_spamvec, "TP", basis)
+        conv = pygsti.obj.spamvec.convert(static_spamvec, "static", basis)
         with self.assertRaises(ValueError):
-            pygsti.obj.spamvec.convert(full_spamvec, "foobar")
+            pygsti.obj.spamvec.convert(full_spamvec, "foobar", basis)
 
             
 
