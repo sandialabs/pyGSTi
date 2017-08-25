@@ -495,10 +495,11 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
                 basis = _build_composite_basis(matrices) # really list of Bases or basis tuples
                 blockMatrices = basis._blockMatrices
                 name          = basis.name
-            elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-                blockMatrices = [matrices]                      # Then nest
-            else:
-                blockMatrices = matrices                        # Given as nested lists
+            elif isinstance(first, list) or \
+                 (isinstance(first, _np.ndarray) and first.ndim == 3): # els of matrices are sub-bases, so
+                blockMatrices = matrices                              # set directly equal to blockMatrices
+            elif isinstance(first, _np.ndarray) and first.ndim ==2:  # matrices is a list of matrices 
+                blockMatrices = [matrices]                           # so set as the first (& only) sub-basis-block
         else:
             blockMatrices = []
         if name is None:

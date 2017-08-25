@@ -353,18 +353,23 @@ class BasisBaseTestCase(BaseTestCase):
                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
             ])
 
-        std2x2Matrices = [
-                np.array([[1, 0],
-                          [0, 0]]),
-                np.array([[0, 1],
-                          [0, 0]]),
-                np.array([[0, 0],
-                          [1, 0]]),
-                np.array([[0, 0],
-                          [0, 1]])]
+        std2x2Matrices = np.array([
+            [[1, 0],
+             [0, 0]],
+            
+            [[0, 1],
+             [0, 0]],
+            
+            [[0, 0],
+             [1, 0]],
+            
+            [[0, 0],
+             [0, 1]]
+        ],'complex')
 
         empty = Basis(matrices=[])
         alt_standard = Basis(matrices=std2x2Matrices)
+        print("MXS = \n",alt_standard._matrices)
         alt_standard = Basis(matrices=std2x2Matrices,
                              name='std',
                              longname='Standard'
