@@ -49,9 +49,9 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_go_compare = pygsti.io.load_gateset(compare_files + "/lgst_go.gateset")
         gs_clgst_compare = pygsti.io.load_gateset(compare_files + "/clgst.gateset")
 
-        self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0)
-        self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0)
-        self.assertAlmostEqual( gs_clgst.frobeniusdist(gs_clgst_compare), 0)
+        self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0, places=5)
+        self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0, places=5)
+        self.assertAlmostEqual( gs_clgst.frobeniusdist(gs_clgst_compare), 0, places=5)
 
         #Check for error conditions
         with self.assertRaises(ValueError):
@@ -111,7 +111,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         #gs_lgst = pygsti.optimize_gauge(gs_lgst, "target", targetGateset=self.datagen_gateset, gateWeight=1.0, spamWeight=1.0) #DEPRECATED
         gs_lgst = pygsti.gaugeopt_to_target(gs_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
-        self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0)
+        self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0, places=4)
 
 
     def test_eLGST(self):
@@ -361,7 +361,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_mlegst_go = pygsti.optimize_gauge(gs_mlegst, 'target', targetGateset=gs_mle_compare, spamWeight=1.0) #DEPRECATED
         gs_mlegst_go = pygsti.gaugeopt_to_target(gs_mlegst, gs_mle_compare, {'spam':1.0}, checkJac=True)
 
-        self.assertAlmostEqual( gs_mlegst_go.frobeniusdist(gs_mle_compare), 0, places=5)
+        self.assertAlmostEqual( gs_mlegst_go.frobeniusdist(gs_mle_compare), 0, places=4)
 
     def test_LGST_1overSqrtN_dependence(self):
         my_datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
