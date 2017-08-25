@@ -16,8 +16,8 @@ def logl_confidence_region(gateset, dataset, confidenceLevel,
                            gatestring_list=None, probClipInterval=(-1e6,1e6),
                            minProbClip=1e-4, radius=1e-4, hessianProjection="std",
                            regionType="std", comm=None, memLimit=None,
-                           cptp_penalty_factor=None, distributeMethod="deriv",
-                           gateLabelAliases=None):
+                           cptp_penalty_factor=None, spam_penalty_factor=None,
+                           distributeMethod="deriv", gateLabelAliases=None):
 
     """
     Constructs a ConfidenceRegion given a gateset and dataset using the log-likelihood Hessian.
@@ -93,6 +93,10 @@ def logl_confidence_region(gateset, dataset, confidenceLevel,
         The CPTP penalty factor used in MLGST when computing error bars via
         linear-response.
 
+    spam_penalty_factor : float, optional
+        The SPAM penalty factor used in MLGST when computing error bars via
+        linear-response.
+
     distributeMethod : {"gatestrings", "deriv"}
         The distribute-method used in MLGST when computing error bars via
         linear-response.
@@ -126,6 +130,7 @@ def logl_confidence_region(gateset, dataset, confidenceLevel,
             'gateStringsToUse': gatestring_list,
             'maxiter': 10000, 'tol': 1e-10,
             'cptp_penalty_factor': cptp_penalty_factor,
+            'spam_penalty_factor': spam_penalty_factor,
             'minProbClip': minProbClip, 
             'probClipInterval': probClipInterval,
             'radius': radius,
