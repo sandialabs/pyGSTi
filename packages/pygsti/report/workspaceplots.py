@@ -2173,13 +2173,17 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         pVals_nz = _np.array([x for x in pVals if abs(x)>TOL])
         pVals0 = (len(pVals)-len(pVals_nz)) if log else dsc.pVals0
         llrVals = dsc.llrVals.astype('d')
-        
+
         if log:
-            minval = _np.floor(_np.log10(min(pVals_nz)))
-            maxval = _np.ceil(_np.log10(max(pVals_nz)))
-            thres = (maxval-minval)/(nbins-1) * (nbins-2)
-            lastBinCount = (_np.log10(pVals_nz)>thres).sum()
-             #Kenny: why use this as a normalization?  Is this correct?
+            if len(pVals_nz) == 0:
+                minval = maxval = thres = 0.0
+                lastBinCount = 0
+            else:
+                minval = _np.floor(_np.log10(min(pVals_nz)))
+                maxval = _np.ceil(_np.log10(max(pVals_nz)))
+                thres = (maxval-minval)/(nbins-1) * (nbins-2)
+                lastBinCount = (_np.log10(pVals_nz)>thres).sum()
+                #Kenny: why use this as a normalization?  Is this correct?
         else:
             minval = min(pVals)
             maxval = max(pVals)
