@@ -483,26 +483,29 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         minSol = _opt.minimize(call_objective_fn, x0,
                               method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                               callback = print_obj_func if bToStdout else None)
+        solnX = minSol.x
+        solnF = minSol.fun
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights, checkJac)
         #minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
         #                            max_nfev=maxfev, ftol=tol)
-        minSol,converged,msg = _opt.custom_leastsq(
+        solnX,converged,msg = _opt.custom_leastsq(
             call_objective_fn, jacobian, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=None, #no MPI for gauge opt yet...
             verbosity=printer.verbosity-2)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
+        solnF = call_objective_fn(solnX) if returnAll else None
     else:
         raise ValueError('Unknown algorithm inside of gauge opt: {}'.format(algorithm))
 
-    gaugeGroupEl.from_vector(minSol.x)
+    gaugeGroupEl.from_vector(solnX)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
 
     if returnAll:
-        return minSol.fun, gaugeMat, newGateset
+        return solnF, gaugeMat, newGateset
     else:  
         return newGateset
 
