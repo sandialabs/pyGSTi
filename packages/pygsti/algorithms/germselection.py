@@ -439,9 +439,10 @@ def calc_bulk_twirled_DDD(gateset, germsList, eps=1e-6, check=False,
     if germLengths is None:
         germLengths = _np.array([len(germ) for germ in germsList])
     twirledDeriv = bulk_twirled_deriv(gateset, germsList, eps, check, comm) / germLengths[:, None, None]
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+    nGerms, _, vec_gateset_dim = twirledDeriv.shape
+    twirledDerivDaggerDeriv = _np.zeros((nGerms, vec_gateset_dim, vec_gateset_dim), dtype=_np.complex)
+    for i in range(nGerms):
+        twirledDerivDaggerDeriv[i, :, :] = _np.dot(twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
     return twirledDerivDaggerDeriv
 
 
@@ -473,8 +474,8 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
-        combinedDDD = _np.einsum('i,ijk', weights,
-                                 derivDaggerDerivList[gateset_num])
+        combinedDDD = _np.squeeze(_np.tensordot(_np.expand_dims(weights, 1), derivDaggerDerivList[gateset_num], (0, 0)))
+        assert len(combinedDDD.shape) == 2
         sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
         observableEigenvals = sortedEigenvals[nGaugeParams:]
         score = (_scoring.list_score(observableEigenvals, scoreFunc)
