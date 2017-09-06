@@ -143,13 +143,29 @@ class DataComparator():
         composite_score = _np.sum(self.llrVals)
         k = self.num_strs*self.dof
         return (composite_score - k) / _np.sqrt(2*k)
-            
-    def report(self,confidence_level=0.95,verbosity=1):
-        single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
+#            
+#    def report(self,confidence_level=0.95,verbosity=1):
+#        single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)
+#        number_of_single_thresh_violators = _np.sum(_np.where(self.llrVals>single_string_thresh,1,0))
+#        composite_thresh = find_thresh(confidence_level,1,self.num_strs*self.dof)
+#        composite_score = _np.sum(self.llrVals)
+#        
+
+    def report(self,confidence_level=0.95,verbosity=1,aggregate_weight = 0.5):
+        assert aggregate_weight <= 1.
+        assert aggregate_weight >= 0.
+        single_weight = 1. - aggregate_weight
+        if single_weight == 0:
+            single_string_thresh = np.inf
+        else:
+            single_string_thresh = find_thresh(confidence_level,self.num_strs / single_weight,self.dof)
+        if aggregate_weight == 0:
+            composite_thresh = np.inf
+        else:
+            composite_thresh = find_thresh(confidence_level,1. / aggregate_weight,self.num_strs*self.dof)
         number_of_single_thresh_violators = _np.sum(_np.where(self.llrVals>single_string_thresh,1,0))
-        composite_thresh = find_thresh(confidence_level,1,self.num_strs*self.dof)
         composite_score = _np.sum(self.llrVals)
-        
+
         if verbosity > 0:
         
             print("Consistency report- datasets are inconsistent at given confidence level if EITHER of the following scores report inconsistency.")
