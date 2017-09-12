@@ -75,7 +75,7 @@ def randomID():
 
 def read_contents(filename):
     contents = None
-    with open(filename) as f:
+    with open(filename, encoding='utf-8') as f:
         contents = f.read()
         try: # to convert to unicode since we use unicode literals
             contents = contents.decode('utf-8')
