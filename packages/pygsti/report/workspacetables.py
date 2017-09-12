@@ -462,7 +462,8 @@ class GatesetVsTargetTable(WorkspaceTable):
         colHeadings = ('Metric', "Value")
         formatters  = (None,None)
 
-        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+        tooltips = colHeadings
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
     
         AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
         table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
@@ -1271,7 +1272,11 @@ class FitComparisonTable(WorkspaceTable):
         if NpByX is None:
             NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
 
-        table = _ReportTable(colHeadings, None)
+        tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
+                    'difference between observed logl and expected mean',
+                    'std deviation', 'number of std deviation', 'dataset dof',
+                    'number of gateset parameters', '1-5 star rating (like NetFlix)')
+        table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
         
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
             gstrs = gss.allstrs
