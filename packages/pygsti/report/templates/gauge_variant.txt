@@ -43,7 +43,7 @@ ws.GateEigenvalueTable(gs, gs_target, cri, display=('rel','log-rel'))
 These tables present different measures of distance or discrepancy from the GST estimate to the ideal target operations.
 
 @@code
-ws.GatesetVsTargetTable(gs, gs_target, cri)
+ws.GatesetVsTargetTable(gs, gs_target, clifford_compilation, cri)
 ws.GatesVsTargetTable(gs, gs_target, cri)
 
 @@markdown

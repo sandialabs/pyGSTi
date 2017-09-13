@@ -12,6 +12,7 @@ import scipy.stats        as _stats
 import scipy.linalg       as _spl
 
 from .. import algorithms as _alg
+from .. import construction as _cnst
 from .. import tools      as _tools
 from .. import objects    as _objs
 from . import reportables as _reportables
@@ -436,7 +437,7 @@ class ChoiTable(WorkspaceTable):
 
 
 class GatesetVsTargetTable(WorkspaceTable):
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+    def __init__(self, ws, gateset, targetGateset, clifford_compilation, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset (as a whole) to a target gateset
         using metrics that can be evaluatd for an entire gate set.
@@ -445,6 +446,11 @@ class GatesetVsTargetTable(WorkspaceTable):
         ----------
         gateset, targetGateset : GateSet
             The gate sets to compare
+
+        clifford_compilation : dict
+            A dictionary of gate sequences, one for each Clifford operation
+            in the Clifford group relevant to the gate set Hilbert space.  If 
+            None, then rows requiring a clifford compilation are omitted.
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -455,22 +461,34 @@ class GatesetVsTargetTable(WorkspaceTable):
         ReportTable
         """
         super(GatesetVsTargetTable,self).__init__(ws, self._create, gateset,
-                                                targetGateset, confidenceRegionInfo)
+                                                  targetGateset, clifford_compilation,
+                                                  confidenceRegionInfo)
     
-    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    def _create(self, gateset, targetGateset, clifford_compilation, confidenceRegionInfo):
     
         colHeadings = ('Metric', "Value")
         formatters  = (None,None)
-
+        
         tooltips = colHeadings
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
     
-        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
-        table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
+        pAGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Avg. primitive gate set infidelity", pAGsI), (None, 'Normal') )
 
-        RBnum = _reportables.predicted_rb_number(gateset, targetGateset, confidenceRegionInfo)
-        table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
-        
+        pRBnum = _reportables.predicted_rb_number(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Predicted primitive RB number", pRBnum), (None, 'Normal') )
+
+        if clifford_compilation:
+            clifford_gateset = _cnst.build_alias_gateset(gateset,clifford_compilation)
+            clifford_targetGateset = _cnst.build_alias_gateset(targetGateset,clifford_compilation)
+
+            #For clifford versions we don't have a confidence region - so no error bars
+            AGsI = _reportables.average_gateset_infidelity(clifford_gateset, clifford_targetGateset, None)
+            table.addrow(("Avg. clifford gate set infidelity", AGsI), (None, 'Normal') )
+    
+            RBnum = _reportables.predicted_rb_number(clifford_gateset, clifford_targetGateset, None)
+            table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
+
         table.finish()
         return table
 
