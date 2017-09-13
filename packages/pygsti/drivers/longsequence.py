@@ -658,6 +658,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
+                       gaugeOptSuite='varySpamWt', gaugeOptTarget=None,
                        comm=None, memLimit=None, advancedOptions=None,
                        output_pkl=None, verbosity=2):
 
@@ -714,6 +715,28 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate
 
+    gaugeOptSuite : str or dict, optional
+        Specifies which gauge optimizations to perform on each estimate.  An
+        string (see below) specifies a built-in set of gauge optimizations,
+        otherwise `gaugeOptSuite` should be a dictionary of gauge-optimization
+        parameter dictionaries, as specified by the `gaugeOptParams` argument 
+        of :func:`do_long_sequence_gst`.  The key names of `gaugeOptSuite` then
+        label the gauge optimizations within the resuling `Estimate` objects.
+        The built-in gauge optmization suites are:
+
+          - "single" : performs only a single "best guess" gauge optimization.
+          - "varySpam" : varies spam weight and toggles valid-SPAM penalty.
+          - "varySpamWt" : varies spam weight but no valid-SPAM penalty.
+          - "varyValidSpamWt" : varies spam weight with valid-SPAM penalty.
+          - "none" : no gauge optimizations are performed.
+
+    gaugeOptTarget : GateSet, optional
+        If not None, a gate set to be used as the "target" for gauge-
+        optimization (only).  This argument is useful when you want to 
+        gauge optimize toward something other than the *ideal* target gates
+        given by `targetGateFilenameOrSet`, which are used as the default when
+        `gaugeOptTarget` is None.
+
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
@@ -764,6 +787,48 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     else:
         ds = dataFilenameOrSet #assume a Dataset object
 
+
+    #Build ordered dict of gauge optimization parameters
+    if isinstance(gaugeOptSuite, dict):
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        for lbl, goparams in gaugeOptSuite.items():
+            gaugeOptSuite_dict[lbl] = goparams.copy()
+            gaugeOptSuite_dict[lbl].update( {'verbosity': printer-1 } )
+            
+    elif gaugeOptSuite == "single":
+        gaugeOptSuite_dict = _collections.OrderedDict(
+            [('single', {'itemWeights': {'gates':1, 'spam':1e-3},
+                         'verbosity': printer-1} )])
+        
+    elif gaugeOptSuite in ("varySpam", "varySpamWt", "varyValidSpamWt"):
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        if gaugeOptSuite == "varySpam": vSpam_range = [0,1]
+        elif gaugeOptSuite == "varySpamWt": vSpam_range = [0]
+        elif gaugeOptSuite == "varyValidSpamWt": vSpam_range = [1]
+
+        for vSpam in vSpam_range:
+            for spamWt in [1e-4,1e-1]:
+                lbl = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
+                gaugeOptSuite_dict[lbl] = {
+                    'itemWeights': {'gates':1, 'spam':spamWt},
+                    'validSpamPenalty': vSpam, 'verbosity': printer-1 }
+
+    elif gaugeOptSuite == "none":
+        gaugeOptSuite_dict = _collections.OrderedDict()
+
+    else:
+        raise ValueError("Invalid `gaugeOptSuite` argument: %s" % gaugeOptSuite)
+
+    if gaugeOptTarget is not None:
+        assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
+        for goparams in gaugeOptSuite_dict.values():
+            if 'targetGateset' in goparams:
+                _warnings.warn(("`gaugeOptTarget` argument is overriding"
+                                "user-defined targetGateset in gauge opt"
+                                "param dict(s)"))
+            goparams.update( {'targetGateset': gaugeOptTarget } )
+
+
     ret = None
     modes = modes.split(",")
     with printer.progress_logging(1):
@@ -799,29 +864,20 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            effectStrsListOrFilename, germsListOrFilename,
                                            maxLengths, False, advanced, comm, memLimit,
                                            None, printer-1)
-            
-            #Gauge optimize to a variety of spam weights
-            for vSpam in [1]:
-                for spamWt in [1e-4,1e-1]:
-                    goLabel = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
-                    tGO = _time.time()
-                    
-                    ret.estimates[est_label].add_gaugeoptimized(
-                        {'itemWeights': {'gates':1, 'spam':spamWt},
-                         'validSpamPenalty': vSpam, 'verbosity': printer-1},
-                        None, goLabel)
-                    printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
 
-                    #Gauge optimize data-scaled estimate also
-                    if est_label + ".robust" in ret.estimates:
-                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
-                        tGO = _time.time()
-                        ret.estimates[est_label + ".robust"].add_gaugeoptimized(
-                            {'itemWeights': {'gates':1, 'spam':spamWt},
-                             'validSpamPenalty': vSpam, 'verbosity': printer-1},
-                            None, goLabel)
-                        printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
+            #Gauge optimize to list of gauge optimization parametesr
+            for goLabel,goparams in gaugeOptSuite_dict.items():
+                printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
+                tGO = _time.time()
+                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel)
+                printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
+
+                #Gauge optimize data-scaled estimate also
+                if est_label + ".robust" in ret.estimates:
+                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
+                    tGO = _time.time()
+                    ret.estimates[est_label + ".robust"].add_gaugeoptimized(goparams, None, goLabel)
+                    printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
