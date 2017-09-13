@@ -132,8 +132,8 @@ thatOne G1 G2 * G3
 """#My Data file
 #Get string lookup data from the file test.dict
 ## Lookup = sip_test.dict
-## Columns = plus frequency, count total
-# OLD Columns = plus count, minus count
+## Columns = 0 frequency, count total
+# OLD Columns = 0 count, 1 count
 
 #empty string
 {}            1.0 100
@@ -169,7 +169,7 @@ G_my_x G_my_y 0.5 24.0
 
         datafile_test = \
 """#Data File with bad syntax
-## Columns = plus frequency, count total
+## Columns = 0 frequency, count total
 {}            1.0 100
 G1            0.0 100
 FooBar        0.4 100
@@ -181,7 +181,7 @@ G3            0.2 100
 
         datafile_test = \
 """#Data File with zero counts
-## Columns = plus frequency, count total
+## Columns = 0 frequency, count total
 {}            1.0 100
 G1            0.0 100
 G2            0   0
@@ -193,7 +193,7 @@ G3            0.2 100
 
         datafile_test = \
 """#Data File with bad columns
-## Columns = plus frequency, minus frequency
+## Columns = 0 frequency, 1 frequency
 {}            1.0 0.0
 G1            0.0 1.0
 G2            0   1.0
@@ -205,7 +205,7 @@ G3            0.2 0.8
 
         datafile_test = \
 """#Data File with bad frequency
-## Columns = plus frequency, count total
+## Columns = 1 frequency, count total
 {}            1.0 100
 G1            0.0 100
 G2            3.4 100
@@ -217,7 +217,7 @@ G3            0.2 100
 
         datafile_test = \
 """#Data File with bad counts
-## Columns = plus count, count total
+## Columns = 0 count, count total
 {}            30  100
 G1            10  100
 G2            0.2 100
@@ -229,7 +229,7 @@ G3            0.1 100
 
         datafile_test = \
 """#Data File with bad syntax
-## Columns = plus count, count total
+## Columns = 0 count, count total
 {xx}            10  100
 """
         f = open(temp_files + "/sip_test8.data","w")
@@ -241,7 +241,7 @@ G3            0.1 100
         multidatafile_test = \
 """#Multi Data File
 ## Lookup = sip_test.dict
-## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
 {}            30  100  20 200
 G1            10  100  10 200
 G2            20  100  5  200
@@ -274,7 +274,7 @@ G2            20  100
 
         multidatafile_test = \
 """#Multi Data File bad columns
-## Columns = ds1 plus frequency, ds1 minus frequency, ds2 plus count, ds2 count total
+## Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
 {}            0.3  0.4  20 200
 G1            0.1  0.5  10 200
 G2            0.2  0.3  5  200
@@ -285,7 +285,7 @@ G2            0.2  0.3  5  200
 
         multidatafile_test = \
 """#Multi Data File frequency out of range and count before frequency
-## Columns = ds1 count total, ds1 plus frequency, ds2 plus count, ds2 count total
+## Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
 {}            100  0.3  20 200
 G1            100  10   10 200
 G2            100  0.2  5  200
@@ -296,7 +296,7 @@ G2            100  0.2  5  200
 
         multidatafile_test = \
 """#Multi Data File count out of range
-## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
 {}            0.3  100  20 200
 G1            0.1   100  10 200
 G2            20  100  5  200
@@ -307,7 +307,7 @@ G2            20  100  5  200
 
         multidatafile_test = \
 """#Multi Data File with bad syntax
-## Columns = ds1 plus count, ds1 count total, ds2 plus count, ds2 count total
+## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
 {xxx}         0.3  100  20 200
 """
         f = open(temp_files + "/sip_test7.multidata","w")
@@ -434,7 +434,7 @@ DensityMx
 
 E
 StateVec
-0 1
+1 0
 
 #G1 = X(pi/2)
 G1
@@ -455,7 +455,7 @@ UnitaryMxExp
 pi/2      0
 
 
-SPAMLABEL plus = rho_up E
+SPAMLABEL 0 = rho_up E
 """
 
         gatesetfile_test3 = \
@@ -541,7 +541,7 @@ UnitaryMxExp
 0          0           0 1
 
 IDENTITYVEC 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-SPAMLABEL plus = rho_up E
+SPAMLABEL 00 = rho_up E
 """
 
 
@@ -604,7 +604,7 @@ SPAMLABEL plus = rho_up E
         self.assertArraysAlmostEqual(gs2.gates['G2'],rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.gates['G3'],rotXPi)
         self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs2.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
 
 
 

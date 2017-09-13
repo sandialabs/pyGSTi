@@ -227,7 +227,7 @@ class StdInputParser(object):
             labels" and whose values are lists if gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
         Returns
         -------
@@ -258,7 +258,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
             spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -299,7 +299,7 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = -1
+        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
                 spamLabel = colLabel[:-len(' count')]
@@ -315,9 +315,12 @@ class StdInputParser(object):
                 freqCols.append( (spamLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if 'plus' in spamLabels and 'minus' not in spamLabels:
-                spamLabels.append('minus')
-                impliedCountTotCol1Q = colLabels.index( 'count total' )
+            if '1' in spamLabels and '0' not in spamLabels:
+                spamLabels.append('0')
+                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
+            elif '0' in spamLabels and '1' not in spamLabels:
+                spamLabels.append('1')
+                impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
@@ -339,8 +342,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        if impliedCountTotCol1Q >= 0:
-            countDict['minus'] = colValues[impliedCountTotCol1Q] - countDict['plus']
+        if impliedCountTotCol1Q[1] >= 0:
+            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedSpamLabel == '0':
+                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            else:
+                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -395,7 +402,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
+            else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
             dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -472,10 +479,15 @@ class StdInputParser(object):
 
         for dsLabel,spamLabels in dsSpamLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if 'plus' in spamLabels and 'minus' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('minus')
+                if '1' in spamLabels and '0' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '0', iTotal) )
+                if '0' in spamLabels and '1' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('1')
+                    iTotal = colLabels.index( '%s count total' % dsLabel )
+                    impliedCounts1Q.append( (dsLabel, '1', iTotal) )
+
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
@@ -497,8 +509,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['minus'] = colValues[iTotCol] - countDicts[dsLabel]['plus']
+        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
+            if spamLabel == '0':
+                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            elif spamLabel == '1':
+                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
@@ -720,8 +736,8 @@ def read_gateset(filename):
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['plus'] = [ 'rho', 'E' ]
-        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        spam_labels['1'] = [ 'rho', 'E' ]
+        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
         # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 

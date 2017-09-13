@@ -1,3 +1,7 @@
+from copy import deepcopy as _deepcopy
+import pickle as _pickle
+import numpy as _np
+
 class ReportableQty(object):
     """
     Encapsulates a computed quantity and possibly its error bars,
@@ -33,8 +37,85 @@ class ReportableQty(object):
     def __repr__(self):
         return 'ReportableQty({})'.format(str(self))
 
-    def __getattr__(self, attr):
-        return getattr(self.value, attr)
+    def __add__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value + x, self.errbar, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value + x)
+
+    def __mul__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value * x, self.errbar * x, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value * x)
+
+    def __truediv__(self,x):
+        if self.has_eb():
+            return ReportableQty(self.value / x, self.errbar / x, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value / x)
+
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
+    def __copy__(self):
+        return ReportableQty(self.value, self.errbar)
+
+    def __deepcopy__(self, memo):
+        return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errbar, memo))
+
+    #def __getattr__(self, attr):
+        #print(self.value)
+        #return getattr(self.value, attr)
+
+    def log(self):
+        """ Returns a ReportableQty that is the logarithm of this one."""
+        # log(1 + x) ~ x
+        # x + dx        
+        # log(x + dx) = log(x(1 + dx/x)) = log x + log(1+dx/x) = log x + dx/x
+        v = self.value
+        if _np.any(_np.isreal(v)) and _np.any(v < 0):
+            v = v.astype(complex) # so logarithm can be complex
+
+        if self.has_eb():
+            return ReportableQty( _np.log(v), _np.log(v + self.errbar) - _np.log(v),
+                                  self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.log(v) )
+
+    def real(self):
+        """ Returns a ReportableQty that is the real part of this one."""
+        if self.has_eb():
+            return ReportableQty( _np.real(self.value), _np.real(self.errbar), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.real(self.value) )
+        
+    def imag(self):
+        """ Returns a ReportableQty that is the imaginary part of this one."""
+        if self.has_eb():
+            return ReportableQty( _np.imag(self.value), _np.imag(self.errbar), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( _np.imag(self.value) )
+
+    def reshape(self, *args):
+        """ Returns a ReportableQty whose underlying values are reshaped."""
+        if self.has_eb():
+            return ReportableQty( self.value.reshape(*args), self.errbar.reshape(*args), self.nonMarkovianEBs)
+        else:
+            return ReportableQty( self.value.reshape(*args) )
+
+    @property
+    def size(self):
+        """ Returns the size of this ReportableQty's value. """
+        return self.value.size
+        
+        
+
+        
 
     @staticmethod
     def from_val(value, nonMarkovianEBs=False):
@@ -48,6 +129,8 @@ class ReportableQty(object):
           holding the first field as a value and second field as an error bar
         Anything else will be converted to a ReportableQty with no error bars
         '''
+        if isinstance(value, ReportableQty):
+            return value
         if isinstance(value, tuple):
             assert len(value) == 2, 'Tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(
@@ -58,6 +141,13 @@ class ReportableQty(object):
 
     def has_eb(self):
         return self.errbar is not None
+
+    def scale(self, factor):
+        """
+        Scale the value and error bar (if present) by `factor`.
+        """
+        self.value *= factor
+        if self.has_eb(): self.errbar *= factor
 
     def get_value(self):
         """

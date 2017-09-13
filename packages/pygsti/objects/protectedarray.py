@@ -2,6 +2,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ..tools import compattools as _compat
 
+
 class ProtectedArray(object):
     """
     A numpy ndarray-like class that allows certain elements to

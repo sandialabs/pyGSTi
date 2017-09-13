@@ -30,7 +30,6 @@ class BlankTable(WorkspaceTable):
         table = _ReportTable(['Blank'], [None])
         table.finish()
         return table
-
     
 class SpamTable(WorkspaceTable):
     def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None,
@@ -80,11 +79,7 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             gateset = gatesets[-1] #only show HSVec for last gateset
-            #mxBasis    = gateset.basis.name
-            mxBasis = gateset.basis.name
-            mxBasisDim = gateset.basis.dim.blockDims
-            #mxBasisDim = gateset.basis.dim.blockDims
-            basisNm    = _objs.basis_longname(mxBasis)
+            basisNm    = _objs.basis_longname(gateset.basis.name)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
             
@@ -99,17 +94,14 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                # basisNm = gateset.basis.name
-                # TEMPORARY: TO USE DEPRECATED RIGETTI DATA FOR REPORT
-                basisNm = gateset.basis.name
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)            
+                mxBasis = gateset.basis
+                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
                 rowData.append( rhoMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                basisNm = gateset.basis.name
-                #basisNm = gateset.basis.name
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], basisNm)
+                mxBasis = gateset.basis
+                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
                 evals = _np.linalg.eigvals(rhoMx)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
@@ -134,16 +126,14 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
-                basisNm = gateset.basis.name
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
+                mxBasis = gateset.basis
+                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
-                basisNm = gateset.basis.name
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], basisNm)
+                mxBasis = gateset.basis
+                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
                 evals = _np.linalg.eigvals(EMx)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
@@ -258,11 +248,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            #basisNm = gateset.basis.name
-            basisNm = gateset.basis.name
-            #basisDims = gateset.basis.dim.blockDims
-            basisDims = gateset.basis.dim.blockDims
-            basisLongNm = _objs.basis_longname(basisNm)
+            basisLongNm = _objs.basis_longname(gateset.basis.name)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -280,10 +266,7 @@ class GatesTable(WorkspaceTable):
             row_formatters = [None]
     
             for gateset in gatesets:
-                #basisNm = gateset.basis.name
-                basisNm = gateset.basis.name
-                #basisDims = gateset.basis.dim.blockDims
-                basisDims = gateset.basis.dim.blockDims
+                basis = gateset.basis
 
                 if display_as == "numbers":
                     row_data.append(gateset.gates[gl])
@@ -291,8 +274,8 @@ class GatesTable(WorkspaceTable):
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, gateset.gates[gl],
                                              colorbar=False,
-                                             mxBasis=basisNm,
-                                             mxBasisDims=basisDims)
+                                             mxBasis=basis)
+
                     row_data.append( fig )
                     row_formatters.append('Figure')
                 else:
@@ -303,21 +286,19 @@ class GatesTable(WorkspaceTable):
                 if isinstance(gatesets[-1].gates[gl], _objs.FullyParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].basis.name
-                    basisDims = gatesets[-1].basis.dim.blockDims
+                    basis = gatesets[-1].basis
                     intervalMx = intervalVec.reshape(gate_dim,gate_dim)
                 elif isinstance(gatesets[-1].gates[gl], _objs.TPParameterizedGate):
                     #then we know how to reshape into a matrix
                     gate_dim   = gatesets[-1].get_dimension()
-                    basisNm = gatesets[-1].basis.name
-                    basisDims = gatesets[-1].basis.dim.blockDims
+                    basis = gatesets[-1].basis
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
                     # we don't know how best to reshape
                     # vector of parameter intervals, so just don't unless needed for boxes
                     intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
-                    basisNm = basisDims = None #we don't know how to label the params
+                    basis = None #we don't know how to label the params
 
                 if display_as == "numbers":
                     row_data.append(intervalMx)
@@ -326,8 +307,7 @@ class GatesTable(WorkspaceTable):
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
                                              colorbar=False,
-                                             mxBasis=basisNm,
-                                             mxBasisDims=basisDims)
+                                             mxBasis=basis)
                     row_data.append( fig )
                     row_formatters.append('Figure')
                 else:
@@ -375,7 +355,6 @@ class ChoiTable(WorkspaceTable):
         """
         super(ChoiTable,self).__init__(ws, self._create, gatesets, titles,
                                        confidenceRegionInfo, display)
-
         
     def _create(self, gatesets, titles, confidenceRegionInfo, display):
         if isinstance(gatesets, _objs.GateSet):
@@ -395,7 +374,7 @@ class ChoiTable(WorkspaceTable):
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
-                evals   = [_reportables.choi_evals(gateset, gl) for gl in gateLabels]
+                evals   = [_reportables.choi_evals(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
@@ -403,9 +382,7 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    basisNm = gateset.basis.name
-                    basisDims = gateset.basis.dim.blockDims
-                    basisLongNm = _objs.basis_longname(basisNm)
+                    basisLongNm = _objs.basis_longname(gateset.basis.name)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -431,47 +408,79 @@ class ChoiTable(WorkspaceTable):
             for disp in display:
                 if disp == "matrix":
                     for gateset, (choiMxs, _) in zip(gatesets, qtysList):
-                        choiMx, _ = choiMxs[i].get_value_and_err_bar()
-                        row_data.append(choiMx)
+                        row_data.append(choiMxs[i])
                         row_formatters.append('Brackets')
         
                 elif disp == "eigenvalues":
                     for gateset, (_, evals) in zip(gatesets, qtysList):
-                        evals, evalsEB = evals[i].get_value_and_err_bar()
                         try:
-                            evals = evals.reshape(evals.size//4, 4)
-                              #assumes len(evals) is multiple of 4!
+                            evals[i] = evals[i].reshape(evals[i].size//4, 4)
+                            #assumes len(evals) is multiple of 4!
                         except: # if it isn't try 3 (qutrits)
-                            evals = evals.reshape(evals.size//3, 3)
-                              #assumes len(evals) is multiple of 3!
-
-                        if confidenceRegionInfo is None:
-                            row_data.append(evals)
-                            row_formatters.append('Normal')
-                        else:
-                            try:    evalsEB = evalsEB.reshape(evalsEB.size//4, 4)
-                            except: evalsEB = evalsEB.reshape(evalsEB.size//3, 3)
-                            row_data.append( (evals,evalsEB) )
-                            row_formatters.append('Vec')
+                            evals[i] = evals[i].reshape(evals[i].size//3, 3)
+                            #assumes len(evals) is multiple of 3!
+                        row_data.append(evals[i])                        
+                        row_formatters.append('Normal')
                             
                 elif disp == "barplot":
                     for gateset in gatesets:
                         for gateset, (_, evals) in zip(gatesets,qtysList):
-                            evals, evalsEB = evals[i].get_value_and_err_bar()
-                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evals, evalsEB)
+                            evs, evsEB = evals[i].get_value_and_err_bar()
+                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
                             row_data.append(fig)
                             row_formatters.append('Figure')
+                            
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
+
+
+class GatesetVsTargetTable(WorkspaceTable):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+        """
+        Create a table comparing a gateset (as a whole) to a target gateset
+        using metrics that can be evaluatd for an entire gate set.
     
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The gate sets to compare
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.    
+    
+        Returns
+        -------
+        ReportTable
+        """
+        super(GatesetVsTargetTable,self).__init__(ws, self._create, gateset,
+                                                targetGateset, confidenceRegionInfo)
+    
+    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    
+        colHeadings = ('Metric', "Value")
+        formatters  = (None,None)
+
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+    
+        AGsI = _reportables.average_gateset_infidelity(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Avg. gate set infidelity", AGsI), (None, 'Normal') )
+
+        RBnum = _reportables.predicted_rb_number(gateset, targetGateset, confidenceRegionInfo)
+        table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
+        
+        table.finish()
+        return table
+
     
 #    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset's gates to a target gateset using
-        the infidelity, diamond-norm distance, and trace distance.
+        the infidelity, diamond-norm distance, trace distance, and other
+        metrics.
     
         Parameters
         ----------
@@ -492,20 +501,25 @@ class GatesVsTargetTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-    
-        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm") #, "Frobenius|Distance"
-        formatters  = (None,'Conversion','Conversion','Conversion') # ,'Conversion'
+        
+        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm",
+                       "Unitarity|Infidelity", "Gauge Inv.|Infidelity", "Avg. Gate|Infidelity") #, "Frobenius|Distance"
+        formatters  = (None,'Conversion','Conversion','Conversion','Conversion','Conversion','Conversion')
     
         infidelities = [_reportables.process_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
         jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
         dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
+        unitarityIF  = [_reportables.unitarity_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        gaugeInvIF   = [_reportables.gaugeinv_infidelity(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        AGI          = [_reportables.avg_gate_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
 
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
     
         for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
-                                                      infidelities, jt_diffs, dnorms):
+                                                      infidelities, jt_diffs, dnorms,
+                                                      unitarityIF, gaugeInvIF, AGI):
             table.addrow(rowData, formatters)
         table.finish()
         return table
@@ -618,10 +632,7 @@ class ErrgenTable(WorkspaceTable):
                 confidenceRegionInfo, display, display_as, genType):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-        basisNm = gateset.basis.name
-        #basisNm = gateset.basis.name
-        #basisDims = gateset.basis.dim.blockDims
-        basisDims = gateset.basis.dim.blockDims
+        basis = gateset.basis
         colHeadings = ['Gate']
 
         for disp in display:
@@ -636,9 +647,10 @@ class ErrgenTable(WorkspaceTable):
         assert(display_as == "boxes" or display_as == "numbers")
         table = _ReportTable(colHeadings, (None,)*len(colHeadings) , confidenceRegionInfo=confidenceRegionInfo)
 
-        errgens = {'M': []}
-        hamProjs = {'M': []}
-        stoProjs = {'M': []}
+        errgenAndProjs = { }
+        errgensM = []
+        hamProjsM = []
+        stoProjsM = []
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
@@ -656,61 +668,71 @@ class ErrgenTable(WorkspaceTable):
             gate = gateset.gates[gl]
             targetGate = targetGateset.gates[gl]
 
-            errgens[gl] = _tools.error_generator(gate, targetGate,
-                                                 targetGateset.basis, genType)
-            absMax = _np.max(_np.abs(errgens[gl]))
-            addMax(errgens['M'], absMax)
+            if genType == "logG-logT":
+                info = _reportables.logGmlogT_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            elif genType == "logTiG":
+                info = _reportables.logTiG_and_projections(
+                    gateset, targetGateset, gl, confidenceRegionInfo)
+            else: raise ValueError("Invalid generator type: %s" % genType)
+            errgenAndProjs[gl] = info
+            
+            errgen = info['error generator'].get_value()
+            absMax = _np.max(_np.abs(errgen))
+            addMax(errgensM, absMax)
 
             if "H" in display:
-                hamProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "hamiltonian", basisNm, basisNm)
-                absMax = _np.max(_np.abs(hamProjs[gl]))
-                addMax(hamProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].get_value()))
+                addMax(hamProjsM, absMax)
 
             if "S" in display:
-                stoProjs[gl] = _tools.std_errgen_projections(
-                    errgens[gl], "stochastic", basisNm, basisNm)
-                absMax = _np.max(_np.abs(stoProjs[gl]))
-                addMax(stoProjs['M'], absMax)
+                absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
+                addMax(stoProjsM, absMax)
     
         #Do plotting
         for gl in gateLabels:
             row_data = [gl]
             row_formatters = [None]
+            info = errgenAndProjs[gl]
             
             for disp in display:
                 if disp == "errgen":
                     if display_as == "boxes":
-                        m,M = getMinMax(errgens['M'],_np.max(_np.abs(errgens[gl])))
-                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgens[gl], m,M,
-                                                         basisNm,basisDims)
+                        errgen, EB = info['error generator'].get_value_and_err_bar()
+                        m,M = getMinMax(errgensM, _np.max(_np.abs(errgen)))
+                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgen, m,M,
+                                                         basis, EBmatrix=EB)
                         row_data.append(errgen_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(errgens[gl])
+                        row_data.append(info['error generator'])
                         row_formatters.append('Brackets')
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        m,M = getMinMax(hamProjs['M'],_np.max(_np.abs(hamProjs[gl])))
+                        hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
+                        m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, hamProjs[gl], basisNm, m, M, boxLabels=True)
+                            self.ws, hamProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(hamProjs[gl])
+                        row_data.append(info['hamiltonian projections'])
                         row_formatters.append('Brackets')
 
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        m,M = getMinMax(stoProjs['M'],_np.max(_np.abs(stoProjs[gl])))
+                        stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
+                        m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, stoProjs[gl], basisNm, m, M, boxLabels=True)
+                            self.ws, stoProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(stoProjs[gl])
+                        row_data.append(info['stochastic projections'])
                         row_formatters.append('Brackets')
 
             table.addrow(row_data, row_formatters)
@@ -798,8 +820,6 @@ class GateDecompTable(WorkspaceTable):
         
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
         gateLabels = list(gateset.gates.keys())  # gate labels
-        basisNm   = gateset.basis.name
-        basisDims = gateset.basis.dim.blockDims
 
         colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
@@ -808,55 +828,25 @@ class GateDecompTable(WorkspaceTable):
                              colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
         formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
 
-        axes = {}; angles = {}; inexact = {}; hamEvals = {}
+        decomp = _reportables.general_decomposition(
+            gateset, targetGateset, confidenceRegionInfo)
+
         for gl in gateLabels:
-            gate = gateset.gates[gl]
-            target_logG = _tools.unitary_superoperator_matrix_log(targetGateset.gates[gl],targetGateset.basis)
-            logG = _tools.approximate_matrix_log(gate, target_logG)
-            inexact[gl] = _np.linalg.norm(_spl.expm(logG)-gate)
-            
-            hamProjs, hamGens = _tools.std_errgen_projections(
-                logG, "hamiltonian", basisNm, basisNm, return_generators=True)
-            norm = _np.linalg.norm(hamProjs)
-            axes[gl] = hamProjs / norm if (norm > 1e-15) else hamProjs
-            #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
-               # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
-               # least of Pauli products) and divide by 2# to be consistent with
-               # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
-               # theta in units of pi.
-
-            angles[gl] = norm * (2.0/gateset.dim)**0.5 / _np.pi
-               #Scratch...
-               # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
-               # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
-               # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
-               # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
-               # normalized paulis are just /sqrt(2), so need to additionally divide by
-               # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
-               # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
-
-            basis_mxs = gateset.basis.get_composite_matrices()
-            scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
-                           if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
-                         for i,mx in enumerate(basis_mxs) ]
-            hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
-            hamEvals[gl] = _np.linalg.eigvals(hamMx)
-
-        for gl in gateLabels:            
-            rowData = [gl, hamEvals[gl]/_np.pi, angles[gl], axes[gl], inexact[gl] ]
+            decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
+            rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
+                       decomp[gl + ' angle'], decomp[gl + ' axis'],
+                       decomp[gl + ' log inexactness'] ]
 
             for j,gl_other in enumerate(gateLabels):
-                rotnAngle = angles[gl]
-                rotnAngle_other = angles[gl_other]
+                rotnAngle = decomp[gl + ' angle'].get_value()
+                rotnAngle_other = decomp[gl_other + ' angle'].get_value()
     
                 if gl_other == gl:
                     rowData.append( "" )
                 elif abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                     rowData.append( "--" )
                 else:
-                    real_dot = _np.clip( _np.real(_np.dot(axes[gl].flatten(), axes[gl_other].flatten())), -1.0, 1.0)
-                    angle = _np.arccos( real_dot ) / _np.pi
-                    rowData.append( angle )
+                    rowData.append(decomp[gl + ',' + gl_other + ' axis angle'])
 
             table.addrow(rowData, formatters)
     
@@ -907,7 +897,7 @@ class old_GateDecompTable(WorkspaceTable):
 
         for decomp, gl in zip(decomps, gateLabels):
             evals = _reportables.eigenvalues(gateset, gl)
-            decomp, decompEB = decomp.get_value_and_err_bar()
+            decomp, decompEB = decomp.get_value_and_err_bar() #OLD
     
             rowData = [gl, evals] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
                 [(decomp.get(x,'X'),decompEB) for x in decompNames[2:4] ]
@@ -969,15 +959,15 @@ class old_RotationAxisTable(WorkspaceTable):
     
         rotnAxisAngles, rotnAxisAnglesEB = _reportables.angles_btwn_rotn_axes(gateset, confidenceRegionInfo)
         rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
-                           for gl in gateLabels ]
+                           for gl in gateLabels ] #OLD
     
         for i,gl in enumerate(gateLabels):
-            decomp, decompEB = decomps[i].get_value_and_err_bar()
+            decomp, decompEB = decomps[i].get_value_and_err_bar() #OLD
             rotnAngle = decomp.get('pi rotations','X')
     
             angles_btwn_rotn_axes = []
             for j,gl_other in enumerate(gateLabels):
-                decomp_other, _ = decomps[j].get_value_and_err_bar()
+                decomp_other, _ = decomps[j].get_value_and_err_bar() #OLD
                 rotnAngle_other = decomp_other.get('pi rotations','X')
     
                 if gl_other == gl:
@@ -1008,7 +998,8 @@ class old_RotationAxisTable(WorkspaceTable):
 class GateEigenvalueTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
-                 display=('evals','rel','log-evals','log-rel','polar','relpolar') ):
+                 display=('evals','rel','log-evals','log-rel','polar','relpolar'),
+                 virtual_gates=None):
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a gateset's gates.
@@ -1027,13 +1018,18 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "rel", "log-evals", "log-rel", "polar", "relpolar"}
+        display : tuple of {"evals", "target", "rel", "log-evals", "log-rel", "polar", "relpolar"}
             Specifies which columns are displayed in the table: a list of the
-            eigenvalues, a list of the relative eigenvalues, the (complex)
+            eigenvalues, target eigenvalues, relative eigenvalues, the (complex)
             logarithm of the eigenvalues and relative eigenvalues, a polar plot of
             the eigenvalues, and/or a polar plot of the relative eigenvalues.
-            If `targetGateset` is None, then `"rel"`, `"log-rel"` and `"relpolar"`
-            will be silently ignored.
+            If `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
+            and `"relpolar"` will be silently ignored.
+
+        virtual_gates : list, optional
+            If not None, a list of `GateString` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+            automatically discarded so they are not displayed twice.
     
         Returns
         -------
@@ -1041,16 +1037,20 @@ class GateEigenvalueTable(WorkspaceTable):
         """
         super(GateEigenvalueTable,self).__init__(ws, self._create, gateset,
                                                  targetGateset,
-                                                 confidenceRegionInfo, display)
+                                                 confidenceRegionInfo, display,
+                                                 virtual_gates)
         
     def _create(self, gateset, targetGateset,               
-                confidenceRegionInfo, display):
+                confidenceRegionInfo, display,
+                virtual_gates):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
-        colHeadings = ['Gate']
+        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
             if disp == "evals":
                 colHeadings.append('Eigenvalues')
+            elif disp == "target":
+                colHeadings.append('Target Evals.')
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
@@ -1070,85 +1070,80 @@ class GateEigenvalueTable(WorkspaceTable):
 
         formatters = [None]*len(colHeadings)
     
-        def format_evals(evals,evalsEB):
+        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+
+        if virtual_gates is None:
+            iterOver = gateLabels
+        else:
+            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
+    
+        for gl in iterOver:
+            #Note: gl may be a gate label (a string) or a GateString
+            row_data = [ str(gl) ]
+            row_formatters = [None]
+
+            if _tools.isstr(gl):
+                evals = _reportables.eigenvalues(gateset, gl, confidenceRegionInfo)
+            else:
+                evals = _reportables.gatestring_eigenvalues(gl, gateset, confidenceRegionInfo)
+                
             evals = evals.reshape(evals.size, 1)
-            if evalsEB is not None:
-                evalsEB = evalsEB.reshape(evalsEB.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
             #try: evals = evals.reshape(evals.size//2, 2) #assumes len(evals) is even!
             #except: evals = evals.reshape(evals.size, 1)
-            #if evalsEB is not None:
-            #    try: evalsEB = evalsEB.reshape(evalsEB.size//2, 2)
-            #    except: evalsEB = evalsEB.reshape(evalsEB.size, 1)
-            return evals, evalsEB
-    
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
-    
-        for gl in gateLabels:
-            row_data = [gl]
-            row_formatters = [None]
-
-            evals, evalsEB = _reportables.eigenvalues(gateset, gl).get_value_and_err_bar()
-            #evals, evalsEB = qtys['%s eigenvalues' % gl].get_value_and_err_bar()
 
             if targetGateset is not None:
-                gate = gateset.gates[gl]
-                targetGate = targetGateset.gates[gl]
-                target_evals = _np.linalg.eigvals(targetGate)
-                rel_gate = _np.dot(_np.linalg.inv(targetGate), gate) #TODO: function for this?
-                rel_evals = _np.linalg.eigvals(rel_gate)
+                #TODO: move this to a reportable qty to get error bars?
+                if _tools.isstr(gl):
+                    rel_evals = _reportables.rel_gate_eigenvalues(gateset, targetGateset, gl, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
+                else:
+                    rel_evals = _reportables.rel_gatestring_eigenvalues(gl, gateset, targetGateset, confidenceRegionInfo)
+                    target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
             for disp in display:
                 if disp == "evals":
-                    evals,evalsEB = format_evals(evals,evalsEB)
-                    row_data.append( (evals,evalsEB) )
-                    row_formatters.append('Vec')
+                    row_data.append( evals )
+                    row_formatters.append('Normal')
+
+                elif disp == "target" and targetGateset is not None:
+                    row_data.append( target_evals )
+                    row_formatters.append('Normal')
 
                 elif disp == "rel" and targetGateset is not None:
-                    rel_evals,_ = format_evals(rel_evals,None)
-                    row_data.append( (rel_evals,None) )
-                    row_formatters.append('Vec')
+                    row_data.append( rel_evals )
+                    row_formatters.append('Normal')
 
                 elif disp == "log-evals":
-                    evals,evalsEB = format_evals(evals,evalsEB)
-                    if evalsEB is not None:
-                        logevals, logevalsEB = _np.log(evals), _np.log(evalsEB)
-                        row_data.append( (_np.real(logevals),_np.real(logevalsEB)) )
-                        row_data.append( (_np.imag(logevals)/_np.pi,_np.imag(logevalsEB)/_np.pi) )
-                        row_formatters.append('Vec')
-                        row_formatters.append('Pi')
-            
-                    else:
-                        logevals = _np.log(evals)
-                        row_data.append( (_np.real(logevals),None) )
-                        row_data.append( (_np.imag(logevals)/_np.pi,None) )
-                        row_formatters.append('Vec') 
-                        row_formatters.append('Pi')  
-
+                    logevals = evals.log()
+                    row_data.append( logevals.real() )
+                    row_data.append( logevals.imag()/_np.pi )
+                    row_formatters.append('Normal')
+                    row_formatters.append('Pi')
 
                 elif disp == "log-rel":
-                    rel_evals,_ = format_evals(rel_evals,None)
-                    log_relevals = _np.log(rel_evals)
-                    row_data.append( (_np.real(log_relevals),None) )
-                    row_data.append( (_np.imag(log_relevals)/_np.pi,None) )
+                    log_relevals = rel_evals.log()
+                    row_data.append( log_relevals.real() )
+                    row_data.append( log_relevals.imag()/_np.pi )
                     row_formatters.append('Vec') 
                     row_formatters.append('Pi')  
-
                     
                 elif disp == "polar":
+                    evals_val = evals.get_value()
                     if targetGateset is None:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[evals],["blue"],centerText=gl)
+                            self.ws,[evals_val],["blue"],centerText=str(gl))
                     else:
                         fig = _wp.PolarEigenvaluePlot(
-                            self.ws,[target_evals,evals],
-                            ["black","blue"],["target","gate"], centerText=gl)
+                            self.ws,[target_evals,evals_val],
+                            ["black","blue"],["target","gate"], centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
 
                 elif disp == "relpolar" and targetGateset is not None:
+                    rel_evals_val = rel_evals.get_value()
                     fig = _wp.PolarEigenvaluePlot(
-                        self.ws,[rel_evals],["red"],["rel"],centerText=gl)
+                        self.ws,[rel_evals_val],["red"],["rel"],centerText=str(gl))
                     row_data.append( fig )
                     row_formatters.append('Figure')
             table.addrow(row_data, row_formatters)
@@ -1293,8 +1288,9 @@ class FitComparisonTable(WorkspaceTable):
                     raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
             Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
             Nsig = (fitQty-k)/_np.sqrt(2*k)
+            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
             #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
     
             if   (fitQty-k) < _np.sqrt(2*k): rating = 5
@@ -1425,14 +1421,13 @@ class GatesSingleMetricTable(WorkspaceTable):
     def _create(self, gatesets, titles, targetGateset, metric):
     
         gateLabels = list(targetGateset.gates.keys())  # use target's gate labels
-        basisNm = targetGateset.basis.name
-        basisDims = targetGateset.basis.dim.blockDims
+        basis = targetGateset.basis
 
         #Check that all gatesets are in the same basis as targetGateset
         for title,gateset in zip(titles,gatesets):
-            if basisNm != gateset.basis.name:
+            if basis.name != gateset.basis.name:
                 raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
-                                 % (title, gateset.basis.name, basisNm))
+                                 % (title, gateset.basis.name, basis.name))
 
         #Do computation first
         metricVals = [] #one element per row (gate label)
@@ -1442,11 +1437,11 @@ class GatesSingleMetricTable(WorkspaceTable):
             for title,gateset in zip(titles,gatesets):
                 gate = gateset.gates[gl]
                 if metric == "infidelity":
-                    dct[title] = 1-_tools.process_fidelity(gate, cmpGate, basisNm)
+                    dct[title] = 1-_tools.process_fidelity(gate, cmpGate, basis)
                 elif metric == "diamond":
-                    dct[title] = _tools.jtracedist(gate, cmpGate, basisNm)
+                    dct[title] = _tools.jtracedist(gate, cmpGate, basis)
                 elif metric == "jtrace":
-                    dct[title] = 0.5 * _tools.diamonddist(gate, cmpGate, basisNm)
+                    dct[title] = 0.5 * _tools.diamonddist(gate, cmpGate, basis)
                 else: raise ValueError("Invalid `metric` argument: %s" % metric)
             metricVals.append(dct)
 
@@ -1581,7 +1576,6 @@ class StandardErrgenTable(WorkspaceTable):
                 m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
                 fig = _wp.GateMatrixPlot(self.ws, projector, m,M,
                                          projection_basis, d)
-    
                 rowData.append(fig)
                 rowFormatters.append('Figure')
     

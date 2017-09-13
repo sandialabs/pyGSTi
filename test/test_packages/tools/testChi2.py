@@ -8,11 +8,11 @@ class Chi2LogLTestCase(BaseTestCase):
 
     def test_chi2_terms(self):
         gs = pygsti.io.load_gateset(compare_files + '/analysis.gateset')
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + '/analysis.dataset')
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + '/analysis.dataset%s' % self.versionsuffix)
         terms = pygsti.chi2_terms(ds, gs)
 
     def test_chi2_fn(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         chi2, grad = pygsti.chi2(ds, std.gs_target, returnGradient=True)
         pygsti.chi2(ds, std.gs_target, returnHessian=True)
 

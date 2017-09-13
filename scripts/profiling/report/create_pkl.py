@@ -7,7 +7,8 @@ def main():
     gs_target = std1Q_XYI.gs_target
     fiducials = std1Q_XYI.fiducials
     germs = std1Q_XYI.germs
-    maxLengths = [1,2,4] #,8,16,32,64]
+    maxLengths = [1,2,4]
+    #maxLengths = [1, 2, 4, 8, 16, 32, 64]
 
     #Generate some data
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)

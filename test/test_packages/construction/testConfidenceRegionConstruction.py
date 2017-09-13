@@ -41,8 +41,8 @@ class TestConfidenceRegionConstructionMethods(BaseTestCase):
                            gatestring_list=self.lsgstStrings, probClipInterval=(-1e6,1e6),
                            minProbClip=1e-4, radius=1e-4, hessianProjection="std",
                            regionType="std", comm=None, memLimit=None,
-                           cptp_penalty_factor=None, distributeMethod="deriv",
-                           gateLabelAliases=None)
+                           cptp_penalty_factor=None, spam_penalty_factor=None,
+                           distributeMethod="deriv", gateLabelAliases=None)
 
         #make sure we can pickle it
         s = pickle.dumps(cr)
@@ -53,8 +53,8 @@ class TestConfidenceRegionConstructionMethods(BaseTestCase):
                            gatestring_list=None, probClipInterval=(-1e6,1e6),
                            minProbClip=1e-4, radius=1e-4, hessianProjection="linear response",
                            regionType="std", comm=None, memLimit=None,
-                           cptp_penalty_factor=None, distributeMethod="deriv",
-                           gateLabelAliases=None)
+                           cptp_penalty_factor=None, spam_penalty_factor=None,
+                           distributeMethod="deriv", gateLabelAliases=None)
 
         with self.assertRaises(ValueError):
             pygsti.construction.logl_confidence_region(self.gateset, self.ds, 95,

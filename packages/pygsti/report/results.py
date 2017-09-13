@@ -384,7 +384,8 @@ class Estimate(object):
             
         Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
         Np = gs.num_params() #don't bother with non-gauge only here [FUTURE: add option for this?]
-        k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+        k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
+        if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
         return (fitQty-k)/_np.sqrt(2*k)
 
 

@@ -12,6 +12,8 @@ import warnings          as _warnings
 from .. import tools     as _tools
 from .. import objects   as _objs
 
+from ..objects import smart_cached
+
 
 def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
                        gatestring_filter=None, gateLabelAliases=None):
@@ -88,6 +90,7 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
     return tuples,len(effectStrs),len(prepStrs)
 
 
+
 def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     """
     Returns a new gate string map whose strings have been 
@@ -126,6 +129,7 @@ def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     return new_gatestring_tuples, rows, cols
 
 
+
 def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
@@ -152,6 +156,7 @@ def total_count_matrix(gsplaq, dataset):
     for i,j,gstr in gsplaq:
         ret[i,j] = dataset[ gstr ].total()
     return ret
+
 
 
 def count_matrices(gsplaq, dataset, spamlabels):
@@ -257,7 +262,7 @@ def probability_matrices(gsplaq, gateset, spamlabels,
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
 
-
+@smart_cached
 def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                 probs_precomp_dict=None):
     """
@@ -302,6 +307,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
+@smart_cached
 def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
                 probs_precomp_dict=None):
     """
@@ -348,6 +354,7 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
     return logLMxs.sum(axis=0) # sum over spam labels
 
 
+
 def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     """
     Compute per-gate error rate.
@@ -378,11 +385,13 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
 
+
 def _eformat(f, prec):
     """
     Formatting routine for writing compact representations of
     numbers in plot boxes
     """
+    if _np.isnan(f): return "" #show NAN as blanks
     if prec == 'compact' or prec == 'compacthp':
         if f < 0:
             return "-" + _eformat(-f,prec)
@@ -419,6 +428,7 @@ def _eformat(f, prec):
         return "%g" % f #fallback to general format
 
 #OLD
+#
 #def _computeGateStringMaps(gss, dataset):
 ##    xvals, yvals, xyGateStringDict
 ##    strs, fidpair_filters, gatestring_filters,
@@ -433,12 +443,15 @@ def _eformat(f, prec):
 #                                    gss.aliases)
 #             for x in gss.used_xvals for y in gss.used_yvals }
 
+
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
     return int(len(ixs))
 
+
 def _all_same(items):
     return all(x == items[0] for x in items)
+
 
 def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     """
@@ -481,6 +494,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     return n_boxes, dof_per_box
 
     
+
 def _computeProbabilities(gss, gateset, dataset):
     """ 
     Returns a dictionary of probabilities for each gate sequence in
@@ -498,7 +512,7 @@ def _computeProbabilities(gss, gateset, dataset):
     return probs_dict
 
     
-
+#@smart_cached
 def _computeSubMxs(gss, subMxCreationFn, sumUp):
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
@@ -506,6 +520,7 @@ def _computeSubMxs(gss, subMxCreationFn, sumUp):
     return subMxs
 
 
+@smart_cached
 def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClipForWeighting=1e-4):
     """
@@ -558,6 +573,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
+@smart_cached
 def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClip=1e-6):
     """
@@ -609,6 +625,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
+@smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
     Computes matrix of 2*log-likelihood-ratios comparing the 

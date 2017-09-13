@@ -125,6 +125,10 @@ class Basis(object):
         self.longname = longname
         self.real     = real
 
+    def copy(self):
+        """Make a copy of this Basis object."""
+        return Basis(self, longname=self.longname, real=self.real, labels=self.labels)
+
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
 
@@ -201,19 +205,22 @@ class Basis(object):
 
         Returns
         -------
-        list of matrices
+        numpy array
+            array of matrices, shape == (nMatrices, d, d) where
+            d is the composite matrix dimension.
         '''
-        compMxs = []
-        start   = 0
+        nMxs = sum([len(mxs) for mxs in self._blockMatrices])
         length  = sum(mxs[0].shape[0] for mxs in self._blockMatrices)
+        compMxs = _np.zeros( (nMxs, length, length), 'complex')
+        i, start   = 0, 0
+
         for mxs in self._blockMatrices:
             d = mxs[0].shape[0]
             for mx in mxs:
-                compMx = _np.zeros((length, length), 'complex' )
-                compMx[start:start+d,start:start+d] = mx
-                compMxs.append(compMx)
-            start += d
-        assert(start == length)
+                compMxs[i][start:start+d,start:start+d] = mx
+                i += 1
+            start += d 
+        assert(start == length and i == nMxs)
         return compMxs
 
     @cache_by_hashed_args
@@ -283,6 +290,20 @@ class Basis(object):
         '''
         return _inv(self.get_to_std())
 
+    def equivalent(self, otherName):
+        return Basis(otherName, self.dim.blockDims)
+
+    def expanded_equivalent(self, otherName=None):
+        if otherName is None:
+            otherName = self.name
+        return Basis(otherName, sum(self.dim.blockDims))
+
+    def std_equivalent(self):
+        return self.equivalent('std')
+
+    def expanded_std_equivalent(self):
+        return self.expanded_equivalent('std')
+
 def _build_composite_basis(bases):
     '''
     Build a composite basis from a list of tuples or Basis objects 
@@ -339,6 +360,21 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
         from_basis = Basis(from_basis, dimOrBlockDims)
     return from_basis.transform_matrix(to_basis)
 
+def build_basis_pair(mx, from_basis, to_basis):
+    if isinstance(from_basis, Basis) and not isinstance(to_basis, Basis):
+        to_basis = from_basis.equivalent(to_basis)
+    elif isinstance(to_basis, Basis) and not isinstance(from_basis, Basis):
+        from_basis = to_basis.equivalent(from_basis)
+    else:
+        dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+        to_basis = Basis(to_basis, dimOrBlockDims)
+        from_basis = Basis(from_basis, dimOrBlockDims)
+    return from_basis, to_basis
+
+def build_basis_for_matrix(mx, basis):
+    dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
+    return Basis(basis, dimOrBlockDims)
+
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     """
     Convert a gate matrix from one basis of a density matrix space
@@ -375,17 +411,23 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     dim        = Dim(dimOrBlockDims)
     from_basis = Basis(from_basis, dim)
     to_basis   = Basis(to_basis, dim)
+    #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
-    if from_basis.dim.gateDim != to_basis.dim.gateDim or \
-            resize is not None:
+    if from_basis.dim.gateDim != to_basis.dim.gateDim: 
+        raise ValueError('Automatic basis expanding/contracting temporarily disabled')
+        #or \
+        #    resize is not None:
         if resize is None:
+            assert len(to_basis.dim.blockDims) == 1 or len(from_basis.dim.blockDims) == 1, \
+                    'Cannot convert from composite basis {} to another composite basis {}'.format(from_basis, to_basis)
+            '''
+            WRONG
             if from_basis.dim.gateDim < to_basis.dim.gateDim:
                 resize = 'contract'
-                assert len(to_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
             else:
                 resize = 'expand'
-                assert len(from_basis.dim.blockDims) == 1, 'Cannot convert from composite basis to another composite basis'
-        return resize_mx(mx, from_basis.dim.blockDims, resize, from_basis, to_basis)
+            '''
+        return resize_mx(mx, resize=resize, startBasis=from_basis, endBasis=to_basis)
 
     if from_basis.name == to_basis.name:
         return mx.copy()
@@ -453,10 +495,11 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
                 basis = _build_composite_basis(matrices) # really list of Bases or basis tuples
                 blockMatrices = basis._blockMatrices
                 name          = basis.name
-            elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-                blockMatrices = [matrices]                      # Then nest
-            else:
-                blockMatrices = matrices                        # Given as nested lists
+            elif isinstance(first, list) or \
+                 (isinstance(first, _np.ndarray) and first.ndim == 3): # els of matrices are sub-bases, so
+                blockMatrices = matrices                              # set directly equal to blockMatrices
+            elif isinstance(first, _np.ndarray) and first.ndim ==2:  # matrices is a list of matrices 
+                blockMatrices = [matrices]                           # so set as the first (& only) sub-basis-block
         else:
             blockMatrices = []
         if name is None:
@@ -492,19 +535,21 @@ def _build_default_block_matrices(name, dim):
         blockMatrices.append(f(blockDim))
     return blockMatrices
 
-def basis_matrices(name, dimOrBlockDims):
+def basis_matrices(nameOrBasis, dim):
     '''
     Get the elements of the specifed basis-type which
-    spans the density-matrix space given by dimOrBlockDims.
+    spans the density-matrix space given by dim.
 
     Parameters
     ----------
-    name : {'std', 'gm', 'pp', 'qt'}
+    name : {'std', 'gm', 'pp', 'qt'} or Basis
         The basis type.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
-        Pauli-product (pp), and Qutrit (qt).
+        Pauli-product (pp), and Qutrit (qt).  If a Basis object, then 
+        the basis matrices are contained therein, and its dimension is checked to
+        match dim.
 
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
+    dim : int 
+        The dimension of the density-matrix space.
 
     Returns
     -------
@@ -515,14 +560,62 @@ def basis_matrices(name, dimOrBlockDims):
         and N is the dimension of the density-matrix space,
         equal to sum( block_dim_i^2 ).
     '''
+    if isinstance(nameOrBasis, Basis):
+        basis = nameOrBasis
+        assert(basis.dim.dmDim == dim), "Basis object has wrong dimension ({}) for requested basis matrices ({})".format(
+            basis.dim.dmDim, dim)
+        return basis.get_composite_matrices()
+
+    name = nameOrBasis
     if name not in _basisConstructorDict:
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
-            name, dimOrBlockDims))
+            name, dim))
     f = _basisConstructorDict[name].constructor
 
-    return f(dimOrBlockDims)
+    return f(dim)
 
-def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std'):
+def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
+    assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
+    if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
+        return mx
+    #print('{}ing {} to {}'.format(resize, stdBasis1, stdBasis2))
+    #print('Dims: ({} to {})'.format(stdBasis1.dim, stdBasis2.dim))
+    if resize == 'expand':
+        assert stdBasis1.dim.gateDim < stdBasis2.dim.gateDim
+        right = _np.dot(mx, stdBasis1.get_expand_mx())
+        mid   = _np.dot(stdBasis1.get_contract_mx(), right)
+    elif resize == 'contract':
+        assert stdBasis1.dim.gateDim > stdBasis2.dim.gateDim
+        right = _np.dot(mx, stdBasis2.get_contract_mx())
+        mid = _np.dot(stdBasis2.get_expand_mx(), right)
+    return mid
+
+def flexible_change_basis(mx, startBasis, endBasis):
+    if startBasis.dim.gateDim == endBasis.dim.gateDim:
+        return change_basis(mx, startBasis, endBasis)
+    if startBasis.dim.gateDim < endBasis.dim.gateDim:
+        resize = 'expand'
+    else:
+        resize = 'contract'
+    stdBasis1 = startBasis.std_equivalent()
+    stdBasis2 = endBasis.std_equivalent()
+    start = change_basis(mx, startBasis, stdBasis1)
+    mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
+    end   = change_basis(mid, stdBasis2, endBasis)
+    return end
+
+def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
+    if dimOrBlockDims is None:
+        return mx
+    if resize == 'expand':
+        a = Basis('std', dimOrBlockDims)
+        b = Basis('std', sum(dimOrBlockDims))
+    else:
+        a = Basis('std', sum(dimOrBlockDims))
+        b = Basis('std', dimOrBlockDims)
+    return resize_std_mx(mx, resize, a, b)
+
+
     '''
     Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
     space to a matrix in the same basis in the opposite space.
@@ -543,25 +636,33 @@ def resize_mx(mx, dimOrBlockDims, resize=None, startBasis='std', endBasis='std')
         embedding density matrix space, i.e.
         sum( dimOrBlockDims_i )^2
     '''
+    bothBases = isinstance(startBasis, Basis) and isinstance(endBasis, Basis)
     if resize is not None and \
-            (isinstance(startBasis, Basis) and isinstance(endBasis, Basis)) or \
+            bothBases or \
             (dimOrBlockDims is not None):
-        dim = Dim(dimOrBlockDims)
-        startBasis = Basis(startBasis, dim)
-        endBasis   = Basis(endBasis, dim)
+        if dimOrBlockDims is not None:# not bothBases:
+            dim = Dim(dimOrBlockDims)
+            startBasis = Basis(startBasis, dim)
+            endBasis   = Basis(endBasis, dim)
+        else:
+            assert bothBases
         stdBasis1  = Basis('std', startBasis.dim.blockDims)
         stdBasis2  = Basis('std', endBasis.dim.blockDims)
+        try:
+            assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
 
-        assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
-
-        start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
-        if resize == 'expand':
-            right = _np.dot(start, stdBasis2.get_expand_mx())
-            mid   = _np.dot(stdBasis2.get_contract_mx(), right)
-        elif resize == 'contract':
-            mid = _np.dot(stdBasis1.get_expand_mx(), _np.dot(start, stdBasis1.get_contract_mx()))
-        # No else case needed, see assert
-        return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
+            start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
+            mid = resize_std_mx(start, resize, stdBasis1, stdBasis2)
+            # No else case needed, see assert
+            return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
+        except ValueError:
+            print('startBasis: {}'.format(startBasis))
+            print('endBasis: {}'.format(endBasis))
+            print('stdBasis1: {}'.format(stdBasis1))
+            print(stdBasis1.dim)
+            print('stdBasis2: {}'.format(stdBasis2))
+            print(stdBasis2.dim)
+            raise
     else:
         return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 

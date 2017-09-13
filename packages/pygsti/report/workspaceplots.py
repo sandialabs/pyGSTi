@@ -407,8 +407,8 @@ def generate_boxplot(subMxs,
                                    prec, hoverLabelFn)
         assert(fig is not None), "No data to display!"
         
-        fig['layout'].update(width=30*(nXs*nIXs+5)*scale,
-                             height=30*(nYs*nIYs+5)*scale)
+        fig['layout'].update(width=30*(nXs*nIXs+15)*scale,
+                             height=30*(nYs*nIYs+15)*scale)
         
     if xlabel: fig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
@@ -434,7 +434,6 @@ def generate_boxplot(subMxs,
     #    rptFig.set_extra_info( { 'nUsedXs': len(xvals),
     #                             'nUsedYs': len(yvals) } )
     return fig
-
 
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
@@ -719,9 +718,10 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     return go.Figure(data=[trace], layout=layout)
 
 
-def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
-                             mxBasisDimsY=None, xlabel=None, ylabel=None,
-                             boxLabels=False, colorbar=None, prec=0, scale=1.0):
+def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
+                             xlabel=None, ylabel=None,
+                             boxLabels=False, colorbar=None, prec=0, scale=1.0,
+                             EBmatrix=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -733,16 +733,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     m, M : float
         Minimum and maximum of the color scale.
 
-    mxBasis : str
-      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-      Used to label the rows & columns.  If you don't want labels, set to None.
-
-    mxBasisDims, mxBasisDimsY : int or list, optional
-      The dimension of the density matrix space, or a list specifying the
-      dimensions of terms in a direct-sum decomposition of the density matrix
-      space, for the X and Y axes (columns and rows).  Used to label the 
-      columns and rows, respectively.  If `myBasisDimsY` is None if will 
-      default to `mxBasisDims`.
+    mxBasis, mxBasisY : str or Basis, optional
+      The name abbreviation for the basis or a Basis object. Used to label the
+      columns & rows (x- and y-ticklabels).  Typically in
+      {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
     xlabel, ylabel : str, optional
       Axis labels for the plot.
@@ -766,6 +760,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
 
+    EBmatrix : numpy array, optional
+        An array, of the same size as `gateMatrix`, which gives error bars to be
+        be displayed in the hover info.
+
     Returns
     -------
     plotly.Figure
@@ -774,45 +772,46 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     xextra = 2.25 if ylabel is None else 2.5
     yextra = 2.25 if xlabel is None else 2.5
 
-    if mxBasis is not None and mxBasisDims is not None:
-        if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
-        xlabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
-        ylabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDims) > 1:
-                yextra += .5
-        elif mxBasisDims > 1:
-            yextra += .5
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDimsY) > 1:
-                yextra += .5
-        elif mxBasisDimsY > 1:
-            yextra += .5
+    if _tools.isstr(mxBasis):
+        if mxBasisY is None:
+            mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[0]))))
+        mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[1]))))
+
+    if _tools.isstr(mxBasisY):
+        mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(gateMatrix.shape[0]))))
+
+    if mxBasis is not None:
+        xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
+        if mxBasis.dim.gateDim > 1: yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
+        
+    if mxBasisY is not None:
+        ylabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasisY.labels]
+        if mxBasisY.dim.gateDim > 1: yextra += .5
+    else:
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
-    thickLineInterval = 4 if mxBasis == "pp" else None
+    thickLineInterval = 4 if (mxBasis is not None and mxBasis.name == "pp") \
+                        else None #TODO: separate X and Y thick lines?
     return matrix_color_boxplot(gateMatrix, m, M, xlabels, ylabels,
                                 xlabel, ylabel, xextra, yextra,
                                 boxLabels, thickLineInterval,
-                                colorbar, colormap, prec, scale)
+                                colorbar, colormap, prec, scale, EBmatrix)
 
 
 def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
                          xlabel=None, ylabel=None, xextra=2.5, yextra=2.5,
                          boxLabels=False, thickLineInterval=None,
                          colorbar=None, colormap=None,
-                         prec=0, scale=1.0):
+                         prec=0, scale=1.0, EBmatrix=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
     Parameters
     ----------
-    gateMatrix : numpy array
+    matrix : numpy array
         The matrix to visualize.
 
     m, M : float
@@ -855,6 +854,11 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
 
+    EBmatrix : numpy array, optional
+        An array, of the same size as `matrix`, which gives error bars to be
+        be displayed in the hover info.
+
+
     Returns
     -------
     plotly.Figure
@@ -869,13 +873,21 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
 
     #Create hoverlabels manually, since hoverinfo='z' arg to Heatmap
     # doesn't work for certain (e.g. linear-log) color maps
-    def hoverLabelFn(val):
-        if _np.isnan(val): return ""
-        return "%s" % val #TODO: something better - or user-specifiable
+    if EBmatrix is None:
+        def hoverLabelFn(i,j):
+            val = flipped_mx[i, j]
+            if _np.isnan(val): return ""
+            return "%s" % val #TODO: something better - or user-specifiable
+    else:
+        flipped_EBmx = _np.flipud(EBmatrix)  # FLIP so [0,0] matrix el is at *top* left
+        def hoverLabelFn(i,j):
+            val,eb = flipped_mx[i,j], flipped_EBmx[i,j]
+            if _np.isnan(val): return ""
+            return "%s +/- %s" % (val,eb) #TODO: something better - or user-specifiable
     
     hoverLabels = []
     for i in range(matrix.shape[0]):
-        hoverLabels.append([ hoverLabelFn(flipped_mx[i, j]) 
+        hoverLabels.append([ hoverLabelFn(i,j) 
                              for j in range(matrix.shape[1]) ] )
         
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
@@ -1474,9 +1486,9 @@ class ColorBoxPlot(WorkspacePlot):
 class GateMatrixPlot(WorkspacePlot):
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
-                 mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
-                 boxLabels=False, colorbar=None, prec=0, mxBasisDimsY=None,
-                 scale=1.0):
+                 mxBasis=None, xlabel=None, ylabel=None,
+                 boxLabels=False, colorbar=None, prec=0, mxBasisY=None,
+                 scale=1.0, EBmatrix=None):
         """
         Creates a color box plot of a gate matrix using a diverging color map.
     
@@ -1491,17 +1503,11 @@ class GateMatrixPlot(WorkspacePlot):
         m, M : float, optional
           Min and max values of the color scale.
     
-        mxBasis : str, optional
-          The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-          Used to label the rows & columns.  If you don't want labels, leave as
-          None.
-    
-        mxBasisDims : int or list, optional
-          The dimension of the density matrix space this basis spans, or a
-          list specifying the dimensions of terms in a direct-sum
-          decomposition of the density matrix space.  Used to label the
-          rows & columns.  If you don't want labels, leave as None.
-    
+        mxBasis : str or Basis object, optional
+          The basis, often of `gateMatrix`, used to create the x-labels (and
+          y-labels when `mxBasisY` is None). Typically in {"pp","gm","std","qt"}.
+          If you don't want labels, leave as None.
+        
         xlabel : str, optional
           An x-axis label for the plot.
     
@@ -1524,25 +1530,30 @@ class GateMatrixPlot(WorkspacePlot):
             - int >= 0 = fixed precision given by int
             - int <  0 = number of significant figures given by -int
     
-        mxBasisDimsY : int or list, optional
-            Specifies the dimension of the basis along the Y-axis direction
-            if and when this is *different* from the X-axis direction.  If
-            the two are the same, this parameter can be set to None.
+        mxBasisY : int or list, optional
+          The basis, used to create the y-labels (for rows) when these are
+          *different* from the x-labels.  Typically in
+          {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        EBmatrix : numpy array, optional
+            An array, of the same size as `gateMatrix`, which gives error bars to be
+            be displayed in the hover info.
         """
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
-                                            mxBasis, mxBasisDims, xlabel, ylabel,
-                                            boxLabels, colorbar, prec, mxBasisDimsY, scale)
+                                            mxBasis, xlabel, ylabel,
+                                            boxLabels, colorbar, prec, mxBasisY, scale, EBmatrix)
+
           
     def _create(self, gateMatrix, m, M, 
-                mxBasis, mxBasisDims, xlabel, ylabel,
-                boxLabels, colorbar, prec, mxBasisDimsY, scale):
+                mxBasis, xlabel, ylabel,
+                boxLabels, colorbar, prec, mxBasisY, scale, EBmatrix):
         
         return gatematrix_color_boxplot(
-            gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
-            xlabel, ylabel, boxLabels, colorbar, prec, scale)
+            gateMatrix, m, M, mxBasis, mxBasisY,
+            xlabel, ylabel, boxLabels, colorbar, prec, scale, EBmatrix)
 
 
 
@@ -1755,7 +1766,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
 
 class ProjectionsBoxPlot(WorkspacePlot):
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
-                 boxLabels=False, colorbar=None, prec="compacthp", scale=1.0):
+                 boxLabels=False, colorbar=None, prec="compacthp", scale=1.0,
+                 EBmatrix=None):
         """
         Creates a color box plot displaying projections.
 
@@ -1800,14 +1812,17 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        EBmatrix : numpy array, optional
+            An array, of the same size as `projections`, which gives error bars to be
+            be displayed in the hover info.
         """
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
                                                  projection_basis, m, M,
-                                                 boxLabels, colorbar, prec, scale)
-        
+                                                 boxLabels, colorbar, prec, scale, EBmatrix)
     def _create(self, projections,
                 projection_basis, m, M,
-                boxLabels, colorbar, prec, scale):
+                boxLabels, colorbar, prec, scale, EBmatrix):
 
         absMax = _np.max(_np.abs(projections))
         if m is None: m = -absMax
@@ -1822,7 +1837,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             projections = projections.reshape( (1,projections.size) )
             xlabel = ""; ylabel = ""        
         elif nQubits == 1:
-            projections = projections.reshape( (1,4) )
+            projections = projections.reshape( (1,4) )                
             xlabel = "Q1"; ylabel = ""
         elif nQubits == 2:
             projections = projections.reshape( (4,4) )
@@ -1830,13 +1845,19 @@ class ProjectionsBoxPlot(WorkspacePlot):
         else:
             projections = projections.reshape( (4,projections.size/4) )
             xlabel = "Q*"; ylabel="Q1"
+
+        if EBmatrix is not None:
+            EBmatrix = EBmatrix.reshape( projections.shape )
     
         xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
     
         return gatematrix_color_boxplot(
-            projections, m, M, projection_basis, xd, yd,
-            xlabel, ylabel, boxLabels, colorbar, prec,  scale)
+            projections, m, M,
+            _objs.Basis(projection_basis,xd),
+            _objs.Basis(projection_basis,yd),
+            xlabel, ylabel, boxLabels, colorbar, prec,
+            scale, EBmatrix)
 
 
 
@@ -2037,8 +2058,9 @@ class FitComparisonBarPlot(WorkspacePlot):
                     raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
             Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
+            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
             Nsig = (fitQty-k)/_np.sqrt(2*k)
+            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
             #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
     
             if   (fitQty-k) < _np.sqrt(2*k):
@@ -2083,12 +2105,63 @@ class FitComparisonBarPlot(WorkspacePlot):
             layout['yaxis']['range'] = [min(ys)/2.0,1]
         
         return go.Figure(data=data, layout=layout)
-    
 
-class DatasetComparisonPlot(WorkspacePlot):
+
+class DatasetComparisonSummaryPlot(WorkspacePlot):
+    def __init__(self, ws, dslabels, dsc_dict, scale=1.0):
+        """
+        Creates a plot showing the total 2*deltaLogL values for each pair of
+        DataSets out of some number of total DataSets. 
+
+        Background: For every pair of data sets, the likelihood is computed for
+        two different models: 1) the model in which a single set of
+        probabilities (one per gate sequence, obtained by the combined outcome
+        frequencies) generates both data sets, and 2) the model in which each
+        data is generated from different sets of probabilities.  Twice the ratio
+        of these log-likelihoods can be compared to the value that is expected
+        when model 1) is valid.  This plot shows the difference between the
+        expected and actual twice-log-likelihood ratio in units of standard
+        deviations.  Zero or negative values indicate the data sets appear to be
+        generated by the same underlying probabilities.  Large positive values
+        indicate the data sets appear to be generated by different underlying
+        probabilities.
+        
+        Parameters
+        ----------
+        dslabels : list
+            A list of data set labels, specifying the ordering and the number
+            of data sets.
+
+        dsc_dict : dict
+            A dictionary of `DataComparator` objects whose keys are 2-tuples of
+            integers such that the value associated with `(i,j)` is a
+            `DataComparator` object that compares the `i`-th and `j`-th data
+            sets (as indexed by `dslabels`.
+        """
+        super(DatasetComparisonSummaryPlot,self).__init__(ws, self._create, dslabels, dsc_dict, scale)
+        
+    def _create(self, dslabels, dsc_dict, scale):
+        nSigmaMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
+        max_nSigma = 0.0
+        for i,dslabel1 in enumerate(dslabels):
+            for j,dslabel2 in enumerate(dslabels[i+1:],start=i+1):
+                dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
+                val = dsc.get_composite_nsigma() if (dsc is not None) else None
+                nSigmaMx[i,j] = nSigmaMx[j,i] = val
+                if val and val > max_nSigma: max_nSigma = val
+
+        colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_nSigma)
+        return matrix_color_boxplot(
+            nSigmaMx, 0.0, max_nSigma, dslabels, dslabels, "Dataset 1", "Dataset 2",
+            boxLabels=True, prec=1, colormap=colormap, scale=scale)
+
+
+
+class DatasetComparisonHistogramPlot(WorkspacePlot):
+    """ """
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                   log=True, display='pvalue', scale=1.0):
-        super(DatasetComparisonPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
+        super(DatasetComparisonHistogramPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
                                                    log, display, scale)
         
     def _create(self, dsc, nbins, frequency, log, display, scale):
@@ -2100,13 +2173,17 @@ class DatasetComparisonPlot(WorkspacePlot):
         pVals_nz = _np.array([x for x in pVals if abs(x)>TOL])
         pVals0 = (len(pVals)-len(pVals_nz)) if log else dsc.pVals0
         llrVals = dsc.llrVals.astype('d')
-        
+
         if log:
-            minval = _np.floor(_np.log10(min(pVals_nz)))
-            maxval = _np.ceil(_np.log10(max(pVals_nz)))
-            thres = (maxval-minval)/(nbins-1) * (nbins-2)
-            lastBinCount = (_np.log10(pVals_nz)>thres).sum()
-             #Kenny: why use this as a normalization?  Is this correct?
+            if len(pVals_nz) == 0:
+                minval = maxval = thres = 0.0
+                lastBinCount = 0
+            else:
+                minval = _np.floor(_np.log10(min(pVals_nz)))
+                maxval = _np.ceil(_np.log10(max(pVals_nz)))
+                thres = (maxval-minval)/(nbins-1) * (nbins-2)
+                lastBinCount = (_np.log10(pVals_nz)>thres).sum()
+                #Kenny: why use this as a normalization?  Is this correct?
         else:
             minval = min(pVals)
             maxval = max(pVals)

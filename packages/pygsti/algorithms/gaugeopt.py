@@ -21,20 +21,19 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
-    mxBasis = gateset.basis.name
-    basisDim = gateset.basis.dim.blockDims
+    mxBasis = gateset.basis
 
     #Use the target gateset's basis if gateset's is unknown
     # (as it can often be if it's just come from an logl opt,
     #  since from_vector will clear any basis info)
-    if mxBasis == "unknown" and targetGateset is not None: 
-        mxBasis = targetGateset.basis.name
-        basisDim = targetGateset.basis.dim.blockDims
+    if mxBasis.name == "unknown" and targetGateset is not None: 
+        mxBasis = targetGateset.basis
+
     def objective_fn(gs):
         ret = 0
 
         if CPpenalty != 0:
-            gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+            gs.basis = mxBasis #set basis for jamiolkowski iso
             s = _tools.sum_of_negative_choi_evals(gs, weights=None)
               # we desire *uniform* weights (don't specify itemWeights here)
             ret += CPpenalty * s
@@ -210,8 +209,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         validSpamPenalty == 0 and \
         targetGateset is not None and \
         gatesMetric == "frobenius" and \
-        spamMetric  == "frobenius":# and \
-        #gateset.dim < 64:
+        spamMetric  == "frobenius" and \
+        gateset.dim < 64: # least squares optimization is uneffective if more than 3 qubits
 
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
@@ -236,8 +235,7 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
     # resulting gate set is now in the same basis as the target.
     if targetGateset is not None:
         newGateset = result[-1] if returnAll else result
-        newGateset.basis = Basis(targetGateset.basis.name,
-                             targetGateset.basis.dim.blockDims)
+        newGateset.basis = targetGateset.basis.copy()
         #DEBUG
         #print('gauge opt result distance to target')
         #print(newGateset.frobeniusdist(targetGateset))
@@ -485,19 +483,29 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         minSol = _opt.minimize(call_objective_fn, x0,
                               method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
                               callback = print_obj_func if bToStdout else None)
+        solnX = minSol.x
+        solnF = minSol.fun
     elif algorithm == 'ls':
         jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights, checkJac)
-        minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
-                                    max_nfev=maxfev, ftol=tol)
+        #minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+        #                            max_nfev=maxfev, ftol=tol)
+        solnX,converged,msg = _opt.custom_leastsq(
+            call_objective_fn, jacobian, x0, f_norm2_tol=tol,
+            jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
+            max_iter=maxiter, comm=None, #no MPI for gauge opt yet...
+            verbosity=printer.verbosity-2)
+        printer.log("Least squares message = %s" % msg,2)
+        assert(converged)
+        solnF = call_objective_fn(solnX) if returnAll else None
     else:
         raise ValueError('Unknown algorithm inside of gauge opt: {}'.format(algorithm))
 
-    gaugeGroupEl.from_vector(minSol.x)
+    gaugeGroupEl.from_vector(solnX)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
 
     if returnAll:
-        return minSol.fun, gaugeMat, newGateset
+        return solnF, gaugeMat, newGateset
     else:  
         return newGateset
 
@@ -643,8 +651,13 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
     gateDim = gateset.get_dimension()
     firstRowForTP = _np.zeros(gateDim); firstRowForTP[0] = 1.0
-    mxBasis = gateset.basis.name
-    basisDim = gateset.basis.dim.blockDims
+    mxBasis = gateset.basis
+
+    #Use the target gateset's basis if gateset's is unknown
+    # (as it can often be if it's just come from an logl opt,
+    #  since from_vector will clear any basis info)
+    if mxBasis.name == "unknown" and targetGateset is not None: 
+        mxBasis = targetGateset.basis
 
     if toGetTo == "target":
         if targetGateset is None: raise ValueError("Must specify a targetGateset != None")
@@ -664,7 +677,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             gs = gateset.copy(); gs.transform(ggEl)
 
             if cpPenalty != 0:
-                gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+                gs.basis = mxBasis #set basis for jamiolkowski iso
                 s = _tools.sum_of_negative_choi_evals(gs)
                 if s > 1e-8: return cpPenalty #*(1.0+s) #1e-8 should match TOL in contract to CP routines
 
@@ -750,7 +763,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             ggEl = _objs.TPGaugeGroup.element(matM)
             gs = tpGateset.copy(); gs.transform(ggEl)
 
-            gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+            gs.basis = mxBasis #set basis for jamiolkowski iso
             cpPenalties = _tools.sums_of_negative_choi_evals(gs)
             #numNonCP = sum([ 1 if p > 1e-4 else 0 for p in cpPenalties ])
             #cpPenalty = sum( [ 10**i*cp for (i,cp) in enumerate(cpPenalties)] ) + 100*numNonCP #DEBUG
@@ -843,7 +856,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
             ggEl = _objs.TPGaugeGroup.element(matM)
             gs = tpGateset.copy(); gs.transform(ggEl)
 
-            gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+            gs.basis = mxBasis #set basis for jamiolkowski iso
             cpPenalties = _tools.sums_of_negative_choi_evals(gs)
             cpPenalty = sum( cpPenalties )
 
@@ -905,8 +918,7 @@ def optimize_gauge(gateset, toGetTo, maxiter=100000, maxfev=None, tol=1e-8,
 
     #If we've optimized to a target, set the basis of the new gatset
     if toGetTo in ("target", "TP and target", "CPTP and target"):
-        newGateset.basis = Basis(targetGateset.basis.name,
-                             targetGateset.basis.dim.blockDims)
+        newGateset.basis = targetGateset.basis.copy()
 
     if toGetTo == "target":
         printer.log(('The resulting Frobenius-norm distance is: %g' % minSol.fun), 2)

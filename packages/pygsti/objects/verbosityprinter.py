@@ -150,16 +150,20 @@ class VerbosityPrinter():
         self._progressParamsStack   = []
         self.warnings         = warnings
         self.extra_indents    = 0 # Used for nested calls
+        self.defaultVerbosity = 1
 
     def clone(self):
         '''
         Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
         '''
         p = VerbosityPrinter(self.verbosity, self.filename, self._comm, self.warnings)
-        p.progressLevel  = self.progressLevel
-        p.extra_indents = self.extra_indents
-        p._delayQueue    = _dc(self._delayQueue) # deepcopy
-        p._progressStack = _dc(self._progressStack)
+
+        p.defaultVerbosity = self.defaultVerbosity
+        p.progressLevel    = self.progressLevel
+        p.extra_indents    = self.extra_indents
+
+        p._delayQueue          = _dc(self._delayQueue) # deepcopy
+        p._progressStack       = _dc(self._progressStack)
         p._progressParamsStack = _dc(self._progressParamsStack)
         return p
 
@@ -208,6 +212,16 @@ class VerbosityPrinter():
         p.verbosity -= other
         p.extra_indents += other
         return p
+
+    def __getstate__(self):
+        #Return the state (for pickling) -- *don't* pickle Comm object
+        to_pickle = self.__dict__.copy()
+        del to_pickle['_comm'] # one *cannot* pickle Comm objects
+        return  to_pickle
+
+    def __setstate__(self, stateDict):
+        self.__dict__.update(stateDict)
+        self._comm = None # initialize to None upon unpickling
 
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for the entire program)
     def _append_to(self, filename, message):
@@ -259,7 +273,7 @@ class VerbosityPrinter():
         if self.warnings:
             self._put('\nWARNING: %s\n' % message, stderr=True)
 
-    def log(self, message, messageLevel=1, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
+    def log(self, message, messageLevel=None, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
         '''
         Log a status message to screen/file
         Determines whether the message should be printed based on current verbosity setting,
@@ -288,6 +302,8 @@ class VerbosityPrinter():
         -------
         None
         '''
+        if messageLevel is None:
+            messageLevel = self.defaultVerbosity
         if messageLevel <= self.verbosity:
             indent = (indentChar * (messageLevel-1+indentOffset 
                                     + self.extra_indents)) if doIndent else ''
@@ -327,6 +343,28 @@ class VerbosityPrinter():
             % (self.progressLevel, self.verbosity, self.extra_indents)
 
     @_contextmanager
+    def verbosity_env(self, level):
+        '''
+        Create a temporary environment with a different verbosity level,
+        controlled using Python's with statement:
+
+            >>> with printer.verbosity_env(2):
+                    printer.log('Message1') # printed at verbosity level 2
+                    printer.log('Message2') # printed at verbosity level 2
+
+        Parameters
+        ----------
+        level - int:
+            The new default verbosity value for the printer.log() function
+        '''
+        original = self.defaultVerbosity
+        try:
+            self.defaultVerbosity = level
+            yield
+        finally:
+            self.defaultVerbosity = original
+
+    @_contextmanager
     def progress_logging(self, messageLevel=1):
         '''
         Context manager for logging progress bars/iterations
@@ -337,12 +375,14 @@ class VerbosityPrinter():
         messageLevel - int, optional:
           the verbosity level of the progressbar/set of iterations
         '''
-        self._progressStack.append(messageLevel)
-        self._progressParamsStack.append(None)
-        if self.verbosity == messageLevel:
-            self.progressLevel += 1
-        yield
-        self._end_progress()
+        try:
+            self._progressStack.append(messageLevel)
+            self._progressParamsStack.append(None)
+            if self.verbosity == messageLevel:
+                self.progressLevel += 1
+            yield
+        finally:
+            self._end_progress()
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
     def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#',

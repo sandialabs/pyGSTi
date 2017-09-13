@@ -21,10 +21,10 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
     Parameters
     ----------
     xhat : float
-       The number of plus counts for the sin string being used.
+       The number of 0 counts for the sin string being used.
 
     yhat : float
-       The number of plus counts for the cos string being used.
+       The number of 0 counts for the cos string being used.
 
     k : float
        The generation of experiments that xhat and yhat come from.
@@ -86,8 +86,8 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
-    each generation).  Note: this assumes the dataset contains 'plus' and
-    'minus' SPAM labels.
+    each generation).  Note: this assumes the dataset contains '0' and
+    '1' SPAM labels.
 
     Parameters
     ----------
@@ -122,10 +122,10 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     if lengthList == None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
-        xhatTemp = DS[angleSinStrs[i]]['plus']
-        yhatTemp = DS[angleCosStrs[i]]['plus']
-        Nx = xhatTemp + DS[angleSinStrs[i]]['minus']
-        Ny = yhatTemp + DS[angleCosStrs[i]]['minus']
+        xhatTemp = DS[angleSinStrs[i]]['0']
+        yhatTemp = DS[angleCosStrs[i]]['0']
+        Nx = xhatTemp + DS[angleSinStrs[i]]['1']
+        Ny = yhatTemp + DS[angleCosStrs[i]]['1']
         angleTemp1 = extract_rotation_hat(xhatTemp,yhatTemp,length,
                                           Nx,Ny,angleName,angleTemp1,rpeconfig_inst)
         angleHatList.append(angleTemp1)

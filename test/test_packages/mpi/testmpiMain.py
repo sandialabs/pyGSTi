@@ -96,8 +96,8 @@ def create_fake_dataset(comm):
         dsFake = comm.bcast(None, root=0)
 
     #for gs in dsFake:
-    #    if abs(dsFake[gs]['plus']-dsFake_cmp[gs]['plus']) > 0.5:
-    #        print("DS DIFF: ",gs, dsFake[gs]['plus'], "vs", dsFake_cmp[gs]['plus'] )
+    #    if abs(dsFake[gs]['0']-dsFake_cmp[gs]['0']) > 0.5:
+    #        print("DS DIFF: ",gs, dsFake[gs]['0'], "vs", dsFake_cmp[gs]['0'] )
     return dsFake, lsgstStrings
 
 
@@ -216,22 +216,22 @@ def test_MPI_pr(comm):
 
     # non-split tree => automatically adjusts wrtBlockSize to accomodate
     #                    the number of processors
-    serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
-    parallel, pp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+    parallel, pp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
-    serial, sdp, sp = gs.bulk_hpr('plus', tree, returnPr=True, returnDeriv=True,
+    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
                              clipTo=(-1e6,1e6))
-    parallel, pdp, pp = gs.bulk_hpr('plus', tree, returnPr=True,
+    parallel, pdp, pp = gs.bulk_hpr('0', tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sdp-pdp) < 1e-6)
@@ -240,26 +240,26 @@ def test_MPI_pr(comm):
 
     # split tree =>  distribures on sub-trees prior to adjusting
     #                wrtBlockSize to accomodate remaining processors
-    serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_pr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_pr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dpr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_dpr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
-    parallel, pp = gs.bulk_dpr('plus', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+    parallel, pp = gs.bulk_dpr('0', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
-    serial, sdp, sp = gs.bulk_hpr('plus', tree, returnPr=True, returnDeriv=True,
+    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
                              clipTo=(-1e6,1e6))
-    parallel, pdp, pp = gs.bulk_hpr('plus', split_tree, returnPr=True,
+    parallel, pdp, pp = gs.bulk_hpr('0', split_tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     pdp = split_tree.permute_computation_to_original(pdp)
@@ -368,7 +368,7 @@ def test_MPI_fills(comm):
 
     #Check fill probabilities
 
-    spam_label_rows = { 'plus': 0, 'minus': 1 }
+    spam_label_rows = { '0': 0, '1': 1 }
     nGateStrings = tree.num_final_strings()
     nDerivCols = gs.num_params()
     nSpamLabels = len(spam_label_rows)
@@ -517,7 +517,7 @@ def test_MPI_by_block(comm):
 
     #Check that "by column" matches standard "at once" methods:
 
-    spam_label_rows = { 'plus': 0, 'minus': 1 }
+    spam_label_rows = { '0': 0, '1': 1 }
     nGateStrings = tree.num_final_strings()
     nDerivCols = gs.num_params()
     nSpamLabels = len(spam_label_rows)

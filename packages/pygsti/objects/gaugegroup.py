@@ -142,10 +142,11 @@ class TPDiagGaugeGroup(TPGaugeGroup):
 
 
 class UnitaryGaugeGroup(GateGaugeGroup):
-    def __init__(self, dim):
+    def __init__(self, dim, basis):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.LindbladParameterizedGate(None, _np.identity(dim,'d'),
-                                               cptp=True, nonham_basis=[])
+                                               cptp=True, nonham_basis=[],
+                                               ham_basis=basis, mxBasis=basis)
         GateGaugeGroup.__init__(self, gate)
 
     class element(GateGaugeGroup.element):

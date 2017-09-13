@@ -12,6 +12,7 @@ import numpy as _np
 import sys as _sys
 import time as _time
 import collections as _collections
+import pickle as _pickle
 from scipy.stats import chi2 as _chi2
 
 from .. import report as _report
@@ -27,7 +28,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
                          germsListOrFilename, maxLengths, gaugeOptParams=None,
                          advancedOptions=None, comm=None, memLimit=None,
-                         verbosity=2):
+                         output_pkl=None, verbosity=2):
     """
     Perform end-to-end GST analysis using Ls and germs, with L as a maximum
     length.
@@ -54,7 +55,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -128,6 +130,10 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     memLimit : int or None, optional
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
@@ -219,12 +225,18 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         startingPt = advancedOptions.get('starting point',"target")
 
     #Get dataset for checking below
-    if comm is None or comm.Get_rank() == 0:
-        if _compat.isstr(dataFilenameOrSet):
-            dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
+    if _compat.isstr(dataFilenameOrSet):
+        if comm is None or comm.Get_rank() == 0:
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    dschk = _pickle.load(pklfile)
+            else:
+                dschk = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, verbosity)
+            if comm is not None: comm.bcast(dschk, root=0)
         else:
-            dschk = dataFilenameOrSet
-    else: dschk = None
+            dschk = comm.bcast(None, root=0)
+    else:
+        dschk = dataFilenameOrSet
 
     #Construct gate sequences
     actionIfMissing = advancedOptions.get('missingDataAction','drop')
@@ -243,7 +255,8 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     
     return do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                                      lsgstLists, gaugeOptParams,
-                                     advancedOptions, comm, memLimit, verbosity)
+                                     advancedOptions, comm, memLimit,
+                                     output_pkl, verbosity)
 
 
 
@@ -251,7 +264,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                               lsgstLists, gaugeOptParams=None,
                               advancedOptions=None, comm=None, memLimit=None,
-                              verbosity=2):
+                              output_pkl=None, verbosity=2):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -264,7 +277,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -299,6 +313,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     memLimit : int or None, optional
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
 
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
@@ -350,9 +368,17 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 
     #Get/load dataset
     if _compat.isstr(dataFilenameOrSet):
-        ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
         default_dir = _os.path.dirname(dataFilenameOrSet) #default directory for reports, etc
-        default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]
+        default_base = _os.path.splitext( _os.path.basename(dataFilenameOrSet) )[0]        
+        if comm is None or comm.Get_rank() == 0:
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    ds = _pickle.load(pklfile)
+            else:
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+            if comm is not None: comm.bcast(ds, root=0)
+        else:
+            ds = comm.bcast(None, root=0)            
     else:
         ds = dataFilenameOrSet #assume a Dataset object
         default_dir = default_base = None
@@ -442,6 +468,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             ds, gs_start, rawLists,
             tol = advancedOptions.get('tolerance',1e-6),
             cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
+            spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
             maxiter = advancedOptions.get('maxIterations',100000),
             minProbClipForWeighting=advancedOptions.get(
                 'minProbClipForWeighting',1e-4),
@@ -464,6 +491,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
           ds, gs_start, rawLists,
           tol = advancedOptions.get('tolerance',1e-6),
           cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
+          spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
           maxiter = advancedOptions.get('maxIterations',100000),
           minProbClip = advancedOptions.get('minProbClip',1e-4),
           probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
@@ -613,6 +641,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             raise ValueError("Invalid onBadFit value: %s" % onBadFit)
             
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
+
+    #Write results to a pickle file if desired
+    if output_pkl and (comm is None or comm.Get_rank() == 0):
+        if _compat.isstr(output_pkl):
+            with open(output_pkl, 'wb') as pklfile:
+                _pickle.dump(ret, pklfile)
+        else:
+            _pickle.dump(ret, output_pkl)
+        
     return ret
 
 
@@ -621,7 +658,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       comm=None, memLimit=None, verbosity=2):
+                       comm=None, memLimit=None, advancedOptions=None,
+                       output_pkl=None, verbosity=2):
 
     """
     Perform end-to-end GST analysis using standard practices.
@@ -637,7 +675,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     ----------
     dataFilenameOrSet : DataSet or string
         The data set object to use for the analysis, specified either directly
-        or by the filename of a dataset file (in text format).
+        or by the filename of a dataset file (assumed to be a pickled `DataSet`
+        if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
     targetGateFilenameOrSet : GateSet or string
         The target gate set, specified either directly or by the filename of a
@@ -683,6 +722,18 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         A rough memory limit in bytes which restricts the amount of memory 
         used (per core when run on multi-CPUs).
 
+    advancedOptions : dict, optional
+        Specifies advanced options most of which deal with numerical details of
+        the objective function or expert-level functionality.  Keys of this 
+        dictionary can be any of the modes being computed (see the `modes`
+        argument) or 'all', which applies to all modes.  Values are
+        dictionaries of advanced arguements - see :func:`do_long_sequence_gst`
+        for a list of the allowed keys for each such dictionary.
+
+    output_pkl : str or file, optional
+        If not None, a file(name) to `pickle.dump` the returned `Results` object
+        to (only the rank 0 process performs the dump when `comm` is not None).
+
     verbosity : int, optional
        The 'verbosity' option is an integer specifying the level of 
        detail printed to stdout during the calculation.
@@ -701,7 +752,15 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
 
     #Get/load dataset
     if _compat.isstr(dataFilenameOrSet):
-        ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+        if comm is None or comm.Get_rank() == 0:
+            if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
+                with open(dataFilenameOrSet,'rb') as pklfile:
+                    ds = _pickle.load(pklfile)
+            else:
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+            if comm is not None: comm.bcast(ds, root=0)
+        else:
+            ds = comm.bcast(None, root=0)            
     else:
         ds = dataFilenameOrSet #assume a Dataset object
 
@@ -728,26 +787,48 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 
                 est_label = parameterization = mode #for now, 1-1 correspondence
                 tgt = gs_target.copy(); tgt.set_all_parameterizations(parameterization)
-                advanced = {'appendTo': ret, 'estimateLabel': est_label }
+
+                #prepare advanced options dictionary
+                if advancedOptions is not None:
+                    advanced = advancedOptions.get('all',{})
+                    advanced.update( advancedOptions.get(mode,{}) )
+                else: advanced = {}
+                advanced.update( {'appendTo': ret, 'estimateLabel': est_label } )
                 
                 ret = do_long_sequence_gst(ds, tgt, prepStrsListOrFilename,
                                            effectStrsListOrFilename, germsListOrFilename,
                                            maxLengths, False, advanced, comm, memLimit,
-                                           printer-1)
+                                           None, printer-1)
             
             #Gauge optimize to a variety of spam weights
             for vSpam in [1]:
                 for spamWt in [1e-4,1e-1]:
+                    goLabel = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
+                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
+                    tGO = _time.time()
+                    
                     ret.estimates[est_label].add_gaugeoptimized(
                         {'itemWeights': {'gates':1, 'spam':spamWt},
-                         'validSpamPenalty': vSpam},
-                        None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
+                         'validSpamPenalty': vSpam, 'verbosity': printer-1},
+                        None, goLabel)
+                    printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
 
                     #Gauge optimize data-scaled estimate also
                     if est_label + ".robust" in ret.estimates:
+                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
+                        tGO = _time.time()
                         ret.estimates[est_label + ".robust"].add_gaugeoptimized(
                             {'itemWeights': {'gates':1, 'spam':spamWt},
-                             'validSpamPenalty': vSpam},
-                            None, "Spam %g%s" % (spamWt, "+v" if vSpam else ""))
+                             'validSpamPenalty': vSpam, 'verbosity': printer-1},
+                            None, goLabel)
+                        printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
+
+    #Write results to a pickle file if desired
+    if output_pkl and (comm is None or comm.Get_rank() == 0):
+        if _compat.isstr(output_pkl):
+            with open(output_pkl, 'wb') as pklfile:
+                _pickle.dump(ret, pklfile)
+        else:
+            _pickle.dump(ret, output_pkl)
 
     return ret

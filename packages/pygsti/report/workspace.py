@@ -6,107 +6,67 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the Workspace class and supporting functionality."""
 
-import itertools as _itertools
+import itertools   as _itertools
 import collections as _collections
-import os as _os
-import shutil as _shutil
-import numpy as _np
-import uuid as _uuid
-import random as _random
-import inspect as _inspect
-import sys as _sys
-import hashlib as _hashlib
-import functools as _functools
+import os          as _os
+import shutil      as _shutil
+import numpy       as _np
+import uuid        as _uuid
+import random      as _random
+import inspect     as _inspect
+import sys         as _sys
+import hashlib     as _hashlib
+import functools   as _functools
+import pickle      as _pickle
+import json        as _json
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
+
+from pprint import pprint as _pprint
 #from IPython.display import clear_output as _clear_output
 
 _PYGSTI_WORKSPACE_INITIALIZED = False
 
-def digest(obj):
-    """Returns an MD5 digest of an arbitary Python object, `obj`."""
-    if _sys.version_info > (3, 0): # Python3?
-        longT = int      # define long and unicode
-        unicodeT = str   #  types to mimic Python2
-    else:
-        longT = long
-        unicodeT = unicode
-
-    # a function to recursively serialize 'v' into an md5 object
-    def add(md5, v):
-        """Add `v` to the hash, recursively if needed."""
-        md5.update(str(type(v)).encode('utf-8'))
-        if isinstance(v, bytes):
-            md5.update(v)  #can add bytes directly
-        elif isinstance(v, float) or _compat.isstr(v) or _compat.isint(v):
-            md5.update(str(v).encode('utf-8')) #need to encode strings
-        elif isinstance(v, _np.ndarray):
-            md5.update(v.tostring()) # numpy gives us bytes
-        elif isinstance(v, (tuple, list)):
-            for el in v:  add(md5,el)
-        elif isinstance(v, dict):
-            keys = list(v.keys())
-            for k in sorted(keys):
-                add(md5,k)
-                add(md5,v[k])
-        elif isinstance(v, SwitchValue):
-            md5.update(v.base.tostring()) #don't recurse to parent switchboard
-        elif v is None:
-            md5.update("NONE".encode('utf-8'))
-        elif isinstance(v,NotApplicable):
-            md5.update("NOTAPPLICABLE".encode('utf-8'))
-        elif isinstance(v, (_objs.DataSet, _objs.DataComparator)):
-            md5.update(v.timestamp.encode('utf-8'))
-        else:
-            #print("Encoding type: ",str(type(v)))
-            attribs = list(sorted(dir(v)))
-            for k in attribs:
-                if k.startswith('__'): continue
-                a = getattr(v, k)
-                if _inspect.isroutine(a): continue
-                add(md5,k)
-                add(md5,a)
-        return
-
-    M = _hashlib.md5()
-    add(M, obj)
-    return M.digest() #return the MD5 digest
-
-def _is_hashable(x):
-    try:
-        dct = { x: 0 }
-    except TypeError:
-        return False
-    return True
-
-def get_fn_name_key(fn):
-    name = fn.__name__
-    if hasattr(fn, '__self__'):
-        name = fn.__self__.__class__.__name__ + '.' + name
-    return name
-
-def call_key(fn, args):
+def enable_plotly_pickling():
     """ 
-    Returns a hashable key for caching the result of a function call.
-
-    Parameters
-    ----------
-    fn : function
-       The function itself
-
-    args : list or tuple
-       The function's arguments.
-
-    Returns
-    -------
-    tuple
+    Hacks the plotly python library so that figures may be pickled and
+    un-pickled.  This hack should be used only temporarily - so all pickling
+    and un-pickling should be done between calls to
+    :func:`enable_plotly_pickling` and :func:`disable_plotly_pickling`.
     """
-    fnName = get_fn_name_key(fn)
-    return (fnName,) + tuple(map(digest,args))
+    import plotly
+    def setitem(self, key, value, _raise=True):
+        return dict.__setitem__(self,key,value)
+    
+    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+    plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
+    plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
+    plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
+    del plotlyDictClass.__getattr__
+    del plotlyDictClass.__setattr__
+    plotlyDictClass.__setitem__ = setitem
+    
+def disable_plotly_pickling():
+    """ Reverses the effect of :func:`enable_plotly_pickling` """
+    import plotly
+    plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
+    plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
+    plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
+    plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
+    del plotlyDictClass.__saved_getattr__
+    del plotlyDictClass.__saved_setattr__
+
+def ws_custom_digest(md5, v):
+    if isinstance(v,NotApplicable):
+        md5.update("NOTAPPLICABLE".encode('utf-8'))
+    elif isinstance(v, SwitchValue):
+        md5.update(v.base.tostring()) #don't recurse to parent switchboard
+    else:
+        raise _objs.CustomDigestError()
 
 def randomID():
     """ Returns a random DOM ID """
@@ -201,15 +161,40 @@ class Workspace(object):
     a script to build a hardcoded ("fixed") report/dashboard.
     """
 
-    def __init__(self):
+    def __init__(self, cachefile=None):
         """
         Initialize a Workspace object.
-        """
 
-        self.outputObjs = {} #cache of WorkspaceOutput objects (hashable by call_keys)
-        self.compCache = {}  # cache of computation function results (hashable by call_keys)
+        Parameters
+        ----------
+        cachefile : str, optional
+            filename with cached workspace results
+        """
         self._register_components(False)
-        self.ineffectiveCache = set()
+        self.smartCache = _objs.SmartCache()
+        if cachefile is not None:
+            self.load_cache(cachefile)
+        self.smartCache.add_digest(ws_custom_digest)
+
+    def save_cache(self, cachefile, showUnpickled=False):
+        with open(cachefile, 'wb') as outfile:
+            enable_plotly_pickling()
+            _pickle.dump(self.smartCache, outfile)
+            disable_plotly_pickling()
+        if showUnpickled:
+            print('Unpickled keys:')
+            _pprint(self.smartCache.unpickleable)
+
+    def load_cache(self, cachefile):
+        with open(cachefile, 'rb') as infile:
+            enable_plotly_pickling()
+            oldCache = _pickle.load(infile).cache
+            disable_plotly_pickling()
+            for v in oldCache.values():
+                if isinstance(v, WorkspaceOutput): # hasattr(v,'ws') == True for plotly dicts (why?)
+                    print('Updated {} object to set ws to self'.format(type(v)))
+                    v.ws = self
+            self.smartCache.cache.update(oldCache)
 
     def _makefactory(self, cls, autodisplay):#, printer=_objs.VerbosityPrinter(1)):
         PY3 = bool(_sys.version_info > (3, 0))
@@ -297,6 +282,7 @@ class Workspace(object):
 
           # Spam & Gates vs. a target
         self.SpamVsTargetTable = makefactory(_wt.SpamVsTargetTable)
+        self.GatesetVsTargetTable = makefactory(_wt.GatesetVsTargetTable)
         self.GatesVsTargetTable = makefactory(_wt.GatesVsTargetTable)
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
@@ -329,7 +315,8 @@ class Workspace(object):
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
         self.GramMatrixBarPlot = makefactory(_wp.GramMatrixBarPlot)
         self.FitComparisonBarPlot = makefactory(_wp.FitComparisonBarPlot)
-        self.DatasetComparisonPlot = makefactory(_wp.DatasetComparisonPlot)
+        self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
+        self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
 
         
@@ -652,32 +639,13 @@ class Workspace(object):
             for j,arg in nonSwitchedArgs:
                 argVals[j] = arg
 
-            name_key = get_fn_name_key(fn)
-            #if any argument is a NotApplicable object, just use it as the
-            # result. Otherwise, compute the result or pull it from cache.
             for v in argVals:
                 if isinstance(v, NotApplicable):
                     key="NA"; result = v; break
             else:
-                if name_key in self.ineffectiveCache:
-                    key = 'NA'
-                    result = fn(*argVals)
-                else:
-                    # argVals now contains all the arguments, so call the function if
-                    #  we need to and add result.
-                    times = dict()
-                    with _timed_block('hash', times):
-                        key = call_key(fn, argVals) # cache by call key
-                    if key not in self.compCache:
-                        with _timed_block('call', times):
-                            self.compCache[key] = fn(*argVals)
-                    if 'call' in times:
-                        if times['hash'] > times['call']:
-                            #print('Added {} to hash-ineffective functions'.format(name_key))
-                            self.ineffectiveCache.add(name_key)
-                    result = self.compCache[key]
+                key, result = self.smartCache.cached_compute(fn, argVals)
 
-            if key not in storedKeys:
+            if key not in storedKeys or key == 'INEFFECTIVE':                
                 switchpos_map[pos] = len(resultValues)
                 storedKeys[key] = len(resultValues)
                 resultValues.append( result )
@@ -1144,7 +1112,7 @@ class Switchboard(_collections.OrderedDict):
     def __getattr__(self, attr):
         if attr in self:
             return self[attr]
-        return getattr(self.__dict__,attr)
+        return getattr(self.__dict__, attr)
 
 
 class SwitchboardView(object):
@@ -1324,6 +1292,15 @@ class WorkspaceOutput(object):
         self.ws = ws
         #self.widget = None #don't build until 1st display()
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        del state_dict['ws']
+        return state_dict
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        if 'ws' not in self.__dict__:
+            self.__dict__['ws'] = None
         
     # Note: hashing not needed because these objects are not *inputs* to
     # other WorspaceOutput objects or computation functions - these objects
@@ -1738,10 +1715,16 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        '''
+        # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(self.plotfn, *self.initargs)
+        '''
+        self.initargs = args
+        self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
+            self.ws.switchedCompute(fn, *self.initargs)
         self.options = { 'click_to_display': False }
 
     def set_render_options(self, click_to_display=None):

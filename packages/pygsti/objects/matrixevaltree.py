@@ -138,7 +138,9 @@ class MatrixEvalTree(EvalTree):
                 for b in range(L-start,0,-1):
                     if gateString[start:start+b] in evalDict:
                         bite = b; break
-                else: assert(False) #Logic error - loop above should always exit when b == 1
+                else: assert(False), ("EvalTree Error: probably caused because "
+                  "your gate strings contain gates that your gate set does not")
+                  #Logic error - loop above should always exit when b == 1
 
                 #iInFinal = k if bool(start + bite == L) else -1
                 bFinal = bool(start + bite == L)

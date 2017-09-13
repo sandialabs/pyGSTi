@@ -41,6 +41,25 @@ from .verbosityprinter import VerbosityPrinter
 #TODO: add "type" argument to ConfidenceRegion constructor?
 #   ==> "std" or "non-markovian"
 
+#Helpers
+def _create_empty_grad(val, nParams):
+    """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
+    if type(val) == float:
+        gradVal = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
+    else:
+        gradSize = (nParams,) + tuple(val.shape)
+        gradVal = _np.zeros( gradSize, val.dtype ) #assume all functions are real-valued for now...
+    return gradVal #gradient of value (empty)
+
+def _create_empty_gradF(f0, nParams):
+    if isinstance(f0, dict): #special behavior for dict: process each item separately
+        gradF = { ky: _create_empty_grad(val,nParams) for ky,val in f0.items() }
+    else:
+        gradF = _create_empty_grad(f0,nParams)
+    return gradF
+
+
+
 class ConfidenceRegion(object):
     """
     Encapsulates a hessian-based confidence region in gate-set space.
@@ -286,6 +305,11 @@ class ConfidenceRegion(object):
         """
         return bool(self.invRegionQuadcForm is not None)
 
+    def get_errobar_type(self):
+        if self.nonMarkRadiusSq > 0:
+            return "non-markovian"
+        else:
+            return "standard"
 
     def get_gateset(self):
         """
@@ -375,17 +399,78 @@ class ConfidenceRegion(object):
         gateVec0 = gateObj.to_vector()
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        if type(f0) == float:
-            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
-        else:
-            gradSize = (nParams,) + tuple(f0.shape)
-            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+        gradF = _create_empty_gradF(f0, nParams)
 
         for i in range(nGateParams):
             gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.from_vector(gateVec)
-            gradF[gpo + i] = ( fnOfGate( gateObj ) - f0 ) / eps
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][gpo + i] = ( fnOfGate( gateObj )[ky] - f0[ky] ) / eps
+            else:
+                gradF[gpo + i] = ( fnOfGate( gateObj ) - f0 ) / eps
 
-        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
+
+
+    def get_gatestring_fn_confidence_interval(self, fnOfGatestringAndSet,
+                                        gatestring, eps=1e-7,
+                                        returnFnVal=False, verbosity=0):
+        """
+        Compute the confidence interval for a function of a single gate string.
+
+        Parameters
+        ----------
+        fnOfGatestringAndSet : function
+            A function which takes two arguments: a `GateString` and a `GateSet`.
+            The returned confidence interval is based on linearizing this
+            function and propagating the gateset-space confidence region.
+
+        gatestring : GateString
+            The gate label sequence passed to fnOfGatestringAndSet.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives.
+
+        returnFnVal : bool, optional
+            If True, return the value of fnOfGatestringAndSet along with it's
+            confidence region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfGatestringAndSet.  Thus,
+            shape of df matches that returned by fnOfGatestringAndSet.
+
+        f0 : float or numpy array
+            Only returned when returnFnVal == True. Value of 
+            fnOfGatestringAndSet at the gate specified by gateLabel.
+        """
+
+        nParams = self.gateset.num_params()
+        gateset = self.gateset.copy() # copy because we add eps to this gateset
+
+        f0 = fnOfGatestringAndSet(gatestring, gateset) #function value at "base point"
+        gatesetVec0 = gateset.to_vector()
+        assert(len(gatesetVec0) == nParams)
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        gradF = _create_empty_gradF(f0, nParams)
+
+        for i in range(nParams):
+            gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
+            gateset.from_vector(gatesetVec)
+            gateset.basis = self.gateset.basis #preserve basis since we've just perturbed a little
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][i] = ( fnOfGatestringAndSet( gatestring, gateset )[ky] - f0[ky] ) / eps
+            else:
+                gradF[i] = ( fnOfGatestringAndSet(gatestring, gateset) - f0 ) / eps
+
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
     def get_prep_fn_confidence_interval(self, fnOfPrep, prepLabel, eps=1e-7,
@@ -436,17 +521,17 @@ class ConfidenceRegion(object):
         prepVec0 = prepObj.to_vector()
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        if type(f0) == float:
-            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
-        else:
-            gradSize = (nParams,) + tuple(f0.shape)
-            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+        gradF = _create_empty_gradF(f0, nParams)
 
         for i in range(nPrepParams):
             prepVec = prepVec0.copy(); prepVec[i] += eps; prepObj.from_vector(prepVec)
-            gradF[gpo + i] = ( fnOfPrep( prepObj ) - f0 ) / eps
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][gpo + i] = ( fnOfPrep( prepObj )[ky] - f0[ky] ) / eps
+            else:
+                gradF[gpo + i] = ( fnOfPrep( prepObj ) - f0 ) / eps
 
-        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
     def get_effect_fn_confidence_interval(self, fnOfEffect, effectLabel, eps=1e-7,
@@ -502,17 +587,17 @@ class ConfidenceRegion(object):
         effectVec0 = effectObj.to_vector()
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        if type(f0) == float:
-            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
-        else:
-            gradSize = (nParams,) + tuple(f0.shape)
-            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+        gradF = _create_empty_gradF(f0, nParams)
 
         for i in range(nEffectParams):
             effectVec = effectVec0.copy(); effectVec[i] += eps; effectObj.from_vector(effectVec)
-            gradF[gpo + i] = ( fnOfEffect( effectObj ) - f0 ) / eps
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][gpo + i] = ( fnOfEffect( effectObj )[ky] - f0[ky] ) / eps
+            else:
+                gradF[gpo + i] = ( fnOfEffect( effectObj ) - f0 ) / eps
 
-        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
     def get_gateset_fn_confidence_interval(self, fnOfGateset, eps=1e-7, returnFnVal=False, verbosity=0):
@@ -557,18 +642,19 @@ class ConfidenceRegion(object):
         assert(len(gatesetVec0) == nParams)
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        if type(f0) == float:
-            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
-        else:
-            gradSize = (nParams,) + tuple(f0.shape)
-            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
+        gradF = _create_empty_gradF(f0, nParams)
 
         for i in range(nParams):
             gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
             gateset.from_vector(gatesetVec)
-            gradF[i] = ( fnOfGateset(gateset) - f0 ) / eps
+            gateset.basis = self.gateset.basis #preserve basis since we've just perturbed a little
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][i] = ( fnOfGateset( gateset )[ky] - f0[ky] ) / eps
+            else:
+                gradF[i] = ( fnOfGateset(gateset) - f0 ) / eps
 
-        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
 
     def get_spam_fn_confidence_interval(self, fnOfSpamVecs, eps=1e-7, returnFnVal=False, verbosity=0):
@@ -610,13 +696,7 @@ class ConfidenceRegion(object):
           #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        if type(f0) == float:
-            gradF = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
-        else:
-            gradSize = (nParams,) + tuple(f0.shape)
-            gradF = _np.zeros( gradSize, f0.dtype ) #assume all functions are real-valued for now...
-
-
+        gradF = _create_empty_gradF(f0, nParams)
         gsEps = self.gateset.copy()
 
         #loop just over parameterized objects - don't use get_preps() here...
@@ -627,8 +707,13 @@ class ConfidenceRegion(object):
             for i in range(nRhoParams):
                 vecEps = vec.copy(); vecEps[i] += eps
                 gsEps.preps[prepLabel].from_vector(vecEps) #update gsEps parameters
-                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-                                   gsEps.get_effects() ) - f0 ) / eps
+                if isinstance(f0, dict): #special behavior for dict: process each item separately
+                    for ky in gradF:
+                        gradF[ky][off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                                             gsEps.get_effects() )[ky] - f0[ky] ) / eps
+                else:
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                                     gsEps.get_effects() ) - f0 ) / eps
             gsEps.preps[prepLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
 
         #loop just over parameterized objects - don't use get_effects() here...
@@ -639,13 +724,29 @@ class ConfidenceRegion(object):
             for i in range(nEParams):
                 vecEps = vec.copy(); vecEps[i] += eps
                 gsEps.effects[ELabel].from_vector(vecEps) #update gsEps parameters
-                gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-                                   gsEps.get_effects() ) - f0 ) / eps
+                if isinstance(f0, dict): #special behavior for dict: process each item separately
+                    for ky in gradF:
+                        gradF[ky][off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                                             gsEps.get_effects() )[ky] - f0[ky] ) / eps
+                else:
+                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
+                                                     gsEps.get_effects() ) - f0 ) / eps
             gsEps.effects[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
 
-        return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
+        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
+    
 
+    def _compute_return_from_gradF(self, gradF, f0, returnFnVal, verbosity):
+        """ Just adds logic for special behavior when f0 is a dict """
+        if isinstance(f0, dict):
+            df_dict = { ky: self._compute_df_from_gradF(
+                               gradF[ky], f0[ky], False, verbosity)
+                        for ky in gradF }
+            return (df_dict, f0) if returnFnVal else df_dict
+        else:
+            return self._compute_df_from_gradF(gradF, f0, returnFnVal, verbosity)
 
+        
     def _compute_df_from_gradF(self, gradF, f0, returnFnVal, verbosity):
         if self.regionQuadcForm is None:
             df = self._compute_df_from_gradF_linresponse(

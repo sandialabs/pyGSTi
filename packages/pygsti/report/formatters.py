@@ -83,7 +83,9 @@ formatDict['Verbatim'] = {
 
 # Pi formatters
 formatDict['Pi'] = {
-    'html'  : NormalHTML.variant(formatstring='%s&pi;'),
+    'html'  : NormalHTML.variant(formatstring='%s&pi;',
+                                 ebstring='%s <span class="errorbar">+/- %s</span>&pi;', 
+                                 nmebstring='%s <span class="nmerrorbar">+/- %s</span>&pi;'),
     'latex' : NormalLatex.variant(formatstring='%s$\\pi$',
                                   ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $')}
 
@@ -141,8 +143,8 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
-    fig.set_render_options(click_to_display=specs['click_to_display'])
-    render_out = fig.render("html",
+    fig.value.set_render_options(click_to_display=specs['click_to_display'])
+    render_out = fig.value.render("html",
                             resizable="handlers only" if specs['resizable'] else False,
                             autosize=specs['autosize'])
     return render_out #a dictionary with 'html' and 'js' keys
@@ -150,7 +152,7 @@ def html_figure(fig, specs):
 def latex_figure(figInfo, specs):
     extension    = '.pdf' 
     formatstring = "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}"
-    fig, name, W, H = figInfo
+    fig, name, W, H = figInfo.value
     scratchDir = specs['scratchDir']
     if len(scratchDir) > 0: #empty scratchDir signals not to output figure
         fig.save_to(_os.path.join(scratchDir, name + self.extension))
@@ -169,7 +171,8 @@ formatDict['Bold'] = {
 #Special formatting for Hamiltonian and Stochastic gateset types
 formatDict['GatesetType'] = {
     'html'  : Formatter(),
-    'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}
+    'latex' : Formatter(stringreplacers=[('H','$\\mathcal{H}$'),('S','$\\mathcal{S}$')])}    
+
 
 '''
 # 'pre' formatting, where the user gives the data in separate formats

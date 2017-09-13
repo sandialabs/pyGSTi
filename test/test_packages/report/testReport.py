@@ -38,6 +38,7 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
+        self.results.estimates['default'].parameters['hessianProjection'] = 'intrinsic error'
         pygsti.report.create_general_report(self.results,temp_files + "/general_reportB.html",
                                                  confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
@@ -46,6 +47,7 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
+        self.results.estimates['default'].parameters['hessianProjection'] = 'std'
         pygsti.report.create_general_report(self.results,temp_files + "/general_reportE.html",
                                                  confidenceLevel=-95, verbosity=3,  auto_open=False)
         #Compare the html files?
@@ -62,10 +64,15 @@ class TestReport(ReportBaseCase):
 
     def test_reports_logL_TP_wCIs(self):
         vs = self.versionsuffix
+        self.results.estimates['default'].parameters['hessianProjection'] = 'optimal gate CIs' #only do this on one test since (takes a long time)
         pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportD.html",
                                                  confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
+
+    def test_report_notebook(self):
+        pygsti.report.create_report_notebook(self.results_logL, temp_files + "/report_notebook.ipynb", None,
+                                             verbosity=3)
 
 
     def test_table_formatting(self):
@@ -146,7 +153,7 @@ class TestReport(ReportBaseCase):
         #test ignoring gate strings not in dataset
         qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
                                                             pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(plus) diff", self.gs_clgst, self.ds,
+        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
                                                             pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
         qty_str = str(qty) #test __str__
 

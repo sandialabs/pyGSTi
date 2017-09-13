@@ -31,7 +31,8 @@ class DriversTestCase(BaseTestCase):
         self.lsgstStrings_lae = pygsti.construction.make_lsgst_lists(
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLens,
             truncScheme='length as exponent' )
-# RUN BELOW LINES TO GENERATE SAVED DATASETS
+
+        ## RUN BELOW LINES TO GENERATE SAVED DATASETS
         #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         #ds = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings[-1],
@@ -45,14 +46,14 @@ class DriversTestCase(BaseTestCase):
         #    datagen_gateset, self.lsgstStrings_lae[-1],
         #    nSamples=1000,sampleError='binomial', seed=100)
         #
-        #ds.save(compare_files + "/drivers.dataset")
-        #ds_tgp.save(compare_files + "/drivers_tgp.dataset")
-        #ds_lae.save(compare_files + "/drivers_lae.dataset")
+        #ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        #ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
+        #ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
 
 class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_WholeGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
 
         maxLens = self.maxLens
@@ -117,7 +118,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_TruncGermPowers(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_tgp.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
         ts = "truncated germ powers"
 
         maxLens = self.maxLens
@@ -135,7 +136,7 @@ class TestDriversMethods(DriversTestCase):
         #    std.germs, maxLens, truncScheme=ts, constrainToTP=False)
 
     def test_longSequenceGST_LengthAsExponent(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_lae.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
         ts = "length as exponent"
 
         maxLens = self.maxLens
@@ -155,7 +156,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_fiducialPairReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         maxLens = self.maxLens
 
         #Make list-of-lists of GST gate sequences
@@ -218,7 +219,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_randomReduction(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
         maxLens = self.maxLens
 
@@ -251,15 +252,15 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_linearGates(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                       prepLabels=['rho0'], prepExpressions=["0"],
-                                                      effectLabels=['E0'], effectExpressions=["1"],
-                                                      spamdefs={'plus': ('rho0','E0'),
-                                                                     'minus': ('rho0','remainder') },
+                                                      effectLabels=['E0'], effectExpressions=["0"],
+                                                      spamdefs={'0': ('rho0','E0'),
+                                                                '1': ('rho0','remainder') },
                                                       parameterization="linear")
 
         maxLens = self.maxLens
@@ -277,7 +278,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_CPTP(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
 
         gs_target = std.gs_target.copy()
         gs_target.set_all_parameterizations("CPTP")
@@ -293,7 +294,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_Sonly(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
 
         gs_target = std.gs_target.copy()
         gs_target.set_all_parameterizations("S")
@@ -310,14 +311,14 @@ class TestDriversMethods(DriversTestCase):
 
     def test_longSequenceGST_GLND(self):
         #General Lindbladian parameterization (allowed to be non-CPTP)
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
 
         gs_target = std.gs_target.copy()
 
         #No set_all_parameterizations option for this one, since it probably isn't so useful
         for lbl,gate in gs_target.gates.items():
             gs_target.gates[lbl] = pygsti.objects.gate.convert(gate, "GLND", "gm")
-        gs_target.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(gs_target.dim)
+        gs_target.default_gauge_group = pygsti.objects.UnitaryGaugeGroup(gs_target.dim,"gm")
           #Lindblad gates only know how to do unitary transforms currently, even though
           # in the non-cptp case it they should be able to transform generally.
         
@@ -332,7 +333,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_HplusS(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
 
         gs_target = std.gs_target.copy()
         gs_target.set_all_parameterizations("H+S")
@@ -349,7 +350,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_wMapCalc(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
 
         gs_target = std.gs_target.copy()
@@ -362,7 +363,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_longSequenceGST_badfit(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         ts = "whole germ powers"
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
@@ -384,7 +385,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_stdpracticeGST(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
         maxLens = self.maxLens
@@ -413,7 +414,7 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_bootstrap(self):
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset")
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
         tp_target = std.gs_target.copy(); tp_target.set_all_parameterizations("TP")
         gs = pygsti.do_lgst(ds, specs, targetGateset=tp_target, svdTruncateTo=4, verbosity=0)

@@ -16,8 +16,8 @@ gs_clifford_generators = _cnst.build_gateset(
     [ "I(Q0)","X(pi/2,Q0)", "X(pi,Q0)", "X(-pi/2,Q0)",
       "Y(pi/2,Q0)", "Y(pi,Q0)", "Y(-pi/2,Q0)"],
     prepLabels=["rho0"], prepExpressions=["0"],
-    effectLabels=["E0"], effectExpressions=["1"], 
-    spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+    effectLabels=["E0"], effectExpressions=["0"], 
+    spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
 
 # Mapping of all 1Q cliffords onto the generating set given above.
 # This uses the compilations in arXiv:1508.06676v1
