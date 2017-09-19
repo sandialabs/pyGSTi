@@ -408,7 +408,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                                                    effectStrs=lsgstLists[0].effectStrs,
                                                    prep_labels=gs_target.get_prep_labels(),
                                                    effect_labels=gs_target.get_effect_labels())
-            gs_start = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
+            gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
+            gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
                                     gateLabelAliases=lsgstLists[0].aliases,
                                     verbosity=printer) # returns a gateset with the *same*
                                                        # parameterizations as gs_target
