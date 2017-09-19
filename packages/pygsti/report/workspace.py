@@ -75,11 +75,18 @@ def randomID():
 
 def read_contents(filename):
     contents = None
-    with open(filename, encoding='utf-8') as f:
-        contents = f.read()
-        try: # to convert to unicode since we use unicode literals
-            contents = contents.decode('utf-8')
-        except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+    try: #on Windows using python3 open can fail when trying to read text files. encoding fixes this
+        f = open(filename)
+    except UnicodeDecodeError:
+        f = open(filename, encoding='utf-8') #try this, but not available in python 2.7!
+        
+    contents = f.read()
+    f.close()
+    
+    try: # to convert to unicode since we use unicode literals
+        contents = contents.decode('utf-8')
+    except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+    
     return contents
 
 def insert_resource(connected, online_url, offline_filename,
