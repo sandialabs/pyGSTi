@@ -1874,12 +1874,16 @@ class EigenvalueParameterizedGate(GateMatrix):
                     for ik,k in enumerate(evecIndsToMakeReal): 
                         vecs[:,ik] = self.B[:,k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
-                    nullsp = _mt.nullspace(V); assert(nullsp.shape[1] == nToReal)
-                      #assert we can find enough real linear combos!
+                    nullsp = _mt.nullspace(V); 
+                    if nullsp.shape[1] < nToReal: #DEBUG
+                        raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
+                                         % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
+                    assert(nullsp.shape[1] >= nToReal),"Cannot find enough real linear combos!"
+                    nullsp = nullsp[:,0:nToReal] #truncate #cols if there are more than we need
     
                     Cmx = nullsp[nToReal:,:] + 1j*nullsp[0:nToReal,:] # Cr + i*Ci
                     new_vecs = _np.dot(vecs,Cmx)
-                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL)
+                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
                     for ik,k in enumerate(evecIndsToMakeReal): 
                         self.B[:,k] = new_vecs[:,ik]
                     self.Bi = _np.linalg.inv(self.B)                
