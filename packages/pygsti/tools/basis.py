@@ -205,19 +205,22 @@ class Basis(object):
 
         Returns
         -------
-        list of matrices
+        numpy array
+            array of matrices, shape == (nMatrices, d, d) where
+            d is the composite matrix dimension.
         '''
-        compMxs = []
-        start   = 0
+        nMxs = sum([len(mxs) for mxs in self._blockMatrices])
         length  = sum(mxs[0].shape[0] for mxs in self._blockMatrices)
+        compMxs = _np.zeros( (nMxs, length, length), 'complex')
+        i, start   = 0, 0
+
         for mxs in self._blockMatrices:
             d = mxs[0].shape[0]
             for mx in mxs:
-                compMx = _np.zeros((length, length), 'complex' )
-                compMx[start:start+d,start:start+d] = mx
-                compMxs.append(compMx)
-            start += d
-        assert(start == length)
+                compMxs[i][start:start+d,start:start+d] = mx
+                i += 1
+            start += d 
+        assert(start == length and i == nMxs)
         return compMxs
 
     @cache_by_hashed_args
@@ -492,10 +495,11 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
                 basis = _build_composite_basis(matrices) # really list of Bases or basis tuples
                 blockMatrices = basis._blockMatrices
                 name          = basis.name
-            elif not isinstance(first, list):                  # If not nested lists (really just 'matrices')
-                blockMatrices = [matrices]                      # Then nest
-            else:
-                blockMatrices = matrices                        # Given as nested lists
+            elif isinstance(first, list) or \
+                 (isinstance(first, _np.ndarray) and first.ndim == 3): # els of matrices are sub-bases, so
+                blockMatrices = matrices                              # set directly equal to blockMatrices
+            elif isinstance(first, _np.ndarray) and first.ndim ==2:  # matrices is a list of matrices 
+                blockMatrices = [matrices]                           # so set as the first (& only) sub-basis-block
         else:
             blockMatrices = []
         if name is None:
