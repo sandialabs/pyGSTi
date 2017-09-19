@@ -56,3 +56,32 @@ clifford_compilation['Gc0c20'] = ['Gix', 'Giy', 'Giy', 'Giy', 'Gix', 'Gii', 'Gii
 clifford_compilation['Gc0c21'] = ['Giy', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']   
 clifford_compilation['Gc0c22'] = ['Gix', 'Gix', 'Gix', 'Giy', 'Giy', 'Gii', 'Gii']   
 clifford_compilation['Gc0c23'] = ['Gix', 'Giy', 'Gix', 'Gix', 'Gix', 'Gii', 'Gii']  
+
+
+global_fidPairs =  [
+    (0, 1), (2, 0), (2, 1), (3, 3)]
+
+pergerm_fidPairsDict = {
+  ('Gix',): [
+        (1, 2), (2, 2), (3, 1), (3, 3)],
+  ('Gii',): [
+        (1, 1), (2, 2), (3, 3)],
+  ('Giy',): [
+        (0, 1), (1, 1), (2, 0), (3, 0)],
+  ('Gix', 'Giy'): [
+        (0, 1), (2, 0), (2, 1), (3, 3)],
+  ('Giy', 'Gii', 'Gii'): [
+        (0, 1), (1, 1), (2, 0), (3, 0)],
+  ('Gix', 'Gii', 'Giy'): [
+        (0, 1), (2, 0), (2, 1), (3, 3)],
+  ('Gix', 'Giy', 'Gii'): [
+        (0, 1), (2, 0), (2, 1), (3, 3)],
+  ('Gix', 'Gii', 'Gii'): [
+        (1, 2), (2, 2), (3, 1), (3, 3)],
+  ('Gix', 'Gix', 'Gii', 'Giy'): [
+        (0, 0), (1, 0), (1, 1), (2, 1), (3, 2), (3, 3)],
+  ('Gix', 'Giy', 'Giy', 'Gii'): [
+        (0, 2), (1, 0), (1, 1), (2, 0), (2, 2), (3, 3)],
+  ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy'): [
+        (0, 0), (0, 1), (0, 2), (1, 2)],
+}
