@@ -716,8 +716,10 @@ def basis_element_labels(basis, dimOrBlockDims):
     if isinstance(basis, Basis):
         return basis.labels
 
-    if dimOrBlockDims == 1: #Special case of single element basis, in which
-        return [ "" ]       # case we return a single label.
+    if dimOrBlockDims == 1 or \
+       (len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 1):
+        return [ "" ]       # Special case of single element basis, in which
+                            # case we return a single label.
 
     #Note: the loops constructing the labels in this function
     # must be in-sync with those for constructing the matrices
