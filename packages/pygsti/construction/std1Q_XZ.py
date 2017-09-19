@@ -37,3 +37,18 @@ gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gz'],
                                 effectLabels=["E0"], effectExpressions=["0"],
                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
                                 basis='pp')
+
+
+global_fidPairs =  [
+    (0, 1), (1, 2), (4, 3), (4, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gz',): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gz', 'Gx'): [
+        (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
+  ('Gz', 'Gx', 'Gx'): [
+        (0, 3), (0, 4), (1, 0), (1, 4), (2, 1), (4, 5)],
+}

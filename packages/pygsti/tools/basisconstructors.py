@@ -292,6 +292,9 @@ def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
     list
         A list of 9 numpy arrays each of shape (3, 3).
     """
+    if dim == 1: #special case of just identity mx
+        return [ _np.identity(1,'d') ]
+    
     assert(dim == 3)
     A = _np.array( [[1,0,0,0],
                    [0,1./_np.sqrt(2),1./_np.sqrt(2),0],

@@ -947,7 +947,7 @@ def build_alias_gateset(gs_primitives, alias_dict):
     """
     Creates a new gateset by composing the gates of an existing `GateSet`,
     `gs_primitives`, according to a dictionary of `GateString`s, `alias_dict`.
-    The keys of `alias_dict` are the gate labels of the returned `GateSet1.
+    The keys of `alias_dict` are the gate labels of the returned `GateSet`.
     SPAM vectors are unaltered, and simply copied from `gs_primitives`.
 
     Parameters

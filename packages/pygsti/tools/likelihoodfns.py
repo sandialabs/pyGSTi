@@ -9,7 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
-#import time as _time
+import time as _time
+import sys as _sys
 from . import basis as _basis
 from . import listtools as _lt
 from . import jamiolkowski as _jam
@@ -665,10 +666,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
     probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
 
-    #DEBUG
-    #import time
-    #import sys
-    #tStart = time.time()
+    tStart = _time.time()
 
     #Loop over subtrees
     for iSubTree in mySubTreeIndices:
@@ -708,16 +706,17 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
        
         subtree_hessian = _np.zeros( (nP,nP), 'd')
 
-        #k,kmax = 0,len(mySliceTupList) #DEBUG
+        k,kmax = 0,len(mySliceTupList)
         for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
             spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
+            rank = comm.Get_rank() if (comm is not None) else 0
 
-            #DEBUG
-            #iSub = mySubTreeIndices.index(iSubTree)
-            #print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
-            #          % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
-            #             len(mySubTreeIndices), len(evalSubTree)))            
-            #sys.stdout.flush(); k += 1
+            if verbosity > 3 or (verbosity == 3 and rank == 0):
+                iSub = mySubTreeIndices.index(iSubTree)
+                print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+                      % (rank,_time.time()-tStart,k,kmax,iSub,
+                         len(mySubTreeIndices), len(evalSubTree)))            
+                _sys.stdout.flush(); k += 1
 
             subtree_hessian[slice1,slice2] = \
                 hessian_from_hprobs(hprobs, dprobs12, cntVecMx,

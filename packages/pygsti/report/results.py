@@ -237,11 +237,11 @@ class Estimate(object):
             #Check for long hessian computation on a single proc
             if comm is None and gateset.dim > 4 and len(gatestrings) > 100:
                 _warnings.warn(("Confidence region computations for systems"
-                                "larger than 1 qubit on a single processor"
-                                "may take a long time (many hours).  You might"
-                                "not want to do this, so I'm going to sleep for"
-                                "10s to give you a chance to kill me before"
-                                "I start intensive computation."))
+                                " larger than 1 qubit on a single processor"
+                                " may take a long time (many hours).  You might"
+                                " not want to do this, so I'm going to sleep for"
+                                " 10s to give you a chance to kill me before"
+                                " I start intensive computation."))
                 _time.sleep(10)
             
             params = self.parameters
@@ -391,7 +391,7 @@ class Estimate(object):
 
 
     def copy(self):
-        """ Creates a copy of this Results object. """
+        """ Creates a copy of this Estimate object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Estimate()
         cpy.parameters = self.parameters.copy()
@@ -547,6 +547,46 @@ class Results(object):
         self.gatestring_lists['prep fiducials'] = finalStruct.prepStrs
         self.gatestring_lists['effect fiducials'] = finalStruct.effectStrs
         self.gatestring_lists['germs'] = finalStruct.germs
+
+
+    def add_estimates(self, results, estimatesToAdd=None):
+        """
+        Add some or all of the estimates from `results` to this `Results` object.
+
+        Parameters
+        ----------
+        results : Results
+            The object to import estimates from.  Note that this object must contain
+            the same data set and gate sequence information as the importing object
+            or an error is raised.
+
+        estimatesToAdd : list, optional
+            A list of estimate keys to import from `results`.  If None, then all
+            the estimates contained in `results` are imported.
+
+        Returns
+        -------
+        None
+        """
+        if self.dataset is None:
+            raise ValueError(("The data set must be initialized"
+                              "*before* adding estimates"))
+
+        if 'iteration' not in self.gatestring_structs:
+            raise ValueError(("Gate sequences must be initialized"
+                              "*before* adding estimates"))
+
+        assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
+        assert(len(self.gatestring_structs['iteration']) == len(results.gatestring_structs['iteration'])), \
+            "Iteration count inconsistency: cannot import estimates!"
+
+        for estimate_key in results.estimates:
+            if estimatesToAdd is None or estimate_key in estimatesToAdd:
+                if estimate_key in self.estimates:
+                    _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                                   + " of this Results object!  Usually you don't"
+                                   + " want to do this.")
+                self.estimates[estimate_key] = results.estimates[estimate_key]
 
         
     def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,

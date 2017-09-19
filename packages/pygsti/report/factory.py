@@ -392,6 +392,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("params",(0,1))
     switchBd.add("objective",(0,1))
     switchBd.add("mpc",(0,1))
+    switchBd.add("clifford_compilation",(0,1))
 
     switchBd.add("gsFinalIter",(0,1))
     switchBd.add("gsFinal",(0,1,2))
@@ -434,6 +435,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.mpc[d,i] = est.parameters['minProbClip']
             else:
                 switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
+            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",None)
 
             NA = ws.NotApplicable()
             effds, scale_subMxs = est.get_effective_dataset(True)
@@ -640,6 +642,7 @@ def create_general_report(results, filename, title="auto",
     effectStrs = switchBd.effectStrs
     germs = switchBd.germs
     strs = switchBd.strs
+    cliffcomp = switchBd.clifford_compilation
 
     addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, includeHSVec=False)
     addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
@@ -660,7 +663,7 @@ def create_general_report(results, filename, title="auto",
     addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
                                                           virtual_gates=germs)
     addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
     addqty('bestGatesVsTargetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
@@ -871,6 +874,7 @@ def create_report_notebook(results, filename, title="auto",
             mpc = estimate.parameters['minProbClip']
         else:
             mpc = estimate.parameters['minProbClipForWeighting']
+        clifford_compilation = estimate.parameters.get('clifford_compilation',None)
 
         effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
         scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}

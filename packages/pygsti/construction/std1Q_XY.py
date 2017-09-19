@@ -62,3 +62,26 @@ clifford_compilation["Gc20"] = ['Gx','Gy','Gy','Gy','Gx',]
 clifford_compilation["Gc21"] = ['Gy',]
 clifford_compilation["Gc22"] = ['Gx','Gx','Gx','Gy','Gy',]
 clifford_compilation["Gc23"] = ['Gx','Gy','Gx','Gx','Gx',]
+
+
+global_fidPairs =  [
+    (0, 0), (2, 3), (5, 2), (5, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gy',): [
+        (0, 2), (2, 2), (2, 4), (4, 4)],
+  ('Gx', 'Gy'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gy', 'Gy', 'Gy', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
+  ('Gy', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gy', 'Gx', 'Gy', 'Gy', 'Gx', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
+  ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gy', 'Gy', 'Gy', 'Gx', 'Gy', 'Gx'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+}
