@@ -15,9 +15,9 @@ from .. import optimize as _opt
 
 from ..objects import Basis
 
-def create_objective_fn(gateset, targetGateset, itemWeights=None,
-                       CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
-                       gatesMetric="frobenius", spamMetric="frobenius"):
+def _create_objective_fn(gateset, targetGateset, itemWeights=None,
+                         cptp_penalty_factor=0, spam_penalty_factor=0,
+                         gatesMetric="frobenius", spamMetric="frobenius"):
     if itemWeights is None: itemWeights = {}
     gateWeight = itemWeights.get('gates',1.0)
     spamWeight = itemWeights.get('spam',1.0)
@@ -32,25 +32,35 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
     def objective_fn(gs):
         ret = 0
 
-        if CPpenalty != 0:
+        if cptp_penalty_factor > 0:
             gs.basis = mxBasis #set basis for jamiolkowski iso
-            s = _tools.sum_of_negative_choi_evals(gs, weights=None)
-              # we desire *uniform* weights (don't specify itemWeights here)
-            ret += CPpenalty * s
+            cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gs.basis)
+            ret += _np.sum(cpPenaltyVec)
 
-        if TPpenalty != 0:
-            rhoVecFirstEl = 1.0 / (gs.dim**0.25)  # note: sqrt(gateDim) gives linear dim of density mx
-            for gate in gs.gates.values():
-                ret += TPpenalty * abs(1.0-gate[0,0])
-                for k in range(1,gate.shape[1]):
-                    ret += TPpenalty * abs(gate[0,k])
-            for rhoVec in gs.preps.values():
-                ret += TPpenalty * abs(rhoVecFirstEl - rhoVec[0])
+        if spam_penalty_factor > 0:
+            spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gs.basis)
+            ret += _np.sum(spamPenaltyVec)
 
-        if validSpamPenalty != 0:
-            sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in gs.preps.values() ] )
-            sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in gs.effects.values() ] )
-            ret += validSpamPenalty*sp
+        #OLD PENALTY FACTORS: TODO - remove soon
+        #if CPpenalty != 0:
+        #    gs.basis = mxBasis #set basis for jamiolkowski iso
+        #    s = _tools.sum_of_negative_choi_evals(gs, weights=None)
+        #      # we desire *uniform* weights (don't specify itemWeights here)
+        #    ret += CPpenalty * s
+        #
+        #if TPpenalty != 0:
+        #    rhoVecFirstEl = 1.0 / (gs.dim**0.25)  # note: sqrt(gateDim) gives linear dim of density mx
+        #    for gate in gs.gates.values():
+        #        ret += TPpenalty * abs(1.0-gate[0,0])
+        #        for k in range(1,gate.shape[1]):
+        #            ret += TPpenalty * abs(gate[0,k])
+        #    for rhoVec in gs.preps.values():
+        #        ret += TPpenalty * abs(rhoVecFirstEl - rhoVec[0])
+        #
+        #if validSpamPenalty != 0:
+        #    sp =  sum( [ _tools.prep_penalty(rhoVec,mxBasis) for rhoVec in gs.preps.values() ] )
+        #    sp += sum( [ _tools.effect_penalty(EVec,mxBasis) for EVec   in gs.effects.values() ] )
+        #    ret += validSpamPenalty*sp
 
         if targetGateset is not None:
             if gatesMetric == "frobenius":
@@ -97,10 +107,11 @@ def create_objective_fn(gateset, targetGateset, itemWeights=None,
         return ret
     return objective_fn
 
+
 def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
-                       CPpenalty=0, TPpenalty=0, validSpamPenalty=0,
+                       cptp_penalty_factor=0, spam_penalty_factor=0,
                        gatesMetric="frobenius", spamMetric="frobenius",
-                       gauge_group=None, method='L-BFGS-B', maxiter=100000,
+                       gauge_group=None, method='auto', maxiter=100000,
                        maxfev=None, tol=1e-8, returnAll=False, verbosity=0,
                        checkJac=False):
     """
@@ -124,23 +135,15 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         "spam" values.  The precise use of these weights depends on the gateset
         metric(s) being used.
        
-    CPpenalty : float, optional
-        A prefactor for a L1-like CP pentalty term that prefers gatesets 
-        which are completely positive.  The penalty term equals the sum
-        of the magnitudes of the negative eigenvalues of each gate's 
-        Choi matrix.
+    cptp_penalty_factor : float, optional
+        If greater than zero, the objective function also contains CPTP penalty
+        terms which penalize non-CPTP-ness of the gates being optimized.  This factor
+        multiplies these CPTP penalty terms.
 
-    TPpenalty : float, optional
-        A prefactor for an L1-like TP pentalty term which penalizes
-        gates when their first row is *not* equal to [1, 0, ... 0],
-        and penalizes state preparation vectors when their first element
-        does not equal sqrt( 1/sqrt(dim) ).
-
-    validSpamPenalty : float, optional
-        A prefactor for a term in the objective function which penalizes
-        state preparation vectors which don't correspond to *positive*
-        (density) matrices and penalizes effects which have eigenvalues
-        outside of the [0,1] range.
+    spam_penalty_factor : float, optional
+        If greater than zero, the objective function also contains SPAM penalty
+        terms which penalize non-positive-ness of the state preps being optimized.  This
+        factor multiplies these SPAM penalty terms.
         
     gatesMetric : {"frobenius", "fidelity", "tracedist"}, optional
         The metric used to compare gates within gate sets. "frobenius" computes 
@@ -165,6 +168,8 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
         known by scipy.optimize.minimize such as 'BFGS', 'Nelder-Mead', 'CG', 'L-BFGS-B',
         or additionally:
 
+        - 'auto' -- 'ls' when allowed, otherwise 'L-BFGS-B'
+        - 'ls' -- custom least-squares optimizer.
         - 'custom' -- custom CG that often works better than 'CG'
         - 'supersimplex' -- repeated application of 'Nelder-Mead' to converge it
         - 'basinhopping' -- scipy.optimize.basinhopping using L-BFGS-B as a local optimizer
@@ -203,180 +208,175 @@ def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
       final gauge-transformed gateset.
     """
     if itemWeights is None: itemWeights = {}
-    
-    if CPpenalty         == 0 and \
-        TPpenalty        == 0 and \
-        validSpamPenalty == 0 and \
-        targetGateset is not None and \
-        gatesMetric == "frobenius" and \
-        spamMetric  == "frobenius" and \
-        gateset.dim < 64: # least squares optimization is uneffective if more than 3 qubits
 
+    #Check for case when we know how to compute the Jacobian and can work in least-squares mode.
+
+    if  targetGateset is not None and \
+        gatesMetric == "frobenius" and spamMetric  == "frobenius" and \
+        (method == "auto" or method == "ls") and \
+        gateset.dim < 64: # least squares optimization seems uneffective if more than 3 qubits (?)
+
+        if method == "auto": method = 'ls'
+        
         gateWeight = itemWeights.get('gates',1.0)
         spamWeight = itemWeights.get('spam',1.0)
+        
         def objective_fn(gs):
             residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
-            return residuals
 
-        algorithm = 'ls'
+            if cptp_penalty_factor > 0:
+                cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gs.basis)
+            else: cpPenaltyVec = [] # so concatenate ignores
+
+            if spam_penalty_factor > 0:
+                spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gs.basis)
+            else: spamPenaltyVec = [] # so concatenate ignores
+
+            return _np.concatenate( (residuals, cpPenaltyVec, spamPenaltyVec) )
+
+        def jacobian_fn(gs_pre, gs_post, gaugeGroupEl):
+            
+            # Indices: Jacobian output matrix has shape (L, N)
+            start = 0
+            d = gs_pre.dim
+            N = gaugeGroupEl.num_params()
+            L = gs_pre.num_elements(include_povm_identity=True)
+
+            #Compute "extra" (i.e. beyond the gateset-element) rows of jacobian
+            if cptp_penalty_factor != 0: L += len(gs_pre.gates)
+            if spam_penalty_factor != 0: L += len(gs_pre.preps)
+
+            jacMx = _np.zeros((L, N))
+    
+            #Overview of terms:
+            # objective: gate_term = (S_inv * gate * S - target_gate)
+            # jac:       d(gate_term) = (d (S_inv) * gate * S + S_inv * gate * dS )
+            #            d(gate_term) = (-(S_inv * dS * S_inv) * gate * S + S_inv * gate * dS )
+            
+            # objective: rho_term = (S_inv * rho - target_rho)
+            # jac:       d(rho_term) = d (S_inv) * rho 
+            #            d(rho_term) = -(S_inv * dS * S_inv) * rho
+    
+            # objective: ET_term = (E.T * S - target_E.T)
+            # jac:       d(ET_term) = E.T * dS
+    
+            # S, and S_inv are shape (d,d)
+            S       = gaugeGroupEl.get_transform_matrix()
+            S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
+            dS      = gaugeGroupEl.deriv_wrt_params() # shape (d*d),N
+            dS.shape = (d, d, N) # call it (d1,d2,N)
+            dS  = _np.rollaxis(dS, 2) # shape (N, d1, d2)
+
+            # -- Gate terms
+            # -------------------------
+            for lbl, G in gs_pre.gates.items():
+                # d(gate_term) = S_inv * (-dS * S_inv * G * S + G * dS) = S_inv * (-dS * G' + G * dS)
+                #   Note: (S_inv * G * S) is G' (transformed G)
+                wt   = itemWeights.get(lbl, gateWeight)
+                left = -1 * _np.dot(dS, gs_post.gates[lbl]) # shape (N,d1,d2)
+                right = _np.swapaxes(_np.dot(G, dS), 0,1) # shape (d1, N, d2) -> (N,d1,d2)
+                result = _np.swapaxes(_np.dot(S_inv, left + right), 1,2) # shape (d1, d2, N)
+                result = result.reshape( (d**2, N) ) #must copy b/c non-contiguous
+                jacMx[start:start+d**2] = wt * result
+                start += d**2
+
+            # -- prep terms
+            # -------------------------                
+            for lbl, rho in gs_post.preps.items():
+                # d(rho_term) = -(S_inv * dS * S_inv) * rho
+                #   Note: (S_inv * rho) is transformed rho
+                wt   = itemWeights.get(lbl, spamWeight)
+                Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,N,d2)
+                result = -1 * _np.dot(Sinv_dS, rho).squeeze(2) # shape (d,N,1) => (d,N)
+                jacMx[start:start+d] = wt * result
+                start += d
+
+
+            # -- effect terms
+            # -------------------------
+            for lbl, E in gs_pre.effects.items():
+                # d(ET_term) = E.T * dS
+                wt   = itemWeights.get(lbl, spamWeight)
+                result = _np.dot(E.T, dS).T  # shape (1,N,d2).T => (d2,N,1)
+                jacMx[start:start+d] = wt * result.squeeze(2) # (d2,N)
+                start += d
+                
+            if gs_pre._povm_identity is not None:
+                # same as effects
+                wt   = itemWeights.get(gs_pre._identitylabel, spamWeight)
+                result = _np.dot(gs_pre._povm_identity.T, dS).T
+                jacMx[start:start+d] = wt * result.squeeze(2) # (d2,N)
+                start += d
+
+            # -- penalty terms
+            # -------------------------
+            if cptp_penalty_factor > 0:
+                start += _cptp_penalty_jac_fill(jacMx[start:], gs_pre, gs_post,
+                                                gaugeGroupEl, cptp_penalty_factor,
+                                                gs_pre.basis)
+
+            if spam_penalty_factor > 0:
+                start += _spam_penalty_jac_fill(jacMx[start:], gs_pre, gs_post,
+                                                gaugeGroupEl, spam_penalty_factor,
+                                                gs_pre.basis)
+                
+            if checkJac:
+                def mock_objective_fn(v):
+                    gaugeGroupEl.from_vector(v)
+                    gs = gs_pre.copy()
+                    gs.transform(gaugeGroupEl)
+                    return objective_fn(gs)
+
+                vec = gaugeGroupEl.to_vector()
+                _opt.check_jac(mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-7, errType='abs')
+                
+                #alt_jac = _opt.optimize._fwd_diff_jacobian(mock_objective_fn, vec, 1e-2)
+                if False: #not _tools.array_eq(jacMx, alt_jac, tol=1e-3):
+                    # Testing and comparison with the plotting code below has show that usually this difference is very small,
+                    # even when a finer color scale is used
+                    print('Warning: finite differences jacobian differs from analytic jacobian')
+                    '''
+                    import matplotlib.pyplot as plt
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
+    
+                    ax1.matshow(jacMx, vmin=-1, vmax=1)
+                    ax1.set_title('analytic')
+                    ax2.matshow(alt_jac, vmin=-1, vmax=1)
+                    ax2.set_title('ffd')
+                    im = ax3.matshow(alt_jac - jacMx, vmin=-1, vmax=1)
+                    ax3.set_title('combined')
+    
+                    fig.subplots_adjust(right=0.8)
+                    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+                    fig.colorbar(im, cax=cbar_ax)
+                    plt.show()
+                    '''
+            return jacMx
+            
     else:
-        objective_fn = create_objective_fn(gateset, targetGateset,
-                itemWeights, 
-                CPpenalty, TPpenalty, 
-                validSpamPenalty, gatesMetric, 
-                spamMetric)
-        algorithm = 'min'
+        if method == "auto": method = 'L-BFGS-B'
+        
+        objective_fn = _create_objective_fn(gateset, targetGateset,
+                itemWeights, cptp_penalty_factor, spam_penalty_factor,
+                gatesMetric, spamMetric)
+        jacobian_fn = None
 
     result = gaugeopt_custom(gateset, objective_fn, gauge_group, method,
-            maxiter, maxfev, tol, returnAll, verbosity, algorithm=algorithm, 
-            itemWeights=itemWeights, checkJac=checkJac)
+                             maxiter, maxfev, tol, returnAll, jacobian_fn,
+                             verbosity)
 
     #If we've gauge optimized to a target gate set, declare that the
     # resulting gate set is now in the same basis as the target.
     if targetGateset is not None:
         newGateset = result[-1] if returnAll else result
         newGateset.basis = targetGateset.basis.copy()
-        #DEBUG
-        #print('gauge opt result distance to target')
-        #print(newGateset.frobeniusdist(targetGateset))
     
     return result
 
-def calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights, check=False):
-    gateWeight = itemWeights.get('gates',1.0)
-    spamWeight = itemWeights.get('spam',1.0)
-    def jacobian(vec):
-        '''
-        The derivative of the objective function with respect the input parameter vector, v
-        This is UNSQUARED, because the residuals are unsquared.
-        '''
-        # equivalent to a 'from numpy import dot', but only for the scope of this function
-        dot = _np.dot
-
-        gaugeGroupEl.from_vector(vec)
-        gs = gateset.copy()
-        gs.transform(gaugeGroupEl)
-
-        gates   = list(gs.gates.values())
-        preps   = list(gs.preps.values())
-        effects = list(gs.effects.values())
-        assert len(gates) > 0
-
-        # Indices: Jacobian output matrix has shape (L, N)
-        start = 0
-        d = gates[0].shape[0]
-        N = vec.shape[0]
-        L = (d**2 * len(gates)   + 
-             d    * len(preps)   + 
-             d    * len(effects) +
-             d    * (0 if gs._povm_identity is None else 1))
-        jacMx = _np.zeros((L, N))
-
-        # S, and S_inv are (dxd)
-        S       = gaugeGroupEl.get_transform_matrix()
-        S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
-        # dS is ((d*d)xlen(v))
-        dS      = gaugeGroupEl.gate.deriv_wrt_params()
-        # dS is (dxdxlen(v))
-        dS.shape = (d, d, N)
-        rolled  = _np.rollaxis(dS, 2)
-        rolled2 = _np.rollaxis(dS, 2, 1)
-        for Glabel, G in gs.gates.items():
-            '''
-            Jac_gate = S_inv @ [dS @ S_inv @ Gk @ S - Gk @ dS]
-                                ^^^^^^^^^^^^^^^^^^^   ^^^^^^^
-                                left                  right
-
-            => (d**2, N) mx
-            '''
-            wt   = itemWeights.get(Glabel, gateWeight)
-
-            right = dot(G, rolled)
-            right = _np.rollaxis(right, 2, 1)
-
-            left = dot(S_inv, dot(G, S))
-            left = dot(rolled, left)
-            left = _np.rollaxis(left, 0, 3)
-
-            result = left - right
-            result = _np.rollaxis(result, 2) # Roll the same way as dS
-            result = dot(S_inv, result)
-            result = _np.rollaxis(result, 2, 1) # Don't mix up d sides
-            result = -1 * result.reshape((d**2, N))
-            assert result.shape == (d ** 2, N)
-            jacMx[start:start+d**2] = wt * result
-            start += d**2
-        for Plabel, P in gs.preps.items():
-            '''
-            Jac_prep = - S_inv @ dS @ S_inv @ P
-                         ^^^^^^^^^^   ^^^^^^^^^       
-                         left         right
-            => (d, N) mx
-            '''
-            wt   = itemWeights.get(Plabel, spamWeight)
-
-            left   = dot(S_inv, rolled)
-            right  = dot(S_inv, P)
-            result = dot(left, right)
-            result *= -1
-            result.shape = (d, N)
-            assert result.shape == (d, N)
-            jacMx[start:start+d] = wt * result
-            start += d
-        for Elabel, E in gs.effects.items():
-            '''
-            Jac_effect = Ek.T @ dS
-            => (d, N) mx
-            '''
-            wt   = itemWeights.get(Elabel, spamWeight)
-
-            result = dot(E.T, rolled).T
-            # (1,d, N) to (d, N)
-            result.shape = (d, N)
-            assert result.shape == (d, N)
-            jacMx[start:start+d] = wt * result
-            start += d
-        if gs._povm_identity is not None:
-            '''
-            Jac_effect = Ek.T @ dS
-            => (d, N) mx
-            '''
-            wt   = itemWeights.get(gs._identitylabel, spamWeight)
-
-            result = dot(gs._povm_identity.T, rolled).T
-            result.shape = (d, N)
-            # (1,d, N) to (d, N)
-            assert result.shape == (d, N)
-            jacMx[start:start+d] = wt * result
-            start += d
-        if check:
-            alt_jac = _opt.optimize._fwd_diff_jacobian(call_objective_fn, vec, 1e-2)
-            if not _tools.array_eq(jacMx, alt_jac, tol=1e-3):
-                # Testing and comparison with the plotting code below has show that usually this difference is very small, even when a finer color scale is used
-                print('Warning: finite differences jacobian differs from analytic jacobian')
-                '''
-                import matplotlib.pyplot as plt
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True)
-
-                ax1.matshow(jacMx, vmin=-1, vmax=1)
-                ax1.set_title('analytic')
-                ax2.matshow(alt_jac, vmin=-1, vmax=1)
-                ax2.set_title('ffd')
-                im = ax3.matshow(alt_jac - jacMx, vmin=-1, vmax=1)
-                ax3.set_title('combined')
-
-                fig.subplots_adjust(right=0.8)
-                cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-                fig.colorbar(im, cax=cbar_ax)
-                plt.show()
-                '''
-        return jacMx
-    return jacobian
 
 def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    returnAll=False, verbosity=0, algorithm='min', itemWeights=None,
-                    checkJac=False):
+                    returnAll=False, jacobian_fn=None, verbosity=0):
     """
     Optimize the gauge of a gateset using a custom objective function.
 
@@ -419,23 +419,14 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         When True, return best "goodness" value and gauge matrix in addition to the
         gauge optimized gateset.
 
+    jacobian_fn : function, optional
+        The jacobian of `objective_fn`.  The function must take three parameters,
+        1) the un-transformed `GateSet`, 2) the transformed `GateSet`, and 3) the
+        `GaugeGroup.element` representing the transformation that brings the first
+        argument into the second.
+
     verbosity : int, optional
         How much detail to send to stdout.
-
-    algorithm : string, either 'ls' or 'min', optional
-        The algorithm to use when performing gauge optimization
-
-    itemWeights : dict, optional
-        Dictionary of weighting factors for gates and spam operators.  Keys can
-        be gate, state preparation, or POVM effect, as well as the special values
-        "spam" or "gates" which apply the given weighting to *all* spam operators
-        or gates respectively.  Values are floating point numbers.  Values given 
-        for specific gates or spam operators take precedence over "gates" and
-        "spam" values.  The precise use of these weights depends on the gateset
-        metric(s) being used.
-
-    checkJac : bool
-        Check the Jacobian against finite differences
 
     Returns
     -------
@@ -449,9 +440,6 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
-
-    if itemWeights is None:
-        itemWeights = dict()
 
     if gauge_group is None:
         gauge_group = gateset.default_gauge_group
@@ -469,36 +457,46 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     def call_objective_fn(gaugeGroupElVec):
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
-        transform = gaugeGroupEl.get_transform_matrix()
         gs.transform(gaugeGroupEl)
         return objective_fn(gs)
 
+    if jacobian_fn:
+        def call_jacobian_fn(gaugeGroupElVec):
+            gaugeGroupEl.from_vector(gaugeGroupElVec)
+            gs = gateset.copy()
+            gs.transform(gaugeGroupEl)
+            return jacobian_fn(gateset, gs, gaugeGroupEl)
+    else:
+        call_jacobian_fn = None
+
+    
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
     print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
     if bToStdout: 
         print_obj_func(x0) #print initial point
 
-
-    if algorithm == 'min':
-        minSol = _opt.minimize(call_objective_fn, x0,
-                              method=method, maxiter=maxiter, maxfev=maxfev, tol=tol,
-                              callback = print_obj_func if bToStdout else None)
-        solnX = minSol.x
-        solnF = minSol.fun
-    elif algorithm == 'ls':
-        jacobian = calculate_ls_jacobian(gaugeGroupEl, gateset, call_objective_fn, itemWeights, checkJac)
-        #minSol  = _opt.least_squares(call_objective_fn, x0, jac=jacobian,
+    if method == 'ls':
+        #minSol  = _opt.least_squares(call_objective_fn, x0, #jac=call_jacobian_fn,
         #                            max_nfev=maxfev, ftol=tol)
+        #solnX = minSol.x
+        assert(call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         solnX,converged,msg = _opt.custom_leastsq(
-            call_objective_fn, jacobian, x0, f_norm2_tol=tol,
+            call_objective_fn, call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=None, #no MPI for gauge opt yet...
             verbosity=printer.verbosity-2)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
         solnF = call_objective_fn(solnX) if returnAll else None
+
     else:
-        raise ValueError('Unknown algorithm inside of gauge opt: {}'.format(algorithm))
+        minSol = _opt.minimize(call_objective_fn, x0,
+                               method=method, maxiter=maxiter, maxfev=maxfev,
+                               tol=tol, jac=call_jacobian_fn,                               
+                               callback = print_obj_func if bToStdout else None)
+        solnX = minSol.x
+        #solnF = minSol.fun
+        solnF = call_objective_fn(solnX) if returnAll else None
 
     gaugeGroupEl.from_vector(solnX)
     newGateset = gateset.copy()
@@ -508,6 +506,159 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         return solnF, gaugeMat, newGateset
     else:  
         return newGateset
+
+
+def _cptp_penalty(gs,prefactor,gateBasis):
+    """
+    Helper function - CPTP penalty: (sum of tracenorms of gates),
+    which in least squares optimization means returning an array
+    of the sqrt(tracenorm) of each gate.  This function is the
+    *same* as that in core.py.
+
+    Returns
+    -------
+    numpy array
+        a (real) 1D array of length len(gs.gates).
+    """
+    from ..algorithms.core import _cptp_penalty as _core_cptp_penalty
+    return _core_cptp_penalty(gs, prefactor, gateBasis)
+
+
+def _spam_penalty(gs,prefactor,gateBasis):
+    """
+    Helper function - CPTP penalty: (sum of tracenorms of gates),
+    which in least squares optimization means returning an array
+    of the sqrt(tracenorm) of each gate.  This function is the
+    *same* as that in core.py.
+
+    Returns
+    -------
+    numpy array
+        a (real) 1D array of length len(gs.gates).
+    """
+    from ..algorithms.core import _spam_penalty as _core_spam_penalty
+    return _core_spam_penalty(gs, prefactor, gateBasis)
+
+
+def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
+                           gaugeGroupEl, prefactor, gateBasis):
+    """
+    Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
+    Returns a (real) array of shape (len(gs.gates), gaugeGroupEl.num_params()).
+    """
+    
+    # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
+    # but here, unlike in core.py, chi = J(S_inv * G * S) == J(G')
+    # and we're differentiating wrt the parameters of S, the
+    # gaugeGroupEl.
+
+    # S, and S_inv are shape (d,d)
+    d,N     = gs_pre.dim, gaugeGroupEl.num_params()
+    S       = gaugeGroupEl.get_transform_matrix()
+    S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
+    dS      = gaugeGroupEl.deriv_wrt_params() # shape (d*d),N
+    dS.shape = (d, d, N) # call it (d1,d2,N)
+    dS  = _np.rollaxis(dS, 2) # shape (N, d1, d2)
+
+    for i,(gl,gate) in enumerate(gs_post.iter_gates()):
+        pre_gate = gs_pre.gates[gl]
+
+        #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
+        # so sgnchi == d(|chi_std|_Tr)/dchi_std
+        chi = _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
+        assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
+            "chi should be Hermitian!"
+
+        U,s,Vt = _np.linalg.svd(chi)
+        sgnvals = [ sv/abs(sv) if (abs(sv) > 1e-7) else 0.0 for sv in s]
+        sgnchi = _np.dot(U,_np.dot(_np.diag(sgnvals),Vt))
+        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
+            "sngchi should be Hermitian!"
+        
+        # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
+        # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
+        # transform).  This shuffle op commutes with the derivative, so that
+        # dchi_std/dp := d(M(G'))/dp = M(d(S_inv*G*S)/dp) = M( d(S_inv)*G*S + S_inv*G*dS )
+        #              = M( (-S_inv*dS*S_inv)*G*S + S_inv*G*dS ) = M( S_inv*(-dS*S_inv*G*S) + G*dS )
+        left = -1 * _np.dot(dS, gate) # shape (N,d1,d2)
+        right = _np.swapaxes(_np.dot(pre_gate, dS), 0,1) # shape (d1, N, d2) -> (N,d1,d2)
+        result = _np.swapaxes(_np.dot(S_inv, left + right), 0,1) # shape (N, d1, d2)
+
+        dchi_std = _np.empty((N,d,d), 'complex')
+        for p in range(N): #p indexes param
+            dchi_std[p] = _tools.fast_jamiolkowski_iso_std(result[p], gateBasis) # "M(results)"
+            assert(_np.linalg.norm(dchi_std[p] - dchi_std[p].T.conjugate()) < 1e-8) #check hermitian
+
+        dchi_std = _np.conjugate(dchi_std) # I'm not sure
+          # why this is needed: I think b/c els of sgnchi and MdGdp_std[p]
+          # are hermitian and we want to think of the real and im parts of
+          # (i,j) and (j,i) els as the two "variables" we differentiate wrt.
+          # TODO: work this out on paper.
+
+        #contract to get (note contract along both mx indices b/c treat like a
+        # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
+        v =  _np.einsum("ij,aij->a",sgnchi,dchi_std)
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
+        assert(_np.linalg.norm(v.imag) < 1e-4)
+        cpPenaltyVecGradToFill[i,:] = v.real
+        chi = sgnchi = dchi_std = v = None #free mem
+        
+    return len(gs_pre.gates) #the number of leading-dim indicies we filled in
+
+
+def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
+                           gaugeGroupEl, prefactor, gateBasis):
+    """
+    Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
+    Returns a (real) array of shape (len(gs.preps), gaugeGroupEl.num_params()).
+    """
+    BMxs = gateBasis.get_composite_matrices() #shape [gs.dim, dmDim, dmDim]
+    ddenMxdV = BMxs # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+
+    # S, and S_inv are shape (d,d)
+    d,N     = gs_pre.dim, gaugeGroupEl.num_params()
+    S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
+    dS      = gaugeGroupEl.deriv_wrt_params() # shape (d*d),N
+    dS.shape = (d, d, N) # call it (d1,d2,N)
+    dS  = _np.rollaxis(dS, 2) # shape (N, d1, d2)
+
+    # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
+    # but here, unlike in core.py, denMx = StdMx(S_inv * rho) = StdMx(rho')
+    # and we're differentiating wrt the parameters of S, the
+    # gaugeGroupEl.
+    
+    for i,(lbl,prepvec) in enumerate(gs_post.iter_preps()):
+
+        #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
+        denMx = _tools.vec_to_stdmx(prepvec, gateBasis)
+        dmDim = denMx.shape[0]
+        assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
+            "denMx should be Hermitian!"
+        
+        U,s,Vt = _np.linalg.svd(denMx)
+        sgnvals = [ sv/abs(sv) if (abs(sv) > 1e-7) else 0.0 for sv in s]
+        sgndm = _np.dot(U,_np.dot(_np.diag(sgnvals),Vt))
+        assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
+            "sngdm should be Hermitian!"
+
+        # get d(prepvec')/dp = d(S_inv * prepvec)/dp in gateBasis [shape == (N,dim)]
+        #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
+        Sinv_dS  = _np.dot(S_inv, dS) # shape (d1,N,d2)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec).squeeze(2) # shape (d,N,1) => (d,N)
+        assert(dVdp.shape == (d,N))
+
+        # denMx = sum( spamvec[i] * Bmx[i] )
+
+        #contract to get (note contract along both mx indices b/c treat like a mx basis):
+        # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
+        # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, N]
+        v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx))) #add 0.5/|denMx|_Tr factor
+        assert(_np.linalg.norm(v.imag) < 1e-4)
+        spamPenaltyVecGradToFill[i,:] = v.real
+        denMx = sgndm = dVdp = v = None #free mem
+
+    return len(gs_pre.preps) #the number of leading-dim indicies we filled in
 
 
 # OLD ############################################################################################

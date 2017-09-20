@@ -812,7 +812,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 lbl = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
                 gaugeOptSuite_dict[lbl] = {
                     'itemWeights': {'gates':1, 'spam':spamWt},
-                    'validSpamPenalty': vSpam, 'verbosity': printer-1 }
+                    'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
 
     elif gaugeOptSuite == "none":
         gaugeOptSuite_dict = _collections.OrderedDict()

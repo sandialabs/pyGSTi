@@ -28,6 +28,7 @@ class GaugeGroup(object):
         def deriv_wrt_params(self): return None
         def to_vector(self): return _np.array([],'d')
         def from_vector(self,v): pass
+        def num_params(self): return 0
 
 class GateGaugeGroup(GaugeGroup):
     def __init__(self, gate):
@@ -67,6 +68,9 @@ class GateGaugeGroup(GaugeGroup):
         def from_vector(self,v):
             self.gate.from_vector(v)
             self._inv_matrix = None
+
+        def num_params(self):
+            return self.gate.num_params()
 
 
 
