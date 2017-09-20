@@ -691,8 +691,11 @@ class StaticGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        return _np.zeros((self.dim**2,0),'d')
-
+        derivMx = _np.zeros((self.dim**2,0),'d')
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
     def copy(self):
         """

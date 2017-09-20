@@ -6,7 +6,9 @@ from pygsti.construction import std2Q_XYICNOT
 import pickle
 from contextlib import contextmanager
 
-from load import load
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+#comm = None
 
 def main():
     gs_target  = std2Q_XYICNOT.gs_target
@@ -29,9 +31,11 @@ def main():
             gatesMetric='frobenius',
             cptp_penalty_factor=1.0,
             spam_penalty_factor=1.0,
-            verbosity=3, checkJac=True)
-        print("Final Diff = ", gs_gaugeopt.frobeniusdist(gs_target, None, 1.0, 0.0001))
-        print(gs_gaugeopt.strdiff(gs_target))
+            comm=comm, verbosity=3, checkJac=False)
+
+        if comm is None or comm.Get_rank() == 0:
+            print("Final Diff = ", gs_gaugeopt.frobeniusdist(gs_target, None, 1.0, 0.0001))
+            print(gs_gaugeopt.strdiff(gs_target))
 
 if __name__ == '__main__':
     main()
