@@ -398,45 +398,45 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         startingPt = advancedOptions.get('starting point',"target")
         
-    if comm is None or comm.Get_rank() == 0:
+    #Compute starting point
+    if startingPt == "LGST":
+        assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
+               "Cannot run LGST: fiducials not specified!"
+        specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
+                                               effectStrs=lsgstLists[0].effectStrs,
+                                               prep_labels=gs_target.get_prep_labels(),
+                                               effect_labels=gs_target.get_effect_labels())
+        gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
+        gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
+                                gateLabelAliases=lsgstLists[0].aliases,
+                                verbosity=printer) # returns a gateset with the *same*
+                                                   # parameterizations as gs_target
 
-        #Compute starting point
-        if startingPt == "LGST":
-            assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
-                   "Cannot run LGST: fiducials not specified!"
-            specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
-                                                   effectStrs=lsgstLists[0].effectStrs,
-                                                   prep_labels=gs_target.get_prep_labels(),
-                                                   effect_labels=gs_target.get_effect_labels())
-            gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
-            gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
-                                    gateLabelAliases=lsgstLists[0].aliases,
-                                    verbosity=printer) # returns a gateset with the *same*
-                                                       # parameterizations as gs_target
+        #In LGST case, gauge optimimize starting point to the target
+        # (historical; sometimes seems to help in practice, since it's gauge
+        # optimizing to physical gates (e.g. something in CPTP)
+        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
+          #Note: use *default* gauge-opt params when optimizing
 
-            #In LGST case, gauge optimimize starting point to the target
-            # (historical; sometimes seems to help in practice, since it's gauge
-            # optimizing to physical gates (e.g. something in CPTP)
-            gs_start = _alg.gaugeopt_to_target(gs_start, gs_target)
-              #Note: use *default* gauge-opt params when optimizing
+        # Also reset the POVM identity to that of the target.  Essentially,
+        # we declare that this basis (gauge) has the same identity as the
+        # target (typically the first basis element).
+        gs_start.povm_identity = gs_target.povm_identity.copy()
 
-            # Also reset the POVM identity to that of the target.  Essentially,
-            # we declare that this basis (gauge) has the same identity as the
-            # target (typically the first basis element).
-            gs_start.povm_identity = gs_target.povm_identity.copy()
-
-        elif startingPt == "target":
-            gs_start = gs_target.copy()
-        elif isinstance(startingPt, _objs.GateSet):
-            gs_start = startingPt
-            startingPt = "User-supplied-GateSet" #for profiler log below
-        else:
-            raise ValueError("Invalid starting point: %s" % startingPt)
+    elif startingPt == "target":
+        gs_start = gs_target.copy()
+    elif isinstance(startingPt, _objs.GateSet):
+        gs_start = startingPt
+        startingPt = "User-supplied-GateSet" #for profiler log below
+    else:
+        raise ValueError("Invalid starting point: %s" % startingPt)
         
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
-                          % startingPt,tRef); tRef=tNxt                
-    
+    tNxt = _time.time()
+    profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
+                      % startingPt,tRef); tRef=tNxt                
+
+    #Post-processing gs_start : done only on root proc in case there is any nondeterminism.
+    if comm is None or comm.Get_rank() == 0:
         #Advanced Options can specify further manipulation of starting gate set
         if advancedOptions.get('contractStartToCPTP',False):
             gs_start = _alg.contract(gs_start, "CPTP")
@@ -566,6 +566,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
+        if "comm" not in gaugeOptParams:
+            gaugeOptParams["comm"] = comm
 
         go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
@@ -624,6 +626,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #if onBadFit == "scale data and reopt": # then will need to re-gauge-opt too, like:
                 #    if "targetGateset" not in gaugeOptParams:
                 #        gaugeOptParams["targetGateset"] = gs_target
+                #    if "comm" not in gaugeOptParams:
+                #        gaugeOptParams["comm"] = comm
                 #
                 #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
                 #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
@@ -812,7 +816,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 lbl = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
                 gaugeOptSuite_dict[lbl] = {
                     'itemWeights': {'gates':1, 'spam':spamWt},
-                    'validSpamPenalty': vSpam, 'verbosity': printer-1 }
+                    'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
 
     elif gaugeOptSuite == "none":
         gaugeOptSuite_dict = _collections.OrderedDict()

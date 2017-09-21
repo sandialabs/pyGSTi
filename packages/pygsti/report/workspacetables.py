@@ -1640,12 +1640,12 @@ class GaugeOptParamsTable(WorkspaceTable):
     
         if 'method' in gaugeOptArgs:
             table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-        if 'TPpenalty' in gaugeOptArgs:
-            table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
-        if 'CPpenalty' in gaugeOptArgs:
-            table.addrow(("CP penalty factor", str(gaugeOptArgs['CPpenalty'])), (None,None))
-        if 'validSpamPenalty' in gaugeOptArgs:
-            table.addrow(("Valid-SPAM constrained", str(gaugeOptArgs['validSpamPenalty'])), (None,None))
+        #if 'TPpenalty' in gaugeOptArgs: #REMOVED
+        #    table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
+        if 'cptp_penalty_factor' in gaugeOptArgs:
+            table.addrow(("CP penalty factor", str(gaugeOptArgs['cptp_penalty_factor'])), (None,None))
+        if 'spam_penalty_factor' in gaugeOptArgs:
+            table.addrow(("SPAM constrained", str(gaugeOptArgs['spam_penalty_factor'])), (None,None))
         if 'gatesMetric' in gaugeOptArgs:
             table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
         if 'spamMetric' in gaugeOptArgs:
