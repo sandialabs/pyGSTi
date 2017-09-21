@@ -78,8 +78,7 @@ class ReportBaseCase(BaseTestCase):
                                   'defaultBasename': "MyDefaultReportName"})
         
         gaugeOptParams = collections.OrderedDict([
-                ('TPpenalty', 0),
-                ('CPpenalty', 0),
+                ('cptp_penalty_factor', 0),
                 ('gatesMetric',"frobenius"),
                 ('spamMetric',"frobenius"),
                 ('itemWeights', {'gates': 1.0, 'spam': 0.001}) ])
