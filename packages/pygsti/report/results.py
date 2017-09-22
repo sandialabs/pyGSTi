@@ -20,7 +20,7 @@ from ..             import tools                as _tools
 
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
-__SHORTCUT_OLD_RESULTS_LOAD = False
+_SHORTCUT_OLD_RESULTS_LOAD = False
 
 class Estimate(object):
     """
@@ -667,10 +667,13 @@ class Results(object):
             goparams = _collections.OrderedDict()
             for k,v in stateDict['parameters'].items():
                 if k != 'gaugeOptParams': params[k] = v
-                else: goparams['go0'] = v
+                elif isinstance(v,list) and len(v) == 1:
+                    goparams['go0'] = v[0]
+                else:
+                    goparams['go0'] = v
 
             gstrStructs = _collections.OrderedDict()
-            if __SHORTCUT_OLD_RESULTS_LOAD == False:
+            if _SHORTCUT_OLD_RESULTS_LOAD == False:
                 try:
                     prepStrs = stateDict['gatestring_lists']['prep fiducials']
                     effectStrs = stateDict['gatestring_lists']['effect fiducials']
@@ -710,7 +713,7 @@ class Results(object):
                 else: gatesets[k] = v
             gatesets['final iteration estimate'] = gatesets['iteration estimates'][-1]
 
-            estimate = Estimate(gatesets['target'], gatesets['seed'],
+            estimate = Estimate(self, gatesets['target'], gatesets['seed'],
                                 gatesets['iteration estimates'], params)
             if 'go0' in gatesets:
                 estimate.add_gaugeoptimized(goparams.get('go0',{}), gatesets['go0'])
