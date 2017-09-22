@@ -86,6 +86,7 @@ function openTab(evt, tabID) {
     tabcontent = document.getElementsByClassName("tabcontent");
     for (i = 0; i < tabcontent.length; i++) {
         tabcontent[i].style.display = "none";
+	tabcontent[i].className = tabcontent[i].className.replace(" active", "");
     }
 
     // Get all elements with class="tablink" and remove the class "active"
@@ -95,9 +96,27 @@ function openTab(evt, tabID) {
     }
 
     // Show the current tab, and add an "active" class to the button that opened the tab
-    document.getElementById(tabID).style.display = "block";
-    evt.currentTarget.className += " active";
+    //  as well as the content.
+    contentDiv = document.getElementById(tabID)
+
+    if( $(contentDiv).children().length == 0 ) {
+	loadLocal('tabs/' + tabID + '.html', '#' + tabID, function() {
+	    //do what we would have done below if it were loaded
+	    contentDiv.style.display = "block";
+	    contentDiv.className += " active";
+	    $(contentDiv).trigger('tabchange');
+	});
     }
+    else { //tab is already loaded
+	contentDiv.style.display = "block";
+	contentDiv.className += " active";
+
+	// Run any onchange handlers on this tab in case switches have changed
+	// (change handlers just exit if they're not in the active tab)
+	$(contentDiv).trigger('tabchange');
+    }
+    evt.currentTarget.className += " active"; //do this right away always (no need to wait)
+}
 
 /* Set the width of the side navigation to 250px and the left margin of the page content to 250px */
 function openNav() {
@@ -109,5 +128,27 @@ function openNav() {
 function closeNav() {
     document.getElementById("theSidenav").style.width = "10px";
     document.getElementById("main").style.marginLeft = "10px"; // for push: 
+}
+
+function loadLocal(url, selector, complete) {
+   var request = new XMLHttpRequest();
+    request.responseType = 'text';
+    request.open('GET', url, true);
+    request.onload = function() {
+      // "0" is usually an error, but Safari completes request and then sets
+      // status to 0, probably b/c of cross-domain issues... use this as hack for now
+      if (request.status == 200 || request.status == 0) { 
+          var response = request.responseText;
+          $( selector ).html(response)
+	  console.log("loadLocal: success loading " + request.responseURL);
+	  complete();
+      } else {
+	  console.log("loadLocal: there was an error in the response:\n" + request.status);
+      }
+    };
+    request.onerror = function() {
+	console.log("loadLocal: there was a connection error of some sort!");
+    };
+    request.send();
 }
 
