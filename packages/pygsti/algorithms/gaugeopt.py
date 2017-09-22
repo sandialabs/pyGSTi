@@ -322,7 +322,6 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
     if mxBasis.name == "unknown" and targetGateset is not None: 
         mxBasis = targetGateset.basis
 
-
     if  method == "ls":
         # least-squares case where objective function returns an array of
         # the before-they're-squared difference terms and there's an analytic jacobian
@@ -331,10 +330,12 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
 
             if cptp_penalty_factor > 0:
+                gs.basis = mxBasis
                 cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gs.basis)
             else: cpPenaltyVec = [] # so concatenate ignores
 
             if spam_penalty_factor > 0:
+                gs.basis = mxBasis
                 spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gs.basis)
             else: spamPenaltyVec = [] # so concatenate ignores
 
@@ -352,6 +353,11 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             #Compute "extra" (i.e. beyond the gateset-element) rows of jacobian
             if cptp_penalty_factor != 0: L += len(gs_pre.gates)
             if spam_penalty_factor != 0: L += len(gs_pre.preps)
+
+            #Set basis for pentaly term calculation
+            if cptp_penalty_factor != 0 or spam_penalty_factor != 0:
+                gs_pre.basis = mxBasis
+                gs_post.basis = mxBasis
 
             jacMx = _np.zeros((L, N))
     
@@ -472,6 +478,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 ret += _np.sum(cpPenaltyVec)
     
             if spam_penalty_factor > 0:
+                gs.basis = mxBasis
                 spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gs.basis)
                 ret += _np.sum(spamPenaltyVec)
     
@@ -631,6 +638,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     """
     BMxs = gateBasis.get_composite_matrices() #shape [gs.dim, dmDim, dmDim]
     ddenMxdV = BMxs # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+    assert(ddenMxdV.size > 0), "Could not obtain basis matrices from " \
+        + "'%s' basis for spam pentalty factor!" % gateBasis.name
 
     # S, and S_inv are shape (d,d)
     d,N     = gs_pre.dim, gaugeGroupEl.num_params()
