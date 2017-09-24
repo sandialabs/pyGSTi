@@ -745,12 +745,16 @@ def create_general_report(results, filename, title="auto",
                                                      ['Target','Estimated'], "boxes", cri)
     addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
     addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri)
-    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
-                                                          virtual_gates=germs)
+    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri,
+           display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
+           virtual_gates=germs)
     addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
     addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty('bestGatesVsTargetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
-    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+                                        display=('inf','trace','diamond','uinf','agi'), virtual_gates=germs)
+    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, display=('giinf','gidm'), virtual_gates=germs)
+    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+                                         display=('inf','trace','diamond','uinf','agi','giinf','gidm'))
     addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
