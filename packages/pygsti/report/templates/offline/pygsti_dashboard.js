@@ -137,7 +137,7 @@ function loadLocal(url, selector, complete) {
     request.onload = function() {
       // "0" is usually an error, but Safari completes request and then sets
       // status to 0, probably b/c of cross-domain issues... use this as hack for now
-      if (request.status == 200 || request.status == 0) { 
+      if (request.status == 200) { // || request.status == 0) {
           var response = request.responseText;
           $( selector ).html(response)
 	  console.log("loadLocal: success loading " + request.responseURL);
@@ -148,6 +148,25 @@ function loadLocal(url, selector, complete) {
     };
     request.onerror = function() {
 	console.log("loadLocal: there was a connection error of some sort!");
+    };
+    request.send();
+}
+
+
+function testLocalAjax(url, onerror) {
+   var request = new XMLHttpRequest();
+    request.responseType = 'text';
+    request.open('GET', url, true);
+    request.onload = function() {
+	if (request.status != 200) {
+	    onerror(request.status);
+	}
+	else {
+	    console.log('testLocalAjax success!');
+	}
+    };
+    request.onerror = function() {
+	onerror("connection error");
     };
     request.send();
 }
