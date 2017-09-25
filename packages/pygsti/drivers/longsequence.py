@@ -663,7 +663,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       gaugeOptSuite='varySpamWt', gaugeOptTarget=None,
+                       gaugeOptSuite='toggleValidSpam', gaugeOptTarget=None,
                        comm=None, memLimit=None, advancedOptions=None,
                        output_pkl=None, verbosity=2):
 
@@ -730,9 +730,10 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         The built-in gauge optmization suites are:
 
           - "single" : performs only a single "best guess" gauge optimization.
-          - "varySpam" : varies spam weight and toggles valid-SPAM penalty.
-          - "varySpamWt" : varies spam weight but no valid-SPAM penalty.
-          - "varyValidSpamWt" : varies spam weight with valid-SPAM penalty.
+          - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
+          - "varySpamWt" : varies spam weight but no SPAM penalty.
+          - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
+          - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
           - "none" : no gauge optimizations are performed.
 
     gaugeOptTarget : GateSet, optional
@@ -805,18 +806,42 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             [('single', {'itemWeights': {'gates':1, 'spam':1e-3},
                          'verbosity': printer-1} )])
         
-    elif gaugeOptSuite in ("varySpam", "varySpamWt", "varyValidSpamWt"):
-        gaugeOptSuite_dict = _collections.OrderedDict()
-        if gaugeOptSuite == "varySpam": vSpam_range = [0,1]
-        elif gaugeOptSuite == "varySpamWt": vSpam_range = [0]
-        elif gaugeOptSuite == "varyValidSpamWt": vSpam_range = [1]
+    elif gaugeOptSuite in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
 
-        for vSpam in vSpam_range:
-            for spamWt in [1e-4,1e-1]:
-                lbl = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
-                gaugeOptSuite_dict[lbl] = {
-                    'itemWeights': {'gates':1, 'spam':spamWt},
-                    'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
+        itemWeights_bases = _collections.OrderedDict()
+        itemWeights_bases[""] = {'gates': 1}
+
+        #Add if a 2-qubit gateset
+        if gs_target.dim == 16: 
+            if advancedOptions is not None:
+                advanced = advancedOptions.get('all',{}) #'unreliableGates' can only be specified in 'all' options
+            else: advanced = {}
+            unreliableGates = advanced.get('unreliableGates',['Gcnot','Gcphase','Gms','Gcn','Gcx','Gcz'])
+            if any([gl in gs_target.gates.keys() for gl in unreliableGates]):
+                base = {'gates': 1}
+                for gl in unreliableGates:
+                    if gl in gs_target.gates.keys(): base[gl] = 0.01
+                itemWeights_bases["-2QUR"] = base
+            
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        if gaugeOptSuite == "varySpam":
+            vSpam_range = [0,1]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "varySpamWt":
+            vSpam_range = [0]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "varyValidSpamWt":
+            vSpam_range = [1]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "toggleValidSpam":
+            vSpam_range = [0,1]; spamWt_range = [1e-3]
+
+        for postfix,baseWts in itemWeights_bases.items():
+            for vSpam in vSpam_range:
+                for spamWt in spamWt_range:
+                    lbl = "Spam %g%s%s" % (spamWt, "+v" if vSpam else "", postfix)
+                    itemWeights = baseWts.copy()
+                    itemWeights['spam'] = spamWt
+                    gaugeOptSuite_dict[lbl] = {
+                        'itemWeights': itemWeights,
+                        'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
 
     elif gaugeOptSuite == "none":
         gaugeOptSuite_dict = _collections.OrderedDict()
