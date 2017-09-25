@@ -386,8 +386,10 @@ def generate_boxplot(subMxs,
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
         fig['layout']['xaxis'].update(tickvals=list(range(nXs)))
         fig['layout']['yaxis'].update(tickvals=list(range(nYs)))
-        fig['layout'].update(width=80*(nXs+3)*scale,
-                             height=80*(nYs+3)*scale)
+
+        xBoxes = nXs
+        yBoxes = nYs
+
 
     else: #not summing up
 
@@ -406,9 +408,10 @@ def generate_boxplot(subMxs,
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
         assert(fig is not None), "No data to display!"
-        
-        fig['layout'].update(width=30*(nXs*nIXs+15)*scale,
-                             height=30*(nYs*nIYs+15)*scale)
+
+        xBoxes = nXs*(nIXs+1) - 1
+        yBoxes = nYs*(nIYs+1) - 1
+
         
     if xlabel: fig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
@@ -422,17 +425,41 @@ def generate_boxplot(subMxs,
         fig['layout']['yaxis'].update(tickmode="array",
                                       ticktext=val_filter(ylabels),
                                       tickfont={'size': 10*scale, 'color': "black"})
-        #lblLen = max(map(len,val_filter(ylabels)))
-        #fig['layout'].update(margin=go.Margin(l=5*lblLen*scale ) ) # r=50, b=100, t=100, pad=4
 
-    # ticSize, grid, title?
+    #Set plot size and margins
+    lmargin = rmargin = tmargin = bmargin = 10
+    if xlabel: bmargin += 30
+    if ylabel: lmargin += 30
+    if xlabels:
+        max_xl = max([len(xl) for xl in fig['layout']['xaxis']['ticktext']])
+        if max_xl > 0: bmargin += max_xl*5
+    if ylabels:
+        max_yl = max([len(yl) for yl in fig['layout']['yaxis']['ticktext']])
+        if max_yl > 0: lmargin += max_yl*5
+    if colorbar: rmargin = 100
 
-    #TODO: figure saving
-    #if rptFig is not None: #can be None if there's nothing to plot
-    #    rptFig.save_to(save_to)
-    #if rptFig is not None:
-    #    rptFig.set_extra_info( { 'nUsedXs': len(xvals),
-    #                             'nUsedYs': len(yvals) } )
+      #make sure there's enough margin for hover tooltips
+    if 10*xBoxes < 200: rmargin = max(200 - 10*xBoxes, rmargin)
+    if 10*yBoxes < 200: bmargin = max(200 - 10*xBoxes, bmargin)
+
+    width = lmargin + 10*xBoxes + rmargin
+    height = tmargin + 10*yBoxes + bmargin
+
+    width *= scale
+    height *= scale
+    lmargin *= scale
+    rmargin *= scale
+    tmargin *= scale
+    bmargin *= scale
+
+    #DEBUG
+    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
+    #print("DB dims = ",width,height)
+    
+    fig['layout'].update(width=width,
+                         height=height,
+                         margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
+
     return fig
 
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
@@ -946,10 +973,35 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
                               color=colormap.besttxtcolor(matrix[iy,ix])),
                         showarrow=False)
                 )
-                
+
+    #Set plot size and margins
+    lmargin = rmargin = tmargin = bmargin = 10
+    if xlabel: tmargin += 30
+    if ylabel: lmargin += 30
+    max_xl = max([len(xl) for xl in xlabels])
+    if max_xl > 0: tmargin += max_xl*5
+    max_yl = max([len(yl) for yl in ylabels])
+    if max_yl > 0: lmargin += max_yl*5
+    if colorbar: rmargin = 100
+
+    width = lmargin + 15*matrix.shape[1] + rmargin
+    height = tmargin + 15*matrix.shape[0] + bmargin
+
+    width *= scale
+    height *= scale
+    lmargin *= scale
+    rmargin *= scale
+    tmargin *= scale
+    bmargin *= scale
+
+    #DEBUG
+    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
+    #print("DB dims = ",width,height)
+    
     layout = go.Layout(
-        width = 35*(matrix.shape[1]+xextra)*scale,
-        height = 35*(matrix.shape[0]+yextra)*scale,
+        width = width,
+        height = height,
+        margin = go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin), #pad=0
         xaxis=dict(
             side="top",
             title=xlabel,
@@ -980,8 +1032,7 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
             range=[-0.5,len(ylabels)-0.5],
             ),
         shapes = gridlines,
-        annotations = annotations,
-        margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
+        annotations = annotations
     )
     #print("DEBUG width = ",40*(gateMatrix.shape[1]+xextra)*scale)
     #print("DEBUG height = ",40*(gateMatrix.shape[0]+yextra)*scale)
