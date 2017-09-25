@@ -101,6 +101,49 @@ class ReportableQty(object):
         else:
             return ReportableQty( _np.imag(self.value) )
 
+    def absdiff(self, constant_value, separate_re_im=False):
+        """ 
+        Returns a ReportableQty that is the (element-wise in the vector case)
+        difference between `constant_value` and this one given by:
+
+        `abs(self - constant_value)`.
+        """
+        if separate_re_im:
+            re_v = _np.fabs( _np.real(self.value) - _np.real(constant_value) )
+            im_v = _np.fabs( _np.imag(self.value) - _np.imag(constant_value) )
+            if self.has_eb():
+                return (ReportableQty( re_v, _np.fabs(_np.real(self.errbar)), self.nonMarkovianEBs),
+                        ReportableQty( im_v, _np.fabs(_np.imag(self.errbar)), self.nonMarkovianEBs) )
+            else:
+                return ReportableQty( re_v ), ReportableQty( im_v )
+
+        else:
+            v = _np.absolute( self.value - constant_value )
+            if self.has_eb():
+                return ReportableQty( v, self.errbar, self.nonMarkovianEBs)
+            else:
+                return ReportableQty( v )
+
+    def infidelity_diff(self, constant_value):
+        """ 
+        Returns a ReportableQty that is the (element-wise in the vector case)
+        difference between `constant_value` and this one given by:
+
+        `1.0 - Re(conjugate(constant_value) * self )`
+        """
+        # let diff(x) = 1.0 - Re(const.C * x) = 1.0 - (const.re * x.re + const.im * x.im)
+        # so d(diff)/dx.re = -const.re, d(diff)/dx.im = -const.im
+        # diff(x + dx) = diff(x) + d(diff)/dx * dx
+        # diff(x + dx) - diff(x) =  - (const.re * dx.re + const.im * dx.im)
+        v = 1.0 -_np.real( _np.conjugate(constant_value) * self.value )
+        if self.has_eb():
+            eb = abs( _np.real(constant_value) * _np.real(self.errbar) +
+                      _np.imag(constant_value) * _np.real(self.errbar) )
+            return ReportableQty( v, eb, self.nonMarkovianEBs)
+        else:
+            return ReportableQty( v )
+
+        
     def reshape(self, *args):
         """ Returns a ReportableQty whose underlying values are reshaped."""
         if self.has_eb():

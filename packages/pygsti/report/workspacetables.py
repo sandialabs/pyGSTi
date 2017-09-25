@@ -371,11 +371,11 @@ class ChoiTable(WorkspaceTable):
             gateLabels = list(gateset.gates.keys()) # gate labels
             #qtys_to_compute = []
             if 'matrix' in display:
-                choiMxs = [_reportables.choi_matrix(gateset, gl) for gl in gateLabels]
+                choiMxs = [_reportables.choi_matrix(gl, gateset) for gl in gateLabels]
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
-                evals   = [_reportables.choi_evals(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
+                evals   = [_reportables.choi_evals(gl, gateset, confidenceRegionInfo) for gl in gateLabels]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
@@ -495,51 +495,110 @@ class GatesetVsTargetTable(WorkspaceTable):
     
 #    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
-    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+                 display=('inf','trace','diamond','uinf','agi','giinf','gidm'),
+                 virtual_gates=None):
         """
         Create a table comparing a gateset's gates to a target gateset using
-        the infidelity, diamond-norm distance, trace distance, and other
-        metrics.
+        metrics such as the  infidelity, diamond-norm distance, and trace distance.
     
         Parameters
         ----------
         gateset, targetGateset : GateSet
             The gate sets to compare
-    
+
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals.    
+
+        display : tuple, optional
+            A tuple of one or more of the allowed options (see below) which
+            specify which columns are displayed in the table.
+
+            - "inf" :     process infidelity
+            - "trace" :   1/2 trace distance
+            - "diamond" : 1/2 diamond norm distance
+            - "uinf" :    unitarity infidelity
+            - "agi" :     average gate infidelity
+            - "frob" :    frobenius distance
+            - "giinf" :   gauge-invariant infidelity
+            - "gidm" :    gauge-invariant diamond norm
+
+        virtual_gates : list, optional
+            If not None, a list of `GateString` objects specifying additional "gates"
+            (i.e. processes) to compute eigenvalues of.  Length-1 gate strings are
+            automatically discarded so they are not displayed twice.    
     
         Returns
         -------
         ReportTable
         """
         super(GatesVsTargetTable,self).__init__(ws, self._create, gateset,
-                                                targetGateset, confidenceRegionInfo)
+                                                targetGateset, confidenceRegionInfo,
+                                                display, virtual_gates)
     
-    def _create(self, gateset, targetGateset, confidenceRegionInfo):
+    def _create(self, gateset, targetGateset, confidenceRegionInfo,
+                display, virtual_gates):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
-        
-        colHeadings = ('Gate', "Process|Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Norm",
-                       "Unitarity|Infidelity", "Gauge Inv.|Infidelity", "Avg. Gate|Infidelity") #, "Frobenius|Distance"
-        formatters  = (None,'Conversion','Conversion','Conversion','Conversion','Conversion','Conversion')
-    
-        infidelities = [_reportables.process_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
-        jt_diffs     = [_reportables.jt_diff(gateset, targetGateset, gl, confidenceRegionInfo)            for gl in gateLabels]
-        dnorms       = [_reportables.half_diamond_norm(gateset, targetGateset, gl, confidenceRegionInfo)  for gl in gateLabels]
-        unitarityIF  = [_reportables.unitarity_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
-        gaugeInvIF   = [_reportables.gaugeinv_infidelity(gateset, gl, confidenceRegionInfo) for gl in gateLabels]
-        AGI          = [_reportables.avg_gate_infidelity(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+
+        colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        for disp in display:
+            if disp == "inf":    colHeadings.append("Process|Infidelity")
+            elif disp == "trace": colHeadings.append("1/2 Trace|Distance")
+            elif disp == "diamond": colHeadings.append( "1/2 Diamond-Norm")
+            elif disp == "uinf": colHeadings.append("Unitarity|Infidelity")
+            elif disp == "agi": colHeadings.append("Avg. Gate|Infidelity")
+            elif disp == "frob": colHeadings.append("Frobenius|Distance")
+            elif disp == "giinf": colHeadings.append("Gauge Inv.|Infidelity")
+            elif disp == "gidm": colHeadings.append("Gauge Inv.|1/2 Diamond-Norm")
+            else: raise ValueError("Invalid display column name: %s" % disp)
+
+        formatters  = (None,) + ('Conversion',) * (len(colHeadings)-1)
 
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
-    
-        formatters = [None] + [ 'Normal' ] * (len(colHeadings) - 1)
-    
-        for rowData in _reportables.labeled_data_rows(gateLabels, confidenceRegionInfo,
-                                                      infidelities, jt_diffs, dnorms,
-                                                      unitarityIF, gaugeInvIF, AGI):
-            table.addrow(rowData, formatters)
+
+        formatters = (None,) + ('Normal',) * (len(colHeadings) - 1)
+
+        if virtual_gates is None:
+            iterOver = gateLabels
+        else:
+            iterOver = gateLabels + [v for v in virtual_gates if len(v) > 1]
+
+        for gl in iterOver:
+            #Note: gl may be a gate label (a string) or a GateString
+            row_data = [ str(gl) ]
+            b = bool(_tools.isstr(gl)) #whether this is a gate label or a string
+
+            for disp in display:
+                if disp == "inf":
+                    fn = _reportables.process_infidelity if b else \
+                         _reportables.gatestring_process_infidelity
+                elif disp == "trace":
+                    fn = _reportables.jt_diff if b else \
+                         _reportables.gatestring_jt_diff
+                elif disp == "diamond":
+                    fn = _reportables.half_diamond_norm if b else \
+                         _reportables.gatestring_half_diamond_norm
+                elif disp == "uinf":
+                    fn = _reportables.unitarity_infidelity if b else \
+                         _reportables.gatestring_unitarity_infidelity
+                elif disp == "agi":
+                    fn = _reportables.avg_gate_infidelity if b else \
+                         _reportables.gatestring_avg_gate_infidelity
+                elif disp == "frob":
+                    fn = _reportables.fro_diff if b else \
+                         _reportables.gatestring_fro_diff
+                elif disp == "giinf":
+                    fn = _reportables.gaugeinv_infidelity if b else \
+                         _reportables.gatestring_gaugeinv_infidelity
+                elif disp == "gidm":
+                    fn = _reportables.gaugeinv_diamondnorm if b else \
+                         _reportables.gatestring_gaugeinv_diamondnorm
+                qty = fn(gl, gateset, targetGateset, confidenceRegionInfo)
+                row_data.append( qty )
+
+            table.addrow(row_data, formatters)
         table.finish()
         return table
         
@@ -578,10 +637,10 @@ class SpamVsTargetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        prepInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
+        prepInfidelities = [_reportables.vec_infidelity(l, gateset, targetGateset, 
                                                         'prep', confidenceRegionInfo)
                             for l in prepLabels]
-        prepTraceDists   = [_reportables.vec_tr_diff(gateset, targetGateset, l, 
+        prepTraceDists   = [_reportables.vec_tr_diff(l, gateset, targetGateset,
                                                         'prep', confidenceRegionInfo)
                             for l in prepLabels]
         for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
@@ -589,10 +648,10 @@ class SpamVsTargetTable(WorkspaceTable):
             table.addrow(rowData, formatters)
     
         formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        effectInfidelities = [_reportables.vec_infidelity(gateset, targetGateset, l, 
+        effectInfidelities = [_reportables.vec_infidelity(l, gateset, targetGateset,
                                                         'effect', confidenceRegionInfo)
                             for l in effectLabels]
-        effectTraceDists   = [_reportables.vec_tr_diff(gateset, targetGateset, l, 
+        effectTraceDists   = [_reportables.vec_tr_diff(l, gateset, targetGateset,
                                                         'effect', confidenceRegionInfo)
                             for l in effectLabels]
         for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
@@ -689,10 +748,10 @@ class ErrgenTable(WorkspaceTable):
 
             if genType == "logG-logT":
                 info = _reportables.logGmlogT_and_projections(
-                    gateset, targetGateset, gl, confidenceRegionInfo)
+                    gl, gateset, targetGateset, confidenceRegionInfo)
             elif genType == "logTiG":
                 info = _reportables.logTiG_and_projections(
-                    gateset, targetGateset, gl, confidenceRegionInfo)
+                    gl, gateset, targetGateset, confidenceRegionInfo)
             else: raise ValueError("Invalid generator type: %s" % genType)
             errgenAndProjs[gl] = info
             
@@ -793,7 +852,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         colHeadings = ('Gate', "Angle between|rotation axes")
         formatters  = (None,'Conversion')
     
-        anglesList = [_reportables.gateset_gateset_angles_btwn_axes(gateset, targetGateset, gl, confidenceRegionInfo) for gl in gateLabels]
+        anglesList = [_reportables.gateset_gateset_angles_btwn_axes(gl, gateset, targetGateset, confidenceRegionInfo) for gl in gateLabels]
 
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
     
@@ -904,7 +963,7 @@ class old_GateDecompTable(WorkspaceTable):
         colHeadings = ('Gate','Eigenvalues','Fixed pt','Rotn. axis','Diag. decay','Off-diag. decay')
         formatters = [None]*6
     
-        decomps = [_reportables.decomposition(gateset, gl) for gl in gateLabels]
+        decomps = [_reportables.decomposition(gl, gateset) for gl in gateLabels]
         decompNames = ('fixed point',
                        'axis of rotation',
                        'decay of diagonal rotation terms',
@@ -915,7 +974,7 @@ class old_GateDecompTable(WorkspaceTable):
         formatters = (None, 'Vec', 'Normal', 'Normal', 'Normal', 'Normal')
 
         for decomp, gl in zip(decomps, gateLabels):
-            evals = _reportables.eigenvalues(gateset, gl)
+            evals = _reportables.eigenvalues(gl, gateset)
             decomp, decompEB = decomp.get_value_and_err_bar() #OLD
     
             rowData = [gl, evals] + [decomp.get(x,'X') for x in decompNames[0:2] ] + \
@@ -959,7 +1018,7 @@ class old_RotationAxisTable(WorkspaceTable):
     
         gateLabels = list(gateset.gates.keys())
     
-        decomps = [_reportables.decomposition(gateset, gl) for gl in gateLabels]
+        decomps = [_reportables.decomposition(gl, gateset) for gl in gateLabels]
     
         colHeadings = ("Gate","Angle") + tuple( [ "RAAW(%s)" % gl for gl in gateLabels] )
         nCols = len(colHeadings)
@@ -1037,13 +1096,24 @@ class GateEigenvalueTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
 
-        display : tuple of {"evals", "target", "rel", "log-evals", "log-rel", "polar", "relpolar"}
-            Specifies which columns are displayed in the table: a list of the
-            eigenvalues, target eigenvalues, relative eigenvalues, the (complex)
-            logarithm of the eigenvalues and relative eigenvalues, a polar plot of
-            the eigenvalues, and/or a polar plot of the relative eigenvalues.
-            If `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
-            and `"relpolar"` will be silently ignored.
+        display : tuple
+            A tuple of one or more of the allowed options (see below) which
+            specify which columns are displayed in the table.  If 
+            `targetGateset` is None, then `"target"`, `"rel"`, `"log-rel"`
+            `"relpolar"`, `"gidm"`, and `"giinf"` will be silently ignored.
+        
+            - "evals" : the gate eigenvalues
+            - "target" : the target gate eigenvalues
+            - "rel" : the relative-gate eigenvalues
+            - "log-evals" : the (complex) logarithm of the eigenvalues
+            - "log-rel" : the (complex) logarithm of the relative eigenvalues
+            - "polar": a polar plot of the gate eigenvalues
+            - "relpolar" : a polar plot of the relative-gate eigenvalues
+            - "absdiff-evals" : absolute difference w/target eigenvalues
+            - "infdiff-evals" : 1-Re(z0.C*z) difference w/target eigenvalues
+            - "absdiff-log-evals" : Re & Im differences in eigenvalue logarithms
+            - "gidm" : the gauge-invariant diamond norm metric
+            - "giinf" : the gauge-invariant infidelity metric
 
         virtual_gates : list, optional
             If not None, a list of `GateString` objects specifying additional "gates"
@@ -1084,6 +1154,22 @@ class GateEigenvalueTable(WorkspaceTable):
             elif disp == "relpolar":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Rel. Evals')
+            elif disp == "absdiff-evals":
+                if(targetGateset is not None): #silently ignore
+                    colHeadings.append('|eval - target|')
+            elif disp == "infdiff-evals":
+                if(targetGateset is not None): #silently ignore
+                    colHeadings.append('1.0 - Re(target.C * eval)')
+            elif disp == "absdiff-log-evals":
+                if(targetGateset is not None): #silently ignore
+                    colHeadings.append('|Re(log eval) - Re(log target)|')
+                    colHeadings.append('|Im(log eval) - Im(log target)|')
+            elif disp == "gidm":
+                if(targetGateset is not None): #silently ignore
+                    colHeadings.append('Gauge-inv. diamond norm')
+            elif disp == "giinf":
+                if(targetGateset is not None): #silently ignore
+                    colHeadings.append('Gauge-inv. infidelity')
             else:
                 raise ValueError("Invalid display element: %s" % disp)
 
@@ -1101,10 +1187,9 @@ class GateEigenvalueTable(WorkspaceTable):
             row_data = [ str(gl) ]
             row_formatters = [None]
 
-            if _tools.isstr(gl):
-                evals = _reportables.eigenvalues(gateset, gl, confidenceRegionInfo)
-            else:
-                evals = _reportables.gatestring_eigenvalues(gl, gateset, confidenceRegionInfo)
+            fn = _reportables.eigenvalues if _tools.isstr(gl) else \
+                 _reportables.gatestring_eigenvalues
+            evals = fn(gl, gateset, confidenceRegionInfo)
                 
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
@@ -1114,11 +1199,21 @@ class GateEigenvalueTable(WorkspaceTable):
             if targetGateset is not None:
                 #TODO: move this to a reportable qty to get error bars?
                 if _tools.isstr(gl):
-                    rel_evals = _reportables.rel_gate_eigenvalues(gateset, targetGateset, gl, confidenceRegionInfo)
+                    rel_evals = _reportables.rel_gate_eigenvalues(gl, gateset, targetGateset, confidenceRegionInfo)
                     target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
                 else:
                     rel_evals = _reportables.rel_gatestring_eigenvalues(gl, gateset, targetGateset, confidenceRegionInfo)
                     target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
+
+                # permute target eigenvalues according to min-weight matching
+                minWt, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
+                matched_target_evals = target_evals.copy()
+                for i,j in pairs:
+                    matched_target_evals[i] = target_evals[j]
+                target_evals = matched_target_evals
+                target_evals = target_evals.reshape(evals.value.shape)
+                   # b/c evals have shape (x,1) and targets (x,),
+                   # which causes problems when we try to subtract them
 
             for disp in display:
                 if disp == "evals":
@@ -1145,7 +1240,41 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_data.append( log_relevals.real() )
                     row_data.append( log_relevals.imag()/_np.pi )
                     row_formatters.append('Vec') 
-                    row_formatters.append('Pi')  
+                    row_formatters.append('Pi')
+
+                elif disp == "absdiff-evals":
+                    absdiff_evals = evals.absdiff(target_evals)
+                    row_data.append( absdiff_evals )
+                    row_formatters.append('Vec')
+                    
+                elif disp == "infdiff-evals":
+                    infdiff_evals = evals.infidelity_diff(target_evals)
+                    row_data.append( infdiff_evals )
+                    row_formatters.append('Vec')
+
+                elif disp == "absdiff-log-evals":
+                    log_evals = evals.log()
+                    re_diff, im_diff = log_evals.absdiff( _np.log(target_evals.astype(complex)), separate_re_im=True )
+                    row_data.append( re_diff )
+                    row_data.append( im_diff/_np.pi )
+                    row_formatters.append('Vec')
+                    row_formatters.append('Pi')
+
+                elif disp == "gidm":
+                    if targetGateset is None:
+                        fn = _reportables.gaugeinv_diamondnorm if _tools.isstr(gl) else \
+                             _reportables.gatestring_gaugeinv_diamondnorm
+                        gidm = fn(gl, gateset, targetGateset, confidenceRegionInfo)
+                        row_data.append( gidm )
+                        row_formatters.append('Normal')
+                
+                elif disp == "giinf":
+                    if targetGateset is None:
+                        fn = _reportables.gaugeinv_infidelity if _tools.isstr(gl) else \
+                             _reportables.gatestring_gaugeinv_infidelity
+                        giinf = fn(gl, gateset, targetGateset, confidenceRegionInfo)
+                        row_data.append( giinf )
+                        row_formatters.append('Normal')
                     
                 elif disp == "polar":
                     evals_val = evals.get_value()

@@ -512,3 +512,7 @@ div.sidenav a.active {
     padding:3px;
     text-align:center;
 }
+
+#AjaxError {
+    color: #E00;
+}

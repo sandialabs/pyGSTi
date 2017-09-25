@@ -103,15 +103,65 @@ def _read_and_preprocess_template(templateFilename, toggles):
     
     return preprocess(template)
 
-def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision,
+def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open, precision,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, toggles=None, verbosity=0):
+                    connected=False, toggles=None, renderMath=True, verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
+    #Figure out which rendering mode we'll use
+    full = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
+                          "templates", templateFilenameOrDir )
+    if _os.path.isdir(full) or not outputFilename.endswith(".html"):
+        #template is a directory, so we must outputFilename must also be a directory
+        render_typ = "htmldir" # output is a dir of html files
+        if outputFilename.endswith(".html") or outputFilename.endswith(".pdf"):
+            outputDir = _os.path.splitext(outputFilename)[0] #remove extension
+        else:
+            outputDir = outputFilename #assume any .ext is desired in folder name
+        outputFilename = _os.path.join(outputDir, 'main.html')
+
+        def clearDir(path):
+            if not _os.path.isdir(path): return
+            for fn in _os.listdir(path):
+                full_fn = _os.path.join(path,fn)
+                if _os.path.isdir(full_fn):
+                    clearDir(full_fn)
+                    _os.rmdir(full_fn)
+                else:
+                    _os.remove( full_fn )
+        
+        #Create figures directory if it doesn't already exist,
+        # otherwise clear it
+        figDir = _os.path.join(outputDir, 'figures')
+        if not _os.path.exists(figDir):
+            _os.makedirs(figDir)
+        else:
+            assert(_os.path.isdir(figDir)), "%s exists but isn't a directory!" % figDir
+            clearDir(figDir)
+
+        #Create tabs directory if it doesn't already exist,
+        # otherwise clear it
+        tabDir = _os.path.join(outputDir, 'tabs')
+        if not _os.path.exists(tabDir):
+            _os.makedirs(tabDir)
+        else:
+            assert(_os.path.isdir(tabDir)), "%s exists but isn't a directory!" % tabDir
+            clearDir(tabDir)
+
+        #clear offline dir if it exists
+        offlineDir = _os.path.join(outputDir, 'offline')
+        if _os.path.isdir(offlineDir):
+            clearDir(offlineDir)
+            _os.rmdir(offlineDir) #otherwise rsync doesn't work (?)
+            
+    else:
+        assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
+        render_typ = "html"
+        outputDir = _os.path.dirname(outputFilename)
+
     #Copy offline directory into position
     if not connected:
-        outputDir = _os.path.dirname(outputFilename)
         _ws.rsync_offline_dir(outputDir)
 
     #Add favicon
@@ -185,30 +235,30 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
             "auto-render.min.js")
 
-
-        qtys['katexLIB'] += (
-            '\n<script>'
-            'document.addEventListener("DOMContentLoaded", function() {'
-            '  $("#status").show();\n'
-            '  $("#status").text("Rendering body math");\n'
-            '  $(".math").each(function() {\n'
-            '    console.log("Rendering KateX");\n'
-            '    var texTxt = $(this).text();\n'
-            '    el = $(this).get(0);\n'
-            '    if(el.tagName == "DIV"){\n'
-            '       addDisp = "\\displaystyle";\n'
-            '    } else {\n'
-            '    addDisp = "";\n'
-            '    }\n'
-            '    try {\n'
-            '      katex.render(addDisp+texTxt, el);\n'
-            '    }\n'
-            '    catch(err) {\n'
-            '      $(this).html("<span class=\'err\'>"+err);\n'
-            '    }\n'
-            '  });\n'
-            '});\n'
-            '</script>' )
+        if renderMath:
+            qtys['katexLIB'] += (
+                '\n<script>'
+                'document.addEventListener("DOMContentLoaded", function() {'
+                '  $("#status").show();\n'
+                '  $("#status").text("Rendering body math");\n'
+                '  $(".math").each(function() {\n'
+                '    console.log("Rendering KateX");\n'
+                '    var texTxt = $(this).text();\n'
+                '    el = $(this).get(0);\n'
+                '    if(el.tagName == "DIV"){\n'
+                '       addDisp = "\\displaystyle";\n'
+                '    } else {\n'
+                '    addDisp = "";\n'
+                '    }\n'
+                '    try {\n'
+                '      katex.render(addDisp+texTxt, el);\n'
+                '    }\n'
+                '    catch(err) {\n'
+                '      $(this).html("<span class=\'err\'>"+err);\n'
+                '    }\n'
+                '  });\n'
+                '});\n'
+                '</script>' )
 
 #OLD: auto-render entire document
 #        qtys['katexLIB'] += ('\n<script>'
@@ -236,12 +286,7 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             connected, None, cssFile)
                 for cssFile in CSSnames] )
 
-    #Insert qtys into template file
-    templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                      "templates", templateFilename )
-
-    template = _read_and_preprocess_template(templateFilename, toggles)
-
+    #render quantities as HTML
     qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
     for key,val in qtys.items():
         if _compat.isstr(val):
@@ -251,26 +296,61 @@ def _merge_template(qtys, templateFilename, outputFilename, auto_open, precision
             printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
-                out = val.render("html", precision=precision, resizable=True, autosize=False)
+                out = val.render(render_typ, precision=precision, resizable=True, autosize=False)
             elif isinstance(val,_ws.WorkspacePlot):
-                out = val.render("html", resizable=True, autosize=False)
+                out = val.render(render_typ, resizable=True, autosize=False)
             else: #switchboards usually
-                out = val.render("html") 
-
+                out = val.render(render_typ)
+                
             # Note: out is a dictionary of rendered portions
-            qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+            if 'main' in out:
+                #then an "htmldir" render output, which may require us to
+                # create some separate files in the output directory
+                for k,v in out.items():
+                    if k == 'main':
+                        qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % v
+                    elif 'filename' in v: # v should be something like "figures/myFig.html"
+                        with open(_os.path.join(outputDir,v['filename']),'w') as f:
+                            f.write( "<script>\n%(js)s\n</script>\n\n%(html)s" % v )
+                    else:
+                        printer.warning("Unknown render output (ignorning): %s" % v)
 
-    #Do actual fill -- everything needs to be unicode at this point.
-    filled_template = template % qtys_html
-      #.format_map(qtys_html) #need python 3.2+
-      
-    if _sys.version_info <= (3, 0): # Python2: need to re-encode for write(...)
-        filled_template = filled_template.encode('utf-8')
+            else: #assume 'out' is a normal html-render dict with 'html' and 'js' keys
+                qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+
         
-    with open(outputFilename, 'w') as outputfile:
-        outputfile.write(filled_template)
+    #Insert qtys into template file(s)
+    if _os.path.isdir(full):
+        baseTemplateDir = full
+        templateFilenames = [fn for fn in _os.listdir(baseTemplateDir) if fn.endswith(".html")]
+        outputFilenames = []
+        for fn in templateFilenames:
+            outfn = _os.path.join(outputDir, fn) if (fn == 'main.html') else \
+                    _os.path.join(outputDir, 'tabs', fn)
+            outputFilenames.append( outfn )
+    else:
+        baseTemplateDir = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)), "templates" )
+        templateFilenames = [templateFilenameOrDir]
+        outputFilenames = [outputFilename]
+        
+    for templateFilename,outputName in zip(templateFilenames,outputFilenames):
+        templateFilename = _os.path.join( baseTemplateDir, templateFilename )
+        template = _read_and_preprocess_template(templateFilename, toggles)
+    
+        #Do actual fill -- everything needs to be unicode at this point.
+        filled_template = template % qtys_html
+          #.format_map(qtys_html) #need python 3.2+
+      
+        if _sys.version_info <= (3, 0): # Python2: need to re-encode for write(...)
+            filled_template = filled_template.encode('utf-8')
 
-    printer.log("Output written to %s" % outputFilename)
+        with open(outputName, 'w') as outputfile:
+            outputfile.write(filled_template)
+
+    if render_typ == "html":
+        printer.log("Output written to %s" % outputFilename)
+    else: # render_typ == "htmldir"
+        printer.log("Output written to %s directory" % outputDir)
 
     if auto_open:
         url = 'file://' + _os.path.abspath(outputFilename)
@@ -595,6 +675,11 @@ def create_general_report(results, filename, title="auto",
     results_dict = results if isinstance(results, dict) else {"unique": results}
     toggles = _set_toggles(results_dict)
 
+    #DEBUG
+    renderMath = True
+    #_ws.WorkspaceOutput.default_render_options['click_to_display'] = True #don't render any plots until they're clicked
+    #_ws.WorkspaceOutput.default_render_options['render_math'] = renderMath #don't render any math
+
     qtys = {} # stores strings to be inserted into report template
     def addqty(name, fn, *args, **kwargs):
         with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
@@ -660,12 +745,16 @@ def create_general_report(results, filename, title="auto",
                                                      ['Target','Estimated'], "boxes", cri)
     addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
     addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri)
-    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('evals','target','log-evals'),
-                                                          virtual_gates=germs)
+    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri,
+           display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
+           virtual_gates=germs)
     addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
     addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty('bestGatesVsTargetTable', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
-    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+                                        display=('inf','trace','diamond','uinf','agi'), virtual_gates=germs)
+    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, display=('giinf','gidm'), virtual_gates=germs)
+    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+                                         display=('inf','trace','diamond','uinf','agi','giinf','gidm'))
     addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
@@ -770,9 +859,10 @@ def create_general_report(results, filename, title="auto",
         if comm is None or comm.Get_rank() == 0:
             # 3) populate template html file => report html file
             printer.log("*** Merging into template file ***")
-            template = "report_dashboard.html"
+            #template = "report_dashboard.html"
+            template = "general_report"
             _merge_template(qtys, template, filename, auto_open, precision,
-                            connected=connected, toggles=toggles, verbosity=printer,
+                            connected=connected, toggles=toggles, renderMath=renderMath, verbosity=printer,
                             CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
             #SmartCache.global_status(printer)
     else:
