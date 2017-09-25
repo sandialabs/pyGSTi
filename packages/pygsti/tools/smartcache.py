@@ -339,7 +339,7 @@ def digest(obj, custom_digests=None):
                     md5.update(str(hash(v)).encode('utf-8'))
                 except TypeError as hashException:
                     if isinstance(v, _np.ndarray):
-                        md5.update(v.tostring()) # numpy gives us bytes
+                        md5.update(v.tostring() + str(v.shape) ) # numpy gives us bytes
                     elif isinstance(v, (tuple, list)):
                         for el in v:  add(md5,el)
                     elif isinstance(v, dict):
