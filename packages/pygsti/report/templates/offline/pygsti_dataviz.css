@@ -232,3 +232,8 @@ figure > div.pygsti-wsoutput-group {
 fieldset {
     border: 0px none;
 }
+
+/* Plotly hovertext size */
+.hovertext text {
+    font-size: 10px !important;
+}
