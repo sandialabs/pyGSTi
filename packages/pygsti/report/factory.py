@@ -429,7 +429,7 @@ def _set_toggles(results_dict):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm):
+                               nmthreshold, computecrs, comm):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -550,7 +550,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
                         switchBd.cri[d,i,il] = est.get_confidence_region(
-                            est_confidenceLevel, l, "final", comm=comm)
+                            est_confidenceLevel, l, "final",
+                            allowcreate=computecrs, comm=comm)
                     else: switchBd.cri[d,i,il] = NA
                     
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
@@ -563,7 +564,7 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False,
-                          connected=False, verbosity=1):
+                          connected=False, computecrs=True, verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -645,6 +646,13 @@ def create_general_report(results, filename, title="auto",
         will link to web resources (e.g. CDN libraries) instead of embedding
         them.
 
+    computecrs : bool, optional
+        Whether to compute confidence regions as needed, according to
+        `confidenceLevel`.  If True, any absent confidence regions that would
+        be used are computed.  If False, only existing confidence regions are
+        used, and error bars are simply omitted when a confidence region is 
+        absent.
+
     verbosity : int, optional
        How much detail to send to stdout.
     
@@ -698,12 +706,15 @@ def create_general_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
             _create_master_switchboard(ws, results_dict,
-                                       confidenceLevel, nmthreshold, comm)
+                                       confidenceLevel, nmthreshold,
+                                       computecrs, comm)
 
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
-        qtys['confidenceIntervalScaleFctr'] = "%.3g" % switchBd.cri[0,0,0].intervalScaling
-        qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % switchBd.cri[0,0,0].nNonGaugeParams
+        for some_cri in switchBd.cri.flat: #can have only some confidence regions
+            if some_cri is not None: # OLD: switchBd.cri[0,0,0]
+                qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
+                qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)

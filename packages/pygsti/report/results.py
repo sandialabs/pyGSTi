@@ -133,9 +133,11 @@ class Estimate(object):
                     goparams["targetGateset"] = self.gatesets['target']
                 else: raise ValueError("Must supply 'targetGateset' in 'goparams' argument")
 
-            gateset = _gaugeopt_to_target(**goparams)
-
-
+            goparams['returnAll'] = True
+            starting_gateset = goparams["gateset"].copy()
+            minF, gaugeGroupEl, gateset = _gaugeopt_to_target(**goparams)
+            goparams['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
+            
         #sort the parameters by name for consistency
         ordered_goparams = _collections.OrderedDict( 
             [(k,goparams[k]) for k in sorted(list(goparams.keys()))])
@@ -144,10 +146,103 @@ class Estimate(object):
         self.goparameters[label] = ordered_goparams
 
         
+    def propagate_confidence_region(self, label, confidenceLevel=95,
+                                    ref_gateset_key = 'final iteration estimate',
+                                    EPS=1e-3):
+        """
+        Propagates an existing "reference" confidence region for some GateSet
+        "G0" to a new confidence region for a gauge-equivalent gateset "G1".
+
+        When successful, a new confidence region will be created for the 
+        gauge-optimized gate set given by `label` and stored internally, as well
+        as returned.
+
+        Parameters
+        ----------
+        label : str
+            The key into this `Estimate` object's `gatesets` and `goparameters`
+            dictionaries that identifies a gauge optimization result.  This 
+            gauge optimization must have begun at the reference gateset, i.e.,
+            `gatesets[ref_gateset_key]` must equal (by frobeinus distance)
+            `goparameters[label]['gateset']`.
+
+        confidenceLevel : float, optional
+            The confidence level as a percentage (0-100) of the reference
+            confidence region being propagated.
+
+        ref_gateset_key : str, optional
+            The key within `gatesets` of the reference gate set.
+
+        EPS : float, optional
+            A small offset used for constructing finite-difference derivatives.
+            Usually the default value is fine.
+
+        Returns
+        -------
+        ConfidenceRegion
+            Note: this region is also stored internally and as such the return
+            value of this function can often be ignored.
+        """
+        ref_gateset = self.gatesets[ref_gateset_key]
+        goparams = self.goparameters[label]
+        start_gateset = goparams['gateset'].copy()
+        final_gateset = self.gatesets[label].copy()
+
+        assert('_gaugeGroupEl' in goparams),"To propagate a confidence " + \
+            "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
+        gaugeGroupEl = goparams['_gaugeGroupEl']
+
+        assert(start_gateset.frobeniusdist(ref_gateset) < 1e-6), \
+            "Gauge-opt starting point must be the reference GateSet"
+        
+        cr = self.confidence_regions.get(
+            self._crkey(ref_gateset_key, 'final', confidenceLevel), None)
+            #TODO: let string list key ('final' above) be variable?
+            
+        assert(cr is not None), "Reference confidence region doesn't exist!"
+        assert(cr.hessianProjection != "linear response"), \
+            "Reference confidence region must be Hessian-based!"
+                            
+        #Update hessian by TMx = d(diffs in current go'd gateset)/d(diffs in ref gateset)
+        TMx = _np.empty( (final_gateset.num_params(), ref_gateset.num_params()), 'd' )
+        v0, w0 = ref_gateset.to_vector(), final_gateset.to_vector()
+        gs = ref_gateset.copy()
+        for iCol in range(ref_gateset.num_params()):
+            v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
+            gs.from_vector(v)
+            gs.transform(gaugeGroupEl)
+            w = gs.to_vector()
+            dw = (w - w0)/EPS
+            if iCol % 10 == 0: print("DB: col %d/%d: %g" % (iCol, ref_gateset.num_params(),_np.linalg.norm(dw)))
+            TMx[:,iCol] = dw
+
+        rank = _np.linalg.matrix_rank(TMx)
+        print("DEBUG: constructed TMx: rank = ", rank)
+        
+        # Hessian is gauge-transported via H -> TMx_inv^T * H * TMx_inv
+        TMx_inv = _np.linalg.inv(TMx)
+        new_hessian = _np.dot(TMx_inv.T, _np.dot(cr.hessian, TMx_inv))
+
+        #Create a new confidence region based on the new hessian
+        new_cr = _objs.ConfidenceRegion(final_gateset, new_hessian, confidenceLevel,
+                                        cr.hessianProjection,
+                                        nonMarkRadiusSq=cr.nonMarkRadiusSq)
+        new_crKey = self._crkey(label, 'final', confidenceLevel)
+        self.confidence_regions[new_crKey] = new_cr
+        print("DEBUG: Done transporting CI.  Success!")
+
+        return new_cr
+
+        
+    def _crkey(self, gateset_key, gatestrings_key, confidenceLevel):
+        return gateset_key + "." + gatestrings_key \
+            + "." + str(confidenceLevel)
+        
     def get_confidence_region(self, confidenceLevel=95,
                               gateset_key="final iteration estimate",
                               gatestrings_key="final", 
-                              label=None, forcecreate=False, comm=None):
+                              label=None, forcecreate=False,
+                              allowcreate=True, comm=None):
         """
         Get the ConfidenceRegion object associated with a given gate set and
         confidence level.
@@ -156,7 +251,8 @@ class Estimate(object):
         `confidence_regions` dictionary (dictated by `label`) then it will be
         returned instead of creating a region (unless `forcecreate == True`).
         If a new region is constructed it will automatically be added to this
-        object's `confidence_regions` dictionary with the key `label`.
+        object's `confidence_regions` dictionary with the key `label`.  If
+        such a region doesn't exist and `allowcreate == False` None is returned.
 
         This function is essentailly a wrapper which maps values from the
         `parameters` dictionary of this object to the arguments of 
@@ -194,6 +290,10 @@ class Estimate(object):
             If True, then a new region will always be created, even if one
             already exists.
 
+        allowcreate : bool, optional
+            If True, a new region will be created if one doesn't exist.  If
+            False, `None` will be returned when a region doesn't already exist.
+
         comm : mpi4py.MPI.Comm, optional
             When not None, an MPI communicator for distributing the computation
             across multiple processors.
@@ -208,8 +308,13 @@ class Estimate(object):
             return None
 
         crkey = label if (label is not None) else \
-                gateset_key + "." + gatestrings_key \
-                + "." + str(confidenceLevel)
+                self._crkey(gateset_key, gatestrings_key, confidenceLevel)
+
+        assert( not (forcecreate and not allowcreate)), \
+            "Cannot set `forcecreate=True` with `allowcreate=False`"
+        
+        if (not allowcreate) and (crkey not in self.confidence_regions):
+            return None
         
         if forcecreate or (crkey not in self.confidence_regions):
             
