@@ -167,6 +167,10 @@ class ConfidenceRegion(object):
             assert(hessianProjection == 'linear response')
             projected_hessian = None
 
+        #save input args for copying object
+        self.hessianProjection = hessianProjection
+        self.hessian = hessian #raw hessian
+
         #Scale projected Hessian for desired confidence level => quadratic form for confidence region
         # assume hessian gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian)
         # where seScaleFctr gives the scaling factor for a normal distribution, i.e. integrating the
