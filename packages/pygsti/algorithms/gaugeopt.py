@@ -298,7 +298,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     newGateset.transform(gaugeGroupEl)
 
     if returnAll:
-        return solnF, gaugeMat, newGateset
+        return solnF, gaugeGroupEl, newGateset
     else:  
         return newGateset
 
