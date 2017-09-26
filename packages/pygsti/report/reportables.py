@@ -296,7 +296,7 @@ def gatestring_gaugeinv_diamondnorm(gatestring, gatesetA, gatesetB):
     B = gatesetB.product(gatestring) # "target gate"
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False )
+    return _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False ))
 
 @gatestrings_quantity() # This function changes arguments to (gatestring, gatesetA, gatesetB, confidenceRegionInfo)
 def gatestring_gaugeinv_infidelity(gatestring, gatesetA, gatesetB):
@@ -304,8 +304,8 @@ def gatestring_gaugeinv_infidelity(gatestring, gatesetA, gatesetB):
     B = gatesetB.product(gatestring) # "target gate"
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
-                                  return_pairs=False)
+    return _np.mean(_tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
+                                  return_pairs=False))
 
 
 @gatestrings_quantity() # This function changes arguments to (gatestring, gatesetA, gatesetB, confidenceRegionInfo)
@@ -990,14 +990,14 @@ def unitarity_infidelity(A, B, mxBasis):
 def gaugeinv_diamondnorm(A, B, mxBasis):
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False)
+    return _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False))
 
 @gates_quantity() # This function changes arguments to (gateLabel, gatesetA, gatesetB, confidenceRegionInfo)
 def gaugeinv_infidelity(A, B, mxBasis):
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
-                                  return_pairs=False)
+    return _np.mean(_tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
+                                  return_pairs=False))
 
 
 #OLD: TIMS FN... seems perhaps better motivated, but for now keep this simple and equal to gatestring_ version

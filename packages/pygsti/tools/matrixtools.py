@@ -574,9 +574,9 @@ def minweight_match(a, b, metricfn=None, return_pairs=True):
 
     Returns
     -------
-    min_weight : float
-        The minimum weight obtained, as defined above as the sum of the weights
-        of all the pairs.
+    weight_array : numpy.ndarray
+        The array of weights corresponding to the min-weight matching. The sum
+        of this array's elements is the minimized total weight.
 
     pairs : list
         Only returned when `return_pairs == True`, a list of 2-tuple pairs of
@@ -595,10 +595,10 @@ def minweight_match(a, b, metricfn=None, return_pairs=True):
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
 
     matched_pairs = list(zip(a_inds,b_inds))
-    min_weight = float(weightMx[a_inds, b_inds].sum())
+    min_weights = weightMx[a_inds, b_inds]
 
     if return_pairs:
-        return min_weight, matched_pairs
+        return min_weights, matched_pairs
     else:
-        return min_weight
+        return min_weights
            

@@ -1206,7 +1206,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
 
                 # permute target eigenvalues according to min-weight matching
-                minWt, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
+                _, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
                 matched_target_evals = target_evals.copy()
                 for i,j in pairs:
                     matched_target_evals[i] = target_evals[j]
