@@ -141,7 +141,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     )
     
     fig = go.Figure(data=data, layout=layout)
-    return fig
+    return { 'plotlyfig': fig, 'colormap': colormap, 'plt_data': plt_data }
 
 
 
@@ -225,8 +225,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
                         prec, None, hoverLabels)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
-    fig['layout']['xaxis'].update(tickvals=xtics)
-    fig['layout']['yaxis'].update(tickvals=ytics)
+    fig['plotlyfig']['layout']['xaxis'].update(tickvals=xtics)
+    fig['plotlyfig']['layout']['yaxis'].update(tickvals=ytics)
     return fig
 
 
@@ -384,8 +384,8 @@ def generate_boxplot(subMxs,
         fig = color_boxplot( subMxSums, colormap, colorbar, boxLabelSize,
                              prec, hoverLabelFn)
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
-        fig['layout']['xaxis'].update(tickvals=list(range(nXs)))
-        fig['layout']['yaxis'].update(tickvals=list(range(nYs)))
+        fig['plotlyfig']['layout']['xaxis'].update(tickvals=list(range(nXs)))
+        fig['plotlyfig']['layout']['yaxis'].update(tickvals=list(range(nYs)))
 
         xBoxes = nXs
         yBoxes = nYs
@@ -404,7 +404,7 @@ def generate_boxplot(subMxs,
             hoverLabelFn = hoverInfo
         else: hoverLabelFn = None
 
-        boxLabelSize = 8*scale if boxLabels else 0
+        boxLabelSize = 8 if boxLabels else 0 #do not scale (OLD: 8*scale)
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
         assert(fig is not None), "No data to display!"
@@ -412,17 +412,17 @@ def generate_boxplot(subMxs,
         xBoxes = nXs*(nIXs+1) - 1
         yBoxes = nYs*(nIYs+1) - 1
 
-        
-    if xlabel: fig['layout']['xaxis'].update(title=xlabel,
+    pfig = fig['plotlyfig']
+    if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
-    if ylabel: fig['layout']['yaxis'].update(title=ylabel,
+    if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
     if xlabels:
-        fig['layout']['xaxis'].update(tickmode="array",
+        pfig['layout']['xaxis'].update(tickmode="array",
                                       ticktext=val_filter(xlabels),
                                       tickfont={'size': 10*scale, 'color': "black"})
     if ylabels:
-        fig['layout']['yaxis'].update(tickmode="array",
+        pfig['layout']['yaxis'].update(tickmode="array",
                                       ticktext=val_filter(ylabels),
                                       tickfont={'size': 10*scale, 'color': "black"})
 
@@ -431,10 +431,10 @@ def generate_boxplot(subMxs,
     if xlabel: bmargin += 30
     if ylabel: lmargin += 30
     if xlabels:
-        max_xl = max([len(xl) for xl in fig['layout']['xaxis']['ticktext']])
+        max_xl = max([len(xl) for xl in pfig['layout']['xaxis']['ticktext']])
         if max_xl > 0: bmargin += max_xl*5
     if ylabels:
-        max_yl = max([len(yl) for yl in fig['layout']['yaxis']['ticktext']])
+        max_yl = max([len(yl) for yl in pfig['layout']['yaxis']['ticktext']])
         if max_yl > 0: lmargin += max_yl*5
     if colorbar: rmargin = 100
 
@@ -456,7 +456,7 @@ def generate_boxplot(subMxs,
     #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
     #print("DB dims = ",width,height)
     
-    fig['layout'].update(width=width,
+    pfig['layout'].update(width=width,
                          height=height,
                          margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
 
@@ -742,7 +742,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         xaxis=xaxis,
         yaxis=yaxis,
     )
-    return go.Figure(data=[trace], layout=layout)
+    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap }
 
 
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
@@ -970,7 +970,7 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
                     dict(
                     text=_ph._eformat(matrix[iy,ix],prec),
                     x=ix, y=nY-1-iy, xref='x1', yref='y1',
-                    font=dict(size=scale*8,
+                    font=dict(size=8,  #don't scale box labels (OLD: 8*scale)
                               color=colormap.besttxtcolor(matrix[iy,ix])),
                         showarrow=False)
                 )
@@ -992,6 +992,10 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
             precnum = 3
         else: precnum = abs(prec)+1
         boxSizeX = boxSizeY = 8*precnum
+
+        if len(annotations) > 0:
+            maxTextLen = max([len(ann['text']) for ann in annotations])
+            boxSizeX = boxSizeY = max(8*maxTextLen, 8*precnum)
 
     if (matrix.shape[0] < 3):
         # there is issue with hover info not working for
@@ -1048,9 +1052,9 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
         shapes = gridlines,
         annotations = annotations
     )
-    #print("DEBUG width = ",40*(gateMatrix.shape[1]+xextra)*scale)
-    #print("DEBUG height = ",40*(gateMatrix.shape[0]+yextra)*scale)
-    return go.Figure(data=data, layout=layout)
+
+    return { 'plotlyfig': go.Figure(data=data, layout=layout),
+             'colormap': colormap, 'plt_data': flipped_mx }
 
 
 
@@ -1178,7 +1182,7 @@ class BoxKeyPlot(WorkspacePlot):
             ]
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout) }
 
 
     
@@ -1276,7 +1280,6 @@ class ColorBoxPlot(WorkspacePlot):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
-        fig = None
         addl_hover_info_fns = _collections.OrderedDict()
 
 
@@ -1469,23 +1472,17 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False) #invalid colormapType was set above
 
             if scatter:
-                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
+                fig = gatestring_color_scatterplot(gss, subMxs, colormap,
                                                       False, boxLabels, prec,
                                                       hoverInfo, sumUp, ytitle,
                                                       scale, addl_hover_info)
             else:
-                newfig = gatestring_color_boxplot(gss, subMxs, colormap,
+                fig = gatestring_color_boxplot(gss, subMxs, colormap,
                                                   False, boxLabels, prec,
                                                   hoverInfo, sumUp, invert,
                                                   scale, addl_hover_info)
 
-            if fig is None:
-                fig = newfig
-            else:
-                newfig['data'][0].update(visible=False)
-                fig['data'].append(newfig['data'][0])
-
-        nTraces = len(fig['data'])
+        nTraces = len(fig['plotlyfig']['data'])
         assert(nTraces == len(plottypes))
 
         if nTraces > 1:
@@ -1497,7 +1494,7 @@ class ColorBoxPlot(WorkspacePlot):
                     dict(args=['visible', visible],
                          label=nm,
                          method='restyle') )
-            fig['layout'].update(
+            fig['plotlyfig']['layout'].update(
                 updatemenus=list([
                     dict(buttons=buttons,
                          direction = 'left',
@@ -1797,7 +1794,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 ))
         assert(len(data) >= 3)
         
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout)}
 
 
 
@@ -1966,7 +1963,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             bargap=0.02
         )
         
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'plt_y': evals, 'plt_yerr': errbars}
 
 
 
@@ -2035,7 +2033,7 @@ class GramMatrixBarPlot(WorkspacePlot):
             bargap=0.1
         )
         
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout)}
 
 class FitComparisonBarPlot(WorkspacePlot):
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
@@ -2143,7 +2141,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         if max(ys) < 1.0:
             layout['yaxis']['range'] = [min(ys)/2.0,1]
         
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout)}
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):
@@ -2325,7 +2323,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             legend=dict(orientation="h")
         )
 
-        return go.Figure(data=data, layout=layout)
+        return {'plotlyfig': go.Figure(data=data, layout=layout)}
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
@@ -2670,7 +2668,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         )
 
         #reverse order of data so z-ordering is nicer
-        return go.Figure(data=list(reversed(data)), layout=layout)
+        return {'plotlyfig': go.Figure(data=list(reversed(data)), layout=layout)}
 
         #newplotgca.set_xlabel(xlabel, fontsize=15)
         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)

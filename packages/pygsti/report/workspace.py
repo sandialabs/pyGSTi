@@ -1999,7 +1999,7 @@ class WorkspacePlot(WorkspaceOutput):
                 else:
                     #use auto-sizing (fluid layout)
                     fig_dict = _plotly_ex.plot_ex(
-                        fig, show_link=False,
+                        fig['plotlyfig'], show_link=False,
                         autosize=autosize, resizable=resizable,
                         lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'])
@@ -2044,7 +2044,7 @@ class WorkspacePlot(WorkspaceOutput):
                 else:
                     #use auto-sizing (fluid layout)
                     fig_dict = _plotly_ex.plot_ex(
-                        fig, show_link=False,
+                        fig['plotlyfig'], show_link=False,
                         autosize=autosize, resizable=resizable,
                         lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'])

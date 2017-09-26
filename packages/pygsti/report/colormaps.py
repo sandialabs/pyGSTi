@@ -21,6 +21,25 @@ def _vnorm(x, vmin, vmax):
 
 class Colormap(object):
     def __init__(self, rgb_colors, hmin, hmax):
+        """
+        Create a new Colormap.
+
+        Parameters
+        ----------
+        rgb_colors : list
+            A list of `[val, (R,G,B)]` elements where `val` is a floating point
+            number between 0 and 1 (plotly maps the post-'normalized' data linearly
+            onto the interval [0,1] before mapping to a color), and `R`,`G`,and `B`
+            are red, green, and blue floating point values in [0,1].  The color will
+            be interpolated between the different "point" elements in this list.
+
+        hmin, hmax : float
+            The minimum and maximum post-normalized values to be used for the
+            heatmap.  That is, `hmin` is the value (after `normalize` has been
+            called) assigned the "0.0"-valued color in `rgb_colors` and `hmax`
+            similarly for the "1.0"-valued color.
+        """
+
         self.rgb_colors = rgb_colors
         self.hmin = hmin
         self.hmax = hmax
@@ -50,6 +69,22 @@ class Colormap(object):
                                (round(r*255),round(g*255),round(b*255))]
                               for z,(r,g,b) in self.rgb_colors ]
         return plotly_colorscale
+
+
+    def get_matplotlib_norm_and_cmap(self):
+        """
+        Creates and returns normalization and colormap 
+        classes for matplotlib heatmap plots.
+
+        Returns
+        -------
+        norm, cmap
+        """
+        from .mpl_colormaps import mpl_make_linear_norm as _mpl_make_linear_norm
+        from .mpl_colormaps import mpl_make_linear_cmap as _mpl_make_linear_cmap
+        norm = _mpl_make_linear_norm(self.hmin, self.hmax)
+        cmap = _mpl_make_linear_cmap(self.rgb_colors)
+        return norm, cmap
 
 
     
@@ -154,13 +189,28 @@ class LinlogColormap(Colormap):
         else:
             return return_value.view(_np.ma.MaskedArray)
 
+    def get_matplotlib_norm_and_cmap(self):
+        """
+        Creates and returns normalization and colormap 
+        classes for matplotlib heatmap plots.
+
+        Returns
+        -------
+        norm, cmap
+        """
+        from .mpl_colormaps import mpl_LinLogNorm as _mpl_LinLogNorm
+        _, cmap = super(LinlogColormap, self).get_matplotlib_norm_and_cmap()
+        norm = _mpl_LinLogNorm(self)
+        cmap.set_bad('w',1)
+        return norm, cmap                
 
 
 class DivergingColormap(Colormap):
     def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
         hmin = vmin
         hmax = vmax
-        self.midpoint = midpoint #midpoint doesn't work yet!
+        self.midpoint = midpoint
+        assert(midpoint == 0.0), "midpoint doesn't work yet!"
 
         if color == "RdBu": # blue -> white -> red
             rgb_colors = [ [0.0, (0.0,0.0,1.0)],
@@ -176,6 +226,7 @@ class DivergingColormap(Colormap):
         #no normalization is done automatically by plotly,
         # (using zmin and zmax values of heatmap)
         return value
+
 
         #vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
         #
