@@ -134,7 +134,16 @@ def vector(v, specs):
     string
         html string for v.
     """
-    return latex_vector(v, specs)
+    lines = [ ]
+    for el in v:
+        lines.append( value(el, specs) )
+    if specs['brackets']:
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+    else:
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+
 
 def matrix(m, specs):
     """

@@ -49,14 +49,18 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
                   % (" & ".join(colHeadingsFormatted)))
 
     for formatted_rowData in rows:
-        if len(formatted_rowData) > 0:
-            latex += " & ".join(formatted_rowData)
 
-            multirows = [ ("multirow" in el) for el in formatted_rowData ]
+        if len(formatted_rowData) > 0:
+            formatted_rowData_latex = [
+                (formatted_cell['latex'] if isinstance(formatted_cell,dict)
+                 else formatted_cell) for formatted_cell in formatted_rowData ]
+            latex += " & ".join(formatted_rowData_latex)
+
+            multirows = [ ("multirow" in el) for el in formatted_rowData_latex ]
             if any(multirows):
                 latex += " \\\\ "
                 last = True; lineStart = None; col = 1
-                for multi,data in zip(multirows,formatted_rowData):                                
+                for multi,data in zip(multirows,formatted_rowData_latex):
                     if last == True and multi == False:
                         lineStart = col #line start
                     elif last == False and multi == True:
@@ -134,11 +138,11 @@ def vector(v, specs):
     for el in v:
         lines.append( value(el, specs) )
     if specs['brackets']:
-        return "$ \\begin{pmatrix}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+        return "\\ensuremath{ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
     else:
-        return "$ \\begin{pmatrix}\n" + \
-                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+        return "\\ensuremath{ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
 
 
 def matrix(m, specs):

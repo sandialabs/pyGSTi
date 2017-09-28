@@ -43,6 +43,13 @@ th .errorbar {
 .modebar-btn[data-title="Download plot as a png"] {
     display: inline;
 }
+.modebar-btn[data-title="Download PDF"] {
+    display: inline;
+}
+.modebar-btn[data-title="Reset axes"] {
+    display: inline;
+}
+
 
 
 
@@ -236,4 +243,13 @@ fieldset {
 /* Plotly hovertext size */
 .hovertext text {
     font-size: 10px !important;
+}
+
+/* Download links beneath tables */
+.dlLink {
+    font-size: 12px;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    text-decoration: none;
+    color: #000000;
+    float: left;
 }

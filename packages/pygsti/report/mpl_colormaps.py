@@ -154,7 +154,9 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
     # todo: get margins and subtract from h,w
     
     if mpl_fig is not None and w is not None and h is not None:
-        mpl_fig.set_size_inches(w/100.0,h/100.0) # was 12,8 for "super" color plot 
+        mpl_size = w/100.0, h/100.0 #heusistic
+        mpl_fig.set_size_inches(*mpl_size) # was 12,8 for "super" color plot
+        pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
     
     xaxis, yaxis = layout['xaxis'], layout['yaxis']
     annotations = layout.get('annotations',[])
@@ -293,13 +295,20 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
                 handles.append(s)
                 labels.append(name)   
             
-        elif typ == "bar": #always grey=pos, red=neg type of bar plot for now (since that's all pygsti uses)
+        elif typ == "bar": 
             barWidth = 1.0
             xlabels = [str(xl) for xl in traceDict['x']] # x "values" are actually bar labels in plotly
-            y = _np.asarray(pygsti_fig['plt_y']) 
-            x = _np.arange(y.size)  # actual x values are just the integers
-            yerr = pygsti_fig['plt_yerr']
 
+            #always grey=pos, red=neg type of bar plot for now (since that's all pygsti uses)
+            if 'plt_y' in pygsti_fig:
+                y = _np.asarray(pygsti_fig['plt_y']) 
+                yerr = pygsti_fig['plt_yerr']
+            else:
+                y = _np.asarray(traceDict['y'])
+                yerr = None
+
+            x = _np.arange(y.size)  # actual x values are just the integers
+    
             if yerr is None:
                 pos_y = _np.maximum(y.flatten().real,0.0)
                 neg_y = _np.abs(_np.minimum(y.flatten().real,0.0))
@@ -316,17 +325,20 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
                     else:
                         pos_y.append(abs(val)); pos_err.append(eb)
                         neg_y.append(0);        neg_err.append(0)
+                pos_y = _np.array(pos_y)
+                neg_y = _np.array(neg_y)
+                
                 if _np.any(pos_y > 0):
-                    rects = axes.bar(ind, pos_y, barWidth, color=(0.5,0.5,0.5),
+                    rects = axes.bar(x, pos_y, barWidth, color=(0.5,0.5,0.5),
                                  yerr=pos_err)
                 if _np.any(neg_y > 0):
-                    rects = axes.bar(ind, neg_y, barWidth, color='r',yerr=neg_err)
+                    rects = axes.bar(x, neg_y, barWidth, color='r',yerr=neg_err)
                     
             if xtickvals is not None:
                 xtics = _np.array(xtickvals)+0.5 #_np.arange(plt_data.shape[1])+0.5
             else: xtics = x
             axes.set_xticks(xtics, minor=False)
-            axes.set_xticklabels( mpl_process_lbls(xlabels) ,rotation=0, fontsize=(fontsize-4) )
+            axes.set_xticklabels( mpl_process_lbls(xlabels) ,rotation=0, fontsize=(fontsize-4) )    
             
         elif typ == "histogram":
             histnorm = traceDict.get('histnorm',None)
@@ -352,7 +364,9 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
     if save_to:
         _plt.savefig(save_to, bbox_extra_artists=(axes,),
                      bbox_inches='tight') #need extra artists otherwise                                                                                                                   #axis labels get clipped 
-        _plt.close(fig)
+        _plt.cla()
+        _plt.close(mpl_fig)
+        del mpl_fig
         return None #figure is closed!
     else:
         return mpl_fig

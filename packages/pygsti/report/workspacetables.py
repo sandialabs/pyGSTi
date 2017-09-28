@@ -1504,11 +1504,12 @@ class GatestringTable(WorkspaceTable):
             table = _ReportTable(colHeadings, formatters)
         else:
             table = "tabular"
-            colHeadings = ('#',) + tuple(titles)
+            colHeadings = ('\\#',) + tuple(titles)
             latex_head  = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
             latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(colHeadings)-1,commonTitle)
             latex_head += "%s \\\\ \hline\n" % (" & ".join(colHeadings))
-    
+
+            colHeadings = ('#',) + tuple(titles)
             html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
             html_head += '<tr><th></th><th colspan="%d">%s</th></tr>\n' % (len(colHeadings)-1,commonTitle)
             html_head += "<tr><th> %s </th></tr>" % (" </th><th> ".join(colHeadings))

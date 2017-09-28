@@ -79,9 +79,9 @@ class ReportTable(object):
 
 
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
-               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+               output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
-               brackets=False, click_to_display=False):
+               brackets=False, click_to_display=False, link_to_pdf=False):
         '''
         Render a table object
 
@@ -89,7 +89,7 @@ class ReportTable(object):
         ----------
         fmt : string
             name of format to be used
-        scratchDir     : string
+        output_dir     : string
             directory for latex figures to be rendered in
         precision      : int
             number of digits to render
@@ -115,13 +115,15 @@ class ReportTable(object):
             id tag for HTML tables
         tableclass     : string
             class tag for HTML tables
+        link_to_pdf    : bool
+            whether to create links to PDF files
+
         Returns
         -------
         string
         '''
-
         spec = {
-            'scratchDir'     : scratchDir,
+            'output_dir'     : output_dir,
             'precision'      : precision,
             'polarprecision' : polarprecision,
             'sciprecision'   : sciprecision,
@@ -133,7 +135,8 @@ class ReportTable(object):
             'brackets'       : brackets,
             'longtables'     : longtables,
             'tableID'        : tableID,
-            'tableclass'     : tableclass}
+            'tableclass'     : tableclass,
+            'link_to_pdf'    : link_to_pdf}
 
         if fmt not in _convertDict:
             raise NotImplementedError('%s format option is not currently supported')

@@ -402,3 +402,10 @@ PlotManager.prototype.enqueue = function(callback, label, autostart=true){
     this.labelqueue.push(label);
     if(autostart && this.processor === null) { this.run(); } // in case queue hasn't started
 }
+
+
+function stripAllEventHandlers(jquery_element) {    
+    var old_element = jquery_element.get(0);
+    var new_element = old_element.cloneNode(true);
+    old_element.parentNode.replaceChild(new_element, old_element);
+}

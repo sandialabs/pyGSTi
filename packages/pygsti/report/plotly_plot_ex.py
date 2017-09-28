@@ -15,7 +15,8 @@ from pkg_resources import resource_string
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, autosize=False,
-            lock_aspect_ratio=False, master=True, click_to_display=False):
+            lock_aspect_ratio=False, master=True, click_to_display=False,
+            link_to_pdf_id=False):
     """ 
     TODO: docstring
     Create a pyGSTi plotly graph locally, returning HTML & JS separately.
@@ -111,13 +112,23 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         groupclass = "pygsti-plotgroup-master" \
                      if master else "pygsti-plotgroup-slave"
 
+        if link_to_pdf_id:
+            link_to_pdf_js = (
+                "\n"
+                "  btn = $('#{id}').find('.modebar-btn[data-title=\"Save and edit plot in cloud\"]');\n"
+                "  stripAllEventHandlers( btn );\n"
+                "  btn = $('#{id}').find('.modebar-btn[data-title=\"Save and edit plot in cloud\"]');\n"
+                "  btn.attr('data-title','Download PDF');\n"
+                "  btn.click( function() {{\n"
+                "     window.open('figures/{pdfid}.pdf');\n"
+                "  }});\n").format(id=plotdivid, pdfid=link_to_pdf_id)
+            plotly_create_js += link_to_pdf_js
 
         plotly_click_js = ""
         if click_to_display and master:
             # move plotly plot creation from "create" to "click" handler
             plotly_click_js = plotly_create_js
-            plotly_create_js = ""
-            
+            plotly_create_js = ""            
             
         full_script = (  #(assume this will all be run within an on-ready handler)
             '  $("#{id}").addClass("{groupclass}");\n' #perform this right away

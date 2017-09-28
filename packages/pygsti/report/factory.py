@@ -164,6 +164,8 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open, prec
     if not connected:
         _ws.rsync_offline_dir(outputDir)
 
+    figureDir = _os.path.join(outputDir, 'figures')
+
     #Add favicon
     if 'favicon' not in qtys:
         if connected:
@@ -293,30 +295,24 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open, prec
             qtys_html[key] = val
 
         else:
+
             printer.log("Rendering %s" % key, 3)
+            if isinstance(val,_ws.WorkspaceOutput): #switchboards don't have render options yet...
+                val.set_render_options(output_dir=figureDir,
+                                       link_to_pdf=False) # TEST
+            
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
                 out = val.render(render_typ, precision=precision, resizable=True, autosize=False)
+                #val.render("latexdir") # TEST
             elif isinstance(val,_ws.WorkspacePlot):
                 out = val.render(render_typ, resizable=True, autosize=False)
+                #val.render("latexdir") #TEST
             else: #switchboards usually
                 out = val.render(render_typ)
                 
             # Note: out is a dictionary of rendered portions
-            if 'main' in out:
-                #then an "htmldir" render output, which may require us to
-                # create some separate files in the output directory
-                for k,v in out.items():
-                    if k == 'main':
-                        qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % v
-                    elif 'filename' in v: # v should be something like "figures/myFig.html"
-                        with open(_os.path.join(outputDir,v['filename']),'w') as f:
-                            f.write( "<script>\n%(js)s\n</script>\n\n%(html)s" % v )
-                    else:
-                        printer.warning("Unknown render output (ignorning): %s" % v)
-
-            else: #assume 'out' is a normal html-render dict with 'html' and 'js' keys
-                qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+            qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
 
         
     #Insert qtys into template file(s)
@@ -755,15 +751,16 @@ def create_general_report(results, filename, title="auto",
     addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
     addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
-    addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri)
+    addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri) #TEST
     addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri,
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
            virtual_gates=germs)
     addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
     addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+    addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
                                         display=('inf','trace','diamond','uinf','agi'), virtual_gates=germs)
-    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, display=('giinf','gidm'), virtual_gates=germs)
+    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
+                                        display=('giinf','gidm'), virtual_gates=germs)
     addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
                                          display=('inf','trace','diamond','uinf','agi','giinf','gidm'))
     addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),

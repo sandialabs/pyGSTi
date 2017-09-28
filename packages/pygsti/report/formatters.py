@@ -44,7 +44,7 @@ formatDict['Rho'] = {
     'html'  : Formatter(stringreplacers=[('rho', '&rho;')],
                          regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
     'latex' : Formatter(stringreplacers=[('rho', '\\rho')],
-                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='${}$')}
+                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$')}
 
 # 'E' (POVM) effect formatting
 formatDict['Effect'] = {
@@ -143,21 +143,19 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
-    fig.value.set_render_options(click_to_display=specs['click_to_display'])
+    fig.value.set_render_options(click_to_display=specs['click_to_display'],
+                                 output_dir=specs['output_dir'],
+                                 link_to_pdf=specs['link_to_pdf'])
     render_out = fig.value.render("html",
                             resizable="handlers only" if specs['resizable'] else False,
                             autosize=specs['autosize'])
     return render_out #a dictionary with 'html' and 'js' keys
 
-def latex_figure(figInfo, specs):
-    extension    = '.pdf' 
-    formatstring = "\\vcenteredhbox{\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s/%s}}"
-    fig, name, W, H = figInfo.value
-    scratchDir = specs['scratchDir']
-    if len(scratchDir) > 0: #empty scratchDir signals not to output figure
-        fig.save_to(_os.path.join(scratchDir, name + self.extension))
-    return formatstring % (W, H, scratchDir,
-                           name + self.extension)
+def latex_figure(fig, specs):
+    fig.value.set_render_options(output_dir=specs['output_dir'])
+    render_out = fig.value.render('latex')
+    render_out['latex'] = "\\vcenteredhbox{%s}" % render_out['latex'] #wrap std latex output
+    return render_out
 
 formatDict['Figure'] = {
     'html'  : html_figure,
