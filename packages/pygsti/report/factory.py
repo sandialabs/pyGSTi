@@ -103,7 +103,8 @@ def _read_and_preprocess_template(templateFilename, toggles):
     
     return preprocess(template)
 
-def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open, precision,
+def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
+                    precision, pdf_links, python_links,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
                     connected=False, toggles=None, renderMath=True, verbosity=0):
 
@@ -299,15 +300,17 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open, prec
             printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceOutput): #switchboards don't have render options yet...
                 val.set_render_options(output_dir=figureDir,
-                                       link_to_pdf=False) # TEST
+                                       link_to_pdf=pdf_links, link_to_pkl=python_links)
             
             if isinstance(val,_ws.WorkspaceTable):
                 #supply precision argument
                 out = val.render(render_typ, precision=precision, resizable=True, autosize=False)
-                #val.render("latexdir") # TEST
+                if pdf_links:    val.render("latexdir") 
+                if python_links: val.render("pythondir")
             elif isinstance(val,_ws.WorkspacePlot):
                 out = val.render(render_typ, resizable=True, autosize=False)
-                #val.render("latexdir") #TEST
+                if pdf_links:    val.render("latexdir")
+                if python_links: val.render("pythondir")
             else: #switchboards usually
                 out = val.render(render_typ)
                 
@@ -560,7 +563,8 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False,
-                          connected=False, computecrs=True, verbosity=1):
+                          connected=False, computecrs=True,
+                          pdf_links=False, python_links=False, verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -648,6 +652,14 @@ def create_general_report(results, filename, title="auto",
         be used are computed.  If False, only existing confidence regions are
         used, and error bars are simply omitted when a confidence region is 
         absent.
+
+    pdf_links : bool, optional
+        If True, render PDF versions of plots and tables, and create links 
+        to them in the report.
+
+    python_links : bool, optional
+        If True, render Python versions of plots (pickled python data) and tables
+        (pickled pandas DataFrames), and create links to them in the report.
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -869,7 +881,7 @@ def create_general_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
             #template = "report_dashboard.html"
             template = "general_report"
-            _merge_template(qtys, template, filename, auto_open, precision,
+            _merge_template(qtys, template, filename, auto_open, precision, pdf_links, python_links,
                             connected=connected, toggles=toggles, renderMath=renderMath, verbosity=printer,
                             CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
             #SmartCache.global_status(printer)

@@ -1,8 +1,9 @@
 
+//Maybe need this instead (for Katex?) document.addEventListener("DOMContentLoaded", function() {
 $(document).ready(function() {
 
     window.plotman = new PlotManager();
-    
+
     document.getElementById("defaultOpen").click();
     
     $("body").on("mousemove",function(event) {
@@ -14,12 +15,7 @@ $(document).ready(function() {
 	}
     });
     
-    
-    $("figcaption").each( function() { //old: .pygsti-wsoutput-group
-	$(this).on('click', function() {
-	    $(this).children("span.captiondetail").toggle();}); //siblings("figcaption")
-    });
-    
+    //Top banner/header JS below here
     var elSelector		= '.header',
 	elClassHidden	= 'header--hidden',
 	throttleTimeout	= 500,
@@ -104,6 +100,8 @@ function openTab(evt, tabID) {
 	    //do what we would have done below if it were loaded
 	    contentDiv.style.display = "block";
 	    contentDiv.className += " active";
+	    render_katex( contentDiv );
+	    enable_caption_toggles( contentDiv );
 	    $(contentDiv).trigger('tabchange');
 	});
     }
@@ -117,6 +115,36 @@ function openTab(evt, tabID) {
     }
     evt.currentTarget.className += " active"; //do this right away always (no need to wait)
 }
+
+function render_katex(parentEl) {
+    $("#status").show();
+    $("#status").text("Rendering body math");
+    $(parentEl).find(".math").each(function() {
+        console.log("Rendering KateX");
+        var texTxt = $(this).text();
+        el = $(this).get(0);
+        if(el.tagName == "DIV"){
+            addDisp = "\\displaystyle";
+        } else {
+            addDisp = "";
+        }
+        try {
+            katex.render(addDisp+texTxt, el);
+        }
+        catch(err) {
+            $(this).html("<span class=\'err\'>"+err);
+        }
+    });
+}
+
+function enable_caption_toggles(parentEl) {
+    $(parentEl).find("figcaption").each( function() { //old: .pygsti-wsoutput-group
+	$(this).on('click', function() {
+	    $(this).children("span.captiondetail").toggle();}); //siblings("figcaption")
+    });
+}
+
+
 
 /* Set the width of the side navigation to 250px and the left margin of the page content to 250px */
 function openNav() {

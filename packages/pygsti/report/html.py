@@ -6,7 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """
 Routines for converting python objects to HTML.  Parallel rountines as
-LatexUtil has for latex conversion.
+latex.py has for latex conversion.
 """
 
 import numpy as _np

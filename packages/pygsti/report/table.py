@@ -47,7 +47,7 @@ class ReportTable(object):
         self._override       = isinstance(colHeadings, dict)
 
         if self._override:
-            self._columnNames = colHeadings['text']
+            self._columnNames = colHeadings['python']
         else:
             self._columnNames = colHeadings 
 
@@ -81,7 +81,7 @@ class ReportTable(object):
     def render(self, fmt, longtables=False, tableID=None, tableclass=None,
                output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
-               brackets=False, click_to_display=False, link_to_pdf=False):
+               brackets=False, click_to_display=False, link_to_pdf=False, link_to_pkl=False):
         '''
         Render a table object
 
@@ -117,6 +117,8 @@ class ReportTable(object):
             class tag for HTML tables
         link_to_pdf    : bool
             whether to create links to PDF files
+        link_to_pkl    : bool
+            whether to create links to PKL files
 
         Returns
         -------
@@ -136,7 +138,8 @@ class ReportTable(object):
             'longtables'     : longtables,
             'tableID'        : tableID,
             'tableclass'     : tableclass,
-            'link_to_pdf'    : link_to_pdf}
+            'link_to_pdf'    : link_to_pdf,
+            'link_to_pkl'    : link_to_pkl}
 
         if fmt not in _convertDict:
             raise NotImplementedError('%s format option is not currently supported')

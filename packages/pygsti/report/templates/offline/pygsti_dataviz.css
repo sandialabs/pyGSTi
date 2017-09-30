@@ -37,6 +37,9 @@ th .errorbar {
 .modebar {
     /* display: none; */
 }
+.modebar-group {
+    margin-left: 0px !important; /* removes space btwn bar buttons */
+}
 .modebar-btn {
     display: none;
 }
@@ -44,6 +47,9 @@ th .errorbar {
     display: inline;
 }
 .modebar-btn[data-title="Download PDF"] {
+    display: inline;
+}
+.modebar-btn[data-title="Download python pickle"] {
     display: inline;
 }
 .modebar-btn[data-title="Reset axes"] {

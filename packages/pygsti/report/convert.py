@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 from . import html
 from . import latex
+from . import python
 
 import numpy as _np
 import cmath
@@ -28,7 +29,8 @@ def functions_in(module):
 
 convertDict = {
         'html'  : functions_in(html),
-        'latex' : functions_in(latex)}
+        'latex' : functions_in(latex),
+        'python' : functions_in(python)}
 
 def calc_dim(x):
     '''

@@ -1400,7 +1400,7 @@ class FitComparisonTable(WorkspaceTable):
                 'html': (Xlabel,'&chi;<sup>2</sup>','k','&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                'text': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
+                'python': (Xlabel,'chi^2','k','chi^2-k','sqrt{2k}','N_{sigma}','N_s','N_p', 'Rating')
                 }
                 
         elif objective == "logl":
@@ -1410,7 +1410,7 @@ class FitComparisonTable(WorkspaceTable):
                 'html': (Xlabel,'2&Delta;(log L)','k','2&Delta;(log L)-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>','N<sub>s</sub>','N<sub>p</sub>', 'Rating'),
-                'text': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
+                'python': (Xlabel,'2*Delta(log L)','k','2*Delta(log L)-k','sqrt{2k}',
                                                'N_{sigma}','N_s','N_p', 'Rating')
                 }
         else:
@@ -1516,7 +1516,7 @@ class GatestringTable(WorkspaceTable):
             html_head += "</thead><tbody>"
             table = _ReportTable(colHeadings, formatters,
                                  customHeader={'latex': latex_head,
-                                               'html': html_head})
+                                               'html': html_head })
     
         formatters = (('Normal',) + ('GateString',)*len(gsLists))*nCols
 

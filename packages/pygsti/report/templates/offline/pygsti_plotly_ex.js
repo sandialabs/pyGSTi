@@ -404,8 +404,16 @@ PlotManager.prototype.enqueue = function(callback, label, autostart=true){
 }
 
 
-function stripAllEventHandlers(jquery_element) {    
+function cloneAndReplace(jquery_element) {    
     var old_element = jquery_element.get(0);
     var new_element = old_element.cloneNode(true);
     old_element.parentNode.replaceChild(new_element, old_element);
+    return $(new_element)
+}
+
+function cloneAndAppend(jquery_element) {    
+    var old_element = jquery_element.get(0);
+    var new_element = old_element.cloneNode(true);
+    old_element.parentNode.appendChild(new_element, old_element);
+    return $(new_element)
 }

@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from .cell        import Cell
-from .formatters  import formatDict as _formatDict
 from .reportables import ReportableQty as _ReportableQty
 
 class Row(object):

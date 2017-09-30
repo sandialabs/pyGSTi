@@ -141,7 +141,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     )
     
     fig = go.Figure(data=data, layout=layout)
-    return { 'plotlyfig': fig, 'colormap': colormap, 'plt_data': plt_data }
+    return { 'plotlyfig': fig, 'colormap': colormap, 'plt_data': plt_data, 'pythonValue': plt_data }
 
 
 
@@ -742,7 +742,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         xaxis=xaxis,
         yaxis=yaxis,
     )
-    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap }
+    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap,
+             'pythonValue': {'x': xs, 'y': ys} }
 
 
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
@@ -1054,7 +1055,8 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
     )
 
     return { 'plotlyfig': go.Figure(data=data, layout=layout),
-             'colormap': colormap, 'plt_data': flipped_mx }
+             'colormap': colormap, 'plt_data': flipped_mx,
+             'pythonValue': flipped_mx}
 
 
 
@@ -1182,7 +1184,8 @@ class BoxKeyPlot(WorkspacePlot):
             ]
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
-        return {'plotlyfig': go.Figure(data=data, layout=layout) }
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'pythonValue': "No data in box key plot!"}
 
 
     
@@ -1793,8 +1796,14 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 showlegend=False,
                 ))
         assert(len(data) >= 3)
+
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'r': tr['r'], 't': tr['t']}
         
-        return {'plotlyfig': go.Figure(data=data, layout=layout)}
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'pythonValue': pythonVal }
 
 
 
@@ -1964,7 +1973,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         )
         
         return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'plt_y': evals, 'plt_yerr': errbars}
+                'plt_y': evals, 'plt_yerr': errbars,
+                'pythonValue': evals, 'pythonErrorBar': errbars}
 
 
 
@@ -2032,8 +2042,12 @@ class GramMatrixBarPlot(WorkspacePlot):
                 ),
             bargap=0.1
         )
-        
-        return {'plotlyfig': go.Figure(data=data, layout=layout)}
+
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            pythonVal[tr['name']] = tr['y']
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'pythonValue': pythonVal }
 
 class FitComparisonBarPlot(WorkspacePlot):
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
@@ -2141,7 +2155,8 @@ class FitComparisonBarPlot(WorkspacePlot):
         if max(ys) < 1.0:
             layout['yaxis']['range'] = [min(ys)/2.0,1]
         
-        return {'plotlyfig': go.Figure(data=data, layout=layout)}
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'pythonValue': {'x': xs, 'y': ys} }
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):
@@ -2323,7 +2338,11 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             legend=dict(orientation="h")
         )
 
-        return {'plotlyfig': go.Figure(data=data, layout=layout)}
+        pythonVal = {'histogram values': vals}
+        if display == 'pvalue':
+            pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
+        return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'pythonValue': pythonVal}
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
@@ -2667,8 +2686,14 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             )
         )
 
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
+        
         #reverse order of data so z-ordering is nicer
-        return {'plotlyfig': go.Figure(data=list(reversed(data)), layout=layout)}
+        return {'plotlyfig': go.Figure(data=list(reversed(data)), layout=layout),
+                'pythonValue': pythonVal }
 
         #newplotgca.set_xlabel(xlabel, fontsize=15)
         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)

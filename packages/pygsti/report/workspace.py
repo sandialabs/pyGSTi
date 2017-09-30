@@ -1293,7 +1293,9 @@ class WorkspaceOutput(object):
                                'render_math': True,
                                'output_dir': False,
                                'latex_call': "pdflatex",
-                               'link_to_pdf': False }
+                               'link_to_pdf': False,
+                               'link_to_pkl': False,
+                               'page_size': (6.5,8.0) }
     
     def __init__(self, ws):
         """
@@ -1309,7 +1311,7 @@ class WorkspaceOutput(object):
         self.options = WorkspaceOutput.default_render_options.copy()
 
     def set_render_options(self, click_to_display=None, output_dir=None, render_math=None,
-                           latex_call=None, link_to_pdf=None):
+                           latex_call=None, link_to_pdf=None, link_to_pkl=None):
         """
         Sets rendering options, which affect how render() behaves.
 
@@ -1340,6 +1342,10 @@ class WorkspaceOutput(object):
 
         if link_to_pdf is not None:
             self.options['link_to_pdf'] = link_to_pdf
+
+        if link_to_pkl is not None:
+            self.options['link_to_pkl'] = link_to_pkl
+            
 
 
     def __getstate__(self):
@@ -1412,7 +1418,7 @@ class WorkspaceOutput(object):
 
     def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
                      switchboards, switchIndices, div_css_classes=None,
-                     link_to_pdf=False):
+                     link_to_pdf=False, link_to_pkl=False):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
@@ -1451,6 +1457,9 @@ class WorkspaceOutput(object):
 
         link_to_pdf : bool, optional
             Whether or not to include links to PDF files
+
+        link_to_pkl : bool, optional
+            Whether or not to include links to PKL files
 
         Returns
         -------
@@ -1514,9 +1523,6 @@ class WorkspaceOutput(object):
         handler_js += "  $( '#%s' ).children().hide();\n" % ID
         handler_js += "  $( '#' + idToShow ).show();\n"
         handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
-        if link_to_pdf:
-            handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
-            handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
         handler_js += "}\n"
                 
         #build change event listener javascript
@@ -1545,13 +1551,14 @@ class WorkspaceOutput(object):
         #on-ready handler starts trying to connect to switches
         js += "$(document).ready(function() {\n" #
         js += "  connect_%s_to_switches();\n" % ID
-
         if link_to_pdf:
-            for divID in div_ids:
-                js += ("  $('#{id}').dblclick(function(){{\n"
-                       "    window.open('figures/{id}.pdf');\n"
-                       "  }});\n").format(id=divID)
-
+            for div_id in div_ids:
+                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
+        if link_to_pkl:
+            for div_id in div_ids:
+                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
         js += "});\n\n"
         js += handler_js
 
@@ -1560,7 +1567,7 @@ class WorkspaceOutput(object):
 
     def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
                          switchboards, switchIndices, output_dir, div_css_classes=None,
-                         link_to_pdf=False):
+                         link_to_pdf=False, link_to_pkl=False):
         """
         TODO: docstring
         """
@@ -1628,14 +1635,14 @@ class WorkspaceOutput(object):
         if link_to_pdf:
             handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
             handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
+        if link_to_pkl:
+            handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
+            handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
         handler_js += "    });\n" # end load-complete handler
         handler_js += "  }\n"
         handler_js += "  else {\n"
         handler_js += "    $( '#' + idToShow ).show();\n"
         handler_js += "    $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
-        if link_to_pdf:
-            handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
-            handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
         handler_js += "  }\n"
         handler_js += "}\n"
 
@@ -1665,14 +1672,7 @@ class WorkspaceOutput(object):
         
         #on-ready handler starts trying to connect to switches
         js += "$(document).ready(function() {\n" #
-        js += "  connect_%s_to_switches();\n" % ID
-
-        if link_to_pdf:
-            for divID in div_ids:
-                js += ("  $('#{id}').dblclick(function(){{\n"
-                       "    window.open('figures/{id}.pdf');\n"
-                       "  }});\n").format(id=divID)
-        
+        js += "  connect_%s_to_switches();\n" % ID        
         js += "});\n\n" # end on-ready handler
         js += handler_js
 
@@ -1705,8 +1705,10 @@ class NotApplicable(WorkspaceOutput):
         Parameters
         ----------
         typ : str
-            The format to render as.  Currently `"html"` is widely supported
-            and `"latex"` is supported for tables.
+            The format to render as.  Allowed options are `"html"`,
+            `"latex"`, and `"python"`, as well as `"htmldir"`,
+            `"latexdir"`, and `"pythondir"` (primarily used for 
+            internal report creation).
 
         ID : str, optional
             A base ID to use when rendering.  If None, the object's
@@ -1725,8 +1727,11 @@ class NotApplicable(WorkspaceOutput):
         if typ == "html" or typ == "htmldir":
             return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js':"" }
 
-        elif typ == "latex":
+        elif typ == "latex" or typ == "latexdir":
             return {'latex': "Not applicable" }
+
+        elif typ == "python" or typ == "pythondir":
+            return "Not Applicable"
         else:
             raise ValueError("NotApplicable render type not supported: %s" % typ)
 
@@ -1842,7 +1847,8 @@ class WorkspaceTable(WorkspaceOutput):
                                                   sciprecision=precDict['sci'],
                                                   resizable=resizable, autosize=autosize,
                                                   click_to_display=self.options['click_to_display'],
-                                                  link_to_pdf=self.options['link_to_pdf'])
+                                                  link_to_pdf=self.options['link_to_pdf'],
+                                                  link_to_pkl=self.options['link_to_pkl'])
 
                     divHTML.append(table_dict['html'])
                     divJS.append(table_dict['js'])
@@ -1903,7 +1909,8 @@ class WorkspaceTable(WorkspaceOutput):
                                                   sciprecision=precDict['sci'],
                                                   resizable=resizable, autosize=autosize,
                                                   click_to_display=self.options['click_to_display'],
-                                                  link_to_pdf=self.options['link_to_pdf'])
+                                                  link_to_pdf=self.options['link_to_pdf'],
+                                                  link_to_pkl=self.options['link_to_pkl'])
     
                     divHTML.append(table_dict['html'])
 
@@ -1937,7 +1944,8 @@ class WorkspaceTable(WorkspaceOutput):
                     "Cannot render 'htmldir' without a valid 'output_dir' render option"
                 base = self._render_html_dir(tableID, divHTML, divJS, divIDs, self.switchpos_map,
                                              self.switchboards, self.sbSwitchIndices, self.options['output_dir'],
-                                             None, self.options.get('link_to_pdf',False))
+                                             None, self.options.get('link_to_pdf',False),
+                                             self.options.get('link_to_pkl',False) )
                 #base has keys == divIDs + 'main' for separate table html+js ; values = dict w/ 'filename' also?
                 # OR just returns a *list* of baseIDs?
                 # OR keys == filenames to put divIDs in
@@ -2034,6 +2042,38 @@ class WorkspaceTable(WorkspaceOutput):
                                 (W,H, _os.path.join('figure',"%s.pdf" % tableDivID)) )
                 
             return {'latex': "\n".join(tables_latex) }
+
+        elif typ == "python":
+
+            tables_python = {}
+            for i, table in enumerate(self.tables):
+                if isinstance(table,NotApplicable): continue
+                tableDivID = tableID + "_%d" % i
+                outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
+                table_dict = table.render("python", output_dir=None)
+                   #( setting output_dir generates separate files for plots in table )
+                tables_python[tableDivID] = table_dict['python']
+                
+            return {'python': tables_python }
+
+        elif typ == "pythondir":
+
+            assert('output_dir' in self.options and self.options['output_dir']), \
+                "Cannot render 'pythondir' without a valid 'output_dir' render option"
+
+            output_dir = self.options['output_dir']
+
+            tables_python = []
+            for i, table in enumerate(self.tables):
+                if isinstance(table,NotApplicable): continue
+                tableDivID = tableID + "_%d" % i
+                outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
+                table_dict = table.render("python", output_dir=output_dir)
+                  #( setting output_dir generates separate files for plots in table )
+                table_dict['python'].to_pickle(outputFilename) # a DataFrame
+                tables_python.append("df_%s = pd.read_pickle('%s');"
+                                     % (tableDivID,outputFilename))
+            return {'python': "\n".join(tables_python) }
                                      
         else:
             assert(len(self.tables) == 1), \
@@ -2187,7 +2227,8 @@ class WorkspacePlot(WorkspaceOutput):
                             autosize=autosize, resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
-                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False)
+                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False,
+                            link_to_pkl_id= plotDivID if self.options['link_to_pkl'] else False)
 
                     divIDs.append(plotDivID)  # getPlotlyDivID(fig_dict['html'])
                     divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
@@ -2231,7 +2272,8 @@ class WorkspacePlot(WorkspaceOutput):
                             autosize=autosize, resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
-                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False)
+                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False,
+                            link_to_pkl_id= plotDivID if self.options['link_to_pkl'] else False)
                         
                     divIDs.append(plotDivID) # getPlotlyDivID(fig_dict['html'])
                     divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
@@ -2253,7 +2295,7 @@ class WorkspacePlot(WorkspaceOutput):
                 base = self._render_html_dir(plotID, divHTML, divJS, divIDs, self.switchpos_map,
                                              self.switchboards, self.sbSwitchIndices,
                                              self.options['output_dir'], ['relwrap'], False)
-                                             # Don't link_to_pdf b/c plots will all have download buttons
+                                             # Don't link_to_pdf/pkl b/c plots will all have download buttons
                 ret = base
                 switch_js = base['js']
                 ret['js'] = '' # start from scratch (we'll wrap switch_js)
@@ -2294,4 +2336,44 @@ class WorkspacePlot(WorkspaceOutput):
                 includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
                                 (W,H,filename))
             return {'latex': '\n'.join(includes) }
+
+        elif typ == "python":
+
+            plots_python = {}
+            for i,fig in enumerate(self.figs):
+                plotDivID = plotID + "_%d" % i
+                if isinstance(fig,NotApplicable): continue
+                if 'pythonValue' in fig:
+                    data = {'value': fig['pythonValue'] }
+                    if "pythonErrorBar" in fig:
+                        data['errorbar'] = fig['pythonErrorBar']
+                else:
+                    data = {'value': "Opaque Figure"}
+                plots_python[plotDivID] = data
+            return {'python': plots_python }
+
+
+        elif typ == "pythondir":
+
+            assert('output_dir' in self.options and self.options['output_dir']), \
+                "Cannot render 'pythondir' without a valid 'output_dir' render option"
+
+            output_dir = self.options['output_dir']
+
+            plots_python = []
+            for i,fig in enumerate(self.figs):
+                plotDivID = plotID + "_%d" % i
+                if isinstance(fig,NotApplicable): continue
+                outputFilename = _os.path.join(output_dir, "%s.pkl" % plotDivID)
+                if 'pythonValue' in fig:
+                    data_to_pickle = {'value': fig['pythonValue'] }
+                    if "pythonErrorBar" in fig:
+                        data_to_pickle['errorbar'] = fig['pythonErrorBar']
+                else:
+                    data_to_pickle = "Opaque Figure"
+                _pickle.dump(data_to_pickle, open(outputFilename,"wb"))
+                plots_python.append("data_%s = pd.read_pickle('%s');"
+                                     % (plotDivID,outputFilename))
+            return {'python': "\n".join(plots_python) }
+            
 
