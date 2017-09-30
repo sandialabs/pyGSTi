@@ -716,8 +716,10 @@ def basis_element_labels(basis, dimOrBlockDims):
     if isinstance(basis, Basis):
         return basis.labels
 
-    if dimOrBlockDims == 1: #Special case of single element basis, in which
-        return [ "" ]       # case we return a single label.
+    if dimOrBlockDims == 1 or (hasattr(dimOrBlockDims,'__len__')
+        and len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 1):
+        return [ "" ]       # Special case of single element basis, in which
+                            # case we return a single label.
 
     #Note: the loops constructing the labels in this function
     # must be in-sync with those for constructing the matrices
@@ -787,7 +789,8 @@ def basis_element_labels(basis, dimOrBlockDims):
 
 
     elif basis == "qt":
-        assert dimOrBlockDims == 3 or (len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 3)
+        assert dimOrBlockDims == 3 or (hasattr(dimOrBlockDims,'__len__')
+                and len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 3)
         lblList = ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
 
     else:

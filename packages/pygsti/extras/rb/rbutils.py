@@ -186,7 +186,7 @@ def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=None):
         the gateset.
         
     d : int, optional
-        The dimension of the Hilbert space.  If Nine, it is obtained
+        The dimension of the Hilbert space.  If None, it is obtained
         from the gateset.
 
     Returns

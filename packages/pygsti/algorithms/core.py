@@ -1091,7 +1091,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         dsGateStringsToUse = gateStringsToUse
             # no difference in the strings used by the alias
 
-    #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian
+    #Compute "extra" (i.e. beyond the (gatestring,spamlabel)) rows of jacobian
     ex = 0
     if regularizeFactor != 0:
         ex = vec_gs_len
@@ -3002,9 +3002,12 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
         dGdp = gate.deriv_wrt_params() #shape (dim**2, nP)
         dGdp = _np.swapaxes(dGdp,0,1)  #shape (nP, dim**2, )
         dGdp.shape = (nP,gs.dim,gs.dim)
-        
-        # M maps to choi-jamiolkowsky "basis".  MdGdp_std is choi mapping
-        # of dGdp in the std basis == dchi_std/dp
+
+        # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
+        # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
+        # transform).  This shuffle op commutes with the derivative, so that
+        # dchi_std/dp := d(M(G))/dp = M(dG/dp), which we call "MdGdp_std" (the choi
+        # mapping of dGdp in the std basis)
         MdGdp_std = _np.empty((nP,gs.dim,gs.dim), 'complex')
         for p in range(gate.num_params()): #p indexes param
             MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], gateBasis) #now "M(dGdp_std)"
@@ -3033,7 +3036,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
                            nGateParams, nSpamParams, gateBasis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (len(gs.gates), nParams).
+    Returns a (real) array of shape (len(gs.preps), nParams).
     """
     BMxs = gateBasis.get_composite_matrices() #shape [gs.dim, dmDim, dmDim]
     ddenMxdV = BMxs # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec

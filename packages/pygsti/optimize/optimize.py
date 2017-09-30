@@ -771,7 +771,8 @@ def _fwd_diff_jacobian(f, x0, eps=1e-10):
 
     return jac
 
-def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
+def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
+              verbosity=1):
     """
     Checks a jacobian function using finite differences.
 
@@ -793,6 +794,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
         The allowd tolerance on the relative differene between the
         values of the finite difference and jacToCheck jacobians
         if errType == 'rel' or the absolute difference if errType == 'abs'.
+
+    verbosity : int, optional
+        Controls how much detail is printed to stdout.
 
     Returns
     -------
@@ -830,8 +834,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
                 err = _np.abs(fd_jac[i,j]-jacToCheck[i,j])
                 if err > tol: 
                     errs.append( (i,j,err) )
-                    #print("DEBUG JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
-                    # (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
+                    if verbosity > 1:
+                        print("JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
+                              (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
                 errSum += err
 
     errs.sort(key=lambda x: -x[2])
@@ -839,7 +844,11 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
     if len(errs) > 0:
         maxabs = _np.max(_np.abs(jacToCheck))
         max_err_ratio = _np.max([ x[2]/maxabs for x in errs ])
-        if max_err_ratio > 0.01: 
-            print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+        if verbosity > 0:
+            if max_err_ratio > 0.01: 
+                print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+
+    if verbosity > 0:
+        print("check_jac %s [err = %g]" % (("ERROR" if len(errs) else "OK"),errSum))
 
     return errSum, errs, fd_jac

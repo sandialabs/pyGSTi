@@ -552,3 +552,53 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
         
     return logM
 
+
+
+def minweight_match(a, b, metricfn=None, return_pairs=True):
+    """
+    Matches the elements of two vectors, `a` and `b` by minimizing the
+    weight between them, defined as the sum of `metricfn(x,y)` over
+    all `(x,y)` pairs (`x` in `a` and `y` in `b`).
+
+    Parameters
+    ----------
+    a, b : list or numpy.ndarray
+        1D arrays to match elements between.
+
+    metricfn : function, optional
+        A function of two float parameters, `x` and `y`,which defines the cost
+        associated with matching `x` with `y`.
+
+    return_pairs : bool, optional
+        If True, the matching is also returned.
+
+    Returns
+    -------
+    min_weight : float
+        The minimum weight obtained, as defined above as the sum of the weights
+        of all the pairs.
+
+    pairs : list
+        Only returned when `return_pairs == True`, a list of 2-tuple pairs of
+        indices `(ix,iy)` giving the indices into `a` and `b` respectively of 
+        each matched pair.
+    """
+    assert(len(a) == len(b))
+    if metricfn is None:
+        metricfn = lambda x,y: abs(x-y)
+        
+    D = len(a)
+    weightMx = _np.empty((D,D),'d')
+    for i,x in enumerate(a):
+        weightMx[i,:] = [metricfn(x,y) for j,y in enumerate(b)]
+    a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
+    assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
+
+    matched_pairs = list(zip(a_inds,b_inds))
+    min_weight = float(weightMx[a_inds, b_inds].sum())
+
+    if return_pairs:
+        return min_weight, matched_pairs
+    else:
+        return min_weight
+           

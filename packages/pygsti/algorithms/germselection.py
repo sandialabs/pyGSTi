@@ -439,9 +439,20 @@ def calc_bulk_twirled_DDD(gateset, germsList, eps=1e-6, check=False,
     if germLengths is None:
         germLengths = _np.array([len(germ) for germ in germsList])
     twirledDeriv = bulk_twirled_deriv(gateset, germsList, eps, check, comm) / germLengths[:, None, None]
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+
+    #OLD: slow, I think because conjugate *copies* a large tensor, causing a memory bottleneck
+    #twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
+    #                                     _np.conjugate(twirledDeriv),
+    #                                     twirledDeriv)
+
+    #NEW: faster, one-germ-at-a-time computation requires less memory.
+    nGerms, _, vec_gateset_dim = twirledDeriv.shape
+    twirledDerivDaggerDeriv = _np.empty((nGerms, vec_gateset_dim, vec_gateset_dim),
+                                        dtype=_np.complex)
+    for i in range(nGerms):
+        twirledDerivDaggerDeriv[i, :, :] = _np.dot(
+            twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
+
     return twirledDerivDaggerDeriv
 
 
@@ -455,7 +466,7 @@ def calc_twirled_DDD(gateset, germ, eps=1e-6):
     twirledDeriv = twirled_deriv(gateset, germ, eps) / len(germ)
     twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
                                          _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+                                         twirledDeriv)         
     return twirledDerivDaggerDeriv
 
 

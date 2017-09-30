@@ -127,7 +127,7 @@ function trigger_wstable_plot_creation(id) {
 	//5) It's possible that the plot div (wstable) has
         //   a max-height set.  This won't confine the table
         //   at all (since it's not a block element), so we
-        //   should remove it (it would useful for plots,
+        //   should remove it (it would be useful for plots,
         //   but not tables).
 	wstable.css("max-height","none");
     });
@@ -394,7 +394,7 @@ PlotManager.prototype.run = function(){
 	    pm.processor = null;
             $("#status").hide();
 	}
-    }, 100, this); //pass this as "pm" argument to function
+    }, 200, this); //pass this as "pm" argument to function
 }
 
 PlotManager.prototype.enqueue = function(callback, label, autostart=true){

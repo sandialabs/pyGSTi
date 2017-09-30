@@ -477,13 +477,19 @@ class GateSet(object):
         return L
 
 
-    def num_elements(self):
+    def num_elements(self, include_povm_identity=False):
         """
         Return the number of total gate matrix and spam vector
         elements in this gateset.  This is in general different
         from the number of *parameters* in the gateset, which
         are the number of free variables used to generate all of
         the matrix and vector *elements*.
+
+        Parameters
+        ----------
+        include_povm_identity : bool, optional
+            Whether to include the elements of the GateSet's
+            povm_identity member (if present, i.e. not None).
 
         Returns
         -------
@@ -493,7 +499,8 @@ class GateSet(object):
         rhoSize = [ rho.size for rho in list(self.preps.values()) ]
         eSize   = [ E.size for E in list(self.effects.values()) ]
         gateSize = [ gate.size for gate in list(self.gates.values()) ]
-        return sum(rhoSize) + sum(eSize) + sum(gateSize)
+        povmSize = self.povm_identity.size if (include_povm_identity and self.povm_identity.size) else 0
+        return sum(rhoSize) + sum(eSize) + sum(gateSize) + povmSize
 
 
     def num_nongauge_params(self):

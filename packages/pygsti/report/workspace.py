@@ -75,11 +75,18 @@ def randomID():
 
 def read_contents(filename):
     contents = None
-    with open(filename) as f:
-        contents = f.read()
-        try: # to convert to unicode since we use unicode literals
-            contents = contents.decode('utf-8')
-        except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+    try: #on Windows using python3 open can fail when trying to read text files. encoding fixes this
+        f = open(filename)
+    except UnicodeDecodeError:
+        f = open(filename, encoding='utf-8') #try this, but not available in python 2.7!
+        
+    contents = f.read()
+    f.close()
+    
+    try: # to convert to unicode since we use unicode literals
+        contents = contents.decode('utf-8')
+    except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
+    
     return contents
 
 def insert_resource(connected, online_url, offline_filename,
@@ -794,17 +801,17 @@ class Switchboard(_collections.OrderedDict):
         """ 
         Break off this implementation so SwitchboardViews can use.
         """
-        assert(typ == "html"), "Can't render Switchboards as anything but HTML"
+        assert(typ == "html" or typ == "htmldir"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
-        for i,(name,baseID,typ,posLbls,ipos,bShow) in enumerate(
+        for i,(name,baseID,styp,posLbls,ipos,bShow) in enumerate(
                 zip(self.switchNames, self.switchIDs, self.switchTypes,
                     self.positionLabels, self.initialPositions, show)):
             
             ID = (baseID + view_suffix) if view_suffix else baseID
             style = "" if bShow else " style='display: none'"
             
-            if typ == "buttons":
+            if styp == "buttons":
                 html  = "<div class='switch_container'%s>\n" % style
                 html += "<fieldset id='%s'>\n" % ID
                 if name:
@@ -846,7 +853,7 @@ class Switchboard(_collections.OrderedDict):
                     ))
 
 
-            elif typ == "dropdown":
+            elif styp == "dropdown":
                 html = "<div class='switch_container'%s><fieldset>\n" % style
                 if name:
                     html += "<label for='%s'>%s</label>\n" % (ID,name)
@@ -886,9 +893,9 @@ class Switchboard(_collections.OrderedDict):
                         "connect_%s_to_base();" % ID #start trying to connect
                     ))
             
-            elif typ == "slider" or typ == "numslider":
+            elif styp == "slider" or styp == "numslider":
                 
-                if typ == "numslider":
+                if styp == "numslider":
                     float_vals = list(map(float,posLbls))
                     m,M = min(float_vals),max(float_vals)
                 else:
@@ -983,7 +990,7 @@ class Switchboard(_collections.OrderedDict):
                     ))
                 
             else:
-                raise ValueError("Unknown switch type: %s" % typ)
+                raise ValueError("Unknown switch type: %s" % styp)
 
             js += "$('#%s').addClass('initializedSwitch');\n" % ID
 
@@ -993,7 +1000,11 @@ class Switchboard(_collections.OrderedDict):
         html = "\n".join(switch_html)
         js = "$(document).ready(function() {\n" +\
              "\n".join(switch_js) + "\n});"
-        return {'html':html, 'js':js}
+
+        if typ == "html":
+            return {'html':html, 'js':js}
+        else: # typ == "htmldir"
+            return { 'main': {'html':html, 'js':js} }
                 
 
     def get_switch_change_handlerjs(self, switchIndex):
@@ -1279,6 +1290,8 @@ class WorkspaceOutput(object):
     output in various formats, and `display` is used to show the object within
     an iPython notebook.
     """
+    default_render_options = { 'click_to_display': False,
+                               'render_math': True }
     
     def __init__(self, ws):
         """
@@ -1291,6 +1304,27 @@ class WorkspaceOutput(object):
         """
         self.ws = ws
         #self.widget = None #don't build until 1st display()
+        self.options = WorkspaceOutput.default_render_options.copy()
+
+    def set_render_options(self, click_to_display=None):
+        """
+        Sets rendering options, which affect how render() behaves.
+
+        Parameters
+        ----------
+        click_to_display : bool, optional
+            If True, table plots are not initially created but must
+            be clicked to prompt creation.  This is False by default,
+            and can be useful to set to True for tables with
+            especially complex plots whose creation would slow down
+            page loading significantly.
+
+        Returns
+        -------
+        None
+        """
+        if click_to_display is not None:
+            self.options['click_to_display'] = click_to_display
 
     def __getstate__(self):
         state_dict = self.__dict__.copy()
@@ -1357,7 +1391,7 @@ class WorkspaceOutput(object):
         _display(_HTML(content))
 
     def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
-                     switchboards, switchIndices):
+                     switchboards, switchIndices, div_css_classes=None):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
@@ -1397,10 +1431,17 @@ class WorkspaceOutput(object):
             the embeddable output the value is.  Keys are `"html"` and `"js"`.
         """
 
+        #Build list of CSS classes for the created divs
+        classes = ['single_switched_value'] 
+        if div_css_classes is not None:
+            classes.extend(div_css_classes)
+        cls = ' '.join(classes)
+        
         #build HTML as container div containing one or more plot divs
         # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
         html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
-        html += "\n".join(div_htmls) + "\n</div>\n"
+        html += "\n".join([ "<div class='%s' id='%s'>\n%s\n</div>\n" %
+                            (cls,tup[0],tup[1]) for tup in zip(div_ids, div_htmls) ]) + "\n</div>\n"
 
         #build javascript to map switch positions to div_ids
         js = "var switchmap_%s = new Array();\n" % ID
@@ -1425,35 +1466,40 @@ class WorkspaceOutput(object):
 
         #define fn to "connect" output object to switchboard, i.e.
         #  register event handlers for relevant switches so output object updates
-        js += "function connect_%s_to_switches(){" % ID
-        js += "  if(%s) {" % cnd  # "if switches are ready"
+        js += "function connect_%s_to_switches(){\n" % ID
+        js += "  if(%s) {\n" % cnd  # "if switches are ready"
         # loop below adds event bindings to the body of this if-block
+
+        #build a handler function to get all of the relevant switch positions,
+        # build a (flattened) position array, and perform the lookup.  Note that
+        # this function does the same thing regardless of *which* switch was
+        # changed, and so is called by all relevant switch change handlers.
+        onchange_name = "%s_onchange" % ID
+        handler_js = "function %s() {\n" % onchange_name
+        handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
+        handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n" # short-circuit
+        handler_js += "  var curSwitchPos = new Array();\n"
+        for sb, switchInds in zip(switchboards, switchIndices):
+            for switchIndex in switchInds:
+                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
+        handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
+        handler_js += "  $( '#%s' ).children().hide();\n" % ID
+        handler_js += "  $( '#' + idToShow ).show();\n"
+        handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
+        handler_js += "}\n"
                 
         #build change event listener javascript
-        handler_fns_js = []
         for sb, switchInds in zip(switchboards, switchIndices):
             # switchInds is a tuple containing the "used" switch indices of sb
-            
             for switchIndex in switchInds:
-                #build a handler function to get all of the relevant switch positions,
-                # build a (flattened) position array, and perform the lookup.
-                fname = "%s_onchange_%s_%d" % (ID,sb.ID,switchIndex)
-                handler_js = "function %s() {\n" % fname 
-                handler_js += "  var curSwitchPos = new Array();\n"
-                for sb2, switchInds2 in zip(switchboards, switchIndices):
-                    for switchIndex2 in switchInds2:
-                        handler_js += "  curSwitchPos.push(%s);\n" % sb2.get_switch_valuejs(switchIndex2)
-                handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
-                handler_js += "  $( '#%s' ).children().hide();\n" % ID
-                handler_js += "  $( '#' + idToShow ).show();\n"
-                handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
-                handler_js += "}\n"
-                handler_fns_js.append(handler_js)
-
                 # part of if-block ensuring switches are ready (i.e. created)
                 js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
-                              "%s(); });\n" % fname
-                js += "    %s();\n" % fname # call function to update visibility
+                              "%s(); });\n" % onchange_name
+                
+        #bind onchange call to custom 'tabchange' event that we trigger when tab changes
+        js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
+        js +=                         "%s(); });\n" % onchange_name
+        js += "    %s();\n" % onchange_name # call onchange function *once* at end to update visibility
 
         # end if-block
         js += "    console.log('Switches initialized: %s handlers set');\n" % ID
@@ -1469,9 +1515,120 @@ class WorkspaceOutput(object):
         js += "$(document).ready(function() {\n" #
         js += "  connect_%s_to_switches();\n" % ID
         js += "});\n\n"
-        js += "\n".join(handler_fns_js)
+        js += handler_js
 
         return {'html':html, 'js':js}
+
+
+    def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
+                         switchboards, switchIndices, div_css_classes=None):
+        """
+        TODO: docstring
+        """
+        #Build list of CSS classes for the created divs
+        classes = ['single_switched_value'] 
+        if div_css_classes is not None:
+            classes.extend(div_css_classes)
+        cls = ' '.join(classes)
+        
+        #build HTML as container div containing one or more plot divs
+        # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
+        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
+        html += "\n".join([ "<div class='%s' id='%s'></div>\n" %
+                             (cls,divID) for divID in div_ids ]) + "\n</div>\n"
+
+        #build a list of filenames based on the divIDs
+        div_filenames = [ ("figures/"+divID+".html") for divID in div_ids ]
+
+        #build javascript to map switch positions to div_ids
+        js = "var switchmap_%s = new Array();\n" % ID
+        for switchPositions, iDiv in switchpos_map.items():
+            #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
+            div_id = div_ids[iDiv]
+            flatPositions = []
+            for singleBoardSwitchPositions in switchPositions:
+                flatPositions.extend( singleBoardSwitchPositions )                
+            js += "switchmap_%s[ [%s] ] = '%s';\n" % \
+                    (ID, ",".join(map(str,flatPositions)), div_id)
+
+        js += "window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #ensure a *global* variable
+        js += "\n"
+
+
+        cnd = " && ".join([ "$('#switchbd%s_%d').hasClass('initializedSwitch')"
+                            % (sb.ID,switchIndex)
+                            for sb, switchInds in zip(switchboards, switchIndices)
+                            for switchIndex in switchInds ])
+        if len(cnd) == 0: cnd = "true"
+
+        #define fn to "connect" output object to switchboard, i.e.
+        #  register event handlers for relevant switches so output object updates
+        js += "function connect_%s_to_switches(){\n" % ID
+        js += "  if(%s) {\n" % cnd  # "if switches are ready"
+        # loop below adds event bindings to the body of this if-block
+
+        #build a handler function to get all of the relevant switch positions,
+        # build a (flattened) position array, and perform the lookup.  Note that
+        # this function does the same thing regardless of *which* switch was
+        # changed, and so is called by all relevant switch change handlers.
+        onchange_name = "%s_onchange" % ID
+        handler_js = "function %s() {\n" % onchange_name
+        handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
+        handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n" # short-circuit
+        handler_js += "  var curSwitchPos = new Array();\n"
+        for sb, switchInds in zip(switchboards, switchIndices):
+            for switchIndex in switchInds:
+                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
+        handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
+        handler_js += "  $( '#%s' ).children().hide();\n" % ID
+        
+        handler_js += "  if( $( '#' + idToShow ).children().length == 0 ) {\n"
+        handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
+        handler_js += "        $('#' + idToShow).show();\n"
+        handler_js += "        $('#' + idToShow).parentsUntil('#%s').show();\n" % ID
+        handler_js += "    });\n" # end load-complete handler
+        handler_js += "  }\n"
+        handler_js += "  else {\n"
+        handler_js += "    $( '#' + idToShow ).show();\n"
+        handler_js += "    $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
+        handler_js += "  }\n"
+        handler_js += "}\n"
+
+        
+        #build change event listener javascript
+        for sb, switchInds in zip(switchboards, switchIndices):
+            # switchInds is a tuple containing the "used" switch indices of sb
+            for switchIndex in switchInds:
+                # part of if-block ensuring switches are ready (i.e. created)
+                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
+                              "%s(); });\n" % onchange_name
+
+        #bind onchange call to custom 'tabchange' event that we trigger when tab changes
+        js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
+        js +=                         "%s(); });\n" % onchange_name
+        js += "    %s();\n" % onchange_name # call onchange function *once* at end to update visibility
+
+        # end if-block
+        js += "    console.log('Switches initialized: %s handlers set');\n" % ID
+        js += "    $( '#%s' ).show()\n" % ID  #visibility updates are done: show parent container
+        js += "  }\n" #ends if-block
+        js += "  else {\n"  # switches aren't ready - so wait
+        js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
+        js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
+        js += "  }\n"
+        js += "};\n" #end of connect function
+        
+        #on-ready handler starts trying to connect to switches
+        js += "$(document).ready(function() {\n" #
+        js += "  connect_%s_to_switches();\n" % ID
+        js += "});\n\n"
+        js += handler_js
+
+        ret = {'main': {'html':html, 'js':js}  }
+        for divID,divHTML,divJS,divFN in zip(div_ids, div_htmls, div_jss, div_filenames):
+            ret[divID] = { 'html': divHTML, 'js': divJS, 'filename': divFN }
+            
+        return ret
 
 
 class NotApplicable(WorkspaceOutput):
@@ -1506,7 +1663,7 @@ class NotApplicable(WorkspaceOutput):
         """
         if ID is None: ID=randomID()
         
-        if typ == "html":
+        if typ == "html" or typ == "htmldir":
             return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js':"" }
 
         elif typ == "latex":
@@ -1544,27 +1701,6 @@ class WorkspaceTable(WorkspaceOutput):
         self.initargs = args
         self.tables,self.switchboards,self.sbSwitchIndices,self.switchpos_map = \
             self.ws.switchedCompute(self.tablefn, *self.initargs)
-        self.options = { 'click_to_display': False }
-
-    def set_render_options(self, click_to_display=None):
-        """
-        Sets rendering options, which affect how render() behaves.
-
-        Parameters
-        ----------
-        click_to_display : bool, optional
-            If True, table plots are not initially created but must
-            be clicked to prompt creation.  This is False by default,
-            and can be useful to set to True for tables with
-            especially complex plots whose creation would slow down
-            page loading significantly.
-
-        Returns
-        -------
-        None
-        """
-        if click_to_display is not None:
-            self.options['click_to_display'] = click_to_display
 
         
     def render(self, typ, global_requirejs=False, precision=None,
@@ -1620,69 +1756,136 @@ class WorkspaceTable(WorkspaceOutput):
                          'polar': precision.get(['polar'],p),
                          'sci': precision.get(['sci'],p) }
         
-        if typ == "html":
+        if typ == "html" or typ == "htmldir":
             tableID = "table_" + randomID()
-            
             divHTML = []
             divIDs = []
             divJS = []
-            for i, table in enumerate(self.tables):
-                tableDivID = tableID + "_%d" % i
-                if isinstance(table,NotApplicable):
-                    table_dict = table.render("html",tableDivID)
-                else:
-                    table_dict = table.render("html", tableID=tableDivID + "_tbl",
-                                              tableclass="dataTable",
-                                              precision=precDict['normal'],
-                                              polarprecision=precDict['polar'],
-                                              sciprecision=precDict['sci'],
-                                              resizable=resizable, autosize=autosize,
-                                              click_to_display=self.options['click_to_display'])
-
-                divHTML.append("<div class='single_switched_value' id='%s'>\n%s\n</div>\n" %
-                               (tableDivID,table_dict['html']))
-                divJS.append(table_dict['js'])
-                divIDs.append(tableDivID)
-                
-            base = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
-                                     self.switchboards, self.sbSwitchIndices)
-            ret = { 'html': base['html'], 'js': '' }
-
-            if global_requirejs:
-                ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
-            ret['js'] += '  $(document).ready(function() {\n'
-
-            #Table initialization javascript: this will either be within the math-rendering (queued) function
-            # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
-            init_table_js = ''
-            if resizable:
-                init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-            if autosize:
-                init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-            if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                init_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
-
-            ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
-
-            if '$' in ret['html']:
-                # then there is math text that needs rendering,
-                # so queue this, *then* trigger plot creation
-                ret['js'] += ('  plotman.enqueue(function() {{ \n'
-                              '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
-                              '             {{left: "$$", right: "$$", display: true}},\n'
-                              '             {{left: "$", right: "$", display: false}},\n'
-                              '             ] }} );\n').format(tableID=tableID)
-                ret['js'] += init_table_js
-                ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
-            else:
-                #Note: this MUST be below plot handler init, as this triggers plot creation
-                ret['js'] += init_table_js 
             
-            ret['js'] += '}); //end on-ready handler\n'
-            if global_requirejs:
-                ret['js'] += '}); //end require block\n'
+            if typ == "html":
+                for i, table in enumerate(self.tables):
+                    tableDivID = tableID + "_%d" % i
+                    if isinstance(table,NotApplicable):
+                        table_dict = table.render("html",tableDivID)
+                    else:
+                        table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                                                  tableclass="dataTable",
+                                                  precision=precDict['normal'],
+                                                  polarprecision=precDict['polar'],
+                                                  sciprecision=precDict['sci'],
+                                                  resizable=resizable, autosize=autosize,
+                                                  click_to_display=self.options['click_to_display'])
 
-            return ret
+                    divHTML.append(table_dict['html'])
+                    divJS.append(table_dict['js'])
+                    divIDs.append(tableDivID)
+    
+                base = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices)
+
+                ret = { 'html': base['html'], 'js': '' }
+
+                if global_requirejs:
+                    ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
+                ret['js'] += '  $(document).ready(function() {\n'
+    
+                #Table initialization javascript: this will either be within the math-rendering (queued) function
+                # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
+                init_table_js = ''
+                if resizable:
+                    init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+                if autosize:
+                    init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+                if resizable or autosize: #TODO: doesn't this delayed creation always happen?
+                    init_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
+    
+                ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+    
+                if '$' in ret['html'] and self.options['render_math']:
+                    # then there is math text that needs rendering,
+                    # so queue this, *then* trigger plot creation
+                    ret['js'] += ('  plotman.enqueue(function() {{ \n'
+                                  '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                                  '             {{left: "$$", right: "$$", display: true}},\n'
+                                  '             {{left: "$", right: "$", display: false}},\n'
+                                  '             ] }} );\n').format(tableID=tableID)
+                    ret['js'] += init_table_js
+                    ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
+                else:
+                    #Note: this MUST be below plot handler init, as this triggers plot creation
+                    ret['js'] += init_table_js 
+                
+                ret['js'] += '}); //end on-ready handler\n'
+                if global_requirejs:
+                    ret['js'] += '}); //end require block\n'
+    
+                return ret
+    
+            else: # typ == "htmldir"
+
+                for i, table in enumerate(self.tables):
+                    tableDivID = tableID + "_%d" % i
+                    if isinstance(table,NotApplicable):
+                        table_dict = table.render("html",tableDivID)
+                    else:
+                        table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                                                  tableclass="dataTable",
+                                                  precision=precDict['normal'],
+                                                  polarprecision=precDict['polar'],
+                                                  sciprecision=precDict['sci'],
+                                                  resizable=resizable, autosize=autosize,
+                                                  click_to_display=self.options['click_to_display'])
+    
+                    divHTML.append(table_dict['html'])
+
+                    # init_table_js work is peformed when divs are loaded
+                    init_single_table_js = ''
+                    if resizable:
+                        init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableDivID)
+                    if autosize:
+                        init_single_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableDivID)
+                    if resizable or autosize: #TODO: doesn't this delayed creation always happen?
+                        init_single_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableDivID)
+
+                    if '$' in table_dict['html'] and self.options['render_math']:
+                        # then there is math text that needs rendering,
+                        # so queue this, *then* trigger plot creation
+                        table_dict['js'] += ('  plotman.enqueue(function() {{ \n'
+                                             '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                                             '             {{left: "$$", right: "$$", display: true}},\n'
+                                             '             {{left: "$", right: "$", display: false}},\n'
+                                             '             ] }} );\n').format(tableID=tableDivID)
+                        table_dict['js'] += init_single_table_js
+                        table_dict['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableDivID) #end enqueue 
+                    else:
+                        #Note: this MUST be below plot handler init, as this triggers plot creation
+                        table_dict['js'] += init_single_table_js 
+    
+                    divJS.append(table_dict['js']) #Note: do we need to wrape this JS in an onready and/or require stmt so it runs when loaded?
+                    divIDs.append(tableDivID)
+
+                base = self._render_html_dir(tableID, divHTML, divJS, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices)
+                #base has keys == divIDs + 'main' for separate table html+js ; values = dict w/ 'filename' also?
+                # OR just returns a *list* of baseIDs?
+                # OR keys == filenames to put divIDs in
+                # base['main']['html'] -- should be empty divs and onchange handlers in base['main']['js'] should load divs that are empty
+
+                ret = base
+                switch_js = base['main']['js']
+                ret['main']['js'] = '' # start from scratch (we'll wrap switch_js)
+                
+                if global_requirejs:
+                    ret['main']['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
+                ret['main']['js'] += '  $(document).ready(function() {\n'
+                ret['main']['js'] += switch_js # just switchboard init JS
+
+                ret['main']['js'] += '}); //end on-ready handler\n'
+                if global_requirejs:
+                    ret['main']['js'] += '}); //end require block\n'
+
+                return ret
+                
         else:
             assert(len(self.tables) == 1), \
                 "Can only render %s format for a non-switched table" % typ
@@ -1725,27 +1928,7 @@ class WorkspacePlot(WorkspaceOutput):
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
             self.ws.switchedCompute(fn, *self.initargs)
-        self.options = { 'click_to_display': False }
 
-    def set_render_options(self, click_to_display=None):
-        """
-        Sets rendering options, which affect how render() behaves.
-
-        Parameters
-        ----------
-        click_to_display : bool, optional
-            If True, the plot is rendered so that it is not initially
-            created, but must be clicked to prompt creation.  This is
-            False by default, and can be useful to set to True for 
-            especially complex plots whose creation would slow down
-            page loading significantly.
-
-        Returns
-        -------
-        None
-        """
-        if click_to_display is not None:
-            self.options['click_to_display'] = click_to_display
         
     def render(self, typ="html", global_requirejs=False, resizable=True, autosize=False):
         """
@@ -1777,7 +1960,7 @@ class WorkspacePlot(WorkspaceOutput):
             A dictionary of strings giving the HTML and Javascript portions
             of the embeddable output.  Keys are `"html"` and `"js"`.
         """
-        assert(typ == "html"), "Only HTML rendering supported currently"
+        assert(typ == "html" or typ == "htmldir"), "Only HTML rendering supported currently"
 
         plotID = "plot_" + randomID()
 
@@ -1787,62 +1970,116 @@ class WorkspacePlot(WorkspaceOutput):
             iEnd = html.index('"', iStart+8)
             return html[iStart+8:iEnd]
 
-        #pick "master" plot, whose resizing dictates the resizing of other plots,
-        # as the largest-height plot.
-        iMaster = None; maxH = 0;
-        for i, fig in enumerate(self.figs):
-            if isinstance(fig, NotApplicable): 
-                continue
-          # master=None below, but it's unclear whether this will is needed.
-        
-        divHTML = []
-        divIDs = []
-        divJS = []
-        for i,fig in enumerate(self.figs):
-            if isinstance(fig,NotApplicable):
-                NAid = randomID()
-                fig_dict = fig.render(typ, NAid)
-                divIDs.append(NAid)
-            else:
-                #use auto-sizing (fluid layout)
-                fig_dict = _plotly_ex.plot_ex(
-                    fig, show_link=False,
-                    autosize=autosize, resizable=resizable,
-                    lock_aspect_ratio=True, master=True, # bool(i==iMaster)
-                    click_to_display=self.options['click_to_display'])
-                divIDs.append(getPlotlyDivID(fig_dict['html']))
-
-            divHTML.append("<div class='relwrap single_switched_value'><div class='abswrap'>%s</div></div>" % fig_dict['html'])
-            divJS.append( fig_dict['js'] )
-            
-        base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                self.switchboards, self.sbSwitchIndices)
-        ret = { 'html': base['html'], 'js': '' }
+        ##pick "master" plot, whose resizing dictates the resizing of other plots,
+        ## as the largest-height plot.
+        #iMaster = None; maxH = 0;
+        #for i, fig in enumerate(self.figs):
+        #    if isinstance(fig, NotApplicable): 
+        #        continue
+        # NOTE: master=None below, but it's unclear whether this will later be needed.
 
         # "handlers only" mode is when plot is embedded in something
         #  larger (e.g. a table) that takes responsibility for putting
         #  the JS in an on-ready handler and initializing and creating
         #  the plots.
         handlersOnly = bool(resizable == "handlers only")
-
         
-        if not handlersOnly:
-            if global_requirejs:
-                ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
-            ret['js'] += '  $(document).ready(function() {\n'
-        ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
-
-        if not handlersOnly:
-            if resizable: # make a resizable widget
-                ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
-            if autosize: # add window resize handler
-                ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
-            if (autosize or resizable): #trigger init & create of plots
-                ret['js'] += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotID)
-
-        if not handlersOnly:
-            ret['js'] += '}); //end on-ready handler\n'
-            if global_requirejs:
-                ret['js'] += '}); //end require block\n'
+        divHTML = []
+        divIDs = []
+        divJS = []
+        
+        if typ == "html":
                         
-        return ret
+            for i,fig in enumerate(self.figs):
+                plotDivID = plotID + "_%d" % i
+                if isinstance(fig,NotApplicable):
+                    NAid = randomID()
+                    fig_dict = fig.render(typ, NAid)
+                    divIDs.append(NAid)
+                else:
+                    #use auto-sizing (fluid layout)
+                    fig_dict = _plotly_ex.plot_ex(
+                        fig, show_link=False,
+                        autosize=autosize, resizable=resizable,
+                        lock_aspect_ratio=True, master=True, # bool(i==iMaster)
+                        click_to_display=self.options['click_to_display'])
+                    divIDs.append(plotDivID)  # getPlotlyDivID(fig_dict['html'])
+    
+                divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
+                divJS.append( fig_dict['js'] )
+                
+            base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
+                                     self.switchboards, self.sbSwitchIndices, ['relwrap'])
+            ret = { 'html': base['html'], 'js': '' }
+                
+            if not handlersOnly:
+                if global_requirejs:
+                    ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+                ret['js'] += '  $(document).ready(function() {\n'
+            ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+    
+            if not handlersOnly:
+                if resizable: # make a resizable widget
+                    ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
+                if autosize: # add window resize handler
+                    ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
+                if (autosize or resizable): #trigger init & create of plots
+                    ret['js'] += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotID)
+    
+            if not handlersOnly:
+                ret['js'] += '}); //end on-ready handler\n'
+                if global_requirejs:
+                    ret['js'] += '}); //end require block\n'
+                            
+            return ret
+
+        else:  # typ == "htmldir"
+
+            for i,fig in enumerate(self.figs):
+                plotDivID = plotID + "_%d" % i
+                if isinstance(fig,NotApplicable):
+                    NAid = randomID()
+                    fig_dict = fig.render(typ, NAid)
+                    divIDs.append(NAid)
+                else:
+                    #use auto-sizing (fluid layout)
+                    fig_dict = _plotly_ex.plot_ex(
+                        fig, show_link=False,
+                        autosize=autosize, resizable=resizable,
+                        lock_aspect_ratio=True, master=True, # bool(i==iMaster)
+                        click_to_display=self.options['click_to_display'])
+                    divIDs.append(plotDivID) # getPlotlyDivID(fig_dict['html'])
+
+                divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
+
+                # init_table_js work is peformed when divs are loaded
+                init_single_plot_js = ''
+                if not handlersOnly:
+                    if resizable: # make a resizable widget
+                        init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotDivID)
+                    if autosize: # add window resize handler
+                        init_single_plot_js += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotDivID)
+                    if (autosize or resizable): #trigger init & create of plots
+                        init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotDivID)
+
+                divJS.append( fig_dict['js'] + init_single_plot_js )
+                
+            base = self._render_html_dir(plotID, divHTML, divJS, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices, ['relwrap'])
+            ret = base
+            switch_js = base['main']['js']
+            ret['main']['js'] = '' # start from scratch (we'll wrap switch_js)
+    
+            if not handlersOnly:
+                if global_requirejs:
+                    ret['main']['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
+                ret['main']['js'] += '  $(document).ready(function() {\n'
+            ret['main']['js'] += switch_js # just switchboard init JS
+        
+            if not handlersOnly:
+                ret['main']['js'] += '}); //end on-ready handler\n'
+                if global_requirejs:
+                    ret['main']['js'] += '}); //end require block\n'
+                            
+            return ret
+

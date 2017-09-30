@@ -398,44 +398,45 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     else:
         startingPt = advancedOptions.get('starting point',"target")
         
-    if comm is None or comm.Get_rank() == 0:
+    #Compute starting point
+    if startingPt == "LGST":
+        assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
+               "Cannot run LGST: fiducials not specified!"
+        specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
+                                               effectStrs=lsgstLists[0].effectStrs,
+                                               prep_labels=gs_target.get_prep_labels(),
+                                               effect_labels=gs_target.get_effect_labels())
+        gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
+        gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
+                                gateLabelAliases=lsgstLists[0].aliases,
+                                verbosity=printer) # returns a gateset with the *same*
+                                                   # parameterizations as gs_target
 
-        #Compute starting point
-        if startingPt == "LGST":
-            assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
-                   "Cannot run LGST: fiducials not specified!"
-            specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
-                                                   effectStrs=lsgstLists[0].effectStrs,
-                                                   prep_labels=gs_target.get_prep_labels(),
-                                                   effect_labels=gs_target.get_effect_labels())
-            gs_start = _alg.do_lgst(ds, specs, gs_target, svdTruncateTo=gate_dim,
-                                    gateLabelAliases=lsgstLists[0].aliases,
-                                    verbosity=printer) # returns a gateset with the *same*
-                                                       # parameterizations as gs_target
+        #In LGST case, gauge optimimize starting point to the target
+        # (historical; sometimes seems to help in practice, since it's gauge
+        # optimizing to physical gates (e.g. something in CPTP)
+        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
+          #Note: use *default* gauge-opt params when optimizing
 
-            #In LGST case, gauge optimimize starting point to the target
-            # (historical; sometimes seems to help in practice, since it's gauge
-            # optimizing to physical gates (e.g. something in CPTP)
-            gs_start = _alg.gaugeopt_to_target(gs_start, gs_target)
-              #Note: use *default* gauge-opt params when optimizing
+        # Also reset the POVM identity to that of the target.  Essentially,
+        # we declare that this basis (gauge) has the same identity as the
+        # target (typically the first basis element).
+        gs_start.povm_identity = gs_target.povm_identity.copy()
 
-            # Also reset the POVM identity to that of the target.  Essentially,
-            # we declare that this basis (gauge) has the same identity as the
-            # target (typically the first basis element).
-            gs_start.povm_identity = gs_target.povm_identity.copy()
-
-        elif startingPt == "target":
-            gs_start = gs_target.copy()
-        elif isinstance(startingPt, _objs.GateSet):
-            gs_start = startingPt
-            startingPt = "User-supplied-GateSet" #for profiler log below
-        else:
-            raise ValueError("Invalid starting point: %s" % startingPt)
+    elif startingPt == "target":
+        gs_start = gs_target.copy()
+    elif isinstance(startingPt, _objs.GateSet):
+        gs_start = startingPt
+        startingPt = "User-supplied-GateSet" #for profiler log below
+    else:
+        raise ValueError("Invalid starting point: %s" % startingPt)
         
-        tNxt = _time.time()
-        profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
-                          % startingPt,tRef); tRef=tNxt                
-    
+    tNxt = _time.time()
+    profiler.add_time('do_long_sequence_gst: Starting Point (%s)'
+                      % startingPt,tRef); tRef=tNxt                
+
+    #Post-processing gs_start : done only on root proc in case there is any nondeterminism.
+    if comm is None or comm.Get_rank() == 0:
         #Advanced Options can specify further manipulation of starting gate set
         if advancedOptions.get('contractStartToCPTP',False):
             gs_start = _alg.contract(gs_start, "CPTP")
@@ -565,6 +566,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
+        if "comm" not in gaugeOptParams:
+            gaugeOptParams["comm"] = comm
 
         go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
@@ -623,6 +626,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #if onBadFit == "scale data and reopt": # then will need to re-gauge-opt too, like:
                 #    if "targetGateset" not in gaugeOptParams:
                 #        gaugeOptParams["targetGateset"] = gs_target
+                #    if "comm" not in gaugeOptParams:
+                #        gaugeOptParams["comm"] = comm
                 #
                 #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
                 #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
@@ -658,6 +663,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
+                       gaugeOptSuite='toggleValidSpam', gaugeOptTarget=None,
                        comm=None, memLimit=None, advancedOptions=None,
                        output_pkl=None, verbosity=2):
 
@@ -714,6 +720,29 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate
 
+    gaugeOptSuite : str or dict, optional
+        Specifies which gauge optimizations to perform on each estimate.  An
+        string (see below) specifies a built-in set of gauge optimizations,
+        otherwise `gaugeOptSuite` should be a dictionary of gauge-optimization
+        parameter dictionaries, as specified by the `gaugeOptParams` argument 
+        of :func:`do_long_sequence_gst`.  The key names of `gaugeOptSuite` then
+        label the gauge optimizations within the resuling `Estimate` objects.
+        The built-in gauge optmization suites are:
+
+          - "single" : performs only a single "best guess" gauge optimization.
+          - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
+          - "varySpamWt" : varies spam weight but no SPAM penalty.
+          - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
+          - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
+          - "none" : no gauge optimizations are performed.
+
+    gaugeOptTarget : GateSet, optional
+        If not None, a gate set to be used as the "target" for gauge-
+        optimization (only).  This argument is useful when you want to 
+        gauge optimize toward something other than the *ideal* target gates
+        given by `targetGateFilenameOrSet`, which are used as the default when
+        `gaugeOptTarget` is None.
+
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
@@ -764,6 +793,72 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     else:
         ds = dataFilenameOrSet #assume a Dataset object
 
+
+    #Build ordered dict of gauge optimization parameters
+    if isinstance(gaugeOptSuite, dict):
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        for lbl, goparams in gaugeOptSuite.items():
+            gaugeOptSuite_dict[lbl] = goparams.copy()
+            gaugeOptSuite_dict[lbl].update( {'verbosity': printer-1 } )
+            
+    elif gaugeOptSuite == "single":
+        gaugeOptSuite_dict = _collections.OrderedDict(
+            [('single', {'itemWeights': {'gates':1, 'spam':1e-3},
+                         'verbosity': printer-1} )])
+        
+    elif gaugeOptSuite in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
+
+        itemWeights_bases = _collections.OrderedDict()
+        itemWeights_bases[""] = {'gates': 1}
+
+        #Add if a 2-qubit gateset
+        if gs_target.dim == 16: 
+            if advancedOptions is not None:
+                advanced = advancedOptions.get('all',{}) #'unreliableGates' can only be specified in 'all' options
+            else: advanced = {}
+            unreliableGates = advanced.get('unreliableGates',['Gcnot','Gcphase','Gms','Gcn','Gcx','Gcz'])
+            if any([gl in gs_target.gates.keys() for gl in unreliableGates]):
+                base = {'gates': 1}
+                for gl in unreliableGates:
+                    if gl in gs_target.gates.keys(): base[gl] = 0.01
+                itemWeights_bases["-2QUR"] = base
+            
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        if gaugeOptSuite == "varySpam":
+            vSpam_range = [0,1]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "varySpamWt":
+            vSpam_range = [0]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "varyValidSpamWt":
+            vSpam_range = [1]; spamWt_range = [1e-4,1e-1]
+        elif gaugeOptSuite == "toggleValidSpam":
+            vSpam_range = [0,1]; spamWt_range = [1e-3]
+
+        for postfix,baseWts in itemWeights_bases.items():
+            for vSpam in vSpam_range:
+                for spamWt in spamWt_range:
+                    lbl = "Spam %g%s%s" % (spamWt, "+v" if vSpam else "", postfix)
+                    itemWeights = baseWts.copy()
+                    itemWeights['spam'] = spamWt
+                    gaugeOptSuite_dict[lbl] = {
+                        'itemWeights': itemWeights,
+                        'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
+
+    elif gaugeOptSuite == "none":
+        gaugeOptSuite_dict = _collections.OrderedDict()
+
+    else:
+        raise ValueError("Invalid `gaugeOptSuite` argument: %s" % gaugeOptSuite)
+
+    if gaugeOptTarget is not None:
+        assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
+        for goparams in gaugeOptSuite_dict.values():
+            if 'targetGateset' in goparams:
+                _warnings.warn(("`gaugeOptTarget` argument is overriding"
+                                "user-defined targetGateset in gauge opt"
+                                "param dict(s)"))
+            goparams.update( {'targetGateset': gaugeOptTarget } )
+
+
     ret = None
     modes = modes.split(",")
     with printer.progress_logging(1):
@@ -799,29 +894,20 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            effectStrsListOrFilename, germsListOrFilename,
                                            maxLengths, False, advanced, comm, memLimit,
                                            None, printer-1)
-            
-            #Gauge optimize to a variety of spam weights
-            for vSpam in [1]:
-                for spamWt in [1e-4,1e-1]:
-                    goLabel = "Spam %g%s" % (spamWt, "+v" if vSpam else "")
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
-                    tGO = _time.time()
-                    
-                    ret.estimates[est_label].add_gaugeoptimized(
-                        {'itemWeights': {'gates':1, 'spam':spamWt},
-                         'validSpamPenalty': vSpam, 'verbosity': printer-1},
-                        None, goLabel)
-                    printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
 
-                    #Gauge optimize data-scaled estimate also
-                    if est_label + ".robust" in ret.estimates:
-                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
-                        tGO = _time.time()
-                        ret.estimates[est_label + ".robust"].add_gaugeoptimized(
-                            {'itemWeights': {'gates':1, 'spam':spamWt},
-                             'validSpamPenalty': vSpam, 'verbosity': printer-1},
-                            None, goLabel)
-                        printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
+            #Gauge optimize to list of gauge optimization parametesr
+            for goLabel,goparams in gaugeOptSuite_dict.items():
+                printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
+                tGO = _time.time()
+                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel)
+                printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
+
+                #Gauge optimize data-scaled estimate also
+                if est_label + ".robust" in ret.estimates:
+                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
+                    tGO = _time.time()
+                    ret.estimates[est_label + ".robust"].add_gaugeoptimized(goparams, None, goLabel)
+                    printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
