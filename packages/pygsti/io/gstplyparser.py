@@ -92,7 +92,7 @@ class GateStringLexer:
         raise ValueError("Lexer error")
 
 
-class GateStringParser:
+class GateStringParser(object):
     tokens = GateStringLexer.tokens
 
     def __init__(self, lexer_object=None, lookup={}):
