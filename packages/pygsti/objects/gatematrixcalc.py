@@ -794,7 +794,7 @@ class GateMatrixCalc(GateCalc):
         
         if comm is not None: #ignorning comm since can't do anything with it!
             #_warnings.warn("More processors than can be used for product computation")
-            pass #this is a fairly common occurance, and doesn't merit a warning
+            pass #this is a fairly common occurrence, and doesn't merit a warning
 
         # ------------------------------------------------------------------
 

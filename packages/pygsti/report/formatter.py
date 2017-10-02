@@ -106,11 +106,11 @@ class Formatter(object):
             return self.stringreturn[1]
 
         # Below is the standard formatter case:
-        # Replace all occurances of certain substrings
+        # Replace all occurrences of certain substrings
         if self.stringreplacers is not None:
             for stringreplace in self.stringreplacers:
                 item = item.replace(stringreplace[0], stringreplace[1])
-        # And then replace all occurances of certain regexes
+        # And then replace all occurrences of certain regexes
         if self.regexreplace is not None:
             result = _re.match(self.regexreplace[0], item)
             if result is not None:

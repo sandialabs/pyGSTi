@@ -315,36 +315,36 @@ class DataSet(object):
         else: return None
         
 
-    def get_row(self, gatestring, occurance=0):
+    def get_row(self, gatestring, occurrence=0):
         """
         Get a row of data from this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
-        occurance number separately from the gate sequence.
+        occurrence number separately from the gate sequence.
         
         Parameters
         ----------
         gatestring : GateString or tuple
             The gate sequence to extract data for.
 
-        occurance : int, optional
-            0-based occurance index, specifying which occurance of
+        occurrence : int, optional
+            0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
 
         Returns
         -------
         DataSetRow
         """
-        if occurance > 0: 
-            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
+        if occurrence > 0: 
+            gatestring = gatestring + _gs.GateString(("#%d" % occurrence,))
         return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
                           self._total_key(gatestring))
 
 
-    def set_row(self, gatestring, countDict, occurance=0):
+    def set_row(self, gatestring, countDict, occurrence=0):
         """
         Set the counts for a row of this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
-        occurance number separately from the gate sequence.
+        occurrence number separately from the gate sequence.
         
         Parameters
         ----------
@@ -354,12 +354,12 @@ class DataSet(object):
         countDict : dict
             The dictionary of counts (data).
 
-        occurance : int, optional
-            0-based occurance index, specifying which occurance of
+        occurrence : int, optional
+            0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
         """
-        if occurance > 0: 
-            gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurance,))
+        if occurrence > 0: 
+            gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurrence,))
         if gatestring in self:
             row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
                              self._total_key(gatestring))
@@ -369,13 +369,13 @@ class DataSet(object):
             self.add_count_dict(gatestring, countDict)
         
 
-    def keys(self, stripOccuranceTags=False):
+    def keys(self, stripOccurrenceTags=False):
         """
         Returns the gate strings used as keys of this DataSet.
 
         Parameters
         ----------
-        stripOccuranceTags : bool, optional
+        stripOccurrenceTags : bool, optional
             Only applicable if `collisionAction` has been set to
             "keepseparate", when this argument is set to True
             any final "#<number>" elements of (would-be dupilcate)
@@ -388,7 +388,7 @@ class DataSet(object):
             A list of GateString objects which index the data
             counts within this data set.            
         """
-        if stripOccuranceTags and self.collisionAction == "keepseparate":
+        if stripOccurrenceTags and self.collisionAction == "keepseparate":
             return [ (gs[:-1] if (len(gs)>0 and gs[-1].startswith("#")) else gs) 
                      for gs in self.gsIndex.keys() ]
         else:

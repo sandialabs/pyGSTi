@@ -76,9 +76,9 @@ def remove_duplicates(l,indexToTest=None):
     return lcopy
 
 
-def compute_occurance_indices(lst):
+def compute_occurrence_indices(lst):
     """
-    Returns a 0-based list of integers specifying which occurance,
+    Returns a 0-based list of integers specifying which occurrence,
     i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
