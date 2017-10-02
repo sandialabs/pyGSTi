@@ -3,15 +3,19 @@
 $(document).ready(function() {
 
     window.plotman = new PlotManager();
+    window.navtacked = true;
+    openNav();
 
     document.getElementById("defaultOpen").click();
     
     $("body").on("mousemove",function(event) {
-	if (event.pageX < 50) {
-            openNav();
-	}
-	else if (event.pageX > 250) {
-            closeNav();
+	if(!window.navtacked) {
+	    if (event.pageX < 50) {
+		openNav();
+	    }
+	    else if (event.pageX > 250) {
+		closeNav();
+	    }
 	}
     });
     
@@ -156,6 +160,16 @@ function openNav() {
 function closeNav() {
     document.getElementById("theSidenav").style.width = "10px";
     document.getElementById("main").style.marginLeft = "10px"; // for push: 
+}
+
+function tackNav() {
+    if(window.navtacked) {
+	window.navtacked = false;
+	document.getElementById("tackbtn").innerHTML = "&#8857;"
+    } else {
+	window.navtacked = true;
+	document.getElementById("tackbtn").innerHTML = "&#8859;"
+    }
 }
 
 function loadLocal(url, selector, complete) {
