@@ -356,13 +356,20 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
         printer.log("Opening %s..." % outputFilename)
         _webbrowser.open(url)
         
-def _errgen_formula(errgen_type):
+def _errgen_formula(errgen_type, typ):
+    assert(typ in ('html','latex'))
     if errgen_type == "logTiG":
-        return "$\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}$"
+        ret = '<span class="math">\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}</span>'
     elif errgen_type == "logG-logT":
-        return "$\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}$"
+        ret = '<span class="math">\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}</span>'
     else:
-        return "???"
+        ret = "???"
+    
+    if typ == "latex": #minor modifications for latex versino
+        ret = ret.replace('<span class="math">','$')
+        ret = ret.replace('</span>','$')
+
+    return ret
 
 def _add_new_labels(running_lbls, current_lbls):
     """ 
@@ -706,7 +713,7 @@ def create_general_report(results, filename, title="auto",
     qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
-    qtys['errorgenformula'] = _errgen_formula(errgen_type)
+    qtys['errorgenformula'] = _errgen_formula(errgen_type, 'html')
 
     # Generate Tables
     printer.log("*** Generating switchboard tables ***")
