@@ -1627,25 +1627,33 @@ class WorkspaceOutput(object):
                 handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
         handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
         handler_js += "  $( '#%s' ).children().hide();\n" % ID
-        
-        handler_js += "  if( $( '#' + idToShow ).children().length == 0 ) {\n"
+
+        handler_js += "  divToShow = $( '#' + idToShow );\n"
+        handler_js += "  if( divToShow.children().length == 0 ) {\n"
         handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
-        handler_js += "        $('#' + idToShow).show();\n"
-        handler_js += "        $('#' + idToShow).parentsUntil('#%s').show();\n" % ID
+        handler_js += "        divToShow = $( '#' + idToShow );\n"
+        handler_js += "        divToShow.show();\n"
+        handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
         if link_to_pdf:
-            handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
+            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
             handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
         if link_to_pkl:
-            handler_js += "    $('#' + idToShow).append('<a class=\"dlLink\" href=\"figures/'"
+            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
             handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
+        handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
+        handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n" 
         handler_js += "    });\n" # end load-complete handler
         handler_js += "  }\n"
         handler_js += "  else {\n"
-        handler_js += "    $( '#' + idToShow ).show();\n"
-        handler_js += "    $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
+        handler_js += "    divToShow.show();\n"
+        handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
+        handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
+        handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
         handler_js += "  }\n"
         handler_js += "}\n"
-
+          #Note: caption resizing also occurs after table & plot creation within 
+          # pygsti_plotly_ex.js trigger_* functions.
+        
         
         #build change event listener javascript
         for sb, switchInds in zip(switchboards, switchIndices):

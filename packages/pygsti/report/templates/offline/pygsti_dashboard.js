@@ -140,7 +140,7 @@ function render_katex(parentEl) {
 function enable_caption_toggles(parentEl) {
     $(parentEl).find("figcaption").each( function() { //old: .pygsti-wsoutput-group
 	$(this).on('click', function() {
-	    $(this).children("span.captiondetail").toggle();}); //siblings("figcaption")
+	    $(this).children("span.captiondetail").toggleClass('showcaption');}); //siblings("figcaption")
     });
 }
 

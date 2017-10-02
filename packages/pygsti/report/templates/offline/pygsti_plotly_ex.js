@@ -130,6 +130,14 @@ function trigger_wstable_plot_creation(id) {
         //   should remove it (it would be useful for plots,
         //   but not tables).
 	wstable.css("max-height","none");
+
+	// 6) If this table is within a <figure> tag try to set
+	//    caption detail's width based on rendered table width
+	caption = wstable.closest('figure').children('figcaption:first');
+	if(caption.length > 0) {
+            caption.css('width', Math.round(wstable.width()*0.9) + 'px');
+	}
+
     });
     //Create table plots after typesetting is done and non-plot TDs are fixed
     // (note: table must be visible to compute widths correctly)
@@ -181,6 +189,14 @@ function trigger_wsplot_plot_creation(id) {
     wsplot.css("width", max_width(plots));
     wsplot.css("height", max_height(plots));
     console.log("Handshake: resizing container to = " + max_width(plots) + ", " + max_height(plots));
+
+    // 6) If this table is within a <figure> tag try to set
+    //    caption detail's width based on rendered table width
+    caption = wsplot.closest('figure').children('figcaption:first');
+    if(caption.length > 0) {
+        caption.css('width', Math.round(wsplot.width()*0.9) + 'px');
+    }
+
 }
 
 

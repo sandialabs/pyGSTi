@@ -146,6 +146,10 @@ a[href^="#"] {
 figure {
   counter-increment: figure;
 }
+figcaption {
+    margin: auto;
+    text-alight: center;
+}
 figcaption:before {
   content: "Figure " counter(figure) ". ";
 }
@@ -495,7 +499,12 @@ div.sidenav a.active {
 }
 
 .captiondetail {
+    display: none;
     font-weight: normal;
+    text-align: left;
+}
+.showcaption {
+    display: block !important;
 }
 
 #status {
