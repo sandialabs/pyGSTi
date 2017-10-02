@@ -1283,8 +1283,8 @@ class ColorBoxPlot(WorkspacePlot):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
+        fig = None
         addl_hover_info_fns = _collections.OrderedDict()
-
 
         # Begin "Additional sub-matrix" functions for adding more info to hover text
         def list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
@@ -1475,15 +1475,21 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False) #invalid colormapType was set above
 
             if scatter:
-                fig = gatestring_color_scatterplot(gss, subMxs, colormap,
+                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
                                                       False, boxLabels, prec,
                                                       hoverInfo, sumUp, ytitle,
                                                       scale, addl_hover_info)
             else:
-                fig = gatestring_color_boxplot(gss, subMxs, colormap,
+                newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                                   False, boxLabels, prec,
                                                   hoverInfo, sumUp, invert,
                                                   scale, addl_hover_info)
+
+            if fig is None:
+                fig = newfig
+            else:
+                newfig['plotlyfig']['data'][0].update(visible=False)
+                fig['plotlyfig']['data'].append(newfig['plotlyfig']['data'][0])
 
         nTraces = len(fig['plotlyfig']['data'])
         assert(nTraces == len(plottypes))
