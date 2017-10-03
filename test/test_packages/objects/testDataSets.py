@@ -387,9 +387,9 @@ Gx^4 20 80 0.2 100
         ds.add_count_list( ('Gx','Gy'), [20,80] )
         ds.add_count_list( ('Gx','Gx'), [30,70] ) # a duplicate
         self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
-        self.assertEqual( ds.keys(stripOccuranceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
+        self.assertEqual( ds.keys(stripOccurrenceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
-        ds.set_row( ('Gx','Gx'), {'0': 5, '1': 95}, occurance=1 ) #test set_row with occurance arg
+        ds.set_row( ('Gx','Gx'), {'0': 5, '1': 95}, occurrence=1 ) #test set_row with occurrence arg
 
 
     def test_tddataset_construction(self):
