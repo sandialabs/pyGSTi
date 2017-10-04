@@ -7,9 +7,19 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 #comm = None
 
+
 def main():
     gs_target  = std1Q_XYI.gs_target
     gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001).rotate(0.1)
+
+    #DEBUG
+    #del gs_target.spamdefs['1']
+    #del gs_datagen.spamdefs['1']
+    print(gs_datagen.get_prep_labels())
+    print(gs_datagen.get_effect_labels())
+    print(gs_datagen.num_elements(include_povm_identity=True))
+    print(gs_datagen.spamdefs)
+    
     with timed_block('Basic gauge opt:'):
         gs_gaugeopt = gaugeopt_to_target(
             gs_datagen, gs_target, tol=1e-7,

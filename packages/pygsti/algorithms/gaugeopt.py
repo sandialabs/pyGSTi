@@ -351,8 +351,8 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             L = gs_pre.num_elements(include_povm_identity=True)
 
             #Compute "extra" (i.e. beyond the gateset-element) rows of jacobian
-            if cptp_penalty_factor != 0: L += len(gs_pre.gates)
-            if spam_penalty_factor != 0: L += len(gs_pre.preps)
+            if cptp_penalty_factor != 0: L += _cptp_penalty_size(gs_pre)
+            if spam_penalty_factor != 0: L += _spam_penalty_size(gs_pre)
 
             #Set basis for pentaly term calculation
             if cptp_penalty_factor != 0 or spam_penalty_factor != 0:
@@ -461,7 +461,8 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     return objective_fn(gs)
 
                 vec = gaugeGroupEl.to_vector()
-                _opt.check_jac(mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-7, errType='abs')
+                _opt.check_jac(mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, errType='abs',
+                               verbosity=1)
                 
             return jacMx
 
@@ -531,6 +532,21 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
     return objective_fn, jacobian_fn
 
 
+def _cptp_penalty_size(gs):
+    """
+    Helper function - *same* as that in core.py.
+    """
+    from ..algorithms.core import _cptp_penalty_size as _core_cptp_penalty_size
+    return _core_cptp_penalty_size(gs)
+
+def _spam_penalty_size(gs):
+    """
+    Helper function - *same* as that in core.py.
+    """
+    from ..algorithms.core import _spam_penalty_size as _core_spam_penalty_size
+    return _core_spam_penalty_size(gs)
+
+
 def _cptp_penalty(gs,prefactor,gateBasis):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
@@ -557,11 +573,10 @@ def _spam_penalty(gs,prefactor,gateBasis):
     Returns
     -------
     numpy array
-        a (real) 1D array of length len(gs.gates).
+        a (real) 1D array of length _spam_penalty_size(gs)
     """
     from ..algorithms.core import _spam_penalty as _core_spam_penalty
     return _core_spam_penalty(gs, prefactor, gateBasis)
-
 
 def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
                            gaugeGroupEl, prefactor, gateBasis, wrtFilter):
@@ -593,11 +608,9 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
             "chi should be Hermitian!"
 
-        U,s,Vt = _np.linalg.svd(chi)
-        sgnvals = [ sv/abs(sv) if (abs(sv) > 1e-7) else 0.0 for sv in s]
-        sgnchi = _np.dot(U,_np.dot(_np.diag(sgnvals),Vt))
+        sgnchi = _tools.matrix_sign(chi)
         assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
-            "sngchi should be Hermitian!"
+            "sgnchi should be Hermitian!"
         
         # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
         # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
@@ -613,11 +626,9 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
             dchi_std[p] = _tools.fast_jamiolkowski_iso_std(result[p], gateBasis) # "M(results)"
             assert(_np.linalg.norm(dchi_std[p] - dchi_std[p].T.conjugate()) < 1e-8) #check hermitian
 
-        dchi_std = _np.conjugate(dchi_std) # I'm not sure
-          # why this is needed: I think b/c els of sgnchi and MdGdp_std[p]
-          # are hermitian and we want to think of the real and im parts of
-          # (i,j) and (j,i) els as the two "variables" we differentiate wrt.
-          # TODO: work this out on paper.
+        dchi_std = _np.conjugate(dchi_std) # so element-wise multiply
+          # of complex number (einsum below) results in separately adding
+          # Re and Im parts (also see NOTE in spam_penalty_jac_fill below)
 
         #contract to get (note contract along both mx indices b/c treat like a
         # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
@@ -634,10 +645,19 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
                            gaugeGroupEl, prefactor, gateBasis, wrtFilter):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (len(gs.preps), gaugeGroupEl.num_params()).
+    Returns a (real) array of shape (_spam_penalty_size(gs), gaugeGroupEl.num_params()).
     """
     BMxs = gateBasis.get_composite_matrices() #shape [gs.dim, dmDim, dmDim]
-    ddenMxdV = BMxs # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+    ddenMxdV = dEMxdV = BMxs.conjugate() # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
+      #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
+      # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
+      # in order to gather the different components of the total derivative of the trace-norm
+      # wrt some spam-vector change dV.  If left un-conjugated, we'd get A*B + A.C*B.C (just
+      # taking the (i,j) and (j,i) elements of the sum, say) which would give us
+      # 2*Re(A*B) = A.r*B.r - B.i*A.i when we *want* (b/c Re and Im parts are thought of as
+      # separate, independent degrees of freedom) A.r*B.r + A.i*B.i = 2*Re(A*B.C) -- so
+      # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
+    
     assert(ddenMxdV.size > 0), "Could not obtain basis matrices from " \
         + "'%s' basis for spam pentalty factor!" % gateBasis.name
 
@@ -662,11 +682,9 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
         
-        U,s,Vt = _np.linalg.svd(denMx)
-        sgnvals = [ sv/abs(sv) if (abs(sv) > 1e-7) else 0.0 for sv in s]
-        sgndm = _np.dot(U,_np.dot(_np.diag(sgnvals),Vt))
+        sgndm = _tools.matrix_sign(denMx)
         assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
-            "sngdm should be Hermitian!"
+            "sgndm should be Hermitian!"
 
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in gateBasis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
@@ -685,4 +703,79 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         spamPenaltyVecGradToFill[i,:] = v.real
         denMx = sgndm = dVdp = v = None #free mem
 
-    return len(gs_pre.preps) #the number of leading-dim indicies we filled in
+
+    # remainder effectvec has derivative wrt gauge parameters that is
+    # minus the sum of the derivatives for each term except with
+    # sgn(EMx) replaced with sgn(EcMx).
+    if gs_post._remainderlabel in gs_post.get_effect_labels():
+        EcMx = _tools.vec_to_stdmx( gs_post.effects[gs_post._remainderlabel], gateBasis)
+        assert(_np.linalg.norm(EcMx - EcMx.T.conjugate()) < 1e-4), \
+            "EMx should be Hermitian!"
+
+        sgnEc = _tools.matrix_sign(EcMx)
+        assert(_np.linalg.norm(sgnEc - sgnEc.T.conjugate()) < 1e-4), \
+            "sgnEc should be Hermitian!"
+
+        #Initialize Ec derivative with derivative of povm_identity term
+        # within Ec (which transforms under gauge optimizations) - see below
+        pre_effectvec = gs_pre.povm_identity
+        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
+        vc =  _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
+        vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx)))
+        assert(_np.linalg.norm(vc.imag) < 1e-4)
+        
+        iC = len(gs_post.preps) + len(gs_post.effects) # index corresponding to |Ec|_Tr term
+        spamPenaltyVecGradToFill[iC,:] = vc.real
+    else:
+        EcMx = sgnEc = iC = None
+
+        
+    # d( sqrt(|EMx|_Tr) ) = (0.5 / sqrt(|EMx|_Tr)) * d( |EMx|_Tr )
+    # but here, unlike in core.py, EMx = StdMx(S.T * E) = StdMx(E')
+    # and we're differentiating wrt the parameters of S, the
+    # gaugeGroupEl.
+    
+    for i,(lbl,effectvec) in enumerate(gs_post.iter_effects(), start=len(gs_post.preps)):
+
+        #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
+        EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+        dmDim = EMx.shape[0]
+        assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
+            "denMx should be Hermitian!"
+
+        sgnE = _tools.matrix_sign(EMx)
+        assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
+            "sgnE should be Hermitian!"
+
+        # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
+        #                      = [effectvec.T * dS].T
+        #  OR = dS.T * effectvec
+        pre_effectvec = gs_pre.effects[lbl]
+        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
+          # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
+        assert(dVdp.shape == (d,n))
+
+        # EMx = sum( spamvec[i] * Bmx[i] )
+
+        #contract to get (note contract along both mx indices b/c treat like a mx basis):
+        # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
+        # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
+        v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
+        assert(_np.linalg.norm(v.imag) < 1e-4)
+        spamPenaltyVecGradToFill[i,:] = v.real
+
+        if sgnEc is not None: #Add contribution of derivative of this effect within |Ec|_Tr
+            vc =  -1.0 * _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
+            vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx))) #add 0.5/|EcMx|_Tr factor
+            assert(_np.linalg.norm(vc.imag) < 1e-4)
+            spamPenaltyVecGradToFill[iC,:] += vc.real
+            vc = None
+            
+        denMx = sgndm = dVdp = v = None #free mem
+
+    #return the number of leading-dim indicies we filled in
+    if sgnEc is not None:
+        return len(gs_post.preps) + len(gs_post.effects) + 1
+    else:
+        return len(gs_post.preps) + len(gs_post.effects)

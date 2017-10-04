@@ -204,6 +204,9 @@ def nullspace_qr(m, tol=1e-7):
     
     return q[:,rank:]
 
+def matrix_sign(M):
+    U,s,Vt = _np.linalg.svd(M)
+    return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):
     """

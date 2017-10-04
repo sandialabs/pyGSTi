@@ -141,6 +141,8 @@ def tracenorm(A):
     A : numpy array
         The matrix to compute the trace norm of.
     """
+    assert(_np.linalg.norm(A - _np.conjugate(A.T)) < 1e-8), \
+        "'tracenorm' is currenlty only implemented for Hermitian matrices"
     evals = _np.linalg.eigvals( A )
     return sum( [abs(ev) for ev in evals] )
 
