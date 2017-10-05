@@ -80,10 +80,11 @@ def read_contents(filename):
     contents = None
     try: #on Windows using python3 open can fail when trying to read text files. encoding fixes this
         f = open(filename)
+        contents = f.read()
     except UnicodeDecodeError:
         f = open(filename, encoding='utf-8') #try this, but not available in python 2.7!
-        
-    contents = f.read()
+        contents = f.read()
+
     f.close()
     
     try: # to convert to unicode since we use unicode literals
