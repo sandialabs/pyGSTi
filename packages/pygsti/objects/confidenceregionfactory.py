@@ -40,38 +40,49 @@ from .verbosityprinter import VerbosityPrinter
 #     is the difference between the expected (mean) lambda (=K-K') and what
 #     we actually observe (=lambda(G_mle)).
 #
-#TODO: add "type" argument to ConfidenceRegion constructor?
-#   ==> "std" or "non-markovian"
-
-#Helpers
-
 
 class ConfidenceRegionFactory(object):
     """
-    Encapsulates a hessian-based confidence region in gate-set space.
+    An object which is capable of generating confidence intervals/regions.
 
-    A ConfidenceRegion computes and stores the quadratic form for an approximate
-    confidence region based on a confidence level and a hessian, typically of either
-    loglikelihood function or its proxy, the chi2 function.
+    Often times, it does so by holding the Hessian of a fit function with
+    respect to a `GateSet`'s parameters and related projections of it onto the
+    non-gauge space.
+
+    Alternative (non-Hessian-based) means of computing confidence intervals
+    are also available, such as by using so-called "linear reponse error bars".
     """
 
     def __init__(self, parent, gateset_lbl, gatestring_list_lbl,
                  hessian=None, nonMarkRadiusSq=None):
         """
-        Initializes a new ConfidenceRegion.
+        Initializes a new ConfidenceRegionFactory.
 
         Parameters
         ----------
-        gateset : GateSet
-            the gate set point estimate that maximizes the logl or minimizes
-            the chi2, and marks the point in gateset-space where the Hessian
-            has been evaluated.
+        parent : Estimate
+            the parent estimate object, needed to resolve gate set and gate
+            string list labels.
 
-        hessian : numpy array
-            A nParams x nParams Hessian matrix, where nParams is the number
-            of dimensions of gateset space, i.e. gateset.num_params().  This 
-            can and must be None when `hessianProjection` equals
-            `linear response` (see below).
+        gateset_lbl : str
+            The key into the parent `Estimate`'s `.gatesets` dictionary that
+            gives the `GateSet` about which confidence regions will be 
+            constructed.
+
+        gatestring_list_lbl : str
+            The key into the parent `Results`'s `.gatestring_lists` dictionary
+            that specifies which gate sequences should be or were included 
+            when computing fit functions (the log-likelihood or chi2).
+
+        hessian : numpy array, optional
+            A pre-computed nParams x nParams Hessian matrix, where nParams is
+            the number of dimensions of gateset space, i.e. gateset.num_params().
+
+        nonMarkRadiusSq : float, optional
+            The non-Markovian radius associated with the goodness of fit found
+            at the point where `hessian` was computed.  This must be specified
+            whenver `hessian` is, and should be left as `None` when `hessian`
+            is not specified.
         """
 
         #May be specified (together) whey hessian has already been computed
@@ -105,18 +116,21 @@ class ConfidenceRegionFactory(object):
         self.parent = None # initialize to None upon unpickling
         
     def set_parent(self, parent):
+        """
+        Sets the parent Estimate object of this ConfidenceRegionFactory.
+        """
         self.parent = parent        
         
     def has_hessian(self):
         """
-        Returns whether or not the full Hessian has already been computed.
+        Returns whether or not the Hessian has already been computed.
 
-        When True, computation of confidence regions and intervals is
-        fast, since the difficult work of computing the inverse Hessian is
-        already done.  When False, a slower method must be used to estimate
-        the necessary portion of the Hessian.  The result of this function
-        is often used to decide whether or not to proceed with an error-bar
-        computation.
+        When True, :func:`project_hessian` can be used to project the
+        Hessian for use in creating confidence intervals.  When False,
+        either :func:`compute_hessian` can be called to compute the 
+        Hessian or slower methods must be used to estimate the necessary
+        portion of the Hessian.  The result of this function is often used
+        to decide whether or not to proceed with an error-bar computation.
 
         Returns
         -------
@@ -139,6 +153,24 @@ class ConfidenceRegionFactory(object):
 
         
     def compute_hessian(self, comm=None, memLimit=None):
+        """
+        Computes the Hessian for this factory.
+
+        Parameters
+        ----------
+        comm : mpi4py.MPI.Comm, optional
+            When not None, an MPI communicator for distributing the computation
+            across multiple processors.
+
+        memLimit : int, optional
+            A rough memory limit in bytes which restricts the amount of intermediate
+            values that are computed and stored.
+
+        Returns
+        -------
+        numpy.ndarray
+            The Hessian matrix (also stored internally)
+        """
         assert(self.parent is not None) # Estimate
         assert(self.parent.parent is not None) # Results
 
@@ -196,12 +228,20 @@ class ConfidenceRegionFactory(object):
         
         self.hessian = hessian
         self.nonMarkRadiusSq = nonMarkRadiusSq
+        return hessian
 
 
 
     def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000):
         """
-        hessianProjection : string, optional
+        Projects the Hessian onto the non-gauge space.
+
+        This is a necessary step before confidence regions/intervals can be
+        computed via Hessian-based methods.
+
+        Parameters
+        ----------
+        projection_type : string
             Specifies how (and whether) to project the given hessian matrix
             onto a non-gauge space.  Allowed values are:
 
@@ -222,13 +262,22 @@ class ConfidenceRegionFactory(object):
               computation of the entire Hessian matrix, which can be 
               prohibitively costly on large parameter spaces.
 
+        label : str, optional
+            The internal label to use for this projection.  If None, then
+            `projection_type` is used, which is usually fine.
+
         tol : float, optional
             Tolerance for optimal Hessian projection.  Only used when
-            hessianProjection == 'optimal gate CIs'
+            `projection_type == 'optimal gate CIs'`.
 
         maxiter : int, optional
             Maximum iterations for optimal Hessian projection.  Only used when
-            hessianProjection == 'optimal gate CIs'
+            `projection_type == 'optimal gate CIs'`.
+        
+        Returns
+        -------
+        numpy.ndarray
+            The *inverse* of the projected Hessian matrix (also stored internally)
         """
         assert(self.hessian is not None), "No hessian! Compute it using 'compute_hessian'"
         
@@ -276,14 +325,19 @@ class ConfidenceRegionFactory(object):
             'tol': tol,
             'maxiter': maxiter
         }
+        return inv_projected_hessian
 
 
 
-    def enable_linear_response_errorbars(self, linresponse_mlgst_params, comm=None, memLimit=None):
+    def enable_linear_response_errorbars(self, linresponse_mlgst_params):
         """
-                linresponse_mlgst_params : dict, optional
-            Only used when `hessianProjection == 'linear response'`, this 
-            dictionary gives the arguments passed to the :func:`do_mlgst`
+        Stores the parameters needed to run (on-demand) the ML-GST
+        optimizations needed to compute error bars on quantities.
+
+        Parameters
+        ----------
+        linresponse_mlgst_params : dict
+            the arguments passed to the :func:`do_mlgst`
             calls used to compute linear-response error bars.
         """
         assert(self.parent is not None) # Estimate
@@ -300,8 +354,8 @@ class ConfidenceRegionFactory(object):
         spam_penalty_factor = parameters.get('spamPenaltyFactor',0)
         aliases = parameters.get('gateLabelAliases',None)
         distributeMethod = parameters.get('distributeMethod','deriv')
-        if memLimit is None:
-            memLimit = parameters.get('memLimit',None)
+        memLimit = parameters.get('memLimit',None)
+        comm = parameters.get('comm',None)
         
         self.linresponse_mlgst_params = {
             'dataset': dataset,
@@ -321,8 +375,31 @@ class ConfidenceRegionFactory(object):
     def view(self, confidenceLevel, regionType='normal',
              hessian_projection_label=None):
         """
+        Constructs a "view" of this ConfidenceRegionFactory for a particular
+        type and confidence level.  The returned view object can then be used to 
+        construct confidence intervals/regions.
+
+        Parameters
+        ----------
         confidenceLevel : float
             The confidence level as a percentage, i.e. between 0 and 100.
+
+        regionType : {'normal', 'non-markovian'}
+            The type of confidence regions.  `'normal'` constructs standard
+            intervals based on the inverted Hessian matrix or linear-response
+            optimizations.  `'non-markovian'` attempts to enlarge the intervals
+            to account for the badness-of-fit at the current location.
+
+        hessian_projection_label : str, optional
+            A label specifying which Hessian projection to use (only useful
+            when there are multiple).  These labels are either the 
+            `projection_type` values of :func:`project_hessian` or the
+            custom `label` argument provided to that function.  If None,
+            then the most recent (perhaps the only) projection is used.
+
+        Returns
+        -------
+        ConfidenceRegionFactoryView
         """
         inv_hessian_projection = None
         linresponse_mlgst_params = None
@@ -469,6 +546,28 @@ class ConfidenceRegionFactoryView(object):
     def __init__(self, gateset, inv_projected_hessian, mlgst_params, confidenceLevel,
                  nonMarkRadiusSq, nNonGaugeParams, nGaugeParams):
         """
+        Creates a new ConfidenceRegionFactoryView.
+
+        Usually this constructor is not called directly, and objects of
+        this type are obtained by calling the :method:`view` method of
+        a `ConfidenceRegionFactory` object.
+
+        Parameters
+        ----------
+        gateset : GateSet
+            The gateset at the center of this confidence region.
+
+        inv_projected_hessian : numpy.ndarray
+            The computed inverse of the non-gauge-projected Hessian.
+
+        mlgst_params : dict
+            A dictionary of ML-GST parameters only used for linear-response
+            error bars.
+
+        confidenceLevel : float
+            the confidence level (between 0 and 100) used in
+            the computation of confidence regions/intervals.
+
         nonMarkRadiusSq : float, optional
             When non-zero, "a non-Markovian error region" is constructed using
             this value as the squared "non-markovian radius". This specifies the
@@ -479,8 +578,11 @@ class ConfidenceRegionFactoryView(object):
             zero (the default), a standard and thereby statistically rigorous
             conficence region is created.  Non-zero values should only be
             supplied if you really know what you're doing.
-        """
 
+        nNonGaugeParams, nGaugeParams : int
+            The numbers of non-gauge and gauge parameters, respectively.  These could be
+            computed from `gateset` but they're passed in to save compuational time.
+        """
     
         #Scale projected Hessian for desired confidence level => quadratic form for confidence region
         # assume hessian gives Fisher info, so asymptotically normal => confidence interval = +/- seScaleFctr * 1/sqrt(hessian)
@@ -572,6 +674,14 @@ class ConfidenceRegionFactoryView(object):
         return to_pickle
         
     def get_errobar_type(self):
+        """
+        Return the type of error bars this view will generate, either
+        "standard" or "non-markovian".
+
+        Returns
+        -------
+        str
+        """
         if self.nonMarkRadiusSq > 0:
             return "non-markovian"
         else:
@@ -609,7 +719,12 @@ class ConfidenceRegionFactoryView(object):
     def get_fn_confidence_interval(self, fnObj, eps=1e-7,
                                    returnFnVal=False, verbosity=0):
         """
-        Compute the confidence interval for a ReportableQtyFn.
+        Compute the confidence interval for an arbitrary function.
+
+        This "function", however, must be encapsulated as a 
+        `GateSetFunction` object, which allows it to neatly specify
+        what its dependencies are and allows it to compaute finite-
+        different derivatives more efficiently.
 
         Parameters
         ----------
@@ -764,7 +879,6 @@ class ConfidenceRegionFactoryView(object):
         return delta
         
 
-
     def _compute_df_from_gradF_hessian(self, gradF, f0, verbosity):
         """
         Internal function which computes error bars given an function value
@@ -837,7 +951,7 @@ class ConfidenceRegionFactoryView(object):
 
         return df
 
-
+#Helper functions
 def _create_empty_grad(val, nParams):
     """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
     if type(val) == float:
@@ -854,397 +968,6 @@ def _create_empty_gradF(f0, nParams):
         gradF = _create_empty_grad(f0,nParams)
     return gradF
 
-
-
-
-#OLD: TODO REMOVE
-# ---------------------------------- 
-#        
-#    def get_gate_fn_confidence_interval(self, fnOfGate, gateLabel, eps=1e-7,
-#                                        returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of a single gate.
-#
-#        Parameters
-#        ----------
-#        fnOfGate : function
-#            A function which takes as its only argument a gate matrix.  The
-#            returned confidence interval is based on linearizing this function
-#            and propagating the gateset-space confidence region.
-#
-#        gateLabel : string
-#            The label specifying which gate to use in evaluations of fnOfGate.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives of fnOfGate.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfGate along with it's confidence
-#            region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfGate.  Thus, shape of
-#            df matches that returned by fnOfGate.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of fnOfGate
-#            at the gate specified by gateLabel.
-#        """
-#
-#        nParams = self.gateset.num_params()
-#
-#        gateObj = self.gateset.gates[gateLabel].copy() # copy because we add eps to this gate
-#        gateMx = _np.asarray(gateObj).copy()
-#        gpo = self.gateset_offsets[gateLabel][0] #starting "gate parameter offset"
-#
-#        f0 = fnOfGate(gateMx) #function value at "base point" gateMx
-#        nGateParams = gateObj.num_params()
-#        gateVec0 = gateObj.to_vector()
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#
-#        for i in range(nGateParams):
-#            gateVec = gateVec0.copy(); gateVec[i] += eps; gateObj.from_vector(gateVec)
-#            if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                for ky in gradF:
-#                    gradF[ky][gpo + i] = ( fnOfGate( gateObj )[ky] - f0[ky] ) / eps
-#            else:
-#                gradF[gpo + i] = ( fnOfGate( gateObj ) - f0 ) / eps
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#
-#
-#    def get_gatestring_fn_confidence_interval(self, fnOfGatestringAndSet,
-#                                        gatestring, eps=1e-7,
-#                                        returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of a single gate string.
-#
-#        Parameters
-#        ----------
-#        fnOfGatestringAndSet : function
-#            A function which takes two arguments: a `GateString` and a `GateSet`.
-#            The returned confidence interval is based on linearizing this
-#            function and propagating the gateset-space confidence region.
-#
-#        gatestring : GateString
-#            The gate label sequence passed to fnOfGatestringAndSet.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfGatestringAndSet along with it's
-#            confidence region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfGatestringAndSet.  Thus,
-#            shape of df matches that returned by fnOfGatestringAndSet.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of 
-#            fnOfGatestringAndSet at the gate specified by gateLabel.
-#        """
-#
-#        nParams = self.gateset.num_params()
-#        gateset = self.gateset.copy() # copy because we add eps to this gateset
-#
-#        f0 = fnOfGatestringAndSet(gatestring, gateset) #function value at "base point"
-#        gatesetVec0 = gateset.to_vector()
-#        assert(len(gatesetVec0) == nParams)
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#
-#        for i in range(nParams):
-#            gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
-#            gateset.from_vector(gatesetVec)
-#            gateset.basis = self.gateset.basis #preserve basis since we've just perturbed a little
-#            if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                for ky in gradF:
-#                    gradF[ky][i] = ( fnOfGatestringAndSet( gatestring, gateset )[ky] - f0[ky] ) / eps
-#            else:
-#                gradF[i] = ( fnOfGatestringAndSet(gatestring, gateset) - f0 ) / eps
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#
-#
-#    def get_prep_fn_confidence_interval(self, fnOfPrep, prepLabel, eps=1e-7,
-#                                        returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of a single state prep.
-#
-#        Parameters
-#        ----------
-#        fnOfPrep : function
-#            A function which takes as its only argument a prepration vector.  The
-#            returned confidence interval is based on linearizing this function
-#            and propagating the gateset-space confidence region.
-#
-#        prepLabel : string
-#            The label specifying which preparation to use in evaluations of fnOfPrep.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives of fnOfPrep.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfPrep along with it's confidence
-#            region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfPrep.  Thus, shape of
-#            df matches that returned by fnOfPrep.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of fnOfPrep
-#            at the state preparation specified by prepLabel.
-#        """
-#
-#        nParams = self.gateset.num_params()
-#
-#        prepObj = self.gateset.preps[prepLabel].copy() # copy because we add eps to this gate
-#        spamVec = _np.asarray(prepObj).copy()
-#        gpo = self.gateset_offsets[prepLabel][0] #starting "gateset parameter offset"
-#
-#        f0 = fnOfPrep(spamVec) #function value at "base point"
-#        nPrepParams = prepObj.num_params()
-#        prepVec0 = prepObj.to_vector()
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#
-#        for i in range(nPrepParams):
-#            prepVec = prepVec0.copy(); prepVec[i] += eps; prepObj.from_vector(prepVec)
-#            if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                for ky in gradF:
-#                    gradF[ky][gpo + i] = ( fnOfPrep( prepObj )[ky] - f0[ky] ) / eps
-#            else:
-#                gradF[gpo + i] = ( fnOfPrep( prepObj ) - f0 ) / eps
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#
-#
-#    def get_effect_fn_confidence_interval(self, fnOfEffect, effectLabel, eps=1e-7,
-#                                        returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of a single POVM effect.
-#
-#        Parameters
-#        ----------
-#        fnOfEffect : function
-#            A function which takes as its only argument a POVM vector.  The
-#            returned confidence interval is based on linearizing this function
-#            and propagating the gateset-space confidence region.
-#
-#        effectLabel : string
-#            The label specifying which POVM to use in evaluations of fnOfEffect.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives of fnOfEffect.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfEffect along with it's confidence
-#            region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfEffect.  Thus, shape of
-#            df matches that returned by fnOfEffect.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of fnOfEffect
-#            at the POVM effect specified by effectLabel.
-#        """
-#
-#        nParams = self.gateset.num_params()
-#
-#        effectObj = self.gateset.effects[effectLabel].copy() # copy because we add eps to this gate
-#        spamVec = _np.asarray(effectObj).copy()
-#        f0 = fnOfEffect(spamVec) #function value at "base point"
-#
-#        if effectLabel not in self.gateset_offsets: #e.g. "remainder" is not...
-#            #Assume this effect label has not official "parameters" and just
-#            # return 0 as the confidence interval.
-#            return (0.0,f0) if returnFnVal else 0.0
-#
-#        gpo = self.gateset_offsets[effectLabel][0] #starting "gateset parameter offset"
-#        nEffectParams = effectObj.num_params()
-#        effectVec0 = effectObj.to_vector()
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#
-#        for i in range(nEffectParams):
-#            effectVec = effectVec0.copy(); effectVec[i] += eps; effectObj.from_vector(effectVec)
-#            if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                for ky in gradF:
-#                    gradF[ky][gpo + i] = ( fnOfEffect( effectObj )[ky] - f0[ky] ) / eps
-#            else:
-#                gradF[gpo + i] = ( fnOfEffect( effectObj ) - f0 ) / eps
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#
-#
-#    def get_gateset_fn_confidence_interval(self, fnOfGateset, eps=1e-7, returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of a GateSet.
-#
-#        Parameters
-#        ----------
-#        fnOfGateset : function
-#            A function which takes as its only argument a GateSet object.  The
-#            returned confidence interval is based on linearizing this function
-#            and propagating the gateset-space confidence region.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives of fnOfGateset.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfGateset along with it's confidence
-#            region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfGateset.  Thus, shape of
-#            df matches that returned by fnOfGateset.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of fnOfGateset
-#            at the gate specified by gateLabel.
-#        """
-#
-#        nParams = self.gateset.num_params()
-#
-#        gateset = self.gateset.copy() # copy because we add eps to this gateset
-#
-#        f0 = fnOfGateset(gateset) #function value at "base point" gateMx
-#        gatesetVec0 = gateset.to_vector()
-#        assert(len(gatesetVec0) == nParams)
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#
-#        for i in range(nParams):
-#            gatesetVec = gatesetVec0.copy(); gatesetVec[i] += eps
-#            gateset.from_vector(gatesetVec)
-#            gateset.basis = self.gateset.basis #preserve basis since we've just perturbed a little
-#            if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                for ky in gradF:
-#                    gradF[ky][i] = ( fnOfGateset( gateset )[ky] - f0[ky] ) / eps
-#            else:
-#                gradF[i] = ( fnOfGateset(gateset) - f0 ) / eps
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#
-#
-#    def get_spam_fn_confidence_interval(self, fnOfSpamVecs, eps=1e-7, returnFnVal=False, verbosity=0):
-#        """
-#        Compute the confidence interval for a function of spam vectors.
-#
-#        Parameters
-#        ----------
-#        fnOfSpamVecs : function
-#            A function which takes two arguments, rhoVecs and EVecs, each of which
-#            is a list of column vectors.  Note that the EVecs list will include
-#            *all* the effect vectors, including the a "compliment" vector.  The
-#            returned confidence interval is based on linearizing this function
-#            and propagating the gateset-space confidence region.
-#
-#        eps : float, optional
-#            Step size used when taking finite-difference derivatives of fnOfSpamVecs.
-#
-#        returnFnVal : bool, optional
-#            If True, return the value of fnOfSpamVecs along with it's confidence
-#            region half-widths.
-#
-#        verbosity : int, optional
-#            Specifies level of detail in standard output.
-#
-#        Returns
-#        -------
-#        df : float or numpy array
-#            Half-widths of confidence intervals for each of the elements
-#            in the float or array returned by fnOfSpamVecs.  Thus, shape of
-#            df matches that returned by fnOfSpamVecs.
-#
-#        f0 : float or numpy array
-#            Only returned when returnFnVal == True. Value of fnOfSpamVecs.
-#        """
-#        nParams = self.gateset.num_params()
-#
-#        f0 = fnOfSpamVecs(self.gateset.get_preps(), self.gateset.get_effects())
-#          #Note: .get_Evecs() can be different from .EVecs b/c the former includes compliment EVec
-#
-#        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-#        gradF = _create_empty_gradF(f0, nParams)
-#        gsEps = self.gateset.copy()
-#
-#        #loop just over parameterized objects - don't use get_preps() here...
-#        for prepLabel,rhoVec in self.gateset.preps.items():
-#            nRhoParams = rhoVec.num_params()
-#            off = self.gateset_offsets[prepLabel][0]
-#            vec = rhoVec.to_vector()
-#            for i in range(nRhoParams):
-#                vecEps = vec.copy(); vecEps[i] += eps
-#                gsEps.preps[prepLabel].from_vector(vecEps) #update gsEps parameters
-#                if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                    for ky in gradF:
-#                        gradF[ky][off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-#                                                             gsEps.get_effects() )[ky] - f0[ky] ) / eps
-#                else:
-#                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-#                                                     gsEps.get_effects() ) - f0 ) / eps
-#            gsEps.preps[prepLabel] = rhoVec.copy()  #reset gsEps (copy() just to be safe)
-#
-#        #loop just over parameterized objects - don't use get_effects() here...
-#        for ELabel,EVec in self.gateset.effects.items():
-#            nEParams = EVec.num_params()
-#            off = self.gateset_offsets[ELabel][0]
-#            vec = EVec.to_vector()
-#            for i in range(nEParams):
-#                vecEps = vec.copy(); vecEps[i] += eps
-#                gsEps.effects[ELabel].from_vector(vecEps) #update gsEps parameters
-#                if isinstance(f0, dict): #special behavior for dict: process each item separately
-#                    for ky in gradF:
-#                        gradF[ky][off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-#                                                             gsEps.get_effects() )[ky] - f0[ky] ) / eps
-#                else:
-#                    gradF[off + i] = ( fnOfSpamVecs( gsEps.get_preps(),
-#                                                     gsEps.get_effects() ) - f0 ) / eps
-#            gsEps.effects[ELabel] = EVec.copy()  #reset gsEps (copy() just to be safe)
-#
-#        return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
-#    
-# -------------------------------------------------------------
 
 
 

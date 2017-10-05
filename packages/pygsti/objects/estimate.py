@@ -141,7 +141,34 @@ class Estimate(object):
         self.gatesets[label] = gateset
         self.goparameters[label] = ordered_goparams
 
-    def add_confidence_region_factory(self, gateset_label='final iteration estimate', gatestrings_label='final'):
+    def add_confidence_region_factory(self,
+                                      gateset_label='final iteration estimate',
+                                      gatestrings_label='final'):
+        """
+        Creates a new confidence region factory.
+
+        An instance of :class:`ConfidenceRegionFactory` serves to create
+        confidence intervals and regions in reports and elsewhere.  This
+        function creates such a factory, which is specific to a given
+        `GateSet` (given by this object's `.gatesets[gateset_label]` ) and 
+        gate string list (given by the parent `Results`'s 
+        `.gatestring_lists[gastrings_label]` list).
+
+        Parameters
+        ----------
+        gateset_label : str, optional
+            The label of a `GateSet` held within this `Estimate`.
+
+        gatestrings_label : str, optional
+            The label of a gate string list within this estimate's parent
+            `Results` object.
+
+        Returns
+        -------
+        ConfidenceRegionFactory
+            The newly created factory (also cached internally) and accessible
+            via the :func:`get_confidence_region_factory` method.
+        """
         ky = CRFkey(gateset_label, gatestrings_label)
         if ky in self.confidence_region_factories:
             _warnings.warn("Confidence region factory for %s already exists - overwriting!" % str(ky))
@@ -151,7 +178,31 @@ class Estimate(object):
         return newCRF
                                                                                     
 
-    def get_confidence_region_factory(self, gateset_label, gatestrings_label='final', createIfNeeded=False):
+    def get_confidence_region_factory(self, gateset_label='final iteration estimate',
+                                      gatestrings_label='final', createIfNeeded=False):
+        """
+        Retrieves a confidence region factory for the given gate set
+        and gate string list labels.  For more information about
+        confidence region factories, see :func:`add_confidence_region_factory`.
+
+        Parameters
+        ----------
+        gateset_label : str, optional
+            The label of a `GateSet` held within this `Estimate`.
+
+        gatestrings_label : str, optional
+            The label of a gate string list within this estimate's parent
+            `Results` object.
+
+        createIfNeeded : bool, optional
+            If True, a new confidence region factory will be created if none
+            exists.  Otherwise a `KeyError` is raised when the requested 
+            factory doesn't exist.
+
+        Returns
+        -------
+        ConfidenceRegionFactory
+        """
         ky = CRFkey(gateset_label, gatestrings_label)
         if ky in self.confidence_region_factories:
             return self.confidence_region_factories[ky]
@@ -164,28 +215,30 @@ class Estimate(object):
             self, to_gateset_label, from_gateset_label='final iteration estimate',
             gatestrings_label = 'final', EPS=1e-3):
         """
-        Propagates an existing "reference" confidence region for some GateSet
+        Propagates an existing "reference" confidence region for a GateSet
         "G0" to a new confidence region for a gauge-equivalent gateset "G1".
 
-        When successful, a new confidence region will be created for the 
-        gauge-optimized gate set given by `label` and stored internally, as well
-        as returned.
+        When successful, a new confidence region factory is created for the 
+        `.gatesets[to_gateset_label]` `GateSet` and `gatestrings_label` gate
+        string list from the existing factory for `.gatesets[from_gateset_label]`.
 
         Parameters
         ----------
-        label : str
+        to_gateset_label : str
             The key into this `Estimate` object's `gatesets` and `goparameters`
-            dictionaries that identifies a gauge optimization result.  This 
-            gauge optimization must have begun at the reference gateset, i.e.,
-            `gatesets[from_gateset_label]` must equal (by frobeinus distance)
-            `goparameters[to_gateset_label]['gateset']`.
+            dictionaries that identifies the final gauge-optimized result to
+            create a factory for.  This gauge optimization must have begun at
+            "from" reference gateset, i.e., `gatesets[from_gateset_label]` must
+            equal (by frobeinus distance) `goparameters[to_gateset_label]['gateset']`.
 
-        confidenceLevel : float, optional
-            The confidence level as a percentage (0-100) of the reference
-            confidence region being propagated.
-
-        ref_gateset_key : str, optional
-            The key within `gatesets` of the reference gate set.
+        from_gateset_label : str, optional
+            The key into this `Estimate` object's `gatesets` dictionary
+            that identifies the reference gate set.
+        
+        gatestrings_label : str, optional
+            The key of the gate string list (within the parent `Results`'s
+            `.gatestring_lists` dictionary) that identifies the gate string
+            list used by the old (&new) confidence region factories.
 
         EPS : float, optional
             A small offset used for constructing finite-difference derivatives.
