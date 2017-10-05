@@ -216,19 +216,20 @@ class GateSet(object):
         return list(self.preps.keys())
 
 
-    def get_effect_labels(self):
+    def get_effect_labels(self, include_remainder=True):
         """
         Get all the effect vector labels present in a SPAM label.  This
         may include the special "remainder" label signifying the "complement"
-        effect vector, equal to Identity - sum(other effect vectors).
+        effect vector, equal to Identity - sum(other effect vectors), when
+        `include_remainder = True`.
 
         Returns
         -------
         list of strings
         """
         labels = list(self.effects.keys())
-        if any( [effectLabel == self._remainderlabel and
-                 prepLabel != self._remainderlabel
+        if include_remainder and any(
+                [effectLabel == self._remainderlabel and prepLabel != self._remainderlabel
                  for prepLabel,effectLabel in list(self.spamdefs.values())] ):
             labels.append( self._remainderlabel )
         return labels

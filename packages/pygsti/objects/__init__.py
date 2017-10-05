@@ -10,7 +10,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # the package namespace
 
 #Import Objects at package level
-from .confidenceregion import ConfidenceRegion
+from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
 from .tddataset import TDDataSet
 from .exceptions import *
@@ -44,6 +44,8 @@ from .datacomparator import DataComparator
 
 from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
     DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup
+
+from .results import Results
 
 #from gigateset import GaugeInvGateSet
 #Experimental only: don't import in production pyGSTi

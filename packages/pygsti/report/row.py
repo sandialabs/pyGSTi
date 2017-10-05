@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from .cell        import Cell
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 class Row(object):
     '''

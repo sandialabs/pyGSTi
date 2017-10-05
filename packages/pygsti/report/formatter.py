@@ -9,7 +9,7 @@ from copy import deepcopy
 
 from functools import partial
 
-from .reportableqty import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 class Formatter(object):
     '''

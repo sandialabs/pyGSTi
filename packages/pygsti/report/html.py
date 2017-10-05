@@ -15,7 +15,7 @@ from .. import objects as _objs
 from ..tools import compattools as _compat
 from .latex import vector as latex_vector
 from .latex import matrix as latex_matrix
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation

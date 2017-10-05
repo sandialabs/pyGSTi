@@ -9,7 +9,7 @@ Routines for converting python objects to python.
 """
 
 import collections as _collections
-from .reportableqty import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation

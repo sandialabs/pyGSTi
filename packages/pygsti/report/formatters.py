@@ -13,7 +13,7 @@ html  = converter('html')  # Retrieve low-level formatters
 latex = converter('latex')
 
 from .formatter import Formatter as _Formatter
-from .reportableqty import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 import cgi     as _cgi
 import numpy   as _np

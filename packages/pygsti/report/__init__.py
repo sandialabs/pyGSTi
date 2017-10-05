@@ -10,6 +10,5 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 # the package namespace
 from .reportables import *
 from .factory import *
-from .results import Results
 from .workspace import Workspace
 from .notebook import Notebook

@@ -13,7 +13,7 @@ import cmath
 import functools
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 '''
 This module defines type-differentiation for low level formatting types

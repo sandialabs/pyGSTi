@@ -435,7 +435,7 @@ def _set_toggles(results_dict):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, computecrs, comm):
+                               nmthreshold, comm):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -555,9 +555,12 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
-                        switchBd.cri[d,i,il] = est.get_confidence_region(
-                            est_confidenceLevel, l, "final",
-                            allowcreate=computecrs, comm=comm)
+                        try:
+                            crf = est.get_confidence_region_factory(l, 'final')
+                            region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
+                            switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
+                        except KeyError:
+                            switchBd.cri[d,i,il] = None
                     else: switchBd.cri[d,i,il] = NA
                     
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
@@ -569,8 +572,7 @@ def create_general_report(results, filename, title="auto",
                           linlogPercentile=5, errgen_type="logTiG",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
-                          cachefile=None, brief=False,
-                          connected=False, computecrs=True,
+                          cachefile=None, brief=False, connected=False, 
                           pdf_links=False, python_links=False, verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
@@ -653,13 +655,6 @@ def create_general_report(results, filename, title="auto",
         will link to web resources (e.g. CDN libraries) instead of embedding
         them.
 
-    computecrs : bool, optional
-        Whether to compute confidence regions as needed, according to
-        `confidenceLevel`.  If True, any absent confidence regions that would
-        be used are computed.  If False, only existing confidence regions are
-        used, and error bars are simply omitted when a confidence region is 
-        absent.
-
     pdf_links : bool, optional
         If True, render PDF versions of plots and tables, and create links 
         to them in the report.
@@ -721,8 +716,7 @@ def create_general_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
             _create_master_switchboard(ws, results_dict,
-                                       confidenceLevel, nmthreshold,
-                                       computecrs, comm)
+                                       confidenceLevel, nmthreshold, comm)
 
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?

@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from .row         import Row
 from .formatters  import formatDict    as _formatDict
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
 import re as _re
 

@@ -517,7 +517,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     #Get or Create the Resuts object we'll ultimately return
     ret = advancedOptions.get('appendTo',None)
     if ret is None:
-        ret = _report.Results()
+        ret = _objs.Results()
         ret.init_dataset(ds)
         ret.init_gatestrings(lsgstLists)
     else:
@@ -544,6 +544,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     parameters['radius'] = advancedOptions.get('radius',1e-4)
     parameters['weights'] = advancedOptions.get('gsWeights',None)
     parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
+    parameters['spamPenaltyFactor'] = advancedOptions.get('spamPenaltyFactor',0)
     parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
     parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
     parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
