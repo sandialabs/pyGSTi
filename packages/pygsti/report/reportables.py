@@ -111,6 +111,32 @@ Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
 # init args == (gatesetA, gatesetB, gatestring) 
 
 
+#Example alternate implementation that utilizes evaluate_nearby...
+#class Gatestring_gaugeinv_diamondnorm(_gsf.GateSetFunction):
+#    def __init__(self, gatesetA, gatesetB, gatestring):
+#        B = gatesetB.product(gatestring)
+#        self.evB = _np.linalg.eigvals(B)
+#        self.gatestring = gatestring
+#        _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
+#            
+#    def evaluate(self, gateset):
+#        A = gateset.product(self.gatestring)
+#        evA, evecsA = _np.linalg.eig(A)
+#        self.A0, self.evA0, self.evecsA0, self.ievecsA0 = A, evA, evecsA, _np.linalg.inv(evecsA) #save for evaluate_nearby...
+#        wts, self.pairs = _tools.minweight_match(evA, self.evB, lambda x,y: abs(x-y), return_pairs=True)
+#        return _np.max(wts)
+#
+#    def evaluate_nearby(self, nearby_gateset):
+#        #avoid calling minweight_match again
+#        A = nearby_gateset.product(self.gatestring)
+#        dA = A - self.A0
+#        #evA = _np.linalg.eigvals(A)  # = self.evA0 + U * (A-A0) * Udag
+#        evA = _np.array( [ self.evA0 + _np.dot(self.ievecsA0[k,:], _np.dot(dA, self.evecsA0[:,k])) for k in range(dA.shape[0])] )
+#        return _np.max( [ abs(evA[i]-self.evB[j]) for i,j in self.pairs ] )
+#
+# ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
+
+
 def gatestring_gaugeinv_diamondnorm(gatesetA, gatesetB, gatestring):
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
