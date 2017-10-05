@@ -411,5 +411,6 @@ def enable_old_python_results_unpickling():
         def __init__(self):
             self.ResultCache = dummy_ResultCache
     _sys.modules[__name__].ResultOptions = dummy_ResultOptions
+    _sys.modules[__name__].Estimate = _Estimate
     _sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
     _sys.modules['pygsti.report.results'] = _sys.modules[__name__]

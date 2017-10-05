@@ -440,6 +440,10 @@ class Estimate(object):
         return  to_pickle
 
     def __setstate__(self, stateDict):
+        if 'confidence_regions' in stateDict: #BACKWARDS COMPATIBILITY
+            del stateDict['confidence_regions']
+            stateDict['confidence_region_factories'] = _collections.OrderedDict()
+            
         self.__dict__.update(stateDict)
         for crf in self.confidence_region_factories.values():
             crf.set_parent(self)
