@@ -400,14 +400,16 @@ class Results(object):
              '  Please update this call with one to:\n'
              '  pygsti.report.create_general_report(...)\n'))
 
-class ResultOptions(object):
-    """ Unused.  Exists for sole purpose of loading old Results pickles """
-    pass
 
-#Define empty ResultCache class in resultcache module to enable loading old Results pickles
-import sys as _sys
-class dummy_ResultCache(object): pass
-class dummy_resultcache_module(object):
-    def __init__(self):
-        self.ResultCache = dummy_ResultCache
-_sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
+def enable_old_python_results_unpickling():
+    
+    #Define empty ResultCache class in resultcache module to enable loading old Results pickles
+    import sys as _sys
+    class dummy_ResultCache(object): pass
+    class dummy_ResultOptions(object): pass
+    class dummy_resultcache_module(object):
+        def __init__(self):
+            self.ResultCache = dummy_ResultCache
+    _sys.modules[__name__].ResultOptions = dummy_ResultOptions
+    _sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
+    _sys.modules['pygsti.report.results'] = _sys.modules[__name__]
