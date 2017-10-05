@@ -50,7 +50,7 @@ def spamfn_factory(fn):
             return fn(gateset.get_preps(), gateset.get_effects(),
                       *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 #Note: the 'basis' argument is unnecesary here, as it could be passed as an additional arg
@@ -83,7 +83,7 @@ def gatefn_factory(fn):
             return fn(gateset.gates[self.gl], gateset.basis,
                       *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
@@ -121,7 +121,7 @@ def gatesfn_factory(fn):
             return fn(gateset.gates[self.gl], self.other_gateset.gates[self.gl],
                       gateset.basis, *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
@@ -159,7 +159,7 @@ def vecfn_factory(fn):
             return fn(vecsrc[self.lbl], gateset.basis,
                       *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
@@ -201,7 +201,7 @@ def vecsfn_factory(fn):
             return fn(vecsrc[self.lbl], self.other_vecsrc[self.lbl],
                       gateset.basis,  *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
 
@@ -231,6 +231,6 @@ def gatesetfn_factory(fn):
         def evaluate(self, gateset):
             return fn(gateset, *self.args, **self.kwargs)
         
-    GSFTemp.__name__ = fn.__name__ + "_class"
+    GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
