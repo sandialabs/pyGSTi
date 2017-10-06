@@ -570,7 +570,7 @@ def minweight_match(a, b, metricfn=None, return_pairs=True):
 
     metricfn : function, optional
         A function of two float parameters, `x` and `y`,which defines the cost
-        associated with matching `x` with `y`.
+        associated with matching `x` with `y`.  If None, `abs(x-y)` is used.
 
     return_pairs : bool, optional
         If True, the matching is also returned.

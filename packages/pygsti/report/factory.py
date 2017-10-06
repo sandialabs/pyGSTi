@@ -755,10 +755,10 @@ def create_general_report(results, filename, title="auto",
 
     gsFinal = switchBd.gsFinal
     cri = switchBd.cri if (confidenceLevel is not None) else None
-    addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, gsFinal, cri)
+    addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
+           ['Target','Estimated'], cri)
     addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-                                                         ['Target','Estimated'],
-                                                         cri, includeHSVec=False)
+           ['Target','Estimated'], cri, includeHSVec=False)
     addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
@@ -776,7 +776,7 @@ def create_general_report(results, filename, title="auto",
                                         display=('giinf','gidm'), virtual_gates=germs)
     addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
                                          display=('inf','trace','diamond','uinf','agi','giinf','gidm'))
-    addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S"),
+    addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty('softwareEnvTable', ws.SoftwareEnvTable)
@@ -1002,7 +1002,9 @@ def create_report_notebook(results, filename, title="auto",
         if confidenceLevel is None:
             cri = None
         else:
-            cri = estimate.get_confidence_region(confidenceLevel, gopt)\
+            crfactory = estimate.get_confidence_region_factory(gopt)
+            region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
+            cri = crfactory.view(abs(confidenceLevel), region_type)\
     """.format(goLabel=goLabels[0], CL=confidenceLevel))
             
     nb.add_code("""\

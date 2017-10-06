@@ -749,7 +749,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
                              xlabel=None, ylabel=None,
                              boxLabels=False, colorbar=None, prec=0, scale=1.0,
-                             EBmatrix=None):
+                             EBmatrix=None, title=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -792,6 +792,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
         An array, of the same size as `gateMatrix`, which gives error bars to be
         be displayed in the hover info.
 
+    title : str, optional
+        A title for the plot
+
+
     Returns
     -------
     plotly.Figure
@@ -804,10 +808,13 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
         if mxBasisY is None:
             mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[0]))))
         mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[1]))))
+    else:
+        if mxBasisY is None and gateMatrix.shape[0] == gateMatrix.shape[1]:
+            mxBasisY = mxBasis #can use mxBasis, whatever it is
 
     if _tools.isstr(mxBasisY):
         mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(gateMatrix.shape[0]))))
-
+                
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
         if mxBasis.dim.gateDim > 1: yextra += .5
@@ -826,14 +833,15 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
     return matrix_color_boxplot(gateMatrix, m, M, xlabels, ylabels,
                                 xlabel, ylabel, xextra, yextra,
                                 boxLabels, thickLineInterval,
-                                colorbar, colormap, prec, scale, EBmatrix)
+                                colorbar, colormap, prec, scale,
+                                EBmatrix, title)
 
 
 def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
                          xlabel=None, ylabel=None, xextra=2.5, yextra=2.5,
                          boxLabels=False, thickLineInterval=None,
                          colorbar=None, colormap=None,
-                         prec=0, scale=1.0, EBmatrix=None):
+                         prec=0, scale=1.0, EBmatrix=None, title=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -886,6 +894,8 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
         An array, of the same size as `matrix`, which gives error bars to be
         be displayed in the hover info.
 
+    title : str, optional
+        A title for the plot
 
     Returns
     -------
@@ -978,6 +988,7 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
 
     #Set plot size and margins
     lmargin = rmargin = tmargin = bmargin = 20
+    if title: tmargin += 25
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
     max_xl = max([len(xl) for xl in xlabels])
@@ -1018,12 +1029,15 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
     #print("DB dims = ",width,height)
     
     layout = go.Layout(
+        title = title,
+        titlefont=dict(size=10*scale),
         width = width,
         height = height,
         margin = go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin), #pad=0
         xaxis=dict(
             side="top",
             title=xlabel,
+            titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
             showline=True,
@@ -1039,6 +1053,7 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
         yaxis=dict(
             side="left",
             title=ylabel,
+            titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
             showline=True,
@@ -1573,7 +1588,7 @@ class GateMatrixPlot(WorkspacePlot):
             - int >= 0 = fixed precision given by int
             - int <  0 = number of significant figures given by -int
     
-        mxBasisY : int or list, optional
+        mxBasisY : str or Basis object, optional
           The basis, used to create the y-labels (for rows) when these are
           *different* from the x-labels.  Typically in
           {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
@@ -1816,7 +1831,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
 class ProjectionsBoxPlot(WorkspacePlot):
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
                  boxLabels=False, colorbar=None, prec="compacthp", scale=1.0,
-                 EBmatrix=None):
+                 EBmatrix=None, title=None):
         """
         Creates a color box plot displaying projections.
 
@@ -1865,13 +1880,18 @@ class ProjectionsBoxPlot(WorkspacePlot):
         EBmatrix : numpy array, optional
             An array, of the same size as `projections`, which gives error bars to be
             be displayed in the hover info.
+
+        title : str, optional
+            A title for the plot
         """
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
-                                                 projection_basis, m, M,
-                                                 boxLabels, colorbar, prec, scale, EBmatrix)
+                                                projection_basis, m, M,
+                                                boxLabels, colorbar, prec, scale,
+                                                EBmatrix, title)
     def _create(self, projections,
                 projection_basis, m, M,
-                boxLabels, colorbar, prec, scale, EBmatrix):
+                boxLabels, colorbar, prec, scale,
+                EBmatrix, title):
 
         absMax = _np.max(_np.abs(projections))
         if m is None: m = -absMax
@@ -1906,7 +1926,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             _objs.Basis(projection_basis,xd),
             _objs.Basis(projection_basis,yd),
             xlabel, ylabel, boxLabels, colorbar, prec,
-            scale, EBmatrix)
+            scale, EBmatrix, title)
 
 
 

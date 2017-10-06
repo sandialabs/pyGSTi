@@ -44,7 +44,6 @@ class SpamTable(WorkspaceTable):
         gatesets : GateSet or list of GateSets
             The GateSet(s) whose SPAM elements should be displayed. If
             multiple GateSets are given, they should have the same gates.
-
     
         titles : list of strs, optional
             Titles correponding to elements of `gatesets`, e.g. `"Target"`.
@@ -158,15 +157,19 @@ class SpamTable(WorkspaceTable):
 
 #def get_gateset_spam_parameters_table(gateset, confidenceRegionInfo=None):
 class SpamParametersTable(WorkspaceTable):
-    def __init__(self, ws, gateset, confidenceRegionInfo=None):
+    def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None):
         """
         Create a table for gateset's "SPAM parameters", that is, the
         dot products of prep-vectors and effect-vectors.
     
         Parameters
         ----------
-        gateset : GateSet
-            The GateSet
+        gatesets : GateSet or list of GateSets
+            The GateSet(s) whose SPAM parameters should be displayed. If
+            multiple GateSets are given, they should have the same gates.
+
+        titles : list of strs, optional
+            Titles correponding to elements of `gatesets`, e.g. `"Target"`.
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -176,27 +179,37 @@ class SpamParametersTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(SpamParametersTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo)
+        super(SpamParametersTable,self).__init__(ws, self._create, gatesets, titles, confidenceRegionInfo)
 
-    def _create(self, gateset, confidenceRegionInfo):
-        colHeadings = [''] + list(gateset.get_effect_labels())
-        formatters  = [None] + [ 'Effect' ]*len(gateset.get_effect_labels())
+    def _create(self, gatesets, titles, confidenceRegionInfo):
+        
+        if isinstance(gatesets, _objs.GateSet):
+            gatesets = [gatesets]
+        if titles is None:
+            titles = ['']*len(gatesets)
+
+        colHeadings = [''] + list(gatesets[0].get_effect_labels())
+        formatters  = [None] + [ 'Effect' ]*len(gatesets[0].get_effect_labels())
     
         table       = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
-    
-        spamDotProdsQty = _ev( _reportables.Spam_dotprods(gateset), confidenceRegionInfo)
-        DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
-    
-        formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
-    
-        for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
-            rowData = [prepLabel]
-            for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
-                if confidenceRegionInfo is None:
-                    rowData.append((DPs[ii,jj],None))
-                else:
-                    rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
-            table.addrow(rowData, formatters)
+
+        for gstitle, gateset in zip(titles,gatesets):
+            cri = confidenceRegionInfo if (confidenceRegionInfo and
+                                           confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
+            spamDotProdsQty = _ev( _reportables.Spam_dotprods(gateset), cri)
+            DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
+        
+            formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
+        
+            for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
+                prefix = gstitle + " " if len(gstitle) else ""
+                rowData = [prefix + prepLabel]
+                for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
+                    if cri is None:
+                        rowData.append((DPs[ii,jj],None))
+                    else:
+                        rowData.append((DPs[ii,jj],DPEBs[ii,jj]))
+                table.addrow(rowData, formatters)
     
         table.finish()
         return table
@@ -666,7 +679,7 @@ class SpamVsTargetTable(WorkspaceTable):
 #    def get_gates_vs_target_err_gen_table(gateset, targetGateset, confidenceRegionInfo=None, genType="logG-logT"):
 class ErrgenTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
-                 display=("errgen","H","S"), display_as="boxes",
+                 display=("errgen","H","S","A"), display_as="boxes",
                  genType="logTiG"):
                  
         """
@@ -678,10 +691,10 @@ class ErrgenTable(WorkspaceTable):
         gateset, targetGateset : GateSet
             The gate sets to compare
 
-        display : tuple of {"errgen","H","S"}
-            Specifes which columns to include: the error generator itself,
-            the projections of the generator onto Hamiltoian-type error
-            generators, and/or the projections onto Stochastic-type errors.
+        display : tuple of {"errgen","H","S","A"}
+            Specifes which columns to include: the error generator itself
+            and the projections of the generator onto Hamiltoian-type error
+            (generators), Stochastic-type errors, and Affine-type errors.
 
         display_as : {"numbers", "boxes"}, optional
             How to display the requested matrices, as either numerical
@@ -720,15 +733,19 @@ class ErrgenTable(WorkspaceTable):
                 colHeadings.append('Hamiltonian Projections')
             elif disp == "S":
                 colHeadings.append('Stochastic Projections')
+            elif disp == "A":
+                colHeadings.append('Affine Projections')
             else: raise ValueError("Invalid display element: %s" % disp)
 
         assert(display_as == "boxes" or display_as == "numbers")
-        table = _ReportTable(colHeadings, (None,)*len(colHeadings) , confidenceRegionInfo=confidenceRegionInfo)
+        table = _ReportTable(colHeadings, (None,)*len(colHeadings),
+                             confidenceRegionInfo=confidenceRegionInfo)
 
         errgenAndProjs = { }
         errgensM = []
         hamProjsM = []
         stoProjsM = []
+        affProjsM = []
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
@@ -766,7 +783,12 @@ class ErrgenTable(WorkspaceTable):
             if "S" in display:
                 absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
                 addMax(stoProjsM, absMax)
-    
+
+            if "A" in display:
+                absMax = _np.max(_np.abs(info['affine projections'].get_value()))
+                addMax(affProjsM, absMax)
+
+                
         #Do plotting
         for gl in gateLabels:
             row_data = [gl]
@@ -788,11 +810,12 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
+                        T = "Power %.2g" % info['hamiltonian projection power'].get_value()
                         hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
                         m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -802,15 +825,30 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
+                        T = "Power %.2g" % info['stochastic projection power'].get_value()
                         stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
                         m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis.name, m, M,
-                            boxLabels=True, EBmatrix=EB) # basis.name because projector dim is not the same as gate dim
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
                         row_data.append(info['stochastic projections'])
+                        row_formatters.append('Brackets')
+
+                elif disp == "A":
+                    if display_as == "boxes":
+                        T = "Power %.2g" % info['affine projection power'].get_value()
+                        affProjs, EB = info['affine projections'].get_value_and_err_bar()
+                        m,M = getMinMax(affProjsM,_np.max(_np.abs(affProjs)))
+                        affdecomp_fig = _wp.ProjectionsBoxPlot(
+                            self.ws, affProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                        row_data.append(affdecomp_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(info['affine projections'])
                         row_formatters.append('Brackets')
 
             table.addrow(row_data, row_formatters)

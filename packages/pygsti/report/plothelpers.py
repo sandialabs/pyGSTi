@@ -392,13 +392,23 @@ def _eformat(f, prec):
     numbers in plot boxes
     """
     if _np.isnan(f): return "" #show NAN as blanks
-    if prec == 'compact' or prec == 'compacthp':
+    if 'compact' in prec:
         if f < 0:
-            return "-" + _eformat(-f,prec)
+            ef = _eformat(-f,prec)
+            return "-" + ef if (ef != "0") else "0"
 
         if prec == 'compacthp':
-            if f < 0.005: #can't fit in 2 digits; would just be .00, so just print "0"
+            if f <= 0.5e-9: #can't fit in 3 digits; 1e-9 = "1m9" is the smallest 3-digit (not counting minus signs)
                 return "0"
+            if f < 0.005: # then need scientific notation since 3-digit float would be 0.00...
+                s = "%.0e" % f
+                try:
+                    mantissa, exp = s.split('e')
+                    exp = int(exp); assert(exp < 0)
+                    if exp < -9: return "0" #should have been caugth above, but just in case
+                    return "%sm%d" % (mantissa, -exp)
+                except:
+                    return "?"
             if f < 1:
                 z = "%.2f" % f # print first two decimal places
                 if z.startswith("0."): return z[1:]  # fails for '1.00'; then thunk down to next f<10 case

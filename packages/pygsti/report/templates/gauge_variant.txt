@@ -22,7 +22,7 @@ ws.SpamTable([gs_target, gs],
 Computed by taking the dot products of vectors in bestGatesetSpamTable. The symbol $E_C$, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.
 
 @@code
-ws.SpamParametersTable(gs, cri)
+ws.SpamParametersTable([gs,gs_target], ['Estimated','Target'], cri)
 
 @@markdown
 ### Decomposition of estimated gates.
@@ -59,3 +59,19 @@ Compares the *ideal* (generally unitary) logic gates (second column, also in tar
 
 @@code
 ws.GatesTable([gs_target, gs], ['Target','Estimated'], "boxes", cri)
+
+
+@@markdown
+### The GST estimate of the logic gate operation generators.
+A heat map of the Error Generator for each gate, which is the Lindbladian $\mathbb{L}# that describes *how* the gate is failing to match the target.
+
+@@code
+errgen_type = "logTiG" # or "logG-logT"
+ws.ErrgenTable(gs, gs_target, cri, ("errgen","H","S","A"), "boxes", errgen_type)
+
+@@markdown
+### Choi matrix spectrum of the GST estimated gate set.
+The eigenvalues of the Choi representation of each estimated gate.  In the third column, magnitudes of *negative* values are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum $(1,0,0\ldots)$, just like pure quantum states.  Negative eigenvalues are non-physical, and may represent either statistical fluctuations or violations of the CPTP model used by GST.
+
+@@code
+ws.ChoiTable(gs, None, cri, display=("barplot",))

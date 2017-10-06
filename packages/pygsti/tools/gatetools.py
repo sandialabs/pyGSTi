@@ -766,6 +766,43 @@ def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
+def std_scale_factor(dim, projection_type):
+    """
+    Returns the multiplicative scaling that should be applied to the output of
+    :func"`std_error_generators`, before using them as projectors, in order to
+    compute the "standard" reported projection onto that type of error (i.e.
+    the coefficient of the standard generator terms built un-normalized-Paulis).
+
+    Parameters
+    ----------
+    dim : int
+      The dimension of the error generators; also the  associated gate
+      dimension.  This must be a perfect square, as `sqrt(dim)`
+      is the dimension of density matrices. For a single qubit, dim == 4.
+      
+    projection_type : {"hamiltonian", "stochastic", "affine"}
+      The type/class of error generators to get the scaling for.
+
+    Returns
+    -------
+    float
+    """
+    d2 = dim
+    d = int(_np.sqrt(d2))
+
+    if projection_type == "hamiltonian":
+        scaleFctr = 1.0 / ( d*_np.sqrt(2) )
+        # so projection is coefficient of Hamiltonian term (w/un-normalized Paulis)
+    elif projection_type == "stochastic":
+        scaleFctr = 1.0 / d
+        # so projection is coefficient of P*rho*P stochastic term in generator (w/un-normalized Paulis)
+    elif projection_type == "affine":
+        scaleFctr = 1.0 # so projection is coefficient of P affine term in generator (w/un-normalized Paulis)
+    else:
+        raise ValueError("Invalid projection_type argument: %s"
+                         % projection_type)
+    return scaleFctr
+
 
 def std_error_generators(dim, projection_type, projection_basis):
     """
@@ -780,11 +817,12 @@ def std_error_generators(dim, projection_type, projection_basis):
       associated gate dimension, and must be a perfect square, as `sqrt(dim)`
       is the dimension of density matrices. For a single qubit, dim == 4.
       
-    projection_type : {"hamiltonian", "stochastic"}
+    projection_type : {"hamiltonian", "stochastic", "affine"}
       The type of error generators to construct.  If "hamiltonian", then the
       Hamiltonian generators which take a density matrix rho -> -i*[ H, rho ]
       for Pauli-product matrix H.  If "stochastic", then the Stochastic error
-      generators which take rho -> P*rho*P for Pauli-product matrix P.
+      generators which take rho -> P*rho*P for Pauli-product matrix P.  If
+      "affine", then the affine generators which take rho -> P.
 
     projection_basis : {'std', 'gm', 'pp', 'qt'}
       Which basis is used to construct the error generators.  Allowed
@@ -797,7 +835,8 @@ def std_error_generators(dim, projection_type, projection_basis):
       An array of shape (#basis-elements,dim,dim).  `generators[i]` is the
       generator corresponding to the ith basis matrix in the 
       *std* (matrix unit) basis.  (Note that in most cases #basis-elements
-      == dim, so the size of `generators` is (dim,dim,dim) ).
+      == dim, so the size of `generators` is (dim,dim,dim) ).  Each 
+      generator is normalized so that as a vector it has unit Frobenius norm.
     """
     d2 = dim
     d = int(_np.sqrt(d2))
@@ -814,6 +853,8 @@ def std_error_generators(dim, projection_type, projection_basis):
             lindbladMxs[i] = _lt.hamiltonian_to_lindbladian(basisMx) # in std basis
         elif projection_type == "stochastic":
             lindbladMxs[i] = _lt.stochastic_lindbladian(basisMx) # in std basis
+        elif projection_type == "affine":
+            lindbladMxs[i] = _lt.affine_lindbladian(basisMx) #in std basis
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
@@ -826,7 +867,8 @@ def std_error_generators(dim, projection_type, projection_basis):
 
 
 def std_errgen_projections(errgen, projection_type, projection_basis,
-                           mxBasis="gm", return_generators=False):
+                           mxBasis="gm", return_generators=False,
+                           return_scale_fctr=False):
     """
     Compute the projections of a gate error generator onto generators
     for a standard set of errors constructed from the elements of a 
@@ -837,12 +879,13 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     errgen: : ndarray
       The error generator matrix to project.
       
-    projection_type : {"hamiltonian", "stochastic"}
+    projection_type : {"hamiltonian", "stochastic", "affine"}
       The type of error generators to project the gate error generator onto.
       If "hamiltonian", then use the Hamiltonian generators which take a density
       matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.  If "stochastic",
       then use the Stochastic error generators which take rho -> P*rho*P for
-      Pauli-product matrix P (recall P is self adjoint).
+      Pauli-product matrix P (recall P is self adjoint).  If "affine", then
+      use the affine error generators which take rho -> P (superop is |P>><<1|).
 
     projection_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
@@ -858,6 +901,11 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       If True, return the error generators projected against along with the
       projection values themseves.
 
+    return_scale_fctr : bool, optional
+      If True, also return the scaling factor that was used to multply the
+      projections onto *normalized* error generators to get the returned
+      values.
+
     Returns
     -------
     projections : numpy.ndarray
@@ -870,6 +918,10 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       (#basis-els,gate_dim,gate_dim) such that  `generators[i]` is the
       generator corresponding to the i-th basis element.  Note 
       that these matricies are in the *std* (matrix unit) basis.
+
+    scale : float
+      Only returned when `return_scale_fctr == True`.  A mulitplicative
+      scaling constant that *has already been applied* to `projections`.
     """
 
     errgen_std = change_basis(errgen, mxBasis, "std")
@@ -904,10 +956,13 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
             proj = abs(proj)
         projections[i] = proj
 
-    if return_generators:
-        return projections, lindbladMxs
-    else:
-        return projections
+    scaleFctr = std_scale_factor(d2, projection_type)
+    projections *= scaleFctr
+
+    ret = [projections]
+    if return_generators: ret.append(lindbladMxs)
+    if return_scale_fctr: ret.append(scaleFctr)
+    return ret[0] if len(ret)==1 else tuple(ret)
 
 
 def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
@@ -1431,7 +1486,36 @@ def project_gateset(gateset, targetGateset,
     ret_Nps = [ NpDict[p] for p in projectiontypes ]
     return ret_gs, ret_Nps
 
+def project_to_target_eigenspace(gateset, targetGateset):
+    """
+    Project each gate of `gateset` onto the eigenspace of the corresponding
+    gate within `targetGateset`.  Return the resulting `GateSet`.
 
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate set being projected and the gate set specifying the "target"
+        eigen-spaces, respectively.
+
+    Returns
+    -------
+    GateSet
+    """
+    ret = targetGateset.copy()
+    for gl,gate in gateset.gates:
+        evals_gate = _np.eigvals(gate)
+        evals, Utgt = _np.eigs(targetGateset.gates[gl])
+        _, pairs = minweight_match(evals, evals_gate, return_pairs=True)
+
+        for i,j in pairs: #replace target evals w/matching eval of gate
+            evals[i] = evals_gate[j]
+
+        ret.gates[gl] = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
+    return ret
+    
+
+
+#TODO: remove later? deprecate?
 def unitary_to_pauligate(U):
     """
     Get the linear operator on (vectorized) density

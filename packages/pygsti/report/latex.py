@@ -136,7 +136,7 @@ def vector(v, specs):
     """
     lines = [ ]
     for el in v:
-        lines.append( value(el, specs) )
+        lines.append( value(el, specs, mathmode=True) )
     if specs['brackets']:
         return "\\ensuremath{ \\begin{pmatrix}\n" + \
                 " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
@@ -171,16 +171,16 @@ def matrix(m, specs):
 
     for r in range(m.shape[0]):
         lines.append( " & ".join(
-                [value(el, specs) for el in m[r,:] ] ) )
+                [value(el, specs, mathmode=True) for el in m[r,:] ] ) )
 
     if specs['brackets']:
-        return prefix + "$ \\begin{pmatrix}\n"  + \
-        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+        return prefix + "\\ensuremath{ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
     else:
-        return prefix + "$ \\begin{pmatrix}\n"  + \
-        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+        return prefix + "\\ensuremath{ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
 
-def value(el, specs):
+def value(el, specs, mathmode=False):
     """
     Convert a floating point or complex value to latex.
 
@@ -191,6 +191,12 @@ def value(el, specs):
 
     specs : dictionary
         Dictionary of user-specified and default parameters to formatting
+
+    mathmode : bool, optional
+        Whether this routine should assume that math-mode is already enabled and
+        output is free to contain math-mode instructions.  When False, whenever
+        math-mode instructions are needed the output is wrapped in an
+        'ensuremath' block.
 
     Returns
     -------
@@ -219,7 +225,10 @@ def value(el, specs):
         p = s.split('e')
         if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
-            s = p[0] + "\\times 10^{" + ex + "}"
+            if mathmode:
+                s = p[0] + "\\times 10^{" + ex + "}"
+            else: #ensure math mode so \times and ^ will work
+                s = "\\ensuremath{ " + p[0] + "\\times 10^{" + ex + "} }"
 
         #Strip superfluous endings
         if "." in s:
@@ -240,7 +249,11 @@ def value(el, specs):
                     r,phi = cmath.polar(el)
                     ex = ("i%.*f" % (polarprecision, phi/_np.pi)) if phi >= 0 \
                         else ("-i%.*f" % (polarprecision, -phi/_np.pi))
-                    s = "%se^{%s\\pi}" % (render(r),ex)
+                    if mathmode:
+                        s = "%se^{%s\\pi}" % (render(r),ex)
+                    else: #ensure math mode so ^ will work
+                        s = "\\ensuremath{ %se^{%s\\pi} }" % (render(r),ex)
+
                 else:
                     s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
             else:

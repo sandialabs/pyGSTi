@@ -80,6 +80,42 @@ def stochastic_lindbladian(Q):
     return lindbladian
 
 
+def affine_lindbladian(Q):
+    """
+    Construct the Lindbladian corresponding to affine Q-errors.
+
+    Mathematically, for a d-dimensional matrix Q, this routine 
+    constructs the d^2-dimension Lindbladian matrix L whose
+    action is given by L(rho) = Q where rho is a density
+    matrix.  L is returned as a superoperator matrix that acts on a
+    vectorized density matrices.
+
+    Parameters
+    ----------
+    Q : ndarray
+      The matrix used to construct the Lindbladian.
+
+    Returns
+    -------
+    ndarray
+    """
+
+    #TODO: there's probably a fast & slick way to so this computation
+    #  using vectorization identities
+    assert(len(Q.shape) == 2)
+    assert(Q.shape[0] == Q.shape[1])
+    d = Q.shape[0]
+    Id = _np.identity(d,'d').flatten()
+    lindbladian = _np.zeros( (d**2,d**2), dtype=Q.dtype )
+    
+    for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
+        rho1 = Q * _np.dot(Id,rho0.flatten()) # get |Q>><Id|rho0
+        lindbladian[:,i] = rho1.flatten()
+          # vectorize rho1 & set as linbladian column
+
+    return lindbladian
+
+
 def nonham_lindbladian(Lm,Ln):
     """
     Construct the Lindbladian corresponding to generalized
