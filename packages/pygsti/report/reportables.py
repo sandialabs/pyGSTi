@@ -422,27 +422,27 @@ Gateset_gateset_angles_btwn_axes = _gsf.gatesfn_factory(gateset_gateset_angles_b
 def rel_eigvals(A, B, mxBasis):
     target_gate_inv = _np.linalg.inv(B)
     rel_gate = _np.dot(target_gate_inv, A)
-    return _np.linalg.eigvals(rel_gate)
+    return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_eigvals = _gsf.gatesfn_factory(rel_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logTiG_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logTiG")
-    return _np.linalg.eigvals(rel_gate)
+    return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logTiG_eigvals = _gsf.gatesfn_factory(rel_logTiG_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
-    return _np.linalg.eigvals(rel_gate)
+    return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logGmlogT_eigvals = _gsf.gatesfn_factory(rel_logGmlogT_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def rel_gate_eigenvalues(A, B, mxBasis):
     rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_gate)
+    return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_gate_eigenvalues = _gsf.gatesfn_factory(rel_gate_eigenvalues)
 # init args == (gateset1, gateset2, gateLabel)
 

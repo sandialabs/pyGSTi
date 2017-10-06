@@ -557,7 +557,8 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
 
 
 
-def minweight_match(a, b, metricfn=None, return_pairs=True):
+def minweight_match(a, b, metricfn=None, return_pairs=True,
+                    pass_indices_to_metricfn=False):
     """
     Matches the elements of two vectors, `a` and `b` by minimizing the
     weight between them, defined as the sum of `metricfn(x,y)` over
@@ -574,6 +575,10 @@ def minweight_match(a, b, metricfn=None, return_pairs=True):
 
     return_pairs : bool, optional
         If True, the matching is also returned.
+
+    pass_indices_to_metricfn : bool, optional
+        If True, the metric function is passed two *indices* into the `a` and
+        `b` arrays, respectively, instead of the values.
 
     Returns
     -------
@@ -592,8 +597,14 @@ def minweight_match(a, b, metricfn=None, return_pairs=True):
         
     D = len(a)
     weightMx = _np.empty((D,D),'d')
-    for i,x in enumerate(a):
-        weightMx[i,:] = [metricfn(x,y) for j,y in enumerate(b)]
+    
+    if pass_indices_to_metricfn:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(i,j) for j,y in enumerate(b)]
+    else:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(x,y) for j,y in enumerate(b)]
+            
     a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
 

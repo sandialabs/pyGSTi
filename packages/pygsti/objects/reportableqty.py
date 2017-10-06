@@ -128,7 +128,7 @@ class ReportableQty(object):
         else:
             v = _np.absolute( self.value - constant_value )
             if self.has_eb():
-                return ReportableQty( v, self.errbar, self.nonMarkovianEBs)
+                return ReportableQty( v, _np.absolute(self.errbar), self.nonMarkovianEBs)
             else:
                 return ReportableQty( v )
 

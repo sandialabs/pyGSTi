@@ -809,7 +809,8 @@ class ConfidenceRegionFactoryView(object):
                     for ky in gradF:
                         gradF[ky][gpo + i] = ( f[ky] - f0[ky] ) / eps
                 else:
-                    gradF[gpo + i] = ( f - f0 ) / eps
+                    assert( _np.linalg.norm(_np.imag(f-f0)) < 1e-12 or _np.iscomplexobj(gradF) ), "gradF seems to be the wrong type!"
+                    gradF[gpo + i] = _np.real_if_close( f - f0 ) / eps
 
         return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 
@@ -955,10 +956,10 @@ class ConfidenceRegionFactoryView(object):
 def _create_empty_grad(val, nParams):
     """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
     if type(val) == float:
-        gradVal = _np.zeros( nParams, 'd' ) #assume all functions are real-valued for now...
+        gradVal = _np.zeros( nParams, 'd' )
     else:
         gradSize = (nParams,) + tuple(val.shape)
-        gradVal = _np.zeros( gradSize, val.dtype ) #assume all functions are real-valued for now...
+        gradVal = _np.zeros( gradSize, val.dtype )
     return gradVal #gradient of value (empty)
 
 def _create_empty_gradF(f0, nParams):

@@ -1486,7 +1486,7 @@ def project_gateset(gateset, targetGateset,
     ret_Nps = [ NpDict[p] for p in projectiontypes ]
     return ret_gs, ret_Nps
 
-def project_to_target_eigenspace(gateset, targetGateset):
+def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     """
     Project each gate of `gateset` onto the eigenspace of the corresponding
     gate within `targetGateset`.  Return the resulting `GateSet`.
@@ -1497,20 +1497,35 @@ def project_to_target_eigenspace(gateset, targetGateset):
         The gate set being projected and the gate set specifying the "target"
         eigen-spaces, respectively.
 
+    EPS : float, optional
+        Small magnitude specifying how much to "nudge" the target gates
+        before eigen-decomposing them, so that their spectra will have the
+        same conjugacy structure as the gates of `gateset`.
+
     Returns
     -------
     GateSet
     """
     ret = targetGateset.copy()
-    for gl,gate in gateset.gates:
-        evals_gate = _np.eigvals(gate)
-        evals, Utgt = _np.eigs(targetGateset.gates[gl])
-        _, pairs = minweight_match(evals, evals_gate, return_pairs=True)
-
+    for gl,gate in gateset.iter_gates():
+        tgt_gate = targetGateset.gates[gl].copy()
+        tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
+        evals_gate,Ugate = _np.linalg.eig(gate)
+        evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
+        _, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
+        
+        evals = evals_gate.copy()
         for i,j in pairs: #replace target evals w/matching eval of gate
             evals[i] = evals_gate[j]
 
-        ret.gates[gl] = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
+        Utgt_inv = _np.linalg.inv(Utgt)
+        epgate = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
+        #print("DB: tgt_evals = ",evals_tgt)
+        #print("DB: evals = ",evals)
+        #print("DB: ",_np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv)))
+        #print("DB: imag norm = ",_np.linalg.norm(_np.imag(epgate)))
+        ret.gates[gl] = _np.real_if_close(epgate, tol=1000)
+
     return ret
     
 
