@@ -91,13 +91,15 @@ Choi_trace = _gsf.gatefn_factory(choi_trace) # init args == (gateset, gateLabel)
 
 
 def gate_eigenvalues(gate, mxBasis):
-    return _np.linalg.eigvals(gate)
+    return _np.array(sorted(_np.linalg.eigvals(gate),
+                            key=lambda ev: abs(ev), reverse=True))
 Gate_eigenvalues = _gsf.gatefn_factory(gate_eigenvalues)
 # init args == (gateset, gateLabel)
 
 
 def gatestring_eigenvalues(gateset, gatestring):
-    return _np.linalg.eigvals(gateset.product(gatestring))
+    return _np.array(sorted(_np.linalg.eigvals(gateset.product(gatestring)),
+                            key=lambda ev: abs(ev), reverse=True))
 Gatestring_eigenvalues = _gsf.gatesetfn_factory(gatestring_eigenvalues)
 # init args == (gateset, gatestring)
 
