@@ -549,7 +549,8 @@ def logTiG_and_projections(A, B, mxBasis):
             errgen,"hamiltonian",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['hamiltonian projections'] = proj
-    ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                           if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors
       
     proj, scale = \
@@ -557,7 +558,8 @@ def logTiG_and_projections(A, B, mxBasis):
             errgen,"stochastic",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['stochastic projections'] = proj
-    ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                          if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors
 
     proj, scale = \
@@ -565,7 +567,8 @@ def logTiG_and_projections(A, B, mxBasis):
             errgen,"affine",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['affine projections'] = proj
-    ret['affine projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['affine projection power'] = float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                     if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors  
     return ret
 LogTiG_and_projections = _gsf.gatesfn_factory(logTiG_and_projections)
@@ -584,7 +587,8 @@ def logGmlogT_and_projections(A, B, mxBasis):
             errgen,"hamiltonian",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['hamiltonian projections'] = proj
-    ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                           if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors
       
     proj, scale = \
@@ -592,7 +596,8 @@ def logGmlogT_and_projections(A, B, mxBasis):
             errgen,"stochastic",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['stochastic projections'] = proj
-    ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                          if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors
 
     proj, scale = \
@@ -600,7 +605,8 @@ def logGmlogT_and_projections(A, B, mxBasis):
             errgen,"affine",mxBasis.name,mxBasis,return_scale_fctr=True)
         # mxBasis.name because projector dim is not the same as gate dim
     ret['affine projections'] = proj
-    ret['affine projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2
+    ret['affine projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
+                                      if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors  
     return ret
 LogGmlogT_and_projections = _gsf.gatesfn_factory(logGmlogT_and_projections)
