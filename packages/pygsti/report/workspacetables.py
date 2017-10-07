@@ -528,14 +528,19 @@ class GatesVsTargetTable(WorkspaceTable):
             A tuple of one or more of the allowed options (see below) which
             specify which columns are displayed in the table.
 
-            - "inf" :     process infidelity
+            - "inf" :     entanglement infidelity
+            - "agi" :     average gate infidelity
             - "trace" :   1/2 trace distance
             - "diamond" : 1/2 diamond norm distance
-            - "uinf" :    unitarity infidelity
-            - "agi" :     average gate infidelity
+            - "nuinf" :   non-unitary entanglement infidelity
+            - "nuagi" :   non-unitary entanglement infidelity
+            - "evinf" :     eigenvalue entanglement infidelity
+            - "evagi" :     eigenvalue average gate infidelity
+            - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+            - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+            - "evdiamond" : eigenvalue 1/2 diamond norm distance
+            - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
             - "frob" :    frobenius distance
-            - "giinf" :   gauge-invariant infidelity
-            - "gidm" :    gauge-invariant diamond norm
 
         virtual_gates : list, optional
             If not None, a list of `GateString` objects specifying additional "gates"
@@ -557,14 +562,19 @@ class GatesVsTargetTable(WorkspaceTable):
 
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
-            if disp == "inf":    colHeadings.append("Process|Infidelity")
-            elif disp == "trace": colHeadings.append("1/2 Trace|Distance")
-            elif disp == "diamond": colHeadings.append( "1/2 Diamond-Norm")
-            elif disp == "uinf": colHeadings.append("Unitarity|Infidelity")
+            if disp == "inf":    colHeadings.append("Entanglement|Infidelity")
             elif disp == "agi": colHeadings.append("Avg. Gate|Infidelity")
+            elif disp == "trace": colHeadings.append("1/2 Trace|Distance")
+            elif disp == "diamond": colHeadings.append( "1/2 Diamond-Dist")
+            elif disp == "nuinf": colHeadings.append("Non-unitary|Ent. Infidelity")
+            elif disp == "nuagi": colHeadings.append("Non-unitary|Avg. Gate Infidelity")
+            elif disp == "evinf": colHeadings.append("Eigenvalue|Ent. Infidelity")
+            elif disp == "evagi": colHeadings.append("Eigenvalue|Avg. Gate Infidelity")
+            elif disp == "evnuinf": colHeadings.append("Eigenvalue Non-U.|Ent. Infidelity")
+            elif disp == "evnuagi": colHeadings.append("Eigenvalue Non-U.|Avg. Gate Infidelity")
+            elif disp == "evdiamond": colHeadings.append("Eigenvalue|1/2 Diamond-Dist")
+            elif disp == "evnudiamond": colHeadings.append("Eigenvalue Non-U.|1/2 Diamond-Dist")
             elif disp == "frob": colHeadings.append("Frobenius|Distance")
-            elif disp == "giinf": colHeadings.append("Gauge Inv.|Infidelity")
-            elif disp == "gidm": colHeadings.append("Gauge Inv.|1/2 Diamond-Norm")
             else: raise ValueError("Invalid display column name: %s" % disp)
 
         formatters  = (None,) + ('Conversion',) * (len(colHeadings)-1)
@@ -585,29 +595,44 @@ class GatesVsTargetTable(WorkspaceTable):
 
             for disp in display:
                 if disp == "inf":
-                    fn = _reportables.Process_infidelity if b else \
-                         _reportables.Gatestring_process_infidelity
+                    fn = _reportables.Entanglement_infidelity if b else \
+                         _reportables.Gatestring_entanglement_infidelity
+                elif disp == "agi":
+                    fn = _reportables.Avg_gate_infidelity if b else \
+                         _reportables.Gatestring_avg_gate_infidelity
                 elif disp == "trace":
                     fn = _reportables.Jt_diff if b else \
                          _reportables.Gatestring_jt_diff
                 elif disp == "diamond":
                     fn = _reportables.Half_diamond_norm if b else \
                          _reportables.Gatestring_half_diamond_norm
-                elif disp == "uinf":
-                    fn = _reportables.Unitarity_infidelity if b else \
-                         _reportables.Gatestring_unitarity_infidelity
-                elif disp == "agi":
-                    fn = _reportables.Avg_gate_infidelity if b else \
-                         _reportables.Gatestring_avg_gate_infidelity
+                elif disp == "nuinf":
+                    fn = _reportables.Nonunitary_entanglement_infidelity if b else \
+                         _reportables.Gatestring_nonunitary_entanglement_infidelity
+                elif disp == "nuagi":
+                    fn = _reportables.Nonunitary_avg_gate_infidelity if b else \
+                         _reportables.Gatestring_nonunitary_avg_gate_infidelity
+                elif disp == "evinf":
+                    fn = _reportables.Eigenvalue_entanglement_infidelity if b else \
+                         _reportables.Gatestring_eigenvalue_entanglement_infidelity
+                elif disp == "evagi":
+                    fn = _reportables.Eigenvalue_avg_gate_infidelity if b else \
+                         _reportables.Gatestring_eigenvalue_avg_gate_infidelity
+                elif disp == "evnuinf":
+                    fn = _reportables.Eigenvalue_nonunitary_entanglement_infidelity if b else \
+                         _reportables.Gatestring_eigenvalue_nonunitary_entanglement_infidelity
+                elif disp == "evnuagi":
+                    fn = _reportables.Eigenvalue_nonunitary_avg_gate_infidelity if b else \
+                         _reportables.Gatestring_eigenvalue_nonunitary_avg_gate_infidelity
+                elif disp == "evdiamond":
+                    fn = _reportables.Eigenvalue_diamondnorm if b else \
+                         _reportables.Gatestring_eigenvalue_diamondnorm
+                elif disp == "evnudiamond":
+                    fn = _reportables.Eigenvalue_nonunitary_diamondnorm if b else \
+                         _reportables.Gatestring_eigenvalue_nonunitary_diamondnorm
                 elif disp == "frob":
                     fn = _reportables.Fro_diff if b else \
                          _reportables.Gatestring_fro_diff
-                elif disp == "giinf":
-                    fn = _reportables.Gaugeinv_infidelity if b else \
-                         _reportables.Gatestring_gaugeinv_infidelity
-                elif disp == "gidm":
-                    fn = _reportables.Gaugeinv_diamondnorm if b else \
-                         _reportables.Gatestring_gaugeinv_diamondnorm
                 qty = _ev( fn(gateset, targetGateset, gl), confidenceRegionInfo)
                 row_data.append( qty )
 

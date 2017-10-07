@@ -777,13 +777,13 @@ def create_general_report(results, filename, title="auto",
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
     addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
     addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
-                                        display=('inf','trace','diamond','uinf','agi'), virtual_gates=germs)        
+                                        display=('inf','agi','trace','diamond','nuinf','nuagi'), virtual_gates=germs)        
     addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
-                                        display=('giinf','gidm'))
+                                        display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
     addqty('bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsFinal, gsEP, cri, #TEST
-                                        display=('giinf','gidm'), virtual_gates=germs)
+                                        display=('evdiamond','evnudiamond'), virtual_gates=germs)
     addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
-                                         display=('inf','trace','diamond','uinf','agi','giinf','gidm'))
+                                         display=('inf','trace','diamond','evinf','evdiamond'))
     addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)

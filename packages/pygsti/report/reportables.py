@@ -137,47 +137,33 @@ Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
 # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
 
 
-def gatestring_gaugeinv_diamondnorm(gatesetA, gatesetB, gatestring):
-    A = gatesetA.product(gatestring) # "gate"
-    B = gatesetB.product(gatestring) # "target gate"
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
-    return _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False ))
-Gatestring_gaugeinv_diamondnorm = _gsf.gatesetfn_factory(gatestring_gaugeinv_diamondnorm)
-# init args == (gatesetA, gatesetB, gatestring)
-  
-
-def gatestring_gaugeinv_infidelity(gatesetA, gatesetB, gatestring):
-    A = gatesetA.product(gatestring) # "gate"
-    B = gatesetB.product(gatestring) # "target gate"
-    evA = _np.linalg.eigvals(A)
-    evB = _np.linalg.eigvals(B)
-    return _np.mean(_tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
-                                  return_pairs=False))
-Gatestring_gaugeinv_infidelity = _gsf.gatesetfn_factory(gatestring_gaugeinv_infidelity)
-# init args == (gatesetA, gatesetB, gatestring)
-
-
-def gatestring_process_infidelity(gatesetA, gatesetB, gatestring):
-    A = gatesetA.product(gatestring) # "gate"
-    B = gatesetB.product(gatestring) # "target gate"
-    return 1.0 - _tools.process_fidelity(A, B, gatesetB.basis)
-Gatestring_process_infidelity = _gsf.gatesetfn_factory(gatestring_process_infidelity)
-# init args == (gatesetA, gatesetB, gatestring)
-
-
 def gatestring_fro_diff(gatesetA, gatesetB, gatestring):
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
-    return _tools.frobeniusdist(A, B)
+    return fro_diff(A,B,gatesetB.basis)
 Gatestring_fro_diff = _gsf.gatesetfn_factory(gatestring_fro_diff)
 # init args == (gatesetA, gatesetB, gatestring)
+
+def gatestring_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return entanglement_infidelity(A,B,gatesetB.basis)
+Gatestring_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_entanglement_infidelity)
+# init args == (gatesetA, gatesetB, gatestring)
+
+def gatestring_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return avg_gate_infidelity(A,B,gatesetB.basis)
+Gatestring_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_avg_gate_infidelity)
+  # init args == (gatesetA, gatesetB, gatestring)
 
 
 def gatestring_jt_diff(gatesetA, gatesetB, gatestring):
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
-    return _tools.jtracedist(A, B, gatesetB.basis)
+    return jt_diff(A, B, gatesetB.basis)
 Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
@@ -186,7 +172,7 @@ try:
     def gatestring_half_diamond_norm(gatesetA, gatesetB, gatestring):
         A = gatesetA.product(gatestring) # "gate"
         B = gatesetB.product(gatestring) # "target gate"
-        return 0.5 * _tools.diamonddist(A, B, gatesetB.basis)
+        return half_diamond_norm(A, B, gatesetB.basis)
     Gatestring_half_diamond_norm = _gsf.gatesetfn_factory(gatestring_half_diamond_norm)
       # init args == (gatesetA, gatesetB, gatestring)
 
@@ -195,25 +181,67 @@ except ImportError:
     Gatestring_half_diamond_norm = None
 
 
-def gatestring_unitarity_infidelity(gatesetA, gatesetB, gatestring):
-    """ Returns 1 - sqrt(U), where U is the unitarity of A*B^{-1} """
+def gatestring_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
-    from ..extras.rb import rbutils as _rbutils
-    return 1.0 - _np.sqrt( _rbutils.unitarity( _np.dot(A, _np.linalg.inv(B)), gatesetB.basis) )
-Gatestring_unitarity_infidelity = _gsf.gatesetfn_factory(gatestring_unitarity_infidelity)
+    return nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
+Gatestring_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_nonunitary_entanglement_infidelity)
   # init args == (gatesetA, gatesetB, gatestring)
 
 
-def gatestring_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
+def gatestring_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
-    d = _np.sqrt(A.shape[0])
-    from ..extras.rb import rbutils as _rbutils
-    return _rbutils.average_gate_infidelity(A,B, d, gatesetB.basis)
-Gatestring_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_avg_gate_infidelity)
+    return nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
+Gatestring_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_nonunitary_avg_gate_infidelity)
   # init args == (gatesetA, gatesetB, gatestring)
+
+
+def gatestring_eigenvalue_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_entanglement_infidelity(A,B,gatesetB.basis)
+Gatestring_eigenvalue_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_eigenvalue_entanglement_infidelity)
+  # init args == (gatesetA, gatesetB, gatestring)
+
+
+def gatestring_eigenvalue_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_avg_gate_infidelity(A,B,gatesetB.basis)
+Gatestring_eigenvalue_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_eigenvalue_avg_gate_infidelity)
+  # init args == (gatesetA, gatesetB, gatestring)
+
+def gatestring_eigenvalue_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
+Gatestring_eigenvalue_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_eigenvalue_nonunitary_entanglement_infidelity)
+  # init args == (gatesetA, gatesetB, gatestring)
+
+
+def gatestring_eigenvalue_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
+Gatestring_eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_eigenvalue_nonunitary_avg_gate_infidelity)
+  # init args == (gatesetA, gatesetB, gatestring)
+
+  
+def gatestring_eigenvalue_diamondnorm(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_diamondnorm(A,B,gatesetB.basis)
+Gatestring_eigenvalue_diamondnorm = _gsf.gatesetfn_factory(gatestring_eigenvalue_diamondnorm)
+# init args == (gatesetA, gatesetB, gatestring)
+
+
+def gatestring_eigenvalue_nonunitary_diamondnorm(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    return eigenvalue_nonunitary_diamondnorm(A,B,gatesetB.basis)
+Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring_eigenvalue_nonunitary_diamondnorm)
+# init args == (gatesetA, gatesetB, gatestring)
 
 
 def decomposition(gate):
@@ -290,15 +318,15 @@ Angles_btwn_rotn_axes = _gsf.gatesetfn_factory(angles_btwn_rotn_axes)
 # init args == (gateset)
 
 
-def process_fidelity(A, mxBasis, B):
+def entanglement_fidelity(A, mxBasis, B):
     return _tools.process_fidelity(A, B, mxBasis)
-Process_fidelity = _gsf.gatesfn_factory(process_fidelity)
+Entanglement_fidelity = _gsf.gatesfn_factory(entanglement_fidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-def process_infidelity(A, B, mxBasis):
+def entanglement_infidelity(A, B, mxBasis):
     return 1 - _tools.process_fidelity(A, B, mxBasis)
-Process_infidelity = _gsf.gatesfn_factory(process_infidelity)
+Entanglement_infidelity = _gsf.gatesfn_factory(entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
@@ -344,30 +372,93 @@ except ImportError:
     half_diamond_norm = None
     Half_diamond_norm = None
 
-    
-def unitarity_infidelity(A, B, mxBasis):
-    """ Returns 1 - sqrt(U), where U is the unitarity of A*B^{-1} """
+
+def std_unitarity(A,B, mxBasis):
+    """ A gauge-invariant quantity that behaves like the unitarity """
     from ..extras.rb import rbutils as _rbutils
-    return 1.0 - _np.sqrt( _rbutils.unitarity( _np.dot(A, _np.linalg.inv(B)), mxBasis) )
-Unitarity_infidelity = _gsf.gatesfn_factory(unitarity_infidelity)
+    Lambda = _np.dot(A, _np.linalg.inv(B))
+    return _rbutils.unitarity( Lambda, mxBasis )
+
+def eigenvalue_unitarity(A,B):
+    """ A gauge-invariant quantity that behaves like the unitarity """
+    Lambda = _np.dot(A, _np.linalg.inv(B))
+    d2 = Lambda.shape[0]
+    lmb = _np.linalg.eigvals(Lambda)
+    return (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
+    
+def nonunitary_entanglement_infidelity(A, B, mxBasis):
+    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
+    d2 = A.shape[0]; U = std_unitarity(A,B,mxBasis)
+    return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
+Nonunitary_entanglement_infidelity = _gsf.gatesfn_factory(nonunitary_entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-def gaugeinv_diamondnorm(A, B, mxBasis):
+def nonunitary_avg_gate_infidelity(A, B, mxBasis):
+    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of A*B^{-1} """
+    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = std_unitarity(A,B,mxBasis)
+    return (d-1.0)/d * (1.0 - _np.sqrt(U))
+Nonunitary_avg_gate_infidelity = _gsf.gatesfn_factory(nonunitary_avg_gate_infidelity)
+
+
+def eigenvalue_nonunitary_entanglement_infidelity(A, B, mxBasis):
+    """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
+    d2 = A.shape[0]; U = eigenvalue_unitarity(A,B)
+    return (d2-1.0)/d2 * (1.0 - _np.sqrt(U))
+Eigenvalue_nonunitary_entanglement_infidelity = _gsf.gatesfn_factory(eigenvalue_nonunitary_entanglement_infidelity)
+# init args == (gateset1, gateset2, gateLabel)
+
+
+def eigenvalue_nonunitary_avg_gate_infidelity(A, B, mxBasis):
+    """ Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
+    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = eigenvalue_unitarity(A,B)
+    return (d-1.0)/d * (1.0 - _np.sqrt(U))
+Eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
+
+
+def eigenvalue_entanglement_infidelity(A, B, mxBasis):
+    d2 = A.shape[0]
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y), return_pairs=False))
-Gaugeinv_diamondnorm = _gsf.gatesfn_factory(gaugeinv_diamondnorm)
+    mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
+                                 return_pairs=False))
+    return 1.0 + mlPl/float(d2)
+Eigenvalue_entanglement_infidelity = _gsf.gatesfn_factory(eigenvalue_entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-def gaugeinv_infidelity(A, B, mxBasis):
+def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
+    d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
-    return _np.mean(_tools.minweight_match(evA,evB, lambda x,y: 1.0-_np.real(_np.conjugate(y)*x),
-                                  return_pairs=False))
-Gaugeinv_infidelity = _gsf.gatesfn_factory(gaugeinv_infidelity)
+    mlPl = _np.sum(_tools.minweight_match(evA,evB, lambda x,y: -_np.abs(_np.conjugate(y)*x),
+                                 return_pairs=False))
+    return (d2 + mlPl)/float(d*(d+1))
+Eigenvalue_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_avg_gate_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
+
+def eigenvalue_diamondnorm(A, B, mxBasis):
+    d2 = A.shape[0]
+    evA = _np.linalg.eigvals(A)
+    evB = _np.linalg.eigvals(B)
+    return (d2-1.0)/d2 * _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(x-y),
+                                                        return_pairs=False))
+Eigenvalue_diamondnorm = _gsf.gatesfn_factory(eigenvalue_diamondnorm)
+# init args == (gateset1, gateset2, gateLabel)
+
+
+def eigenvalue_nonunitary_diamondnorm(A, B, mxBasis):
+    d2 = A.shape[0]
+    evA = _np.linalg.eigvals(A)
+    evB = _np.linalg.eigvals(B)
+    return (d2-1.0)/d2 * _np.max(_tools.minweight_match(evA,evB, lambda x,y: abs(abs(x)-abs(y)),
+                                                        return_pairs=False))
+Eigenvalue_nonunitary_diamondnorm = _gsf.gatesfn_factory(eigenvalue_nonunitary_diamondnorm)
+# init args == (gateset1, gateset2, gateLabel)
+
+
 
 
 #OLD: TIMS FN... seems perhaps better motivated, but for now keep this simple and equal to gatestring_ version
