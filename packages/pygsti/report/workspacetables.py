@@ -749,17 +749,23 @@ class ErrgenTable(WorkspaceTable):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
         basis = gateset.basis
+        basisPrefix = ""
+        if basis.name == "pp": basisPrefix = "Pauli "
+        elif basis.name == "qt": basisPrefix = "Qutrit "
+        elif basis.name == "gm": basisPrefix = "GM "
+        elif basis.name == "std": basisPrefix = "Mx unit "
+        
         colHeadings = ['Gate']
 
         for disp in display:
             if disp == "errgen":
                 colHeadings.append('Error Generator')
             elif disp == "H":
-                colHeadings.append('Hamiltonian Projections')
+                colHeadings.append('%sHamiltonian Projections' % basisPrefix)
             elif disp == "S":
-                colHeadings.append('Stochastic Projections')
+                colHeadings.append('%sStochastic Projections' % basisPrefix)
             elif disp == "A":
-                colHeadings.append('Affine Projections')
+                colHeadings.append('%sAffine Projections' % basisPrefix)
             else: raise ValueError("Invalid display element: %s" % disp)
 
         assert(display_as == "boxes" or display_as == "numbers")
