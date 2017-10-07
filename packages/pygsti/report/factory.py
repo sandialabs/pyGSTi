@@ -481,6 +481,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("clifford_compilation",(0,1))
 
     switchBd.add("gsFinalIter",(0,1))
+    switchBd.add("gsFinalIterEP",(0,1))
     switchBd.add("gsFinal",(0,1,2))
     switchBd.add("gsEvalProjected",(0,1,2))
     switchBd.add("gsTargetAndFinal",(0,1,2)) #general only!
@@ -530,6 +531,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
             switchBd.gsTarget[d,i] = est.gatesets['target']
             switchBd.gsFinalIter[d,i] = est.gatesets['final iteration estimate']
+            switchBd.gsFinalIterEP[d,i] = _tools.project_to_target_eigenspace(est.gatesets['final iteration estimate'],
+                                                                              est.gatesets['target'])
             switchBd.gsFinal[d,i,:] = [ est.gatesets.get(l,NA) for l in gauge_opt_labels ]
             switchBd.gsEvalProjected[d,i,:] = [ (_tools.project_to_target_eigenspace(gs, est.gatesets['target'])
                                                  if (gs is not NA) else NA) for gs in switchBd.gsFinal[d,i,:] ]
@@ -757,7 +760,8 @@ def create_general_report(results, filename, title="auto",
     addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
-    gsEP = switchBd.gsEvalProjected
+    gsFinalIter = switchBd.gsFinalIter
+    gsEP = switchBd.gsEvalProjected # GI: gsFinalIterEP
     cri = switchBd.cri if (confidenceLevel is not None) else None
     addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], cri)
@@ -769,18 +773,18 @@ def create_general_report(results, filename, title="auto",
                                                      ['Target','Estimated'], "boxes", cri)
     addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
     addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri) #TEST
-    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri,
+    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, #GI
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
-    addqty('bestGermsEvalTable', ws.GateEigenvalueTable, gsFinal, gsEP, cri,
+    addqty('bestGermsEvalTable', ws.GateEigenvalueTable, gsFinal, gsEP, cri, #GI
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
            virtual_gates=germs) #don't display eigenvalues of all germs
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
     addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
     addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'), virtual_gates=germs)        
-    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST
+    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, #TEST #GI
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
-    addqty('bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsFinal, gsEP, cri, #TEST
+    addqty('bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsFinal, gsEP, cri, #TEST #GI
                                         display=('evdiamond','evnudiamond'), virtual_gates=germs)
     addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
                                          display=('inf','trace','diamond','evinf','evdiamond'))
