@@ -724,7 +724,7 @@ class StaticGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -956,7 +956,7 @@ class FullyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -1200,12 +1200,12 @@ class TPParameterizedGate(GateMatrix):
         the gate parameters do not allow for it), ValueError is raised.
 
         In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroup.element` or 
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
         corresponds to a TP-like transform matrix.
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -1545,7 +1545,7 @@ class LinearlyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -2117,7 +2117,7 @@ class EigenvalueParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -2763,11 +2763,11 @@ class LindbladParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        if isinstance(S, _gaugegroup.UnitaryGaugeGroup.element):
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
 

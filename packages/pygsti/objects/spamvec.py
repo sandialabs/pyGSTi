@@ -463,7 +463,7 @@ class StaticSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
             
@@ -637,7 +637,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
             
@@ -848,7 +848,7 @@ class TPParameterizedSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
             
@@ -1141,7 +1141,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
             

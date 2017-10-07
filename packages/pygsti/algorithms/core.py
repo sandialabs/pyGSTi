@@ -295,10 +295,10 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
             BMat_p_padded[0:guessTrunc, 0:guessTrunc] = BMat_p
             for i in range(guessTrunc,trunc):
                 BMat_p_padded[i,i] = _np.sqrt( s[i] ) #set diagonal as sqrt of actual AB matrix's singular values
-            ggEl = _objs.FullGaugeGroup.element(_np.linalg.inv(BMat_p_padded))
+            ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
             lgstGateset.transform(ggEl)
         else:
-            ggEl = _objs.FullGaugeGroup.element(_np.linalg.inv(BMat_p))
+            ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstGateset.transform(ggEl)
 
         # RESET identity vector after lgstGateset.transform since this transforms gateset back to what we think is

@@ -203,7 +203,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     jacobian_fn : function, optional
         The jacobian of `objective_fn`.  The function must take three parameters,
         1) the un-transformed `GateSet`, 2) the transformed `GateSet`, and 3) the
-        `GaugeGroup.element` representing the transformation that brings the first
+        `GaugeGroupElement` representing the transformation that brings the first
         argument into the second.
 
     comm : mpi4py.MPI.Comm, optional

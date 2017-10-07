@@ -42,8 +42,11 @@ from .profiler import Profiler
 from .profiler import DummyProfiler
 from .datacomparator import DataComparator
 
-from .gaugegroup import FullGaugeGroup, TPGaugeGroup, \
-    DiagGaugeGroup, TPDiagGaugeGroup, UnitaryGaugeGroup
+from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
+from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement
+from .gaugegroup import DiagGaugeGroup, DiagGaugeGroupElement
+from .gaugegroup import TPDiagGaugeGroup, TPDiagGaugeGroupElement
+from .gaugegroup import UnitaryGaugeGroup, UnitaryGaugeGroupElement
 
 from .results import Results
 

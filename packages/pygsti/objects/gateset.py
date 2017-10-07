@@ -919,7 +919,7 @@ class GateSet(object):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
