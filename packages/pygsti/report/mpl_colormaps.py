@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 from .plothelpers import _eformat
+from ..tools import compattools as _compat
 
 try:
     import matplotlib as _matplotlib
@@ -343,11 +344,11 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
         elif typ == "histogram":
             histnorm = traceDict.get('histnorm',None)
             marker = traceDict.get('marker',None)
-            color = mpl_color(marker['color'] if marker else "gray")
+            color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
             xbins = traceDict['xbins'] 
             histdata = traceDict['x'] 
             
-            histBins = (xbins['end'] - xbins['start'])/xbins['size']
+            histBins = int(round( (xbins['end'] - xbins['start'])/xbins['size']))
              
             histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)                
             #histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin

@@ -18,6 +18,66 @@ def _vnorm(x, vmin, vmax):
     if _np.isclose(vmin,vmax): return _np.ma.zeros(x.shape,'d')
     return _np.clip( (x-vmin)/ (vmax-vmin), 0.0, 1.0)
 
+@smart_cached
+def as_rgb_array(colorStr):
+    colorStr = colorStr.strip() #remove any whitespace                                                                           
+    if colorStr.startswith('#') and len(colorStr) >= 7:
+        r,g,b = colorStr[1:3], colorStr[3:5], colorStr[5:7]
+        r = float(int(r,16))
+        g = float(int(r,16))
+        b = float(int(r,16))
+        rgb = r,g,b                                                                          
+    elif colorStr.startswith('rgb(') and colorStr.endswith(')'):
+        tupstr = colorStr[len('rgb('):-1]
+        rgb = [float(x) for x in tupstr.split(',')]
+    elif colorStr.startswith('rgba(') and colorStr.endswith(')'):
+        tupstr = colorStr[len('rgba('):-1]
+        rgba = tupstr.split(',')
+        rgb = [float(x)/256.0 for x in rgba[0:3]] + [float(rgba[3])]
+    else:
+        raise ValueError("Cannot convert colorStr = ", colorStr)
+    return _np.array(rgb)
+
+
+def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
+    """
+    Evaluates plotly colorscale at a particular value.
+
+    This function linearly interpolates between the colors of a 
+    Plotly colorscale.
+
+    Parameters
+    ----------
+    plotly_colorscale : list
+        A Plotly colorscale (list of `[val, color]`) elements where
+        `val` is a float between 0 and 1, and `color` is any acceptable
+        Plotly color value (e.g. `rgb(0,100,255)`, `#0033FF`, etc.).
+
+    normalized_value : float
+        The value (between 0 and 1) to compute the color for.
+    
+    Returns
+    -------
+    str
+        A string representation of the plotly color of the form `"rgb(R,G,B)"`.
+    """
+    for i,(val,color) in enumerate(plotly_colorscale[:-1]):
+        next_val, next_color = plotly_colorscale[i+1]
+        if val <= normalized_value < next_val:
+            rgb = as_rgb_array(color)
+            next_rgb = as_rgb_array(next_color)
+            v = (normalized_value - val) / (next_val - val)
+            interp_rgb = (1.0-v)*rgb + v*next_rgb
+            break
+    else:
+        val,color = plotly_colorscale[-1]
+        assert(val <= normalized_val)
+        interp_rgb = as_rgb_array(color)
+    return 'rgb(%d,%d,%d)' % ( int(round(interp_rgb[0])),
+                               int(round(interp_rgb[1])),
+                               int(round(interp_rgb[2])) )
+
+
 
 class Colormap(object):
     def __init__(self, rgb_colors, hmin, hmax):
@@ -69,6 +129,43 @@ class Colormap(object):
                                (round(r*255),round(g*255),round(b*255))]
                               for z,(r,g,b) in self.rgb_colors ]
         return plotly_colorscale
+
+    def get_color(self, value):
+        """
+        Retrieves the color at a particular colormap value.
+    
+        This function linearly interpolates between the colors of a 
+        this colormap's color scale
+    
+        Parameters
+        ----------
+        value : float
+            The value (before normalization) to compute the color for.
+        
+        Returns
+        -------
+        str
+            A string representation of the plotly color of the form `"rgb(R,G,B)"`.
+        """
+        colorscale = self.get_colorscale()
+        normalized_value = self.normalize(value)
+
+        for i,(val,color) in enumerate(self.rgb_colors[:-1]):
+            next_val, next_color = self.rgb_colors[i+1]
+            if val <= normalized_value < next_val:
+                rgb = _np.array( color ) # r,g,b values as array
+                next_rgb = _np.array(next_color)
+                v = (normalized_value - val) / (next_val - val)
+                interp_rgb = (1.0-v)*rgb + v*next_rgb
+                break
+        else:
+            val,color = self.rgb_colors[-1]
+            assert(val <= normalized_value)
+            interp_rgb = _np.array(color)
+        return 'rgb(%d,%d,%d)' % ( int(round(interp_rgb[0]*255)),
+                                   int(round(interp_rgb[1]*255)),
+                                   int(round(interp_rgb[2]*255)) )
+
 
 
     def get_matplotlib_norm_and_cmap(self):

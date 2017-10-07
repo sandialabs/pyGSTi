@@ -746,6 +746,109 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
              'pythonValue': {'x': xs, 'y': ys} }
 
 
+def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
+                             sumUp=False, ylabel="",scale=1.0):
+    """
+    Similar to :func:`gatestring_color_boxplot` except a histogram is created.
+
+    Parameters
+    ----------
+    gatestring_structure : GatestringStructure
+        Specifies a set of gate sequences along with their outer and inner x,y
+        structure, e.g. fiducials, germs, and maximum lengths.
+
+    subMxs : list
+        A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
+        or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
+        indicate elements should not be displayed.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    hoverInfo : bool, optional
+        Whether to incude interactive hover labels.
+
+    sumUp : bool, optional
+        False displays each matrix element as it's own color box
+        True sums the elements of each (x,y) matrix and displays
+        a single color box for the sum.
+
+    ylabel : str, optional
+        The y-axis label to use.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+    g = gatestring_structure
+    
+    ys = [ ]; #artificially add minval so 
+    for ix,x in enumerate(g.used_xvals()):
+        for iy,y in enumerate(g.used_yvals()):
+            plaq = g.get_plaquette(x,y)
+            N = len(subMxs[iy][ix])
+            #TODO: if sumUp then need to sum before appending...
+            for iiy,iix,gstr in plaq:
+                ys.append( subMxs[iy][ix][N-1-iiy][iix] )
+
+    minval = 0
+    maxval = _np.max(ys)
+    cumulative = dict(enabled=False)
+    #             marker=dict(color=barcolor),
+    #barcolor = 'gray'
+
+    nbins = 50
+    binsize = (maxval-minval)/(nbins-1)
+    bincenters = _np.linspace(minval, maxval, nbins)
+    
+    trace = go.Histogram(
+            x=[bincenters[0]] + ys, #artificially add 1 count in lowest bin so plotly anchors histogram properly
+            autobinx=False,
+            xbins=dict(
+                start=minval-binsize/2.0,
+                end=maxval+binsize/2.0,
+                size=binsize
+            ),
+            marker=dict(
+                color=[colormap.get_color(t) for t in bincenters],
+                line=dict(
+                    color='black',
+                    width=1.0,
+                )
+            ),
+            cumulative=cumulative,
+            opacity=1.00,
+            showlegend=False,
+        )
+
+    log = True
+    layout = go.Layout(
+            width=700*scale,
+            height=400*scale,
+            font=dict(size=10),
+            xaxis=dict(
+                title=ylabel, #b/c "y-values" are along x-axis in histogram
+                showline=True
+                ),
+            yaxis=dict(
+                type='log' if log else 'linear',
+                #tickformat='g',
+                exponentformat='power',
+                showline=True
+            ),
+            bargap=0,
+            bargroupgap=0,
+            legend=dict(orientation="h")
+        )
+
+    pythonVal = {'histogram values': ys}
+    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap,
+             'pythonValue': pythonVal }
+
+
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
                              xlabel=None, ylabel=None,
                              boxLabels=False, colorbar=None, prec=0, scale=1.0,
@@ -1209,7 +1312,7 @@ class ColorBoxPlot(WorkspacePlot):
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTgatesets=None, dscomparator=None, submatrices=None,
-                 scatter=False, scale=1.0):
+                 typ="boxes", scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -1276,9 +1379,10 @@ class ColorBoxPlot(WorkspacePlot):
             matrices to plot, corresponding to the used x and y values
             of `gss`.
 
-        scatter : bool, optional
-            If True, a scatter plot of the values vs. sequence length is created 
-            instead of a grid of boxes.
+        typ : {"boxes","scatter","histogram"}
+            Which type of plot to make: the standard grid of "boxes", a
+            "scatter" plot of the values vs. sequence length, or a "histogram"
+            of all the values.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
@@ -1288,13 +1392,13 @@ class ColorBoxPlot(WorkspacePlot):
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTgatesets, dscomparator, submatrices,
-                                          scatter, scale)
+                                          typ, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTgatesets, dscomparator, submatrices,
-                scatter, scale):
+                typ, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
@@ -1355,8 +1459,8 @@ class ColorBoxPlot(WorkspacePlot):
         if _tools.isstr(plottypes):
             plottypes = [plottypes]
 
-        for typ in plottypes:
-            if typ == "chi2":
+        for ptyp in plottypes:
+            if ptyp == "chi2":
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
@@ -1371,7 +1475,7 @@ class ColorBoxPlot(WorkspacePlot):
                 addl_hover_info_fns['f'] = addl_mx_fn_f
                 addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
 
-            elif typ == "logl":
+            elif ptyp == "logl":
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
@@ -1387,7 +1491,7 @@ class ColorBoxPlot(WorkspacePlot):
                 addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
                 #DEBUG: addl_hover_info_fns['chk'] = addl_mx_fn_chk
 
-            elif typ == "blank":
+            elif ptyp == "blank":
                 precomp=False
                 colormapType = "trivial"
                 ytitle = ""
@@ -1396,7 +1500,7 @@ class ColorBoxPlot(WorkspacePlot):
                     return _np.nan * _np.zeros( (len(gss.minor_yvals()),
                                                  len(gss.minor_xvals())), 'd')
 
-            elif typ == "errorrate":
+            elif ptyp == "errorrate":
                 precomp=False
                 colormapType = "seq"
                 ytitle="error rate"
@@ -1405,7 +1509,7 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
                     return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, dataset, directGSTgatesets) ]] )
 
-            elif typ == "directchi2":
+            elif ptyp == "directchi2":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
@@ -1417,7 +1521,7 @@ class ColorBoxPlot(WorkspacePlot):
                         directGSTgatesets.get(plaq.base,None),
                         minProbClipForWeighting)
 
-            elif typ == "directlogl":
+            elif ptyp == "directlogl":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
@@ -1429,7 +1533,7 @@ class ColorBoxPlot(WorkspacePlot):
                         directGSTgatesets.get(plaq.base,None),
                         minProbClipForWeighting)
 
-            elif typ == "dscmp":
+            elif ptyp == "dscmp":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "green"
@@ -1440,21 +1544,21 @@ class ColorBoxPlot(WorkspacePlot):
                 def mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
-            elif (submatrices is not None) and typ in submatrices:
-                precomp = False; ytitle = typ
-                if typ + ".colormap" in submatrices:
-                    colormapType = submatrices[typ + ".colormap"]
+            elif (submatrices is not None) and ptyp in submatrices:
+                precomp = False; ytitle = ptyp
+                if ptyp + ".colormap" in submatrices:
+                    colormapType = submatrices[ptyp + ".colormap"]
                 else:
                     colormapType = "seq"
             
             else:
-                raise ValueError("Invalid plot type: %s" % typ)
+                raise ValueError("Invalid plot type: %s" % ptyp)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
                 probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
 
-            if (submatrices is not None) and typ in submatrices:
-                subMxs = submatrices[typ] # "custom" type -- all mxs precomputed by user
+            if (submatrices is not None) and ptyp in submatrices:
+                subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
                 subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
 
@@ -1489,16 +1593,23 @@ class ColorBoxPlot(WorkspacePlot):
                 
             else: assert(False) #invalid colormapType was set above
 
-            if scatter:
-                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
-                                                      False, boxLabels, prec,
-                                                      hoverInfo, sumUp, ytitle,
-                                                      scale, addl_hover_info)
-            else:
+
+            if typ == "boxes":
                 newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                                   False, boxLabels, prec,
                                                   hoverInfo, sumUp, invert,
                                                   scale, addl_hover_info)
+                
+            elif typ == "scatter":
+                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
+                                                      False, boxLabels, prec,
+                                                      hoverInfo, sumUp, ytitle,
+                                                      scale, addl_hover_info)
+            elif typ == "histogram":
+                newfig = gatestring_color_histogram(gss, subMxs, colormap,
+                                                      False, ytitle, scale)
+            else:
+                raise ValueError("Invalid `typ` argument: %s" % typ)
 
             if fig is None:
                 fig = newfig
@@ -2052,6 +2163,10 @@ class GramMatrixBarPlot(WorkspacePlot):
             hoverinfo='y',
             name="from Target"
         )
+
+        ymin = min(_np.min(svals), _np.min(target_svals))
+        ymax = max(_np.max(svals), _np.max(target_svals))
+        ymin = max(ymin, 1e-8) #prevent lower y-limit from being riduculously small
         
         data = [trace1,trace2]
         layout = go.Layout(
@@ -2065,6 +2180,7 @@ class GramMatrixBarPlot(WorkspacePlot):
                 title="eigenvalue",
                 type='log',
                 exponentformat='power',
+                range=[_np.log10(ymin),_np.log10(ymax)],
                 ),
             bargap=0.1
         )
