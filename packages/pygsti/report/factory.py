@@ -463,7 +463,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         ["Dataset","Estimate","G-Opt","max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
-        show=[multidataset,multiest,False,False] # "global" switches only
+        show=[multidataset,multiest,multiGO,False] # "global" switches only + gauge-opt (OK if doesn't apply)
     )
 
     switchBd.add("ds",(0,))
@@ -733,14 +733,14 @@ def create_general_report(results, filename, title="auto",
     multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(Ls) > 1)
 
-    #goView = [multidataset,multiest,multiGO,False]
-    #maxLView = [multidataset,multiest,False,multiL]
-    goView = [False,False,multiGO,False]
+    ##goView = [multidataset,multiest,multiGO,False]
+    ##maxLView = [multidataset,multiest,False,multiL]
+    #goView = [False,False,multiGO,False]
     maxLView = [False,False,False,multiL]
 
     qtys['topSwitchboard'] = switchBd
-    qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
-    qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
+    #qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
+    #qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
     qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
 
     gsTgt = switchBd.gsTarget

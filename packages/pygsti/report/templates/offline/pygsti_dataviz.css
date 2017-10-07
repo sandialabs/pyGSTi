@@ -217,19 +217,24 @@ figure > div.pygsti-wsoutput-group {
 }
 
 .switch_container legend {
-    float: left;
+    /* float: left; */
     padding: 5px;
     font-size: 9pt;
+    color: white;
 }
 
 .switch_container label {
-    float: left;
+    /* float: left; */
     padding: 5px;
     font-size: 9pt;
 }
 
 .sidenav .switch_container label {
     color: white;
+}
+
+.sidenav .switch_container label.ui-checkboxradio-label {
+    color: black;
 }
 
 
