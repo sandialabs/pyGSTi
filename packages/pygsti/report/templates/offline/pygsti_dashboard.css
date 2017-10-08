@@ -444,7 +444,7 @@ div.sidenav a.active {
 .sidenav #tackbtn {
     position: absolute;
     top: 0;
-    right: 25px;
+    right: 5px;
     font-size: 25px;
     margin-left: 50px;
 }
@@ -460,6 +460,10 @@ div.sidenav a.active {
 @media screen and (max-height: 450px) {
     .sidenav {padding-top: 10px;}
     .sidenav a {font-size: 12px;}
+}
+
+.switch_container .ui-selectmenu-button.ui-button {
+    width: 150px; /* set to slightly less than sidenav width */
 }
 
 .header {

@@ -1,4 +1,8 @@
 
+sidenav_closed_width = 10;
+sidenav_mousetrigger_width = 50;
+sidenav_width = 200;
+
 //Maybe need this instead (for Katex?) document.addEventListener("DOMContentLoaded", function() {
 $(document).ready(function() {
 
@@ -10,10 +14,10 @@ $(document).ready(function() {
     
     $("body").on("mousemove",function(event) {
 	if(!window.navtacked) {
-	    if (event.pageX < 50) {
+	    if (event.pageX < sidenav_mousetrigger_width) {
 		openNav();
 	    }
-	    else if (event.pageX > 250) {
+	    else if (event.pageX > sidenav_width) {
 		closeNav();
 	    }
 	}
@@ -150,16 +154,16 @@ function enable_caption_toggles(parentEl) {
 
 
 
-/* Set the width of the side navigation to 250px and the left margin of the page content to 250px */
+/* Set the width of the side navigation to open width and the left margin of the page content to the same */
 function openNav() {
-    document.getElementById("theSidenav").style.width = "250px";
-    document.getElementById("main").style.marginLeft = "250px"; // for push: 
+    document.getElementById("theSidenav").style.width = sidenav_width + "px";
+    document.getElementById("main").style.marginLeft = sidenav_width + "px"; // for push: 
 }
 
 /* Set the width of the side navigation to 0 and the left margin of the page content to 0 */
 function closeNav() {
-    document.getElementById("theSidenav").style.width = "10px";
-    document.getElementById("main").style.marginLeft = "10px"; // for push: 
+    document.getElementById("theSidenav").style.width = sidenav_closed_width + "px";
+    document.getElementById("main").style.marginLeft = sidenav_closed_width + "px"; // for push: 
 }
 
 function tackNav() {

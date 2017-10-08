@@ -826,8 +826,8 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
 
     log = True
     layout = go.Layout(
-            width=700*scale,
-            height=400*scale,
+            width=500*scale,
+            height=350*scale,
             font=dict(size=10),
             xaxis=dict(
                 title=ylabel, #b/c "y-values" are along x-axis in histogram
@@ -2096,8 +2096,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         
         data = [trace]
         layout = go.Layout(
-            width = 400*scale,
-            height = 300*scale,
+            width = (100 + 50*len(xs))*scale,
+            height = 250*scale,
             xaxis = dict(
                 title="index",
                 tickvals=xs
@@ -2281,7 +2281,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         
         data = [trace]
         layout = go.Layout(
-            width = 400*scale,
+            width = 60*len(ys)*scale,
             height = 300*scale,
             xaxis = dict(
                 title=Xlabel,

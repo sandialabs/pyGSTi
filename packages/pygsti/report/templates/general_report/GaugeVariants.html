@@ -8,18 +8,19 @@
 	  %(bestGatesetGaugeOptParamsTable)s
 	</figure>
 
-	<p class="clear"></p>
+        <!-- <p class="clear"></p> -->
+
+	<figure id="bestGatesetSpamParametersTable" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimate of SPAM probabilities.</span> <span class="captiondetail"> Computed by taking the dot products of vectors in Table <a href="#bestGatesetSpamTable" class="table"></a>.  The symbol <span class="math">E_C</span>, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</span></figcaption>
+	  %(bestGatesetSpamParametersTable)s
+	</figure>
+
 
 	<figure id="bestGatesetSpamTable" class='tbl'>
 	  <figcaption><span class="captiontitle">The GST estimate of the SPAM operations.</span> <span class="captiondetail"> Compares the estimated SPAM operations to those desired (repeated from Table <a href="#targetGatesetTable"></a> for convenience.</span></figcaption>
 	  %(bestGatesetSpamBriefTable)s
 	</figure>
 	
-	<figure id="bestGatesetSpamParametersTable" class='tbl'>
-	  <figcaption><span class="captiontitle">GST estimate of SPAM probabilities.</span> <span class="captiondetail"> Computed by taking the dot products of vectors in Table <a href="#bestGatesetSpamTable" class="table"></a>.  The symbol <span class="math">E_C</span>, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</span></figcaption>
-	  %(bestGatesetSpamParametersTable)s
-	</figure>
-
 	<figure class='tbl' id="bestGatesetDecompTable">
 	  <figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">  A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto a the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle respectively.</span></figcaption>
 	  %(bestGatesetDecompTable)s
@@ -31,11 +32,6 @@
 	</figure> -->
 
 	<p class="clear"></p>
-
-	<figure id="bestGatesetVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated gate set to target gate set.</span> <span class="captiondetail"> This table displays the values of metrics which measure the aggregated <q>distance</q> between entire gate sets.  In this case, the two gate sets under consideration are the GST estimate and the target.</span></figcaption>
-	  %(bestGatesetVsTargetTable)s
-	</figure>
 	
 	
 	<figure id="bestGatesVsTargetTable_gv" class='tbl'>
@@ -48,16 +44,22 @@
 	  %(bestGatesetSpamVsTargetTable)s
 	</figure>
 
-	<p class="clear"></p>
-	
-	<figure id="bestGatesetGatesTable" class='tbl'>
-	  <figcaption><span class="captiontitle">The GST estimate of the logic gate operations.</span> <span class="captiondetail"> Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</span></figcaption>
-	  %(bestGatesetGatesBoxTable)s
+	<figure id="bestGatesetVsTargetTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Comparison of GST estimated gate set to target gate set.</span> <span class="captiondetail"> This table displays the values of metrics which measure the aggregated <q>distance</q> between entire gate sets.  In this case, the two gate sets under consideration are the GST estimate and the target.</span></figcaption>
+	  %(bestGatesetVsTargetTable)s
 	</figure>
-		
+
+
+	<p class="clear"></p>
+			
 	<figure id="bestGatesetErrGenTable" class='tbl'>
 	  <figcaption><span class="captiontitle">The GST estimate of the logic gate operation generators.</span> <span class="captiondetail"> A heat map of the <q>Error Generator</q> for each gate, which is the Lindbladian <span class="math">\mathbb{L}</span> that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all elements of these matrices is zero, the estimated gates match the target gates (Table <a href="#targetGatesetTable" class="table"></a>).  Note that the range of the color scale is variable, being determined by the data.  In the third column, each generator is projected onto each of the <q>Hamiltonian generators</q> given by the action of commutation with each Pauli-product basis element.  In the forth column, each generator is projected onto each of the <q>Stochastic generators</q> given by the action of conjugation with each Pauli-product basis element.  Columns and rows correspond to Pauli operators on the first and second (if present) qubit.</span></figcaption>
 	  %(bestGatesetErrGenBoxTable)s
+	</figure>
+
+	<figure id="bestGatesetGatesTable" class='tbl'>
+	  <figcaption><span class="captiontitle">The GST estimate of the logic gate operations.</span> <span class="captiondetail"> Compares the <em>ideal</em> (generally unitary) logic gates (second column, also in Table <a href="#targetGatesetTable" class="table"></a>) with those <em>estimated</em> by GST (third column).  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</span></figcaption>
+	  %(bestGatesetGatesBoxTable)s
 	</figure>
 		
 	<figure id="bestGatesetChoiTable" class='tbl'>

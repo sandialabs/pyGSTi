@@ -6,14 +6,19 @@
 	  %(bestGatesVsTargetTable_gi)s
 	</figure>
 
+	<figure id="bestGatesetEigenvalueTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates and germs.</span> <span class="captiondetail"> The spectrum (Eigenvalues column) of each estimated gate and estimated germ.</span></figcaption>
+	  %(bestGatesetEvalTable)s
+	</figure>
+
 	<figure id="bestGatesVsTargetTable_gigerms" class='tbl'>
 	  <figcaption><span class="captiontitle">Comparison of GST estimated germs to those expecteds.</span> <span class="captiondetail"> This table presents, for each of the germs, different measures of discrepancy between the germ using the GST estimate andto the ideal target operation.</span></figcaption>
 	  %(bestGatesVsTargetTable_gigerms)s
 	</figure>
 
-	<figure id="bestGatesetEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates and germs.</span> <span class="captiondetail"> The spectrum (Eigenvalues column) of each estimated gate and estimated germ.</span></figcaption>
-	  %(bestGatesetEvalTable)s
+	<figure id="gramBarPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Gram Matrix Eigenvales.</span> <span class="captiondetail">Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.</span> </figcaption>
+	  %(gramBarPlot)s
 	</figure>
 
 	<figure id="bestGermsEigenvalueTable" class='tbl'>
@@ -21,7 +26,3 @@
 	  %(bestGermsEvalTable)s
 	</figure>
 
-	<figure id="gramBarPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Gram Matrix Eigenvales.</span> <span class="captiondetail">Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.</span> </figcaption>
-	  %(gramBarPlot)s
-	</figure>
