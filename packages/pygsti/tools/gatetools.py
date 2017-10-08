@@ -1507,6 +1507,8 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     GateSet
     """
     ret = targetGateset.copy()
+    ret.set_all_parameterizations("full") # so we can freely assign gates new values
+    
     for gl,gate in gateset.iter_gates():
         tgt_gate = targetGateset.gates[gl].copy()
         tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
