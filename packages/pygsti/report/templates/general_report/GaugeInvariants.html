@@ -2,27 +2,27 @@
 	<p>Quantities which are <em>gauge-invariant</em> are the most reliable means of assessing the quality of the gates, as these do not depend on any unphysical gauge degrees of freedom</p>
 
 	<figure id="bestGatesVsTargetTable_gi" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated gates to target gates.</span> <span class="captiondetail"> This table presents, for each of the gates, different measures of distance or discrepancy from the GST estimate to the ideal target operation.</span></figcaption>
+	  <figcaption><span class="captiontitle">GST estimated gates vs. ideal targets</span> <span class="captiondetail">This table presents different gauge-invariant measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
 	  %(bestGatesVsTargetTable_gi)s
 	</figure>
 
 	<figure id="bestGatesetEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates and germs.</span> <span class="captiondetail"> The spectrum (Eigenvalues column) of each estimated gate and estimated germ.</span></figcaption>
+	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> The spectrum of each estimated gate, along with metrics which compare these eigenvalues with those of the ideal target gate.  In order to perform comparisons, are estimated and target spectra are aligned by identifying a minimum-weight matching based on the metric being computed.  Mathematical descriptions of the metrics apear when hovering over the column headers.</span></figcaption>
 	  %(bestGatesetEvalTable)s
 	</figure>
 
 	<figure id="bestGatesVsTargetTable_gigerms" class='tbl'>
-	  <figcaption><span class="captiontitle">Comparison of GST estimated germs to those expecteds.</span> <span class="captiondetail"> This table presents, for each of the germs, different measures of discrepancy between the germ using the GST estimate andto the ideal target operation.</span></figcaption>
+	  <figcaption><span class="captiontitle">GST estimated germs vs. eigen-projected.</span> <span class="captiondetail"> This table presents, for each of the germs, measures of discrepancy between the actual GST estimate and the <q>eigenspace-projected</q> estimate of the germ.  An eigenspace-projected version of each estimated gate is computed by replacing the <i>just the eigenvalues</i> of the ideal target operation with those of the estimated gate.  This open-heart-surgery on the ideal gate leaves an <q>eigenspace-projected</q> gate which has the same spectrum as the estimated gate but the same eigen-vectors as the ideal gate.  Comparing the estimated germs (gate-products) with those formed from the projected gates probes how well just the eigenvalues of the estimated gates are able to account for the errors amplified by the germ sequences.  If the estimated-gate eigenvalues account for everything, all of the discrepancy values in this table would equal zero.</span></figcaption>
 	  %(bestGatesVsTargetTable_gigerms)s
 	</figure>
 
 	<figure id="gramBarPlot" class='tbl'>
-	  <figcaption><span class="captiontitle">Gram Matrix Eigenvales.</span> <span class="captiondetail">Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.</span> </figcaption>
+	  <figcaption><span class="captiontitle">Gram matrix eigenvalues.</span> <span class="captiondetail">Bars compare the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.  Larger eigenvalues indicate larger sensitivity, and the number of non-zero values indicates the dimension of the density-matrix space being probed (e.g. there should be 4 large, ideally unit, eigenvalues for the single-qubit case).</span> </figcaption>
 	  %(gramBarPlot)s
 	</figure>
 
 	<figure id="bestGermsEigenvalueTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Eigenvalues of estimated germs.</span> <span class="captiondetail"> The spectrum (Eigenvalues column) of each estimated germ and that expected from the eigenspace-projected version of the estimated gate set.</span></figcaption>
+	  <figcaption><span class="captiontitle">Eigenvalues of estimated germs.</span> <span class="captiondetail">The spectrum of each estimated germ (a gate product), along with metrics which compare these eigenvalues with those of the <q>eigenspace-projected</q> germ.  The latter is computed using the set of eigenspace-projected gates described in the caption for the table above.  The comparison probes how well just the eigenvalues of the estimated gates are able to account for the errors amplified by the germ sequences.  If the estimated-gate eigenvalues account for everything, the eigenvalues of the estimated and eigenspace-projected germs would be equal.  In order to perform comparisons, spectra are aligned by identifying a minimum-weight matching based on the metric being computed.  Mathematical descriptions of the metrics apear when hovering over the column headers.</span></figcaption>
 	  %(bestGermsEvalTable)s
 	</figure>
 

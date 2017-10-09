@@ -561,25 +561,53 @@ class GatesVsTargetTable(WorkspaceTable):
         gateLabels  = list(gateset.gates.keys())  # gate labels
 
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        tooltips    = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
-            if disp == "inf":    colHeadings.append("Entanglement|Infidelity")
-            elif disp == "agi": colHeadings.append("Avg. Gate|Infidelity")
-            elif disp == "trace": colHeadings.append("1/2 Trace|Distance")
-            elif disp == "diamond": colHeadings.append( "1/2 Diamond-Dist")
-            elif disp == "nuinf": colHeadings.append("Non-unitary|Ent. Infidelity")
-            elif disp == "nuagi": colHeadings.append("Non-unitary|Avg. Gate Infidelity")
-            elif disp == "evinf": colHeadings.append("Eigenvalue|Ent. Infidelity")
-            elif disp == "evagi": colHeadings.append("Eigenvalue|Avg. Gate Infidelity")
-            elif disp == "evnuinf": colHeadings.append("Eigenvalue Non-U.|Ent. Infidelity")
-            elif disp == "evnuagi": colHeadings.append("Eigenvalue Non-U.|Avg. Gate Infidelity")
-            elif disp == "evdiamond": colHeadings.append("Eigenvalue|1/2 Diamond-Dist")
-            elif disp == "evnudiamond": colHeadings.append("Eigenvalue Non-U.|1/2 Diamond-Dist")
-            elif disp == "frob": colHeadings.append("Frobenius|Distance")
+            if disp == "inf":
+                colHeadings.append("Entanglement|Infidelity")
+                tooltips.append("1.0 - <psi| 1 x Lambda(psi) |psi>")
+            elif disp == "agi":
+                colHeadings.append("Avg. Gate|Infidelity")
+                tooltips.append("d/(d+1) (entanglement infidelity)")
+            elif disp == "trace":
+                colHeadings.append("1/2 Trace|Distance")
+                tooltips.append("0.5 | Chi(A) - Chi(B) |_tr")
+            elif disp == "diamond":
+                colHeadings.append( "1/2 Diamond-Dist")
+                tooltips.append("0.5 sup | (1 x (A-B))(rho) |_tr")
+            elif disp == "nuinf":
+                colHeadings.append("Non-unitary|Ent. Infidelity")
+                tooltips.append("(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]")
+            elif disp == "nuagi":
+                colHeadings.append("Non-unitary|Avg. Gate Infidelity")
+                tooltips.append("(d-1)/d [1 - sqrt( unitarity(A B^-1) )]")
+            elif disp == "evinf":
+                colHeadings.append("Eigenvalue|Ent. Infidelity")
+                tooltips.append("min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]")
+            elif disp == "evagi":
+                colHeadings.append("Eigenvalue|Avg. Gate Infidelity")
+                tooltips.append("min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]")
+            elif disp == "evnuinf":
+                colHeadings.append("Eigenvalue Non-U.|Ent. Infidelity")
+                tooltips.append("(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]")
+            elif disp == "evnuagi":
+                colHeadings.append("Eigenvalue Non-U.|Avg. Gate Infidelity")
+                tooltips.append("(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]")
+            elif disp == "evdiamond":
+                colHeadings.append("Eigenvalue|1/2 Diamond-Dist")
+                tooltips.append("(d^2-1)/d^2 max_i { |a_i - b_i| } where (a_i,b_i) are corresponding eigenvalues of A and B.")
+            elif disp == "evnudiamond":
+                colHeadings.append("Eigenvalue Non-U.|1/2 Diamond-Dist")
+                tooltips.append("(d^2-1)/d^2 max_i { | |a_i| - |b_i| | } where (a_i,b_i) are corresponding eigenvalues of A and B.")
+            elif disp == "frob":
+                colHeadings.append("Frobenius|Distance")
+                tooltips.append("sqrt( sum( (A_ij - B_ij)^2 ) )")
             else: raise ValueError("Invalid display column name: %s" % disp)
 
         formatters  = (None,) + ('Conversion',) * (len(colHeadings)-1)
 
-        table = _ReportTable(colHeadings, formatters, colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips,
+                             confidenceRegionInfo=confidenceRegionInfo)
 
         formatters = (None,) + ('Normal',) * (len(colHeadings) - 1)
 
@@ -1208,18 +1236,18 @@ class GateEigenvalueTable(WorkspaceTable):
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
             if disp == "evals":
-                colHeadings.append('Eigenvalues')
+                colHeadings.append('Eigenvalues (E)')
             elif disp == "target":
-                colHeadings.append('Target Evals.')
+                colHeadings.append('Target Evals. (T)')
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals')
+                    colHeadings.append('Rel. Evals (R)')
             elif disp == "log-evals":
-                colHeadings.append('Real log(eval)')
-                colHeadings.append('Imag log(eval)')
+                colHeadings.append('Re log(E)')
+                colHeadings.append('Im log(E)')
             elif disp == "log-rel":
-                colHeadings.append('Real log(rel. eval)')
-                colHeadings.append('Imag log(rel. eval)')
+                colHeadings.append('Re log(R)')
+                colHeadings.append('Im log(R)')
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
             elif disp == "relpolar":
@@ -1227,14 +1255,14 @@ class GateEigenvalueTable(WorkspaceTable):
                     colHeadings.append('Rel. Evals')
             elif disp == "absdiff-evals":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('|eval - target|')
+                    colHeadings.append('|E - T|')
             elif disp == "infdiff-evals":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('1.0 - Re(target.C * eval)')
+                    colHeadings.append('1.0 - Re(T.C*E)')
             elif disp == "absdiff-log-evals":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('|Re(log eval) - Re(log target)|')
-                    colHeadings.append('|Im(log eval) - Im(log target)|')
+                    colHeadings.append('|Re(log E) - Re(log T)|')
+                    colHeadings.append('|Im(log E) - Im(log T)|')
             elif disp == "gidm":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Gauge-inv. diamond norm')
