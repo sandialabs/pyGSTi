@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Randomized Benhmarking Utility Routines """
 
 import numpy as _np
+import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 from ... import objects as _objs
 from ... import construction as _cnst
@@ -358,14 +359,14 @@ def predicted_RB_decay_parameter(gs,gs_target,d=2):
     E = _np.absolute(_np.linalg.eigvals(L))
     E = _np.flipud(_np.sort(E))
     if abs(E[0] - 1) > 10**(-12):
-        print("Predicted RB decay parameter / error rate may be unreliable:")
-        print("Gateset is not (approximately) trace-preserving.")
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "Gateset is not (approximately) trace-preserving.")
     if abs(E[1]) - abs(E[2]) < 10**(-1):
-        print("Predicted RB decay parameter / error rate may be unreliable:")
-        print("There is more than one significant exponential in RB decay.")
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "There is more than one significant exponential in RB decay.")
     if E[1].imag > 10**(-10):
-        print("Predicted RB decay parameter / error rate may be unreliable:")
-        print("The decay constant has a significant imaginary component.")
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "The decay constant has a significant imaginary component.")
     p = E[1]
     return p
 
@@ -411,25 +412,25 @@ def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     gam_max = gam[index_max]
     
     if abs(gam_max - 1) > 10**(-12):
-        print("Warning: Gateset is not (approximately) trace-preserving.")
-        print("RB theory may not apply")
+        _warnings.warn("Gateset is not (approximately) trace-preserving.\n" +
+                       "RB theory may not apply")
         
     if gam_max.imag > 10**(-12):
-        print("Warning: RB Decay constants have a significant imaginary component.")
-        print("RB theory may not apply")
+        _warnings.warn("RB Decay constants have a significant imaginary component.\n" + 
+                       "RB theory may not apply")
       
     absgam[index_max] = 0.0
     index_2ndmax = _np.argmax(absgam)
     decay_constant = gam[index_2ndmax]
     if decay_constant.imag > 10**(-12):
-        print("Warning: Decay constants have a significant imaginary component.")
-        print("RB theory may not apply")
+        _warnings.warn("Decay constants have a significant imaginary component.\n" +
+                       "RB theory may not apply")
         
     absgam[index_2ndmax] = 0.0
     index_3rdmax = _np.argmax(absgam)
     if abs(decay_constant) - abs(absgam[index_3rdmax]) < 10**(-1):
-        print("Warning: There is more than one significant exponential in RB decay.")
-        print("RB theory may not apply")
+        _warnings.warn("There is more than one significant exponential in RB decay.\n" + 
+                       "RB theory may not apply")
 
     vec_l_operator = vecs[:,index_max] + weighting*vecs[:,index_2ndmax]
     
@@ -757,15 +758,14 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
             Rinversion = R_matrix(full_gateset,group,d=d)
             extended_E = group_dim*_np.dot(extended_E, Rinversion)
         if fixed_length_each_m is True:
-            print("This functionality is not currently available!")
-            print("--- set fixed_length_each to False ---")
-            extended_E = _np.dot(extended_E, R)
+            raise NotImplementedError("This functionality is not currently available! " +
+                                      "-- set fixed_length_each to False.")
+            ##extended_E = _np.dot(extended_E, R)
             # To make this functionality work, we need to multiply
             # P_m by an m-dependent factor, as the number of different
             # sequences which compile to I changes with m. For m=1 it
             # is 1 or 0 (depending on the generators), for m=2, it 
             # depends on the generators, and is 1 for Gi, Gx, Gy.
-            return None
             
     extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[rho_index])
     Rstep = _np.linalg.matrix_power(R,m_step)
@@ -978,8 +978,8 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     q = r_to_p(q,d)
     
     if p < 0.01:
-        print("Warning: first order theory parameters are not guaranteed \
-              to be reliable with a very large decay rate")        
+        _warnings.warn("First order theory parameters are not guaranteed \
+              to be reliable with a very large decay rate")
     Magesan_theory_params['A'] = pr_L_I
     Magesan_theory_params['B'] = pr_L_p - pr_L_I       
     Magesan_theory_params['A1'] = B_1
@@ -1123,7 +1123,7 @@ def norm1to1(operator, n_samples=10000, mxBasis="gm",return_list=False):
     elif mxBasis=='std':
         std_operator = operator
     else:
-        print("mxBasis should be 'gm', 'pp' or 'std'!")
+        raise ValueError("mxBasis should be 'gm', 'pp' or 'std'!")
     
     rand_dim = int(_np.sqrt(float(len(std_operator))))
     vals = [ norm1(unvec(_np.dot(std_operator,vec(random_hermitian(rand_dim)))))
