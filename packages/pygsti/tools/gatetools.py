@@ -134,25 +134,26 @@ def tracenorm(A):
     """
     Compute the trace norm of matrix A given by:
 
-      Tr( sqrt{ A^2 } )
+      Tr( sqrt{ A^dagger * A } )
 
     Parameters
     ----------
     A : numpy array
         The matrix to compute the trace norm of.
     """
-    assert(_np.linalg.norm(A - _np.conjugate(A.T)) < 1e-8), \
-        "'tracenorm' is currenlty only implemented for Hermitian matrices"
-    evals = _np.linalg.eigvals( A )
-    return sum( [abs(ev) for ev in evals] )
-
+    if _np.linalg.norm(A - _np.conjugate(A.T)) < 1e-8:
+        #Hermitian, so just sum eigenvalue magnitudes
+        return _np.sum( _np.abs( _np.linalg.eigvals( A ) ) )
+    else:
+        #Sum of singular values (positive by construction)
+        return _np.sum( _np.linalg.svd(A, compute_uv=False) )
 
 def tracedist(A, B):
     """
     Compute the trace distance between matrices A and B,
     given by:
 
-      D = 0.5 * Tr( sqrt{ (A-B)^2 } )
+      D = 0.5 * Tr( sqrt{ (A-B)^dagger * (A-B) } )
 
     Parameters
     ----------
@@ -163,7 +164,7 @@ def tracedist(A, B):
 
 
 
-def diamonddist(A, B, mxBasis='gm'):
+def diamonddist(A, B, mxBasis='gm', return_x=False):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -180,10 +181,17 @@ def diamonddist(A, B, mxBasis='gm'):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
+    return_x : bool, optional
+        Whether to return a numpy array encoding the state (rho) at 
+        which the maximal trace distance occurs.
+
     Returns
     -------
-    float
+    dm : float
        Diamond norm
+    W : numpy array
+       Only returned if `return_x = True`.  Encodes the state rho, such that
+       `dm = trace( |(J(A)-J(B)).T * W| )`.
     """
     mxBasis = _basis.build_basis_for_matrix(A, mxBasis)
 
@@ -222,8 +230,8 @@ def diamonddist(A, B, mxBasis='gm'):
     assert(dim == A.shape[1] == B.shape[0] == B.shape[1])
 
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
-    JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, mxBasis.std_equivalent())
-    JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, mxBasis.std_equivalent())
+    JAstd = smallDim * _jam.fast_jamiolkowski_iso_std(A, mxBasis)
+    JBstd = smallDim * _jam.fast_jamiolkowski_iso_std(B, mxBasis)
 
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
     #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
@@ -293,7 +301,12 @@ def diamonddist(A, B, mxBasis='gm'):
     except:
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
         return -2
-    return prob.value
+
+    if return_x:
+        X = Y.value + 1j*Z.value #encodes state at which maximum trace-distance occurs
+        return prob.value, X
+    else:
+        return prob.value
 
 def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
@@ -317,8 +330,8 @@ def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     """
     if mxBasis is None:
         mxBasis = _basis.Basis('gm', int(round(_np.sqrt(A.shape[0]))))
-    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
-    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
+    JA = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
+    JB = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
     return tracedist(JA,JB)
 
 
@@ -342,6 +355,11 @@ def process_fidelity(A, B, mxBasis=None):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
+    if A[0,0] == 1.0 and B[0,0] == 1.0: #then assume TP-like gates & use simpler formula
+        TrLambda = _np.trace( _np.dot(A, _np.linalg.inv(B)) )
+        d2 = A.shape[0]
+        return 1.0 - TrLambda / d2
+    
     if mxBasis is None:
         mxBasis = _basis.Basis('gm', int(round(_np.sqrt(A.shape[0]))))
     JA = _jam.jamiolkowski_iso(A, mxBasis)
