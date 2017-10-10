@@ -2093,11 +2093,28 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         log_ys = _np.log10(_np.array(ys,'d'))
         minlog = _np.floor(min(log_ys))
         maxlog = _np.ceil(max(log_ys))
+
+
+        #Set plot size and margins
+        lmargin = rmargin = tmargin = bmargin = 10
+        lmargin += 30 # for y-tics
+        bmargin += 40 # for x-tics & xlabel
+        
+        width = lmargin + max(20*len(xs),120) + rmargin
+        height = tmargin + 120 + bmargin
+    
+        width *= scale
+        height *= scale
+        lmargin *= scale
+        rmargin *= scale
+        tmargin *= scale
+        bmargin *= scale
         
         data = [trace]
         layout = go.Layout(
-            width = (100 + 50*len(xs))*scale,
-            height = 250*scale,
+            width = width, 
+            height = height,
+            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title="index",
                 tickvals=xs
@@ -2278,11 +2295,32 @@ class FitComparisonBarPlot(WorkspacePlot):
             marker=dict(color=colors),
             hoverinfo='text'
         )
+
+        #Set plot size and margins
+        lmargin = rmargin = tmargin = bmargin = 10
+        if Xlabel: bmargin += 20
+        lmargin += 20 #y-label is always present
+        if xtics:
+            max_xl = max([len(xl) for xl in xtics])
+            if max_xl > 0: bmargin += max_xl*5
+        lmargin += 20 #for y-labels (guess)
+        
+        width = lmargin + max(30*len(xs),150) + rmargin
+        height = tmargin + 200 + bmargin
+    
+        width *= scale
+        height *= scale
+        lmargin *= scale
+        rmargin *= scale
+        tmargin *= scale
+        bmargin *= scale
+
         
         data = [trace]
         layout = go.Layout(
-            width = 60*len(ys)*scale,
-            height = 300*scale,
+            width = width, 
+            height = height,
+            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title=Xlabel,
                 tickvals=xs,
