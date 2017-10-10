@@ -1880,7 +1880,7 @@ class WorkspaceTable(WorkspaceOutput):
                 if autosize:
                     init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
                 if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                    init_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableID)
+                    init_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableID)
     
                 ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
     
@@ -1923,6 +1923,12 @@ class WorkspaceTable(WorkspaceOutput):
     
                     divHTML.append(table_dict['html'])
 
+                    pre_js = ""
+                    if global_requirejs:
+                        pre_js += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
+                    pre_js += '  $(document).ready(function() {\n'
+                    table_dict['js'] = pre_js + table_dict['js']
+                    
                     # init_table_js work is peformed when divs are loaded
                     init_single_table_js = ''
                     if resizable:
@@ -1930,7 +1936,7 @@ class WorkspaceTable(WorkspaceOutput):
                     if autosize:
                         init_single_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableDivID)
                     if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                        init_single_table_js += '    trigger_wstable_plot_creation("{tableID}");\n'.format(tableID=tableDivID)
+                        init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableDivID)
 
                     if '$' in table_dict['html'] and self.options['render_math']:
                         # then there is math text that needs rendering,
@@ -1945,8 +1951,12 @@ class WorkspaceTable(WorkspaceOutput):
                     else:
                         #Note: this MUST be below plot handler init, as this triggers plot creation
                         table_dict['js'] += init_single_table_js 
-    
-                    divJS.append(table_dict['js']) #Note: do we need to wrape this JS in an onready and/or require stmt so it runs when loaded?
+
+                    table_dict['js'] += '}); //end on-ready handler\n'
+                    if global_requirejs:
+                        table_dict['js'] += '}); //end require block\n'
+                        
+                    divJS.append(table_dict['js'])
                     divIDs.append(tableDivID)
 
                 assert('output_dir' in self.options and self.options['output_dir']), \

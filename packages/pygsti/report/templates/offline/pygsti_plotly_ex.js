@@ -63,7 +63,7 @@ function make_wsplot_resizable(id) {
 }
 
 
-function trigger_wstable_plot_creation(id) {
+function trigger_wstable_plot_creation(id, resizable) {
     $("#"+id).on("createplots", function(event) {
         var wstable = $("#"+id); //actually a div, a "workspace table"
         console.log("Initial sizing of plot table " + id + " cells");
@@ -78,8 +78,15 @@ function trigger_wstable_plot_creation(id) {
 	    var padding = $(td).css("padding-left");
 	    if(padding == "") { padding = 0; }
 	    else { padding = parseFloat(padding); }
-            $(td).css("width", max_width(plots)+2*padding);
-            $(td).css("height", max_height(plots)+2*padding);
+	    desiredW =	max_width(plots)+2*padding;
+            desiredH =	max_height(plots)+2*padding
+            $(td).css("width", desiredW);
+            $(td).css("height", desiredH);
+	    if(!resizable) {
+		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		firstChild.css("width", max_width(plots)+2*padding);
+		firstChild.css("height", max_height(plots)+2*padding);
+	    }
 	});
 	
         //2) lock down initial widths of non-plot cells to they don't change later
