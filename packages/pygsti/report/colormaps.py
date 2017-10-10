@@ -191,8 +191,6 @@ class LinlogColormap(Colormap):
         self.N = n_boxes
         self.percentile = pcntle
         self.dof = dof_per_box
-        self.vmin = vmin
-        self.vmax = vmax
         hmin = 0  #we'll normalize all values to [0,1] and then
         hmax = 1  # plot.ly will map this range linearly to (also) [0,1]
                   # range of our (and every) colorscale.
@@ -200,6 +198,10 @@ class LinlogColormap(Colormap):
         N = max(self.N,1) #don't divide by N == 0 (if there are no boxes)
         self.trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, self.dof))
           # the linear-log transition point
+
+        self.vmin = vmin
+        self.vmax = max(vmax,self.trans) #so linear portion color scale ends at trans
+
 
         # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
         # [0.5, 1.0] such that the perceived brightness of the pink matches the

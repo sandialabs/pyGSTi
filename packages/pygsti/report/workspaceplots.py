@@ -717,8 +717,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
 
     trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
-                                   color=[colormap.normalize(y) for y in ys],
-                                   colorscale=colormap.get_colorscale(),
+                                   color=[colormap.get_color(y) for y in ys],
+                                   #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly
                                    line=dict(width=1)))
     if hoverInfo:
         trace['hoverinfo'] = 'text'
