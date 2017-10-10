@@ -449,6 +449,27 @@ div.sidenav a.active {
     margin-left: 50px;
 }
 
+
+.sidenav .pygsti-wsoutput-group {
+    width: 90%;	/* some padding around sidenav tables */
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.sidenav .dataTable {
+    width: 100%; /* make width of pygsti-wsoutput-group (above) */
+}
+
+.sidenav .dataTable thead tr th,                                                                                                          
+.sidenav .dataTable tfoot tr td,
+.sidenav .dataTable tbody tr td {
+    font-size: 9px;
+}
+
+.sidenav .dlLink {
+    display: none;
+}
+
 /* Style page content - use this if you want to push the page content to the right when you open the side navigation */
 #main {
     transition: margin-left .5s;

@@ -3,10 +3,10 @@
 
 	<!-- (goSwitchboard2)s -->
 
-	<figure id="bestGatesetGaugeParamsTable" class='tbl'>
+	<!-- <figure id="bestGatesetGaugeParamsTable" class='tbl'>
 	  <figcaption><span class="captiontitle">Gauge Optimization Details</span> <span class="captiondetail"> A list of the parameters used when performing the gauge optimization that produced the final GST results found in tables and figures which report gauge-variant quantities.</span></figcaption>
-	  %(bestGatesetGaugeOptParamsTable)s
-	</figure>
+	  (bestGatesetGaugeOptParamsTable)s
+	</figure> -->
 
         <!-- <p class="clear"></p> -->
 
@@ -20,6 +20,12 @@
 	  <figcaption><span class="captiontitle">Estimated SPAM operations</span> <span class="captiondetail"> Compares the estimated SPAM operations to those desired (the ideal target operations).</span></figcaption>
 	  %(bestGatesetSpamBriefTable)s
 	</figure>
+
+	<figure id="bestGatesVsTargetTable_gv" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimated gates vs. ideal targets</span> <span class="captiondetail">This table presents different (gauge-variant) measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesVsTargetTable_gv)s
+	</figure>
+
 	
 	<figure class='tbl' id="bestGatesetDecompTable">
 	  <figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">  A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle, respectively, and dot products between the axis vectors give the angles between rotation axes.</span></figcaption>
@@ -33,11 +39,11 @@
 
 	<p class="clear"></p>
 	
-	
-	<figure id="bestGatesVsTargetTable_gv" class='tbl'>
-	  <figcaption><span class="captiontitle">GST estimated gates and germs vs. ideal targets</span> <span class="captiondetail">This table presents different (gauge-variant) measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
-	  %(bestGatesVsTargetTable_gv)s
+	<figure id="bestGatesVsTargetTable_gvgerms" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimated germs vs. ideal targets</span> <span class="captiondetail">This table presents different (gauge-variant) measures of distance or discrepancy between the germs of the GST estimate and those composed of the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesVsTargetTable_gvgerms)s
 	</figure>
+
 	
 	<figure id="bestGatesetSpamVsTargetTable" class='tbl'>
 	  <figcaption><span class="captiontitle">GST estimated SPAM vs. ideal targets</span> <span class="captiondetail"> This table presents, for each state preparation and POVM effect, measures of distance or discrepancy from the GST estimate to the ideal target operation. Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
