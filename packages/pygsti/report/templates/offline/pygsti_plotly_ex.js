@@ -93,7 +93,8 @@ function trigger_wstable_plot_creation(id) {
 	    parent_was_visible = false;
 	    tab.show();
 	}
-        wstable.children("div").each( function(k,div) {
+
+	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
             $(div).find("td").not(".plotContainingTD").each(
@@ -101,7 +102,14 @@ function trigger_wstable_plot_creation(id) {
 	    $(div).find("th").each(
 		function(i,el){ $(el).css("height", $(el).height()); });
             if(!was_visible) { $(div).hide(); }
-        });
+        }
+
+	if(wstable.hasClass("single_switched_value")) {
+	    fnForSingleTableDivs( 0, wstable[0]);
+	} else {
+            wstable.children("div").each( fnForSingleTableDivs );
+	}
+
 	if(!parent_was_visible) { tab.hide(); } 
 
 	//3) create the plots.  Each plot will look at its container's (TD's)
