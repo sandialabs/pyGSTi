@@ -178,6 +178,28 @@ class Estimate(object):
         return newCRF
                                                                                     
 
+    def has_confidence_region_factory(self, gateset_label='final iteration estimate',
+                                      gatestrings_label='final'):
+        """
+        Checks whether a confidence region factory for the given gate set
+        and gate string list labels exists.
+
+        Parameters
+        ----------
+        gateset_label : str, optional
+            The label of a `GateSet` held within this `Estimate`.
+
+        gatestrings_label : str, optional
+            The label of a gate string list within this estimate's parent
+            `Results` object.
+
+        Returns
+        -------
+        bool
+        """
+        return bool( CRFkey(gateset_label, gatestrings_label) in self.confidence_region_factories)
+
+    
     def get_confidence_region_factory(self, gateset_label='final iteration estimate',
                                       gatestrings_label='final', createIfNeeded=False):
         """
