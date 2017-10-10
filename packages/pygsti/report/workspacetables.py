@@ -661,7 +661,12 @@ class GatesVsTargetTable(WorkspaceTable):
                 elif disp == "frob":
                     fn = _reportables.Fro_diff if b else \
                          _reportables.Gatestring_fro_diff
+
+                #import time as _time #DEBUG
+                #tStart = _time.time() #DEBUG
                 qty = _ev( fn(gateset, targetGateset, gl), confidenceRegionInfo)
+                #tm = _time.time()-tStart #DEBUG
+                #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append( qty )
 
             table.addrow(row_data, formatters)
@@ -1286,9 +1291,13 @@ class GateEigenvalueTable(WorkspaceTable):
             row_data = [ str(gl) ]
             row_formatters = [None]
 
+            #import time as _time #DEBUG
+            #tStart = _time.time() #DEBUG
             fn = _reportables.Gate_eigenvalues if _tools.isstr(gl) else \
                  _reportables.Gatestring_eigenvalues
             evals = _ev(fn(gateset,gl), confidenceRegionInfo)
+            #tm = _time.time() - tStart #DEBUG
+            #if tm > 0.01: print("DB: Gate eigenvalues in %gs" % tm) #DEBUG
                 
             evals = evals.reshape(evals.size, 1)
             #OLD: format to 2-columns - but polar plots are big, so just stick to 1col now
@@ -1297,12 +1306,17 @@ class GateEigenvalueTable(WorkspaceTable):
 
             if targetGateset is not None:
                 #TODO: move this to a reportable qty to get error bars?
+                
                 if _tools.isstr(gl):
-                    rel_evals = _ev(_reportables.Rel_gate_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
                     target_evals = _np.linalg.eigvals( targetGateset.gates[gl] ) #no error bars
                 else:
-                    rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
                     target_evals = _np.linalg.eigvals( targetGateset.product(gl) ) #no error bars
+
+                if any([(x in display) for x in ('rel','log-rel','relpolar')]):
+                    if _tools.isstr(gl):
+                        rel_evals = _ev(_reportables.Rel_gate_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
+                    else:
+                        rel_evals = _ev(_reportables.Rel_gatestring_eigenvalues(gateset, targetGateset, gl), confidenceRegionInfo)
 
                 # permute target eigenvalues according to min-weight matching
                 _, pairs = _tools.minweight_match( evals.get_value(), target_evals, lambda x,y: abs(x-y) )
@@ -1859,7 +1873,7 @@ class GaugeOptParamsTable(WorkspaceTable):
     
     def _create(self, gaugeOptArgs):
         
-        colHeadings = ('Quantity','Value')
+        colHeadings = ('G-Opt Param','Value')
         formatters = ('Bold','Bold')
     
         table = _ReportTable(colHeadings, formatters)
@@ -1871,17 +1885,17 @@ class GaugeOptParamsTable(WorkspaceTable):
             table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
         #if 'TPpenalty' in gaugeOptArgs: #REMOVED
         #    table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
-        if 'cptp_penalty_factor' in gaugeOptArgs:
+        if 'cptp_penalty_factor' in gaugeOptArgs and gaugeOptArgs['cptp_penalty_factor'] != 0:
             table.addrow(("CP penalty factor", str(gaugeOptArgs['cptp_penalty_factor'])), (None,None))
-        if 'spam_penalty_factor' in gaugeOptArgs:
-            table.addrow(("SPAM constrained", str(gaugeOptArgs['spam_penalty_factor'])), (None,None))
+        if 'spam_penalty_factor' in gaugeOptArgs and gaugeOptArgs['spam_penalty_factor'] != 0:
+            table.addrow(("SPAM penalty factor", str(gaugeOptArgs['spam_penalty_factor'])), (None,None))
         if 'gatesMetric' in gaugeOptArgs:
             table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
         if 'spamMetric' in gaugeOptArgs:
             table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
         if 'itemWeights' in gaugeOptArgs:
             if gaugeOptArgs['itemWeights']:
-                table.addrow(("Item weighting", ", ".join([("%s=%.2g" % (k,v)) 
+                table.addrow(("Item weights", ", ".join([("%s=%.2g" % (k,v)) 
                                for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
         if 'gauge_group' in gaugeOptArgs:
             table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
