@@ -90,38 +90,57 @@ def choi_trace(gate, mxBasis):
 Choi_trace = _gsf.gatefn_factory(choi_trace) # init args == (gateset, gateLabel)
 
 
-def gate_eigenvalues(gate, mxBasis):
-    return _np.array(sorted(_np.linalg.eigvals(gate),
-                            key=lambda ev: abs(ev), reverse=True))
-Gate_eigenvalues = _gsf.gatefn_factory(gate_eigenvalues)
-# init args == (gateset, gateLabel)
+
+class Gate_eigenvalues(_gsf.GateSetFunction):
+    def __init__(self, gateset, gatelabel):
+        self.gatelabel = gatelabel
+        _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + gatelabel])
+            
+    def evaluate(self, gateset):
+        evals,evecs = _np.linalg.eig(gateset.gates[self.gatelabel])
+        
+        ev_list = list(enumerate(evals))
+        ev_list.sort(key=lambda tup:abs(tup[1]), reverse=True)
+        indx,evals = zip(*ev_list)
+        evecs = evecs[:,indx] #sort evecs according to evals
+
+        self.G0 = gateset.gates[self.gatelabel]
+        self.evals = _np.array(evals)
+        self.evecs = evecs
+        self.inv_evecs = _np.linalg.inv(evecs)
+
+        return self.evals
+
+    def evaluate_nearby(self, nearby_gateset):
+        #avoid calling minweight_match again
+        dMx = nearby_gateset.gates[self.gatelabel] - self.G0
+        #evalsM = evals0 + Uinv * (M-M0) * U
+        return _np.array( [ self.evals[k] + _np.dot(self.inv_evecs[k,:], _np.dot(dMx, self.evecs[:,k]))
+                            for k in range(dMx.shape[0])] )
+    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
 
 
-def gatestring_eigenvalues(gateset, gatestring):
-    return _np.array(sorted(_np.linalg.eigvals(gateset.product(gatestring)),
-                            key=lambda ev: abs(ev), reverse=True))
-Gatestring_eigenvalues = _gsf.gatesetfn_factory(gatestring_eigenvalues)
-# init args == (gateset, gatestring)
-
-  
-def rel_gatestring_eigenvalues(gatesetA, gatesetB, gatestring):
-    A = gatesetA.product(gatestring) # "gate"
-    B = gatesetB.product(gatestring) # "target gate"
-    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_gate)
-Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
-# init args == (gatesetA, gatesetB, gatestring) 
+#def gate_eigenvalues(gate, mxBasis):
+#    return _np.array(sorted(_np.linalg.eigvals(gate),
+#                            key=lambda ev: abs(ev), reverse=True))
+#Gate_eigenvalues = _gsf.gatefn_factory(gate_eigenvalues)
+## init args == (gateset, gateLabel)
 
 
-#Example alternate implementation that utilizes evaluate_nearby...
-#class Gatestring_gaugeinv_diamondnorm(_gsf.GateSetFunction):
+#Example....
+#class Gatestring_eigenvalues(_gsf.GateSetFunction):
 #    def __init__(self, gatesetA, gatesetB, gatestring):
-#        B = gatesetB.product(gatestring)
+#        self.gatestring = gatestring
+#        self.B = gatesetB.product(gatestring)
 #        self.evB = _np.linalg.eigvals(B)
 #        self.gatestring = gatestring
 #        _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
 #            
 #    def evaluate(self, gateset):
+#        Mx = gateset.product(self.gatestring)
+#        return _np.array(sorted(_np.linalg.eigvals(),
+#                            key=lambda ev: abs(ev), reverse=True))
+#
 #        A = gateset.product(self.gatestring)
 #        evA, evecsA = _np.linalg.eig(A)
 #        self.A0, self.evA0, self.evecsA0, self.ievecsA0 = A, evA, evecsA, _np.linalg.inv(evecsA) #save for evaluate_nearby...
@@ -135,8 +154,53 @@ Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
 #        #evA = _np.linalg.eigvals(A)  # = self.evA0 + U * (A-A0) * Udag
 #        evA = _np.array( [ self.evA0 + _np.dot(self.ievecsA0[k,:], _np.dot(dA, self.evecsA0[:,k])) for k in range(dA.shape[0])] )
 #        return _np.max( [ abs(evA[i]-self.evB[j]) for i,j in self.pairs ] )
-#
-# ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
+
+
+class Gatestring_eigenvalues(_gsf.GateSetFunction):
+    def __init__(self, gateset, gatestring):
+        self.gatestring = gatestring
+        _gsf.GateSetFunction.__init__(self, gateset, ["all"])
+            
+    def evaluate(self, gateset):
+        Mx = gateset.product(self.gatestring)
+        evals,evecs = _np.linalg.eig(Mx)
+        
+        ev_list = list(enumerate(evals))
+        ev_list.sort(key=lambda tup:abs(tup[1]), reverse=True)
+        indx,evals = zip(*ev_list)
+        evecs = evecs[:,indx] #sort evecs according to evals
+
+        self.Mx = Mx
+        self.evals = _np.array(evals)
+        self.evecs = evecs
+        self.inv_evecs = _np.linalg.inv(evecs)
+
+        return self.evals
+
+    def evaluate_nearby(self, nearby_gateset):
+        #avoid calling minweight_match again
+        Mx = nearby_gateset.product(self.gatestring)
+        dMx = Mx - self.Mx
+        #evalsM = evals0 + Uinv * (M-M0) * U
+        return _np.array( [ self.evals[k] + _np.dot(self.inv_evecs[k,:], _np.dot(dMx, self.evecs[:,k]))
+                            for k in range(dMx.shape[0])] )
+    # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf
+
+
+#def gatestring_eigenvalues(gateset, gatestring):
+#    return _np.array(sorted(_np.linalg.eigvals(gateset.product(gatestring)),
+#                            key=lambda ev: abs(ev), reverse=True))
+#Gatestring_eigenvalues = _gsf.gatesetfn_factory(gatestring_eigenvalues)
+## init args == (gateset, gatestring)
+
+  
+def rel_gatestring_eigenvalues(gatesetA, gatesetB, gatestring):
+    A = gatesetA.product(gatestring) # "gate"
+    B = gatesetB.product(gatestring) # "target gate"
+    rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
+    return _np.linalg.eigvals(rel_gate)
+Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
+# init args == (gatesetA, gatesetB, gatestring) 
 
 
 def gatestring_fro_diff(gatesetA, gatesetB, gatestring):
@@ -171,12 +235,35 @@ Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 
 try:
     import cvxpy as _cvxpy
-    def gatestring_half_diamond_norm(gatesetA, gatesetB, gatestring):
-        A = gatesetA.product(gatestring) # "gate"
-        B = gatesetB.product(gatestring) # "target gate"
-        return half_diamond_norm(A, B, gatesetB.basis)
-    Gatestring_half_diamond_norm = _gsf.gatesetfn_factory(gatestring_half_diamond_norm)
-      # init args == (gatesetA, gatesetB, gatestring)
+
+    class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
+        def __init__(self, gatesetA, gatesetB, gatestring):
+            self.gatestring = gatestring
+            self.B = gatesetB.product(gatestring)
+            self.d = int(round(_np.sqrt(gatesetA.dim)))
+            _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
+                
+        def evaluate(self, gateset):
+            A = gateset.product(self.gatestring)
+            dm, W = _tools.diamonddist(A, self.B, gateset.basis,
+                                       return_x=True)
+            self.W = W
+            return 0.5*dm
+    
+        def evaluate_nearby(self, nearby_gateset):
+            mxBasis = nearby_gateset.basis
+            JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
+                nearby_gateset.product(self.gatestring), mxBasis)
+            JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
+            Jt = (JBstd-JAstd).T
+            return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
+
+    #def gatestring_half_diamond_norm(gatesetA, gatesetB, gatestring):
+    #    A = gatesetA.product(gatestring) # "gate"
+    #    B = gatesetB.product(gatestring) # "target gate"
+    #    return half_diamond_norm(A, B, gatesetB.basis)
+    #Gatestring_half_diamond_norm = _gsf.gatesetfn_factory(gatestring_half_diamond_norm)
+    #  # init args == (gatesetA, gatesetB, gatestring)
 
 except ImportError:
     gatestring_half_diamond_norm = None
@@ -365,10 +452,33 @@ Jt_diff = _gsf.gatesfn_factory(jt_diff)
 
 try:
     import cvxpy as _cvxpy
-    def half_diamond_norm(A, B, mxBasis):
-        return 0.5 * _tools.diamonddist(A, B, mxBasis)
-    Half_diamond_norm = _gsf.gatesfn_factory(half_diamond_norm)
-    # init args == (gateset1, gateset2, gateLabel)
+
+    class Half_diamond_norm(_gsf.GateSetFunction):
+        def __init__(self, gatesetA, gatesetB, gatelabel):
+            self.gatelabel = gatelabel
+            self.B = gatesetB.gates[gatelabel]
+            self.d = int(round(_np.sqrt(gatesetA.dim)))
+            _gsf.GateSetFunction.__init__(self, gatesetA, ["gate:"+gatelabel])
+                
+        def evaluate(self, gateset):
+            gl = self.gatelabel
+            dm, W = _tools.diamonddist(gateset.gates[gl], self.B, gateset.basis,
+                                       return_x=True)
+            self.W = W
+            return 0.5*dm
+    
+        def evaluate_nearby(self, nearby_gateset):
+            gl = self.gatelabel; mxBasis = nearby_gateset.basis
+            JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
+                nearby_gateset.gates[gl], mxBasis)
+            JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
+            Jt = (JBstd-JAstd).T
+            return 0.5*_np.trace( Jt.real * self.W.real + Jt.imag * self.W.imag)
+
+    #def half_diamond_norm(A, B, mxBasis):
+    #    return 0.5 * _tools.diamonddist(A, B, mxBasis)
+    #Half_diamond_norm = _gsf.gatesfn_factory(half_diamond_norm)
+    ## init args == (gateset1, gateset2, gateLabel)
 
 except ImportError:
     half_diamond_norm = None
@@ -440,6 +550,7 @@ def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
     return (d2 + mlPl)/float(d*(d+1))
 Eigenvalue_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_avg_gate_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
+
 
 def eigenvalue_diamondnorm(A, B, mxBasis):
     d2 = A.shape[0]
