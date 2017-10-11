@@ -358,7 +358,7 @@ def process_fidelity(A, B, mxBasis=None):
     if A[0,0] == 1.0 and B[0,0] == 1.0: #then assume TP-like gates & use simpler formula
         TrLambda = _np.trace( _np.dot(A, _np.linalg.inv(B)) )
         d2 = A.shape[0]
-        return 1.0 - TrLambda / d2
+        return TrLambda / d2
     
     if mxBasis is None:
         mxBasis = _basis.Basis('gm', int(round(_np.sqrt(A.shape[0]))))
@@ -1540,11 +1540,12 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
 
         Utgt_inv = _np.linalg.inv(Utgt)
         epgate = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
-        #print("DB: tgt_evals = ",evals_tgt)
-        #print("DB: evals = ",evals)
-        #print("DB: ",_np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv)))
-        #print("DB: imag norm = ",_np.linalg.norm(_np.imag(epgate)))
-        ret.gates[gl] = _np.real_if_close(epgate, tol=1000)
+        epgate = _np.real_if_close(epgate, tol=1000)
+        if _np.linalg.norm(_np.imag(epgate)) > 1e-7:
+            _warnings.warn(("Target-eigenspace-projected gate has an imaginary"
+                            " component.  This usually isn't desired and"
+                            " indicates a failure to match eigenvalues."))
+        ret.gates[gl] = epgate
 
     return ret
     

@@ -164,7 +164,9 @@ class RBTestCase(BaseTestCase):
         gs_d_cliff = gs_clifford_target.copy()
         gs_d = gs_d.depolarize(gate_noise=depol_strength)
         gs_d_cliff = gs_d_cliff.depolarize(gate_noise=depol_strength)
-        
+
+        print("AGI = ",rb.average_gate_infidelity(gs_d.gates['Gx'],gs_target.gates['Gx']))
+        print("r = ",rb.p_to_r(1-depol_strength))
         self.assertAlmostEqual(rb.average_gate_infidelity(gs_d.gates['Gx'],gs_target.gates['Gx']),
                                rb.p_to_r(1-depol_strength))
         A = pygsti.change_basis(gs_d.gates['Gx'], 'gm', 'std')

@@ -256,11 +256,6 @@ class ConfidenceRegionFactory(object):
             - 'intrinsic error' -- compute separately the intrinsic error
               in the gate and spam GateSet parameters and set weighting metric
               based on their ratio.
-            - 'linear response' -- obtain elements of the Hessian via the
-              linear response of a "forcing term".  This requres a likelihood
-              optimization for *every* computed error bar, but avoids pre-
-              computation of the entire Hessian matrix, which can be 
-              prohibitively costly on large parameter spaces.
 
         label : str, optional
             The internal label to use for this projection.  If None, then
@@ -334,6 +329,12 @@ class ConfidenceRegionFactory(object):
         Stores the parameters needed to run (on-demand) the ML-GST
         optimizations needed to compute error bars on quantities.
 
+        'linear response' mode obtains elements of the Hessian via the
+        linear response of a "forcing term".  This requres a likelihood
+        optimization for *every* computed error bar, but avoids pre-
+        computation of the entire Hessian matrix, which can be 
+        prohibitively costly on large parameter spaces.
+
         Parameters
         ----------
         linresponse_mlgst_params : dict
@@ -345,7 +346,8 @@ class ConfidenceRegionFactory(object):
 
         gatestring_list = self.parent.parent.gatestring_lists[self.gatestring_list_lbl]
         dataset = self.parent.parent.dataset
-        
+
+        parameters = self.parent.parameters
         minProbClip = parameters.get('minProbClip', 1e-4)
         minProbClipForWeighting = parameters.get('minProbClipForWeighting',1e-4)
         probClipInterval = parameters.get('probClipInterval',(-1e6,1e6))

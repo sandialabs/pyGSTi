@@ -3,6 +3,7 @@ import warnings
 import pygsti
 from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
+from pygsti.objects import gatesetfunction as gsf
 
 import numpy as np
 import sys, os
@@ -17,6 +18,13 @@ class TestHessianMethods(BaseTestCase):
 
         self.gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
+
+
+        fiducials = stdxyi.fiducials
+        germs = stdxyi.germs
+        gateLabels = list(self.gateset.gates.keys()) # also == std.gates
+        self.maxLengthList = [1,2]
+        self.gss = pygsti.construction.make_lsgst_structs(gateLabels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
@@ -133,32 +141,41 @@ class TestHessianMethods(BaseTestCase):
 
     def test_confidenceRegion(self):
 
-        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
-                                        returnHessian=True)
-        ci_std = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="std")
-        ci_noproj = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="none")
-        ci_opt = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="optimal gate CIs",
-                                             tol=0.1) #very low tol so doesn't take long
-        ci_intrinsic = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="intrinsic error")
-        ci_linresponse = pygsti.obj.ConfidenceRegion(self.gateset, None, 95.0,
-                                                     hessianProjection="linear response",
-                                                     linresponse_mlgst_params={'dataset': self.ds,
-                                                                               'gateStringsToUse': list(self.ds.keys())} )
+        res = pygsti.obj.Results()
+        res.init_dataset(self.ds)
+        res.init_gatestrings(self.gss)
+        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
+                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+                         estimate_key="default")
+        
+        est = res.estimates['default']
+        est.add_confidence_region_factory('final iteration estimate', 'final')
+        self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        self.assertTrue( ci_std.has_hessian() )
+        cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
+        cfctry.compute_hessian()
+        self.assertTrue( cfctry.has_hessian() )
 
+        cfctry.project_hessian('std')
+        cfctry.project_hessian('none')
+        cfctry.project_hessian('optimal gate CIs')
+        cfctry.project_hessian('intrinsic error')
+
+        cfctry.enable_linear_response_errorbars({'dataset': self.ds,
+                                               'gateStringsToUse': list(self.ds.keys())})
+
+        ci_std = cfctry.view( 95.0, 'normal', 'std')
+        ci_noproj = cfctry.view( 95.0, 'normal', 'none')
+        ci_intrinsic = cfctry.view( 95.0, 'normal', 'intrinsic error')
+        ci_opt = cfctry.view( 95.0, 'normal', 'optimal gate CIs')
+        #ci_linresponse = ??
+        
         with self.assertRaises(ValueError):
-            pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="FooBar") #bad hessianProjection
+            cfctry.project_hessian(95.0, 'normal', 'FooBar') #bad hessianProjection
 
-        self.assertWarns(pygsti.obj.ConfidenceRegion, self.gateset,
-                         chi2Hessian, 0.95, hessianProjection="none") # percentage < 1.0
+        self.assertWarns(cfctry.view, 0.95, 'normal', 'none') # percentage < 1.0
 
-        for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic, ci_linresponse):
+        for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic): # , ci_linresponse
             try: 
                 ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals("Gx")
                 ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals("rho0")
@@ -167,62 +184,63 @@ class TestHessianMethods(BaseTestCase):
             except NotImplementedError: 
                 pass #linear response CI doesn't support profile likelihood intervals
     
-            def fnOfGate_float(mx):
+            def fnOfGate_float(mx,b):
                 return float(mx[0,0])
-            def fnOfGate_0D(mx):
+            def fnOfGate_0D(mx,b):
                 return np.array( float(mx[0,0]) )
-            def fnOfGate_1D(mx):
+            def fnOfGate_1D(mx,b):
                 return mx[0,:]
-            def fnOfGate_2D(mx):
+            def fnOfGate_2D(mx,b):
                 return mx[:,:]
-            def fnOfGate_3D(mx):
+            def fnOfGate_3D(mx,b):
                 return np.zeros( (2,2,2), 'd') #just to test for error
-    
-    
-            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_float, 'Gx', verbosity=0)
-            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_0D, 'Gx', verbosity=0)
-            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_1D, 'Gx', verbosity=0)
-            df = ci_cur.get_gate_fn_confidence_interval(fnOfGate_2D, 'Gx', verbosity=0)
-            df, f0 = self.runSilent(ci_cur.get_gate_fn_confidence_interval,
-                                    fnOfGate_float, 'Gx', returnFnVal=True, verbosity=4)
-    
-            with self.assertRaises(ValueError):
-                ci_cur.get_gate_fn_confidence_interval(fnOfGate_3D, 'Gx', verbosity=0)
 
-            #SHORT-CIRCUIT linear reponse here to reduce run time
-            if ci_cur is ci_linresponse: continue
+            for fnOfGate in (fnOfGate_float, fnOfGate_0D, fnOfGate_1D, fnOfGate_2D, fnOfGate_3D):
+                FnClass = gsf.gatefn_factory(fnOfGate)
+                FnObj = FnClass(self.gateset, 'Gx')
+                if fnOfGate is fnOfGate_3D:
+                    with self.assertRaises(ValueError):
+                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                else:
+                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                                            FnObj, returnFnVal=True, verbosity=4)
+
+            ##SHORT-CIRCUIT linear reponse here to reduce run time
+            #if ci_cur is ci_linresponse: continue
     
-            def fnOfVec_float(v):
+            def fnOfVec_float(v,b):
                 return float(v[0])
-            def fnOfVec_0D(v):
+            def fnOfVec_0D(v,b):
                 return np.array( float(v[0]) )
-            def fnOfVec_1D(v):
+            def fnOfVec_1D(v,b):
                 return np.array(v[:])
-            def fnOfVec_2D(v):
+            def fnOfVec_2D(v,b):
                 return np.dot(v.T,v)
-            def fnOfVec_3D(v):
+            def fnOfVec_3D(v,b):
                 return np.zeros( (2,2,2), 'd') #just to test for error
     
-    
-            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_float, 'rho0', verbosity=0)
-            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_0D, 'rho0', verbosity=0)
-            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_1D, 'rho0', verbosity=0)
-            df = ci_cur.get_prep_fn_confidence_interval(fnOfVec_2D, 'rho0', verbosity=0)
-            df, f0 = self.runSilent(ci_cur.get_prep_fn_confidence_interval,
-                                    fnOfVec_float, 'rho0', returnFnVal=True, verbosity=4)
-    
-            with self.assertRaises(ValueError):
-                ci_cur.get_prep_fn_confidence_interval(fnOfVec_3D, 'rho0', verbosity=0)
-    
-            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_float, 'E0', verbosity=0)
-            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_0D, 'E0', verbosity=0)
-            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_1D, 'E0', verbosity=0)
-            df = ci_cur.get_effect_fn_confidence_interval(fnOfVec_2D, 'E0', verbosity=0)
-            df, f0 = self.runSilent(ci_cur.get_effect_fn_confidence_interval,
-                                    fnOfVec_float, 'E0', returnFnVal=True, verbosity=4)
-    
-            with self.assertRaises(ValueError):
-                ci_cur.get_effect_fn_confidence_interval(fnOfVec_3D, 'E0', verbosity=0)
+            for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
+                FnClass = gsf.vecfn_factory(fnOfVec)
+                FnObj = FnClass(self.gateset, 'rho0', 'prep')
+                if fnOfVec is fnOfVec_3D:
+                    with self.assertRaises(ValueError):
+                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                else:
+                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                                            FnObj, returnFnVal=True, verbosity=4)
+
+            for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
+                FnClass = gsf.vecfn_factory(fnOfVec)
+                FnObj = FnClass(self.gateset, 'E0', 'effect')
+                if fnOfVec is fnOfVec_3D:
+                    with self.assertRaises(ValueError):
+                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                else:
+                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                                            FnObj, returnFnVal=True, verbosity=4)
     
     
             def fnOfSpam_float(rhoVecs, EVecs):
@@ -235,18 +253,18 @@ class TestHessianMethods(BaseTestCase):
                 return np.array( [[ np.dot( rhoVecs[0].T, EVecs[0] ), 0],[0,0]] )
             def fnOfSpam_3D(rhoVecs, EVecs):
                 return np.zeros( (2,2,2), 'd') #just to test for error
-    
-            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_float, verbosity=0)
-            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_0D, verbosity=0)
-            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_1D, verbosity=0)
-            df = ci_cur.get_spam_fn_confidence_interval(fnOfSpam_2D, verbosity=0)
-            df, f0 = self.runSilent(ci_cur.get_spam_fn_confidence_interval,
-                                    fnOfSpam_float, returnFnVal=True, verbosity=4)
-    
-            with self.assertRaises(ValueError):
-                ci_cur.get_spam_fn_confidence_interval(fnOfSpam_3D, verbosity=0)
-    
-    
+
+            for fnOfSpam in (fnOfSpam_float, fnOfSpam_0D, fnOfSpam_1D, fnOfSpam_2D, fnOfSpam_3D):
+                FnClass = gsf.spamfn_factory(fnOfSpam)
+                FnObj = FnClass(self.gateset)
+                if fnOfSpam is fnOfSpam_3D:
+                    with self.assertRaises(ValueError):
+                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                else:
+                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                                            FnObj, returnFnVal=True, verbosity=4)
+
     
             def fnOfGateSet_float(gs):
                 return float( gs.gates['Gx'][0,0] )
@@ -258,27 +276,45 @@ class TestHessianMethods(BaseTestCase):
                 return np.array( gs.gates['Gx'] )
             def fnOfGateSet_3D(gs):
                 return np.zeros( (2,2,2), 'd') #just to test for error
-    
-            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_float, verbosity=0)
-            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_0D, verbosity=0)
-            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_1D, verbosity=0)
-            df = ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_2D, verbosity=0)
-            df, f0 = self.runSilent(ci_cur.get_gateset_fn_confidence_interval,
-                                    fnOfGateSet_float, returnFnVal=True, verbosity=4)
-    
-            with self.assertRaises(ValueError):
-                ci_cur.get_gateset_fn_confidence_interval(fnOfGateSet_3D, verbosity=0)
+
+            for fnOfGateSet in (fnOfGateSet_float, fnOfGateSet_0D, fnOfGateSet_1D, fnOfGateSet_2D, fnOfGateSet_3D):
+                FnClass = gsf.gatesetfn_factory(fnOfGateSet)
+                FnObj = FnClass(self.gateset)
+                if fnOfGateSet is fnOfGateSet_3D:
+                    with self.assertRaises(ValueError):
+                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                else:
+                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
+                                            FnObj, returnFnVal=True, verbosity=4)
 
         #TODO: assert values of df & f0 ??
 
     def tets_pickle_ConfidenceRegion(self):
-        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
-                                        returnHessian=True)
-        ci_std = pygsti.obj.ConfidenceRegion(self.gateset, chi2Hessian, 95.0,
-                                             hessianProjection="std")
+        res = pygsti.obj.Results()
+        res.init_dataset(self.ds)
+        res.init_gatestrings(self.gss)
+        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
+                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+                         estimate_key="default")
+        
+        res.add_confidence_region_factory('final iteration estimate', 'final')
+        self.assertTrue( res.has_confidence_region_factory('final iteration estimate', 'final'))
+
+        cfctry = res.get_confidence_region_factory('final iteration estimate', 'final')
+        cfctry.compute_hessian()
+        self.assertTrue( cfctry.has_hessian() )
+
+        cfctry.project_hessian('std')
+        ci_std = cfctry.view( 95.0, 'normal', 'std')
+
         import pickle
+        s = pickle.dumps(cfctry)
+        cifctry2 = pickle.loads(s)
+        
         s = pickle.dumps(ci_std)
         ci_std2 = pickle.loads(s)
+        
         #TODO: make sure ci_std and ci_std2 are the same
 
 

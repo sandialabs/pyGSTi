@@ -66,7 +66,7 @@ class ReportBaseCase(BaseTestCase):
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
             returnAll=True)
 
-        cls.results = pygsti.report.Results()
+        cls.results = pygsti.objects.Results()
         cls.results.init_dataset(cls.ds)
         cls.results.init_gatestrings(cls.lsgstStructs)
         cls.results.add_estimate(targetGateset, cls.gs_clgst,
@@ -91,7 +91,7 @@ class ReportBaseCase(BaseTestCase):
         lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.gs_clgst_tp, cls.lsgstStrings, verbosity=0,
                                                    minProbClip=1e-4, probClipInterval=(-1e6,1e6),
                                                    returnAll=True) #TP initial gateset => TP output gatesets
-        cls.results_logL = pygsti.report.Results()
+        cls.results_logL = pygsti.objects.Results()
         cls.results_logL.init_dataset(cls.ds)
         cls.results_logL.init_gatestrings(cls.lsgstStructs)
         cls.results_logL.add_estimate(targetGateset, cls.gs_clgst_tp,

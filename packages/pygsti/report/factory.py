@@ -513,7 +513,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
         #OLD switchBd.gss[d,:] = results.gatestring_structs['iteration']
         switchBd.gssAllL[d] = results.gatestring_structs['iteration']
-
+        
         for i,lbl in enumerate(est_labels):
             est = results.estimates.get(lbl,None)
             if est is None: continue
@@ -540,10 +540,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsTarget[d,i] = est.gatesets['target']
             switchBd.gsGIRep[d,i] = est.gatesets[GIRepLbl]
             switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.gatesets[GIRepLbl],
-                                                                              est.gatesets['target'])
+                                                                          est.gatesets['target'])
             switchBd.gsFinal[d,i,:] = [ est.gatesets.get(l,NA) for l in gauge_opt_labels ]
-            switchBd.gsEvalProjected[d,i,:] = [ (_tools.project_to_target_eigenspace(gs, est.gatesets['target'])
-                                                 if (gs is not NA) else NA) for gs in switchBd.gsFinal[d,i,:] ]
             switchBd.gsTargetAndFinal[d,i,:] = \
                         [ [est.gatesets['target'], est.gatesets[l]] if (l in est.gatesets) else NA
                           for l in gauge_opt_labels ]
@@ -555,7 +553,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                     switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
             #OLD switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
             switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
-        
+
             if confidenceLevel is not None:
                 #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
         
@@ -584,7 +582,6 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 except KeyError:
                     switchBd.criGIRep[d,i] = None
 
-                    
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
 
 
@@ -732,14 +729,17 @@ def create_general_report(results, filename, title="auto",
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['errorgenformula'] = _errgen_formula(errgen_type, 'html')
 
-    # Generate Tables
-    printer.log("*** Generating switchboard tables ***")
+    # Generate Switchboard
+    printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
             _create_master_switchboard(ws, results_dict,
                                        confidenceLevel, nmthreshold, comm)
 
+    # Generate Tables
+    printer.log("*** Generating tables ***")
+        
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
         for some_cri in switchBd.cri.flat: #can have only some confidence regions

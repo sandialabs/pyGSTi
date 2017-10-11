@@ -15,7 +15,6 @@ import collections as _collections
 import pickle as _pickle
 from scipy.stats import chi2 as _chi2
 
-from .. import report as _report
 from .. import algorithms as _alg
 from .. import construction as _construction
 from .. import objects as _objs
@@ -868,7 +867,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
 
             if mode == "Target":
                 if ret == None:
-                    ret = _report.Results()
+                    ret = _objs.Results()
                     ret.init_dataset(ds)
                     #ret.init_gatestrings(lsgstLists) #TODO
                     raise NotImplementedError("Cannot use 'Target' as the first mode (yet).")

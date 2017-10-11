@@ -128,7 +128,7 @@ class GateTestCase(BaseTestCase):
             state = np.zeros( (4,1), 'd' )
             state[0] = state[3] = 1.0
 
-            T = pygsti.objects.FullGaugeGroup.element(
+            T = pygsti.objects.FullGaugeGroupElement(
                 np.array( [ [0,1],
                             [1,0] ], 'd') )
 

@@ -52,7 +52,7 @@ class GateBaseTestCase(BaseTestCase):
         self.assertAlmostEqual( pygsti.jtracedist(A,A,mxBasis="std"), 0.0 )
         self.assertAlmostEqual( pygsti.diamonddist(A,A,mxBasis="std"), 0.0 )
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), (0.430116263352+0j) )
-        self.assertAlmostEqual( pygsti.jtracedist(A,B,mxBasis="std"), 0.260078105936)
+        self.assertAlmostEqual( pygsti.jtracedist(A,B,mxBasis="std"), 0.26430148 ) #OLD: 0.2601 ?
         self.assertAlmostEqual( pygsti.diamonddist(A,B,mxBasis="std"), 0.614258836298)
 
         self.assertAlmostEqual( pygsti.frobeniusdist(A,B), pygsti.frobeniusnorm(A-B) )

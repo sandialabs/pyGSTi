@@ -750,7 +750,7 @@ SPAMLABEL 1 = rho remainder
             deriv = gate.deriv_wrt_params()
             #test results?
 
-            T = pygsti.obj.FullGaugeGroup.element(np.identity(4,'d'))
+            T = pygsti.obj.FullGaugeGroupElement(np.identity(4,'d'))
             if type(gate) in (pygsti.obj.LinearlyParameterizedGate,
                               pygsti.obj.StaticGate):
                 with self.assertRaises(ValueError):
@@ -1112,7 +1112,7 @@ SPAMLABEL 1 = rho remainder
         #Run a few methods that won't work on static spam vecs
         for svec in (full_spamvec, tp_spamvec):
             v = svec.copy()
-            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            S = pygsti.objects.FullGaugeGroupElement( np.identity(4,'d') )
             v.transform(S, 'prep')
             v.transform(S, 'effect')
             with self.assertRaises(ValueError):
@@ -1123,7 +1123,7 @@ SPAMLABEL 1 = rho remainder
 
         #Ensure we aren't allowed to tranform or depolarize a static vector
         with self.assertRaises(ValueError):
-            S = pygsti.objects.FullGaugeGroup.element( np.identity(4,'d') )
+            S = pygsti.objects.FullGaugeGroupElement( np.identity(4,'d') )
             static_spamvec.transform(S,'prep')
 
         with self.assertRaises(ValueError):
