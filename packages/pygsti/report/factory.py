@@ -829,6 +829,8 @@ def create_general_report(results, filename, title="auto",
     addqty('gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
     addqty('progressBarPlot', ws.FitComparisonBarPlot, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+    addqty('progressBarPlot_sum', ws.FitComparisonBarPlot, 
+           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') #just duplicate for now
 
     if not brief: 
         addqty('dataScalingColorBoxPlot', ws.ColorBoxPlot, 
@@ -840,7 +842,7 @@ def create_general_report(results, filename, title="auto",
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
-        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=True)
+        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=False)
         
         addqty('bestEstimateColorScatterPlot', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,

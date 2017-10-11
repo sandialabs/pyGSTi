@@ -1,0 +1,13 @@
+	<h1>Raw Estimates</h1>
+	<p>This tab shows the (gauge dependent) raw SPAM vectors and gate matrices estimated by GST.</p>
+
+	<figure id="bestGatesetSpamTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Estimated SPAM operations</span> <span class="captiondetail"> Compares the estimated SPAM operations to those desired (the ideal target operations).</span></figcaption>
+	  %(bestGatesetSpamBriefTable)s
+	</figure>
+
+	<figure id="bestGatesetGatesTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Logic gate operations</span> <span class="captiondetail"> Compares the <em>ideal</em> (generally unitary) <q>target</q> logic gates with those <em>estimated</em> by GST.  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (<span style="color:red">red</span>) and -1.0 (<span style="color:blue">blue</span>).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</span></figcaption>
+	  %(bestGatesetGatesBoxTable)s
+	</figure>
+

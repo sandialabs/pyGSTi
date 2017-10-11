@@ -509,7 +509,7 @@ class GatesetVsTargetTable(WorkspaceTable):
 #    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
-                 display=('inf','trace','diamond','uinf','agi','giinf','gidm'),
+                 display=('inf','agi','trace','diamond','nuinf','nuagi'),
                  virtual_gates=None):
         """
         Create a table comparing a gateset's gates to a target gateset using

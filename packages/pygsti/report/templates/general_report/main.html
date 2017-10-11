@@ -31,15 +31,42 @@
 
     <div id="theSidenav" class="sidenav">
       <a href="javascript:void(0)" id="tackbtn" title="Toggle navigation bar auto-hide" onclick="tackNav()">&#8859;</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Summary')" id="defaultOpen">Summary</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Model Violation</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants')">Gauge Invariant</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants')">Gauge Variant</a>
-      #iftoggle(CompareDatasets)
-      <a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Set Comparison</a>
-      #endtoggle
-      <a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
-      <a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
+      <div class="linkgroup">
+	<a href="#" class="linkgroupheading tablink" onclick="openTab(event, 'Summary')" id="defaultOpen">Summary</a>
+      </div>
+
+      <div class="linkgroup">
+        <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Model Violation</p>
+        <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Overview</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_colorboxplot')">Per-sequence detail</a>
+	#iftoggle(ShowScaling)
+	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_scaling')">Robust data scaling</a>
+	#endtoggle
+      </div>
+
+      <div class="linkgroup">
+        <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Gauge Invariant Error Metrics</p>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants_gates')">Overview</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants_germs')">Germs Detail</a>
+	#iftoggle(CompareDatasets)
+	<a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Comparison</a>
+	#endtoggle
+      </div>
+
+      <div class="linkgroup">
+        <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Gauge Dependent Error Metrics</p>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants')">Overview</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants_raw')">Raw Estimates</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants_decomp')">Gate Decompositions</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants_errgen')">Gate Error Generators</a>	
+      </div>
+
+      <div class="linkgroup">
+        <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">For Reference</p>
+	<a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
+	<a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
+      </div>
+      
       %(topSwitchboard)s
 
       %(bestGatesetGaugeOptParamsTable)s
@@ -57,26 +84,38 @@
       <div id="Summary" class="tabcontent">	
       </div>
       
-      <div id="Input" class="tabcontent">
-      </div>
-
       <div id="Goodness" class="tabcontent">
       </div>
+      <div id="Goodness_colorboxplot" class="tabcontent">
+      </div>
+      #iftoggle(ShowScaling)
+      <div id="Goodness_scaling" class="tabcontent">
+      </div>
+      #endtoggle
 
       
-      <div id="GaugeInvariants" class="tabcontent">
+      <div id="GaugeInvariants_gates" class="tabcontent">
       </div>
-
-      
-      <div id="GaugeVariants" class="tabcontent">
+      <div id="GaugeInvariants_germs" class="tabcontent">
       </div>
-
       #iftoggle(CompareDatasets)
       <div id="DataComparison" class="tabcontent">
       </div>
       #endtoggle
+      
+
+      <div id="GaugeVariants" class="tabcontent">
+      </div>
+      <div id="GaugeVariants_raw" class="tabcontent">
+      </div>
+      <div id="GaugeVariants_decomp" class="tabcontent">
+      </div>
+      <div id="GaugeVariants_errgen" class="tabcontent">
+      </div>
 
 
+      <div id="Input" class="tabcontent">
+      </div>
       <div id="Meta" class="tabcontent">
       </div>
 

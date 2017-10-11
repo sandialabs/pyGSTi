@@ -1,35 +1,19 @@
-	<h1>Gauge Variant Outputs</h1>
-	<p>The raw estimated gate set, and then some useful derived quantities.  These quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom using the parameters in Table <a href="#bestGatesetGaugeParamsTable" class="table"></a>.</p>
+	<h1>Gauge Variant Error Metrics</h1>
+	<p>Some common error metrics derived from the estimated gate set.  These quanties are <q>gauge-dependent</q>, meaning they will depend on unphysical gauge degrees of freedom that are a necessary byproduct of estimating an entire gate set at once (akin to a freedom of reference frame).  After finding a best-estimate based on the (physical) data, GST optimizes within the space of all (unphysical) gauge degrees of freedom using the parameters shown in the side bar.</p>
 
-	<!-- (goSwitchboard2)s -->
-
-	<!-- <figure id="bestGatesetGaugeParamsTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Gauge Optimization Details</span> <span class="captiondetail"> A list of the parameters used when performing the gauge optimization that produced the final GST results found in tables and figures which report gauge-variant quantities.</span></figcaption>
-	  (bestGatesetGaugeOptParamsTable)s
-	</figure> -->
-
-        <!-- <p class="clear"></p> -->
-
-	<figure id="bestGatesetSpamParametersTable" class='tbl'>
-	  <figcaption><span class="captiontitle">SPAM probabilities</span> <span class="captiondetail"> Computed by taking the dot products of state preparation and POVM effect vectors.  The symbol <span class="math">E_C</span>, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</span></figcaption>
-	  %(bestGatesetSpamParametersTable)s
+	<figure id="bestGatesetVsTargetTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Entire gate set comparisons</span> <span class="captiondetail"> This table displays metrics which measure the aggregated <q>distance</q> between <i>entire gate sets</i>.  The two gate sets compared here are the estimated and the ideal target gate set.</span></figcaption>
+	  %(bestGatesetVsTargetTable)s
 	</figure>
 
-
-	<figure id="bestGatesetSpamTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Estimated SPAM operations</span> <span class="captiondetail"> Compares the estimated SPAM operations to those desired (the ideal target operations).</span></figcaption>
-	  %(bestGatesetSpamBriefTable)s
+	<figure id="bestGatesetSpamVsTargetTable" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimated SPAM vs. ideal targets</span> <span class="captiondetail"> This table presents, for each state preparation and POVM effect, measures of distance or discrepancy from the GST estimate to the ideal target operation. Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesetSpamVsTargetTable)s
 	</figure>
-
+	
 	<figure id="bestGatesVsTargetTable_gv" class='tbl'>
 	  <figcaption><span class="captiontitle">GST estimated gates vs. ideal targets</span> <span class="captiondetail">This table presents different (gauge-variant) measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
 	  %(bestGatesVsTargetTable_gv)s
-	</figure>
-
-	
-	<figure class='tbl' id="bestGatesetDecompTable">
-	  <figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">  A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle, respectively, and dot products between the axis vectors give the angles between rotation axes.</span></figcaption>
-	  %(bestGatesetDecompTable)s
 	</figure>
 
 	<!-- <figure id="bestGatesetEigenvalueTable" class='tbl'>
@@ -37,39 +21,12 @@
 	  (bestGatesetRelEvalTable)s
 	</figure> -->
 
-	<p class="clear"></p>
-	
 	<figure id="bestGatesVsTargetTable_gvgerms" class='tbl'>
 	  <figcaption><span class="captiontitle">GST estimated germs vs. ideal targets</span> <span class="captiondetail">This table presents different (gauge-variant) measures of distance or discrepancy between the germs of the GST estimate and those composed of the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
 	  %(bestGatesVsTargetTable_gvgerms)s
 	</figure>
 
 	
-	<figure id="bestGatesetSpamVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">GST estimated SPAM vs. ideal targets</span> <span class="captiondetail"> This table presents, for each state preparation and POVM effect, measures of distance or discrepancy from the GST estimate to the ideal target operation. Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
-	  %(bestGatesetSpamVsTargetTable)s
-	</figure>
 
-	<figure id="bestGatesetVsTargetTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Entire gate set comparisons</span> <span class="captiondetail"> This table displays metrics which measure the aggregated <q>distance</q> between <i>entire gate sets</i>.  The two gate sets compared here are the estimated and the ideal target gate set.</span></figcaption>
-	  %(bestGatesetVsTargetTable)s
-	</figure>
-
-
-	<p class="clear"></p>
-			
-	<figure id="bestGatesetErrGenTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Logic gate error generators</span> <span class="captiondetail"> The <b>first column</b> displays a heat map of the estimated <q>Error Generator</q> for each gate, which is the Lindbladian <span class="math">\mathbb{L}</span> that describes <em>how</em> the gate is failing to match the target.  This error generator is defined by the equation %(errorgenformula)s. When all the elements of an error generator are zero, the estimated gate matches the corresponding ideal target gate.  Note that the range of the <span style="color:red">color</span> <span style="color:blue">scale</span> is variable, being determined by the data. <b>Subsequent columns</b> show the result of projectign each generator onto the spaces of different classes of well-known error generators.  The Hamiltonian generators act by commutation with each Pauli basis element <span class="math">B_i</span>, that is <span class="math">\rho \rightarrow -i[B_i, \rho]</span>.  Stochastic generators act by conjugation with each basis element, <span class="math">\rho \rightarrow B_i \rho B_i^\dagger</span>.  Affine generators act by projecting everything onto a particular basis element, <span class="math">\rho \rightarrow \mathrm{Tr}(\rho) B_i</span>.</span></figcaption>
-	  %(bestGatesetErrGenBoxTable)s
-	</figure>
-
-	<figure id="bestGatesetGatesTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Logic gate operations</span> <span class="captiondetail"> Compares the <em>ideal</em> (generally unitary) <q>target</q> logic gates with those <em>estimated</em> by GST.  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in <span class="math">\mathcal{B}(\mathcal{H})</span>.  Matrices are displayed using a heat map that ranges between 1.0 (<span style="color:red">red</span>) and -1.0 (<span style="color:blue">blue</span>).  Note that it is impossible to discern even order-1%% deviations from the ideal using this color scale, and one should rely on other analysis for more a precise comparison.</span></figcaption>
-	  %(bestGatesetGatesBoxTable)s
-	</figure>
 		
-	<figure id="bestGatesetChoiTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Choi matrix spectra</span> <span class="captiondetail"> The eigenvalues of the Choi-Jamiolkowski representation of each estimated gate.  Magnitudes of <em>negative</em> eigenvalues are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum <span class="math">(1,0,0\ldots)</span>, just like pure quantum states.  Negative eigenvalues indicate that a gate is non-physical, and may represent either statistical fluctuations or violations of complete positivity in the GST estimate.</span></figcaption>
-	  %(bestGatesetChoiEvalTable)s
-	</figure>
 	

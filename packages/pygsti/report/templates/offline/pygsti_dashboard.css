@@ -390,10 +390,6 @@ div.topnav button {
    border-top: none; */
 }
 
-div.sidenav a.active {
-    color: lightblue;
-}
-
 /* Fade-in tabs begin */
 .tabcontent {
     -webkit-animation: fadeEffect 1s;
@@ -434,6 +430,54 @@ div.sidenav a.active {
     display: block;
     transition: 0.3s
 }
+
+.sidenav div.linkgroup {
+    border: 1px solid #818181;
+    margin-left: 15px;
+    margin-right: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.sidenav div.linkgroup .linkgroupheading {
+    color: black;
+    text-align: left;
+    background-color: #818181;
+    padding-left: 5px;
+    margin: 0;
+    font-size: 12px;
+}
+.sidenav div.linkgroup a.linkgroupheading {
+    font-size: 16px; /* headings that are links stay large */
+}
+
+.sidenav div.linkgroup a {
+    padding-left: 12px;
+}
+
+/* change color of active link */
+.sidenav a.active {
+    color: lightblue;
+}
+div.sidenav div.linkgroup a.active {
+    color: lightblue; /* so takes precedence */
+}
+
+
+/*Hover changes*/
+.sidenav div.linkgroup:hover {
+    border: 1px solid lightgray;
+}
+.sidenav div.linkgroup:hover > p.linkgroupheading{
+    background-color: lightgray;
+}
+.sidenav div.linkgroup > a.linkgroupheading:hover {
+    background-color: lightgray;
+}
+.sidenav div.linkgroup > a.active.linkgroupheading:hover {
+    color: steelblue;
+}
+
 
 /* When you mouse over the navigation links, change their color */
 .sidenav a:hover, .offcanvas a:focus{

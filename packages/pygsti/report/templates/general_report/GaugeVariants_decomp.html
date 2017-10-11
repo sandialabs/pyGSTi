@@ -1,0 +1,12 @@
+        <h1>Gate Decompositions</h1>
+	<p>This tab shows decompositions of the (gauge dependent) estimates.</p>
+
+	<figure class='tbl' id="bestGatesetDecompTable">
+	  <figcaption><span class="captiontitle">Decomposition of estimated gates.</span> <span class="captiondetail">  A rotation axis and angle are extracted from each gate by considering the projection of its logarithm onto the Pauli Hamiltonian projectors.  The direction and magnitude (up to a conventional constant) give the axis and angle, respectively, and dot products between the axis vectors give the angles between rotation axes.</span></figcaption>
+	  %(bestGatesetDecompTable)s
+	</figure>
+
+	<figure id="bestGatesetChoiTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Choi matrix spectra</span> <span class="captiondetail"> The eigenvalues of the Choi-Jamiolkowski representation of each estimated gate.  Magnitudes of <em>negative</em> eigenvalues are plotted using <span style="color:red">red</span> bars. Unitary gates have a spectrum <span class="math">(1,0,0\ldots)</span>, just like pure quantum states.  Negative eigenvalues indicate that a gate is non-physical, and may represent either statistical fluctuations or violations of complete positivity in the GST estimate.</span></figcaption>
+	  %(bestGatesetChoiEvalTable)s
+	</figure>
