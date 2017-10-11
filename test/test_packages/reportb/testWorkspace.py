@@ -92,7 +92,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=True) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
-                                    hoverInfo=True, sumUp=False, invert=False, scatter=True) )
+                                    hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
 
         from pygsti.algorithms import directx as dx
         specs = pygsti.construction.build_spam_specs(

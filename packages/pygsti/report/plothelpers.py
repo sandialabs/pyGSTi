@@ -392,7 +392,7 @@ def _eformat(f, prec):
     numbers in plot boxes
     """
     if _np.isnan(f): return "" #show NAN as blanks
-    if 'compact' in prec:
+    if prec == 'compact' or prec == 'compacthp':
         if f < 0:
             ef = _eformat(-f,prec)
             return "-" + ef if (ef != "0") else "0"
