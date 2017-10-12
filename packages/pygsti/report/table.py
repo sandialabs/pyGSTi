@@ -78,10 +78,10 @@ class ReportTable(object):
             return self._headings.render(fmt, spec)
 
 
-    def render(self, fmt, longtables=False, tableID=None, tableclass=None,
+    def render(self, fmt, longtables=False, tableID=None, tableclass=None, 
                output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
-               brackets=False, click_to_display=False, link_to_pdf=False, link_to_pkl=False):
+               brackets=False, click_to_display=False, link_to=None, render_includes=True):
         '''
         Render a table object
 
@@ -115,10 +115,11 @@ class ReportTable(object):
             id tag for HTML tables
         tableclass     : string
             class tag for HTML tables
-        link_to_pdf    : bool
-            whether to create links to PDF files
-        link_to_pkl    : bool
-            whether to create links to PKL files
+        link_to        : list or {'tex', 'pdf', 'pkl'}
+            whether to create links to TEX, PDF, and/or PKL files
+        render_includes: bool
+            whether files included in rendered latex should also be rendered
+            (usually as PDFs for use with the 'includegraphics' latex statement)
 
         Returns
         -------
@@ -138,8 +139,8 @@ class ReportTable(object):
             'longtables'     : longtables,
             'tableID'        : tableID,
             'tableclass'     : tableclass,
-            'link_to_pdf'    : link_to_pdf,
-            'link_to_pkl'    : link_to_pkl}
+            'link_to'        : link_to,
+            'render_includes': render_includes }
 
         if fmt not in _convertDict:
             raise NotImplementedError('%s format option is not currently supported')
