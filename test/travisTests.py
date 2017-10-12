@@ -4,43 +4,51 @@ from runTests   import run_tests
 from helpers.automation_tools import get_branchname
 import os, sys
 
-doReportA = os.environ.get('ReportA', 'False')
-doReportB = os.environ.get('ReportB', 'False')
-doDrivers = os.environ.get('Drivers', 'False')
-doDefault = os.environ.get('Default', 'False')
-doMPI     = os.environ.get('MPI',     'False')
+def check_env(varname):
+    return os.environ.get(varname, 'False') == 'True'
+
+doReport      = check_env('Report')
+doReportB     = check_env('ReportB')
+doDrivers     = check_env('Drivers')
+doDefault     = check_env('Default')
+doMPI         = check_env('MPI') 
+doAlgorithms  = check_env('Algorithms') 
+doAlgorithmsB = check_env('AlgorithmsB') 
 
 # I'm doing string comparison rather than boolean comparison because, in python, bool('False') evaluates to true
 # Build the list of packages to test depending on which portion of the build matrix is running
 
-tests    = []   # Run nothing if no environment variables are set
-parallel = True # By default
-
-if doReportA == 'True':
-    tests    = ['report/testReport.py:TestReport.test_reports_logL_TP_wCIs']
-    parallel = False # Not for mpi
-    # Parallel tests break individual tests !! (and will instead run everything in a package)
+tests    = []       # Run nothing if no environment variables are set
+parallel = True     # By default
+package  = 'pygsti' # Check coverage of all of pygsti by default
 
 # All other reports tests
-elif doReportB == 'True':
-    tests = ['report/%s' % filename for filename in [
-    'testAnalysis.py',
-    'testEBFormatters.py',
-    'testMetrics.py',
-    'testPrecisionFormatter.py',
-    'testEBFormatters.py',
-    'testFormatter.py',
-    'testFigureFormatter.py',
-    'testPlotting.py',
-    'testTable.py']]
+if doReport:
+    tests = ['report']
+    package = 'pygsti.report'
 
-elif doDrivers == 'True':
-    tests = ['drivers']
+elif doReportB:
+    tests = ['reportb']
+    package = 'pygsti.report'
 
-elif doDefault == 'True':
-    tests = ['objects', 'tools', 'iotest', 'optimize', 'algorithms', 'construction','extras']
+elif doDrivers:
+    tests = ['drivers', 'objects']
 
-elif doMPI == 'True':
+elif doAlgorithms:
+    #parallel = False
+    tests = ['algorithms']
+    package = 'pygsti.algorithms'
+
+elif doAlgorithmsB:
+    #parallel = False
+    tests = ['algorithmsb']
+    package = 'pygsti.algorithms'
+
+elif doDefault:
+    tests = ['tools', 'iotest', 'optimize', 'construction','extras']
+    #parallel = False #multiprocessing bug in darwin (and apparently TravisCI) causes segfault if used.
+
+elif doMPI:
     tests = ['mpi']
     parallel = False # Not for mpi
 
@@ -56,4 +64,4 @@ threshold = 0 # Isn't representative of full coverage anyways
 if branchname == 'develop':
     coverage  = False
 
-run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile='../output/test.out')
+run_tests(tests, parallel=parallel, coverage=coverage, threshold=threshold, outputfile='../output/test.out', package=package)

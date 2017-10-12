@@ -8,12 +8,21 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 #Import the most important/useful routines of each module into
 # the package namespace
-from .basistools import *
 from .jamiolkowski import *
 from .listtools import *
 from .matrixtools import *
+from .lindbladtools import *
 from .likelihoodfns import *
 from .chi2fns import *
 from .gatetools import *
 from .slicetools import *
-
+from .compattools import *
+from .basis import *
+from .basisconstructors import *
+from .parameterized import *
+from .opttools import *
+from .legacytools import *
+from .dim import Dim
+from .opttools import *
+from .smartcache import *
+from .mpitools import parallel_apply, get_comm

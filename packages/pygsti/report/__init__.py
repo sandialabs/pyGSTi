@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 #Import the most important/useful routines of each module into
 # the package namespace
-from .generation import *
-from .plotting import *
 from .reportables import *
-from .results import Results
+from .factory import *
+from .workspace import Workspace
+from .notebook import Notebook

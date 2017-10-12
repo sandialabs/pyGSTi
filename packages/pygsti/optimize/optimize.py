@@ -19,6 +19,8 @@ except:
 
 from .customcg import fmax_cg
 
+from scipy.optimize import least_squares
+
 
 def minimize(fn,x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
@@ -740,25 +742,37 @@ def create_obj_func_printer(objFunc, startTime=None):
         if f is not None and accepted is not None:
             print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
-            print("%5ds %22.10f" % (_time.time()-startTime, objFunc(x)))
+            result = objFunc(x)
+            duration = _time.time() - startTime
+            try:
+                print("%5ds %22.10f" % (duration, result))
+            except TypeError: # Objfun returns vector, not scalar
+                print('%5ds %s' % (duration,  result))
     return print_obj_func
 
 
 
 def _fwd_diff_jacobian(f, x0, eps=1e-10):
-    y0 = f(x0)
+    y0 = f(x0).copy()
     M = len(y0)
     N = len(x0)
     jac = _np.empty( (M,N), 'd' )
 
     for j in range(N):
+        #print('Adding eps to {}'.format(j))
         xj = x0.copy(); xj[j] += eps
-        yj = f(xj)
-        jac[:,j] = (yj-y0)/eps # df_dxj
+        yj = f(xj).copy()
+        #print('y0, yj')
+        #print(y0[48:52])
+        #print(yj[48:52])
+        df = (yj-y0)/eps # df_dxj
+        jac[:,j] = df
+        #print(df[48:52])
 
     return jac
 
-def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
+def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
+              verbosity=1):
     """
     Checks a jacobian function using finite differences.
 
@@ -780,6 +794,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
         The allowd tolerance on the relative differene between the
         values of the finite difference and jacToCheck jacobians
         if errType == 'rel' or the absolute difference if errType == 'abs'.
+
+    verbosity : int, optional
+        Controls how much detail is printed to stdout.
 
     Returns
     -------
@@ -817,8 +834,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
                 err = _np.abs(fd_jac[i,j]-jacToCheck[i,j])
                 if err > tol: 
                     errs.append( (i,j,err) )
-                    #print("DEBUG JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
-                    # (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
+                    if verbosity > 1:
+                        print("JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
+                              (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
                 errSum += err
 
     errs.sort(key=lambda x: -x[2])
@@ -826,7 +844,11 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
     if len(errs) > 0:
         maxabs = _np.max(_np.abs(jacToCheck))
         max_err_ratio = _np.max([ x[2]/maxabs for x in errs ])
-        if max_err_ratio > 0.01: 
-            print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+        if verbosity > 0:
+            if max_err_ratio > 0.01: 
+                print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+
+    if verbosity > 0:
+        print("check_jac %s [err = %g]" % (("ERROR" if len(errs) else "OK"),errSum))
 
     return errSum, errs, fd_jac

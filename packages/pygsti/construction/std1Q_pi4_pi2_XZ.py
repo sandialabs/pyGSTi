@@ -14,7 +14,7 @@ description = "X(pi/4) and Z(pi/2) gates"
 
 gates = ['Gx','Gz']
 
-prepFiducials = _strc.gatestring_list([(),
+prepStrs = _strc.gatestring_list([(),
                                        ('Gx','Gx',),
                                        ('Gx','Gx','Gz'),
                                        ('Gx','Gx','Gx','Gx'),
@@ -22,7 +22,7 @@ prepFiducials = _strc.gatestring_list([(),
                                        ('Gx','Gx','Gz','Gz','Gz')])
 
 
-measFiducials = _strc.gatestring_list([(),
+effectStrs = _strc.gatestring_list([(),
                                        ('Gx','Gx',),
                                        ('Gz','Gx','Gx'),
                                        ('Gx','Gx','Gx','Gx'),
@@ -39,5 +39,22 @@ germs = _strc.gatestring_list( [('Gx',),
 gs_target = _setc.build_gateset( [2], [('Q0',)],['Gx','Gz'],
                                  ["X(pi/4,Q0)", "Z(pi/2,Q0)"],
                                  prepLabels=["rho0"], prepExpressions=["0"],
-                                 effectLabels=["E0"], effectExpressions=["1"],
-                                 spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                 effectLabels=["E0"], effectExpressions=["0"],
+                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
+                                 basis='pp')
+
+global_fidPairs =  [
+    (0, 0), (2, 3), (5, 2), (5, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gz',): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gz', 'Gx'): [
+        (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
+  ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx', 'Gx'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+}

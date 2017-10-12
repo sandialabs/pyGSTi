@@ -11,35 +11,13 @@ from pygsti.construction import std1Q_XYI as std
 g_maxLengths = [1,2,4,8]
 g_numSubTrees = 3
 
-def runOneQubit_Tutorial():
-    from pygsti.construction import std1Q_XYI
-    gs_target = std1Q_XYI.gs_target
-    fiducials = std1Q_XYI.fiducials
-    germs = std1Q_XYI.germs
-    maxLengths = [1,2,4,8,16,32,64,128,256,512,1024,2048]
-
-    gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
-    listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
-    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
-                                                nSamples=1000,
-                                                sampleError="binomial",
-                                                seed=1234)
-
-    results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
-                                          germs, maxLengths, comm=comm)
-
-    #results.create_full_report_pdf(confidenceLevel=95,
-    #    filename="tutorial_files/MyEvenEasierReport.pdf",verbosity=2)
-
-
 def assertGatesetsInSync(gs, comm):
     if comm is not None:
         bc = gs if comm.Get_rank() == 0 else None
         gs_cmp = comm.bcast(bc, root=0)
         assert(gs.frobeniusdist(gs_cmp) < 1e-6)
 
-
+        
 def runAnalysis(obj, ds, myspecs, gsTarget, lsgstStringsToUse,
                 useFreqWeightedChiSq=False,
                 minProbClipForWeighting=1e-4, fidPairList=None,
@@ -118,8 +96,8 @@ def create_fake_dataset(comm):
         dsFake = comm.bcast(None, root=0)
 
     #for gs in dsFake:
-    #    if abs(dsFake[gs]['plus']-dsFake_cmp[gs]['plus']) > 0.5:
-    #        print("DS DIFF: ",gs, dsFake[gs]['plus'], "vs", dsFake_cmp[gs]['plus'] )
+    #    if abs(dsFake[gs]['0']-dsFake_cmp[gs]['0']) > 0.5:
+    #        print("DS DIFF: ",gs, dsFake[gs]['0'], "vs", dsFake_cmp[gs]['0'] )
     return dsFake, lsgstStrings
 
 
@@ -238,22 +216,22 @@ def test_MPI_pr(comm):
 
     # non-split tree => automatically adjusts wrtBlockSize to accomodate
     #                    the number of processors
-    serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
-    parallel, pp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+    parallel, pp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
-    serial, sdp, sp = gs.bulk_hpr('plus', tree, returnPr=True, returnDeriv=True,
+    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
                              clipTo=(-1e6,1e6))
-    parallel, pdp, pp = gs.bulk_hpr('plus', tree, returnPr=True,
+    parallel, pdp, pp = gs.bulk_hpr('0', tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sdp-pdp) < 1e-6)
@@ -262,26 +240,26 @@ def test_MPI_pr(comm):
 
     # split tree =>  distribures on sub-trees prior to adjusting
     #                wrtBlockSize to accomodate remaining processors
-    serial = gs.bulk_pr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_pr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_pr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_pr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial = gs.bulk_dpr('plus', tree, clipTo=(-1e6,1e6))
-    parallel = gs.bulk_dpr('plus', split_tree, clipTo=(-1e6,1e6), comm=comm)
+    serial = gs.bulk_dpr('0', tree, clipTo=(-1e6,1e6))
+    parallel = gs.bulk_dpr('0', split_tree, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
 
-    serial, sp = gs.bulk_dpr('plus', tree, returnPr=True, clipTo=(-1e6,1e6))
-    parallel, pp = gs.bulk_dpr('plus', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
+    serial, sp = gs.bulk_dpr('0', tree, returnPr=True, clipTo=(-1e6,1e6))
+    parallel, pp = gs.bulk_dpr('0', split_tree, returnPr=True, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     pp = split_tree.permute_computation_to_original(pp)
     assert(np.linalg.norm(serial-parallel) < 1e-6)
     assert(np.linalg.norm(sp-pp) < 1e-6)
 
-    serial, sdp, sp = gs.bulk_hpr('plus', tree, returnPr=True, returnDeriv=True,
+    serial, sdp, sp = gs.bulk_hpr('0', tree, returnPr=True, returnDeriv=True,
                              clipTo=(-1e6,1e6))
-    parallel, pdp, pp = gs.bulk_hpr('plus', split_tree, returnPr=True,
+    parallel, pdp, pp = gs.bulk_hpr('0', split_tree, returnPr=True,
                                  returnDeriv=True, clipTo=(-1e6,1e6), comm=comm)
     parallel = split_tree.permute_computation_to_original(parallel)
     pdp = split_tree.permute_computation_to_original(pdp)
@@ -390,7 +368,7 @@ def test_MPI_fills(comm):
 
     #Check fill probabilities
 
-    spam_label_rows = { 'plus': 0, 'minus': 1 }
+    spam_label_rows = { '0': 0, '1': 1 }
     nGateStrings = tree.num_final_strings()
     nDerivCols = gs.num_params()
     nSpamLabels = len(spam_label_rows)
@@ -539,7 +517,7 @@ def test_MPI_by_block(comm):
 
     #Check that "by column" matches standard "at once" methods:
 
-    spam_label_rows = { 'plus': 0, 'minus': 1 }
+    spam_label_rows = { '0': 0, '1': 1 }
     nGateStrings = tree.num_final_strings()
     nDerivCols = gs.num_params()
     nSpamLabels = len(spam_label_rows)
@@ -735,6 +713,81 @@ def test_MPI_derivcols(comm):
         assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
 
+@mpitest(4)
+def run1Q_end2end(comm):
+    from pygsti.construction import std1Q_XYI
+    gs_target = std1Q_XYI.gs_target
+    fiducials = std1Q_XYI.fiducials
+    germs = std1Q_XYI.germs
+    maxLengths = [1,2,4]
+
+    gs_datagen = gs_target.depolarize(gate_noise=0.1, spam_noise=0.001)
+    listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+        list(gs_target.gates.keys()), fiducials, fiducials, germs, maxLengths)
+    ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
+                                                nSamples=1000,
+                                                sampleError="binomial",
+                                                seed=1234)
+
+    results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
+                                          germs, maxLengths, comm=comm)
+
+    pygsti.report.create_general_report(results, "mpi_test_report.html",
+                                        confidenceLevel=95, verbosity=2, comm=comm)
+
+
+@mpitest(4)
+def test_MPI_germsel(comm):
+    if comm is None or comm.Get_rank() == 0:
+        gatesetNeighborhood = pygsti.alg.randomizeGatesetList(
+            [std.gs_target], randomizationStrength=1e-3,
+            numCopies=3, seed=2018)
+        comm.bcast(gatesetNeighborhood, root=0)
+    else:
+        gatesetNeighborhood = comm.bcast(None, root=0)
+
+    max_length   = 6
+    gates        = std.gs_target.gates.keys()
+    superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+
+    germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+                                        randomize=False, seed=2018, scoreFunc='all',
+                                        threshold=1e6, verbosity=1, gatePenalty=1.0,
+                                        memLimit=3*(1024**3), comm=comm)
+
+@mpitest(4)
+def test_MPI_profiler(comm):
+    mem = pygsti.objects.profiler._get_root_mem_usage(comm)
+    mem = pygsti.objects.profiler._get_max_mem_usage(comm)
+    
+    start_time = time.time()
+    p = pygsti.objects.Profiler(comm, default_print_memcheck=True)
+    p.add_time("My Name", start_time, prefix=1)
+    p.add_count("My Count", inc=1, prefix=1)
+    p.add_count("My Count", inc=2, prefix=1)
+    p.mem_check("My Memcheck", prefix=1)
+    p.mem_check("My Memcheck", prefix=1)
+    p.print_mem("My Memcheck just to print")
+    p.print_mem("My Memcheck just to print", show_minmax=True)
+    p.print_msg("My Message")
+    p.print_msg("My Message", all_ranks=True)
+    
+    s = p.format_times(sortBy="name")
+    s = p.format_times(sortBy="time")
+    #with self.assertRaises(ValueError):
+    #    p.format_times(sortBy="foobar")
+        
+    s = p.format_counts(sortBy="name")
+    s = p.format_counts(sortBy="count")
+    #with self.assertRaises(ValueError):
+    #    p.format_counts(sortBy="foobar")
+
+    s = p.format_memory(sortBy="name")
+    s = p.format_memory(sortBy="usage")
+    #with self.assertRaises(ValueError):
+    #    p.format_memory(sortBy="foobar")
+    #with self.assertRaises(NotImplementedError):
+    #    p.format_memory(sortBy="timestamp")
 
 
 if __name__ == "__main__":

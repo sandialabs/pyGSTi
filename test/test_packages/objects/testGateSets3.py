@@ -27,3 +27,26 @@ class TestGateSetMethods(GateSetTestCase):
             copiedGateset.rotate(0.1)
         with self.assertRaises(AssertionError):
             copiedGateset.randomize_with_unitary(1, randState=np.random.RandomState()) # scale shouldn't matter
+
+    def test_mem_estimates(self):
+
+        gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('rho0','remainder') } )
+
+        mgateset = self.gateset.copy()
+        mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+
+        est = gateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
+                                                 cache_size=100, num_subtrees=2, 
+                                                 num_subtree_proc_groups=1, num_param1_groups=1, 
+                                                 num_param2_groups=1)
+
+        est = mgateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
+                                                 cache_size=100, num_subtrees=2, 
+                                                 num_subtree_proc_groups=1, num_param1_groups=1, 
+                                                 num_param2_groups=1)

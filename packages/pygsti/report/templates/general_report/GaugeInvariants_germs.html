@@ -1,0 +1,12 @@
+        <h1>Gauge Invariant Error Metrics applied to germ sequences</h1>
+
+	<figure id="bestGatesVsTargetTable_gigerms" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimated germs vs. eigen-projected.</span> <span class="captiondetail"> This table presents, for each of the germs, measures of discrepancy between the actual GST estimate and the <q>eigenspace-projected</q> estimate of the germ.  An eigenspace-projected version of each estimated gate is computed by replacing the <i>just the eigenvalues</i> of the ideal target operation with those of the estimated gate.  This open-heart-surgery on the ideal gate leaves an <q>eigenspace-projected</q> gate which has the same spectrum as the estimated gate but the same eigen-vectors as the ideal gate.  Comparing the estimated germs (gate-products) with those formed from the projected gates probes how well just the eigenvalues of the estimated gates are able to account for the errors amplified by the germ sequences.  If the estimated-gate eigenvalues account for everything, all of the discrepancy values in this table would equal zero.</span></figcaption>
+	  %(bestGatesVsTargetTable_gigerms)s
+	</figure>
+
+	<figure id="bestGermsEigenvalueTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Eigenvalues of estimated germs.</span> <span class="captiondetail">The spectrum of each estimated germ (a gate product), along with metrics which compare these eigenvalues with those of the <q>eigenspace-projected</q> germ.  The latter is computed using the set of eigenspace-projected gates described in the caption for the table above.  The comparison probes how well just the eigenvalues of the estimated gates are able to account for the errors amplified by the germ sequences.  If the estimated-gate eigenvalues account for everything, the eigenvalues of the estimated and eigenspace-projected germs would be equal.  In order to perform comparisons, spectra are aligned by identifying a minimum-weight matching based on the metric being computed.  Mathematical descriptions of the metrics apear when hovering over the column headers.</span></figcaption>
+	  %(bestGermsEvalTable)s
+	</figure>
+

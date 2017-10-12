@@ -1,4 +1,4 @@
-## Columns = minus count, plus count
+## Columns = 0 count, 1 count
 (Gi)^3  852  148
 (Gi)^3Gx  807  193
 (Gi)^3Gy  806  194

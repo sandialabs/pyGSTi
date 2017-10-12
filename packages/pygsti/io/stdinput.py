@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import os as _os
 import sys as _sys
+import time as _time
 import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
@@ -19,6 +20,27 @@ from .. import tools as _tools
 
 _pp.ParserElement.enablePackrat()
 _sys.setrecursionlimit(10000)
+
+def get_display_progress_fn(showProgress):
+    
+    def is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__')
+
+    if is_interactive() and showProgress:
+        try:
+            from IPython.display import clear_output
+            def display_progress(i,N,filename):
+                _time.sleep(0.001); clear_output()
+                print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
+                _sys.stdout.flush()
+        except:
+            def display_progress(i,N,f): pass
+    else:
+        def display_progress(i,N,f): pass
+        
+    return display_progress
+
 
 class StdInputParser(object):
     """
@@ -293,7 +315,9 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename, showProgress=True, collisionAction="aggregate"):
+    def parse_datafile(self, filename, showProgress=True,
+                       collisionAction="aggregate",
+                       measurementGates=None):
         """
         Parse a data set file into a DataSet object.
 
@@ -310,6 +334,13 @@ class StdInputParser(object):
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" gate label to the
             duplicated gate sequence.
+
+        measurementGates : dict, optional
+            If not None, a dictrionary whose keys are user-defined "measurement
+            labels" and whose values are lists if gate labels.  The gate labels 
+            in each list define the set of gates which describe the the operation
+            that is performed contingent on a *specific outcome* of the measurement
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
         Returns
         -------
@@ -340,7 +371,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
             spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -348,34 +379,20 @@ class StdInputParser(object):
 
         #Read data lines of data file
         dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
-                                comment="\n".join(preamble_comments))
+                                comment="\n".join(preamble_comments),
+                                measurementGates=measurementGates)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         countDict = {}
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -395,7 +412,7 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = -1
+        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
                 spamLabel = colLabel[:-len(' count')]
@@ -411,9 +428,12 @@ class StdInputParser(object):
                 freqCols.append( (spamLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if 'plus' in spamLabels and 'minus' not in spamLabels:
-                spamLabels.append('minus')
-                impliedCountTotCol1Q = colLabels.index( 'count total' )
+            if '1' in spamLabels and '0' not in spamLabels:
+                spamLabels.append('0')
+                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
+            elif '0' in spamLabels and '1' not in spamLabels:
+                spamLabels.append('1')
+                impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
@@ -435,8 +455,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        if impliedCountTotCol1Q >= 0:
-            countDict['minus'] = colValues[impliedCountTotCol1Q] - countDict['plus']
+        if impliedCountTotCol1Q[1] >= 0:
+            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedSpamLabel == '0':
+                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            else:
+                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -491,7 +515,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
+            else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
             dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -511,26 +535,11 @@ class StdInputParser(object):
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0),1)
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -583,10 +592,15 @@ class StdInputParser(object):
 
         for dsLabel,spamLabels in dsSpamLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if 'plus' in spamLabels and 'minus' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('minus')
+                if '1' in spamLabels and '0' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '0', iTotal) )
+                if '0' in spamLabels and '1' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('1')
+                    iTotal = colLabels.index( '%s count total' % dsLabel )
+                    impliedCounts1Q.append( (dsLabel, '1', iTotal) )
+
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
@@ -608,13 +622,17 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['minus'] = colValues[iTotCol] - countDicts[dsLabel]['plus']
+        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
+            if spamLabel == '0':
+                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            elif spamLabel == '1':
+                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
 
-    def parse_tddatafile(self, filename):
+    def parse_tddatafile(self, filename, showProgress=True):
         """ 
         Parse a data set file into a TDDataSet object.
 
@@ -622,6 +640,9 @@ class StdInputParser(object):
         ----------
         filename : string
             The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
 
         Returns
         -------
@@ -661,25 +682,10 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive():
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N): 
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
             line = line.strip()
             if len(line) == 0 or line[0] == '#': continue
@@ -729,13 +735,13 @@ def read_gateset(filename):
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                spam_vecs[cur_label] = _objs.basis.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                spam_vecs[cur_label] = _objs.basis.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
@@ -745,20 +751,20 @@ def read_gateset(filename):
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q(ar))
+                        _tools.unitary_to_pauligate(ar))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q(ar))
+                        _tools.unitary_to_pauligate(ar))
             else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             elif ar.shape == (4,4):
                 gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) ))
+                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
             else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliMx":
@@ -839,12 +845,12 @@ def read_gateset(filename):
             raise ValueError("Cannot infer basis dimension!")
 
     #Set basis
-    gs.set_basis(basis_abbrev, basis_dims)
+    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['plus'] = [ 'rho', 'E' ]
-        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        spam_labels['1'] = [ 'rho', 'E' ]
+        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
         # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 
@@ -874,5 +880,9 @@ def read_gateset(filename):
 
     if len(remainder_spam_label) > 0:
         gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
+
+    #Add default gauge group -- the full group because
+    # we add FullyParameterizedGates above.
+    gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
 
     return gs

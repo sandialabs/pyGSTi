@@ -1,4 +1,6 @@
+dist: precise
 language: python
+dist: precise
 
 python:
   - "2.7"
@@ -11,15 +13,17 @@ branches:
     - develop
 
 env:
-    - Drivers=True  # All of drivers (Tends to take longer, put it first in the mx)
-    - Default=True  # construction, io, objects, tools, optimize, algorithms
-    - ReportA=True  # Only testReport.py (none of the other reports tests)
-    - ReportB=True  # test the other reports tests
-    - MPI=True  # All of MPI
-   
+    - Drivers=True    # First in build mx because long duration
+    - Algorithms=True 
+    - AlgorithmsB=True
+    - Default=True    # construction, io, objects, tools, optimize
+    - Report=True      
+    - ReportB=True
+    - MPI=True        
+
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev >/dev/null
+  - sudo apt-get -qq install gfortran libblas-dev liblapack-dev
   - sudo apt-get -qq install openmpi-bin openmpi-common openssh-client openssh-server libopenmpi1.3 libopenmpi-dbg libopenmpi-dev >/dev/null
   - sudo bash CI/install.sh # Only install texlive and extensions if we need them
   - "export DISPLAY=:99.0"
@@ -29,7 +33,7 @@ before_install:
 install:
   - travis_retry travis_wait pip install -r requirements.txt
   - pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt >/dev/null
-  - pip install python-pptx mpi4py zmq coverage >/dev/null
+  - pip install ipython mpi4py zmq coverage >/dev/null
   - pip install -e . >/dev/null
   
 cache:

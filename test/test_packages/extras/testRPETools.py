@@ -10,8 +10,8 @@ class RPETestCase(BaseTestCase):
 
         rpeconfig_inst = rpeconfig_GxPi2_GyPi2_UpDn
 
-        xhat = 10 #plus counts for sin string
-        yhat = 90 #plus counts for cos string
+        xhat = 10 #1 counts for sin string
+        yhat = 90 #1 counts for cos string
         k = 1 #experiment generation
         Nx = 100 # sin string clicks
         Ny = 100 # cos string clicks

@@ -1,4 +1,4 @@
-\documentclass[convert={density=300,outext=.png},border=2pt]{standalone}
+\documentclass{standalone}
 \usepackage{amsmath}
 \usepackage{amssymb}
 %\usepackage{varwidth}
@@ -26,6 +26,9 @@
 \def\Id{1\!\mathrm{l}}
 \newcommand{\Tr}[0]{\mathrm{Tr}}
 \providecommand{\e}[1]{\ensuremath{\times 10^{#1}}}
+
+\newcommand*{\vcenteredhbox}[1]{\begingroup
+\setbox0=\hbox{#1}\parbox{\wd0}{\box0}\endgroup}
 
 %Command used for python automatic substitution
 \newcommand{\putfield}[2]{#2}

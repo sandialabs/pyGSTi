@@ -6,13 +6,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the DataSet class and supporting classes and functions """
 
-import numpy as _np
-import pickle as _pickle
+import numpy    as _np
+import pickle   as _pickle
 import warnings as _warnings
+import uuid     as _uuid
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
-
+from ..tools import digest as _digest
 from . import gatestring as _gs
 
 
@@ -27,7 +28,8 @@ class DataSet_KeyValIterator(object):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        return next(self.gsIter), DataSetRow(self.dataset, next(self.countIter))
+        gs = next(self.gsIter); tk = self.dataset._total_key(gs)
+        return gs, DataSetRow(self.dataset, next(self.countIter), tk)
 
     next = __next__
 
@@ -37,12 +39,14 @@ class DataSet_ValIterator(object):
     def __init__(self, dataset):
         self.dataset = dataset
         self.countIter = dataset.counts.__iter__()
+        self.gsIter = dataset.gsIndex.__iter__()
 
     def __iter__(self):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        return DataSetRow(self.dataset, next(self.countIter))
+        tk = self.dataset._total_key( next(self.gsIter) )
+        return DataSetRow(self.dataset, next(self.countIter), tk)
 
     next = __next__
 
@@ -52,9 +56,10 @@ class DataSetRow(object):
       looks similar to a dictionary with spam labels as keys and counts as
       values.
     """
-    def __init__(self, dataset, rowData):
+    def __init__(self, dataset, rowData, totalKey):
         self.dataset = dataset
         self.rowData = rowData
+        self.totalKey = totalKey
 
     def __iter__(self):
         return self.dataset.slIndex.__iter__() #iterator over spam labels
@@ -80,6 +85,8 @@ class DataSetRow(object):
 
     def total(self):
         """ Returns the total counts."""
+        if self.totalKey is not None:
+            return self.dataset.totals[self.totalKey]
         return float(sum(self.rowData))
 
     def fraction(self,spamlabel):
@@ -90,7 +97,18 @@ class DataSetRow(object):
         return self.rowData[ self.dataset.slIndex[spamlabel] ]
 
     def __setitem__(self,spamlabel,count):
+        if self.totalKey is not None:
+            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
+            self.dataset.totals[self.totalKey] += count - old_count
         self.rowData[ self.dataset.slIndex[spamlabel] ] = count
+
+    def scale(self, factor):
+        """ Scales all the counts of this row by the given factor """
+        for spamlabel in self.dataset.slIndex.keys():
+            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
+            if self.totalKey is not None:
+                self.dataset.totals[self.totalKey] += factor*old_count - old_count
+            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*old_count
 
     def as_dict(self):
         """ Returns the (spamlabel,count) pairs as a dictionary."""
@@ -126,7 +144,7 @@ class DataSet(object):
 
     def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
                  spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
-                 collisionAction="aggregate", comment=None):
+                 collisionAction="aggregate", comment=None, measurementGates=None):
         """
         Initialize a DataSet.
 
@@ -177,8 +195,15 @@ class DataSet(object):
 
         comment : string, optional
             A user-specified comment string that gets carried around with the 
-            data.  A common use for this field is to attache to the data details
+            data.  A common use for this field is to attach to the data details
             regarding its collection.
+
+        measurementGates : dict, optional
+            If not None, a dictrionary whose keys are user-defined "measurement
+            labels" and whose values are lists of gate labels.  The gate labels 
+            in each list define the set of gates which describe the the operation
+            that is performed contingent on a *specific outcome* of the measurement
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
 
         Returns
@@ -186,7 +211,7 @@ class DataSet(object):
         DataSet
            a new data set object.
         """
-
+        self.uuid = None
         #Optionally load from a file
         if fileToLoadFrom is not None:
             assert(counts is None and gateStrings is None and gateStringIndices is None and spamLabels is None and spamLabelIndices is None)
@@ -245,6 +270,17 @@ class DataSet(object):
         # comment
         self.comment = comment
 
+        # measurement gates & labels
+        if measurementGates is not None:
+            self.measurementGates = measurementGates.copy()
+            self.measurementLabels = {}
+            for mlbl,gateLbls in measurementGates.items():
+                self.measurementLabels.update( {g: mlbl for g in gateLbls} )
+            self.totals = {}
+        else:
+            self.measurementGates = None
+            self.measurementLabels = None
+            self.totals = None
 
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
@@ -261,35 +297,54 @@ class DataSet(object):
     def __contains__(self, gatestring):
         return gatestring in self.gsIndex
 
-    def get_row(self, gatestring, occurance=0):
+    def __hash__(self):
+        if self.uuid is not None:
+            return hash(self.uuid)
+        else:
+            raise TypeError('Use digest hash')
+
+    def _total_key(self, gatestring):
+        """ 
+        Returns gatestring "aliased" according to self.measurementLabels
+        so that all strings corresponding to the same sequence up to 
+        different intermediate measurement outcomes will have the same key.
+        """
+        if self.measurementLabels is not None:
+            return tuple([self.measurementLabels.get(lbl,lbl)
+                          for lbl in gatestring])
+        else: return None
+        
+
+    def get_row(self, gatestring, occurrence=0):
         """
         Get a row of data from this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
-        occurance number separately from the gate sequence.
+        occurrence number separately from the gate sequence.
         
         Parameters
         ----------
         gatestring : GateString or tuple
             The gate sequence to extract data for.
 
-        occurance : int, optional
-            0-based occurance index, specifying which occurance of
+        occurrence : int, optional
+            0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
 
         Returns
         -------
         DataSetRow
         """
-        if occurance > 0: 
-            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
-        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+        if occurrence > 0: 
+            gatestring = gatestring + _gs.GateString(("#%d" % occurrence,))
+        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
+                          self._total_key(gatestring))
 
 
-    def set_row(self, gatestring, countDict, occurance=0):
+    def set_row(self, gatestring, countDict, occurrence=0):
         """
         Set the counts for a row of this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
-        occurance number separately from the gate sequence.
+        occurrence number separately from the gate sequence.
         
         Parameters
         ----------
@@ -299,27 +354,28 @@ class DataSet(object):
         countDict : dict
             The dictionary of counts (data).
 
-        occurance : int, optional
-            0-based occurance index, specifying which occurance of
+        occurrence : int, optional
+            0-based occurrence index, specifying which occurrence of
             a repeated gate sequence to extract data for.
         """
-        if occurance > 0: 
-            gatestring = gatestring + _gs.GateString(("#%d" % occurance,))
+        if occurrence > 0: 
+            gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurrence,))
         if gatestring in self:
-            row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ])
+            row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
+                             self._total_key(gatestring))
             for spamLabel,cnt in countDict.items():
                 row[spamLabel] = cnt
         else:
             self.add_count_dict(gatestring, countDict)
         
 
-    def keys(self, stripOccuranceTags=False):
+    def keys(self, stripOccurrenceTags=False):
         """
         Returns the gate strings used as keys of this DataSet.
 
         Parameters
         ----------
-        stripOccuranceTags : bool, optional
+        stripOccurrenceTags : bool, optional
             Only applicable if `collisionAction` has been set to
             "keepseparate", when this argument is set to True
             any final "#<number>" elements of (would-be dupilcate)
@@ -332,7 +388,7 @@ class DataSet(object):
             A list of GateString objects which index the data
             counts within this data set.            
         """
-        if stripOccuranceTags and self.collisionAction == "keepseparate":
+        if stripOccurrenceTags and self.collisionAction == "keepseparate":
             return [ (gs[:-1] if (len(gs)>0 and gs[-1].startswith("#")) else gs) 
                      for gs in self.gsIndex.keys() ]
         else:
@@ -448,7 +504,8 @@ class DataSet(object):
         if not isinstance(gateString, _gs.GateString):
             gateString = _gs.GateString(gateString) #make sure we have a GateString
 
-        if round(sum(countList)) == 0: return #don't add zero counts to a dataset
+        if round(sum(countList)) == 0 and self.measurementLabels is None:
+            _warnings.warn("Adding zero counts to DataSet for gate string %s" % str(gateString))
 
         assert( len(countList) == len(self.slIndex))
         countArray = _np.array(countList, 'd')
@@ -473,10 +530,16 @@ class DataSet(object):
             self.counts.append( countArray )
             self.gsIndex[ gateString ] = gateStringIndx
 
-    def add_counts_1q(self, gateString, nPlus, nMinus):
+        #In all cases, the total just gets incremented by all the counts
+        totalKey = self._total_key(gateString)
+        if totalKey is not None:
+            if totalKey not in self.totals: self.totals[totalKey] = 0
+            self.totals[totalKey] += countArray.sum()
+
+    def add_counts_1q(self, gateString, nZeros, nOnes):
         """
         Single-qubit version of addCountsDict, for convenience when
-          the DataSet contains two spam labels, 'plus' and 'minus'.
+          the DataSet contains two spam labels, '0' and '1'.
 
         Parameters
         ----------
@@ -484,11 +547,11 @@ class DataSet(object):
           A tuple of gate labels specifying the gate string or a GateString object,
             e.g. ('I','x')
 
-        nPlus : int
-          The number of counts for the 'plus' spam label.
+        nZeros : int
+          The number of counts for the '0' spam label.
 
-        nMinus : int
-          The number of counts for the 'minus' spam label.
+        nOnes : int
+          The number of counts for the '1' spam label.
 
         Returns
         -------
@@ -500,15 +563,15 @@ class DataSet(object):
 
         if gateString in self.gsIndex and self.collisionAction == "aggregate":
             current_dsRow = self[ gateString ]
-            oldP = current_dsRow['plus'] / float( current_dsRow['plus'] + current_dsRow['minus'] )
-            newP = nPlus / float(nPlus + nMinus)
+            oldP = current_dsRow['1'] / float( current_dsRow['1'] + current_dsRow['0'] )
+            newP = nOnes / float(nOnes + nZeros)
             if abs(oldP-newP) > 0.1:
                 print('Warning! When attempting to combine data for the gate string '+ \
                     str(gateString) +', I encountered a discrepency of '+ str(abs(oldP-newP)*100.0) + \
                     ' percent! To resolve this issue, I am not going to ignore the latter data.')
                 return
 
-        self.add_count_dict(gateString, {'plus':nPlus, 'minus':nMinus} )
+        self.add_count_dict(gateString, {'0':nZeros, '1':nOnes} )
 
     def add_counts_from_dataset(self, otherDataSet):
         """
@@ -587,15 +650,44 @@ class DataSet(object):
 
         return trunc_dataset
 
+    def process_gate_strings(self, processor_fn):
+        """ 
+        Manipulate this DataSet's gate sequences according to `processor_fn`.
+
+        All of the DataSet's gate sequence labels are updated by running each
+        through `processor_fn`.  This can be useful when "tracing out" qubits
+        in a dataset containing multi-qubit data.
+
+        Parameters
+        ----------
+        processor_fn : function
+            A function which takes a single GateString argument and returns
+            another (or the same) GateString.
+
+        Returns
+        -------
+        None
+        """
+        new_gsIndex = _OrderedDict()
+        for gstr,indx in self.gsIndex.items():
+            new_gstr = processor_fn(gstr)
+            assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
+            new_gsIndex[ new_gstr  ] = indx
+        self.gsIndex = new_gsIndex
+        
+
     def copy(self):
         """ Make a copy of this DataSet. """
         if self.bStatic:
             return self # doesn't need to be copied since data can't change
         else:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction)
+                               collisionAction=self.collisionAction,
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
+            if self.totals is not None:
+                copyOfMe.totals = self.totals.copy()
             return copyOfMe
 
 
@@ -603,9 +695,12 @@ class DataSet(object):
         """ Make a non-static copy of this DataSet. """
         if self.bStatic:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction)
+                               collisionAction=self.collisionAction,
+                               measurementGates = self.measurementGates)
             copyOfMe.gsIndex = self.gsIndex.copy()
             copyOfMe.counts = [ el.copy() for el in self.counts ]
+            if self.totals is not None:
+                copyOfMe.totals = self.totals.copy()                
             return copyOfMe
         else:
             return self.copy()
@@ -624,6 +719,7 @@ class DataSet(object):
         else:
             newCounts = _np.empty( (0,len(self.slIndex)), 'd')
         self.counts, self.bStatic = newCounts, True
+        self.uuid = _uuid.uuid4()
 
 
     def __getstate__(self):
@@ -632,7 +728,11 @@ class DataSet(object):
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
                      'counts': self.counts,
-                     'collisionAction': self.collisionAction}
+                     'collisionAction': self.collisionAction,
+                     'measurementGates': self.measurementGates,
+                     'measurementLabels': self.measurementLabels,
+                     'totals': self.totals,
+                     'uuid' : self.uuid}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -642,7 +742,10 @@ class DataSet(object):
         self.counts = state_dict['counts']
         self.bStatic = state_dict['bStatic']
         self.collisionAction = state_dict.get('collisionAction',"aggregate") #backwards compatibility
-
+        self.measurementGates = state_dict.get('measurementGates',None)
+        self.measurementLabels = state_dict.get('measurementLabels',None)
+        self.totals = state_dict.get('totals',None)
+        self.uuid = state_dict.get('uuid', _uuid.uuid4() if self.bStatic else None)
 
     def save(self, fileOrFilename):
         """
@@ -664,7 +767,11 @@ class DataSet(object):
                      'slIndex': self.slIndex,
                      'bStatic': self.bStatic,
                      'collisionAction': self.collisionAction,
-                     'comment': self.comment } 
+                     'comment': self.comment,
+                     'measurementGates': self.measurementGates,
+                     'measurementLabels': self.measurementLabels,
+                     'totals': self.totals,
+                     'uuid' : self.uuid} 
                      #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.counts)
 
@@ -709,6 +816,7 @@ class DataSet(object):
                 f = _gzip.open(fileOrFilename,"rb")
             else:
                 f = open(fileOrFilename,"rb")
+            self.file_origin = fileOrFilename
         else:
             f = fileOrFilename
 
@@ -727,6 +835,9 @@ class DataSet(object):
         self.bStatic = state_dict['bStatic']
         self.collisionAction = state_dict.get("collisionAction","aggregate") #backward compatibility
         self.comment = state_dict.get("comment",None) #backward compatibility
+        self.measurementGates = state_dict.get('measurementGates',None)
+        self.measurementLabels = state_dict.get('measurementLabels',None)
+        self.totals = state_dict.get('totals',None)
 
         if self.bStatic:
             self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
@@ -735,6 +846,9 @@ class DataSet(object):
             for i in range(state_dict['nRows']): #pylint: disable=unused-variable
                 self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
         if bOpen: f.close()
+        if 'uuid' in state_dict:
+            self.uuid= state_dict['uuid']
+        # Otherwise uuid is already set
 
 
 #def upgrade_old_dataset(oldDataset):

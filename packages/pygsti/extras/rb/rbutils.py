@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Randomized Benhmarking Utility Routines """
 
 import numpy as _np
+import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 from ... import objects as _objs
 from ... import construction as _cnst
@@ -16,16 +17,16 @@ from scipy.linalg import sqrtm
 from scipy.linalg import eig
 import itertools as _ittls
 
+# ---- Fitting functions ----#
 def standard_fit_function(m,A,B,p):
     """
-    Computes the standard fitting function for RB average survival probablities 
-    P_m = A + B * p^m, as provided in, e.g., Equation 1 of "Randomized benchmarking 
-    with confidence" (http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032).
-
+    The standard RB decay fitting function P_m = A + B * p^m. This is 
+    used in standard RB, and also variants on this (e.g., interleaved RB).
+    
     Parameters
     ----------
     m : integer
-        Length of random RB sequence (so not including the inversion gate).
+        Length of random RB sequence (not including the inversion gate).
     
     A,B,p : float
 
@@ -35,33 +36,33 @@ def standard_fit_function(m,A,B,p):
     """
     return A+B*p**m
 
-def first_order_fit_function(m,A1,B1,C1,p):
+def first_order_fit_function(m,A,B,C,p):
     """
-    Computes the 'first order' fitting function for RB average survival probablities
-    P_m = A1 + (B1 + m * C1) * p^m. This is a simplified verion of the 'first order'
-    function P_m = A_1*p^m + B_1 + C_1 (m-1)(q-p^2)p^(m-2), as provided in Equation 3 
-    of "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
+    The 'first order' fitting function P_m = A + (B + m * C) * p^m, from
+    "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
     (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
-    The model therein has 1 to many parameters for the fitting. The conversion is
-    A1 = B_1
-    B1 = A_1 - C_1(q/p^(-2) - 1)
-    C1 = C_1(q/p^(-2) - 1)
-    where the LHS (RHS) quantites in this equation are those of our (Magesan et al.'s)
-    fitting function.
+    This is a simplified verion of the 'first order' in that paper (see Eq. 3),
+    as the model therein has 1 to many parameters for fitting. The conversion is
+    A = B_1
+    B = A_1 - C_1(q/p^(-2) - 1)
+    C = C_1(q/p^(-2) - 1)
+    where the LHS (RHS) quantites in this equation are those of our (Magesan 
+    et al.'s) fitting function.
 
     Parameters
     ----------
     m : integer
-        Length of random RB sequence (so not including the inversion gate).
+        Length of random RB sequence (not including the inversion gate).
     
-    A1,B1,C1,f1 : float
+    A,B,C,p : float
 
     Returns
     -------
     float
     """
-    return A1+(B1+C1*m)*p**m
+    return A+(B+C*m)*p**m
 
+# ----- general gate and gateset tools ---- #
 def p_to_r(p,d=2):
     """
     Converts an RB decay rate (p) to the RB number (r), using the relation
@@ -88,36 +89,13 @@ def p_to_r(p,d=2):
 
 def r_to_p(r,d=2):
     """
-    Inverse of p_to_r function: see above   
+    Inverse of p_to_r function. 
+    
     """
     p = 1 - d * r / (d - 1)
     return p
 
-def group_twirl(M,group):
-    """
-    Returns the matrix group twirl of a map M:  
-    Twirl(M) = 1/|group| * Sum_{C in group} (C^-1 * M * C)
-    
-    Parameters
-    ----------
-    M : array or gate
-        The map to be twirled.
-
-    group : MatrixGroup
-        The group to twirl over (e.g., the Clifford group).
-    
-    Returns
-    -------
-    M_twirl : array
-        The twirl of M.
-    """
-    G = len(group)
-    M_twirl = 1.0/G * _np.sum(
-        _np.dot( _np.dot(group.get_matrix_inv(i),M),
-                 group.get_matrix(i)) for i in range(G))
-    return M_twirl
-
-def average_gate_infidelity(gate_actual,gate_target,d=2):
+def average_gate_infidelity(A,B,d=None,mxBasis="gm"):
     """
     Computes the average gate infidelity (AGI) between an actual and a target
     gate. This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2)).
@@ -127,23 +105,70 @@ def average_gate_infidelity(gate_actual,gate_target,d=2):
 
     Parameters
     ----------
-    gate_actual : array or gate
-        The noisy gate whose AGI is to be computed (to the target gate).
+    A : array or gate
+        The noisy gate whose AGI is to be computed (to the target gate B).
         
-    gate_target : array or gate
+    B : array or gate
         The target gate against which "actual" is being compared.
+        
+    d : int
+        Dimension of Hilbert space.  Taken to be `sqrt(A.shape[0])` if None.
+
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the matrices.
 
     Returns
     ----------
     AGI : float
         The AGI of the noisy to the target gate.
     """
-    process_fidelity = _tls.process_fidelity(gate_actual,gate_target)
+    if d is None: d = int(round(_np.sqrt(A.shape[0])))
+    process_fidelity = _tls.process_fidelity(A,B,mxBasis=mxBasis)
     AGF = (d*process_fidelity + 1)/(1+d)
     AGI = 1 - AGF
     return float(AGI)
 
-def average_gateset_infidelity(gs_actual,gs_target,d=2):
+#### DONE + TESTED
+def unitarity(A,mxBasis="gm",d=2):
+    """
+    Returns the unitarity of a channel calculated using the equation
+    u(A) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1), where A_u is the unital 
+    submatrix of A. This is the matrix obtained when the top row, and left 
+    hand column is removed from A when A is written in any basis for which
+    the first element is the normalized identity (so the pp or gm bases).    
+    This formula for unitarity is given in Prop 1 of ``Estimating the Coherence 
+    of noise'' by Wallman et al.
+    
+    Parameters
+    ----------
+    gate : array or gate
+        The gate for which the unitarity is to be computed. 
+                    
+    mxBasis : {"std","gm","pp"} or a Basis object, optional
+        The basis of the matrix.
+        
+    d : int, optional
+        The dimension of the Hilbert space.
+
+    Returns
+    ----------
+    u : float
+        The unitarity of the gate.
+        
+    """
+    d = int(round(_np.sqrt(A.shape[0])))
+    basisMxs = _tls.basis_matrices(mxBasis, d)
+
+    if _np.allclose( basisMxs[0], _np.identity(d,'d') ):
+        B = A
+    else:
+        B = _tls.change_basis(A, mxBasis, "gm") #everything should be able to be put in the "gm" basis
+    
+    unital = B[1:d**2,1:d**2]
+    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)),unital)) / (d**2-1)
+    return u
+
+def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=None):
     """
     Computes the average gateset infidelity (AGsI) between noisy gates and target gates.
     This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2) and below), and is 
@@ -154,18 +179,31 @@ def average_gateset_infidelity(gs_actual,gs_target,d=2):
     gs_actual : GateSet
         Noisy gateset to calculate the AGsI of (to the target gateset).
 
-    gs_clifford_target : GateSet
+    gs_target : GateSet
         Target gateset.
+        
+    mxBasis : {"std","gm","pp"} or Basis object, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    d : int, optional
+        The dimension of the Hilbert space.  If None, it is obtained
+        from the gateset.
 
     Returns
     -------
     AGsI : float
         The AGsI of the actual gateset to the target gateset.    
     """
+    if mxBasis is None: mxBasis = gs_actual.basis
+    if d is None: d = int(round(_np.sqrt(gs_actual.dim)))
+    
     AGI_list = []
     for gate in list(gs_target.gates.keys()):
-        AGI_list.append(average_gate_infidelity(gs_actual.gates[gate],
-                gs_target.gates[gate],d))
+        AGI_list.append(average_gate_infidelity(
+            gs_actual.gates[gate],
+            gs_target.gates[gate],d=d,
+            mxBasis=mxBasis))
     AGsI = _np.mean(AGI_list)
     return AGsI
 
@@ -180,15 +218,17 @@ def errormaps(gs_actual, gs_target):
     Parameters
     ----------
     gs_actual : GateSet
+        The imperfect gateset.
     
     gs_target : GateSet
-        Target gateset.
+        The target gateset.
     
     Returns
     -------
     errormaps : GateSet
         The left multplied error gates, along with the average error map,
-        with the key 'Gavg'.    
+        with the key 'Gavg'.  
+        
     """    
     errormaps_gate_list = []
     errormaps = gs_actual.copy()
@@ -197,52 +237,654 @@ def errormaps(gs_actual, gs_target):
                                _np.transpose(gs_target.gates[gate]))     
         errormaps_gate_list.append(errormaps.gates[gate])
         
-    errormaps['Gavg'] = _np.mean( _np.array([ i for i in errormaps_gate_list]), 
-                                      axis=0, dtype=_np.float64)           
+    errormaps.gates['Gavg'] = _np.mean( _np.array([ i for i in errormaps_gate_list]), 
+                                        axis=0, dtype=_np.float64)           
     return errormaps
 
-def gatedependence_of_errormaps(gs_actual, gs_target, norm='1to1', d=2):
+def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond', 
+                                mxBasis=None, d=2):
     """
-    Computes the 'delta' parameter used to calculate the systematic error
-    of the zeroth or first order theories of Magesan et al PRA 85
-    042311 2012, and the systematic error of the 'L matrix' RB theory of
-    arXiv:1702.01853. This parameter is a measure of the gate-dependence 
-    of the error maps (wrt a target gateset) of the noisy gate set.
+    Computes the "gate-dependence of errors maps" parameter defined by
+    delta_avg = avg_i|| E_i - avg_i(E_i) ||, where E_i are the error maps, and
+    the norm is either the diamond norm or the 1-to-1 norm. This quantity
+    is defined in Magesan et al PRA 85 042311 2012, and is used to calculate
+    The the systematic error of the zeroth or first order theories of Magesan 
+    et al.
     
     Parameters
     ----------
     gs_actual : GateSet
+        The actual gateset
     
     gs_target : GateSet
-        Target gateset.
+        The target gateset.
         
-    norm : Str, optional
+    norm : str, optional
         The norm used in the calculation. Can be either 'diamond' for
         the diamond norm, or '1to1' for the Hermitian 1 to 1 norm.
-    
+        
+    mxBasis : {"std","gm","pp"}, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    d : int, optional
+        The dimension of the Hilbert space.
+   
     Returns
     -------
     delta_avg : float
-        The value of the delta parameter calculated for the given
-        norm and gate sets.    
+        The value of the parameter defined above.
+        
     """
     error_gs = errormaps(gs_actual, gs_target)
     delta = []
     
+    if mxBasis is None:
+        mxBasis = gs_actual.get_basis_name()
+    assert(mxBasis=='pp' or mxBasis=='gm' or mxBasis=='std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    
     for gate in list(gs_target.gates.keys()):
         if norm=='diamond':
-            delta.append(_tls.diamonddist(error_gs.gates[gate],
-                                           error_gs.gates['Gavg']))            
-        elif norm=='1to1':
-            gate_dif = _tls.gm_to_std(error_gs.gates[gate]-error_gs.gates['Gavg'],d)
-            delta.append(norm1to1(gate_dif,n_samples=1000, return_list=False))            
+            delta.append(_tls.diamonddist(error_gs.gates[gate],error_gs.gates['Gavg'],
+                                          mxBasis=mxBasis))            
+        elif norm=='1to1': 
+            gate_dif = error_gs.gates[gate]-error_gs.gates['Gavg']
+            delta.append(norm1to1(gate_dif,n_samples=1000, mxBasis=mxBasis,return_list=False))            
         else:
-            raise ValueError("Only diamond or 1to1 norm available. "
-                             + "set norm='diamond' or norm='1to1'")            
+            raise ValueError("Only diamond or 1to1 norm available.")  
+            
     delta_avg = _np.mean(delta)    
     return delta_avg
-        
 
+# ----- Predicting the RB parameters and curve from a gateset ---- #
+def predicted_RB_number(gs,gs_target,d=None):
+    """
+    Predicts the RB number (RB error rate) from a gateset, using the
+    essentially exact formula from arXiv:1702.01853. The gateset should
+    be trace preserving.
+    
+    Parameters
+    ----------
+    gs : GateSet
+        The gateset to calculate the RB number of (e.g., imperfect Cliffords).
+        Note that this is not necessarily the physical gateset -- it is the 
+        gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
+
+    gs_target: GateSet
+        The target gateset.
+    
+    d : int, optional
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
+
+    Returns
+    -------
+    
+    r_predicted : float.
+        The predicted RB number. This is valid for various types of 
+        RB, including standard Clifford RB.
+        
+    """
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
+    r_predicted = p_to_r(predicted_RB_decay_parameter(gs,gs_target,d))
+    return r_predicted
+
+def predicted_RB_decay_parameter(gs,gs_target,d=2):
+    """
+    Computes the second largest eigenvalue of the 'L matrix', which
+    corrsponds to the RB decay rate for trace-preserving gates and
+    standard Clifford RB. This also acurately predicts the RB decay
+    parameter for a range of other variants of basic RB.
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The actual gateset. This need not form a group -- it is entirely
+        arbitrary. However, for predicting standard Clifford RB, it should
+        be the noisy Clifford gateset (not a "primitives" gateset).
+  
+    gs_target : Gateset
+        The target gateset corresponding to gs.
+    
+    d : int, optional
+        The dimension.
+
+    Returns
+    -------
+    
+    p : float.
+        The second largest eigenvalue of L. This is the RB decay parameter
+        for various types of RB (see above).
+    """
+    L = L_matrix(gs,gs_target)
+    E = _np.absolute(_np.linalg.eigvals(L))
+    E = _np.flipud(_np.sort(E))
+    if abs(E[0] - 1) > 10**(-12):
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "Gateset is not (approximately) trace-preserving.")
+    if abs(E[1]) - abs(E[2]) < 10**(-1):
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "There is more than one significant exponential in RB decay.")
+    if E[1].imag > 10**(-10):
+        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+                       "The decay constant has a significant imaginary component.")
+    p = E[1]
+    return p
+
+def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
+    """
+    Computes the gauge transformation required so that, when the gateset is transformed
+    via this gauge-transformation, the RB number (as predicted by the function 
+    `predicted_RB_number` is the average gateset infidelity between the (gauge-transformed)
+    `gs` gateset and the target gateset `gs_target`. The transformation is defined
+    in arXiv:1702.01853
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The actual gateset. This need not form a group -- it is entirely
+        arbitrary. However, for predicting standard Clifford RB, it should
+        be the noisy Clifford gateset (not a "primitives" gateset).
+  
+    gs_target : Gateset
+        The target gateset corresponding to gs.
+                
+    mxBasis : {"std","gm","pp"}, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    weighting : float, optional
+        Must be non-zero. A weighting on the eigenvector with eigenvalue that
+        is the RB decay parameter, in the sum of the this eigenvector and the
+        eigenvector with eigenvalue of 1 that defines the l_operator. The value
+        of this factor should not change whether this l_operator transforms into
+        a gauge in which r = AGsI, but it *might* impact on other properties of the
+        gates in that gauge (certainly in some cases its value is entirely irrelevant).
+        
+    Returns
+    -------    
+    l_operator: array
+        The matrix defining the gauge-transformation.
+        
+    """                    
+    gam, vecs = _np.linalg.eig(L_matrix(gs,gs_target))
+    absgam = abs(gam)
+    index_max = _np.argmax(absgam)
+    gam_max = gam[index_max]
+    
+    if abs(gam_max - 1) > 10**(-12):
+        _warnings.warn("Gateset is not (approximately) trace-preserving.\n" +
+                       "RB theory may not apply")
+        
+    if gam_max.imag > 10**(-12):
+        _warnings.warn("RB Decay constants have a significant imaginary component.\n" + 
+                       "RB theory may not apply")
+      
+    absgam[index_max] = 0.0
+    index_2ndmax = _np.argmax(absgam)
+    decay_constant = gam[index_2ndmax]
+    if decay_constant.imag > 10**(-12):
+        _warnings.warn("Decay constants have a significant imaginary component.\n" +
+                       "RB theory may not apply")
+        
+    absgam[index_2ndmax] = 0.0
+    index_3rdmax = _np.argmax(absgam)
+    if abs(decay_constant) - abs(absgam[index_3rdmax]) < 10**(-1):
+        _warnings.warn("There is more than one significant exponential in RB decay.\n" + 
+                       "RB theory may not apply")
+
+    vec_l_operator = vecs[:,index_max] + weighting*vecs[:,index_2ndmax]
+    
+    if mxBasis is None:
+        mxBasis = gs.get_basis_name()
+    assert(mxBasis=='pp' or mxBasis=='gm' or mxBasis=='std'), "mxBasis must be 'gm', 'pp' or 'std'."
+    
+    if mxBasis is 'pp' or 'gm':
+        assert(_np.amax(vec_l_operator.imag) < 10**(-15)), "If 'gm' or 'pp' basis, RB gauge matrix should be real."
+        vec_l_operator = vec_l_operator.real
+        
+    vec_l_operator[abs(vec_l_operator) < 10**(-15)] = 0.
+    l_operator = unvec(vec_l_operator) 
+    
+    return l_operator
+
+def transform_to_RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
+    """
+    Transforms a GateSet into the "RB gauge" (see above), as introduced in  
+    arXiv:1702.01853. This gauge is a function of both the gateset and its 
+    target (both of which may be input in any gauge, for the purposes of obtaining 
+    r = average gateset infidelity between the output GateSet and gs_target).
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The actual gateset. This need not form a group -- it is entirely
+        arbitrary. However, for predicting standard Clifford RB, it should
+        be the noisy Clifford gateset (not a "primitives" gateset).
+  
+    gs_target : Gateset
+        The target gateset corresponding to gs.
+                                
+    mxBasis : {"std","gm","pp"}, optional
+        The basis of the gatesets. If None, the basis is obtained from
+        the gateset.
+        
+    weighting : float, optional
+        Must be non-zero. A weighting on the eigenvector with eigenvalue that
+        is the RB decay parameter, in the sum of the this eigenvector and the
+        eigenvector with eigenvalue of 1 that defines the l_operator. The value
+        of this factor should not change whether this l_operator transforms into
+        a gauge in which r = AGsI, but it *might* impact on other properties of the
+        gates in that gauge (certainly in some cases its value is entirely irrelevant).
+
+    Returns
+    -------   
+    gs_in_RB_gauge: GateSet
+        The gateset `gs` transformed into the "RB gauge".
+        
+    """            
+    l = RB_gauge(gs,gs_target,mxBasis=mxBasis,weighting=weighting)
+    gs_in_RB_gauge = gs.copy()
+    for gate in gs.gates.keys():
+        gs_in_RB_gauge.gates[gate] = _np.dot(l,_np.dot(gs.gates[gate],_np.linalg.inv(l)))
+    for rho in gs.preps.keys():
+        gs_in_RB_gauge.preps[rho] = _np.dot(l,gs.preps[rho])
+    for E in gs.effects.keys():
+        gs_in_RB_gauge.effects[E] = _np.dot(_np.transpose(_np.linalg.inv(l)),gs.effects[E])
+        
+    return gs_in_RB_gauge
+
+def L_matrix(gs,gs_target):
+    """
+    Constructs the 'L' linear operator on superoperators, from arXiv:1702.01853,
+    represented as a matrix.
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The actual gateset. This need not form a group -- it is entirely
+        arbitrary. However, for predicting standard Clifford RB, it should
+        be the noisy Clifford gateset (not a "primitives" gateset).
+  
+    gs_target : Gateset
+        The target gateset corresponding to gs.
+
+    Returns
+    -------
+    L : float
+        The L operator from arXiv:1702.01853, represented as a matrix using
+        the 'stacking' convention.  
+        
+    """  
+    dim = len(gs_target.gates.keys())
+    L_matrix = (1 / dim) * _np.sum(_np.kron(gs.gates[key].T,
+                 _np.linalg.inv(gs_target.gates[key])) for key in gs_target.gates.keys())
+    return L_matrix
+
+def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,
+                                          group_to_gateset=None,d=2):
+    """
+    Constructs the second largest eigenvalue of the 'R' matrix (see below), which
+    predicts the RB decay parameter for trace-preserving gates.
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The noisy gateset (e.g., the Cliffords). 
+        If subset_sampling is None or group_to_gateset is None, the labels
+        of the gates in gs should be the same as the labels of the group
+        elements in group. For Clifford RB this would be the clifford gateset
+        (perhaps obtained from a primitive gateset and a compilation table).
+            
+    group : MatrixGroup
+        The group that the 'gs' gateset contains gates from (gs does not
+        need to be the full group, and could be a subset of the group). For
+        Clifford RB, this would be the Clifford group.
+        
+    subset_sampling : list, optional
+        If not None, a list of gate labels from 'gs', for which random sequences of 
+        this subset of gates are implemented in the RB protocol. Even if this is 
+        all of the gates of gs, this list needs to be specified if gs and group are 
+        either (1) not labelled the same (and so group_to_gateset is not None), 
+        or (2) gs is a subset of group.
+        
+    group_to_gateset : dict, optional
+        If not None, a dictionary that maps labels of group elements to labels
+        of gs. Only used if subset_sampling is not None. If subset_sampling is 
+        not None and the gs and group elements have the same labels, this dictionary
+        is not required. Otherwise it is necessary.
+      
+    d : int, optional
+        Dimension of the Hilbert space. Defaults to a single qubit.
+    
+    Returns
+    -------
+    p : float
+        The predicted RB decay parameter. Valid for standard 2-design (e.g., Clifford)
+        RB with trace-preserving gates, and in a range of other circumstances.
+        
+    """ 
+    R = R_matrix(gs,group,subset_sampling=subset_sampling,group_to_gateset=group_to_gateset,d=d)
+    E = _np.absolute(_np.linalg.eigvals(R))
+    E = _np.flipud(_np.sort(E))
+    p = E[1]
+    return p
+
+def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
+    """
+    Constructs the 'R' matrix of arXiv:1702.01853
+    This matrix described the exact behaviour of the average surival
+    probablities of RB sequences. It is exponentially large in the number 
+    of qubits.
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The noisy gateset (e.g., the Cliffords) to calculate the R matrix of. 
+        If subset_sampling is None or group_to_gateset is None, the labels
+        of the gates in gs should be the same as the labels of the group
+        elements in group. For Clifford RB this would be the clifford gateset
+        (perhaps obtained from a primitive gateset and a compilation table).
+            
+    group : MatrixGroup
+        The group that the 'gs' gateset contains gates from (gs does not
+        need to be the full group, and could be a subset of the group). For
+        Clifford RB, this would be the Clifford group.
+        
+    subset_sampling : list, optional
+        If not None, a list of gate labels from 'gs', for which the R matrix
+        corresponding to random sequences of this subset of gates is to be
+        contructed. Even if this is all of the gates of gs, this list needs to
+        be specified if gs and group are either (1) not labelled the same (and so 
+        group_to_gateset is not None), or (2) gs is a subset of group.
+        
+    group_to_gateset : dict, optional
+        If not None, a dictionary that maps labels of group elements to labels
+        of gs. Only used if subset_sampling is not None. If subset_sampling is 
+        not None and the gs and group elements have the same labels, this dictionary
+        is not required. Otherwise it is necessary.
+      
+    d : int, optional
+        Dimension of the Hilbert space. Defaults to a single qubit.
+    
+    Returns
+    -------
+    R : float
+        The R matrix from arXiv:1702.01853 
+        
+    """    
+    group_dim = len(group)
+    R_dim = group_dim * d**2
+    R = _np.zeros([R_dim,R_dim],float)
+    
+    if subset_sampling is None:
+        for i in range(0,group_dim):
+            for j in range(0,group_dim):
+                label_itoj = group.product([group.get_inv(i),j])
+                for k in range (0,d**2):
+                    for l in range(0,d**2):
+                        R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
+        R = R/group_dim
+                
+    if subset_sampling is not None:
+        if group_to_gateset is None:
+            for element in subset_sampling:
+                assert(element in gs.gates.keys() and element in group.labels),  "The subset\
+                   of gates should be elements of the gateset and group if group_to_gateset\
+                   not specificed."
+                
+            for i in range(0,group_dim):
+                for j in range(0,group_dim):
+                    label_itoj = group.product([group.get_inv(i),j])
+                    if group.labels[label_itoj] in subset_sampling:
+                        for k in range (0,d**2):
+                            for l in range(0,d**2):
+                                R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
+            R = R/len(subset_sampling)
+        
+        if group_to_gateset is not None:
+            for key in group_to_gateset.keys():
+                assert(key in group.labels), "group_to_gateset dictionary invalid!"
+                assert(group_to_gateset[key] in gs.gates.keys()), "group_to_gateset \
+                dictionary invalid!"
+                    
+            for i in range(0,group_dim):
+                for j in range(0,group_dim):
+                    label_itoj = group.product([group.get_inv(i),j])
+                    if group.labels[label_itoj] in group_to_gateset.keys():
+                        for k in range (0,d**2):
+                            for l in range(0,d**2):
+                                R[j*d**2+k,i*d**2+l] = gs.gates[group_to_gateset[
+                                        group.labels[label_itoj]]][k,l]
+            R = R/len(subset_sampling)
+            
+    return R
+
+def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
+                  subset_sampling=None,group_to_gateset=None,
+                  fixed_length_each_m = False, compilation=None):
+    """
+    Calculates the exact RB average surival probablilites (ASP), using the 
+    formula given in Eq (2) and the surrounding text of arXiv:1702.01853
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The noisy gateset (e.g., the Cliffords) to calculate the RB survival
+        probabilities for. If subset_sampling is None or group_to_gateset 
+        is None, the labels of the gates in gs should be the same as the 
+        labels of the group elements in group. For Clifford RB this should 
+        be the clifford gateset (perhaps obtained from a primitive gateset 
+        and a compilation table).
+            
+    group : MatrixGroup
+        The group that the 'gs' gateset contains gates from (gs does not
+        need to be the full group, and could be a subset of the group). For
+        Clifford RB, this would be the Clifford group.
+        
+    m_max : int
+        maximal sequence length of the random gates (not including the
+        inversion gate).
+        
+    m_min : int, optional
+        minimal sequence length. Defaults to the smallest valid value of 1.
+        
+    m_step : int, optional
+        step size between sequence lengths
+                     
+    d : int, optional
+        Dimension of the Hilbert space. Defaults to a single qubit.
+       
+    success_spamlabel : str, optional
+        Specifies the SPAM label associated with surival
+              
+    subset_sampling : list, optional
+        If not None, a list of gate labels from 'gs'. These are the gates
+        that random applied in the rb sequences. Even if this is all of the 
+        gates of gs, this list needs to be specified if gs and group are either 
+        (1) not labelled the same (and so group_to_gateset is not None), or 
+        (2) gs is a subset of group.
+        
+    group_to_gateset : dict, optional
+        If not None, a dictionary that maps labels of group elements to labels
+        of gs. Only used if subset_sampling is not None. If subset_sampling is 
+        not None and the gs and group elements have the same labels, this dictionary
+        is not required. Otherwise it is necessary.
+        
+    fixed_length_each_m : bool, optional
+        This does not do anything unless subset_sampling is not None. If
+        subset_sampling is not None, then it specifies the subset of the
+        group elements that are sampled randomly in RB sequences. In this
+        situation there are two different natural ways to enforce that a
+        sequence of m random gates compiles to the identity. The first way
+        is to apply the inverse group element, compiled into gates from
+        this subset. This setting is obtained by fixed_length_each_m = False,
+        and in this case the sequences averaged over for length m consist
+        of sequences of gates from subset_sampling of length >= m + 1. The
+        alternative is to consider only those sequences of m+1 gates from
+        subset_sampling that (ideally) compose to the identity. This is
+        obtained by setting fixed_length_each_m = True. *This setting is
+        currently not supported*.
+        
+    compilation : dict, optional
+        If subset_sampling is not None and fixed_length_each_m is False this
+        specifies the compilation of group elements into the gates from 
+        subset_sampling in order to apply the final inverse gate.
+     
+    Returns
+    -------
+    m : float
+        Array of sequence length values that the ASP has been calculated for
+        
+    P_m : float
+        Array containing ASP values for the specified sequence length values.
+        
+    """  
+    i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
+    m = _np.zeros(1+i_max,int)
+    P_m = _np.zeros(1+i_max,float)
+    group_dim = len(group)
+    R_dim = group_dim * d**2
+    # need the more subtle new version of R
+    R = R_matrix(gs,group,subset_sampling=subset_sampling,
+                 group_to_gateset=group_to_gateset,d=d)
+    rho_index = gs.spamdefs[success_spamlabel][0]
+    E_index = gs.spamdefs[success_spamlabel][1]
+    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs.effects[E_index].T)
+    if subset_sampling is None:
+            extended_E = group_dim*_np.dot(extended_E, R)
+    else:
+        if fixed_length_each_m is False:
+            full_gateset = _cnst.build_alias_gateset(gs,compilation)
+            Rinversion = R_matrix(full_gateset,group,d=d)
+            extended_E = group_dim*_np.dot(extended_E, Rinversion)
+        if fixed_length_each_m is True:
+            raise NotImplementedError("This functionality is not currently available! " +
+                                      "-- set fixed_length_each to False.")
+            ##extended_E = _np.dot(extended_E, R)
+            # To make this functionality work, we need to multiply
+            # P_m by an m-dependent factor, as the number of different
+            # sequences which compile to I changes with m. For m=1 it
+            # is 1 or 0 (depending on the generators), for m=2, it 
+            # depends on the generators, and is 1 for Gi, Gx, Gy.
+            
+    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[rho_index])
+    Rstep = _np.linalg.matrix_power(R,m_step)
+    Riterate =  _np.linalg.matrix_power(R,m_min)
+    for i in range (0,1+i_max):
+        m[i] = m_min + i*m_step
+        P_m[i] = _np.dot(extended_E,_np.dot(Riterate,extended_rho))
+        Riterate = _np.dot(Rstep,Riterate)
+    return m, P_m
+
+#
+#
+# Here put a wrapped around exact_RB_ASPs() to calculate interleaved RB
+# ASPs. Ideally, it would optionally be a wrap-around L_matrix_ASPs() 
+# as well, so that it is efficient for >1 qubit
+#
+
+#
+#
+# Here write a function that calculates exact probs for non-inversion
+# random sequences, for, e.g., URB.
+#
+#
+
+#
+# The following function works, but it would be better if (1) the
+# error bounds where those from Wallman's paper, (2) if it didn't do the
+# gauge optimization (which is fine if (1) is sorted), (3) If it could calculate 
+# the correct average error map for when gs is not the full group (as then the 
+# average error map at the end is not the same as the average error map of the gateset).
+#
+def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
+                  error_bounds=False,norm='diamond'):
+    """
+    Computes RB average survival probablities, as predicted by the 'L' operator
+    theory of arXiv:1702.01853. Within the function, the gs is gauge-optimized to
+    gs_target. This is *not* optimized to the gauge specified in arXiv:1702.01853,
+    but instead performs the standard pyGSTi gauge-optimization (using the frobenius
+    distance). In most cases, this is likely to be a reasonable proxy for the gauge
+    optimization perscribed by arXiv:1702.01853.
+    
+    Parameters
+    ----------
+    gs : Gateset
+        The noisy gateset.
+           
+    gs_target : Gateset
+        Target gateset
+        
+    m_max : int
+        maximal sequence length of the random gates (so not including the
+        inversion gate).
+        
+    m_min : int, optional
+        minimal sequence length. Defaults to the smallest valid value of 1.
+        
+    m_step : int, optional
+        step size between sequence lengths
+      
+    d : int, optional
+        Dimension of the Hilbert space. Defaults to a single qubit.
+        
+    success_spamlabel : str, optional
+        Specifies the SPAM label associated with surival
+        
+    norm : str, optional
+        The norm used in the error bound calculation. Default is consistent with
+        arXiv:1702.01853.
+    
+    Returns
+    -------
+    m : float
+        Array of sequence length values that the ASP has been calculated for
+        
+    P_m : float
+        Array containing predicted ASP values for the specified sequence length values.
+    
+    if error_bounds is True, also returns:
+        lower_bound: float
+            Array containing lower bounds on the possible ASP values
+
+        upper_bound: float
+            Array containing upper bounds on the possible ASP values
+    """      
+    gs_go = _algs.gaugeopt_to_target(gs,gs_target)
+    L = L_matrix(gs_go,gs_target)
+    dim = len(gs_target.gates.keys())
+    rho_index = gs.spamdefs[success_spamlabel][0]
+    E_index = gs.spamdefs[success_spamlabel][1]
+    emaps = errormaps(gs_go,gs_target)
+    E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
+    identity_vec = vec(_np.identity(d**2,float))    
+    delta = gatedependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
+    
+    i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
+    m = _np.zeros(1+i_max,int)
+    P_m = _np.zeros(1+i_max,float)
+    upper_bound = _np.zeros(1+i_max,float)
+    lower_bound = _np.zeros(1+i_max,float)
+    
+    Lstep = _np.linalg.matrix_power(L,m_step)
+    Literate =  _np.linalg.matrix_power(L,m_min)
+    for i in range (0,1+i_max):
+        m[i] = m_min + i*m_step
+        L_m_rdd = unvec(_np.dot(Literate,identity_vec))
+        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go.preps[rho_index]))
+        Literate = _np.dot(Lstep,Literate)
+        upper_bound[i] = P_m[i] + delta/2
+        lower_bound[i] = P_m[i] - delta/2
+        if upper_bound[i] > 1:
+            upper_bound[i]=1
+        if lower_bound[i] < 0:
+            lower_bound[i]=0
+    if error_bounds:    
+        return m, P_m, upper_bound, lower_bound
+    else:
+        return m, P_m
+
+# needs more testing    
 def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus', 
                               norm='1to1', d=2):                   
     """
@@ -291,7 +933,7 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
         PRA 85 042311 2012 (taking the case of time-independent noise therein).    
     """
     Magesan_theory_params = {}
-    Magesan_theory_params['r'] = average_gateset_infidelity(gs_actual,gs_target,d)    
+    Magesan_theory_params['r'] = average_gateset_infidelity(gs_actual,gs_target,None,d)    
     Magesan_theory_params['p'] = r_to_p(Magesan_theory_params['r'],d)
     Magesan_theory_params['delta'] = gatedependence_of_errormaps(gs_actual, 
                                                                  gs_target, norm,d)
@@ -300,18 +942,18 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     R_list = []
     Q_list = []
     for gate in list(gs_target.gates.keys()):
-        R_list.append(_np.dot(_np.dot(error_gs[gate],gs_target.gates[gate]),
-              _np.dot(error_gs['Gavg'],_np.transpose(gs_target.gates[gate]))))
+        R_list.append(_np.dot(_np.dot(error_gs.gates[gate],gs_target.gates[gate]),
+              _np.dot(error_gs.gates['Gavg'],_np.transpose(gs_target.gates[gate]))))
         Q_list.append(_np.dot(gs_target.gates[gate],
-              _np.dot(error_gs[gate],_np.transpose(gs_target.gates[gate]))))
+              _np.dot(error_gs.gates[gate],_np.transpose(gs_target.gates[gate]))))
     
-    error_gs['GR'] = _np.mean(_np.array([ i for i in R_list]), 
+    error_gs.gates['GR'] = _np.mean(_np.array([ i for i in R_list]), 
                                       axis=0, dtype=_np.float64)
-    error_gs['GQ'] = _np.mean(_np.array([ i for i in Q_list]), 
+    error_gs.gates['GQ'] = _np.mean(_np.array([ i for i in Q_list]), 
                                       axis=0, dtype=_np.float64)    
-    error_gs['GQ2'] = _np.dot(error_gs['GQ'],error_gs['Gavg'])
+    error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])
     
-    error_gs['rhoc_mixed'] = 1./d*error_gs['identity']
+    error_gs.preps['rhoc_mixed'] = 1./d*error_gs['identity']
     error_gs.spamdefs['plus_cm'] = ('rhoc_mixed','E0')
     error_gs.spamdefs['minus_cm'] = ('rhoc_mixed','remainder')
     gsl = [('Gavg',),('GR',),('Gavg','GQ',)]   
@@ -332,12 +974,12 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) \
                             + ((pr_R_p - pr_R_I)/p)
     C_1 = pr_L_p - pr_L_I
-    q = average_gate_infidelity(error_gs['GQ2'],_np.identity(d**2,float),d)
+    q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float),d)
     q = r_to_p(q,d)
     
     if p < 0.01:
-        print("Warning: first order theory parameters are not guaranteed \
-              to be reliable with a very large decay rate")        
+        _warnings.warn("First order theory parameters are not guaranteed \
+              to be reliable with a very large decay rate")
     Magesan_theory_params['A'] = pr_L_I
     Magesan_theory_params['B'] = pr_L_p - pr_L_I       
     Magesan_theory_params['A1'] = B_1
@@ -346,286 +988,7 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
 
     return Magesan_theory_params
 
-def gateset_metrics(gs_actual, gs_target, group,d=2,output=False):
-    """
-    From a given actual and target gateset, computes three error rates
-    that are related to the RB number: the average gateset infidelity,
-    the scalar error rates derived from the R and L matrices.
-    
-    Parameters
-    ----------
-    gs_actual : GateSet
-        The gateset to compute the parameters for
-    
-    gs_target : GateSet
-        Target gateset.
-       
-    group: MatrixGroup
-        The matrix group that the gateset is an implementation of.
-    
-    d : int, optional
-        The dimension.
-    
-    output : bool, optional
-        If True, then these parameters are printed to screen in addtion
-        to being returned by the function.
-    
-    Returns
-    -------
-    
-    gateset_metrics : dictionary of floats.
-        The three theoretical error metrics.
-    """
-    gateset_metrics = {}
-    gateset_metrics['AGsI'] = average_gateset_infidelity(gs_actual,gs_target,d)
-    gateset_metrics['r_R'] = p_to_r(R_single_decay_parameter(gs_actual,group,d))
-    gateset_metrics['r_L'] = p_to_r(L_single_decay_parameter(gs_actual,gs_target,d))    
-    if output is True:
-        print('The average gateset infidelity is:', gateset_metrics['AGsI'])
-        print('The scalar error metric obtained from the R matrix is:', 
-              gateset_metrics['r_R'])
-        print('The scalar error metric obtained from the L matrix is:', 
-              gateset_metrics['r_L'])    
-    return gateset_metrics 
-    
-def R_single_decay_parameter(gs,group,d=2):
-    """
-    Computes the second largest eigenvalue of the R matrix.
-    
-    Parameters
-    ----------
-    gs_actual : GateSet
-
-    group: MatrixGroup
-        The matrix group that the gateset is an implementation of.
-    
-    d : int, optional
-        The dimension.
-
-    Returns
-    -------
-    
-    E : float.
-        The second largest eigenvalue of R.
-    """
-    R = R_matrix(gs,group,d)
-    E = _np.absolute(_np.linalg.eigvals(R))
-    E = _np.flipud(_np.sort(E))
-    return E[1]
-
-def L_single_decay_parameter(gs,gs_target,d=2):
-    """
-    As above, but for the L matrix.
-    """
-    L = L_matrix(gs,gs_target)
-    E = _np.absolute(_np.linalg.eigvals(L))
-    E = _np.flipud(_np.sort(E))
-    return E[1]
-
-def R_matrix(gs,group,d=2):
-    """
-    Constructs the 'R' matrix of Eq (2) in arXiv:1702.01853
-    This matrix described the exact behaviour of the average surival
-    probablities of RB sequences. For the Clifford group, it is 
-    exponentially large in the number of qubits n.
-    
-    Parameters
-    ----------
-    gs : Gateset
-        The noisy gateset for some group (e.g., the Cliffords) to 
-        calculate the R matrix of. Gate elements must be labelled as
-        'Gc..' where .. are the labels of the MatrixGroup 'group'.
-        
-    
-    group : MatrixGroup
-        The group that the 'gs' gateset is an implementation of. The
-        group elements should be labelled to correspond to the elements
-        of 'gs'.
-      
-    d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
-    
-    Returns
-    -------
-    R : float
-        The R matrix from arXiv:1702.01853        
-    """           
-    group_dim = len(group)
-    R_dim = group_dim * d**2
-    R = _np.zeros([R_dim,R_dim],float)
-    for i in range(0,group_dim):
-        for j in range(0,group_dim):
-            gate_label_itoj = group.product([group.get_inv(i),j])
-            for k in range (0,d**2):
-                for l in range(0,d**2):
-                    R[j*d**2+k,i*d**2+l] = gs['Gc'+str(gate_label_itoj)][k,l]
-    R = R/group_dim
-    
-    return R
-
-def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus'):
-    """
-    Calculates the exact RB average surival probablilites (ASP), using the 
-    formula given in Eq (2) and the surrounding text of arXiv:1702.01853
-    
-    Parameters
-    ----------
-    gs : Gateset
-        The noisy gateset for some group (e.g., the Cliffords). Gate elements 
-        must be labelled as 'Gc..' where .. are the labels of the MatrixGroup 
-        'group'.
-           
-    group : MatrixGroup
-        The group that the 'gs' gateset is an implementation of. The
-        group elements should be labelled to correspond to the elements
-        of 'gs'.
-        
-    m_max : int
-        maximal sequence length of the random gates (so not including the
-        inversion gate).
-        
-    m_min : int, optional
-        minimal sequence length. Defaults to the smallest valid value of 1.
-        
-    m_step : int, optional
-        step size between sequence lengths
-      
-    d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
-        
-    success_spamlabel : str, optional
-        Specifies the SPAM label associated with surival
-    
-    Returns
-    -------
-    m : float
-        Array of sequence length values that the ASP has been calculated for
-        
-    P_m : float
-        Array containing ASP values for the specified sequence length values.
-        
-    """  
-    i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
-    m = _np.zeros(1+i_max,int)
-    P_m = _np.zeros(1+i_max,float)
-    group_dim = len(group)
-    R_dim = group_dim * d**2
-    R = R_matrix(gs,group,d)
-    rho_index = gs.spamdefs[success_spamlabel][0]
-    E_index = gs.spamdefs[success_spamlabel][1]
-    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs[E_index].T)
-    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs[rho_index])
-    for i in range (0,1+i_max):
-        m[i] = m_min + i*m_step
-        P_m[i] = group_dim*_np.dot(extended_E,_np.dot(
-                _np.linalg.matrix_power(R,m_min + i*m_step+1),extended_rho))
-    return m, P_m
-
-def L_matrix(gs,gs_target):
-    """
-    Constructs the 'L' linear operator on superoperators, from arXiv:1702.01853,
-    represented as a matrix. This matrix provides a good approximation to the 
-    RB decay curve for low-error gatesets.
-    
-    Parameters
-    ----------
-    gs : Gateset
-  
-    gs_target : Gateset
-        Target gateset
-
-    Returns
-    -------
-    L : float
-        The L operator from arXiv:1702.01853, represented as a matrix.       
-    """  
-    dim = len(gs_target.gates.keys())
-    L_matrix = 1 / dim * _np.sum(_np.kron(gs[key].T,
-                 _np.linalg.inv(gs_target[key])) for key in gs_target.gates.keys())
-    return L_matrix
-
-def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
-                  norm='diamond'):
-    """
-    Computes RB average survival probablities, as predicted by the 'L' operator
-    theory of arXiv:1702.01853. Within the function, the gs is gauge-optimized to
-    gs_target. This is *not* optimized to the gauge specified in arXiv:1702.01853,
-    but instead performs the standard pyGSTi gauge-optimization (using the frobenius
-    distance). In most cases, this is likely to be a reasonable proxy for the gauge
-    optimization perscribed by arXiv:1702.01853.
-    
-    Parameters
-    ----------
-    gs : Gateset
-        The noisy gateset for some group (e.g., the Cliffords). Gate elements 
-        must be labelled as 'Gc..' where .. are the labels of the MatrixGroup 
-        'group'.
-           
-    gs_target : Gateset
-        Target gateset
-        
-    m_max : int
-        maximal sequence length of the random gates (so not including the
-        inversion gate).
-        
-    m_min : int, optional
-        minimal sequence length. Defaults to the smallest valid value of 1.
-        
-    m_step : int, optional
-        step size between sequence lengths
-      
-    d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
-        
-    success_spamlabel : str, optional
-        Specifies the SPAM label associated with surival
-        
-    norm : str, optional
-        The norm used in the error bound calculation. Default is consistent with
-        arXiv:1702.01853.
-    
-    Returns
-    -------
-    m : float
-        Array of sequence length values that the ASP has been calculated for
-        
-    P_m : float
-        Array containing predicted ASP values for the specified sequence length values.
-        
-    lower_seb_PM: float
-        Array containing lower bounds on the possible ASP values
-
-    upper_seb_PM: float
-        Array containing upper bounds on the possible ASP values
-    """      
-    gs_go = _algs.gaugeopt_to_target(gs,gs_target)
-    L = L_matrix(gs_go,gs_target)
-    dim = len(gs_target.gates.keys())
-    rho_index = gs.spamdefs[success_spamlabel][0]
-    E_index = gs.spamdefs[success_spamlabel][1]
-    emaps = errormaps(gs_go,gs_target)
-    E_eff = _np.dot(gs_go[E_index].T,emaps['Gavg'])
-    identity_vec = vec(_np.identity(d**2,float))    
-    delta = gatedependence_of_errormaps(gs_go,gs_target,norm,d)
-    
-    i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
-    m = _np.zeros(1+i_max,int)
-    P_m = _np.zeros(1+i_max,float)
-    upper_seb_PM = _np.zeros(1+i_max,float)
-    lower_seb_PM = _np.zeros(1+i_max,float)
-    for i in range (0,1+i_max):
-        m[i] = m_min + i*m_step
-        L_m_rdd = unvec(_np.dot(_np.linalg.matrix_power(L,m_min + i*m_step),identity_vec))
-        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go[rho_index]))
-        upper_seb_PM[i] = P_m[i] + delta/2
-        lower_seb_PM[i] = P_m[i] - delta/2
-        if upper_seb_PM[i] > 1:
-            upper_seb_PM[i]=1
-        if lower_seb_PM[i] < 0:
-            lower_seb_PM[i]=0
-        
-    return m, P_m, lower_seb_PM, upper_seb_PM
-          
+# needs more testing              
 def Magesan_error_bound(m,delta,order='zeroth'):
     """
     Given a 'delta' and a sequence length 'm', computes the value of the systematic
@@ -658,6 +1021,7 @@ def Magesan_error_bound(m,delta,order='zeroth'):
 
     return sys_eb
 
+# needs more testing    
 def seb_upper(y,m,delta,order='zeroth'):
     """
     Finds an upper bound on the RB average surival probability (ASP) from the 
@@ -690,6 +1054,7 @@ def seb_upper(y,m,delta,order='zeroth'):
      
     return upper
 
+# needs more testing    
 def seb_lower(y,m,delta,order='zeroth'):
     """
     Finds a lower bound on the surival probability from the analytic value. See
@@ -702,6 +1067,7 @@ def seb_lower(y,m,delta,order='zeroth'):
        
     return lower
 
+# ----- Matrix tools functions ---- #
 def column_basis_vector(i,dim):
     """
     Returns the ith standard basis vector in dimension dim.
@@ -709,7 +1075,7 @@ def column_basis_vector(i,dim):
     output = _np.zeros([dim,1],float)
     output[i] = 1.
     return output
-
+ 
 def vec(matrix_in):
     """
     Stacks the columns of a matrix to return a vector
@@ -722,7 +1088,7 @@ def unvec(vector_in):
     """
     dim = int(_np.sqrt(len(vector_in)))
     return _np.transpose(_np.array(list(
-                _ittls.izip(*[_ittls.chain(vector_in,
+                zip(*[_ittls.chain(vector_in,
                             _ittls.repeat(None, dim-1))]*dim))))
 
 def norm1(matr):
@@ -744,21 +1110,56 @@ def random_hermitian(dimension):
         my_norm = norm1(c)
     return c / my_norm
 
-def norm1to1(operator, n_samples=10000, return_list=False):
+def norm1to1(operator, n_samples=10000, mxBasis="gm",return_list=False):
     """
     Returns the Hermitian 1-to-1 norm of a superoperator represented in
     the standard basis, calculated via Monte-Carlo sampling. Definition
     of Hermitian 1-to-1 norm can be found in arxiv:1109.6887.
     """
-    rand_dim = int(_np.sqrt(float(len(operator))))
-    vals = [ norm1(unvec(_np.dot(operator,vec(random_hermitian(rand_dim)))))
+    if mxBasis=='gm':
+        std_operator = _tls.change_basis(operator, 'gm', 'std')
+    elif mxBasis=='pp':
+        std_operator = _tls.change_basis(operator, 'pp', 'std')
+    elif mxBasis=='std':
+        std_operator = operator
+    else:
+        raise ValueError("mxBasis should be 'gm', 'pp' or 'std'!")
+    
+    rand_dim = int(_np.sqrt(float(len(std_operator))))
+    vals = [ norm1(unvec(_np.dot(std_operator,vec(random_hermitian(rand_dim)))))
              for n in range(n_samples)]
     if return_list:
         return vals
     else:
         return max(vals)
+
+# needs more testing
+def group_twirl(M,group):
+    """
+    Returns the matrix group twirl of a map M:  
+    Twirl(M) = 1/|group| * Sum_{C in group} (C^-1 * M * C)
     
+    Parameters
+    ----------
+    M : array or gate
+        The map to be twirled.
+
+    group : MatrixGroup
+        The group to twirl over (e.g., the Clifford group).
     
+    Returns
+    -------
+    M_twirl : array
+        The twirl of M.
+    """
+    G = len(group)
+    M_twirl = 1.0/G * _np.sum(
+        _np.dot( _np.dot(group.get_matrix_inv(i),M),
+                 group.get_matrix(i)) for i in range(G))
+    return M_twirl
+    
+# ----- Wallman and Flammia error bars tools ---- #
+# Not tested, as W&F error bars are not currently supported
 def _H_WF(epsilon,nu):
     """
     Implements Eq. 9 from Wallman and Flammia 
@@ -784,7 +1185,6 @@ def _K_WF(epsilon,delta,m,r,sigma_m_squared_func=_sigma_m_squared_base_WF):
     sigma_m_squared = sigma_m_squared_func(m,r)
     return int(_np.ceil(-_np.log(2./delta) / 
                          _np.log(_H_WF(epsilon,sigma_m_squared))))
-
 
 def create_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
                      sigma_m_squared_func=_sigma_m_squared_base_WF):
@@ -848,6 +1248,7 @@ def create_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
                              sigma_m_squared_func=sigma_m_squared_func)
     return K_m_sched
 
+# ----- dataset tools ---- #
 def dataset_to_summary_dict(dataset,seqs,success_spam_label,use_frequencies=False):
     """
     Maps an RB dataset to an ordered dictionary; keys are 

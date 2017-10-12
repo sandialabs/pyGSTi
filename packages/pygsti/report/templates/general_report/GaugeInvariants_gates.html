@@ -1,0 +1,26 @@
+	<h1>Gauge Invariant Error Metrics</h1>
+	<p>Quantities which are <em>gauge-invariant</em> are the most reliable means of assessing the quality of the gates, as these do not depend on any unphysical gauge degrees of freedom</p>
+
+	<figure id="bestGatesVsTargetTable_gi" class='tbl'>
+	  <figcaption><span class="captiontitle">GST estimated gates vs. ideal targets</span> <span class="captiondetail">This table presents different gauge-invariant measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Descriptions of the metrics appear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesVsTargetTable_gi)s
+	</figure>
+
+	<figure id="bestGatesetEigenvalueTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> The spectrum of each estimated gate, along with metrics which compare these eigenvalues with those of the ideal target gate.  In order to perform comparisons, are estimated and target spectra are aligned by identifying a minimum-weight matching based on the metric being computed.  Mathematical descriptions of the metrics apear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesetEvalTable)s
+	</figure>
+
+	<figure id="bestGatesetSpamParametersTable" class='tbl'>
+	  <figcaption><span class="captiontitle">SPAM probabilities</span> <span class="captiondetail"> Computed by taking the dot products of state preparation and POVM effect vectors.  The symbol <span class="math">E_C</span>, when it appears, refers to the <q>complement</q> effect given by subtracting each of the other effects from the identity.</span></figcaption>
+	  %(bestGatesetSpamParametersTable)s
+	</figure>
+
+
+	<figure id="gramBarPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Gram matrix eigenvalues.</span> <span class="captiondetail">Bars compare the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.  Larger eigenvalues indicate larger sensitivity, and the number of non-zero values indicates the dimension of the density-matrix space being probed (e.g. there should be 4 large, ideally unit, eigenvalues for the single-qubit case).</span> </figcaption>
+	  %(gramBarPlot)s
+	</figure>
+
+
+

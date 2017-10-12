@@ -3,6 +3,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import pygsti
 import pygsti.construction as pc
+import numpy as np
 
 class DataSetConstructionTestCase(BaseTestCase):
 
@@ -11,8 +12,8 @@ class DataSetConstructionTestCase(BaseTestCase):
         self.gateset = pc.build_gateset( [2], [('Q0',)],
                                          ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                          prepLabels = ['rho0'], prepExpressions=["0"],
-                                         effectLabels = ['E0'], effectExpressions=["1"],
-                                         spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') })
+                                         effectLabels = ['E0'], effectExpressions=["0"],
+                                         spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') })
         self.depolGateset = self.gateset.depolarize(gate_noise=0.1)
 
         def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList):
@@ -51,6 +52,14 @@ class DataSetConstructionTestCase(BaseTestCase):
         dataset = pc.generate_fake_data(self.dataset, self.gatestring_list, nSamples=None, sampleError='multinomial', seed=100)
         dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='round', seed=100)
 
+        randState = np.random.RandomState(1234)
+        dataset = pc.generate_fake_data(dataset, self.gatestring_list, nSamples=1000, sampleError='binomial', randState=randState)
+
+
+    def test_merge_outcomes(self):
+        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['0', '1']})
+        for dsRow in merged_dataset.itervalues():
+            self.assertEqual( dsRow.total(), dsRow['merged_spam_label'] )
 
 
 if __name__ == '__main__':

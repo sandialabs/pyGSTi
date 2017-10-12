@@ -12,6 +12,7 @@ import inspect as _inspect
 import itertools as _itertools
 import numpy as _np
 
+
 try:
     import psutil as _psutil
     def _get_mem_usage():
@@ -383,7 +384,6 @@ class Profiler(object):
         self.__dict__.update(stateDict)
         self.comm = None # initialize to None upon unpickling
 
-        
 
 
 class DummyProfiler(object):
@@ -408,5 +408,4 @@ class DummyProfiler(object):
     def mem_check(self, name,printme=None):
         """Stub function that does nothing"""
         pass
-
     

@@ -8,8 +8,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
+import scipy.optimize as _spo
 import warnings as _warnings
 
+from .smartcache import smart_cached
+
+def array_eq(a, b, tol=1e-8):
+    print(_np.linalg.norm(a-b))
+    return _np.linalg.norm(a-b) < tol
 
 def trace(M): #memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
     """
@@ -144,7 +150,6 @@ def frobeniusnorm2(ar):
     """
     return _np.sum(ar**2)
 
-
 def nullspace(m, tol=1e-7):
     """
     Compute the nullspace of a matrix.
@@ -199,6 +204,9 @@ def nullspace_qr(m, tol=1e-7):
     
     return q[:,rank:]
 
+def matrix_sign(M):
+    U,s,Vt = _np.linalg.svd(M)
+    return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):
     """
@@ -291,9 +299,160 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
+def unitary_superoperator_matrix_log(M, mxBasis):
     """ 
-    Construct a *real* logarithm of matrix `M`.
+    Construct the logarithm of superoperator matrix `M` 
+    that acts as a unitary on density-matrix space,
+    (`M: rho -> U rho Udagger`) so that log(M) can be
+    written as the action by Hamiltonian `H`:
+    `log(M): rho -> -i[H,rho]`.
+    
+
+    Parameters
+    ----------
+    M : numpy array
+        The superoperator matrix whose logarithm is taken
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    -------
+    numpy array
+        A matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
+        and `logM` can be written as the action `rho -> -i[H,rho]`.
+    """
+    from . import lindbladtools as _lt # (would create circular imports if at top)
+    from . import gatetools as _gt # (would create circular imports if at top)
+    from .basis import change_basis
+
+    M_std = change_basis(M, mxBasis, "std")
+    evals = _np.linalg.eigvals(M_std)
+    assert( _np.allclose(_np.abs(evals), 1.0) ) #simple but technically incomplete check for a unitary superop
+                                              # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
+    U = _gt.process_mx_to_unitary(M_std)
+    H = _spl.logm(U)/-1j # U = exp(-iH)
+    logM_std = _lt.hamiltonian_to_lindbladian(H) # rho --> -i[H, rho]
+    logM = change_basis(logM_std, "std", mxBasis)
+    assert(_np.linalg.norm(_spl.expm(logM) - M) < 1e-8) #expensive b/c of expm - could comment for performance
+    return logM
+    
+
+
+def near_identity_matrix_log(M, TOL=1e-8):
+    """ 
+    Construct the logarithm of superoperator matrix `M` that is
+    near the identity.  If `M` is real, the resulting logarithm will be real.
+
+    Parameters
+    ----------
+    M : numpy array
+        The superoperator matrix whose logarithm is taken
+
+    TOL : float, optional
+        The tolerance used when testing for zero imaginary parts.
+
+    Returns
+    -------
+    numpy array
+        An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
+        and `logM` is real when `M` is real.
+    """    
+    # A near-identity matrix should have a unique logarithm, and it should be
+    # real if the original matrix is real
+    M_is_real = bool(_np.linalg.norm(M.imag) < TOL)
+    logM = _spl.logm(M)
+    if M_is_real:
+        assert(_np.linalg.norm(logM.imag) < TOL), \
+            "near_identity_matrix_log has failed to construct a real logarithm!\n" \
+            + "This is probably because M is not near the identity.\n" \
+            + "Its eigenvalues are: " + str(_np.linalg.eigvals(M))
+        logM = logM.real
+    return logM
+
+def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
+    """ 
+    Construct an approximate logarithm of superoperator matrix `M` that is
+    real and near the `target_logM`.  The equation `M = exp( logM )` is
+    allowed to become inexact in order to make `logM` close to 
+    `target_logM`.  In particular, the objective function that is
+    minimized is (where `||` indicates the 2-norm):
+
+    `|exp(logM) - M|_1 + targetWeight * ||logM - target_logM||^2`
+
+    Parameters
+    ----------
+    M : numpy array
+        The superoperator matrix whose logarithm is taken
+
+    target_logM : numpy array
+        The target logarithm
+
+    targetWeight : float
+        A weighting factor used to blance the exactness-of-log term
+        with the closeness-to-target term in the optimized objective
+        function.  This value multiplies the latter term.
+
+    TOL : float, optional
+        Optimzer tolerance.
+
+    Returns
+    -------
+    logM : numpy array
+        An matrix of the same shape as `M`.
+    """    
+
+    assert(_np.linalg.norm(M.imag) < 1e-8), "Argument `M` must be a *real* matrix!"
+    mx_shape = M.shape
+    
+    def objective(flat_logM):
+        logM = flat_logM.reshape(mx_shape)
+        testM = _spl.expm(logM)
+        ret=  targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
+                _np.linalg.norm(testM.flatten() - M.flatten(), 1)
+        #print("DEBUG: ",ret)
+        return ret
+    
+        #Alt objective1: puts L1 on target term
+        #return _np.linalg.norm(testM-M)**2 + targetWeight*_np.linalg.norm(
+        #                      logM.flatten() - target_logM.flatten(), 1)
+        
+        #Alt objective2: all L2 terms (ridge regression)
+        #return targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
+        #        _np.linalg.norm(testM - M)**2
+
+    #from .. import optimize as _opt
+    #print_obj_func = _opt.create_obj_func_printer(objective) #only ever prints to stdout!                    
+    print_obj_func = None
+
+    logM = _np.real( real_matrix_log(M, actionIfImaginary="ignore") ) #just drop any imaginary part
+    initial_flat_logM = logM.flatten() # + 0.1*target_logM.flatten()
+      # Note: adding some of target_logM doesn't seem to help; and hurts in easy cases
+
+    if objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
+        
+        #print("Initial objective fn val = ",objective(initial_flat_logM))
+        #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logM)**2)
+    
+        solution = _spo.minimize(objective, initial_flat_logM,  options={'maxiter': 1000},
+                                           method='L-BFGS-B',callback=print_obj_func, tol=TOL)
+        logM = solution.x.reshape(mx_shape)
+        #print("Final objective fn val = ",objective(solution.x))
+        #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
+        #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
+        #      _np.linalg.norm(logM-target_logM)**2)
+
+    return logM
+            
+
+
+def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
+    """ 
+    Construct a *real* logarithm of real matrix `M`.
 
     This is possible when negative eigenvalues of `M` come in pairs, so
     that they can be viewed as complex conjugate pairs.
@@ -314,12 +473,12 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
 
     Returns
     -------
-    numpy array
+    logM : numpy array
         An matrix `logM`, of the same shape as `M`, such that `M = exp(logM)`
-        and `logM` is real (if possible).
     """
-    assert(_np.linalg.norm(_np.imag(M)) < TOL) #M should be real to begin with
+    assert( _np.linalg.norm(_np.imag(M)) < TOL ), "real_matrix_log must be passed a *real* matrix!"
     evals,U = _np.linalg.eig(M)
+    U = U.astype("complex")
 
     used_indices = set()
     neg_real_pairs_real_evecs = []
@@ -346,30 +505,43 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
                         neg_real_pairs_conj_evecs.append( (i,j) ); break
                 else: unpaired_indices.append(i)
 
-    log_evals = _np.log(evals)
+    log_evals = _np.log(evals.astype("complex"))
+      # astype guards against case all evals are real but some are negative
+
+    #DEBUG
+    #print("DB: evals = ",evals)
+    #print("DB: log_evals:",log_evals)
+    #for i,ev in enumerate(log_evals):
+    #    print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
+    #print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
+    #print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
+    #print("DB: evec[5] = ",mx_to_string(U[:,5]))
+    #print("DB: evec[6] = ",mx_to_string(U[:,6]))
     
     for (i,j) in neg_real_pairs_real_evecs: #need to adjust evecs as well
-        log_evals[i] = _np.log(evals[i])
+        log_evals[i] = _np.log(-evals[i]) + 1j*_np.pi
         log_evals[j] = log_evals[i].conjugate()
         U[:,i] = (U[:,i] + 1j*U[:,j])/_np.sqrt(2)
         U[:,j] = U[:,i].conjugate()
 
     for (i,j) in neg_real_pairs_conj_evecs: # evecs already conjugates of each other
-        log_evals[i] = _np.log(evals[i])
+        log_evals[i] = _np.log(-evals[i].real) + 1j*_np.pi
         log_evals[j] = log_evals[i].conjugate()
-
+        #Note: if *don't* conjugate j-th, then this picks *consistent* branch cut (what scipy would do), which
+        # results, in general, in a complex logarithm BUT one which seems more intuitive (?) - at least permits
+        # expected angle extraction, etc.
+        
     logM =  _np.dot( U, _np.dot(_np.diag(log_evals), _np.linalg.inv(U) ))
-    imMag = _np.linalg.norm(_np.imag(logM))
-    #print("DB: log_evals = ",log_evals)
-    #print("DEBUG: |imag(logM)| = ",imMag)
 
     #if there are unpaired negative real eigenvalues, the logarithm might be imaginary
     mayBeImaginary = bool(len(unpaired_indices) > 0)
-    
+    imMag = _np.linalg.norm(_np.imag(logM))
+
     if mayBeImaginary and imMag > TOL:
         if actionIfImaginary == "raise":
             raise ValueError("Cannot construct a real log: unpaired negative" +
-                         " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
+                             " real eigenvalues: %s" % [evals[i] for i in unpaired_indices] +
+                             "\nDEBUG M = \n%s" % M + "\nDEBUG evals = %s" % evals)
         elif actionIfImaginary == "warn":
             _warnings.warn("Cannot construct a real log: unpaired negative" +
                          " real eigenvalues: %s" % [evals[i] for i in unpaired_indices])
@@ -377,8 +549,70 @@ def real_matrix_log(M, actionIfImaginary="raise",TOL=1e-8):
             pass
         else:
             assert(False), "Invalid 'actionIfImaginary' argument: %s" % actionIfImaginary
-    else: # logM should be real!
-        assert( imMag < TOL ), "real_matrix_log failed to construct a real logarithm (when it should have!)"
+    else:
+        assert( imMag <= TOL ), "real_matrix_log failed to construct a real logarithm!"
         logM = _np.real(logM)
         
     return logM
+
+
+
+def minweight_match(a, b, metricfn=None, return_pairs=True,
+                    pass_indices_to_metricfn=False):
+    """
+    Matches the elements of two vectors, `a` and `b` by minimizing the
+    weight between them, defined as the sum of `metricfn(x,y)` over
+    all `(x,y)` pairs (`x` in `a` and `y` in `b`).
+
+    Parameters
+    ----------
+    a, b : list or numpy.ndarray
+        1D arrays to match elements between.
+
+    metricfn : function, optional
+        A function of two float parameters, `x` and `y`,which defines the cost
+        associated with matching `x` with `y`.  If None, `abs(x-y)` is used.
+
+    return_pairs : bool, optional
+        If True, the matching is also returned.
+
+    pass_indices_to_metricfn : bool, optional
+        If True, the metric function is passed two *indices* into the `a` and
+        `b` arrays, respectively, instead of the values.
+
+    Returns
+    -------
+    weight_array : numpy.ndarray
+        The array of weights corresponding to the min-weight matching. The sum
+        of this array's elements is the minimized total weight.
+
+    pairs : list
+        Only returned when `return_pairs == True`, a list of 2-tuple pairs of
+        indices `(ix,iy)` giving the indices into `a` and `b` respectively of 
+        each matched pair.
+    """
+    assert(len(a) == len(b))
+    if metricfn is None:
+        metricfn = lambda x,y: abs(x-y)
+        
+    D = len(a)
+    weightMx = _np.empty((D,D),'d')
+    
+    if pass_indices_to_metricfn:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(i,j) for j,y in enumerate(b)]
+    else:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(x,y) for j,y in enumerate(b)]
+            
+    a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
+    assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
+
+    matched_pairs = list(zip(a_inds,b_inds))
+    min_weights = weightMx[a_inds, b_inds]
+
+    if return_pairs:
+        return min_weights, matched_pairs
+    else:
+        return min_weights
+           

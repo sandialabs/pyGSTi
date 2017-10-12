@@ -15,17 +15,18 @@ from . import gatesetconstruction as _setc
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gz','Gn'],
                                 [ "Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                effectLabels=["E0"], effectExpressions=["1"],
-                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                effectLabels=["E0"], effectExpressions=["0"],
+                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
+                                basis='pp')
 
-prepFiducials = _strc.gatestring_list([(),
+prepStrs = _strc.gatestring_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),
                                        ('Gn','Gn','Gn',),
                                        ('Gn','Gz','Gn','Gn','Gn')]) # for 1Q MUB
 
-measFiducials = _strc.gatestring_list([(),
+effectStrs = _strc.gatestring_list([(),
                                        ('Gn',),
                                        ('Gn','Gn'),
                                        ('Gn','Gz','Gn'),
@@ -39,3 +40,24 @@ germs = _strc.gatestring_list([ ('Gz',),
                                 ('Gn','Gz','Gn','Gn','Gz','Gz'),
                                 ('Gn','Gn','Gz','Gn','Gz','Gz'),
                                 ('Gn','Gn','Gn','Gz','Gz','Gz') ])
+
+
+global_fidPairs =  [
+    (0, 0), (2, 3), (5, 2), (5, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gz',): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gn',): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gn', 'Gn', 'Gz', 'Gn', 'Gz'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gn', 'Gz', 'Gn', 'Gz', 'Gz'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gn', 'Gn', 'Gz', 'Gn', 'Gz', 'Gz'): [
+        (0, 0), (2, 3), (3, 0), (5, 0), (5, 2), (5, 4)],
+  ('Gn', 'Gz', 'Gn', 'Gn', 'Gz', 'Gz'): [
+        (0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)],
+  ('Gn', 'Gn', 'Gn', 'Gz', 'Gz', 'Gz'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+}

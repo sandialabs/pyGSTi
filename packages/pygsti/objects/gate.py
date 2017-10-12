@@ -12,7 +12,8 @@ import functools as _functools
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
-from ..tools import basistools as _bt
+from ..tools import jamiolkowski as _jt
+from ..tools import basis as _basis
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
@@ -56,7 +57,7 @@ def optimize_gate(gateToOptimize, targetGate):
     targetMatrix = _np.asarray(targetGate)
     def objective_func(param_vec):
         gateToOptimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(gateToOptimize-targetMatrix)
+        return _mt.frobeniusnorm(gateToOptimize - targetMatrix)
 
     x0 = gateToOptimize.to_vector()
     minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
@@ -67,7 +68,7 @@ def optimize_gate(gateToOptimize, targetGate):
     #      _mt.frobeniusnorm(gateToOptimize-targetMatrix))
 
 
-def compose(gate1, gate2, parameterization="auto"):
+def compose(gate1, gate2, basis, parameterization="auto"):
     """
     Returns a new Gate that is the composition of gate1 and gate2.
 
@@ -83,6 +84,11 @@ def compose(gate1, gate2, parameterization="auto"):
 
     gate2 : Gate
         Gate to compose as right term of matrix product (applied first).
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     parameterization : {"auto","full","TP","linear","static"}, optional
         The parameterization of the resulting gates.  The default, "auto",
@@ -121,15 +127,15 @@ def compose(gate1, gate2, parameterization="auto"):
         paramType = parameterization #user-specified final parameterization
 
     #Convert to paramType as necessary
-    cgate1 = convert(gate1, paramType)
-    cgate2 = convert(gate2, paramType)
+    cgate1 = convert(gate1, paramType, basis)
+    cgate2 = convert(gate2, paramType, basis)
 
     # cgate1 and cgate2 are the same type, so can invoke the gate's compose method
     return cgate1.compose(cgate2)
 
 
 
-def convert(gate, toType):
+def convert(gate, toType, basis):
     """
     Convert gate to a new type of parameterization, potentially creating
     a new Gate object.  Raises ValueError for invalid conversions.
@@ -139,8 +145,13 @@ def convert(gate, toType):
     gate : Gate
         Gate to convert
 
-    toType : {"full","TP","linear","static"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND"}
         The type of parameterizaton to convert to.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for `gate`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
 
     Returns
     -------
@@ -172,6 +183,35 @@ def convert(gate, toType):
             raise ValueError("Cannot convert type %s to LinearlyParameterizedGate"
                              % type(gate))
 
+    elif toType in ("CPTP","H+S","S","GLND"):
+        RANK_TOL = 1e-6        
+        J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
+        if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+            unitary_pre = gate # when 'gate' is unitary
+        else: unitary_pre = None
+
+        nQubits = _np.log2(gate.dim)/2.0
+        bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+        
+        proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+        ham_basis = proj_basis if toType in ("CPTP","H+S") else None
+        nonham_basis = proj_basis
+        nonham_diagonal_only = bool(toType in ("H+S","S") )
+        cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
+        truncate=True
+
+        if isinstance(gate, LindbladParameterizedGate) and \
+           _np.linalg.norm(gate.unitary_prefactor-unitary_pre) < 1e-6 \
+           and ham_basis==gate.ham_basis and nonham_basis==gate.other_basis \
+           and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
+           and basis==gate.matrix_basis:
+            return gate #no conversion necessary
+        else:
+            return LindbladParameterizedGate(
+                gate, unitary_pre, ham_basis, nonham_basis, cptp,
+                nonham_diagonal_only, truncate, basis)
+        
+
     elif toType == "static":
         if isinstance(gate, StaticGate):
             return gate #no conversion necessary
@@ -197,7 +237,7 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
         The gate object to compute a Jacobian for.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -241,7 +281,7 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
         class's `deriv_wrt_params()` method itself as a part of testing.
         
     eps : float, optional
-        The finitite difference step to use.
+        The finite difference step to use.
 
     Returns
     -------
@@ -275,7 +315,7 @@ class Gate(object):
     def __init__(self, dim):
         """ Initialize a new Gate """
         self.dim = dim
-
+        
     def get_dimension(self):
         """ Return the dimension of the gate. """
         return self.dim
@@ -286,7 +326,7 @@ class Gate(object):
 
     def transform(self, S):
         """ Update gate G with inv(S) * G * S."""
-        raise NotImplementedError("This gate cannot be tranform()'d")
+        raise NotImplementedError("This gate cannot be transform()'d")
 
     def depolarize(self, amount):
         """ Depolarize gate by the given amount. """
@@ -310,7 +350,7 @@ class Gate(object):
         and `otherGate`, optionally transforming this gate first
         using `transform` and `inv_transform`.
         """
-        return _np.sqrt(self.frobeniusdist(otherGate, transform, inv_transform))
+        return _np.sqrt(self.frobeniusdist2(otherGate, transform, inv_transform))
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -327,6 +367,49 @@ class Gate(object):
         using `transform` and `inv_transform`.
         """
         raise NotImplementedError("diamonddist(...) not implemented!")
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+        """
+        raise NotImplementedError("num_params not implemented!")
+
+
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+        """
+        raise NotImplementedError("to_vector not implemented!")
+
+    
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError("from_vector not implemented!")
+
+
+    def copy(self):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        raise NotImplementedError("copy not implemented!")
+
 
     #Pickle plumbing
     def __setstate__(self, state):
@@ -350,7 +433,7 @@ class GateMatrix(Gate):
         """ Initialize a new Gate """
         self.base = mx
         super(GateMatrix, self).__init__(self.base.shape[0])
-
+        
     def acton(self, state):
         """ Act this gate matrix on an input state (left-multiply w/matrix) """
         return _np.dot(self.base, state) #TODO: return a SPAMVec?
@@ -367,6 +450,15 @@ class GateMatrix(Gate):
             return _gt.frobeniusdist2(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
+
+    def residuals(self, otherGate, transform=None, inv_transform=None):
+        if transform is None and inv_transform is None:
+            return _gt.residuals(self.base,otherGate)
+        else:
+            return _gt.residuals(_np.dot(
+                    inv_transform,_np.dot(self.base,transform)),
+                    otherGate)
+
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -393,6 +485,21 @@ class GateMatrix(Gate):
             return _gt.diamonddist(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        raise NotImplementedError("deriv_wrt_params(...) is not implemented")
 
 
     #Handled by derived classes
@@ -584,8 +691,11 @@ class StaticGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        return _np.zeros((self.dim**2,0),'d')
-
+        derivMx = _np.zeros((self.dim**2,0),'d')
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
     def copy(self):
         """
@@ -614,7 +724,7 @@ class StaticGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -673,10 +783,10 @@ class StaticGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -846,7 +956,7 @@ class FullyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -904,10 +1014,10 @@ class FullyParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1001,6 +1111,7 @@ class TPParameterizedGate(GateMatrix):
         if not (_np.isclose(mx[0,0], 1.0) and _np.allclose(mx[0,1:], 0.0)):
             raise ValueError("Cannot set TPParameterizedGate: " +
                              "invalid form for 1st row!" )
+            #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
 
 
@@ -1089,12 +1200,12 @@ class TPParameterizedGate(GateMatrix):
         the gate parameters do not allow for it), ValueError is raised.
 
         In this particular case any TP gauge transformation is possible,
-        i.e. when `S` is an instance of `TPGaugeGroup.element` or 
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
         corresponds to a TP-like transform matrix.
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -1152,10 +1263,10 @@ class TPParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1434,7 +1545,7 @@ class LinearlyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -1493,10 +1604,10 @@ class LinearlyParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -1766,12 +1877,16 @@ class EigenvalueParameterizedGate(GateMatrix):
                     for ik,k in enumerate(evecIndsToMakeReal): 
                         vecs[:,ik] = self.B[:,k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
-                    nullsp = _mt.nullspace(V); assert(nullsp.shape[1] == nToReal)
-                      #assert we can find enough real linear combos!
+                    nullsp = _mt.nullspace(V); 
+                    if nullsp.shape[1] < nToReal: #DEBUG
+                        raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
+                                         % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
+                    assert(nullsp.shape[1] >= nToReal),"Cannot find enough real linear combos!"
+                    nullsp = nullsp[:,0:nToReal] #truncate #cols if there are more than we need
     
                     Cmx = nullsp[nToReal:,:] + 1j*nullsp[0:nToReal,:] # Cr + i*Ci
                     new_vecs = _np.dot(vecs,Cmx)
-                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL)
+                    assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
                     for ik,k in enumerate(evecIndsToMakeReal): 
                         self.B[:,k] = new_vecs[:,ik]
                     self.Bi = _np.linalg.inv(self.B)                
@@ -2002,7 +2117,7 @@ class EigenvalueParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -2064,10 +2179,10 @@ class EigenvalueParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------
@@ -2124,7 +2239,6 @@ class LindbladParameterizedGate(GateMatrix):
                  ham_basis="pp", nonham_basis="pp", cptp=True,
                  nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
         """
-        TODO: docstring
         Initialize a LindbladParameterizedGate object.
 
         Parameters
@@ -2146,17 +2260,23 @@ class LindbladParameterizedGate(GateMatrix):
             relative to the target), which should be close to the identity,
             is parameterized.  If none, the identity is used by default.
 
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
         cptp : bool, optional
             Whether or not the new gate should be constrained to CPTP.
             (if True, see behavior or `truncate`).
 
-        nonHamTerms : {"all","diag","none"}, optional
-            Which non-Hamiltonian type Lindblad terms should be included in
-            the parameterization.  Allowed values are:
-
-            - "all" : all "other" (non-Hamiltonian) terms are included.
-            - "diag" : only the "diagonal" (depolarizing) terms are included.
-            - "none" : no non-Hamiltonian terms are included (gate is unitary)
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
@@ -2165,22 +2285,10 @@ class LindbladParameterizedGate(GateMatrix):
             result in a non-positive-definite matrix of non-Hamiltonian term
             coefficients.
 
-        projection_basis : {'std', 'gm', 'pp', 'qt'}, optional
-            The basis is used to construct the lindblad terms used to
-            parameterize the gate.  Allowed values are Matrix-unit (std),
-            Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
-          
-        mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-            Which basis `gateMatrix` is represented in.  Allowed values are
-            Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and
-            Qutrit (qt).
-
-        maxWeight : int, optional
-            The maximum weight (i.e. number of non-identity single-qubit
-            factors) allowed in elements of the projection basis.  This
-            currently only applies to the case `projection_basis == "pp"`, as
-            only elements of the Pauli-product basis can be decomposed into
-            single qubit factors.
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
         """
         if gateMatrix is None:
             assert(unitaryPrefactor is not None), "arguments cannot both be None"
@@ -2196,14 +2304,48 @@ class LindbladParameterizedGate(GateMatrix):
         assert(d*d == d2), "Gate dim must be a perfect square"
         self.unitary_prefactor = unitaryPrefactor
 
+        self.ham_basis = ham_basis
+        self.other_basis = nonham_basis
+        self.matrix_basis = mxBasis
+
         #For now, always use pauli-product basis (should be able to use
         # gm also, but one thing at a time).
-        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, "logTiG")
+        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, mxBasis, "logTiG")
+        self._set_params_from_errgen(errgen, truncate)
+          #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
+          # and self.ham_basis_size and self.other_basis_size
+
+        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
+               _np.allclose(self.paramvals,0.0,atol=1e-6))
+
+        #Assume gate in in the pauli-product basis for now, just for
+        # simplicity.  I think everything should work fine in any other
+        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
+        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
+        self.leftTrans  = _np.linalg.inv(mxBasisToStd)
+        self.rightTrans = mxBasisToStd
+
+        #initialize intermediate storage for matrix and for deriv computation
+        bsO = self.other_basis_size
+        if bsO > 0:
+            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
+        else: self.Lmx = None
+
+        GateMatrix.__init__(self, self.unitary_prefactor)
+        self._construct_matrix() # construct base from the parameters
+
+        if not truncate:
+            assert(not _np.array_equal(gateMatrix,self.base)), \
+                   "Gate matrix must be truncated and truncate == False!"
+
+
+    def _set_params_from_errgen(self, errgen, truncate):
+        d2 = self.unitary_prefactor.shape[0]
+        
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.lindblad_errgen_projections(
-                errgen, ham_basis, nonham_basis, mxBasis, normalize=False,
-                return_generators=True, other_diagonal_only=nonham_diagonal_only) # in std basis
-
+                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
+                return_generators=True, other_diagonal_only=self.nonham_diagonal_only) # in std basis
 
         if self.hamGens is not None:
             bsH = self.hamGens.shape[0]+1 #projection-basis size (not nec. == d2)
@@ -2220,12 +2362,12 @@ class LindbladParameterizedGate(GateMatrix):
         if self.otherGens is not None:
             bsO = self.otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
 
-            if nonham_diagonal_only:
+            if self.nonham_diagonal_only:
                 assert(self.otherGens.shape == (bsO-1,d2,d2))
                 assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
                 #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
     
-                if cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                if self.cptp: #otherParams is a 1D vector of the sqrts of diagonal els
                     otherC = otherC.clip(1e-16,1e100) #must be positive
                     otherParams = _np.sqrt(otherC.real) # shape (bs-1,)
                 else: #otherParams is a 1D vector of the real diagonal els of otherC
@@ -2238,7 +2380,7 @@ class LindbladParameterizedGate(GateMatrix):
     
                 otherParams = _np.empty((bsO-1,bsO-1),'d')
     
-                if cptp: #otherParams mx stores Cholesky decomp
+                if self.cptp: #otherParams mx stores Cholesky decomp
     
                     #push any slightly negative evals of otherC positive so that
                     # the Cholesky decomp will work.
@@ -2253,12 +2395,12 @@ class LindbladParameterizedGate(GateMatrix):
                     try:
                         Lmx = _np.linalg.cholesky(otherC)
                     except _np.linalg.LinAlgError: #Lmx not postitive definite?
-                        pos_evals = evals.clip(1e-15,1e100) #try again with 1e-15
+                        pos_evals = evals.clip(1e-12,1e100) #try again with 1e-12
                         otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
                         Lmx = _np.linalg.cholesky(otherC)
     
                     for i in range(bsO-1):
-                        assert(_np.isreal(Lmx[i,i]))
+                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
                         otherParams[i,i] = Lmx[i,i].real
                         for j in range(i):
                             otherParams[i,j] = Lmx[i,j].real
@@ -2266,7 +2408,7 @@ class LindbladParameterizedGate(GateMatrix):
     
                 else: #otherParams mx stores otherC (hermitian) directly
                     for i in range(bsO-1):
-                        assert(_np.isreal(otherC[i,i]))
+                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
                         otherParams[i,i] = otherC[i,i].real
                         for j in range(i):
                             otherParams[i,j] = otherC[i,j].real
@@ -2276,10 +2418,6 @@ class LindbladParameterizedGate(GateMatrix):
             otherParams = _np.empty(0,'d')
 
         self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
-
-        self.ham_basis = ham_basis
-        self.other_basis = nonham_basis
-        self.matrix_basis = mxBasis
         self.ham_basis_size = bsH
         self.other_basis_size = bsO
 
@@ -2288,29 +2426,6 @@ class LindbladParameterizedGate(GateMatrix):
         #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1),))
         #else:
         #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
-
-        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
-               _np.allclose(self.paramvals,0.0,atol=1e-6))
-
-        #Assume gate in in the pauli-product basis for now, just for
-        # simplicity.  I think everything should work fine in any other
-        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _bt.basis_transform_matrix(mxBasis, "std", d)
-        self.leftTrans  = _np.linalg.inv(mxBasisToStd)
-        self.rightTrans = mxBasisToStd
-
-        #initialize intermediate storage for matrix and for deriv computation
-        if bsO > 0:
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
-        else: self.Lmx = None
-
-        GateMatrix.__init__(self, self.unitary_prefactor)
-        self._construct_matrix() # construct base from the parameters
-
-        if not truncate:
-            assert(not _np.array_equal(gateMatrix,self.base)), \
-                   "Gate matrix must be truncated and truncate == False!"
-
 
 
     def _construct_matrix(self):
@@ -2344,18 +2459,23 @@ class LindbladParameterizedGate(GateMatrix):
     
                 if self.cptp:
                     #  otherParams is an array of length (bs-1)*(bs-1) that
-                    #  encodes a lower-triangular matrix "Lmx" with positive (real)
-                    #  elements along its diagonal via:
-                    #  Lmx[i,i] = otherParams[i,i]**2  (so it's positive)
+                    #  encodes a lower-triangular matrix "Lmx" via:
+                    #  Lmx[i,i] = otherParams[i,i]
                     #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
                     for i in range(bsO-1):
-                        self.Lmx[i,i] = otherParams[i,i]
+                        self.Lmx[i,i] = otherParams[i,i]**2
                         for j in range(i):
                             self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
             
                     #The matrix of (complex) "other"-coefficients is build by
-                    # assuming Lmx is its Cholesky decomp, which since Lmx has
-                    # positive diagonal elements means otherCoeffs is pos-def.
+                    # assuming Lmx is its Cholesky decomp; means otherCoeffs
+                    # is pos-def.
+
+                    # NOTE that the Cholesky decomp with all positive real diagonal
+                    # elements is *unique* for a given positive-definite otherCoeffs
+                    # matrix, but we don't care about this uniqueness criteria and so
+                    # the diagonal els of Lmx can be negative and that's fine -
+                    # otherCoeffs will still be posdef.
                     otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
     
                     #DEBUG - test for pos-def
@@ -2643,25 +2763,31 @@ class LindbladParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        if isinstance(S, _gaugegroup.UnitaryGaugeGroup.element):
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
-            tMx = _np.dot(Uinv,_np.dot(self.base, U))
-            tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
-                                            self.ham_basis, self.other_basis,
-                                            self.cptp,self.nonham_diagonal_only,
-                                            True, self.matrix_basis)
-            #Note: truncate=True above because some unitary transforms seem to
-            # modify the eigenvalues to be negative beyond the tolerances
-            # checked when truncate == False.  I'm not sure why this occurs,
-            # since a true unitary should map CPTP -> CPTP...
-            
-            self.paramvals[:] = tGate.paramvals[:]
+
+            #just conjugate prefactor and Lindbladian exponent by U:
+            self.unitary_prefactor = _np.dot(Uinv,_np.dot(self.unitary_prefactor, U))
+            self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
+            self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_matrix()
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+
+            #CHECK WITH OLD (passes) TODO move to unit tests?
+            #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
+            #tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
+            #                                self.ham_basis, self.other_basis,
+            #                                self.cptp,self.nonham_diagonal_only,
+            #                                True, self.matrix_basis)
+            #assert(_np.linalg.norm(tGate.paramvals - self.paramvals) < 1e-6)
         else:
             raise ValueError("Invalid transform for this LindbladParameterizedGate")
 
@@ -2723,10 +2849,10 @@ class LindbladParameterizedGate(GateMatrix):
           the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
           rotations along each of the non-identity Pauli-product axes.
 
-        mxBasis : {'std', 'gm','pp'}, optional
-          Which basis this gate is represented in.
-          Allowed options are Matrix-unit (std), Gell-Mann
-          (gm) and Pauli-product (pp).
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
 
         Returns
         -------

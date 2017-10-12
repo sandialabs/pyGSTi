@@ -10,6 +10,7 @@ Variables for working with the a gate set containing X(pi/2) and Y(pi/2) gates.
 
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
+from collections import OrderedDict as _OrderedDict
 
 description = "X(pi/2) and Y(pi/2) gates"
 
@@ -32,5 +33,55 @@ germs = _strc.gatestring_list(
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gy'],
                                 [ "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                effectLabels=["E0"], effectExpressions=["1"],
-                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                effectLabels=["E0"], effectExpressions=["0"],
+                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
+                                basis='pp')
+
+clifford_compilation = _OrderedDict()
+clifford_compilation["Gc0"] = []
+clifford_compilation["Gc1"] = ['Gy','Gx',]
+clifford_compilation["Gc2"] = ['Gx','Gx','Gx','Gy','Gy','Gy',]
+clifford_compilation["Gc3"] = ['Gx','Gx',]
+clifford_compilation["Gc4"] = ['Gy','Gy','Gy','Gx','Gx','Gx',]
+clifford_compilation["Gc5"] = ['Gx','Gy','Gy','Gy',]
+clifford_compilation["Gc6"] = ['Gy','Gy',]
+clifford_compilation["Gc7"] = ['Gy','Gy','Gy','Gx',]
+clifford_compilation["Gc8"] = ['Gx','Gy',]
+clifford_compilation["Gc9"] = ['Gx','Gx','Gy','Gy',]
+clifford_compilation["Gc10"] = ['Gy','Gx','Gx','Gx',]
+clifford_compilation["Gc11"] = ['Gx','Gx','Gx','Gy',]
+clifford_compilation["Gc12"] = ['Gy','Gx','Gx',]
+clifford_compilation["Gc13"] = ['Gx','Gx','Gx',]
+clifford_compilation["Gc14"] = ['Gx','Gy','Gy','Gy','Gx','Gx','Gx',]
+clifford_compilation["Gc15"] = ['Gy','Gy','Gy',]
+clifford_compilation["Gc16"] = ['Gx',]
+clifford_compilation["Gc17"] = ['Gx','Gy','Gx',]
+clifford_compilation["Gc18"] = ['Gy','Gy','Gy','Gx','Gx',]
+clifford_compilation["Gc19"] = ['Gx','Gy','Gy',]
+clifford_compilation["Gc20"] = ['Gx','Gy','Gy','Gy','Gx',]
+clifford_compilation["Gc21"] = ['Gy',]
+clifford_compilation["Gc22"] = ['Gx','Gx','Gx','Gy','Gy',]
+clifford_compilation["Gc23"] = ['Gx','Gy','Gx','Gx','Gx',]
+
+
+global_fidPairs =  [
+    (0, 0), (2, 3), (5, 2), (5, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gy',): [
+        (0, 2), (2, 2), (2, 4), (4, 4)],
+  ('Gx', 'Gy'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gy', 'Gy', 'Gy', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
+  ('Gy', 'Gx', 'Gy', 'Gx', 'Gx', 'Gx'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gy', 'Gx', 'Gy', 'Gy', 'Gx', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
+  ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gy', 'Gy', 'Gy', 'Gx', 'Gy', 'Gx'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+}

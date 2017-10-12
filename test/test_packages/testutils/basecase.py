@@ -39,8 +39,8 @@ class BaseTestCase(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.old)
 
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
+    def assertArraysAlmostEqual(self,a,b,places=7):
+        self.assertAlmostEqual( np.linalg.norm(a-b), 0, places=places )
 
 
     def assertWarns(self, callable, *args, **kwds):
@@ -86,5 +86,5 @@ class BaseTestCase(unittest.TestCase):
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
-            self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
-            self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
+            self.assertAlmostEqual( ds1[gatestring]['0'], ds2[gatestring]['0'], places=3 )
+            self.assertAlmostEqual( ds1[gatestring]['1'], ds2[gatestring]['1'], places=3 )

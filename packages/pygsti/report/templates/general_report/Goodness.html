@@ -1,0 +1,20 @@
+	<h1>Model Violation Analysis</h1>
+        <p>Metrics indicating how well the estimated gate set can be trusted - i.e., how well it fits the data.</p>
+
+	<figure id="progressBarPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Model violation summary.</span> <span class="captiondetail">This plot shows how well GST was able to fit your data to a gate set.  Bars indicate the difference between the actual and expected log-likelihood values, and are given in units of standard deviations of the appropriate <span class="math">\chi^2</span> distribution. One bar is shown for each value of <span class="math">L</span> (roughly the maximum sequence length); low values are better (less model violation), and bars are colored according to the <q>star</q> rating found in a later table detailing the overall model violation.</span></figcaption>
+	  %(progressBarPlot)s
+	</figure>
+
+
+        <figure id="progressTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Detailed overall model violation.</span> <span class="captiondetail"> This table gives the details of the comparison between the computed and expected maximum <span class="math">\log(\mathcal{L})</span> (the log-likelihood) for different values of <span class="math">L</span> (roughly the maximum sequence length).  Quantities <span class="math">N_S</span> and <span class="math">N_p</span> are the number of data set degrees-of-freedom and model parameters, respectively.  The quantity <span class="math">2\Delta\log(\mathcal{L})</span> measures the goodness of fit of the GST model (small is better) and is expected to lie within <span class="math">[k-\sqrt{2k},k+\sqrt{2k}]</span> where <span class="math">k = N_s-N_p</span>. <span class="math">N_\sigma = (2\Delta\log(\mathcal{L})-k)/\sqrt{2k}</span> is the number of standard deviations from the mean (a <span class="math">p</span>-value can be straightforwardly derived from <span class="math">N_\sigma</span>).  The rating from 1 to 5 stars gives a very crude indication of goodness of fit.  Heading tool tips provide descriptions of each column's value.</span></figcaption>
+	  <!--<span class="math">p</span> is the p-value derived from a <span class="math">\chi^2_k</span> distribution.(For example, if <span class="math">p=0.05</span>, then the probability of observing a <span class="math">\chi^{2}</span> value as large as, or larger than, the one indicated in the table is 5%%, assuming the GST model is valid.) -->
+	  %(progressTable)s
+	</figure>
+	
+	<figure id="bestEstimateColorScatterPlot" class='tbl'>
+	  <figcaption><span class="captiontitle">Per-sequence model violation vs. length</span> <span class="captiondetail"> Each point displays the goodness-of-fit (<span class="math">2\Delta\log(\mathcal{L})</span>, twice the difference between the expected and actual log-likelihood) for a single gate sequence.  The sequence length is the x-coordinate, so this plot may reveal the typically direct relationship between the goodness-of-fit and sequence length.</span> </figcaption>
+	  %(bestEstimateColorScatterPlot)s
+	</figure>
+

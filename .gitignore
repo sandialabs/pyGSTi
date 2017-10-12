@@ -6,18 +6,27 @@
 *.out
 *.coverage*
 *.serial
+*.cache
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
+jupyter_notebooks/Tutorials/offline
+test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
+**offline/
+**tutorial_files
+*.lprof
+*.cache
 
 # Test Metadata #
 #################
 test/output/*
 test/output/pylint/*
 test/output/individual_coverage/*/*
-test/test_packages/.noseids # Used in running failed tests
+test/test_packages/.noseids
+test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
+**tutorial_files
 
 # Compiled source #
 ###################
@@ -66,3 +75,18 @@ HighImpactPaper1/texFiles/.DS_Store
 doc/html/*
 doc/build/*.rst
 doc/build/_build/*
+
+# Customer Data #
+#################
+scripts/profiling/report/*.ipynb
+scripts/profiling/report/Analyze+2Q+data.py
+scripts/profiling/report/*.html
+scripts/profiling/*.html
+scripts/profiling/report/standard_report.py
+scripts/profiling/report/tp_report.py
+scripts/profiling/report/rigetti_nocache.py
+
+# Profiling data #
+scripts/profiling/output
+scripts/profiling/data
+

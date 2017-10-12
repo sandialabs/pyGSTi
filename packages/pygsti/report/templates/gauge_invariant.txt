@@ -1,0 +1,15 @@
+@@markdown
+# Gauge Invariant Outputs
+Quantities which are *gauge-invariant* are the most reliable means of assessing the quality of the gates, as these do not depend on any unphysical gauge degrees of freedom
+
+@@markdown
+### Eigenvalues of estimated gates: 
+The spectrum (Eigenvalues column) of each estimated gate.  The second column displays these eigenvalues over the complex disc.
+@@code
+ws.GateEigenvalueTable(gs_final, gs_target, cri, display=('evals','target','log-evals'), virtual_gates=germs)
+
+@@markdown
+### Gram Matrix Eigenvalues: 
+Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.
+@@code
+ws.GramMatrixBarPlot(ds, gs_target, 10, strs)

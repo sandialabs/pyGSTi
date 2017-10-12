@@ -1,0 +1,18 @@
+	<h1>Summary</h1>
+	<!-- (goSwitchboard1)s -->
+
+	<figure id="progressBarPlot_sum" class='tbl'>
+	  <figcaption><span class="captiontitle">Model violation summary.</span> <span class="captiondetail">This plot shows how well GST was able to fit your data to a gate set.  Bars indicate the difference between the actual and expected log-likelihood values, and are given in units of standard deviations of the appropriate <span class="math">\chi^2</span> distribution. One bar is shown for each value of <span class="math">L</span> (roughly the maximum sequence length); low values are better (less model violation), and bars are colored according to the <q>star</q> rating found in a later table detailing the overall model violation.</span></figcaption>
+	  %(progressBarPlot_sum)s
+	</figure>
+
+	<figure id="bestEstimateColorHistogram" class='tbl'>
+	  <figcaption><span class="captiontitle">Per-sequence model violation.</span> <span class="captiondetail"> This plot shows a histogram of the per-sequence goodness-of-fit values (<span class="math">2\Delta\log(\mathcal{L})</span>, twice the difference between the expected and actual log-likelihood).  Each sequence equals one count.  Lower values are better, and the colorscale, simply a function of the x-coordinate, matches that found on other more detailed plots of per-sequence model violation.</span> </figcaption>
+	  %(bestEstimateColorHistogram)s
+	</figure>
+
+	<figure id="bestGatesVsTargetTable_sum" class='tbl'>
+	  <figcaption><span class="captiontitle">Summary of estimated gates w.r.t. targets.</span> <span class="captiondetail"> This table presents different measures of distance or discrepancy between the gates of the GST estimate and the ideal target operations.  Description of the metrics appear when hovering over the column headers.</span></figcaption>
+	  %(bestGatesVsTargetTable_sum)s
+	</figure>
+

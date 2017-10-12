@@ -16,226 +16,34 @@ class rpeconfig:
     
     def __init__(self,input_dict):
         unspecified_keys = []
-        try:
-            self.fixed_axis_gate_label = input_dict['fixed_axis_gate_label']
-        except:
-            unspecified_keys.append('fixed_axis_gate_label')
-        try:
-            self.fixed_axis_label = input_dict['fixed_axis_label']
-        except:
-            unspecified_keys.append('fixed_axis_label')
-        try:
-            self.fixed_axis_target = input_dict['fixed_axis_target']
-        except:
-            unspecified_keys.append('fixed_axis_target')
-        try:
-            self.loose_axis_gate_label = input_dict['loose_axis_gate_label']
-        except:
-            unspecified_keys.append('loose_axis_gate_label')
-        try:
-            self.loose_axis_label = input_dict['loose_axis_label']
-        except:
-            unspecified_keys.append('loose_axis_label')
-        try:
-            self.loose_axis_target = input_dict['loose_axis_target']
-        except:
-            unspecified_keys.append('loose_axis_target')
-        try:
-            self.auxiliary_axis_gate_label = input_dict['auxiliary_axis_gate_label']
-        except:
-            unspecified_keys.append('auxiliary_axis_gate_label')
-        try:
-            self.auxiliary_axis_label = input_dict['auxiliary_axis_label']
-        except:
-            unspecified_keys.append('auxiliary_axis_label')
-        try:
-            self.rhoExpressions = input_dict['rhoExpressions']
-        except:
-            unspecified_keys.append('rhoExpressions')
-        try:
-            self.EExpressions = input_dict['EExpressions']
-        except:
-            unspecified_keys.append('EExpressions')
-        try:
-            self.spamLabelDict = input_dict['spamLabelDict']
-        except:
-            unspecified_keys.append('spamLabelDict')
-        try:
-            self.alpha = input_dict['alpha']
-        except:
-            unspecified_keys.append('alpha')
-        try:
-            self.epsilon = input_dict['epsilon']
-        except:
-            unspecified_keys.append('epsilon')
-        try:
-            self.theta = input_dict['theta']
-        except:
-            unspecified_keys.append('theta')
-        try:
-            self.new_epsilon_func = input_dict['new_epsilon_func']
-        except:
-            unspecified_keys.append('new_epsilon_func')
-        try:
-            self.alpha_hat_func = input_dict['alpha_hat_func']
-        except:
-            unspecified_keys.append('alpha_hat_func')
-        try:
-            self.epsilon_hat_func = input_dict['epsilon_hat_func']
-        except:
-            unspecified_keys.append('epsilon_hat_func')
-        try:
-            self.Phi_hat_func = input_dict['Phi_hat_func']
-        except:
-            unspecified_keys.append('Phi_hat_func')
-        try:
-            self.alpha_cos_prep_tuple = input_dict['alpha_cos_prep_tuple']
-        except:
-            unspecified_keys.append('alpha_cos_prep_tuple')
-        try:
-            self.alpha_cos_prep_str = input_dict['alpha_cos_prep_str']
-        except:
-            unspecified_keys.append('alpha_cos_prep_str')
-        try:
-            self.alpha_cos_germ_tuple = input_dict['alpha_cos_germ_tuple']
-        except:
-            unspecified_keys.append('alpha_cos_germ_tuple')
-        try:
-            self.alpha_cos_germ_str = input_dict['alpha_cos_germ_str']
-        except:
-            unspecified_keys.append('alpha_cos_germ_str')
-        try:
-            self.alpha_cos_meas_tuple = input_dict['alpha_cos_meas_tuple']
-        except:
-            unspecified_keys.append('alpha_cos_meas_tuple')
-        try:
-            self.alpha_cos_meas_str = input_dict['alpha_cos_meas_str']
-        except:
-            unspecified_keys.append('alpha_cos_meas_str')
-        try:
-            self.alpha_sin_prep_tuple = input_dict['alpha_sin_prep_tuple']
-        except:
-            unspecified_keys.append('alpha_sin_prep_tuple')
-        try:
-            self.alpha_sin_prep_str = input_dict['alpha_sin_prep_str']
-        except:
-            unspecified_keys.append('alpha_sin_prep_str')
-        try:
-            self.alpha_sin_germ_tuple = input_dict['alpha_sin_germ_tuple']
-        except:
-            unspecified_keys.append('alpha_sin_germ_tuple')
-        try:
-            self.alpha_sin_germ_str = input_dict['alpha_sin_germ_str']
-        except:
-            unspecified_keys.append('alpha_sin_germ_str')
-        try:
-            self.alpha_sin_meas_tuple = input_dict['alpha_sin_meas_tuple']
-        except:
-            unspecified_keys.append('alpha_sin_meas_tuple')
-        try:
-            self.alpha_sin_meas_str = input_dict['alpha_sin_meas_str']
-        except:
-            unspecified_keys.append('alpha_sin_meas_str')
-        try:
-            self.epsilon_cos_prep_tuple = input_dict['epsilon_cos_prep_tuple']
-        except:
-            unspecified_keys.append('epsilon_cos_prep_tuple')
-        try:
-            self.epsilon_cos_prep_str = input_dict['epsilon_cos_prep_str']
-        except:
-            unspecified_keys.append('epsilon_cos_prep_str')
-        try:
-            self.epsilon_cos_germ_tuple = input_dict['epsilon_cos_germ_tuple']
-        except:
-            unspecified_keys.append('epsilon_cos_germ_tuple')
-        try:
-            self.epsilon_cos_germ_str = input_dict['epsilon_cos_germ_str']
-        except:
-            unspecified_keys.append('epsilon_cos_germ_str')
-        try:
-            self.epsilon_cos_meas_tuple = input_dict['epsilon_cos_meas_tuple']
-        except:
-            unspecified_keys.append('epsilon_cos_meas_tuple')
-        try:
-            self.epsilon_cos_meas_str = input_dict['epsilon_cos_meas_str']
-        except:
-            unspecified_keys.append('epsilon_cos_meas_str')
-        try:
-            self.epsilon_sin_prep_tuple = input_dict['epsilon_sin_prep_tuple']
-        except:
-            unspecified_keys.append('epsilon_sin_prep_tuple')
-        try:
-            self.epsilon_sin_prep_str = input_dict['epsilon_sin_prep_str']
-        except:
-            unspecified_keys.append('epsilon_sin_prep_str')
-        try:
-            self.epsilon_sin_germ_tuple = input_dict['epsilon_sin_germ_tuple']
-        except:
-            unspecified_keys.append('epsilon_sin_germ_tuple')
-        try:
-            self.epsilon_sin_germ_str = input_dict['epsilon_sin_germ_str']
-        except:
-            unspecified_keys.append('epsilon_sin_germ_str')
-        try:
-            self.epsilon_sin_meas_tuple = input_dict['epsilon_sin_meas_tuple']
-        except:
-            unspecified_keys.append('epsilon_sin_meas_tuple')
-        try:
-            self.epsilon_sin_meas_str = input_dict['epsilon_sin_meas_str']
-        except:
-            unspecified_keys.append('epsilon_sin_meas_str')
-        try:
-            self.theta_cos_prep_tuple = input_dict['theta_cos_prep_tuple']
-        except:
-            unspecified_keys.append('theta_cos_prep_tuple')
-        try:
-            self.theta_cos_prep_str = input_dict['theta_cos_prep_str']
-        except:
-            unspecified_keys.append('theta_cos_prep_str')
-        try:
-            self.theta_cos_germ_tuple = input_dict['theta_cos_germ_tuple']
-        except:
-            unspecified_keys.append('theta_cos_germ_tuple')
-        try:
-            self.theta_cos_germ_str = input_dict['theta_cos_germ_str']
-        except:
-            unspecified_keys.append('theta_cos_germ_str')
-        try:
-            self.theta_cos_meas_tuple = input_dict['theta_cos_meas_tuple']
-        except:
-            unspecified_keys.append('theta_cos_meas_tuple')
-        try:
-            self.theta_cos_meas_str = input_dict['theta_cos_meas_str']
-        except:
-            unspecified_keys.append('theta_cos_meas_str')
-        try:
-            self.theta_sin_prep_tuple = input_dict['theta_sin_prep_tuple']
-        except:
-            unspecified_keys.append('theta_sin_prep_tuple')
-        try:
-            self.theta_sin_prep_str = input_dict['theta_sin_prep_str']
-        except:
-            unspecified_keys.append('theta_sin_prep_str')
-        try:
-            self.theta_sin_germ_tuple = input_dict['theta_sin_germ_tuple']
-        except:
-            unspecified_keys.append('theta_sin_germ_tuple')
-        try:
-            self.theta_sin_germ_str = input_dict['theta_sin_germ_str']
-        except:
-            unspecified_keys.append('theta_sin_germ_str')
-        try:
-            self.theta_sin_meas_tuple = input_dict['theta_sin_meas_tuple']
-        except:
-            unspecified_keys.append('theta_sin_meas_tuple')
-        try:
-            self.theta_sin_meas_str = input_dict['theta_sin_meas_str']
-        except:
-            unspecified_keys.append('theta_sin_meas_str')
+        for nm in ('fixed_axis_gate_label','fixed_axis_label','fixed_axis_target',
+                   'loose_axis_gate_label','loose_axis_label','loose_axis_target',
+                   'auxiliary_axis_gate_label','auxiliary_axis_label',
+                   'rhoExpressions','EExpressions','spamLabelDict',
+                   'alpha','epsilon','theta',
+                   'new_epsilon_func','alpha_hat_func','epsilon_hat_func','Phi_hat_func',
+                   'alpha_cos_prep_tuple','alpha_cos_prep_str','alpha_cos_germ_tuple',
+                   'alpha_cos_germ_str','alpha_cos_meas_tuple','alpha_cos_meas_str',
+                   'alpha_sin_prep_tuple','alpha_sin_prep_str','alpha_sin_germ_tuple',
+                   'alpha_sin_germ_str','alpha_sin_meas_tuple','alpha_sin_meas_str',
+                   'epsilon_cos_prep_tuple','epsilon_cos_prep_str','epsilon_cos_germ_tuple',
+                   'epsilon_cos_germ_str','epsilon_cos_meas_tuple','epsilon_cos_meas_str',
+                   'epsilon_sin_prep_tuple','epsilon_sin_prep_str','epsilon_sin_germ_tuple',
+                   'epsilon_sin_germ_str','epsilon_sin_meas_tuple','epsilon_sin_meas_str',
+                   'theta_cos_prep_tuple','theta_cos_prep_str','theta_cos_germ_tuple',
+                   'theta_cos_germ_str','theta_cos_meas_tuple','theta_cos_meas_str',
+                   'theta_sin_prep_tuple','theta_sin_prep_str','theta_sin_germ_tuple',
+                   'theta_sin_germ_str','theta_sin_meas_tuple','theta_sin_meas_str'):
+            try:
+                self.__dict__[nm] = input_dict[nm]
+            except:
+                unspecified_keys.append(nm)
+                
         if unspecified_keys == []:
-            print("Fully specified RPE configuration.")
+            #print("Fully specified RPE configuration.")
+            pass #no error
         else:
-            print("RPE configuration not fully specified.  Missing following keys:")
-            for key in unspecified_keys:
-                print(key)
+            raise ValueError(("RPE configuration not fully specified.  "
+                              "Missing following keys:\n") + \
+                              '\n'.join(unspecified_keys))
         
