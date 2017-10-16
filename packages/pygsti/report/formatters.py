@@ -170,15 +170,14 @@ Notice that they still have the function signature (item, specs -> string)
 def html_figure(fig, specs):
     fig.value.set_render_options(click_to_display=specs['click_to_display'],
                                  output_dir=specs['output_dir'],
-                                 link_to_pdf=specs['link_to_pdf'],
-                                 link_to_pkl=specs['link_to_pkl'])
-    render_out = fig.value.render("html",
-                            resizable="handlers only" if specs['resizable'] else False,
-                            autosize=specs['autosize'])
+                                 link_to=specs['link_to'],
+                                 autosize=specs['autosize'],
+                                 resizable="handlers only" if specs['resizable'] else False)
+    render_out = fig.value.render("html")
     return render_out #a dictionary with 'html' and 'js' keys
 
 def latex_figure(fig, specs):
-    fig.value.set_render_options(output_dir=specs['output_dir'])
+    fig.value.set_render_options(output_dir=specs['output_dir'], render_includes=specs['render_includes'])
     render_out = fig.value.render('latex')
     render_out['latex'] = "\\vcenteredhbox{%s}" % render_out['latex'] #wrap std latex output
     return render_out

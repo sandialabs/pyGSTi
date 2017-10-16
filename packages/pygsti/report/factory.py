@@ -104,9 +104,10 @@ def _read_and_preprocess_template(templateFilename, toggles):
     return preprocess(template)
 
 def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
-                    precision, pdf_links, python_links,
+                    precision, link_to,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, toggles=None, renderMath=True, verbosity=0):
+                    connected=False, toggles=None, renderMath=True, resizable=True,
+                    autosize='none', verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -299,18 +300,18 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
 
             printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceOutput): #switchboards don't have render options yet...
-                val.set_render_options(output_dir=figureDir,
-                                       link_to_pdf=pdf_links, link_to_pkl=python_links)
+                val.set_render_options(resizable=resizable, autosize=autosize,
+                                       output_dir=figureDir, link_to=link_to,
+                                       precision=precision)
+                if link_to:
+                    val.set_render_options(leave_includes_src=('tex' in link_to),
+                                           render_includes=('pdf' in link_to) )
             
-            if isinstance(val,_ws.WorkspaceTable):
-                #supply precision argument
-                out = val.render(render_typ, precision=precision, resizable=True, autosize=False)
-                if pdf_links:    val.render("latexdir") 
-                if python_links: val.render("pythondir")
-            elif isinstance(val,_ws.WorkspacePlot):
-                out = val.render(render_typ, resizable=True, autosize=False)
-                if pdf_links:    val.render("latexdir")
-                if python_links: val.render("pythondir")
+                out = val.render(render_typ)
+                if link_to:
+                    if 'tex' in link_to or 'pdf' in link_to: val.render("latexdir") 
+                    if 'pkl' in link_to: val.render("pythondir")
+
             else: #switchboards usually
                 out = val.render(render_typ)
                 
@@ -592,7 +593,8 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False, 
-                          pdf_links=False, python_links=False, verbosity=1):
+                          link_to=None, resizable=True, autosize='initial',
+                          verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -674,13 +676,23 @@ def create_general_report(results, filename, title="auto",
         will link to web resources (e.g. CDN libraries) instead of embedding
         them.
 
-    pdf_links : bool, optional
-        If True, render PDF versions of plots and tables, and create links 
-        to them in the report.
+    link_to : list, optional
+        If not None, a list of one or more items from the set 
+        {"tex", "pdf", "pkl"} indicating whether or not to 
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.  "tex" creates latex source files for
+        tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
+        Python versions of plots (pickled python data) and tables (pickled
+        pandas DataFrams).
 
-    python_links : bool, optional
-        If True, render Python versions of plots (pickled python data) and tables
-        (pickled pandas DataFrames), and create links to them in the report.
+    resizable : bool, optional
+        Whether plots and tables are made with resize handles and can be 
+        resized within the report.
+
+    autosize : {'none', 'initial', 'continual'}
+        Whether tables and plots should be resized, either initially --
+        i.e. just upon first rendering (`"initial"`) -- or whenever
+        the browser window is resized (`"continual"`).
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -921,8 +933,9 @@ def create_general_report(results, filename, title="auto",
             printer.log("*** Merging into template file ***")
             #template = "report_dashboard.html"
             template = "general_report"
-            _merge_template(qtys, template, filename, auto_open, precision, pdf_links, python_links,
-                            connected=connected, toggles=toggles, renderMath=renderMath, verbosity=printer,
+            _merge_template(qtys, template, filename, auto_open, precision, link_to,
+                            connected=connected, toggles=toggles, renderMath=renderMath,
+                            resizable=resizable, autosize=autosize, verbosity=printer,
                             CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
             #SmartCache.global_status(printer)
     else:

@@ -1290,13 +1290,21 @@ class WorkspaceOutput(object):
     output in various formats, and `display` is used to show the object within
     an iPython notebook.
     """
-    default_render_options = { 'click_to_display': False,
-                               'render_math': True,
-                               'output_dir': False,
-                               'latex_call': "pdflatex",
-                               'link_to_pdf': False,
-                               'link_to_pkl': False,
-                               'page_size': (6.5,8.0) }
+    default_render_options = {
+        'global_requirejs': False,
+        'resizable': True,
+        'autosize': 'none',
+        'click_to_display': False,
+        'render_math': True,
+        'output_dir': False,
+        'latex_call': "pdflatex",
+        'link_to': None,
+        'page_size': (6.5,8.0),
+        'render_includes': True,
+        'leave_includes_src': False,
+        'precision': None
+    }
+                               
     
     def __init__(self, ws):
         """
@@ -1311,13 +1319,31 @@ class WorkspaceOutput(object):
         self.ID = randomID() #maybe allow overriding this in the FUTURE
         self.options = WorkspaceOutput.default_render_options.copy()
 
-    def set_render_options(self, click_to_display=None, output_dir=None, render_math=None,
-                           latex_call=None, link_to_pdf=None, link_to_pkl=None):
+    def set_render_options(self, **kwargs):
         """
         Sets rendering options, which affect how render() behaves.
+        TODO: docstring - descriptions of different render options
 
         Parameters
         ----------
+        kwargs : variable
+            Sets any available render options.
+
+        global_requirejs : bool, optional
+            Whether the table is going to be embedded in an environment
+            with a globally defined RequireJS library.  If True, then
+            rendered output will make use of RequireJS.
+
+        resizable : bool, optional
+            Whether or not to place table inside a JQueryUI 
+            resizable widget (only applies when `typ == "html"`).
+
+        autosize : {'none', 'initial', 'continual'}, optional
+            Whether tables and plots should be resized either
+            initially, i.e. just upon first rendering (`"initial"`) or whenever
+            the browser window is resized (`"continual"`).  This option only
+            applies for html rendering.
+
         click_to_display : bool, optional
             If True, table plots are not initially created but must
             be clicked to prompt creation.  This is False by default,
@@ -1325,28 +1351,24 @@ class WorkspaceOutput(object):
             especially complex plots whose creation would slow down
             page loading significantly.
 
+        precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the 
+            precision for complex angles, numbers in scientific notation, and 
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
         Returns
         -------
         None
         """
-        if click_to_display is not None:
-            self.options['click_to_display'] = click_to_display
-
-        if output_dir is not None:
-            self.options['output_dir'] = output_dir
-
-        if render_math is not None:
-            self.options['render_math'] = render_math
-
-        if latex_call is not None:
-            self.options['latex_call'] = latex_call
-
-        if link_to_pdf is not None:
-            self.options['link_to_pdf'] = link_to_pdf
-
-        if link_to_pkl is not None:
-            self.options['link_to_pkl'] = link_to_pkl
-            
+        for key,val in kwargs.items():
+            if key in self.options:
+                self.options[key] = val
+            else:
+                raise ValueError("Invalid render option: %s\nValid options are:\n" % key +
+                                 '\n'.join(self.options.keys()))
 
 
     def __getstate__(self):
@@ -1419,7 +1441,7 @@ class WorkspaceOutput(object):
 
     def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
                      switchboards, switchIndices, div_css_classes=None,
-                     link_to_pdf=False, link_to_pkl=False):
+                     link_to=None):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
@@ -1456,11 +1478,11 @@ class WorkspaceOutput(object):
             A list of (string) CSS classes to add to the div elements created
             by this function.
 
-        link_to_pdf : bool, optional
-            Whether or not to include links to PDF files
-
-        link_to_pkl : bool, optional
-            Whether or not to include links to PKL files
+        link_to : list, optional
+            If not None, a list of one or more items from the set 
+            {"tex", "pdf", "pkl"} indicating whether or not to 
+            include links to Latex, PDF, and Python pickle files,
+            respectively.
 
         Returns
         -------
@@ -1552,11 +1574,15 @@ class WorkspaceOutput(object):
         #on-ready handler starts trying to connect to switches
         js += "$(document).ready(function() {\n" #
         js += "  connect_%s_to_switches();\n" % ID
-        if link_to_pdf:
+        if link_to and ('tex' in link_to):
+            for div_id in div_ids:
+                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
+        if link_to and ('pdf' in link_to):
             for div_id in div_ids:
                 js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
                 js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-        if link_to_pkl:
+        if link_to and ('pkl' in link_to):
             for div_id in div_ids:
                 js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
                 js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
@@ -1568,7 +1594,7 @@ class WorkspaceOutput(object):
 
     def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
                          switchboards, switchIndices, output_dir, div_css_classes=None,
-                         link_to_pdf=False, link_to_pkl=False):
+                         link_to=None):
         """
         TODO: docstring
         """
@@ -1635,10 +1661,13 @@ class WorkspaceOutput(object):
         handler_js += "        divToShow = $( '#' + idToShow );\n"
         handler_js += "        divToShow.show();\n"
         handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
-        if link_to_pdf:
+        if link_to and ('tex' in link_to):
+            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+            handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
+        if link_to and ('pdf' in link_to):
             handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
             handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-        if link_to_pkl:
+        if link_to and ('pkl' in link_to):
             handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
             handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
         handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
@@ -1776,8 +1805,7 @@ class WorkspaceTable(WorkspaceOutput):
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
-    def render(self, typ, ID=None, global_requirejs=False, precision=None,
-               resizable=True, autosize=False):
+    def render(self, typ, ID=None):
         """
         Renders this table into the specifed format, specifically for
         embedding it within a larger document.
@@ -1794,28 +1822,6 @@ class WorkspaceTable(WorkspaceOutput):
             A base ID to use when rendering.  If None, the object's
             persistent ID is used, which usually what you want.
 
-        global_requirejs : bool, optional
-            Whether the table is going to be embedded in an environment
-            with a globally defined RequireJS library.  If True, then
-            rendered output will make use of RequireJS.
-
-        precision : int or dict, optional
-            The amount of precision to display.  A dictionary with keys
-            "polar", "sci", and "normal" can separately specify the 
-            precision for complex angles, numbers in scientific notation, and 
-            everything else, respectively.  If an integer is given, it this
-            same value is taken for all precision types.  If None, then
-            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
-
-        resizable : bool, optional
-            Whether or not to place table inside a JQueryUI 
-            resizable widget (only applies when `typ == "html"`).
-
-        autosize : bool, optional
-            Whether elements within table should be resized when
-            the browser window is resized (only applies when
-            `typ == "html"`).
-
         Returns
         -------
         dict
@@ -1823,6 +1829,12 @@ class WorkspaceTable(WorkspaceOutput):
             embeddable output.  For `"html"`, keys are `"html"` and `"js"`.
             For `"latex"`, there is a single key `"latex"`.
         """
+
+        global_requirejs = self.options.get('global_requirejs',False)
+        resizable = self.options.get('resizable',True)
+        autosize = self.options.get('autosize','none')
+        precision = self.options.get('precision',None)
+        
         if precision is None:
             precDict = {'normal': 6, 'polar': 3, 'sci': 0}
         elif _compat.isint(precDict):
@@ -1854,10 +1866,9 @@ class WorkspaceTable(WorkspaceOutput):
                                                   precision=precDict['normal'],
                                                   polarprecision=precDict['polar'],
                                                   sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=autosize,
+                                                  resizable=resizable, autosize=(autosize == "continual"),
                                                   click_to_display=self.options['click_to_display'],
-                                                  link_to_pdf=self.options['link_to_pdf'],
-                                                  link_to_pkl=self.options['link_to_pkl'])
+                                                  link_to=self.options['link_to'])
 
                     divHTML.append(table_dict['html'])
                     divJS.append(table_dict['js'])
@@ -1877,10 +1888,10 @@ class WorkspaceTable(WorkspaceOutput):
                 init_table_js = ''
                 if resizable:
                     init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-                if autosize:
+                if autosize == "continual":
                     init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-                if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                    init_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableID)
+                init_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
+                    tableID=tableID, initautosize=str(autosize in ("initial","continual")).lower())
     
                 ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
     
@@ -1916,10 +1927,9 @@ class WorkspaceTable(WorkspaceOutput):
                                                   precision=precDict['normal'],
                                                   polarprecision=precDict['polar'],
                                                   sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=autosize,
+                                                  resizable=resizable, autosize=(autosize == "continual"),
                                                   click_to_display=self.options['click_to_display'],
-                                                  link_to_pdf=self.options['link_to_pdf'],
-                                                  link_to_pkl=self.options['link_to_pkl'])
+                                                  link_to=self.options['link_to'])
     
                     divHTML.append(table_dict['html'])
 
@@ -1933,10 +1943,10 @@ class WorkspaceTable(WorkspaceOutput):
                     init_single_table_js = ''
                     if resizable:
                         init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableDivID)
-                    if autosize:
+                    if autosize == "continual":
                         init_single_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableDivID)
-                    if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                        init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableDivID)
+                    init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
+                        tableID=tableDivID, initautosize=str(autosize in ("initial","continual")).lower())
 
                     if '$' in table_dict['html'] and self.options['render_math']:
                         # then there is math text that needs rendering,
@@ -1963,8 +1973,7 @@ class WorkspaceTable(WorkspaceOutput):
                     "Cannot render 'htmldir' without a valid 'output_dir' render option"
                 base = self._render_html_dir(tableID, divHTML, divJS, divIDs, self.switchpos_map,
                                              self.switchboards, self.sbSwitchIndices, self.options['output_dir'],
-                                             None, self.options.get('link_to_pdf',False),
-                                             self.options.get('link_to_pkl',False) )
+                                             None, self.options.get('link_to',None) )
                 #base has keys == divIDs + 'main' for separate table html+js ; values = dict w/ 'filename' also?
                 # OR just returns a *list* of baseIDs?
                 # OR keys == filenames to put divIDs in
@@ -1996,7 +2005,8 @@ class WorkspaceTable(WorkspaceOutput):
                                           precision=precDict['normal'],
                                           polarprecision=precDict['polar'],
                                           sciprecision=precDict['sci'],
-                                          output_dir=self.options['output_dir'])
+                                          output_dir=self.options['output_dir'],
+                                          render_includes=self.options.get('render_includes',True))
                 tables_latex.append(table_dict['latex'])
     
             return {'latex': "\n".join(tables_latex) }
@@ -2008,9 +2018,11 @@ class WorkspaceTable(WorkspaceOutput):
                 "Cannot render 'latexdir' without a valid 'output_dir' render option"
             assert('latex_call' in self.options and self.options['latex_call']), \
                 "Cannot render 'latexdir' without a valid 'latex_call' render option"
-
+            
             output_dir = self.options['output_dir']
             W,H = self.options.get('page_size',(6.5,8.0))
+            render_includes = self.options.get('render_includes',True)
+            leave_src = self.options.get('leave_includes_src',False)
 
             tables_latex = []
             for i, table in enumerate(self.tables):
@@ -2018,47 +2030,56 @@ class WorkspaceTable(WorkspaceOutput):
                 outputFilename = _os.path.join(output_dir, "%s.tex" % tableDivID)
 
                 cwd = _os.getcwd()
-                _os.chdir( output_dir )
-                table_dict = table.render("latex", 
-                                          precision=precDict['normal'],
-                                          polarprecision=precDict['polar'],
-                                          sciprecision=precDict['sci'],
-                                          output_dir=".")
-                # output_dir == "." b/c latex doc will be rendered in same dir
-                #  as figure .pdf files
-                _os.chdir(cwd)
 
-                d = {'toLatex': table_dict['latex'] }
-                #printer.log("Latexing %s table..." % key)
-                self._merge_latex_template(d, "standalone.tex", outputFilename)
+                if render_includes or leave_src:
+                   _os.chdir( output_dir )
+                   table_dict = table.render("latex", 
+                                             precision=precDict['normal'],
+                                             polarprecision=precDict['polar'],
+                                             sciprecision=precDict['sci'],
+                                             output_dir=".",
+                                             render_includes=render_includes)
+                   # output_dir == "." b/c latex doc will be rendered in same dir
+                   #  as figure .pdf files
+                   _os.chdir(cwd)
+   
+                   d = {'toLatex': table_dict['latex'] }
+                   #printer.log("Latexing %s table..." % key)
+                   self._merge_latex_template(d, "standalone.tex", outputFilename)
 
-                cwd = _os.getcwd()
-                _os.chdir( output_dir )
-
-                printer=_objs.VerbosityPrinter(1) #TEMP
-
-                try:
-                    latex_cmd = [ self.options['latex_call'] ] + \
-                                ["-shell-escape", "%s.tex" % tableDivID]
-                    stdout, stderr, returncode = self._process_call(latex_cmd)
-                    self._evaluate_call(latex_cmd, stdout, stderr, returncode,
-                                        printer)
-                    # Check to see if the PNG was generated                                                                                          
-                    if not _os.path.isfile("%s.pdf" % tableDivID):
-                        raise Exception("File %s.pdf was not created by pdflatex"
-                                        % tableDivID)
-                    _os.remove( "%s.tex" % tableDivID )
-                    _os.remove( "%s.log" % tableDivID )
-                    _os.remove( "%s.aux" % tableDivID )
-                except _subprocess.CalledProcessError as e:
-                    printer.error("pdflatex returned code %d " % e.returncode +
-                                  "trying to render standalone %s. " % tableDivID +
-                                  "Check %s.log to see details." % tableDivID)
-                finally:
-                    _os.chdir(cwd)
-                
-                tables_latex.append( "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
-                                (W,H, _os.path.join('figure',"%s.pdf" % tableDivID)) )
+                if render_includes:
+                    cwd = _os.getcwd()
+                    _os.chdir( output_dir )
+    
+                    printer=_objs.VerbosityPrinter(1) #TEMP
+    
+                    try:
+                        latex_cmd = [ self.options['latex_call'] ] + \
+                                    ["-shell-escape", "%s.tex" % tableDivID]
+                        stdout, stderr, returncode = self._process_call(latex_cmd)
+                        self._evaluate_call(latex_cmd, stdout, stderr, returncode,
+                                            printer)
+                        # Check to see if the PNG was generated                                                                                          
+                        if not _os.path.isfile("%s.pdf" % tableDivID):
+                            raise Exception("File %s.pdf was not created by pdflatex"
+                                            % tableDivID)
+                        if not leave_src: _os.remove( "%s.tex" % tableDivID )
+                        _os.remove( "%s.log" % tableDivID )
+                        _os.remove( "%s.aux" % tableDivID )
+                    except _subprocess.CalledProcessError as e:
+                        printer.error("pdflatex returned code %d " % e.returncode +
+                                      "trying to render standalone %s. " % tableDivID +
+                                      "Check %s.log to see details." % tableDivID)
+                    finally:
+                        _os.chdir(cwd)
+                    
+                    tables_latex.append( "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
+                                    (W,H, _os.path.join('figure',"%s.pdf" % tableDivID)) ) #inclue "figure" here?
+                    
+                elif leave_src:
+                    tables_latex.append( "%% Generated but didn't compile %s.tex" % tableDivID )
+                else:
+                    tables_latex.append( "%% Didn't generated anything for tableID=%s" % tableDivID )
                 
             return {'latex': "\n".join(tables_latex) }
 
@@ -2167,7 +2188,7 @@ class WorkspacePlot(WorkspaceOutput):
             self.ws.switchedCompute(fn, *self.initargs)
 
         
-    def render(self, typ="html", ID=None, global_requirejs=False, resizable=True, autosize=False):
+    def render(self, typ="html", ID=None):
         """
         Renders this plot into the specifed format, specifically for
         embedding it within a larger document.
@@ -2184,26 +2205,16 @@ class WorkspacePlot(WorkspaceOutput):
             A base ID to use when rendering.  If None, the object's
             persistent ID is used, which usually what you want.
 
-        global_requirejs : bool, optional
-            Whether the table is going to be embedded in an environment
-            with a globally defined RequireJS library.  If True, then
-            rendered output will make use of RequireJS.
-
-        resizable : bool, optional
-            Whether or not to place plot inside a JQueryUI 
-            resizable widget (only applies when `typ == "html"`).
-
-        autosize : bool, optional
-            Whether this plot should be resized resized when
-            the browser window is resized (only applies when
-            `typ == "html"`).
-
         Returns
         -------
         dict
             A dictionary of strings giving the HTML and Javascript portions
             of the embeddable output.  Keys are `"html"` and `"js"`.
         """
+        global_requirejs = self.options.get('global_requirejs',False)
+        resizable = self.options.get('resizable',True)
+        autosize = self.options.get('autosize','none')
+
         if ID is None: ID = self.ID
         plotID = "plot_" + ID
         
@@ -2243,11 +2254,10 @@ class WorkspacePlot(WorkspaceOutput):
                         #use auto-sizing (fluid layout)
                         fig_dict = _plotly_ex.plot_ex(
                             fig['plotlyfig'], show_link=False,
-                            autosize=autosize, resizable=resizable,
+                            autosize=(autosize == "continual"), resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
-                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False,
-                            link_to_pkl_id= plotDivID if self.options['link_to_pkl'] else False)
+                            link_to=self.options['link_to'], link_to_id=plotDivID)
 
                     divIDs.append(plotDivID)  # getPlotlyDivID(fig_dict['html'])
                     divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
@@ -2266,12 +2276,13 @@ class WorkspacePlot(WorkspaceOutput):
                 if not handlersOnly:
                     if resizable: # make a resizable widget
                         ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
-                    if autosize: # add window resize handler
+                    if autosize == "continual": # add window resize handler
                         ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
-                    if (autosize or resizable): #trigger init & create of plots
-                        ret['js'] += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotID)
+
+                    #trigger init & create of plots
+                    ret['js'] += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
+                        plotID=plotID, initautosize=str(autosize in ("initial","continual")).lower())
         
-                if not handlersOnly:
                     ret['js'] += '}); //end on-ready handler\n'
                     if global_requirejs:
                         ret['js'] += '}); //end require block\n'
@@ -2288,11 +2299,10 @@ class WorkspacePlot(WorkspaceOutput):
                         #use auto-sizing (fluid layout)
                         fig_dict = _plotly_ex.plot_ex(
                             fig['plotlyfig'], show_link=False,
-                            autosize=autosize, resizable=resizable,
+                            autosize=(autosize == "continual"), resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
-                            link_to_pdf_id= plotDivID if self.options['link_to_pdf'] else False,
-                            link_to_pkl_id= plotDivID if self.options['link_to_pkl'] else False)
+                            link_to=self.options['link_to'], link_to_id=plotDivID)
                         
                     divIDs.append(plotDivID) # getPlotlyDivID(fig_dict['html'])
                     divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
@@ -2302,10 +2312,11 @@ class WorkspacePlot(WorkspaceOutput):
                     if not handlersOnly:
                         if resizable: # make a resizable widget
                             init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotDivID)
-                        if autosize: # add window resize handler
+                        if autosize == "continual": # add window resize handler
                             init_single_plot_js += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotDivID)
-                        if (autosize or resizable): #trigger init & create of plots
-                            init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotDivID)
+                        #trigger init & create of plots
+                        init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
+                            plotID=plotDivID, initautosize=str(autosize in ("initial","continual")).lower())
     
                     divJS.append( fig_dict['js'] + init_single_plot_js )
     
@@ -2314,7 +2325,7 @@ class WorkspacePlot(WorkspaceOutput):
                 base = self._render_html_dir(plotID, divHTML, divJS, divIDs, self.switchpos_map,
                                              self.switchboards, self.sbSwitchIndices,
                                              self.options['output_dir'], ['relwrap'], False)
-                                             # Don't link_to_pdf/pkl b/c plots will all have download buttons
+                                             # Don't link_to b/c plots will all have download buttons
                 ret = base
                 switch_js = base['js']
                 ret['js'] = '' # start from scratch (we'll wrap switch_js)
@@ -2342,18 +2353,22 @@ class WorkspacePlot(WorkspaceOutput):
             maxW,maxH = self.options.get('page_size',(6.5,8.0))
             includes = []
             for i,fig in enumerate(self.figs):
-                plotDivID = plotID + "_%d" % i                
-                filename = _os.path.join(output_dir, plotDivID+".pdf")
-                _plotly_to_matplotlib(fig, filename)
-
-                W,H = maxW,maxH
-                if 'mpl_fig_size' in fig: #added by plotly_to_matplotlib call above
-                    figW,figH = fig['mpl_fig_size'] #gives the "normal size" of the figure
-                    W = min(W, figW)
-                    W = min(H, figH)
-
-                includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
-                                (W,H,filename))
+                plotDivID = plotID + "_%d" % i
+                
+                if self.options.get('render_includes',True):
+                    filename = _os.path.join(output_dir, plotDivID+".pdf")
+                    _plotly_to_matplotlib(fig, filename)
+    
+                    W,H = maxW,maxH
+                    if 'mpl_fig_size' in fig: #added by plotly_to_matplotlib call above
+                        figW,figH = fig['mpl_fig_size'] #gives the "normal size" of the figure
+                        W = min(W, figW)
+                        W = min(H, figH)
+    
+                    includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
+                                    (W,H,filename))
+                else:
+                    includes.append("%% Didn't render plotID=%s" % plotDivID)
             return {'latex': '\n'.join(includes) }
 
         elif typ == "python":

@@ -1,6 +1,5 @@
 dist: precise
 language: python
-dist: precise
 
 python:
   - "2.7"
@@ -40,29 +39,21 @@ cache:
   pip: true
   timeout: 1000
 
+#Script For default "test" stage
 script:
   - cd test
   - travis_wait 50 python travisTests.py # Tests may take some time!
   - cd ..
 
-after_script:
-    - |
-        declare exitCode
-        
-        curl -sSL https://raw.githubusercontent.com/alrra/travis-after-all/1.4.4/lib/travis-after-all.js | node
-        exitCode=$?
-
-        if [ $exitCode -eq 0 ]; then
-            python CI/deploy
-        fi
-
-        if [ $exitCode -eq 1 ]; then
-            echo "Build failed - not deploying!!!!!!"
-        fi
+jobs:
+  include:
+    - stage: deploy
+      python: 3.5
+      env: Drivers=False Algorithms=False AlgorithmsB=False Default=False Report=False ReportB=False MPI=False
+      script: python CI/deploy
 
 notifications:
     email:
         on_success: change
         on_failure: always
-
 

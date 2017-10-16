@@ -63,7 +63,7 @@ function make_wsplot_resizable(id) {
 }
 
 
-function trigger_wstable_plot_creation(id, resizable) {
+function trigger_wstable_plot_creation(id, initial_autosize) {
     $("#"+id).on("createplots", function(event) {
         var wstable = $("#"+id); //actually a div, a "workspace table"
         console.log("Initial sizing of plot table " + id + " cells");
@@ -82,7 +82,7 @@ function trigger_wstable_plot_creation(id, resizable) {
             desiredH =	max_height(plots)+2*padding
             $(td).css("width", desiredW);
             $(td).css("height", desiredH);
-	    if(!resizable) {
+	    if(!initial_autosize) {
 		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", max_width(plots)+2*padding);
 		firstChild.css("height", max_height(plots)+2*padding);
@@ -129,6 +129,22 @@ function trigger_wstable_plot_creation(id, resizable) {
         console.log("Creating table " + id + " plots");
         wstable.find(".pygsti-plotgroup-master").trigger("create");
 
+	//Finish the rest of plot creation *after* all the plots have been 
+	// created (the trigger stmt above just queues them).
+	if(plotman != null) {
+	    plotman.enqueue( function() {
+		$("#"+id).trigger("after_createplots");
+	    });
+	} else {
+	    wstable.trigger("after_createplots");
+	}
+
+    });
+
+    $("#"+id).on("after_createplots", function(event) {
+	console.log("Post plot-creation sizing of plot table " + id + " cells");
+	var wstable = $("#"+id); //actually a div, a "workspace table"
+
 	//4) Thus, since the created plots may be smaller than their
 	//  native sizes, and we may need to decrease table cell heights.
 	wstable.find("td.plotContainingTD").each( function(k,td) {
@@ -153,7 +169,17 @@ function trigger_wstable_plot_creation(id, resizable) {
             caption.css('width', Math.round(wstable.width()*0.9) + 'px');
 	}
 
+	// 7) Remove the hard-set width and height of the plot-containing
+	//   div used to prevent initial auto-sizing.
+	if(!initial_autosize) {
+	    wstable.find("td.plotContainingTD").each( function(k,td) {
+		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		firstChild.css("width", "");
+		firstChild.css("height", "");
+	    });
+	}
     });
+    
     //Create table plots after typesetting is done and non-plot TDs are fixed
     // (note: table must be visible to compute widths correctly)
     if(typeof MathJax !== "undefined") {
@@ -167,7 +193,7 @@ function trigger_wstable_plot_creation(id, resizable) {
     }
 }
 
-function trigger_wsplot_plot_creation(id) {
+function trigger_wsplot_plot_creation(id, initial_autosize) {
     console.log("Triggering init and creation of workspace-plot" + id + " plots");
     var wsplot = $("#" + id);
     
@@ -179,18 +205,32 @@ function trigger_wsplot_plot_creation(id) {
     //  will cause the container to expand *up to* the pixel value (set to
     //  the "natural" width).  This seems to give good behavior, and so we
     //  set the width below.
+    var wsplotgroup = null;
+    if(wsplot.hasClass("pygsti-wsoutput-group")) {
+        wsplotgroup = wsplot; // then id was the id of the entire group (OK)
+    } else { // assume id was for one of the plots within a group
+             // (also OK, but we want to set the css of the *group* div below)
+        wsplotgroup = wsplot.closest(".pygsti-wsoutput-group");
+    }
+
+    if(!initial_autosize) {
+	//ignore max-width and max-height settings to desired height
+	wsplotgroup.css("max-width","none");
+	wsplotgroup.css("max-height","none");
+    }
+
     var plots = wsplot.find(".plotly-graph-div");
     var maxDesiredWidth = max_width(plots);
     var maxDesiredHeight = max_height(plots);
-    wsplot.css("width", maxDesiredWidth);
-    wsplot.css("height", maxDesiredHeight);
+    wsplotgroup.css("width", maxDesiredWidth);
+    wsplotgroup.css("height", maxDesiredHeight);
     console.log("Max desired size = " + maxDesiredWidth + ", " + maxDesiredHeight);
 
     //3) update the max-height of this container based on the maximum desired height
-    existing_max_height = wsplot.css("max-height");
+    existing_max_height = wsplotgroup.css("max-height");
     if(existing_max_height != "none") {
-	wsplot.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
-    } else { wsplot.css("max-height", maxDesiredHeight); }
+	wsplotgroup.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
+    } else { wsplotgroup.css("max-height", maxDesiredHeight); }
 
     //4) create the plots, based on the container size.  Note that the
     //   actual width and/or height of the container could be smaller
@@ -201,15 +241,15 @@ function trigger_wsplot_plot_creation(id) {
     //5) update width and/or height of container based on content, as
     // aspect ratio restrictions may have caused plots to be smaller
     // than desired, leaving free space.
-    wsplot.css("width", max_width(plots));
-    wsplot.css("height", max_height(plots));
+    wsplotgroup.css("width", max_width(plots));
+    wsplotgriup.css("height", max_height(plots));
     console.log("Handshake: resizing container to = " + max_width(plots) + ", " + max_height(plots));
 
     // 6) If this table is within a <figure> tag try to set
     //    caption detail's width based on rendered table width
-    caption = wsplot.closest('figure').children('figcaption:first');
+    caption = wsplotgroup.closest('figure').children('figcaption:first');
     if(caption.length > 0) {
-        caption.css('width', Math.round(wsplot.width()*0.9) + 'px');
+        caption.css('width', Math.round(wsplotgroup.width()*0.9) + 'px');
     }
 
 }
