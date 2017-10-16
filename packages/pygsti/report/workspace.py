@@ -1293,7 +1293,7 @@ class WorkspaceOutput(object):
     default_render_options = {
         'global_requirejs': False,
         'resizable': True,
-        'autosize': False,
+        'autosize': 'none',
         'click_to_display': False,
         'render_math': True,
         'output_dir': False,
@@ -1338,10 +1338,11 @@ class WorkspaceOutput(object):
             Whether or not to place table inside a JQueryUI 
             resizable widget (only applies when `typ == "html"`).
 
-        autosize : bool, optional
-            Whether elements within table should be resized when
-            the browser window is resized (only applies when
-            `typ == "html"`).
+        autosize : {'none', 'initial', 'continual'}, optional
+            Whether tables and plots should be resized either
+            initially, i.e. just upon first rendering (`"initial"`) or whenever
+            the browser window is resized (`"continual"`).  This option only
+            applies for html rendering.
 
         click_to_display : bool, optional
             If True, table plots are not initially created but must
@@ -1831,7 +1832,7 @@ class WorkspaceTable(WorkspaceOutput):
 
         global_requirejs = self.options.get('global_requirejs',False)
         resizable = self.options.get('resizable',True)
-        autosize = self.options.get('autosize',False)
+        autosize = self.options.get('autosize','none')
         precision = self.options.get('precision',None)
         
         if precision is None:
@@ -1865,7 +1866,7 @@ class WorkspaceTable(WorkspaceOutput):
                                                   precision=precDict['normal'],
                                                   polarprecision=precDict['polar'],
                                                   sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=autosize,
+                                                  resizable=resizable, autosize=(autosize == "continual"),
                                                   click_to_display=self.options['click_to_display'],
                                                   link_to=self.options['link_to'])
 
@@ -1887,10 +1888,10 @@ class WorkspaceTable(WorkspaceOutput):
                 init_table_js = ''
                 if resizable:
                     init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-                if autosize:
+                if autosize == "continual":
                     init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-                if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                    init_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableID)
+                init_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
+                    tableID=tableID, initautosize=str(autosize in ("initial","continual")).lower())
     
                 ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
     
@@ -1926,7 +1927,7 @@ class WorkspaceTable(WorkspaceOutput):
                                                   precision=precDict['normal'],
                                                   polarprecision=precDict['polar'],
                                                   sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=autosize,
+                                                  resizable=resizable, autosize=(autosize == "continual"),
                                                   click_to_display=self.options['click_to_display'],
                                                   link_to=self.options['link_to'])
     
@@ -1942,10 +1943,10 @@ class WorkspaceTable(WorkspaceOutput):
                     init_single_table_js = ''
                     if resizable:
                         init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableDivID)
-                    if autosize:
+                    if autosize == "continual":
                         init_single_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableDivID)
-                    if resizable or autosize: #TODO: doesn't this delayed creation always happen?
-                        init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",true);\n'.format(tableID=tableDivID)
+                    init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
+                        tableID=tableDivID, initautosize=str(autosize in ("initial","continual")).lower())
 
                     if '$' in table_dict['html'] and self.options['render_math']:
                         # then there is math text that needs rendering,
@@ -2212,7 +2213,7 @@ class WorkspacePlot(WorkspaceOutput):
         """
         global_requirejs = self.options.get('global_requirejs',False)
         resizable = self.options.get('resizable',True)
-        autosize = self.options.get('autosize',False)
+        autosize = self.options.get('autosize','none')
 
         if ID is None: ID = self.ID
         plotID = "plot_" + ID
@@ -2253,7 +2254,7 @@ class WorkspacePlot(WorkspaceOutput):
                         #use auto-sizing (fluid layout)
                         fig_dict = _plotly_ex.plot_ex(
                             fig['plotlyfig'], show_link=False,
-                            autosize=autosize, resizable=resizable,
+                            autosize=(autosize == "continual"), resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
                             link_to=self.options['link_to'], link_to_id=plotDivID)
@@ -2275,12 +2276,13 @@ class WorkspacePlot(WorkspaceOutput):
                 if not handlersOnly:
                     if resizable: # make a resizable widget
                         ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
-                    if autosize: # add window resize handler
+                    if autosize == "continual": # add window resize handler
                         ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
-                    if (autosize or resizable): #trigger init & create of plots
-                        ret['js'] += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotID)
+
+                    #trigger init & create of plots
+                    ret['js'] += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
+                        plotID=plotID, initautosize=str(autosize in ("initial","continual")).lower())
         
-                if not handlersOnly:
                     ret['js'] += '}); //end on-ready handler\n'
                     if global_requirejs:
                         ret['js'] += '}); //end require block\n'
@@ -2297,7 +2299,7 @@ class WorkspacePlot(WorkspaceOutput):
                         #use auto-sizing (fluid layout)
                         fig_dict = _plotly_ex.plot_ex(
                             fig['plotlyfig'], show_link=False,
-                            autosize=autosize, resizable=resizable,
+                            autosize=(autosize == "continual"), resizable=resizable,
                             lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                             click_to_display=self.options['click_to_display'],
                             link_to=self.options['link_to'], link_to_id=plotDivID)
@@ -2310,10 +2312,11 @@ class WorkspacePlot(WorkspaceOutput):
                     if not handlersOnly:
                         if resizable: # make a resizable widget
                             init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotDivID)
-                        if autosize: # add window resize handler
+                        if autosize == "continual": # add window resize handler
                             init_single_plot_js += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotDivID)
-                        if (autosize or resizable): #trigger init & create of plots
-                            init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}");\n'.format(plotID=plotDivID)
+                        #trigger init & create of plots
+                        init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
+                            plotID=plotDivID, initautosize=str(autosize in ("initial","continual")).lower())
     
                     divJS.append( fig_dict['js'] + init_single_plot_js )
     

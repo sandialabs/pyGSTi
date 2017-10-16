@@ -106,7 +106,8 @@ def _read_and_preprocess_template(templateFilename, toggles):
 def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
                     precision, link_to,
                     CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, toggles=None, renderMath=True, verbosity=0):
+                    connected=False, toggles=None, renderMath=True, resizable=True,
+                    autosize='none', verbosity=0):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -299,7 +300,7 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
 
             printer.log("Rendering %s" % key, 3)
             if isinstance(val,_ws.WorkspaceOutput): #switchboards don't have render options yet...
-                val.set_render_options(resizable=True, autosize=False,
+                val.set_render_options(resizable=resizable, autosize=autosize,
                                        output_dir=figureDir, link_to=link_to,
                                        precision=precision)
                 if link_to:
@@ -592,7 +593,8 @@ def create_general_report(results, filename, title="auto",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False, 
-                          link_to=None, verbosity=1):
+                          link_to=None, resizable=True, autosize='initial',
+                          verbosity=1):
     """
     Create a "general" GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
@@ -682,6 +684,15 @@ def create_general_report(results, filename, title="auto",
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
         pandas DataFrams).
+
+    resizable : bool, optional
+        Whether plots and tables are made with resize handles and can be 
+        resized within the report.
+
+    autosize : {'none', 'initial', 'continual'}
+        Whether tables and plots should be resized, either initially --
+        i.e. just upon first rendering (`"initial"`) -- or whenever
+        the browser window is resized (`"continual"`).
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -923,7 +934,8 @@ def create_general_report(results, filename, title="auto",
             #template = "report_dashboard.html"
             template = "general_report"
             _merge_template(qtys, template, filename, auto_open, precision, link_to,
-                            connected=connected, toggles=toggles, renderMath=renderMath, verbosity=printer,
+                            connected=connected, toggles=toggles, renderMath=renderMath,
+                            resizable=resizable, autosize=autosize, verbosity=printer,
                             CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
             #SmartCache.global_status(printer)
     else:

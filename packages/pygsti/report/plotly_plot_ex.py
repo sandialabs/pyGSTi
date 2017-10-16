@@ -47,17 +47,18 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         aspect_ratio = orig_width / orig_height
     else: aspect_ratio = None
 
-    if autosize or resizable:
-        #Remove original dimensions of plot default of 100% is used below
-        # (and triggers resize-script creation)
-        if orig_width: del fig['layout']['width']
-        if orig_height: del fig['layout']['height']
-        
-        #Special polar plot case - see below - add dummy width & height so
-        # we can find/replace them with variables in generated javascript.
-        if 'angularaxis' in fig['layout']:
-            fig['layout']['width'] = 123
-            fig['layout']['height'] = 123
+    #if autosize or resizable: #always do this now b/c gives better control over sizing
+
+    #Remove original dimensions of plot so default of 100% is used below
+    # (and triggers resize-script creation)
+    if orig_width: del fig['layout']['width']
+    if orig_height: del fig['layout']['height']
+    
+    #Special polar plot case - see below - add dummy width & height so
+    # we can find/replace them with variables in generated javascript.
+    if 'angularaxis' in fig['layout']:
+        fig['layout']['width'] = 123
+        fig['layout']['height'] = 123
 
     config = {}
     config['showLink'] = show_link
@@ -70,9 +71,9 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         '100%', '100%', global_requirejs=False)
        #Note: no need for global_requirejs here since we now extract js and remake full script.
 
-    if autosize or resizable:
-        if orig_width: fig['layout']['width'] = orig_width
-        if orig_height: fig['layout']['height'] = orig_height
+    #if autosize or resizable: #always do this now
+    if orig_width: fig['layout']['width'] = orig_width
+    if orig_height: fig['layout']['height'] = orig_height
 
     # Separate the HTML and JS in plot_html so we can insert
     # initial-sizing JS between them.  NOTE: this is FRAGILE and depends
@@ -83,12 +84,19 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     plot_html = plot_html[0:iTag]
 
     full_script = ''
-    if resizable or autosize:
-        #Note: in this case, upper logic (usually in an on-ready hander of the table/plot
-        # group creation) is responsible for triggering a "create" event on the plot div
-        # when appropriate (see workspace.py).
 
-        #Below if/else block added by EGN
+    #Note: in this case, upper logic (usually in an on-ready hander of the table/plot
+    # group creation) is responsible for triggering a "create" event on the plot div
+    # when appropriate (see workspace.py).
+
+    #Get javascript for create and (possibly) resize handlers
+    plotly_create_js = plot_js #the ususal plotly creation javascript
+    plotly_resize_js = None
+
+    if resizable or autosize:
+        #the ususal plotly resize javascript
+        plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
+
         if 'angularaxis' in fig['layout']:
             #Special case of polar plots: Plotly does *not* allow resizing of polar plots.
             # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
@@ -102,66 +110,73 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                 'var ph = plotlydiv.height();\n'
                 '{resized}\n').format(id=plotdivid, resized=plot_js)
             plotly_create_js = plotly_resize_js
-        else:
-            #the ususal plotly creation & resize javascript
-            plotly_create_js = plot_js
-            plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
+        
+    aspect_val = aspect_ratio if aspect_ratio else "null"
+        
+    groupclass = "pygsti-plotgroup-master" \
+                 if master else "pygsti-plotgroup-slave"
 
-        aspect_val = aspect_ratio if aspect_ratio else "null"
-            
-        groupclass = "pygsti-plotgroup-master" \
-                     if master else "pygsti-plotgroup-slave"
+    if link_to and ('pdf' in link_to) and link_to_id:
+        link_to_pdf_js = (
+            "\n"
+            "  btn = $('#{id}').find('.modebar-btn[data-title=\"Save and edit plot in cloud\"]');\n"
+            "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
+            "  btn.attr('data-title','Download PDF');\n"
+            "  btn.click( function() {{\n"
+            "     window.open('figures/{pdfid}.pdf');\n"
+            "  }});\n").format(id=plotdivid, pdfid=link_to_id)
+        plotly_create_js += link_to_pdf_js
+    if link_to and ('pkl' in link_to) and link_to_id:
+        link_to_pkl_js = (
+            "\n"
+            "  btn = $('#{id}').find('.modebar-btn[data-title=\"Zoom\"]');\n"
+            "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
+            "  btn.attr('data-title','Download python pickle');\n"
+            "  btn.click( function() {{\n"
+            "     window.open('figures/{pklid}.pkl');\n"
+            "  }});\n").format(id=plotdivid, pklid=link_to_id)
+        plotly_create_js += link_to_pkl_js
 
-        if link_to and ('pdf' in link_to) and link_to_id:
-            link_to_pdf_js = (
-                "\n"
-                "  btn = $('#{id}').find('.modebar-btn[data-title=\"Save and edit plot in cloud\"]');\n"
-                "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
-                "  btn.attr('data-title','Download PDF');\n"
-                "  btn.click( function() {{\n"
-                "     window.open('figures/{pdfid}.pdf');\n"
-                "  }});\n").format(id=plotdivid, pdfid=link_to_id)
-            plotly_create_js += link_to_pdf_js
-        if link_to and ('pkl' in link_to) and link_to_id:
-            link_to_pkl_js = (
-                "\n"
-                "  btn = $('#{id}').find('.modebar-btn[data-title=\"Zoom\"]');\n"
-                "  btn = cloneAndReplace( btn ); //Strips all event handlers\n"
-                "  btn.attr('data-title','Download python pickle');\n"
-                "  btn.click( function() {{\n"
-                "     window.open('figures/{pklid}.pkl');\n"
-                "  }});\n").format(id=plotdivid, pklid=link_to_id)
-            plotly_create_js += link_to_pkl_js
+    plotly_click_js = ""
+    if click_to_display and master:
+        # move plotly plot creation from "create" to "click" handler
+        plotly_click_js = plotly_create_js
+        plotly_create_js = ""            
+        
+    full_script = (  #(assume this will all be run within an on-ready handler)
+        '  $("#{id}").addClass("{groupclass}");\n' #perform this right away
+        '  $("#{id}").on("init", function(event) {{\n' #always add init-size handler
+        '    pex_init_plotdiv($("#{id}"), {ow}, {oh});\n'
+        '    pex_init_slaves($("#{id}"));\n'
+        '    console.log("Initialized {id}");\n'
+        '  }});\n'
+        '  $("#{id}").on("click.pygsti", function(event) {{\n'
+        '     plotman.enqueue(function() {{ \n'
+        '       {plotlyClickJS} \n'
+        '     }}, "Click-creating Plot {id}" );\n'
+        '     $("#{id}").off("click.pygsti");\n' #remove this event handler
+        '     console.log("Click-Created {id}");\n'
+        '  }});\n'
+        '  $("#{id}").on("create", function(event, fracw, frach) {{\n' #always add create handler
+        '     pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'
+        '     plotman.enqueue(function() {{ \n'
+        '       $("#{id}").addClass("pygBackground");\n'
+        '       {plotlyCreateJS} \n'
+        '       pex_create_slaves($("#{id}"), {ow}, {oh});\n'
+        '     }}, "Creating Plot {id}" );\n'
+        '     console.log("Created {id}");\n'
+        '  }});\n'            
+    ).format(id=plotdivid, ratio=aspect_val,
+             groupclass=groupclass,
+             ow=orig_width if orig_width else "null",
+             oh=orig_height if orig_height else "null",
+             plotlyClickJS=plotly_click_js,
+             plotlyCreateJS=plotly_create_js,
+             plotlyResizeJS=plotly_resize_js)
 
-        plotly_click_js = ""
-        if click_to_display and master:
-            # move plotly plot creation from "create" to "click" handler
-            plotly_click_js = plotly_create_js
-            plotly_create_js = ""            
-            
-        full_script = (  #(assume this will all be run within an on-ready handler)
-            '  $("#{id}").addClass("{groupclass}");\n' #perform this right away
-            '  $("#{id}").on("init", function(event) {{\n' #always add init-size handler
-            '    pex_init_plotdiv($("#{id}"), {ow}, {oh});\n'
-            '    pex_init_slaves($("#{id}"));\n'
-            '    console.log("Initialized {id}");\n'
-            '  }});\n'
-            '  $("#{id}").on("click.pygsti", function(event) {{\n'
-            '     plotman.enqueue(function() {{ \n'
-            '       {plotlyClickJS} \n'
-            '     }}, "Click-creating Plot {id}" );\n'
-            '     $("#{id}").off("click.pygsti");\n' #remove this event handler
-            '     console.log("Click-Created {id}");\n'
-            '  }});\n'
-            '  $("#{id}").on("create", function(event, fracw, frach) {{\n' #always add create handler
-            '     pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'
-            '     plotman.enqueue(function() {{ \n'
-            '       $("#{id}").addClass("pygBackground");\n'
-            '       {plotlyCreateJS} \n'
-            '       pex_create_slaves($("#{id}"), {ow}, {oh});\n'
-            '     }}, "Creating Plot {id}" );\n'
-            '     console.log("Created {id}");\n'
-            '  }});\n'            
+    #Add resize handler if needed
+    if resizable or autosize:
+        full_script += (
             '  $("#{id}").on("resize", function(event,fracw,frach) {{\n'
             '    pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'
             '    plotman.enqueue(function() {{ \n'
@@ -170,23 +185,22 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             '     }}, "Resizing Plot {id}" );\n'
             '    //console.log("Resized {id}");\n'
             '  }});\n'
-        ).format(id=plotdivid, ratio=aspect_val,
-                 groupclass=groupclass,
-                 ow=orig_width if orig_width else "null",
-                 oh=orig_height if orig_height else "null",
-                 plotlyClickJS=plotly_click_js,
-                 plotlyCreateJS=plotly_create_js,
-                 plotlyResizeJS=plotly_resize_js)
+            ).format(id=plotdivid, ratio=aspect_val,
+                     ow=orig_width if orig_width else "null",
+                     oh=orig_height if orig_height else "null",
+                     plotlyResizeJS=plotly_resize_js)
 
-    else:
-        #NOTE: In this case, JS is placed which creates
-        # the plot immediately.  When resize or autosize
-        # are True, creation is deferred to *handlers* which
-        # must be called by "parent" object.  Maybe this should
-        # be the case here too?
-        full_script = (
-            '  {plotlyCreateJS}\n'
-            ).format(plotlyCreateJS=plot_js)
+
+    #OLD: case of simple plot creation without any creation handlers
+    #
+    #    #NOTE: In this case, JS is placed which creates
+    #    # the plot immediately.  When resize or autosize
+    #    # are True, creation is deferred to *handlers* which
+    #    # must be called by "parent" object.  Maybe this should
+    #    # be the case here too?
+    #    full_script = (
+    #        '  {plotlyCreateJS}\n'
+    #        ).format(plotlyCreateJS=plot_js)
 
     return {'html': plot_html, 'js': full_script }
         

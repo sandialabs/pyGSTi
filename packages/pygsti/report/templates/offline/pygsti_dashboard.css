@@ -69,6 +69,7 @@ figure {
   margin: 10px;
   text-align: center;
   float: left;
+  max-width: 100%;
 }
 figcaption {
   font-size: 12px;
