@@ -64,8 +64,8 @@ class SpamTable(WorkspaceTable):
         if isinstance(gatesets, _objs.GateSet):
             gatesets = [gatesets]
 
-        rhoLabels = list(gatesets[0].preps.keys()) #use labels of 1st gateset
-        ELabels = list(gatesets[0].effects.keys()) #use labels of 1st gateset
+        rhoLabels = list(gatesets[0].get_prep_labels()) #use labels of 1st gateset
+        ELabels = list(gatesets[0].get_effect_labels()) #use labels of 1st gateset
             
         if titles is None:
             titles = ['']*len(gatesets)
@@ -95,18 +95,16 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-                mxBasis = gateset.basis
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
+                rhoMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "prep"))
+                          #confidenceRegionInfo) #don't put CIs on matrices for now
                 rowData.append( rhoMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                mxBasis = gateset.basis
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
-                evals = _np.linalg.eigvals(rhoMx)
+                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
+                            confidenceRegionInfo)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
-
                 
             if includeHSVec:
                 rowData.append( gatesets[-1].preps[lbl] )
@@ -127,15 +125,14 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-                mxBasis = gateset.basis
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
+                EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
+                          #confidenceRegionInfo) #don't put CIs on matrices for now
                 rowData.append( EMx )
                 rowFormatters.append('Brackets')
 
             for gateset in gatesets:
-                mxBasis = gateset.basis
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
-                evals = _np.linalg.eigvals(EMx)
+                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
+                            confidenceRegionInfo)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
     
@@ -702,10 +699,13 @@ class SpamVsTargetTable(WorkspaceTable):
         prepLabels   = gateset.get_prep_labels()
         effectLabels = gateset.get_effect_labels()
     
-        colHeadings  = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
-        formatters   = (None,'Conversion','Conversion')
-    
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist") #HERE
+        formatters   = (None,'Conversion','Conversion','Conversion')
+        tooltips = ('','State infidelity or entanglement infidelity of POVM map',
+                    'Trace distance between states (preps) or Jamiolkowski states of POVM maps',
+                    'Half-diamond-norm distance between POVM maps')
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips,
+                             confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         prepInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
@@ -714,20 +714,34 @@ class SpamVsTargetTable(WorkspaceTable):
         prepTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
                                                         'prep'), confidenceRegionInfo)
                             for l in prepLabels]
+        prepDiamondDists = [ _objs.reportableqty.ReportableQty(_np.nan) ] * len(prepLabels)
         for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
-                                                      prepInfidelities, prepTraceDists):
+                                                      prepInfidelities, prepTraceDists,
+                                                      prepDiamondDists):
             table.addrow(rowData, formatters)
-    
-        formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
-                                                        'effect'), confidenceRegionInfo)
-                            for l in effectLabels]
-        effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
-                                                        'effect'), confidenceRegionInfo)
-                            for l in effectLabels]
-        for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
-                                                      effectInfidelities, effectTraceDists):
-            table.addrow(rowData, formatters)
+
+
+        #OLD - when per-effect metrics were displayed
+        #formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        #effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
+        #                                                'effect'), confidenceRegionInfo)
+        #                    for l in effectLabels]
+        #effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
+        #                                                'effect'), confidenceRegionInfo)
+        #                    for l in effectLabels]
+        #for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
+        #                                              effectInfidelities, effectTraceDists):
+        #    table.addrow(rowData, formatters)
+
+        formatters = [ None ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        povmInfidelity = _ev(_reportables.POVM_entanglement_infidelity(
+            gateset, targetGateset), confidenceRegionInfo)                 
+        povmTraceDist = _ev(_reportables.POVM_jt_diff(
+            gateset, targetGateset), confidenceRegionInfo) 
+        povmDiamondDist = _ev(_reportables.POVM_half_diamond_norm(
+            gateset, targetGateset), confidenceRegionInfo)
+        table.addrow(['POVM', povmInfidelity, povmTraceDist, povmDiamondDist],
+                     formatters)
     
         table.finish()
         return table

@@ -24,9 +24,10 @@ class GateSetFunction(object):
 
 def spamfn_factory(fn):
     """
-    Creates a class that evaluates `fn(preps,effects,...)`, where `preps` and
-    `effects` are lists of the preparation and POVM effect  SPAM vectors of a
-    GateSet, respectively, and `...` are additional arguments (see below).
+    Ceates a class that evaluates 
+    `fn(preps,effects,...)`, where `preps` and `effects` are lists of the
+    preparation and POVM effect  SPAM vectors of a GateSet, respectively,
+    and `...` are additional arguments (see below).
 
     Parameters
     ----------
@@ -43,7 +44,7 @@ def spamfn_factory(fn):
     class GSFTemp(GateSetFunction):
         def __init__(self, gateset, *args, **kwargs):
             self.args = args
-            self.kwargs = kwargs        
+            self.kwargs = kwargs
             GateSetFunction.__init__(self, gateset, ["spam"])
             
         def evaluate(self, gateset):
@@ -203,6 +204,40 @@ def vecsfn_factory(fn):
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
+
+
+def povmfn_factory(fn):
+    """
+    Ceates a class that evaluates 
+    `fn(gateset,...)` where `gateset` is the entire GateSet (and it is assumed
+    that `fn` is only a function of the POVM effect elements of the gate set),
+    and `...` are additional arguments (see below).
+    
+    Parameters
+    ----------
+    fn : function
+        A function of at least the one parameter as discussed above.
+
+    Returns
+    -------
+    cls : class
+        A :class:`GateSetFunction`-derived class initialized by
+        `cls(gateset, ...)` where `gateset` is a GateSet and `...` are optional
+        additional arguments that are passed to `fn`.
+    """
+    class GSFTemp(GateSetFunction):
+        def __init__(self, gateset, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+            dps = ["effect:%s"%l for l in gateset.get_effect_labels(False)]
+            GateSetFunction.__init__(self, gateset, dps)
+            
+        def evaluate(self, gateset):
+            return fn(gateset, *self.args, **self.kwargs)
+        
+    GSFTemp.__name__ = fn.__name__ + str("_class")
+    return GSFTemp
+
 
 
 def gatesetfn_factory(fn):

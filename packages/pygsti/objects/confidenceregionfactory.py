@@ -713,9 +713,25 @@ class ConfidenceRegionFactoryView(object):
                                       "are not implemented for this type of confidence region")
         if label is None:
             return self.profLCI
-        else:
+        
+        elif label in self.gateset_offsets:
             start,end = self.gateset_offsets[label]
             return self.profLCI[start:end]
+        
+        elif label == self.gateset._remainderlabel:
+            ELbls = self.gateset.get_effect_labels(False)
+            start,end = self.gateset_offsets[ELbls[0]]; n = end-start
+            ret = self.profLCI[start:end]
+            for lbl in ELbls[1:]:
+                start,end = self.gateset_offsets[lbl]
+                assert(n == end-start),"Effects must have identical parameterizations" \
+                    + " to compute profile likelihood confidence intervals for remainder effect"
+                ret += self.profLCI[start:end]
+            return ret
+
+        else:
+            raise ValueError(("Invalid item label (%s) for computing" % label)
+                             + "profile likelihood confidence intervals")
 
 
     def get_fn_confidence_interval(self, fnObj, eps=1e-7,

@@ -20,7 +20,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..objects import smart_cached as _smart_cached
-from ..objects.reportableqty import ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
 import functools as _functools
@@ -43,15 +43,15 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         #special processing for dict -> df is dict of error bars
         # and we return a dict of ReportableQtys
         if df:
-            return { ky: ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0 }
+            return { ky: _ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0 }
         else:
-            return { ky: ReportableQty(f0[ky], None, False) for ky in f0 }
+            return { ky: _ReportableQty(f0[ky], None, False) for ky in f0 }
     else:
-        return ReportableQty(f0, df, nonMarkovianEBs)
+        return _ReportableQty(f0, df, nonMarkovianEBs)
 
 def evaluate(gatesetFn, cri=None, verbosity=0):
     if gatesetFn is None: # so you can set fn to None when they're missing (e.g. diamond norm)
-        return ReportableQty(_np.nan)
+        return _ReportableQty(_np.nan)
     
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
@@ -333,6 +333,20 @@ Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring
 # init args == (gatesetA, gatesetB, gatestring)
 
 
+def povm_entanglement_infidelity(gatesetA, gatesetB):
+    return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB)
+POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
+
+def povm_jt_diff(gatesetA, gatesetB):
+    return _tools.povm_jtracedist(gatesetA, gatesetB)
+POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
+
+def povm_half_diamond_norm(gatesetA, gatesetB):
+    return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
+POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
+
+
+
 def decomposition(gate):
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
@@ -342,9 +356,9 @@ def decomposition(gate):
         errBarDict = { 'pi rotations': None,
                        'decay of diagonal rotation terms': None,
                        'decay of off diagonal rotation terms': None }
-        return ReportableQty(decompDict, errBarDict)
+        return _ReportableQty(decompDict, errBarDict)
     else:
-        return ReportableQty({})
+        return _ReportableQty({})
 
 def upper_bound_fidelity(gate, mxBasis):
     return _tools.fidelity_upper_bound(gate)[0]
@@ -833,6 +847,15 @@ def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
     return _tools.tracedist(rhoMx1, rhoMx2)
 Vec_tr_diff = _gsf.vecsfn_factory(vec_tr_diff)
 # init args == (gateset1, gateset2, label, typ)
+
+def vec_as_stdmx(vec, mxBasis):
+    return _tools.vec_to_stdmx(vec, mxBasis)
+Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
+
+def vec_as_stdmx_eigenvalues(vec, mxBasis):
+    mx = _tools.vec_to_stdmx(vec, mxBasis)
+    return _np.linalg.eigvals(mx)
+Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
 
 
 def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
