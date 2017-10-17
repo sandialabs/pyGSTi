@@ -304,6 +304,8 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
 #       prob.solve(solver="SCS")#This always fails
     except:
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
+        if return_x:
+            return -2, _np.zeros((dim,dim)) #still need to return x!
         return -2
 
     if return_x:
