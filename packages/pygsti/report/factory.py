@@ -436,7 +436,7 @@ def _set_toggles(results_dict):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm):
+                               nmthreshold, comm, printer):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -529,9 +529,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
-                if not est.has_confidence_region_factory(GIRepLbl, 'final'):
+                if not est.has_confidence_region_factory(GIRepLbl, 'final') or \
+                   not est.get_confidence_region_factory(GIRepLbl,'final').can_construct_views():
                     for l in gauge_opt_labels:
-                        if est.has_confidence_region_factory(l, 'final'):
+                        if est.has_confidence_region_factory(l, 'final') and \
+                           est.get_confidence_region_factory(l, 'final').can_construct_views():
                             GIRepLbl = l; break
 
             NA = ws.NotApplicable()
@@ -568,20 +570,36 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
-                        try:
+                        switchBd.cri[d,i,il] = None #default
+                        if est.has_confidence_region_factory(l, 'final'):
                             crf = est.get_confidence_region_factory(l, 'final')
                             region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                            switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
-                        except KeyError:
-                            switchBd.cri[d,i,il] = None
+                            if crf.can_construct_views():
+                                switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
+                            else:
+                                printer.log(
+                                    ("Note: Cannot create confidence intervals for "
+                                     "{estlbl}.{gslbl} gate set.  This could be"
+                                     "because you created a factory but forgot"
+                                     "to create a Hessian *projection*"
+                                    ).format(estlbl=lbl,gslbl=l), 2)
+                        else:
+                            printer.log(
+                                ("Note: no factory to compute confidence "
+                                 "intervals for the '{estlbl}.{gslbl}' gate set."
+                                ).format(estlbl=lbl,gslbl=l), 2)
+
                     else: switchBd.cri[d,i,il] = NA
 
-                try:
+                # "Gauge Invariant Representation" gateset
+                # If we can't compute CIs for this, ignore SILENTLY, since any
+                #  relevant warnings/notes should have been given above.
+                switchBd.criGIRep[d,i] = None #default
+                if est.has_confidence_region_factory(GIRepLbl, 'final'):
                     crf = est.get_confidence_region_factory(GIRepLbl, 'final')
                     region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                    switchBd.criGIRep[d,i] = crf.view(abs(est_confidenceLevel), region_type)
-                except KeyError:
-                    switchBd.criGIRep[d,i] = None
+                    if crf.can_construct_views():
+                        switchBd.criGIRep[d,i] = crf.view(abs(est_confidenceLevel), region_type)
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
 
@@ -747,7 +765,7 @@ def create_general_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
             _create_master_switchboard(ws, results_dict,
-                                       confidenceLevel, nmthreshold, comm)
+                                       confidenceLevel, nmthreshold, comm, printer)
 
     # Generate Tables
     printer.log("*** Generating tables ***")

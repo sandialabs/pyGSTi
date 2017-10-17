@@ -139,6 +139,24 @@ class ConfidenceRegionFactory(object):
         #return bool(self.invRegionQuadcForm is not None)
         return bool(self.hessian is not None)
 
+    def can_construct_views(self):
+        """
+        Checks whether this factory has enough information to construct
+        'views' of itself (`ConfidenceRegionFactoryView` objects via the
+        :method:`view` method), which can then be used to construct 
+        confidence intervals.
+
+        Returns
+        -------
+        bool
+        """
+        try:
+            self.view(95) #will raise assertion errors
+            return True
+        except:
+            return False
+
+        
     def get_gateset(self):
         """
         Retrieve the associated gate set.
