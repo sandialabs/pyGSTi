@@ -827,12 +827,15 @@ class ErrgenTable(WorkspaceTable):
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
+            M = max(M, ABS_THRESHOLD) 
             for mx in max_lst:
                 if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
                     return -mx,mx
             return None
-                
+
+        ABS_THRESHOLD = 1e-6 #don't let color scales run from 0 to 0: at least this much!
         def addMax(max_lst, M):
+            M = max(M, ABS_THRESHOLD) 
             if not getMinMax(max_lst,M):
                 max_lst.append(M)
     
