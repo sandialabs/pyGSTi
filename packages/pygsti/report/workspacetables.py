@@ -1024,15 +1024,18 @@ class GateDecompTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, 
                              colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
-        formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
+        formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(gateLabels)
 
         decomp = _ev(_reportables.General_decomposition(
             gateset, targetGateset), confidenceRegionInfo)
 
         for gl in gateLabels:
+            axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
+            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, gateset.basis.name, -1.0,1.0,
+                                             boxLabels=True, EBmatrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
-                       decomp[gl + ' angle'], decomp[gl + ' axis'],
+                       decomp[gl + ' angle'], axisFig,
                        decomp[gl + ' log inexactness'] ]
 
             for j,gl_other in enumerate(gateLabels):
