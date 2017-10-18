@@ -2089,10 +2089,11 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        LOWER_LOG_THRESHOLD = -6 #so don't plot all the way down to, e.g., 1e-13
         ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
-        minlog = _np.floor(min(log_ys))
-        maxlog = _np.ceil(max(log_ys))
+        minlog = max( _np.floor(min(log_ys)), LOWER_LOG_THRESHOLD)
+        maxlog = max(_np.ceil(max(log_ys)), minlog+1)
 
 
         #Set plot size and margins
