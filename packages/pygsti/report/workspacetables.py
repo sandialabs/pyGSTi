@@ -1878,9 +1878,10 @@ class GaugeOptParamsTable(WorkspaceTable):
     
         Parameters
         ----------
-        gaugeOptArgs : dict
-            A dictionary specifying values for zero or more of the
-            *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
+        gaugeOptArgs : dict or list
+            A dictionary or list of dictionaries specifying values for
+            zero or more of the *arguments* of pyGSTi's
+            :func:`gaugeopt_to_target` function.
     
         Returns
         -------
@@ -1892,30 +1893,35 @@ class GaugeOptParamsTable(WorkspaceTable):
         
         colHeadings = ('G-Opt Param','Value')
         formatters = ('Bold','Bold')
-    
-        table = _ReportTable(colHeadings, formatters)
-        
+
         if gaugeOptArgs == False: #signals *no* gauge optimization
-            gaugeOptArgs = {'Method': "No gauge optimization was performed" }
-    
-        if 'method' in gaugeOptArgs:
-            table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-        #if 'TPpenalty' in gaugeOptArgs: #REMOVED
-        #    table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
-        if 'cptp_penalty_factor' in gaugeOptArgs and gaugeOptArgs['cptp_penalty_factor'] != 0:
-            table.addrow(("CP penalty factor", str(gaugeOptArgs['cptp_penalty_factor'])), (None,None))
-        if 'spam_penalty_factor' in gaugeOptArgs and gaugeOptArgs['spam_penalty_factor'] != 0:
-            table.addrow(("SPAM penalty factor", str(gaugeOptArgs['spam_penalty_factor'])), (None,None))
-        if 'gatesMetric' in gaugeOptArgs:
-            table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
-        if 'spamMetric' in gaugeOptArgs:
-            table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
-        if 'itemWeights' in gaugeOptArgs:
-            if gaugeOptArgs['itemWeights']:
-                table.addrow(("Item weights", ", ".join([("%s=%.2g" % (k,v)) 
-                               for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
-        if 'gauge_group' in gaugeOptArgs:
-            table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
+            goargs_list = [ {'Method': "No gauge optimization was performed" } ]
+        else:
+            goargs_list = [gaugeOptArgs] if hasattr(gaugeOptArgs,'keys') \
+                            else gaugeOptArgs
+            
+        table = _ReportTable(colHeadings, formatters)
+
+        for i,goargs in enumerate(goargs_list):
+            pre = ("%d: " % i) if len(goargs) > 1 else ""
+            if 'method' in goargs:
+                table.addrow(("%sMethod" % pre, str(goargs['method'])), (None,None))
+            #if 'TPpenalty' in goargs: #REMOVED
+            #    table.addrow(("%sTP penalty factor" % pre, str(goargs['TPpenalty'])), (None,None))
+            if 'cptp_penalty_factor' in goargs and goargs['cptp_penalty_factor'] != 0:
+                table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None,None))
+            if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:
+                table.addrow(("%sSPAM penalty factor" % pre, str(goargs['spam_penalty_factor'])), (None,None))
+            if 'gatesMetric' in goargs:
+                table.addrow(("%sMetric for gate-to-target" % pre, str(goargs['gatesMetric'])), (None,None))
+            if 'spamMetric' in goargs:
+                table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spamMetric'])), (None,None))
+            if 'itemWeights' in goargs:
+                if goargs['itemWeights']:
+                    table.addrow(("%sItem weights" % pre, ", ".join([("%s=%.2g" % (k,v)) 
+                                   for k,v in goargs['itemWeights'].items()])), (None,None))
+            if 'gauge_group' in goargs:
+                table.addrow(("%sGauge group" % pre, str(goargs['gauge_group'])), (None,None))
     
         table.finish()
         return table

@@ -773,7 +773,7 @@ def create_general_report(results, filename, title="auto",
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
         for some_cri in switchBd.cri.flat: #can have only some confidence regions
-            if some_cri is not None: # OLD: switchBd.cri[0,0,0]
+            if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable): # OLD: switchBd.cri[0,0,0]
                 qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 
