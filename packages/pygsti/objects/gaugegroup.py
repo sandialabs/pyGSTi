@@ -152,3 +152,40 @@ class UnitaryGaugeGroup(GateGaugeGroup):
 class UnitaryGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
         GateGaugeGroupElement.__init__(self,gate)
+
+
+class SpamGaugeGroup(GateGaugeGroup):
+    def __init__(self, dim):
+        from . import gate as _gate #b/c gate.py imports gaugegroup
+        ltrans = _np.identity(dim,'d')
+        rtrans = _np.identity(dim,'d')
+        baseMx = _np.identity(dim,'d')
+        parameterArray = _np.zeros(2, 'd')
+        parameterToBaseIndicesMap = { 0: [(0,0)],
+                                      1: [(i,i) for i in range(1,dim)] }
+        gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
+                                               parameterToBaseIndicesMap,
+                                               ltrans, rtrans, real=True)
+        GateGaugeGroup.__init__(self, gate, SpamGaugeGroupElement)
+
+class SpamGaugeGroupElement(GateGaugeGroupElement):
+    def __init__(self, gate):
+        GateGaugeGroupElement.__init__(self,gate)
+
+
+class TPSpamGaugeGroup(GateGaugeGroup):
+    def __init__(self, dim):
+        from . import gate as _gate #b/c gate.py imports gaugegroup
+        ltrans = _np.identity(dim,'d')
+        rtrans = _np.identity(dim,'d')
+        baseMx = _np.identity(dim,'d')
+        parameterArray = _np.zeros(1, 'd')
+        parameterToBaseIndicesMap = { 0: [(i,i) for i in range(1,dim)] }
+        gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
+                                               parameterToBaseIndicesMap,
+                                               ltrans, rtrans, real=True)
+        GateGaugeGroup.__init__(self, gate, TPSpamGaugeGroupElement)
+
+class TPSpamGaugeGroupElement(GateGaugeGroupElement):
+    def __init__(self, gate):
+        GateGaugeGroupElement.__init__(self,gate)
