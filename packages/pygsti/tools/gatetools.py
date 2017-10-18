@@ -1077,6 +1077,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
 
     scaleFctr = std_scale_factor(d2, projection_type)
     projections *= scaleFctr
+    lindbladMxs /= scaleFctr # so projections * generators give original
 
     ret = [projections]
     if return_generators: ret.append(lindbladMxs)

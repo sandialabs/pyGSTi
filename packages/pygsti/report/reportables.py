@@ -766,28 +766,19 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
             logG, "hamiltonian", mxBasis.name, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
-        
-        #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
-        # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
-        # least of Pauli products) and divide by 2# to be consistent with
-        # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
-        # theta in units of pi.
-    
+            
         dim = gatesetA.dim
-        decomp[gl + ' angle'] = norm * (2.0/dim)**0.5 / _np.pi
-        #Scratch...
-        # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
-        # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
-        # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
-        # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
-        # normalized paulis are just /sqrt(2), so need to additionally divide by
-        # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
-        # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
+        decomp[gl + ' angle'] = norm * 2.0 / _np.pi
+        # Units: hamProjs (and norm) are already in "Hamiltonian-coefficient" units,
+        # (see 'std_scale_factor' fn), but because of convention the "angle" is equal
+        # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
+        # thus the factor of 2.0 above.
     
         basis_mxs = mxBasis.get_composite_matrices()
         scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
                        if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
                      for i,mx in enumerate(basis_mxs) ]
+          #really want hamProjs[i] * lindbladian_to_hamiltonian(hamGens[i]) but fn doesn't exists (yet)
         hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
         decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
 
