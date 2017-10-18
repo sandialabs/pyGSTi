@@ -510,7 +510,7 @@ div.sidenav div.linkgroup a.active {
 .sidenav .dataTable thead tr th,                                                                                                          
 .sidenav .dataTable tfoot tr td,
 .sidenav .dataTable tbody tr td {
-    font-size: 9px;
+    font-size: 11px;
 }
 
 .sidenav .dlLink {
