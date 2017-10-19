@@ -19,7 +19,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import objects as _objs
 from .. import tools as _tools
 
-from .gstplyparser import GateStringParser
+from .gatestringparser import GateStringParser as _GateStringParser
 
 
 def get_display_progress_fn(showProgress):
@@ -49,7 +49,7 @@ class StdInputParser(object):
     """
 
     #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
-    _string_parser = GateStringParser()
+    _string_parser = _GateStringParser()
 
     def __init__(self):
         pass
