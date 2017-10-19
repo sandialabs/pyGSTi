@@ -112,7 +112,8 @@ class SpamTable(WorkspaceTable):
                 elif display_as == "boxes":
                     rhoMx_real = rhoMx.hermitian_to_real()
                     v = rhoMx_real.get_value()
-                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False, 
+                                             boxLabels=True, prec='compacthp',
                                              mxBasis=None) #no basis labels 
                     rowData.append( fig )
                     rowFormatters.append('Figure')
@@ -121,8 +122,10 @@ class SpamTable(WorkspaceTable):
 
 
             for gateset in gatesets:
+                cri = confidenceRegionInfo if confidenceRegionInfo and \
+                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
-                            confidenceRegionInfo)
+                            cri)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
                 
@@ -154,6 +157,7 @@ class SpamTable(WorkspaceTable):
                     EMx_real = EMx.hermitian_to_real()
                     v = EMx_real.get_value()
                     fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                             boxLabels=True, prec='compacthp',
                                              mxBasis=None) #no basis labels 
                     rowData.append( fig )
                     rowFormatters.append('Figure')
@@ -161,8 +165,10 @@ class SpamTable(WorkspaceTable):
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
             for gateset in gatesets:
+                cri = confidenceRegionInfo if confidenceRegionInfo and \
+                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
-                            confidenceRegionInfo)
+                            cri)
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
     
