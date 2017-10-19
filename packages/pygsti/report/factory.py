@@ -226,6 +226,11 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
     #                         '</style>'
     #    # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
 
+    if 'masonryLIB' not in qtys:
+        qtys['masonryLIB'] = _ws.insert_resource(
+            connected, "https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js",
+            "masonry.pkgd.min.js")
+
     if 'katexLIB' not in qtys:
         qtys['katexLIB'] = _ws.insert_resource(
             connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
@@ -736,7 +741,7 @@ def create_general_report(results, filename, title="auto",
         title = "GST Report for " + autoname
         _warnings.warn( ("You should really specify `title=` when generating reports,"
                          "as this makes it much easier to identify them later on.  "
-                         "Since you didn't, pyGSTi will has generated a random one"
+                         "Since you didn't, pyGSTi has generated a random one"
                          " for you: '{}'.").format(autoname))
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
