@@ -144,7 +144,10 @@ class Estimate(object):
         
         for i,gop in enumerate(goparams_list):
             printer.log("Stage %d:" % i, 2)
-            if gateset is None:
+            
+            if gateset is not None:
+                last_gs = gateset #just use user-supplied result
+            else:
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 gop = gop.copy() #so we don't change the caller's dict
 
@@ -171,6 +174,7 @@ class Estimate(object):
             ordered_goparams.append( _collections.OrderedDict( 
                 [(k,gop[k]) for k in sorted(list(gop.keys()))]) )
 
+        assert(last_gs is not None)
         self.gatesets[label] = last_gs
         self.goparameters[label] = ordered_goparams if len(goparams_list) > 1 \
                                    else ordered_goparams[0]
