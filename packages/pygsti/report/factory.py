@@ -801,7 +801,7 @@ def create_general_report(results, filename, title="auto",
     strs = switchBd.strs
     cliffcomp = switchBd.clifford_compilation
 
-    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, includeHSVec=False)
+    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
     addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
     addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
@@ -813,7 +813,7 @@ def create_general_report(results, filename, title="auto",
     addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], cri)
     addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], cri, includeHSVec=False)
+           ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
     addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,

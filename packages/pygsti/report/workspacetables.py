@@ -34,7 +34,8 @@ class BlankTable(WorkspaceTable):
         return table
     
 class SpamTable(WorkspaceTable):
-    def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None,
+    def __init__(self, ws, gatesets, titles=None,
+                 display_as="boxes", confidenceRegionInfo=None,
                  includeHSVec=True):
         """
         A table of one or more gateset's SPAM elements.
@@ -43,10 +44,16 @@ class SpamTable(WorkspaceTable):
         ----------
         gatesets : GateSet or list of GateSets
             The GateSet(s) whose SPAM elements should be displayed. If
-            multiple GateSets are given, they should have the same gates.
+            multiple GateSets are given, they should have the same SPAM
+            elements..
     
         titles : list of strs, optional
             Titles correponding to elements of `gatesets`, e.g. `"Target"`.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the SPAM matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -57,10 +64,12 @@ class SpamTable(WorkspaceTable):
             vector representation columns in the table.    
         """
         super(SpamTable,self).__init__(ws, self._create, gatesets,
-                                       titles, confidenceRegionInfo,
+                                       titles, display_as, confidenceRegionInfo,
                                        includeHSVec)
 
-    def _create(self, gatesets, titles, confidenceRegionInfo, includeHSVec):
+    def _create(self, gatesets, titles, display_as, confidenceRegionInfo,
+                includeHSVec):
+        
         if isinstance(gatesets, _objs.GateSet):
             gatesets = [gatesets]
 
@@ -96,9 +105,20 @@ class SpamTable(WorkspaceTable):
 
             for gateset in gatesets:
                 rhoMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "prep"))
-                          #confidenceRegionInfo) #don't put CIs on matrices for now
-                rowData.append( rhoMx )
-                rowFormatters.append('Brackets')
+                            # confidenceRegionInfo) #don't put CIs on matrices for now
+                if display_as == "numbers":
+                    rowData.append( rhoMx )
+                    rowFormatters.append('Brackets')
+                elif display_as == "boxes":
+                    rhoMx_real = rhoMx.hermitian_to_real()
+                    v = rhoMx_real.get_value()
+                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                             mxBasis=None) #no basis labels 
+                    rowData.append( fig )
+                    rowFormatters.append('Figure')
+                else:
+                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
 
             for gateset in gatesets:
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
@@ -127,8 +147,18 @@ class SpamTable(WorkspaceTable):
             for gateset in gatesets:
                 EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
                           #confidenceRegionInfo) #don't put CIs on matrices for now
-                rowData.append( EMx )
-                rowFormatters.append('Brackets')
+                if display_as == "numbers":
+                    rowData.append( EMx )
+                    rowFormatters.append('Brackets')
+                elif display_as == "boxes":
+                    EMx_real = EMx.hermitian_to_real()
+                    v = EMx_real.get_value()
+                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                             mxBasis=None) #no basis labels 
+                    rowData.append( fig )
+                    rowFormatters.append('Figure')
+                else:
+                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
             for gateset in gatesets:
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),

@@ -151,6 +151,35 @@ class ReportableQty(object):
         else:
             return ReportableQty( v )
 
+    def hermitian_to_real(self):
+        """
+        Returns a ReportableQty that holds the real matrix
+        whose upper/lower triangle contains the real/imaginary parts
+        of the corresponding off-diagonal matrix elements of the 
+        *Hermitian* matrix stored in this ReportableQty.  
+
+        This is used for display purposes.  If this object doesn't
+        contain a Hermitian matrix, `ValueError` is raised.
+        """
+        if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
+            raise ValueError("Contained value must be Hermitian!")
+
+        def convert(A):
+            ret = _np.empty(A.shape,'d')
+            for i in range(A.shape[0]):
+                ret[i,i] = A[i,i].real
+                for j in range(i+1, A.shape[1]):
+                    ret[i,j] = A[i,j].real
+                    ret[j,i] = A[i,j].imag
+            return ret
+
+        v = convert(self.value)
+        if self.has_eb():
+            eb = convert(self.errbar)
+            return ReportableQty( v, eb, self.nonMarkovianEBs)
+        else:
+            return ReportableQty( v )
+            
         
     def reshape(self, *args):
         """ Returns a ReportableQty whose underlying values are reshaped."""
