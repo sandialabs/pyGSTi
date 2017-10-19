@@ -31,8 +31,8 @@ class TestWorkspace(ReportBaseCase):
         tbls = []; cr = None
         
         tbls.append( w.BlankTable() )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], cr, True ) )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], cr, False ) )
+        tbls.append( w.SpamTable(self.gs, ["mytitle"], "boxes", cr, True ) )
+        tbls.append( w.SpamTable(self.gs, ["mytitle"], "numbers", cr, False ) )
         tbls.append( w.SpamParametersTable(self.gs, cr ) )
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
