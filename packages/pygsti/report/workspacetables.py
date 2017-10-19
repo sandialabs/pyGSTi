@@ -34,7 +34,8 @@ class BlankTable(WorkspaceTable):
         return table
     
 class SpamTable(WorkspaceTable):
-    def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None,
+    def __init__(self, ws, gatesets, titles=None,
+                 display_as="boxes", confidenceRegionInfo=None,
                  includeHSVec=True):
         """
         A table of one or more gateset's SPAM elements.
@@ -43,10 +44,20 @@ class SpamTable(WorkspaceTable):
         ----------
         gatesets : GateSet or list of GateSets
             The GateSet(s) whose SPAM elements should be displayed. If
+<<<<<<< HEAD
             multiple GateSets are given, they should have the same gates.
+=======
+            multiple GateSets are given, they should have the same SPAM
+            elements..
+>>>>>>> develop
     
         titles : list of strs, optional
             Titles correponding to elements of `gatesets`, e.g. `"Target"`.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the SPAM matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
     
         confidenceRegionInfo : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -57,15 +68,17 @@ class SpamTable(WorkspaceTable):
             vector representation columns in the table.    
         """
         super(SpamTable,self).__init__(ws, self._create, gatesets,
-                                       titles, confidenceRegionInfo,
+                                       titles, display_as, confidenceRegionInfo,
                                        includeHSVec)
 
-    def _create(self, gatesets, titles, confidenceRegionInfo, includeHSVec):
+    def _create(self, gatesets, titles, display_as, confidenceRegionInfo,
+                includeHSVec):
+        
         if isinstance(gatesets, _objs.GateSet):
             gatesets = [gatesets]
 
-        rhoLabels = list(gatesets[0].preps.keys()) #use labels of 1st gateset
-        ELabels = list(gatesets[0].effects.keys()) #use labels of 1st gateset
+        rhoLabels = list(gatesets[0].get_prep_labels()) #use labels of 1st gateset
+        ELabels = list(gatesets[0].get_effect_labels()) #use labels of 1st gateset
             
         if titles is None:
             titles = ['']*len(gatesets)
@@ -95,6 +108,7 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
+<<<<<<< HEAD
                 mxBasis = gateset.basis
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
                 rowData.append( rhoMx )
@@ -104,9 +118,32 @@ class SpamTable(WorkspaceTable):
                 mxBasis = gateset.basis
                 rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
                 evals = _np.linalg.eigvals(rhoMx)
+=======
+                rhoMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "prep"))
+                            # confidenceRegionInfo) #don't put CIs on matrices for now
+                if display_as == "numbers":
+                    rowData.append( rhoMx )
+                    rowFormatters.append('Brackets')
+                elif display_as == "boxes":
+                    rhoMx_real = rhoMx.hermitian_to_real()
+                    v = rhoMx_real.get_value()
+                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False, 
+                                             boxLabels=True, prec='compacthp',
+                                             mxBasis=None) #no basis labels 
+                    rowData.append( fig )
+                    rowFormatters.append('Figure')
+                else:
+                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+
+            for gateset in gatesets:
+                cri = confidenceRegionInfo if confidenceRegionInfo and \
+                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
+                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
+                            cri)
+>>>>>>> develop
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
-
                 
             if includeHSVec:
                 rowData.append( gatesets[-1].preps[lbl] )
@@ -127,6 +164,7 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
+<<<<<<< HEAD
                 mxBasis = gateset.basis
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
                 rowData.append( EMx )
@@ -136,6 +174,29 @@ class SpamTable(WorkspaceTable):
                 mxBasis = gateset.basis
                 EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
                 evals = _np.linalg.eigvals(EMx)
+=======
+                EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
+                          #confidenceRegionInfo) #don't put CIs on matrices for now
+                if display_as == "numbers":
+                    rowData.append( EMx )
+                    rowFormatters.append('Brackets')
+                elif display_as == "boxes":
+                    EMx_real = EMx.hermitian_to_real()
+                    v = EMx_real.get_value()
+                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                             boxLabels=True, prec='compacthp',
+                                             mxBasis=None) #no basis labels 
+                    rowData.append( fig )
+                    rowFormatters.append('Figure')
+                else:
+                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+
+            for gateset in gatesets:
+                cri = confidenceRegionInfo if confidenceRegionInfo and \
+                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
+                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
+                            cri)
+>>>>>>> develop
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
     
@@ -702,10 +763,13 @@ class SpamVsTargetTable(WorkspaceTable):
         prepLabels   = gateset.get_prep_labels()
         effectLabels = gateset.get_effect_labels()
     
-        colHeadings  = ('Prep/POVM', "State|Infidelity", "1/2 Trace|Distance")
-        formatters   = (None,'Conversion','Conversion')
-    
-        table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
+        colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist") #HERE
+        formatters   = (None,'Conversion','Conversion','Conversion')
+        tooltips = ('','State infidelity or entanglement infidelity of POVM map',
+                    'Trace distance between states (preps) or Jamiolkowski states of POVM maps',
+                    'Half-diamond-norm distance between POVM maps')
+        table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips,
+                             confidenceRegionInfo=confidenceRegionInfo)
     
         formatters = [ 'Rho' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         prepInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
@@ -714,7 +778,9 @@ class SpamVsTargetTable(WorkspaceTable):
         prepTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
                                                         'prep'), confidenceRegionInfo)
                             for l in prepLabels]
+        prepDiamondDists = [ _objs.reportableqty.ReportableQty(_np.nan) ] * len(prepLabels)
         for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
+<<<<<<< HEAD
                                                       prepInfidelities, prepTraceDists):
             table.addrow(rowData, formatters)
     
@@ -727,7 +793,34 @@ class SpamVsTargetTable(WorkspaceTable):
                             for l in effectLabels]
         for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
                                                       effectInfidelities, effectTraceDists):
+=======
+                                                      prepInfidelities, prepTraceDists,
+                                                      prepDiamondDists):
+>>>>>>> develop
             table.addrow(rowData, formatters)
+
+
+        #OLD - when per-effect metrics were displayed
+        #formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        #effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
+        #                                                'effect'), confidenceRegionInfo)
+        #                    for l in effectLabels]
+        #effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
+        #                                                'effect'), confidenceRegionInfo)
+        #                    for l in effectLabels]
+        #for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
+        #                                              effectInfidelities, effectTraceDists):
+        #    table.addrow(rowData, formatters)
+
+        formatters = [ None ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        povmInfidelity = _ev(_reportables.POVM_entanglement_infidelity(
+            gateset, targetGateset), confidenceRegionInfo)                 
+        povmTraceDist = _ev(_reportables.POVM_jt_diff(
+            gateset, targetGateset), confidenceRegionInfo) 
+        povmDiamondDist = _ev(_reportables.POVM_half_diamond_norm(
+            gateset, targetGateset), confidenceRegionInfo)
+        table.addrow(['POVM', povmInfidelity, povmTraceDist, povmDiamondDist],
+                     formatters)
     
         table.finish()
         return table
@@ -813,12 +906,15 @@ class ErrgenTable(WorkspaceTable):
 
         def getMinMax(max_lst, M):
             #return a [min,max] already in list if there's one within an order of magnitude
+            M = max(M, ABS_THRESHOLD) 
             for mx in max_lst:
                 if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
                     return -mx,mx
             return None
-                
+
+        ABS_THRESHOLD = 1e-6 #don't let color scales run from 0 to 0: at least this much!
         def addMax(max_lst, M):
+            M = max(M, ABS_THRESHOLD) 
             if not getMinMax(max_lst,M):
                 max_lst.append(M)
     
@@ -1007,15 +1103,18 @@ class GateDecompTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, 
                              colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
-        formatters = (None, 'Pi','Pi', 'Normal', 'Normal') + ('Pi',)*len(gateLabels)
+        formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(gateLabels)
 
         decomp = _ev(_reportables.General_decomposition(
             gateset, targetGateset), confidenceRegionInfo)
 
         for gl in gateLabels:
+            axis, axisEB = decomp[gl + ' axis'].get_value_and_err_bar()
+            axisFig = _wp.ProjectionsBoxPlot(self.ws, axis, gateset.basis.name, -1.0,1.0,
+                                             boxLabels=True, EBmatrix=axisEB)
             decomp[gl + ' hamiltonian eigenvalues'].scale( 1.0/_np.pi ) #scale evals to units of pi
             rowData = [gl, decomp[gl + ' hamiltonian eigenvalues'],
-                       decomp[gl + ' angle'], decomp[gl + ' axis'],
+                       decomp[gl + ' angle'], axisFig,
                        decomp[gl + ' log inexactness'] ]
 
             for j,gl_other in enumerate(gateLabels):
@@ -1861,9 +1960,10 @@ class GaugeOptParamsTable(WorkspaceTable):
     
         Parameters
         ----------
-        gaugeOptArgs : dict
-            A dictionary specifying values for zero or more of the
-            *arguments* of pyGSTi's :func:`gaugeopt_to_target` function.
+        gaugeOptArgs : dict or list
+            A dictionary or list of dictionaries specifying values for
+            zero or more of the *arguments* of pyGSTi's
+            :func:`gaugeopt_to_target` function.
     
         Returns
         -------
@@ -1875,10 +1975,9 @@ class GaugeOptParamsTable(WorkspaceTable):
         
         colHeadings = ('G-Opt Param','Value')
         formatters = ('Bold','Bold')
-    
-        table = _ReportTable(colHeadings, formatters)
-        
+
         if gaugeOptArgs == False: #signals *no* gauge optimization
+<<<<<<< HEAD
             gaugeOptArgs = {'Method': "No gauge optimization was performed" }
     
         if 'method' in gaugeOptArgs:
@@ -1899,6 +1998,35 @@ class GaugeOptParamsTable(WorkspaceTable):
                                for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
         if 'gauge_group' in gaugeOptArgs:
             table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
+=======
+            goargs_list = [ {'Method': "No gauge optimization was performed" } ]
+        else:
+            goargs_list = [gaugeOptArgs] if hasattr(gaugeOptArgs,'keys') \
+                            else gaugeOptArgs
+            
+        table = _ReportTable(colHeadings, formatters)
+
+        for i,goargs in enumerate(goargs_list):
+            pre = ("%d: " % i) if len(goargs) > 1 else ""
+            if 'method' in goargs:
+                table.addrow(("%sMethod" % pre, str(goargs['method'])), (None,None))
+            #if 'TPpenalty' in goargs: #REMOVED
+            #    table.addrow(("%sTP penalty factor" % pre, str(goargs['TPpenalty'])), (None,None))
+            if 'cptp_penalty_factor' in goargs and goargs['cptp_penalty_factor'] != 0:
+                table.addrow(("%sCP penalty factor" % pre, str(goargs['cptp_penalty_factor'])), (None,None))
+            if 'spam_penalty_factor' in goargs and goargs['spam_penalty_factor'] != 0:
+                table.addrow(("%sSPAM penalty factor" % pre, str(goargs['spam_penalty_factor'])), (None,None))
+            if 'gatesMetric' in goargs:
+                table.addrow(("%sMetric for gate-to-target" % pre, str(goargs['gatesMetric'])), (None,None))
+            if 'spamMetric' in goargs:
+                table.addrow(("%sMetric for SPAM-to-target" % pre, str(goargs['spamMetric'])), (None,None))
+            if 'itemWeights' in goargs:
+                if goargs['itemWeights']:
+                    table.addrow(("%sItem weights" % pre, ", ".join([("%s=%.2g" % (k,v)) 
+                                   for k,v in goargs['itemWeights'].items()])), (None,None))
+            if 'gauge_group' in goargs:
+                table.addrow( ("%sGauge group" % pre, goargs['gauge_group'].name) , (None,None))
+>>>>>>> develop
     
         table.finish()
         return table
@@ -2046,7 +2174,7 @@ class SoftwareEnvTable(WorkspaceTable):
         from .._version import __version__ as pyGSTi_version
         table.addrow(("pyGSTi version", str(pyGSTi_version)), (None,'Verbatim'))
     
-        packages = ['numpy','scipy','matplotlib','pyparsing','cvxopt','cvxpy',
+        packages = ['numpy','scipy','matplotlib','ply','cvxopt','cvxpy',
                     'nose','PIL','psutil']
         for pkg in packages:
             table.addrow((pkg, get_version(pkg)), (None,'Verbatim'))

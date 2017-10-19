@@ -15,7 +15,7 @@ ws.GaugeOptParamsTable(goparams)
 @@code
 ws.SpamTable([gs_target, gs],
              ['Target','Estimated'],
-             cri, includeHSVec=False)
+             'boxes', cri, includeHSVec=False)
 
 @@markdown
 ### GST estimate of SPAM probabilities.

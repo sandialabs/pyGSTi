@@ -2001,6 +2001,7 @@ class WorkspaceTable(WorkspaceOutput):
             
             tables_latex = []
             for i, table in enumerate(self.tables):
+                if isinstance(table,NotApplicable): continue
                 table_dict = table.render("latex", 
                                           precision=precDict['normal'],
                                           polarprecision=precDict['polar'],
@@ -2026,6 +2027,7 @@ class WorkspaceTable(WorkspaceOutput):
 
             tables_latex = []
             for i, table in enumerate(self.tables):
+                if isinstance(table,NotApplicable): continue
                 tableDivID = tableID + "_%d" % i
                 outputFilename = _os.path.join(output_dir, "%s.tex" % tableDivID)
 
@@ -2353,8 +2355,9 @@ class WorkspacePlot(WorkspaceOutput):
             maxW,maxH = self.options.get('page_size',(6.5,8.0))
             includes = []
             for i,fig in enumerate(self.figs):
+                if isinstance(fig,NotApplicable): continue
                 plotDivID = plotID + "_%d" % i
-                
+
                 if self.options.get('render_includes',True):
                     filename = _os.path.join(output_dir, plotDivID+".pdf")
                     _plotly_to_matplotlib(fig, filename)

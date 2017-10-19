@@ -631,12 +631,12 @@ class GateSet(object):
             eo += ne; po += np
 
         return deriv
+    
 
     def _buildup_dPG(self):
         """ 
         Helper function for building gauge/non-gauge projectors and 
           for computing the number of gauge/non-gauge elements.
-
         Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
         whose nullspace gives the gauge directions in parameter space.
         """
@@ -2389,13 +2389,12 @@ class GateSet(object):
             
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
+                      itemWeights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
         gateset and otherGateSet.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using gateWeight
-        or spamWeight as applicable), then summed.  The value returned is the
+        matrix and spam vector element are squared, weighted (using 
+        `itemWeights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
         number of summands if normalize == True.
 
@@ -2411,43 +2410,32 @@ class GateSet(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
 
-        gateWeight : float, optional
-           weighting factor for differences between gate elements.
-
-        spamWeight : float, optional
-           weighting factor for differences between elements of spam vectors.
-
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights are applied multiplicatively to the squared
            differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels.  Values
-           are floating point numbers.  By default, weights are set by
-           gateWeight and spamWeight.
+           can be gate, state preparation, POVM effect, or spam labels, as well
+           as the two special labels `"gates"` and `"spam"` which apply to all
+           of the gate or SPAM elements, respectively (but are overridden by
+           specific element values).  Values are floating point numbers.
+           By default, all weights are 1.0.
 
         normalize : bool, optional
-           if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of
-           differences.  If False, this final division is not performed.
+           if True (the default), the sum of weighted squared-differences
+           is divided by the weighted number of differences before the 
+           final square root is taken.  If False, the division is not performed.
 
         Returns
         -------
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, itemWeights,
-                                          normalize)
+                                          itemWeights, normalize)
 
-    def residuals(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
+    def residuals(self, otherGateSet, transformMx=None, itemWeights=None):
         """
-        Compute the weighted residuals between this
-        gateset and otherGateSet.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using gateWeight
-        or spamWeight as applicable), then summed.  The value returned is the
-        square root of this sum, or the square root of this sum divided by the
-        number of summands if normalize == True.
+        Compute the weighted residuals between two gate sets (the differences
+        in corresponding gate matrix and spam vector elements).
 
         Parameters
         ----------
@@ -2461,33 +2449,27 @@ class GateSet(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
 
-        gateWeight : float, optional
-           weighting factor for differences between gate elements.
-
-        spamWeight : float, optional
-           weighting factor for differences between elements of spam vectors.
-
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
-           operators. Weights are applied multiplicatively to the squared
-           differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels.  Values
-           are floating point numbers.  By default, weights are set by
-           gateWeight and spamWeight.
-
-        normalize : bool, optional
-           if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of
-           differences.  If False, this final division is not performed.
+           operators. Weights applied such that they act multiplicatively on 
+           the *squared* differences, so that the residuals themselves are
+           scaled by the square roots of these weights.  Keys can be gate, state
+           preparation, POVM effect, or spam labels, as well as the two special
+           labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
+           elements, respectively (but are overridden by specific element
+           values).  Values are floating point numbers.  By default, all weights
+           are 1.0.
 
         Returns
         -------
-        float
+        residuals : numpy.ndarray
+            A 1D array of residuals (differences w.r.t. other)
+        nSummands : int
+            The (weighted) number of elements accounted for by the residuals.
         """
-        return self._calc().residuals(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, itemWeights,
-                                          normalize)
+        return self._calc().residuals(otherGateSet._calc(), transformMx, itemWeights)
 
+    
     def jtracedist(self, otherGateSet, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between this

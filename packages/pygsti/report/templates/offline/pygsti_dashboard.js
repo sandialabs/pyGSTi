@@ -111,6 +111,7 @@ function openTab(evt, tabID) {
 	    render_katex( contentDiv );
 	    enable_caption_toggles( contentDiv );
 	    $(contentDiv).trigger('tabchange');
+	    //enqueue_masonry( contentDiv ); //doesn't work yet
 	});
     }
     else { //tab is already loaded
@@ -152,6 +153,23 @@ function enable_caption_toggles(parentEl) {
     });
 }
 
+function enqueue_masonry(parentEl) {
+    plotman.enqueue( function() {
+
+        $(parentEl).find('figure').each( function() {
+            w = $(this).width();
+            h = $(this).height();
+            $(this).wrap( "<div class='griditem' style='" +
+                          "width: " + w + "px; height: " + h + "px'></div>");
+        });
+
+        $(parentEl).masonry({
+            itemSelector: '.griditem',
+            stamp: 'h1',
+            columnWidth: 100,
+        });
+    });
+}
 
 
 /* Set the width of the side navigation to open width and the left margin of the page content to the same */

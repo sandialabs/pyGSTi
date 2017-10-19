@@ -570,7 +570,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
             gaugeOptParams["comm"] = comm
 
         go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+        ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
+                                                 None, printer)
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
@@ -630,14 +631,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #        gaugeOptParams["comm"] = comm
                 #
                 #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-                #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final, None, printer)
                 #    
                 #    tNxt = _time.time()
                 #    profiler.add_time('do_long_sequence_gst: robust gauge optimization',tRef); tRef=tNxt
                 #else:
                 
                 # add same gauge-optimized result as above
-                ret.estimates[estlbl + ".robust"].add_gaugeoptimized(gaugeOptParams, go_gs_final)
+                ret.estimates[estlbl + ".robust"].add_gaugeoptimized(gaugeOptParams, go_gs_final,
+                                                                     None, printer)
 
 
         elif onBadFit == "do nothing":
@@ -899,14 +901,14 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             for goLabel,goparams in gaugeOptSuite_dict.items():
                 printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
                 tGO = _time.time()
-                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel)
+                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-2)
                 printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
 
                 #Gauge optimize data-scaled estimate also
                 if est_label + ".robust" in ret.estimates:
                     printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
                     tGO = _time.time()
-                    ret.estimates[est_label + ".robust"].add_gaugeoptimized(goparams, None, goLabel)
+                    ret.estimates[est_label + ".robust"].add_gaugeoptimized(goparams, None, goLabel, printer-2)
                     printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
 
     #Write results to a pickle file if desired

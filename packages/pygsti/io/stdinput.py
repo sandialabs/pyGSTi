@@ -4,6 +4,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
+import re
+
 """ Text-parsering classes and functions to read input files."""
 
 import os as _os
@@ -13,13 +15,12 @@ import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
-import pyparsing as _pp
 
 from .. import objects as _objs
 from .. import tools as _tools
 
-_pp.ParserElement.enablePackrat()
-_sys.setrecursionlimit(10000)
+from .gatestringparser import GateStringParser as _GateStringParser
+
 
 def get_display_progress_fn(showProgress):
     
@@ -45,123 +46,15 @@ def get_display_progress_fn(showProgress):
 class StdInputParser(object):
     """
     Encapsulates a text parser for reading GST input files.
-
-    ** Grammar **
-
-    expop   :: '^'
-    multop  :: '*'
-    integer :: '0'..'9'+
-    real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
-    reflbl  :: (alpha | digit | '_')+
-
-    nop     :: '{}'
-    gate    :: 'G' [ lowercase | digit | '_' ]+
-    strref  :: 'S' '[' reflbl ']'
-    slcref  :: strref [ '[' integer ':' integer ']' ]
-    expable :: gate | slcref | '(' string ')' | nop
-    expdstr :: expable [ expop integer ]*
-    string  :: expdstr [ [ multop ] expdstr ]*
-
-    dataline :: string [ real ]+
-    dictline :: reflbl string
     """
 
+    #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
+    _string_parser = _GateStringParser()
+
     def __init__(self):
-        """ Creates a new StdInputParser object """
+        pass
 
-        def push_first( strg, loc, toks ):
-            self.exprStack.append( toks[0] )
-        def push_mult( strg, loc, toks ):
-            self.exprStack.append( '*' )
-        def push_slice( strg, loc, toks ):
-            self.exprStack.append( 'SLICE' )
-        #def push_count( strg, loc, toks ):
-        #    self.exprStack.append( toks[0] )
-        #    self.exprStack.append( 'COUNT' )
-
-        # caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        # lowers = 'abcdefghijklmnopqrstuvwxyz' #caps.lower()
-        digits = _pp.nums #"0123456789"  #same as "nums"
-        #point = _pp.Literal( "." )
-        #e     = _pp.CaselessLiteral( "E" )
-        #real  = _pp.Combine( _pp.Word( "+-"+_pp.nums, _pp.nums ) +
-        #                  _pp.Optional( point + _pp.Optional( _pp.Word( _pp.nums ) ) ) +
-        #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(push_first)
-        # real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
-        nop   = _pp.Literal("{}").setParseAction(push_first)
-
-        expop = _pp.Literal( "^" )
-        lpar  = _pp.Literal( "(" ).suppress()
-        rpar  = _pp.Literal( ")" ).suppress()
-        # lbrk  = _pp.Literal( "[" ).suppress()
-        # rbrk  = _pp.Literal( "]" ).suppress()
-
-        integer = _pp.Word( digits ).setParseAction(push_first)
-        reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(push_first)
-        #gate   = _pp.Word( "G", lowers + digits + "_" ).setParseAction(push_first)
-        gate    = _pp.Regex(r'G[a-z0-9_]+').setParseAction(push_first) #faster than above
-        strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(push_first)
-        slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(push_slice)) )
-
-        #bSimple = False #experimenting with possible parser speedups
-        #if bSimple:
-        #    string  = _pp.Forward()
-        #    gateSeq = _pp.OneOrMore( gate )
-        #    expable = (nop | gateSeq | lpar + gateSeq + rpar)
-        #    expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
-        #    string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
-        #else:
-        string  = _pp.Forward()
-        expable = (gate | slcref | lpar + string + rpar | nop)
-        expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult)) #pylint: disable=expression-not-assigned
-
-        #count = real.copy().setParseAction(push_count)
-        #dataline = string + _pp.OneOrMore( count )
-        dictline = reflbl + string
-
-        self.string_parser = string
-        #self.dataline_parser = dataline #OLD: when data lines had their own parser
-        self.dictline_parser = dictline
-
-
-    def _evaluateStack(self, s):
-        op = s.pop()
-        if op == "*":
-            op2 = self._evaluateStack( s )
-            op1 = self._evaluateStack( s )
-            return op1 + op2 #tuple addition
-
-        elif op == "^":
-            exp = self._evaluateStack( s )
-            op  = self._evaluateStack( s )
-            return op*exp #tuple mulitplication = repeat op exp times
-
-        elif op == "SLICE":
-            upper = self._evaluateStack( s )
-            lower = self._evaluateStack( s )
-            op = self._evaluateStack( s )
-            return op[lower:upper]
-
-        #elif op == 'COUNT':
-        #    cnt = float(s.pop())          # next item on stack is a count
-        #    self.countList.insert(0, cnt) # so add it to countList and eval the rest of the stack
-        #    return self._evaluateStack( s )
-
-        elif op[0] == 'G':
-            return (op,) #as tuple
-
-        elif op[0] == 'S':
-            reflabel = s.pop() # next item on stack is a reference label (keep as a str)
-            return tuple(self.lookup[reflabel]) #lookup dict typically holds GateString objs...
-
-        elif op == '{}': # no-op returns empty tuple
-            return ()
-
-        else:
-            return int(op)
-
-    def parse_gatestring(self, s, lookup=None):
+    def parse_gatestring(self, s, lookup={}):
         """
         Parse a gate string (string in grammar)
 
@@ -179,16 +72,11 @@ class StdInputParser(object):
         tuple of gate labels
             Representing the gate string.
         """
-        if lookup is None: lookup = {}
-        self.lookup = lookup
-        self.exprStack = []
-        try:
-            self.string_parser.parseString(s)
-        except _pp.ParseException as e:
-            raise ValueError("Parsing error when parsing %s: %s" % (s,str(e)))
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        return self._evaluateStack(self.exprStack)
+        self._string_parser.lookup = lookup
+        gate_tuple = self._string_parser.parse(s)
+        # print "DB: result = ",result
+        # print "DB: stack = ",self.exprStack
+        return gate_tuple
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -217,18 +105,18 @@ class StdInputParser(object):
         counts : list
             List of counts following the gate string.
         """
-        self.lookup = lookup
-        self.exprStack = []
-        self.countList = []
 
-        #get counts from end of s
-        parts = s.split(); counts = []
+        # get counts from end of s
+        parts = s.split();
+        counts = []
         for p in reversed(parts):
-            try: f = float(p)
-            except: break
-            counts.append( f )
-        counts.reverse() #because we appended them in reversed order
-        totalCounts = len(counts) #in case expectedCounts is less
+            try:
+                f = float(p)
+            except:
+                break
+            counts.append(f)
+        counts.reverse()  # because we appended them in reversed order
+        totalCounts = len(counts)  # in case expectedCounts is less
         if len(counts) > expectedCounts >= 0:
             counts = counts[0:expectedCounts]
 
@@ -241,7 +129,6 @@ class StdInputParser(object):
         gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
         gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
         return gateStringTuple, gateStringStr, counts
-
 
     def parse_dictline(self, s):
         """
@@ -261,13 +148,13 @@ class StdInputParser(object):
         gateStringStr : string
             The gate string as represented as a string in the dictline.
         """
-        self.exprStack = []
-        result = self.dictline_parser.parseString(s)
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        gateStringLabel = result[0]
-        gateStringTuple = self._evaluateStack(self.exprStack)
-        gateStringStr = s[ s.index(gateStringLabel) + len(gateStringLabel) : ].strip()
+        label = r'\s*([a-zA-Z0-9_]+)\s+'
+        match = re.match(label, s)
+        if not match:
+            raise ValueError("'{}' is not a valid dictline".format(s))
+        gateStringLabel = match.group(1)
+        gateStringStr = s[match.end():]
+        gateStringTuple = self._string_parser.parse(gateStringStr)
         return gateStringLabel, gateStringTuple, gateStringStr
 
     def parse_stringfile(self, filename):

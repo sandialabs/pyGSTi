@@ -5,28 +5,42 @@ import numpy as np
 import os
 from ..testutils import BaseTestCase, compare_files, temp_files
 
+
 class TestStdInputParser(BaseTestCase):
 
     def test_strings(self):
         lkup = { '1': ('G1',),
                  '2': ('G1','G2'),
-                 '3': ('G1','G2','G3','G4','G5','G6','G7','G8','G9','G10') }
+                 '3': ('G1','G2','G3','G4','G5','G6','G7','G8','G9','G10'),
+                 'G12': ('G1', 'G2'),
+                 'S23': ('G2', 'G3')}
 
         string_tests = [ ("{}", ()),
+                         ("{}^127", ()),
+                         ("{}^0002", ()),
                          ("G1", ('G1',)),
                          ("G1G2G3", ('G1','G2','G3')),
                          ("G1(G2)G3", ('G1','G2','G3')),
                          ("G1(G2)^3G3", ('G1','G2','G2','G2','G3')),
                          ("G1(G2G3)^2", ('G1','G2','G3','G2','G3')),
                          ("G1*G2*G3", ('G1','G2','G3')),
+                         ("G1^02", ('G1', 'G1')),
+                         ("G1*((G2G3)^2G4G5)^2G7", ('G1', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G7')),
+                         ("G1(G2^2(G3G4)^2)^2", ('G1', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4')),
                          ("G1 * G2", ('G1','G2')),
                          ("S[1]",('G1',)),
                          ("S[2]",('G1','G2')),
+                         ("G1S[2]^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
                          ("G1S[1]G3",('G1','G1','G3')),
                          ("S[3][0:4]",('G1', 'G2', 'G3', 'G4')),
                          ("G_my_xG_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
-                         ("G_my_x G_my_y", ('G_my_x', 'G_my_y')) ]
+                         ("G_my_x G_my_y", ('G_my_x', 'G_my_y')),
+                         ("GsG___", ('Gs', 'G___')),
+                         ("S [ 2 ]G3", ('G1', 'G2', 'G3')),
+                         ("S[G12]", ('G1', 'G2')),
+                         ("S[S23]", ('G2', 'G3')),
+                         ("G1\tG2", ('G1', 'G2'))]
 
         std = pygsti.io.StdInputParser()
 
@@ -38,6 +52,20 @@ class TestStdInputParser(BaseTestCase):
 
         with self.assertRaises(ValueError):
             std.parse_gatestring("FooBar")
+
+        with self.assertRaises(ValueError):
+            std.parse_gatestring("G1G2^2^2")
+
+        with self.assertRaises(ValueError):
+            std.parse_gatestring("(G1")
+
+    def test_string_exception(self):
+        """Test lookup failure and Syntax error"""
+        std = pygsti.io.StdInputParser()
+        with self.assertRaises(ValueError):
+            std.parse_gatestring("G1 S[test]")
+        with self.assertRaises(ValueError):
+            std.parse_gatestring("G1 SS")
 
 
     def test_lines(self):

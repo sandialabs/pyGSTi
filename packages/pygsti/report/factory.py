@@ -226,6 +226,11 @@ def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
     #                         '</style>'
     #    # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
 
+    if 'masonryLIB' not in qtys:
+        qtys['masonryLIB'] = _ws.insert_resource(
+            connected, "https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js",
+            "masonry.pkgd.min.js")
+
     if 'katexLIB' not in qtys:
         qtys['katexLIB'] = _ws.insert_resource(
             connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
@@ -436,7 +441,7 @@ def _set_toggles(results_dict):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm):
+                               nmthreshold, comm, printer):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -529,9 +534,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
-                if not est.has_confidence_region_factory(GIRepLbl, 'final'):
+                if not est.has_confidence_region_factory(GIRepLbl, 'final') or \
+                   not est.get_confidence_region_factory(GIRepLbl,'final').can_construct_views():
                     for l in gauge_opt_labels:
-                        if est.has_confidence_region_factory(l, 'final'):
+                        if est.has_confidence_region_factory(l, 'final') and \
+                           est.get_confidence_region_factory(l, 'final').can_construct_views():
                             GIRepLbl = l; break
 
             NA = ws.NotApplicable()
@@ -568,20 +575,40 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
+<<<<<<< HEAD
                         try:
+=======
+                        switchBd.cri[d,i,il] = None #default
+                        if est.has_confidence_region_factory(l, 'final'):
+>>>>>>> develop
                             crf = est.get_confidence_region_factory(l, 'final')
                             region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                            switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
-                        except KeyError:
-                            switchBd.cri[d,i,il] = None
+                            if crf.can_construct_views():
+                                switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
+                            else:
+                                printer.log(
+                                    ("Note: Cannot create confidence intervals for "
+                                     "{estlbl}.{gslbl} gate set.  This could be"
+                                     "because you created a factory but forgot"
+                                     "to create a Hessian *projection*"
+                                    ).format(estlbl=lbl,gslbl=l), 2)
+                        else:
+                            printer.log(
+                                ("Note: no factory to compute confidence "
+                                 "intervals for the '{estlbl}.{gslbl}' gate set."
+                                ).format(estlbl=lbl,gslbl=l), 2)
+
                     else: switchBd.cri[d,i,il] = NA
 
-                try:
+                # "Gauge Invariant Representation" gateset
+                # If we can't compute CIs for this, ignore SILENTLY, since any
+                #  relevant warnings/notes should have been given above.
+                switchBd.criGIRep[d,i] = None #default
+                if est.has_confidence_region_factory(GIRepLbl, 'final'):
                     crf = est.get_confidence_region_factory(GIRepLbl, 'final')
                     region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                    switchBd.criGIRep[d,i] = crf.view(abs(est_confidenceLevel), region_type)
-                except KeyError:
-                    switchBd.criGIRep[d,i] = None
+                    if crf.can_construct_views():
+                        switchBd.criGIRep[d,i] = crf.view(abs(est_confidenceLevel), region_type)
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
 
@@ -718,7 +745,7 @@ def create_general_report(results, filename, title="auto",
         title = "GST Report for " + autoname
         _warnings.warn( ("You should really specify `title=` when generating reports,"
                          "as this makes it much easier to identify them later on.  "
-                         "Since you didn't, pyGSTi will has generated a random one"
+                         "Since you didn't, pyGSTi has generated a random one"
                          " for you: '{}'.").format(autoname))
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
@@ -747,7 +774,7 @@ def create_general_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
             _create_master_switchboard(ws, results_dict,
-                                       confidenceLevel, nmthreshold, comm)
+                                       confidenceLevel, nmthreshold, comm, printer)
 
     # Generate Tables
     printer.log("*** Generating tables ***")
@@ -755,7 +782,7 @@ def create_general_report(results, filename, title="auto",
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
         for some_cri in switchBd.cri.flat: #can have only some confidence regions
-            if some_cri is not None: # OLD: switchBd.cri[0,0,0]
+            if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable): # OLD: switchBd.cri[0,0,0]
                 qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 
@@ -783,7 +810,7 @@ def create_general_report(results, filename, title="auto",
     strs = switchBd.strs
     cliffcomp = switchBd.clifford_compilation
 
-    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, includeHSVec=False)
+    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
     addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
     addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
@@ -795,7 +822,11 @@ def create_general_report(results, filename, title="auto",
     addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], cri)
     addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
+<<<<<<< HEAD
            ['Target','Estimated'], cri, includeHSVec=False)
+=======
+           ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
+>>>>>>> develop
     addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,

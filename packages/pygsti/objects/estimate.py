@@ -10,7 +10,9 @@ import numpy       as _np
 import collections as _collections
 import warnings    as _warnings
 import time        as _time
+import copy        as _copy
 
+from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 
@@ -75,13 +77,13 @@ class Estimate(object):
                 self.parameters[key] = parameters[key]
 
                 
-    def add_gaugeoptimized(self, goparams, gateset=None, label=None):
+    def add_gaugeoptimized(self, goparams, gateset=None, label=None, verbosity=None):
         """
         Adds a gauge-optimized GateSet (computing it if needed) to this object.
 
         Parameters
         ----------
-        goparams : dict
+        goparams : dict or list
             A dictionary of gauge-optimization parameters, typically arguments
             to :func:`gaugeopt_to_target`, specifying how the gauge optimization
             was (or should be) performed.  When `gateset` is `None` (and this
@@ -90,7 +92,10 @@ class Estimate(object):
             :func:`gaugeopt_to_target`. By default, :func:`gaugeopt_to_target`'s
             first two arguments, the `GateSet` to optimize and the target,
             are taken to be `self.gatesets['final iteration estimate']` and 
-            self.gatesets['target'].
+            self.gatesets['target'].  This argument can also be a *list* of
+            such parameter dictionaries, which specifies a multi-stage gauge-
+            optimization whereby the output of one stage is the input of the
+            next.
 
         gateset : GateSet, optional
             The gauge-optimized gate set to store.  If None, then this gate set
@@ -103,6 +108,12 @@ class Estimate(object):
             If None, then the next available "go<X>", where <X> is a 
             non-negative integer, is used as the label.
 
+       verbosity : int, optional
+            An integer specifying the level of detail printed to stdout
+            during the calculations performed in this function.  If not
+            None, this value will override any verbosity values set
+            within `goparams`.
+
         Returns
         -------
         None
@@ -114,33 +125,61 @@ class Estimate(object):
                 label = "go%d" % i; i += 1
                 if (label not in self.goparameters) and \
                    (label not in self.gatesets): break
-
-        if gateset is None:
-            from ..algorithms   import gaugeopt_to_target   as _gaugeopt_to_target
-            goparams = goparams.copy() #so we don't change the caller's dict
             
-            if "gateset" not in goparams:
-                if 'final iteration estimate' in self.gatesets:
-                    goparams["gateset"] = self.gatesets['final iteration estimate']
-                else: raise ValueError("Must supply 'gateset' in 'goparams' argument")
-                
-            if "targetGateset" not in goparams:
-                if 'target' in self.gatesets:
-                    goparams["targetGateset"] = self.gatesets['target']
-                else: raise ValueError("Must supply 'targetGateset' in 'goparams' argument")
+        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+        ordered_goparams = []
+        last_gs = None
 
-            goparams['returnAll'] = True
-            starting_gateset = goparams["gateset"].copy()
-            minF, gaugeGroupEl, gateset = _gaugeopt_to_target(**goparams)
-            goparams['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
+
+        #Create a printer based on specified or maximum goparams
+        # verbosity and any existing comm.
+        comm = None
+        for gop in goparams_list:
+            if gop.get('comm',None) is not None:
+                comm = gop['comm']; break
+        max_vb = verbosity if (verbosity is not None) else \
+                 max( [ gop.get('verbosity',0) for gop in goparams_list ])
+        printer = _VerbosityPrinter.build_printer(max_vb, comm)
+        printer.log("-- Adding Gauge Optimized (%s) --" % label, 1)
+        
+        for i,gop in enumerate(goparams_list):
+            printer.log("Stage %d:" % i, 2)
             
-        #sort the parameters by name for consistency
-        ordered_goparams = _collections.OrderedDict( 
-            [(k,goparams[k]) for k in sorted(list(goparams.keys()))])
+            if gateset is not None:
+                last_gs = gateset #just use user-supplied result
+            else:
+                from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
+                gop = gop.copy() #so we don't change the caller's dict
 
-        self.gatesets[label] = gateset
-        self.goparameters[label] = ordered_goparams
+                if verbosity is not None:
+                    gop['verbosity'] = printer-1 #use common printer
 
+                if last_gs:
+                    gop["gateset"] = last_gs
+                elif "gateset" not in gop:
+                    if 'final iteration estimate' in self.gatesets:
+                        gop["gateset"] = self.gatesets['final iteration estimate']
+                    else: raise ValueError("Must supply 'gateset' in 'goparams' argument")
+                    
+                if "targetGateset" not in gop:
+                    if 'target' in self.gatesets:
+                        gop["targetGateset"] = self.gatesets['target']
+                    else: raise ValueError("Must supply 'targetGateset' in 'goparams' argument")
+    
+                gop['returnAll'] = True
+                minF, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                gop['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
+
+            #sort the parameters by name for consistency
+            ordered_goparams.append( _collections.OrderedDict( 
+                [(k,gop[k]) for k in sorted(list(gop.keys()))]) )
+
+        assert(last_gs is not None)
+        self.gatesets[label] = last_gs
+        self.goparameters[label] = ordered_goparams if len(goparams_list) > 1 \
+                                   else ordered_goparams[0]
+
+        
     def add_confidence_region_factory(self,
                                       gateset_label='final iteration estimate',
                                       gatestrings_label='final'):
@@ -277,9 +316,12 @@ class Estimate(object):
         start_gateset = goparams['gateset'].copy()
         final_gateset = self.gatesets[to_gateset_label].copy()
 
-        assert('_gaugeGroupEl' in goparams),"To propagate a confidence " + \
-            "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
-        gaugeGroupEl = goparams['_gaugeGroupEl']
+        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+        gaugeGroupEls = []
+        for gop in goparams_list:
+            assert('_gaugeGroupEl' in gop),"To propagate a confidence " + \
+                "region, goparameters must contain the gauge-group-element as `_gaugeGroupEl`"
+            gaugeGroupEls.append( goparams['_gaugeGroupEl'] )
 
         assert(start_gateset.frobeniusdist(ref_gateset) < 1e-6), \
             "Gauge-opt starting point must be the 'from' (reference) GateSet"
@@ -297,7 +339,8 @@ class Estimate(object):
         for iCol in range(ref_gateset.num_params()):
             v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
             gs.from_vector(v)
-            gs.transform(gaugeGroupEl)
+            for gaugeGroupEl in gaugeGroupEls:
+                gs.transform(gaugeGroupEl)
             w = gs.to_vector()
             dw = (w - w0)/EPS
             if iCol % 10 == 0: print("DB: col %d/%d: %g" % (iCol, ref_gateset.num_params(),_np.linalg.norm(dw)))
@@ -429,10 +472,10 @@ class Estimate(object):
         """ Creates a copy of this Estimate object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Estimate()
-        cpy.parameters = self.parameters.copy()
-        cpy.goparameters = self.goparameters.copy()
+        cpy.parameters = _copy.deepcopy(self.parameters)
+        cpy.goparameters = _copy.deepcopy(self.goparameters)
         cpy.gatesets = self.gatesets.copy()
-        cpy.confidence_region_factories = self.confidence_regions.copy()
+        cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
         return cpy
 
     def __str__(self):

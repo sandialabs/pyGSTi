@@ -6,7 +6,7 @@ Information pertaining to the target gate set and data set.
 The *ideal* input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.
 
 @@code
-ws.SpamTable(gs_target, None, includeHSVec=False)
+ws.SpamTable(gs_target, None, 'boxes', includeHSVec=False)
 @@markdown
 ### Fiducial sequences.
 A list of the preparation and measurement <q>fiducial</q> gate sequences. See discussion in text.

@@ -20,7 +20,7 @@ from collections import OrderedDict as _OrderedDict
 from .. import tools as _tools
 from .. import algorithms as _alg
 from ..objects import smart_cached as _smart_cached
-from ..objects.reportableqty import ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
 import functools as _functools
@@ -43,15 +43,19 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         #special processing for dict -> df is dict of error bars
         # and we return a dict of ReportableQtys
         if df:
-            return { ky: ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0 }
+            return { ky: _ReportableQty(f0[ky], df[ky], nonMarkovianEBs) for ky in f0 }
         else:
-            return { ky: ReportableQty(f0[ky], None, False) for ky in f0 }
+            return { ky: _ReportableQty(f0[ky], None, False) for ky in f0 }
     else:
+<<<<<<< HEAD
         return ReportableQty(f0, df, nonMarkovianEBs)
+=======
+        return _ReportableQty(f0, df, nonMarkovianEBs)
+>>>>>>> develop
 
 def evaluate(gatesetFn, cri=None, verbosity=0):
     if gatesetFn is None: # so you can set fn to None when they're missing (e.g. diamond norm)
-        return ReportableQty(_np.nan)
+        return _ReportableQty(_np.nan)
     
     if cri:
         nmEBs = bool(cri.get_errobar_type() == "non-markovian")
@@ -333,6 +337,20 @@ Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring
 # init args == (gatesetA, gatesetB, gatestring)
 
 
+def povm_entanglement_infidelity(gatesetA, gatesetB):
+    return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB)
+POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
+
+def povm_jt_diff(gatesetA, gatesetB):
+    return _tools.povm_jtracedist(gatesetA, gatesetB)
+POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
+
+def povm_half_diamond_norm(gatesetA, gatesetB):
+    return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
+POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
+
+
+
 def decomposition(gate):
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
@@ -342,9 +360,15 @@ def decomposition(gate):
         errBarDict = { 'pi rotations': None,
                        'decay of diagonal rotation terms': None,
                        'decay of off diagonal rotation terms': None }
+<<<<<<< HEAD
         return ReportableQty(decompDict, errBarDict)
     else:
         return ReportableQty({})
+=======
+        return _ReportableQty(decompDict, errBarDict)
+    else:
+        return _ReportableQty({})
+>>>>>>> develop
 
 def upper_bound_fidelity(gate, mxBasis):
     return _tools.fidelity_upper_bound(gate)[0]
@@ -752,28 +776,19 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
             logG, "hamiltonian", mxBasis.name, mxBasis, return_generators=True)
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
-        
-        #angles[gl] = norm * (gateset.dim**0.25 / 2.0) / _np.pi
-        # const factor to undo sqrt( sqrt(dim) ) basis normalization (at
-        # least of Pauli products) and divide by 2# to be consistent with
-        # convention:  rotn(theta) = exp(i theta/2 * PauliProduct ), with
-        # theta in units of pi.
-    
+            
         dim = gatesetA.dim
-        decomp[gl + ' angle'] = norm * (2.0/dim)**0.5 / _np.pi
-        #Scratch...
-        # 1Q dim=4 -> sqrt(2) / 2.0 = 1/sqrt(2) ^4= 1/4  ^2 = 1/2 = 2/dim
-        # 2Q dim=16 -> 2.0 / 2.0 but need  1.0 / (2 sqrt(2)) ^4= 1/64 ^2= 1/8 = 2/dim
-        # so formula that works for 1 & 2Q is sqrt(2/dim), perhaps
-        # b/c convention is sigma-mxs in exponent, which are Pauli's/2.0 but our
-        # normalized paulis are just /sqrt(2), so need to additionally divide by
-        # sqrt(2)**nQubits == 2**(log2(dim)/4) == dim**0.25  ( nQubits = log2(dim)/2 )
-        # and convention adds another sqrt(2)**nQubits / sqrt(2) => dim**0.5 / sqrt(2) (??)
+        decomp[gl + ' angle'] = norm * 2.0 / _np.pi
+        # Units: hamProjs (and norm) are already in "Hamiltonian-coefficient" units,
+        # (see 'std_scale_factor' fn), but because of convention the "angle" is equal
+        # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
+        # thus the factor of 2.0 above.
     
         basis_mxs = mxBasis.get_composite_matrices()
         scalings = [ ( _np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
                        if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0 )
                      for i,mx in enumerate(basis_mxs) ]
+          #really want hamProjs[i] * lindbladian_to_hamiltonian(hamGens[i]) but fn doesn't exists (yet)
         hamMx = sum([s*c*bmx for s,c,bmx in zip(scalings,hamProjs,basis_mxs)])
         decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
 
@@ -834,6 +849,18 @@ def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
 Vec_tr_diff = _gsf.vecsfn_factory(vec_tr_diff)
 # init args == (gateset1, gateset2, label, typ)
 
+<<<<<<< HEAD
+=======
+def vec_as_stdmx(vec, mxBasis):
+    return _tools.vec_to_stdmx(vec, mxBasis)
+Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
+
+def vec_as_stdmx_eigenvalues(vec, mxBasis):
+    mx = _tools.vec_to_stdmx(vec, mxBasis)
+    return _np.linalg.eigvals(mx)
+Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
+
+>>>>>>> develop
 
 def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
     for items in zip(labels, *reportableQtyLists):

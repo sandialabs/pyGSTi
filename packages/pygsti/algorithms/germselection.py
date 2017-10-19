@@ -484,8 +484,16 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
-        combinedDDD = _np.einsum('i,ijk', weights,
-                                 derivDaggerDerivList[gateset_num])
+        #OLD
+        #combinedDDD = _np.einsum('i,ijk', weights,
+        #                         derivDaggerDerivList[gateset_num])
+
+        #NEW: tensordot is a bit faster than einsum
+        combinedDDD = _np.squeeze(
+            _np.tensordot(_np.expand_dims(weights, 1),
+                          derivDaggerDerivList[gateset_num], (0, 0)))
+        assert len(combinedDDD.shape) == 2
+        
         sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
         observableEigenvals = sortedEigenvals[nGaugeParams:]
         score = (_scoring.list_score(observableEigenvals, scoreFunc)

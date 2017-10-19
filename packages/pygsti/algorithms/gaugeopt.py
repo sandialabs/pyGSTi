@@ -327,7 +327,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
         # the before-they're-squared difference terms and there's an analytic jacobian
 
         def objective_fn(gs):
-            residuals, nsummands = gs.residuals(targetGateset, None, gateWeight, spamWeight, itemWeights)
+            residuals, nsummands = gs.residuals(targetGateset, None, itemWeights)
 
             if cptp_penalty_factor > 0:
                 gs.basis = mxBasis
@@ -486,10 +486,13 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             if targetGateset is not None:
                 if gatesMetric == "frobenius":
                     if spamMetric == "frobenius":
-                        ret += gs.frobeniusdist(targetGateset, None, gateWeight,
-                                                spamWeight, itemWeights)
+                        ret += gs.frobeniusdist(targetGateset, None, itemWeights)
                     else:
-                        ret += gs.frobeniusdist(targetGateset,None,gateWeight,0,itemWeights)
+                        wts = itemWeights.copy(); wts['spam'] = 0.0
+                        for k in wts:
+                            if k in gs.get_prep_labels() or \
+                               k in gs.get_effect_labels(): wts[k] = 0.0
+                        ret += gs.frobeniusdist(targetGateset,None, wts)
         
                 elif gatesMetric == "fidelity":
                     for gateLbl in gs.gates:
@@ -507,7 +510,6 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
         
                 if spamMetric == "frobenius":
                     pass #added in special case above to match normalization in frobeniusdist
-                    #ret += gs.frobeniusdist(targetGateset,None,0,spamWeight,itemWeights)
         
                 elif spamMetric == "fidelity":
                     for spamlabel in gs.get_spam_labels():

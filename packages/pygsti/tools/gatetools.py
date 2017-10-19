@@ -18,9 +18,13 @@ from . import basis as _basis
 from .basis import change_basis
 
 def _hack_sqrtm(A):
-    return _spl.sqrtm(A) #Travis found this scipy function
-                         # to be incorrect in certain cases (we need a workaround)
-    #return _np.array( (_np.matrix(A))**0.5 ) #gives error about int power
+    sqrt,errest =  _spl.sqrtm(A, disp=False) #Travis found this scipy function
+                                             # to be incorrect in certain cases (we need a workaround)
+    if _np.any(_np.isnan(sqrt)):  #this is sometimes a good fallback when sqrtm doesn't work.
+        ev,U = _np.linalg.eig(A)
+        sqrt = _np.dot( U, _np.dot( _np.diag(_np.sqrt(ev)), _np.linalg.inv(U)))
+        
+    return sqrt
 
 def fidelity(A, B):
     """
@@ -300,6 +304,8 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
 #       prob.solve(solver="SCS")#This always fails
     except:
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
+        if return_x:
+            return -2, _np.zeros((dim,dim)) #still need to return x!
         return -2
 
     if return_x:
@@ -424,6 +430,101 @@ def fidelity_upper_bound(gateMx):
     #print "DEBUG: U = \n", closestUnitaryGateMx
     #print "DEBUG: closest U evals = ",closestU_evals
     #print "DEBUG:  evecs = \n",closestU_evecs
+
+
+def get_povm_map(gateset):
+    """
+    Constructs a gate-like quantity for the POVM within `gateset`.
+
+    This is done by embedding the `k`-outcome classical output space of the POVM
+    in the Hilbert-Schmidt space of `k` by `k` density matrices by placing the 
+    classical probability distribution along the diagonal of the density matrix.
+    Currently, this is only implemented for the case when `k` equals `d`, the 
+    dimension of the POVM's Hilbert space.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset supplying the POVM effect vectors and the basis those
+        vectors are in.
+
+    Returns
+    -------
+    numpy.ndarray
+        The matrix of the "POVM map" in the `gateset.basis` basis.
+    """
+    def _mut(i,j,N):
+        mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
+        return mx
+
+    # Note: get_effect_labels includes remainder label
+    povmVectors = [gateset.effects[lbl] for lbl in gateset.get_effect_labels()]
+    d = len(povmVectors)
+    assert( d**2 == len(povmVectors[0]) ), "Can only compute POVM metrics when num of effects == H space dimension"
+    povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
+    
+    Sk_embedding_in_std = _np.zeros( (d**2, d) )
+    for i in range(d):
+        Sk_embedding_in_std[:,i] = _mut(i,i,d).flatten()
+
+    std_to_basis = _basis.transform_matrix("std", gateset.basis, d)
+    assert(std_to_basis.shape == (d**2,d**2))
+
+    return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
+
+
+def povm_fidelity(gateset, targetGateset):
+    """
+    Computes the process (entanglement) fidelity between POVM maps.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset)
+    target_povm_mx = get_povm_map(targetGateset)
+    return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+
+
+def povm_jtracedist(gateset, targetGateset):
+    """
+    Computes the Jamiolkowski trace distance between POVM maps using :func:`jtracedist`.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset)
+    target_povm_mx = get_povm_map(targetGateset)
+    return jtracedist(povm_mx, target_povm_mx, targetGateset.basis)
+
+
+def povm_diamonddist(gateset, targetGateset):
+    """
+    Computes the diamond distance between POVM maps using :func:`diamonddist`.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset)
+    target_povm_mx = get_povm_map(targetGateset)
+    return diamonddist(povm_mx, target_povm_mx, targetGateset.basis)
 
 
 #decompose gate matrix into axis of rotation, etc
@@ -976,6 +1077,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
 
     scaleFctr = std_scale_factor(d2, projection_type)
     projections *= scaleFctr
+    lindbladMxs /= scaleFctr # so projections * generators give original
 
     ret = [projections]
     if return_generators: ret.append(lindbladMxs)

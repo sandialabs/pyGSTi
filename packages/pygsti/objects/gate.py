@@ -301,11 +301,11 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     for i in range(deriv_to_check.shape[0]):
         for j in range(deriv_to_check.shape[1]):
             diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])
-            if diff > eps:
+            if diff > 10*eps:
                 print("deriv_chk_mismatch: (%d,%d): %g (comp) - %g (fd) = %g" %
                       (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff))
 
-    if _np.linalg.norm(fd_deriv - deriv_to_check) > 5*eps:
+    if _np.linalg.norm(fd_deriv - deriv_to_check)/fd_deriv.size > 10*eps:
         raise ValueError("Failed check of deriv_wrt_params:\n" +
                          " norm diff = %g" % 
                          _np.linalg.norm(fd_deriv - deriv_to_check))
@@ -2463,7 +2463,11 @@ class LindbladParameterizedGate(GateMatrix):
                     #  Lmx[i,i] = otherParams[i,i]
                     #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
                     for i in range(bsO-1):
+<<<<<<< HEAD
                         self.Lmx[i,i] = otherParams[i,i]**2
+=======
+                        self.Lmx[i,i] = otherParams[i,i]
+>>>>>>> develop
                         for j in range(i):
                             self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
             
@@ -2663,7 +2667,7 @@ class LindbladParameterizedGate(GateMatrix):
                     dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
                     assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
                 
-                    #take d(maxtrix-exp) using series approximation
+                    #take d(matrix-exp) using series approximation
                     series = last_commutant = term = dOdp; i=2
                     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
                         commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
@@ -2702,7 +2706,7 @@ class LindbladParameterizedGate(GateMatrix):
                     dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
                     assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
                 
-                    #take d(maxtrix-exp) using series approximation
+                    #take d(matrix-exp) using series approximation
                     series = last_commutant = term = dOdp; i=2
                     while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
                         commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
