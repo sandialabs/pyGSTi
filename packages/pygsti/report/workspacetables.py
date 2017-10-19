@@ -1924,7 +1924,7 @@ class GaugeOptParamsTable(WorkspaceTable):
                     table.addrow(("%sItem weights" % pre, ", ".join([("%s=%.2g" % (k,v)) 
                                    for k,v in goargs['itemWeights'].items()])), (None,None))
             if 'gauge_group' in goargs:
-                table.addrow(("%sGauge group" % pre, str(goargs['gauge_group'])), (None,None))
+                table.addrow( ("%sGauge group" % pre, goargs['gauge_group'].name) , (None,None))
     
         table.finish()
         return table

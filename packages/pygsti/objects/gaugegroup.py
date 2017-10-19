@@ -9,8 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 
 class GaugeGroup(object):
-    def __init__(self):
-        pass
+    def __init__(self, name):
+        self.name = name
 
     def num_params(self):
         return 0
@@ -32,9 +32,10 @@ class GaugeGroupElement(object):
 
     
 class GateGaugeGroup(GaugeGroup):
-    def __init__(self, gate, elementcls):
+    def __init__(self, gate, elementcls, name):
         self.gate = gate
         self.element = elementcls
+        GaugeGroup.__init__(self,name)
 
     def num_params(self):
         return self.gate.num_params()
@@ -80,7 +81,7 @@ class FullGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.FullyParameterizedGate(_np.identity(dim,'d'))
-        GateGaugeGroup.__init__(self, gate, FullGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, FullGaugeGroupElement, "Full")
 
 class FullGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -91,7 +92,7 @@ class TPGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.TPParameterizedGate(_np.identity(dim,'d'))
-        GateGaugeGroup.__init__(self, gate, TPGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, TPGaugeGroupElement, "TP")
 
 class TPGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -116,7 +117,7 @@ class DiagGaugeGroup(GateGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        GateGaugeGroup.__init__(self, gate, DiagGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, DiagGaugeGroupElement, "Diagonal")
 
 class DiagGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -134,7 +135,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        GateGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement, "TP Diagonal")
 
 class TPDiagGaugeGroupElement(TPGaugeGroupElement):
     def __init__(self, gate):
@@ -147,7 +148,7 @@ class UnitaryGaugeGroup(GateGaugeGroup):
         gate = _gate.LindbladParameterizedGate(None, _np.identity(dim,'d'),
                                                cptp=True, nonham_basis=[],
                                                ham_basis=basis, mxBasis=basis)
-        GateGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
 
 class UnitaryGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -166,7 +167,7 @@ class SpamGaugeGroup(GateGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        GateGaugeGroup.__init__(self, gate, SpamGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, SpamGaugeGroupElement, "Spam")
 
 class SpamGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -184,7 +185,7 @@ class TPSpamGaugeGroup(GateGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-        GateGaugeGroup.__init__(self, gate, TPSpamGaugeGroupElement)
+        GateGaugeGroup.__init__(self, gate, TPSpamGaugeGroupElement, "TP Spam")
 
 class TPSpamGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
