@@ -2767,7 +2767,8 @@ class LindbladParameterizedGate(GateMatrix):
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
-        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement):
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
 
@@ -2789,7 +2790,8 @@ class LindbladParameterizedGate(GateMatrix):
             #                                True, self.matrix_basis)
             #assert(_np.linalg.norm(tGate.paramvals - self.paramvals) < 1e-6)
         else:
-            raise ValueError("Invalid transform for this LindbladParameterizedGate")
+            raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
+                             % str(type(S)))
 
 
     def depolarize(self, amount):
