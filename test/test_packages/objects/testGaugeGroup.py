@@ -13,15 +13,9 @@ class GaugeGroupTestCase(BaseTestCase):
         super(GaugeGroupTestCase, self).setUp()
 
     def test_construction(self):
-<<<<<<< HEAD
-        gg   = ggrp.GaugeGroup()
-        ggg  = ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
-                                   ggrp.GateGaugeGroupElement)
-=======
         gg   = ggrp.GaugeGroup('myGaugeGroupName')
         ggg  = ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
                                    ggrp.GateGaugeGroupElement,'myGateGaugeGroupName')
->>>>>>> develop
         fgg  = ggrp.FullGaugeGroup(4)
         tgg  = ggrp.TPGaugeGroup(4)
         dgg  = ggrp.DiagGaugeGroup(4)
@@ -64,15 +58,9 @@ class GaugeGroupTestCase(BaseTestCase):
 
     def test_elements(self):
         ggs = []
-<<<<<<< HEAD
-        ggs.append(ggrp.GaugeGroup())
-        ggs.append(ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
-                                       ggrp.GateGaugeGroupElement))
-=======
         ggs.append(ggrp.GaugeGroup('myGroupName'))
         ggs.append(ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
                                        ggrp.GateGaugeGroupElement,'myGateGroupName'))
->>>>>>> develop
         ggs.append(ggrp.FullGaugeGroup(4))
         ggs.append(ggrp.TPGaugeGroup(4))
         ggs.append(ggrp.DiagGaugeGroup(4))
