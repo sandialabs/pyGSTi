@@ -1942,7 +1942,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters)
 
         for i,goargs in enumerate(goargs_list):
-            pre = ("%d: " % i) if len(goargs) > 1 else ""
+            pre = ("%d: " % i) if len(goargs_list) > 1 else ""
             if 'method' in goargs:
                 table.addrow(("%sMethod" % pre, str(goargs['method'])), (None,None))
             #if 'TPpenalty' in goargs: #REMOVED
