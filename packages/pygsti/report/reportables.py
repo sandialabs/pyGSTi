@@ -47,11 +47,7 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         else:
             return { ky: _ReportableQty(f0[ky], None, False) for ky in f0 }
     else:
-<<<<<<< HEAD
-        return ReportableQty(f0, df, nonMarkovianEBs)
-=======
         return _ReportableQty(f0, df, nonMarkovianEBs)
->>>>>>> develop
 
 def evaluate(gatesetFn, cri=None, verbosity=0):
     if gatesetFn is None: # so you can set fn to None when they're missing (e.g. diamond norm)
@@ -360,15 +356,9 @@ def decomposition(gate):
         errBarDict = { 'pi rotations': None,
                        'decay of diagonal rotation terms': None,
                        'decay of off diagonal rotation terms': None }
-<<<<<<< HEAD
-        return ReportableQty(decompDict, errBarDict)
-    else:
-        return ReportableQty({})
-=======
         return _ReportableQty(decompDict, errBarDict)
     else:
         return _ReportableQty({})
->>>>>>> develop
 
 def upper_bound_fidelity(gate, mxBasis):
     return _tools.fidelity_upper_bound(gate)[0]
@@ -849,8 +839,6 @@ def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
 Vec_tr_diff = _gsf.vecsfn_factory(vec_tr_diff)
 # init args == (gateset1, gateset2, label, typ)
 
-<<<<<<< HEAD
-=======
 def vec_as_stdmx(vec, mxBasis):
     return _tools.vec_to_stdmx(vec, mxBasis)
 Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
@@ -860,7 +848,6 @@ def vec_as_stdmx_eigenvalues(vec, mxBasis):
     return _np.linalg.eigvals(mx)
 Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
 
->>>>>>> develop
 
 def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
     for items in zip(labels, *reportableQtyLists):

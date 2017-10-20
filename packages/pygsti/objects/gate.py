@@ -2463,11 +2463,7 @@ class LindbladParameterizedGate(GateMatrix):
                     #  Lmx[i,i] = otherParams[i,i]
                     #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
                     for i in range(bsO-1):
-<<<<<<< HEAD
-                        self.Lmx[i,i] = otherParams[i,i]**2
-=======
                         self.Lmx[i,i] = otherParams[i,i]
->>>>>>> develop
                         for j in range(i):
                             self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
             

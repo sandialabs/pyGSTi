@@ -575,12 +575,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
-<<<<<<< HEAD
-                        try:
-=======
                         switchBd.cri[d,i,il] = None #default
                         if est.has_confidence_region_factory(l, 'final'):
->>>>>>> develop
                             crf = est.get_confidence_region_factory(l, 'final')
                             region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
                             if crf.can_construct_views():
@@ -822,11 +818,7 @@ def create_general_report(results, filename, title="auto",
     addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], cri)
     addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-<<<<<<< HEAD
-           ['Target','Estimated'], cri, includeHSVec=False)
-=======
            ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
->>>>>>> develop
     addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
     addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,

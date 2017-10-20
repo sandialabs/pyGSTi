@@ -44,12 +44,8 @@ class SpamTable(WorkspaceTable):
         ----------
         gatesets : GateSet or list of GateSets
             The GateSet(s) whose SPAM elements should be displayed. If
-<<<<<<< HEAD
-            multiple GateSets are given, they should have the same gates.
-=======
             multiple GateSets are given, they should have the same SPAM
             elements..
->>>>>>> develop
     
         titles : list of strs, optional
             Titles correponding to elements of `gatesets`, e.g. `"Target"`.
@@ -108,17 +104,6 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for gateset in gatesets:
-<<<<<<< HEAD
-                mxBasis = gateset.basis
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
-                rowData.append( rhoMx )
-                rowFormatters.append('Brackets')
-
-            for gateset in gatesets:
-                mxBasis = gateset.basis
-                rhoMx = _tools.vec_to_stdmx(gateset.preps[lbl], mxBasis)
-                evals = _np.linalg.eigvals(rhoMx)
-=======
                 rhoMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "prep"))
                             # confidenceRegionInfo) #don't put CIs on matrices for now
                 if display_as == "numbers":
@@ -141,7 +126,6 @@ class SpamTable(WorkspaceTable):
                       (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "prep"),
                             cri)
->>>>>>> develop
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
                 
@@ -164,17 +148,6 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Effect']
 
             for gateset in gatesets:
-<<<<<<< HEAD
-                mxBasis = gateset.basis
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
-                rowData.append( EMx )
-                rowFormatters.append('Brackets')
-
-            for gateset in gatesets:
-                mxBasis = gateset.basis
-                EMx = _tools.vec_to_stdmx(gateset.effects[lbl], mxBasis)
-                evals = _np.linalg.eigvals(EMx)
-=======
                 EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
                           #confidenceRegionInfo) #don't put CIs on matrices for now
                 if display_as == "numbers":
@@ -196,7 +169,6 @@ class SpamTable(WorkspaceTable):
                       (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
                             cri)
->>>>>>> develop
                 rowData.append( evals )
                 rowFormatters.append('Brackets')
     
@@ -763,7 +735,7 @@ class SpamVsTargetTable(WorkspaceTable):
         prepLabels   = gateset.get_prep_labels()
         effectLabels = gateset.get_effect_labels()
     
-        colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist") #HERE
+        colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist")
         formatters   = (None,'Conversion','Conversion','Conversion')
         tooltips = ('','State infidelity or entanglement infidelity of POVM map',
                     'Trace distance between states (preps) or Jamiolkowski states of POVM maps',
@@ -780,26 +752,9 @@ class SpamVsTargetTable(WorkspaceTable):
                             for l in prepLabels]
         prepDiamondDists = [ _objs.reportableqty.ReportableQty(_np.nan) ] * len(prepLabels)
         for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
-<<<<<<< HEAD
                                                       prepInfidelities, prepTraceDists):
             table.addrow(rowData, formatters)
-    
-        formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
-                                                        'effect'), confidenceRegionInfo)
-                            for l in effectLabels]
-        effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
-                                                        'effect'), confidenceRegionInfo)
-                            for l in effectLabels]
-        for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
-                                                      effectInfidelities, effectTraceDists):
-=======
-                                                      prepInfidelities, prepTraceDists,
-                                                      prepDiamondDists):
->>>>>>> develop
-            table.addrow(rowData, formatters)
-
-
+            
         #OLD - when per-effect metrics were displayed
         #formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
         #effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
@@ -1977,28 +1932,6 @@ class GaugeOptParamsTable(WorkspaceTable):
         formatters = ('Bold','Bold')
 
         if gaugeOptArgs == False: #signals *no* gauge optimization
-<<<<<<< HEAD
-            gaugeOptArgs = {'Method': "No gauge optimization was performed" }
-    
-        if 'method' in gaugeOptArgs:
-            table.addrow(("Method", str(gaugeOptArgs['method'])), (None,None))
-        #if 'TPpenalty' in gaugeOptArgs: #REMOVED
-        #    table.addrow(("TP penalty factor", str(gaugeOptArgs['TPpenalty'])), (None,None))
-        if 'cptp_penalty_factor' in gaugeOptArgs and gaugeOptArgs['cptp_penalty_factor'] != 0:
-            table.addrow(("CP penalty factor", str(gaugeOptArgs['cptp_penalty_factor'])), (None,None))
-        if 'spam_penalty_factor' in gaugeOptArgs and gaugeOptArgs['spam_penalty_factor'] != 0:
-            table.addrow(("SPAM penalty factor", str(gaugeOptArgs['spam_penalty_factor'])), (None,None))
-        if 'gatesMetric' in gaugeOptArgs:
-            table.addrow(("Metric for gate-to-target", str(gaugeOptArgs['gatesMetric'])), (None,None))
-        if 'spamMetric' in gaugeOptArgs:
-            table.addrow(("Metric for SPAM-to-target", str(gaugeOptArgs['spamMetric'])), (None,None))
-        if 'itemWeights' in gaugeOptArgs:
-            if gaugeOptArgs['itemWeights']:
-                table.addrow(("Item weights", ", ".join([("%s=%.2g" % (k,v)) 
-                               for k,v in gaugeOptArgs['itemWeights'].items()])), (None,None))
-        if 'gauge_group' in gaugeOptArgs:
-            table.addrow(("Gauge group", str(gaugeOptArgs['gauge_group'])), (None,None))
-=======
             goargs_list = [ {'Method': "No gauge optimization was performed" } ]
         else:
             goargs_list = [gaugeOptArgs] if hasattr(gaugeOptArgs,'keys') \
@@ -2026,7 +1959,6 @@ class GaugeOptParamsTable(WorkspaceTable):
                                    for k,v in goargs['itemWeights'].items()])), (None,None))
             if 'gauge_group' in goargs:
                 table.addrow( ("%sGauge group" % pre, goargs['gauge_group'].name) , (None,None))
->>>>>>> develop
     
         table.finish()
         return table

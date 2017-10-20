@@ -35,10 +35,7 @@ class GateGaugeGroup(GaugeGroup):
     def __init__(self, gate, elementcls, name):
         self.gate = gate
         self.element = elementcls
-<<<<<<< HEAD
-=======
         GaugeGroup.__init__(self,name)
->>>>>>> develop
 
     def num_params(self):
         return self.gate.num_params()
@@ -84,11 +81,7 @@ class FullGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.FullyParameterizedGate(_np.identity(dim,'d'))
-<<<<<<< HEAD
-        GateGaugeGroup.__init__(self, gate, FullGaugeGroupElement)
-=======
         GateGaugeGroup.__init__(self, gate, FullGaugeGroupElement, "Full")
->>>>>>> develop
 
 class FullGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -99,11 +92,7 @@ class TPGaugeGroup(GateGaugeGroup):
     def __init__(self, dim):
         from . import gate as _gate #b/c gate.py imports gaugegroup
         gate = _gate.TPParameterizedGate(_np.identity(dim,'d'))
-<<<<<<< HEAD
-        GateGaugeGroup.__init__(self, gate, TPGaugeGroupElement)
-=======
         GateGaugeGroup.__init__(self, gate, TPGaugeGroupElement, "TP")
->>>>>>> develop
 
 class TPGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -128,11 +117,7 @@ class DiagGaugeGroup(GateGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-<<<<<<< HEAD
-        GateGaugeGroup.__init__(self, gate, DiagGaugeGroupElement)
-=======
         GateGaugeGroup.__init__(self, gate, DiagGaugeGroupElement, "Diagonal")
->>>>>>> develop
 
 class DiagGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
@@ -150,11 +135,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         gate = _gate.LinearlyParameterizedGate(baseMx, parameterArray,
                                                parameterToBaseIndicesMap,
                                                ltrans, rtrans, real=True)
-<<<<<<< HEAD
-        GateGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement)
-=======
         GateGaugeGroup.__init__(self, gate, TPDiagGaugeGroupElement, "TP Diagonal")
->>>>>>> develop
 
 class TPDiagGaugeGroupElement(TPGaugeGroupElement):
     def __init__(self, gate):
@@ -167,17 +148,11 @@ class UnitaryGaugeGroup(GateGaugeGroup):
         gate = _gate.LindbladParameterizedGate(None, _np.identity(dim,'d'),
                                                cptp=True, nonham_basis=[],
                                                ham_basis=basis, mxBasis=basis)
-<<<<<<< HEAD
-        GateGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement)
-=======
         GateGaugeGroup.__init__(self, gate, UnitaryGaugeGroupElement, "Unitary")
->>>>>>> develop
 
 class UnitaryGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
         GateGaugeGroupElement.__init__(self,gate)
-<<<<<<< HEAD
-=======
 
 
 class SpamGaugeGroup(GateGaugeGroup):
@@ -215,4 +190,3 @@ class TPSpamGaugeGroup(GateGaugeGroup):
 class TPSpamGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
         GateGaugeGroupElement.__init__(self,gate)
->>>>>>> develop
