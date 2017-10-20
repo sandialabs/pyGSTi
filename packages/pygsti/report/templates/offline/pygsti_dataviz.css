@@ -249,6 +249,7 @@ figure > div.pygsti-wsoutput-group {
 
 fieldset {
     border: 0px none;
+    text-align: left; /* for button groups */
 }
 
 /* Plotly hovertext size */
