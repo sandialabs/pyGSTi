@@ -11,6 +11,8 @@ function max_height(els) {
 }
 
 function make_wstable_resizable(id) {
+    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    
     $("#" + id).resizable({
         autoHide: true,
         resize: function( event, ui ) {
@@ -40,6 +42,8 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
+    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    
     $("#" + id).resizable({
         autoHide: true,
         resize: function( event, ui ) {

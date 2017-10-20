@@ -1424,7 +1424,8 @@ class WorkspaceOutput(object):
         #                                placeholder='Plot HTML',
         #                                description='Plot HTML',
         #                                disabled=False)
-        out = self.render("html", global_requirejs=True) # b/c jupyter uses require.js
+        self.set_render_options(global_requirejs=True) # b/c jupyter uses require.js
+        out = self.render("html")
         #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
@@ -1941,10 +1942,8 @@ class WorkspaceTable(WorkspaceOutput):
                     
                     # init_table_js work is peformed when divs are loaded
                     init_single_table_js = ''
-                    if resizable:
-                        init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableDivID)
-                    if autosize == "continual":
-                        init_single_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableDivID)
+                    if resizable: # make a resizable widget on *entire* plot (will only act on first call)
+                        init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
                     init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
                         tableID=tableDivID, initautosize=str(autosize in ("initial","continual")).lower())
 
@@ -1987,6 +1986,9 @@ class WorkspaceTable(WorkspaceOutput):
                     ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
                 ret['js'] += '  $(document).ready(function() {\n'
                 ret['js'] += switch_js # just switchboard init JS
+                
+                if autosize == "continual": # add window resize handler for *entire* plot
+                    ret['js'] += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
 
                 ret['js'] += '}); //end on-ready handler\n'
                 if global_requirejs:
@@ -2312,10 +2314,8 @@ class WorkspacePlot(WorkspaceOutput):
                     # init_table_js work is peformed when divs are loaded
                     init_single_plot_js = ''
                     if not handlersOnly:
-                        if resizable: # make a resizable widget
-                            init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotDivID)
-                        if autosize == "continual": # add window resize handler
-                            init_single_plot_js += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotDivID)
+                        if resizable: # make a resizable widget on *entire* plot (will only act on first call)
+                            init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
                         #trigger init & create of plots
                         init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
                             plotID=plotDivID, initautosize=str(autosize in ("initial","continual")).lower())
@@ -2336,9 +2336,12 @@ class WorkspacePlot(WorkspaceOutput):
                     if global_requirejs:
                         ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
                     ret['js'] += '  $(document).ready(function() {\n'
+                    
                 ret['js'] += switch_js # just switchboard init JS
             
                 if not handlersOnly:
+                    if autosize == "continual": # add window resize handler for *entire* plot
+                        ret['js'] += '    make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
                     ret['js'] += '}); //end on-ready handler\n'
                     if global_requirejs:
                         ret['js'] += '}); //end require block\n'
