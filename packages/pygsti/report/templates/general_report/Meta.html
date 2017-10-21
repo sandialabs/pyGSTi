@@ -1,13 +1,13 @@
 	<h1>System and pyGSTi parameters</h1>
-	<p>This section contains a raw dump of system information and various pyGSTi parameters.  It's purpose is to stamp this report with parameters indicating how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  Note that if the core GST computation was done on a machine different from the one that created this report, the software information contained here will be of less value.</p>
+	<p>This tab contains a raw dump of system information and various pyGSTi parameters.  Its purpose is to stamp this report with parameters that indicate how exactly GST was run to create it, as well as to record the software environment in within which the report creation was run.  However, if the core GST computation was done on a different computer, then the software information contained here will be less useful (it describes the environment in which the report was generated, not the one in which the estimate was generated).</p>
 
 	<figure id="metadataTable" class='tbl'>
-          <figcaption><span class="captiontitle">Listing of GST parameters and meta-data.</span> <span class="captiondetail"> These parameters and related metadata describe how the GST computation was performed which led to this report.</span></figcaption>
+          <figcaption><span class="captiontitle">Listing of GST parameters and meta-data.</span> <span class="captiondetail"> These parameters and related metadata describe how the GST computation that produced this report was performed.</span></figcaption>
           %(metadataTable)s
 	</figure>
 
 	<figure id="softwareEnvTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> Note that this describes the software environment of the machine used to generate this report, and not necessarily the machine used to perform the core GST gate set estimation.</span></figcaption>
+	  <figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> This table describes the software environment of the machine used to generate this report.  It may not describe the machine used to perform the core GST gate set estimation.</span></figcaption>
 	  %(softwareEnvTable)s
 	</figure>
       

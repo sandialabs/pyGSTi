@@ -665,9 +665,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       gaugeOptSuite='toggleValidSpam', gaugeOptTarget=None,
-                       comm=None, memLimit=None, advancedOptions=None,
-                       output_pkl=None, verbosity=2):
+                       gaugeOptSuite=('toggleValidSpam','unreliable2Q'),
+                       gaugeOptTarget=None, comm=None, memLimit=None,
+                       advancedOptions=None, output_pkl=None, verbosity=2):
 
     """
     Perform end-to-end GST analysis using standard practices.
@@ -722,20 +722,21 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate
 
-    gaugeOptSuite : str or dict, optional
-        Specifies which gauge optimizations to perform on each estimate.  An
-        string (see below) specifies a built-in set of gauge optimizations,
-        otherwise `gaugeOptSuite` should be a dictionary of gauge-optimization
-        parameter dictionaries, as specified by the `gaugeOptParams` argument 
-        of :func:`do_long_sequence_gst`.  The key names of `gaugeOptSuite` then
-        label the gauge optimizations within the resuling `Estimate` objects.
-        The built-in gauge optmization suites are:
+    gaugeOptSuite : str or list or dict, optional
+        Specifies which gauge optimizations to perform on each estimate.  A
+        string or list of strings (see below) specifies built-in sets of gauge
+        optimizations, otherwise `gaugeOptSuite` should be a dictionary of
+        gauge-optimization parameter dictionaries, as specified by the
+        `gaugeOptParams` argument of :func:`do_long_sequence_gst`.  The key
+        names of `gaugeOptSuite` then label the gauge optimizations within
+        the resuling `Estimate` objects.  The built-in suites are:
 
           - "single" : performs only a single "best guess" gauge optimization.
           - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
           - "varySpamWt" : varies spam weight but no SPAM penalty.
           - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
           - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
+          - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
           - "none" : no gauge optimizations are performed.
 
     gaugeOptTarget : GateSet, optional
@@ -795,72 +796,6 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     else:
         ds = dataFilenameOrSet #assume a Dataset object
 
-
-    #Build ordered dict of gauge optimization parameters
-    if isinstance(gaugeOptSuite, dict):
-        gaugeOptSuite_dict = _collections.OrderedDict()
-        for lbl, goparams in gaugeOptSuite.items():
-            gaugeOptSuite_dict[lbl] = goparams.copy()
-            gaugeOptSuite_dict[lbl].update( {'verbosity': printer-1 } )
-            
-    elif gaugeOptSuite == "single":
-        gaugeOptSuite_dict = _collections.OrderedDict(
-            [('single', {'itemWeights': {'gates':1, 'spam':1e-3},
-                         'verbosity': printer-1} )])
-        
-    elif gaugeOptSuite in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
-
-        itemWeights_bases = _collections.OrderedDict()
-        itemWeights_bases[""] = {'gates': 1}
-
-        #Add if a 2-qubit gateset
-        if gs_target.dim == 16: 
-            if advancedOptions is not None:
-                advanced = advancedOptions.get('all',{}) #'unreliableGates' can only be specified in 'all' options
-            else: advanced = {}
-            unreliableGates = advanced.get('unreliableGates',['Gcnot','Gcphase','Gms','Gcn','Gcx','Gcz'])
-            if any([gl in gs_target.gates.keys() for gl in unreliableGates]):
-                base = {'gates': 1}
-                for gl in unreliableGates:
-                    if gl in gs_target.gates.keys(): base[gl] = 0.01
-                itemWeights_bases["-2QUR"] = base
-            
-        gaugeOptSuite_dict = _collections.OrderedDict()
-        if gaugeOptSuite == "varySpam":
-            vSpam_range = [0,1]; spamWt_range = [1e-4,1e-1]
-        elif gaugeOptSuite == "varySpamWt":
-            vSpam_range = [0]; spamWt_range = [1e-4,1e-1]
-        elif gaugeOptSuite == "varyValidSpamWt":
-            vSpam_range = [1]; spamWt_range = [1e-4,1e-1]
-        elif gaugeOptSuite == "toggleValidSpam":
-            vSpam_range = [0,1]; spamWt_range = [1e-3]
-
-        for postfix,baseWts in itemWeights_bases.items():
-            for vSpam in vSpam_range:
-                for spamWt in spamWt_range:
-                    lbl = "Spam %g%s%s" % (spamWt, "+v" if vSpam else "", postfix)
-                    itemWeights = baseWts.copy()
-                    itemWeights['spam'] = spamWt
-                    gaugeOptSuite_dict[lbl] = {
-                        'itemWeights': itemWeights,
-                        'spam_penalty_factor': vSpam, 'verbosity': printer-1 }
-
-    elif gaugeOptSuite == "none":
-        gaugeOptSuite_dict = _collections.OrderedDict()
-
-    else:
-        raise ValueError("Invalid `gaugeOptSuite` argument: %s" % gaugeOptSuite)
-
-    if gaugeOptTarget is not None:
-        assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
-        for goparams in gaugeOptSuite_dict.values():
-            if 'targetGateset' in goparams:
-                _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                "user-defined targetGateset in gauge opt"
-                                "param dict(s)"))
-            goparams.update( {'targetGateset': gaugeOptTarget } )
-
-
     ret = None
     modes = modes.split(",")
     with printer.progress_logging(1):
@@ -897,8 +832,21 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            maxLengths, False, advanced, comm, memLimit,
                                            None, printer-1)
 
-            #Gauge optimize to list of gauge optimization parametesr
+            #Get gauge optimization dictionary
+            gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, tgt, printer-1)
+
+            if gaugeOptTarget is not None:
+                assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
+                for goparams in gaugeOptSuite_dict.values():
+                    if 'targetGateset' in goparams:
+                        _warnings.warn(("`gaugeOptTarget` argument is overriding"
+                                        "user-defined targetGateset in gauge opt"
+                                        "param dict(s)"))
+                    goparams.update( {'targetGateset': gaugeOptTarget } )
+                
+            #Gauge optimize to list of gauge optimization parameters
             for goLabel,goparams in gaugeOptSuite_dict.items():
+                
                 printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
                 tGO = _time.time()
                 ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-2)
@@ -920,3 +868,156 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             _pickle.dump(ret, output_pkl)
 
     return ret
+
+
+def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, verbosity=0):
+    """
+    Constructs a dictionary of gauge-optimization parameter dictionaries based
+    on "gauge optimization suite" name(s).  
+
+    This is primarily a helper function for :func:`do_stdpractice_gst`, but can
+    be useful in its own right for constructing the would-be gauge optimization 
+    dictionary used in :func:`do_stdpractice_gst` and modifying it slightly before
+    before passing it in (`do_stdpractice_gst` will accept a raw dictionary too).
+
+    Parameters
+    ----------
+    gaugeOptSuite : str or dict, optional
+        Specifies which gauge optimizations to perform on each estimate.  An
+        string (see below) specifies a built-in set of gauge optimizations,
+        otherwise `gaugeOptSuite` should be a dictionary of gauge-optimization
+        parameter dictionaries, as specified by the `gaugeOptParams` argument 
+        of :func:`do_long_sequence_gst`.  The key names of `gaugeOptSuite` then
+        label the gauge optimizations within the resuling `Estimate` objects.
+        The built-in gauge optmization suites are:
+
+          - "single" : performs only a single "best guess" gauge optimization.
+          - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).
+          - "varySpamWt" : varies spam weight but no SPAM penalty.
+          - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
+          - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
+          - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
+          - "none" : no gauge optimizations are performed.
+
+    gs_target : GateSet
+        A gate set which specifies the dimension (i.e. parameterization) of the
+        gauge-optimization and the basis.  Usually this is set to the *ideal*
+        `target gate set` for the gate set being gauge optimized.
+    
+    verbosity : int
+        The verbosity to attach to the various gauge optimization parameter
+        dictionaries.
+
+    Returns
+    -------
+    dict 
+        A dictionary whose keys are the labels of the different gauge
+        optimizations to perform and whose values are the corresponding
+        dictionaries of arguments to :func:`gaugeopt_to_target` (or lists
+        of such dictionaries for a multi-stage gauge optimization).
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    
+    #Build ordered dict of gauge optimization parameters
+    if isinstance(gaugeOptSuite, dict):
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        for lbl, goparams in gaugeOptSuite.items():
+            gaugeOptSuite_dict[lbl] = goparams.copy()
+            gaugeOptSuite_dict[lbl].update( {'verbosity': printer } )
+            
+    else:
+        gaugeOptSuite_dict = _collections.OrderedDict()
+        if _compat.isstr(gaugeOptSuite):
+            gaugeOptSuites = [gaugeOptSuite]
+        else:
+            gaugeOptSuites = gaugeOptSuite[:] #assumes gaugeOptSuite is a list/tuple of strs
+
+        for suiteName in gaugeOptSuites:
+            if suiteName == "single":
+                #OLD
+                #gaugeOptSuite_dict['single'] = {'itemWeights': {'gates':1, 'spam':1e-3},
+                #                                'verbosity': printer}
+                
+                stages = [ ] #multi-stage gauge opt
+                gg = gs_target.default_gauge_group
+                
+                if gg is not None:
+
+                    #Stage 1: plain vanilla gauge opt to get into "right ballpark"
+                    if gg.name in ("Full", "TP"):
+                        stages.append(
+                            {
+                                'itemWeights': {'gates': 1.0, 'spam': 1.0},
+                                'verbosity': printer
+                            })
+    
+                    #Stage 2: unitary gauge opt that tries to nail down gates (at
+                    #         expense of spam if needed)
+                    stages.append(
+                        {
+                            'itemWeights': {'gates': 1.0, 'spam': 0.0},
+                            'gauge_group': _objs.UnitaryGaugeGroup(gs_target.dim, gs_target.basis),
+                            'verbosity': printer
+                        })
+    
+                    #Stage 3: spam gauge opt that fixes spam scaling at expense of
+                    #         non-unital parts of gates (but shouldn't affect these
+                    #         elements much since they should be small from Stage 2).
+                    s3gg = _objs.SpamGaugeGroup if (gg.name == "Full") else \
+                           _objs.TPSpamGaugeGroup
+                    stages.append(
+                        {
+                            'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                            'gauge_group': s3gg(gs_target.dim),
+                            'verbosity': printer
+                        })
+                    
+                    gaugeOptSuite_dict['single'] = stages #can be a list of stage dictionaries
+    
+        
+            elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
+        
+                itemWeights_bases = _collections.OrderedDict()
+                itemWeights_bases[""] = {'gates': 1}
+
+                if "unreliable2Q" in gaugeOptSuites and gs_target.dim == 16:
+                    if advancedOptions is not None:
+                        advanced = advancedOptions.get('all',{}) #'unreliableGates' can only be specified in 'all' options
+                    else: advanced = {}
+                    unreliableGates = advanced.get('unreliableGates',['Gcnot','Gcphase','Gms','Gcn','Gcx','Gcz'])
+                    if any([gl in gs_target.gates.keys() for gl in unreliableGates]):
+                        base = {'gates': 1}
+                        for gl in unreliableGates:
+                            if gl in gs_target.gates.keys(): base[gl] = 0.01
+                        itemWeights_bases["-2QUR"] = base
+                            
+                if suiteName == "varySpam":
+                    vSpam_range = [0,1]; spamWt_range = [1e-4,1e-1]
+                elif suiteName == "varySpamWt":
+                    vSpam_range = [0]; spamWt_range = [1e-4,1e-1]
+                elif suiteName == "varyValidSpamWt":
+                    vSpam_range = [1]; spamWt_range = [1e-4,1e-1]
+                elif suiteName == "toggleValidSpam":
+                    vSpam_range = [0,1]; spamWt_range = [1e-3]
+        
+                for postfix,baseWts in itemWeights_bases.items():
+                    for vSpam in vSpam_range:
+                        for spamWt in spamWt_range:
+                            lbl = "Spam %g%s%s" % (spamWt, "+v" if vSpam else "", postfix)
+                            itemWeights = baseWts.copy()
+                            itemWeights['spam'] = spamWt
+                            gaugeOptSuite_dict[lbl] = {
+                                'itemWeights': itemWeights,
+                                'spam_penalty_factor': vSpam, 'verbosity': printer }
+
+            elif suiteName == "unreliable2Q":
+                assert( any([nm in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam")
+                            for nm in gaugeOptSuite])), "'unreliable2Q' suite must be used with a spam suite."
+
+            elif suiteName == "none":
+                pass #add nothing
+
+            else:
+                raise ValueError("Invalid `gaugeOptSuite` argument - unknown suite '%s'" % suiteName)
+
+    return gaugeOptSuite_dict

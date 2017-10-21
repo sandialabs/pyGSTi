@@ -98,7 +98,7 @@ if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
                                       branchname]) # View merge tree between beta and (our) develop
     output = output.decode('utf-8', 'ignore')
     print('Done:')
-    print(output)
+    #print(output)
     
     canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
     

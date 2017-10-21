@@ -762,6 +762,7 @@ def create_general_report(results, filename, title="auto",
     qtys['confidenceLevel'] = "%d" % \
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
+    qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'] = _errgen_formula(errgen_type, 'html')
 
     # Generate Switchboard
