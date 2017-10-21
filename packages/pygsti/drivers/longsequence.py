@@ -833,7 +833,8 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            None, printer-1)
 
             #Get gauge optimization dictionary
-            gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, tgt, printer-1)
+            gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, tgt,
+                                                              advancedOptions, printer-1)
 
             if gaugeOptTarget is not None:
                 assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
@@ -870,7 +871,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
     return ret
 
 
-def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, verbosity=0):
+def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None, verbosity=0):
     """
     Constructs a dictionary of gauge-optimization parameter dictionaries based
     on "gauge optimization suite" name(s).  
@@ -903,6 +904,9 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, verbosity=0):
         A gate set which specifies the dimension (i.e. parameterization) of the
         gauge-optimization and the basis.  Usually this is set to the *ideal*
         `target gate set` for the gate set being gauge optimized.
+
+    advancedOptions : dict, optional
+        A dictionary of advanced options for internal use.
     
     verbosity : int
         The verbosity to attach to the various gauge optimization parameter
