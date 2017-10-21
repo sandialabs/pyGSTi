@@ -517,9 +517,10 @@ class GatesetVsTargetTable(WorkspaceTable):
         
         tooltips = colHeadings
         table = _ReportTable(colHeadings, formatters, colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
-    
-        pAGsI = _ev(_reportables.Average_gateset_infidelity(gateset, targetGateset), confidenceRegionInfo)
-        table.addrow(("Avg. primitive gate set infidelity", pAGsI), (None, 'Normal') )
+
+        #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better for this.
+        #pAGsI = _ev(_reportables.Average_gateset_infidelity(gateset, targetGateset), confidenceRegionInfo)
+        #table.addrow(("Avg. primitive gate set infidelity", pAGsI), (None, 'Normal') )
 
         pRBnum = _ev(_reportables.Predicted_rb_number(gateset, targetGateset), confidenceRegionInfo)
         table.addrow(("Predicted primitive RB number", pRBnum), (None, 'Normal') )
@@ -528,9 +529,9 @@ class GatesetVsTargetTable(WorkspaceTable):
             clifford_gateset = _cnst.build_alias_gateset(gateset,clifford_compilation)
             clifford_targetGateset = _cnst.build_alias_gateset(targetGateset,clifford_compilation)
 
-            #For clifford versions we don't have a confidence region - so no error bars
-            AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_gateset, clifford_targetGateset))
-            table.addrow(("Avg. clifford gate set infidelity", AGsI), (None, 'Normal') )
+            ##For clifford versions we don't have a confidence region - so no error bars
+            #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_gateset, clifford_targetGateset))
+            #table.addrow(("Avg. clifford gate set infidelity", AGsI), (None, 'Normal') )
     
             RBnum = _ev(_reportables.Predicted_rb_number(clifford_gateset, clifford_targetGateset))
             table.addrow(("Predicted RB number", RBnum), (None, 'Normal') )
