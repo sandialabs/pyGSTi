@@ -17,7 +17,7 @@ from ..tools import basis as _basis
 from . import gaugegroup as _gaugegroup
 from .protectedarray import ProtectedArray as _ProtectedArray
 
-IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
+IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 def optimize_gate(gateToOptimize, targetGate):
     """
