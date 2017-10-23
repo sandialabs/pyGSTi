@@ -22,6 +22,7 @@ from .. import io as _io
 from .. import tools as _tools
 from ..tools import compattools as _compat
 
+ROBUST_SUFFIX = ".robust"
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -619,7 +620,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 # and just keep (?) old estimates of all prior iterations (or use "blank"
                 # sentinel once this is supported).
                 
-            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl + ".robust")
+            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl+ROBUST_SUFFIX)
 
             #Do final gauge optimization to data-scaled estimate also
             if gaugeOptParams != False:
@@ -638,7 +639,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 #else:
                 
                 # add same gauge-optimized result as above
-                ret.estimates[estlbl + ".robust"].add_gaugeoptimized(gaugeOptParams, go_gs_final,
+                ret.estimates[estlbl + ROBUST_SUFFIX].add_gaugeoptimized(gaugeOptParams, go_gs_final,
                                                                      None, printer)
 
 
@@ -850,15 +851,23 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 
                 printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
                 tGO = _time.time()
+                gsStart = ret.estimates[est_label].get_start_gateset(goparams)
                 ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-2)
                 printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
 
                 #Gauge optimize data-scaled estimate also
-                if est_label + ".robust" in ret.estimates:
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+".robust"),2)
-                    tGO = _time.time()
-                    ret.estimates[est_label + ".robust"].add_gaugeoptimized(goparams, None, goLabel, printer-2)
-                    printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
+                if est_label + ROBUST_SUFFIX in ret.estimates:
+                    gsStart_robust = ret.estimates[est_label+ROBUST_SUFFIX].get_start_gateset(goparams)
+                    if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
+                        printer.log("-- Conveying '%s' gauge optimization to %s estimate --" % (goLabel,est_label+ROBUST_SUFFIX),2)
+                        params = ret.estimates[est_label].goparameters[goLabel] #no need to copy here
+                        gsopt = ret.estimates[est_label].gatesets[goLabel].copy()
+                        ret.estimates[est_label + ROBUST_SUFFIX].add_gaugeoptimized(params, gsopt, goLabel, printer-2)
+                    else:
+                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+ROBUST_SUFFIX),2)
+                        tGO = _time.time()
+                        ret.estimates[est_label + ROBUST_SUFFIX].add_gaugeoptimized(goparams, None, goLabel, printer-2)
+                        printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):

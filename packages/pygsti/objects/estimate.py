@@ -77,6 +77,28 @@ class Estimate(object):
                 self.parameters[key] = parameters[key]
 
                 
+    def get_start_gateset(self, goparams):
+        """
+        Returns the starting gateset for the gauge optimization given by `goparams`.
+
+        This has a particular (and perhaps singular) use for deciding whether
+        the gauge-optimized gate set for one estimate can be simply copied to
+        another estimate, without actually re-gauge-optimizing.
+
+        Parameters
+        ----------
+        goparams : dict or list
+            A dictionary of gauge-optimization parameters, just as in
+            :func:`add_gaugeoptimized`.
+
+        Returns
+        -------
+        GateSet
+        """
+        goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+        return goparams_list[0].get('gateset',self.gatesets['final iteration estimate'])
+
+                
     def add_gaugeoptimized(self, goparams, gateset=None, label=None, verbosity=None):
         """
         Adds a gauge-optimized GateSet (computing it if needed) to this object.
