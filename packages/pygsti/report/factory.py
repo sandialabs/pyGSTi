@@ -34,6 +34,8 @@ import functools as _functools
 
 from pprint import pprint as _pprint
 
+ROBUST_SUFFIX = ".robust"
+
 def _read_and_preprocess_template(templateFilename, toggles):
     template = ''
     with open(templateFilename, 'r') as templatefile:
@@ -391,6 +393,81 @@ def _add_new_labels(running_lbls, current_lbls):
                 running_lbls.append(lbl)
     return running_lbls
 
+def _add_new_estimate_labels(running_lbls, estimates):
+    """ 
+    Like _add_new_labels but perform robust-suffix processing.
+    """
+    current_lbls = list(estimates.keys())
+    print("DB: add new labels: ",current_lbls, " to ", running_lbls)
+    
+    def add_lbl(lst, lbl):
+        if lbl.endswith(ROBUST_SUFFIX) and \
+           lbl[:-len(ROBUST_SUFFIX)] in current_lbls:
+                return # add nothing: will get processed with the non-suffixed label
+
+        lst.append(lbl) #add label
+        if lbl+ROBUST_SUFFIX in current_lbls and \
+           not _robust_estimate_has_same_gatesets(estimates, lbl):
+            lst.append(lbl+ROBUST_SUFFIX) #add "robust" label
+
+    if running_lbls is None:
+        running_lbls = []
+        
+    if running_lbls != current_lbls:
+        for lbl in current_lbls:
+            if lbl not in running_lbls:
+                add_lbl(running_lbls, lbl)
+
+    print("DB: returning: ",running_lbls)
+    return running_lbls
+
+
+def _robust_estimate_has_same_gatesets(estimates, est_lbl):
+    lbl_robust = est_lbl+ROBUST_SUFFIX
+    if lbl_robust not in estimates: return False #no robust estimate
+
+    for gs_lbl in list(estimates[est_lbl].goparameters.keys()) \
+        + ['final iteration estimate']:
+        if gs_lbl not in estimates[lbl_robust].gatesets:
+            return False #robust estimate is missing gs_lbl!
+
+        gs = estimates[lbl_robust].gatesets[gs_lbl]
+        if estimates[est_lbl].gatesets[gs_lbl].frobeniusdist(gs) > 1e-8:
+            return False #gateset mismatch!
+        
+    return True
+
+def _get_viewable_crf(estimates, est_lbl, gs_lbl,
+                      return_misfit_sigma=False, verbosity=0):
+    printer = VerbosityPrinter.build_printer(verbosity)
+    estimates_to_try = [ estimates[est_lbl] ]
+
+    #Fallback on robust estimate if it has the same gate sets
+    if _robust_estimate_has_same_gatesets(estimates, est_lbl):
+        estimates_to_try.append( estimates[est_lbl + ROBUST_SUFFIX] )
+    
+    for est in estimates_to_try:
+        if est.has_confidence_region_factory(gs_lbl, 'final'):
+            crf = est.get_confidence_region_factory(gs_lbl,'final')
+            if crf.can_construct_views():
+                if return_misfit_sigma:
+                    return crf, est.misfit_sigma()
+                else: return crf
+            else:
+                printer.log(
+                    ("Note: Confidence interval factory for {estlbl}.{gslbl} "
+                     "gate set exists but cannot create views.  This could be "
+                     "because you forgot to create a Hessian *projection*"
+                    ).format(estlbl=est_lbl,gslbl=gs_lbl))
+                
+    printer.log(
+        ("Note: no factory to compute confidence "
+         "intervals for the '{estlbl}.{gslbl}' gate set."
+        ).format(estlbl=est_lbl,gslbl=gs_lbl))
+                
+    return (None,None) if return_misfit_sigma else None
+
+
 
 def create_offline_zip(outputDir="."):
     """ 
@@ -452,7 +529,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     Ls = None        
 
     for results in results_dict.values():
-        est_labels = _add_new_labels(est_labels, list(results.estimates.keys()))
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates)
         Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)    
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
@@ -534,12 +611,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
-                if not est.has_confidence_region_factory(GIRepLbl, 'final') or \
-                   not est.get_confidence_region_factory(GIRepLbl,'final').can_construct_views():
+                GIcrf = _get_viewable_crf(results.estimates, lbl, GIRepLbl)
+                if GIcrf is None:
                     for l in gauge_opt_labels:
-                        if est.has_confidence_region_factory(l, 'final') and \
-                           est.get_confidence_region_factory(l, 'final').can_construct_views():
-                            GIRepLbl = l; break
+                        if _get_viewable_crf(results.estimates, lbl, l) is not None:
+                            GIRepLbl = l; break                            
 
             NA = ws.NotApplicable()
             effds, scale_subMxs = est.get_effective_dataset(True)
@@ -563,36 +639,20 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
 
             if confidenceLevel is not None:
-                #FUTURE: reuse Hessian for multiple gauge optimizations of the same gate set (or leave this to user?)
-        
-                #Check whether we should use non-Markovian error bars:
-                # If fit is bad, check if any reduced fits were computed
-                # that we can use with in-model error bars.  If not, use
-                # experimental non-markovian error bars.
-                if est.misfit_sigma() > nmthreshold:
-                    est_confidenceLevel = -abs(confidenceLevel)
-                else: est_confidenceLevel = confidenceLevel
 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
                         switchBd.cri[d,i,il] = None #default
-                        if est.has_confidence_region_factory(l, 'final'):
-                            crf = est.get_confidence_region_factory(l, 'final')
-                            region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                            if crf.can_construct_views():
-                                switchBd.cri[d,i,il] = crf.view(abs(est_confidenceLevel), region_type)
-                            else:
-                                printer.log(
-                                    ("Note: Cannot create confidence intervals for "
-                                     "{estlbl}.{gslbl} gate set.  This could be"
-                                     "because you created a factory but forgot"
-                                     "to create a Hessian *projection*"
-                                    ).format(estlbl=lbl,gslbl=l), 2)
-                        else:
-                            printer.log(
-                                ("Note: no factory to compute confidence "
-                                 "intervals for the '{estlbl}.{gslbl}' gate set."
-                                ).format(estlbl=lbl,gslbl=l), 2)
+                        crf,misfit_sigma = _get_viewable_crf(results.estimates, lbl, l, True, printer-2)
+                        
+                        if crf is not None:
+                            #Check whether we should use non-Markovian error bars:
+                            # If fit is bad, check if any reduced fits were computed
+                            # that we can use with in-model error bars.  If not, use
+                            # experimental non-markovian error bars.
+                            region_type = "normal" if misfit_sigma <= nmthreshold \
+                                          else "non-markovian"
+                            switchBd.cri[d,i,il] = crf.view(confidenceLevel, region_type)
 
                     else: switchBd.cri[d,i,il] = NA
 
@@ -600,11 +660,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 # If we can't compute CIs for this, ignore SILENTLY, since any
                 #  relevant warnings/notes should have been given above.
                 switchBd.criGIRep[d,i] = None #default
-                if est.has_confidence_region_factory(GIRepLbl, 'final'):
-                    crf = est.get_confidence_region_factory(GIRepLbl, 'final')
-                    region_type = "normal" if est_confidenceLevel >= 0 else "non-markovian"
-                    if crf.can_construct_views():
-                        switchBd.criGIRep[d,i] = crf.view(abs(est_confidenceLevel), region_type)
+                crf,misfit_sigma = _get_viewable_crf(results.estimates, lbl, GIRepLbl, True, 0)
+                if crf is not None:
+                    region_type = "normal" if misfit_sigma <= nmthreshold \
+                                  else "non-markovian"
+                    switchBd.criGIRep[d,i] = crf.view(confidenceLevel, region_type)
 
     return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
 
@@ -726,6 +786,7 @@ def create_general_report(results, filename, title="auto",
     Workspace
         The workspace object used to create the report
     """
+    tStart = _time.time()
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
@@ -964,6 +1025,7 @@ def create_general_report(results, filename, title="auto",
             #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
+    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
         
     return ws
 
