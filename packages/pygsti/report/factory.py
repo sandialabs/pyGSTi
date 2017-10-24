@@ -398,7 +398,6 @@ def _add_new_estimate_labels(running_lbls, estimates):
     Like _add_new_labels but perform robust-suffix processing.
     """
     current_lbls = list(estimates.keys())
-    print("DB: add new labels: ",current_lbls, " to ", running_lbls)
     
     def add_lbl(lst, lbl):
         if lbl.endswith(ROBUST_SUFFIX) and \
@@ -418,7 +417,6 @@ def _add_new_estimate_labels(running_lbls, estimates):
             if lbl not in running_lbls:
                 add_lbl(running_lbls, lbl)
 
-    print("DB: returning: ",running_lbls)
     return running_lbls
 
 
@@ -543,7 +541,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     multiL = bool(len(Ls) > 1)
             
     switchBd = ws.Switchboard(
-        ["Dataset","Estimate","G-Opt","max(L)"],
+        ["Dataset","Estimate","Gauge-Opt","max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
         show=[multidataset,multiest,multiGO,False] # "global" switches only + gauge-opt (OK if doesn't apply)

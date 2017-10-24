@@ -24,19 +24,19 @@ h1 {
   font-size: 1.33333333em;
 }
 h2 {
-  font-size: 1.33333333em;
+  font-size: 1.15em;
 }
 h3 {
-  font-size: 1.22222222em;
+  font-size: 1.1em;
 }
 h4 {
-  font-size: 1.22222222em;
+  font-size: 1.1em;
 }
 h5 {
-  font-size: 1.22222222em;
+  font-size: 1.1em;
 }
 h6 {
-  font-size: 1.22222222em;
+  font-size: 1.1em;
 }
 p {
   margin: 0 0 0.5em;
@@ -188,9 +188,9 @@ h2 {
 /*h1 {
   text-transform: uppercase;
 } */
-h2 {
+/*h2 {
     font-weight: normal;
-}
+}*/
 h1 + h2,
 h1 + * > h2:first-child {
   margin-top: 0;
