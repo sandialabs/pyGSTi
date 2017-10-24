@@ -906,6 +906,8 @@ def create_general_report(results, filename, title="auto",
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty('softwareEnvTable', ws.SoftwareEnvTable)
+    addqty('exampleTable', ws.ExampleTable)
+    qtys['exampleTable'].set_render_options(click_to_display=True)
 
     #Ls and Germs specific
     gss = switchBd.gss

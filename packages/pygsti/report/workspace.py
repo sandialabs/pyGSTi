@@ -315,6 +315,7 @@ class Workspace(object):
         self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
         self.MetadataTable = makefactory(_wt.MetadataTable)
         self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
+        self.ExampleTable = makefactory(_wt.ExampleTable)
 
         #Plots
         self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot)

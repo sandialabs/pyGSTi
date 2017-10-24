@@ -2134,3 +2134,28 @@ class SoftwareEnvTable(WorkspaceTable):
     
         table.finish()
         return table
+
+
+class ExampleTable(WorkspaceTable):
+    def __init__(self, ws):
+        """A table showing how to use table features."""
+        super(ExampleTable,self).__init__(ws, self._create)
+
+    def _create(self):
+        colHeadings = ["Hover over me...","And me!","Click the pig"]
+        tooltips = ["This tooltip can give more information about what this column displays",
+                    "Unfortunately, we can't show nicely formatted math in these tooltips (yet)",
+                    "Click on the pyGSTi logo below to create the non-automatically-generated plot;" +
+                    " then hover over the colored boxes."]
+        example_mx = _np.array( [[ 1.0,  1/3, -1/3, -1.0],
+                                 [ 1/3,  1.0,  0.0, -1/5],
+                                 [-1/3,  0.0,  1.0,  1/6],
+                                 [-1.0, -1/5,  1/6,  1.0]] )
+        example_ebmx = _np.abs(example_mx) * 0.05
+        example_fig =  _wp.GateMatrixPlot(self.ws, example_mx, -1.0,1.0,
+                                          "pp", EBmatrix=example_ebmx)
+        
+        table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
+        table.addrow(("Pi",_np.pi, example_fig), ('Normal','Normal','Figure'))
+        table.finish()
+        return table
