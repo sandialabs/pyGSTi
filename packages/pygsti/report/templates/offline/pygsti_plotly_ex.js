@@ -138,7 +138,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	if(plotman != null) {
 	    plotman.enqueue( function() {
 		$("#"+id).trigger("after_createplots");
-	    });
+	    }, "Finishing table " + id + " plot creation");
 	} else {
 	    wstable.trigger("after_createplots");
 	}
