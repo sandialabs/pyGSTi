@@ -134,12 +134,12 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
                 rndm_indices = interleaved_indices.flatten()
         random_string = [ gateset.gates.keys()[i] for i in rndm_indices ] 
         random_string_group = [ gateset_to_group_labels[gateset.gates.keys()[i]] for i in rndm_indices ] 
-        print(random_string)
+        #print(random_string)
         inversion_group_element = generated_group.get_inv(generated_group.product(random_string_group))
         inversion_sequence = compilation[inversion_group_element]
-        print(inversion_sequence)
+        #print(inversion_sequence)
         random_string.extend(inversion_sequence)
-        print(random_string)
+        #print(random_string)
         
     if not inverse:
         if gateset:
