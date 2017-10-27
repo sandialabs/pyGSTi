@@ -223,7 +223,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
 	wsplotgroup.css("max-height","none");
     }
 
-    var plots = wsplot.find(".plotly-graph-div");
+    var plots = wsplotgroup.find(".plotly-graph-div");
     var maxDesiredWidth = max_width(plots);
     var maxDesiredHeight = max_height(plots);
     wsplotgroup.css("width", maxDesiredWidth);
@@ -246,7 +246,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     // aspect ratio restrictions may have caused plots to be smaller
     // than desired, leaving free space.
     wsplotgroup.css("width", max_width(plots));
-    wsplotgriup.css("height", max_height(plots));
+    wsplotgroup.css("height", max_height(plots));
     console.log("Handshake: resizing container to = " + max_width(plots) + ", " + max_height(plots));
 
     // 6) If this table is within a <figure> tag try to set

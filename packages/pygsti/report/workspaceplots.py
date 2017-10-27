@@ -12,6 +12,8 @@ import os                as _os
 import warnings          as _warnings
 import collections       as _collections
 
+from scipy.stats  import chi2 as _chi2
+    
 from .. import algorithms   as _alg
 from .. import tools        as _tools
 from .. import construction as _construction
@@ -796,6 +798,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
 
     minval = 0
     maxval = _np.max(ys)
+    nvals = len(ys)
     cumulative = dict(enabled=False)
     #             marker=dict(color=barcolor),
     #barcolor = 'gray'
@@ -803,6 +806,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
     nbins = 50
     binsize = (maxval-minval)/(nbins-1)
     bincenters = _np.linspace(minval, maxval, nbins)
+    bindelta = (maxval-minval)/(nbins-1) #spacing between bin centers
     
     trace = go.Histogram(
             x=[bincenters[0]] + ys, #artificially add 1 count in lowest bin so plotly anchors histogram properly
@@ -812,6 +816,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 end=maxval+binsize/2.0,
                 size=binsize
             ),
+            name = "count",
             marker=dict(
                 color=[colormap.get_color(t) for t in bincenters],
                 line=dict(
@@ -822,6 +827,17 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
             cumulative=cumulative,
             opacity=1.00,
             showlegend=False,
+        )
+
+    dof = colormap.dof if hasattr(colormap,"dof") else 1
+    line_trace = go.Scatter(
+        x = bincenters,
+        y = [ nvals*bindelta*_chi2.pdf(xval, dof) for xval in bincenters ],
+        name = "expected",
+        showlegend=False,
+        line = dict(
+            color = ('rgb(0, 0, 0)'),
+            width = 1) # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
         )
 
     log = True
@@ -845,7 +861,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
         )
 
     pythonVal = {'histogram values': ys}
-    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap,
+    return { 'plotlyfig': go.Figure(data=[trace, line_trace], layout=layout), 'colormap': colormap,
              'pythonValue': pythonVal }
 
 
@@ -1618,9 +1634,9 @@ class ColorBoxPlot(WorkspacePlot):
                 fig['plotlyfig']['data'].append(newfig['plotlyfig']['data'][0])
 
         nTraces = len(fig['plotlyfig']['data'])
-        assert(nTraces == len(plottypes))
+        assert(nTraces >= len(plottypes)) # not == b/c histogram adds line trace
 
-        if nTraces > 1:
+        if len(plottypes) > 1:
             buttons = []
             for i,nm in enumerate(plottypes):
                 visible = [False]*nTraces
@@ -2391,7 +2407,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
 
 
 class DatasetComparisonHistogramPlot(WorkspacePlot):
-    """ """
+    """ TODO: docstring"""
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                   log=True, display='pvalue', scale=1.0):
         super(DatasetComparisonHistogramPlot,self).__init__(ws, self._create, dsc, nbins, frequency,

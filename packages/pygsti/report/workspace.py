@@ -914,7 +914,7 @@ class Switchboard(_collections.OrderedDict):
                                   % (ID,style)
                 html += "<fieldset>\n"
                 if name:
-                    html += "<label for='%s'>%s</label>\n" % (ID,name)
+                    html += "<label for='%s' class='pygsti-slider-label'>%s</label>\n" % (ID,name)
                 html += "<div name='%s' id='%s'>\n" % (ID,ID)
                 html += "<div id='%s-handle' class='ui-slider-handle'></div>" % ID
                 html += "</div>\n</fieldset></div>\n"
@@ -1303,7 +1303,8 @@ class WorkspaceOutput(object):
         'page_size': (6.5,8.0),
         'render_includes': True,
         'leave_includes_src': False,
-        'precision': None
+        'precision': None,
+        'valign': 'top'
     }
                                
     
@@ -2219,6 +2220,17 @@ class WorkspacePlot(WorkspaceOutput):
         global_requirejs = self.options.get('global_requirejs',False)
         resizable = self.options.get('resizable',True)
         autosize = self.options.get('autosize','none')
+        valign = self.options.get('valign','top')
+
+        if valign == 'top':
+            abswrap_cls = 'abswrap'
+            relwrap_cls = 'relwrap'
+        elif valign == 'bottom':
+            abswrap_cls = 'bot_abswrap'
+            relwrap_cls = 'bot_relwrap'
+        else:
+            raise ValueError("Invalid 'valign' value: %s" % valign)
+            
 
         if ID is None: ID = self.ID
         plotID = "plot_" + ID
@@ -2265,11 +2277,11 @@ class WorkspacePlot(WorkspaceOutput):
                             link_to=self.options['link_to'], link_to_id=plotDivID)
 
                     divIDs.append(plotDivID)  # getPlotlyDivID(fig_dict['html'])
-                    divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
+                    divHTML.append("<div class='%s'>%s</div>" % (abswrap_cls,fig_dict['html']))
                     divJS.append( fig_dict['js'] )
                     
                 base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices, ['relwrap'])
+                                         self.switchboards, self.sbSwitchIndices, [relwrap_cls])
                 ret = { 'html': base['html'], 'js': '' }
                     
                 if not handlersOnly:
@@ -2310,7 +2322,7 @@ class WorkspacePlot(WorkspaceOutput):
                             link_to=self.options['link_to'], link_to_id=plotDivID)
                         
                     divIDs.append(plotDivID) # getPlotlyDivID(fig_dict['html'])
-                    divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
+                    divHTML.append("<div class='%s'>%s</div>" % (abswrap_cls,fig_dict['html']))
     
                     # init_table_js work is peformed when divs are loaded
                     init_single_plot_js = ''
@@ -2327,7 +2339,7 @@ class WorkspacePlot(WorkspaceOutput):
                     "Cannot render 'htmldir' without a valid 'output_dir' render option"
                 base = self._render_html_dir(plotID, divHTML, divJS, divIDs, self.switchpos_map,
                                              self.switchboards, self.sbSwitchIndices,
-                                             self.options['output_dir'], ['relwrap'], False)
+                                             self.options['output_dir'], [relwrap_cls], False)
                                              # Don't link_to b/c plots will all have download buttons
                 ret = base
                 switch_js = base['js']

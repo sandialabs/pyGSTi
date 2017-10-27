@@ -345,12 +345,20 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
             histnorm = traceDict.get('histnorm',None)
             marker = traceDict.get('marker',None)
             color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
-            xbins = traceDict['xbins'] 
+            xbins = traceDict['xbins']
             histdata = traceDict['x'] 
-            
-            histBins = int(round( (xbins['end'] - xbins['start'])/xbins['size']))
+
+            if abs(xbins['size']) < 1e-6:
+                histBins = 1
+            else:
+                histBins = int(round( (xbins['end'] - xbins['start'])/xbins['size']))
              
-            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)                
+            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+            if yaxistype == 'log':
+                TOL = 1e-6
+                if len(histdata_finite) == 0:
+                    axes.set_yscale("linear") #no data, and will get an error with log-scale, so switch to linear
+            
             #histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
             #histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
             #_plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
@@ -364,7 +372,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
         
     if save_to:
         _plt.savefig(save_to, bbox_extra_artists=(axes,),
-                     bbox_inches='tight') #need extra artists otherwise                                                                                                                   #axis labels get clipped 
+                     bbox_inches='tight') #need extra artists otherwise
+                                          #axis labels get clipped 
         _plt.cla()
         _plt.close(mpl_fig)
         del mpl_fig

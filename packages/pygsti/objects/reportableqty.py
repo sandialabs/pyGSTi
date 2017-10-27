@@ -151,6 +151,19 @@ class ReportableQty(object):
         else:
             return ReportableQty( v )
 
+    def mod(self, x):
+        """
+        Returns a ReportableQty that holds `this_qty mod x`, that is,
+        the value and error bar (if present are modulus-divided by `x`).
+        """
+        v = self.value % x
+        if self.has_eb():
+            eb = self.errbar % x
+            return ReportableQty( v, eb, self.nonMarkovianEBs)
+        else:
+            return ReportableQty( v )
+        
+
     def hermitian_to_real(self):
         """
         Returns a ReportableQty that holds the real matrix

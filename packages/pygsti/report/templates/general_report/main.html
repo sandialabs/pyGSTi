@@ -17,13 +17,6 @@
     %(CSS)s
 
     <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> -->
-
-    <script type="text/javascript">
-      testLocalAjax("tabs/test.html", function(errstatus) {
-        console.log("AJAX ERROR: " + errstatus);
-        $('#AjaxError').show()
-      });
-    </script>
     
   </head>
   
@@ -152,6 +145,13 @@
     <div id="status">
       No message
     </div>
-    
+
+    <script type="text/javascript">
+      testLocalAjax("tabs/test.html", function(errstatus) {
+        console.log("AJAX ERROR: " + errstatus);
+        $('#AjaxError').show()
+      });
+    </script>
+
   </body>
 </html>

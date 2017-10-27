@@ -194,6 +194,19 @@ class LinlogColormap(Colormap):
         hmin = 0  #we'll normalize all values to [0,1] and then
         hmax = 1  # plot.ly will map this range linearly to (also) [0,1]
                   # range of our (and every) colorscale.
+
+        #Notes on statistics below:
+        # consider random variable Y = max(X_i) and CDF of X_i's is F(x)
+        # then CDF of Y is given by: P( Y <= y ) = P( max(X_i) <= y )
+        # which is the probability that *all* X_i's are <= y, which equals
+        # product( P(X_i <= y) ) = prod( F(y) ), so if i=1...n then
+        # CDF of Y is F(y)^n.
+        # Below, we need the inverse of the CDF:
+        # x such that CDF(x) = given_percentage, so 
+        # x such that F(x)^n = percentage, so
+        # x such that F(x) = percentage^{1/n}
+        # Our percentage = "1-percentile" and b/c (1-x)^{1/n} ~= 1 - x/n
+        # we take the ppf at 1-percentile/N
         
         N = max(self.N,1) #don't divide by N == 0 (if there are no boxes)
         self.trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, self.dof))

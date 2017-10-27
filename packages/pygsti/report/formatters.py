@@ -64,8 +64,8 @@ formatDict['Effect'] = {
     'python' : _no_format}
 
 NormalHTML = _Formatter(html, 
-                        ebstring='%s <span class="errorbar">+/- %s</span>', 
-                        nmebstring='%s <span class="nmerrorbar">+/- %s</span>')
+                        ebstring='%s <span class="errorbar">&plusmn; %s</span>', 
+                        nmebstring='%s <span class="nmerrorbar">&plusmn; %s</span>')
 NormalLatex = _Formatter(latex,
                         ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $') #nmebstring will match
 
@@ -104,8 +104,8 @@ PiPython = _Formatter(_pi_python)
 # Pi formatters
 formatDict['Pi'] = {
     'html'  : NormalHTML.variant(formatstring='%s&pi;',
-                                 ebstring='%s <span class="errorbar">+/- %s</span>&pi;', 
-                                 nmebstring='%s <span class="nmerrorbar">+/- %s</span>&pi;'),
+                                 ebstring='%s&pi; <span class="errorbar">&plusmn; %s</span>&pi;', 
+                                 nmebstring='%s&pi; <span class="nmerrorbar">&plusmn; %s</span>&pi;'),
     'latex' : NormalLatex.variant(formatstring='%s$\\pi$',
                                   ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'),
     'python' : PiPython}

@@ -342,17 +342,24 @@ class GatesTable(WorkspaceTable):
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
-                    # we don't know how best to reshape
-                    # vector of parameter intervals, so just don't unless needed for boxes
-                    intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
-                    basis = None #we don't know how to label the params
-
+                    # we don't know how best to reshape interval matrix for gate, so
+                    # use derivative
+                    gate_dim   = gatesets[-1].get_dimension()
+                    basis = gatesets[-1].basis
+                    gate_deriv = gatesets[-1].gates[gl].deriv_wrt_params()
+                    intervalMx = _np.abs(_np.dot(gate_deriv, intervalVec).reshape(gate_dim,gate_dim))
+                    
+                    # vector of parameter intervals
+                    #OLD: intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
+                    
                 if display_as == "numbers":
                     row_data.append(intervalMx)
                     row_formatters.append('Brackets')
                     
                 elif display_as == "boxes":
+                    maxAbsVal = _np.max(_np.abs(intervalMx))
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                             m=-maxAbsVal, M=maxAbsVal,
                                              colorbar=False,
                                              mxBasis=basis)
                     row_data.append( fig )
@@ -1056,11 +1063,16 @@ class GateDecompTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
         gateLabels = list(gateset.gates.keys())  # gate labels
 
-        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
+                      + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
+                    'Taking the log of a gate may be performed approximately.  This is ' +
+                    'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
+                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters, 
-                             colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+                             colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
         formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(gateLabels)
 
         decomp = _ev(_reportables.General_decomposition(
@@ -1426,7 +1438,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     log_evals = evals.log()
                     re_diff, im_diff = log_evals.absdiff( _np.log(target_evals.astype(complex)), separate_re_im=True )
                     row_data.append( re_diff )
-                    row_data.append( im_diff/_np.pi )
+                    row_data.append( (im_diff/_np.pi).mod(2.0) )
                     row_formatters.append('Vec')
                     row_formatters.append('Pi')
 
@@ -1592,7 +1604,7 @@ class FitComparisonTable(WorkspaceTable):
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
                     'std deviation', 'number of std deviation', 'dataset dof',
-                    'number of gateset parameters', '1-5 star rating (like NetFlix)')
+                    'number of gateset parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
         
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
