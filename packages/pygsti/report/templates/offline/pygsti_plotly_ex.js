@@ -10,10 +10,20 @@ function max_height(els) {
     return Math.max.apply(null, hs);
 }
 
+function get_wsobj_group(id) {
+    var obj = $("#" + id);
+    if(obj.hasClass("pygsti-wsoutput-group")) {
+        return obj; // then id was the id of the entire group (OK)
+    } else { // assume id was for one of the items within a group
+        return obj.closest(".pygsti-wsoutput-group");
+    }
+}
+
 function make_wstable_resizable(id) {
-    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
-    $("#" + id).resizable({
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("padding-bottom", "7px"); //weird jqueryUI hack: to compensate for handle(?)
@@ -42,9 +52,10 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
-    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
-    $("#" + id).resizable({
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("max-width","none"); //remove max-width restriction
@@ -257,7 +268,6 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     }
 
 }
-
 
 
 function make_wsobj_autosize(boxid) {

@@ -168,30 +168,36 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
-    fig.value.set_render_options(click_to_display=specs['click_to_display'],
-                                 output_dir=specs['output_dir'],
+    #Create figure inline with 'js' set to only handlers (no further plot init)
+    fig.value.set_render_options(switched_item_mode = "inline",
+                                 resizable="handlers only",
+                                 click_to_display=specs['click_to_display'],
                                  link_to=specs['link_to'],
-                                 autosize=specs['autosize'],
-                                 resizable="handlers only" if specs['resizable'] else False)
+                                 autosize=specs['autosize'])
     render_out = fig.value.render("html")
     return render_out #a dictionary with 'html' and 'js' keys
 
 def latex_figure(fig, specs):
-    fig.value.set_render_options(output_dir=specs['output_dir'], render_includes=specs['render_includes'])
+    assert('output_dir' in specs and specs['output_dir']), \
+        "Cannot render a figure-containing table as 'latex' without a valid 'output_dir' render option"
+    fig.value.set_render_options(output_dir=specs['output_dir'],
+                                 render_includes=specs['render_includes'])
     render_out = fig.value.render('latex')
     render_out['latex'] = "\\vcenteredhbox{%s}" % render_out['latex'] #wrap std latex output
     return render_out
 
 def python_figure(fig, specs):
+    fig.value.set_render_options(switched_item_mode = "inline")
     render_out = fig.value.render('python') # a dict w/keys == plotIDs
     plotDivID = list(render_out['python'].keys())[0] #just take info for the first figure (assume only one figure)
 
     if specs['output_dir'] is not None: # setting output_dir signals that fig should also be rendered
-        fig.value.set_render_options(output_dir=specs['output_dir'])
-        fig.value.render('pythondir') #  to a separate python file
+        fig.value.set_render_options(switched_item_mode = "separate files",
+                                     output_dir=specs['output_dir'])
+        fig.value.render('python') #  to a separate python file
 
     return _ReportableQty( render_out['python'][plotDivID]['value'],
-                           render_out['python'][plotDivID].get('erorbar',None) )
+                           render_out['python'][plotDivID].get('errorbar',None) )
     
 
 formatDict['Figure'] = {
