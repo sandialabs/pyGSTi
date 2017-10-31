@@ -697,8 +697,7 @@ def create_general_report(results, filename, title="auto",
             _merge.merge_html_template_dir(
                 qtys, templateDir, filename, auto_open, precision, link_to,
                 connected=connected, toggles=toggles, renderMath=renderMath,
-                resizable=resizable, autosize=autosize, verbosity=printer,
-                CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+                resizable=resizable, autosize=autosize, verbosity=printer)
             #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")

@@ -346,11 +346,11 @@ def render_as_html(qtys, render_options, link_to, verbosity):
 
         
             
-def merge_html_template(qtys, templateFilename, outputFilename, auto_open,
-                    precision, link_to,
-                    CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, toggles=None, renderMath=True, resizable=True,
-                    autosize='none', verbosity=0):
+def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
+                        precision=None, link_to=None, connected=False, toggles=None,
+                        renderMath=True, resizable=True, autosize='none', verbosity=0,
+                        CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
+                                  "pygsti_fonts.css")):
 
     printer = VerbosityPrinter.build_printer(verbosity)
 
@@ -365,6 +365,7 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open,
 
     #render quantities as HTML
     qtys_html = render_as_html(qtys, dict(switched_item_mode="inline",
+                                          global_requirejs=False,
                                           resizable=resizable, autosize=autosize,
                                           output_dir=None, link_to=link_to,
                                           precision=precision), link_to, printer)
@@ -390,13 +391,13 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open,
         printer.log("Opening %s..." % outputFilename)
         _webbrowser.open(url)
 
-        
-def merge_html_template_dir(qtys, templateDir, outputDir, auto_open,
-                            precision, link_to,
-                            CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                            connected=False, toggles=None, renderMath=True, resizable=True,
-                            autosize='none', verbosity=0):
 
+def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
+                            precision=None, link_to=None, connected=False, toggles=None,
+                            renderMath=True, resizable=True, autosize='none', verbosity=0,
+                            CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
+                                      "pygsti_fonts.css")):
+    
     printer = VerbosityPrinter.build_printer(verbosity)
         
     #Create directories if needed; otherwise clear it
@@ -418,6 +419,7 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open,
 
     #render quantities as HTML
     qtys_html = render_as_html(qtys, dict(switched_item_mode="separate files",
+                                          global_requirejs=False,
                                           resizable=resizable, autosize=autosize,
                                           output_dir=figDir, link_to=link_to,
                                           precision=precision), link_to, printer)

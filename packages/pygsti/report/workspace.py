@@ -285,7 +285,7 @@ class Workspace(object):
         script = ""
         
         if not connected:
-            rsync_offline_dir(_os.getcwd())
+            _merge.rsync_offline_dir(_os.getcwd())
 
         #If offline, add JS to head that will load local requireJS and/or
         # jQuery if needed (jupyter-exported html files always use CDN
@@ -1217,6 +1217,7 @@ class WorkspaceOutput(object):
 
         'output_name': False,
         'switched_item_mode': 'inline', # or 'separate files'
+        'switched_item_id_overrides': {},
 
         #HTML specific
         'global_requirejs': False,
@@ -1374,6 +1375,39 @@ class WorkspaceOutput(object):
         #_display(self.widget)
         _display(_HTML(content))
 
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace output object to a file.
+
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `tex` (LaTeX), `pkl` (Python pickle) and `html` (HTML).  Since this
+        object may contain different instances of its data based on switch
+        positions, when their are multiple instances the user must specify
+        the `index` argument to disambiguate.
+
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError()
+
+    
     def _create_onready_handler(self, content): 
         global_requirejs = self.options.get('global_requirejs',False)
         ret = ""
@@ -1854,10 +1888,10 @@ class WorkspaceTable(WorkspaceOutput):
         
         if precision is None:
             precDict = {'normal': 6, 'polar': 3, 'sci': 0}
-        elif _compat.isint(precDict):
+        elif _compat.isint(precision):
             precDict = {'normal':precision, 'polar':precision, 'sci':precision}
         else:
-            assert('normal' in precDict), "Must at least specify 'normal' precision"
+            assert('normal' in precision), "Must at least specify 'normal' precision"
             p = precision['normal']
             precDict = { 'normal': p,
                          'polar': precision.get(['polar'],p),
@@ -2051,11 +2085,112 @@ class WorkspaceTable(WorkspaceOutput):
             assert(len(self.tables) == 1), \
                 "Can only render %s format for a non-switched table" % typ
             return {typ: self.tables[0].render(typ)}
+        
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace table object to a file.
 
-#'\n'.join(divJS) + base['js'] 
-# '$' in ret['html'] and self.options['render_math']
-# autosize == "continual"
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `tex` (LaTeX), `pkl` (Python pickle) and `html` (HTML).  Since this
+        object may contain different instances of its data based on switch
+        positions, when their are multiple instances the user must specify
+        the `index` argument to disambiguate.
 
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        N = len(self.tables)
+        
+        if filename.endswith(".html"):
+            if index is None and N==1: index = 0
+            else: raise ValueError("Must supply `index` argument for a" +
+                                   "non-trivially-switched WorkspaceTable")
+
+            saved_switchposmap = self.switchpos_map
+            saved_switchboards = self.switchboards
+            saved_switchinds   = self.sbSwitchIndices
+
+            #Temporarily pretend we don't depend on any switchboards and
+            # by default display the user-specified index
+            self.switchboards = []
+            self.sbSwitchIndices = []
+            self.switchpos_map = { (): index }
+
+            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+                    'singleItem': self}
+            _merge.merge_html_template(qtys, "standalone.html", filename,
+                                       verbosity=verbosity)
+
+            self.switchpos_map   = saved_switchposmap
+            self.switchboards    = saved_switchboards
+            self.sbSwitchIndices = saved_switchinds  
+
+        elif filename.endswith(".pkl"):
+            if index is None and N==1: index = 0
+            overrides = {i: "index%d" % i for i in range(N)}
+            self.set_render_options(switched_item_mode="inline",
+                                    switched_item_id_overrides=overrides) 
+            render_out = self.render("python")
+
+            if index is not None: #just pickle a single element
+                to_pickle = render_out['python']['index%d' % index]
+            else: #pickle dictionary of all indices
+                to_pickle = render_out['python']
+            
+            with open(filename,'wb') as f:
+                _pickle.dump(to_pickle, f)
+
+        else:
+            if index is None:
+                if N == 1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceTable")
+                
+            output_dir = _os.path.dirname(filename)
+            filebase,ext = _os.path.splitext(_os.path.basename(filename))
+
+            tempDir = _os.path.join(output_dir,"%s_temp" % filebase)
+            _os.mkdir(tempDir)
+
+            self.set_render_options(switched_item_mode="separate files",
+                                    switched_item_id_overrides={index: filebase},
+                                    output_dir=tempDir)
+
+            if ext == ".tex":
+                self.set_render_options(render_includes=False,
+                                        leave_includes_src=True)
+            elif ext == ".pdf":
+                self.set_render_options(render_includes=True,
+                                        leave_includes_src=False)
+            else:
+                raise ValueError("Unknown file type for %s" % filename)
+                
+            self.render("latex") #renders everything in temp dir
+            _os.rename(_os.path.join(tempDir,"%s%s" % (filebase,ext)),
+                       _os.path.join(output_dir,"%s%s" % (filebase,ext)))
+            
+            #remove all other files
+            _shutil.rmtree(tempDir)
+                        
+
+    
     def _form_table_js(self, tableID, table_html, table_plot_handlers,
                        switchboard_init_js):
         
@@ -2320,6 +2455,95 @@ class WorkspacePlot(WorkspaceOutput):
                                      switched_item_mode)
                 
             return {'python': plots_python }
+
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace plot object to a file.
+
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `pkl` (Python pickle) and `html` (HTML).  Since this object may
+        contain different instances of its data based on switch positions,
+        when their are multiple instances the user must specify the `index`
+        argument to disambiguate.
+
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        N = len(self.figs)
+        
+        if filename.endswith(".html"):
+            #Note: Same as WorkspaceTable except for N
+            if index is None and N==1: index = 0
+            else: raise ValueError("Must supply `index` argument for a" +
+                                   "non-trivially-switched WorkspacePlot")
+
+            saved_switchposmap = self.switchpos_map
+            saved_switchboards = self.switchboards
+            saved_switchinds   = self.sbSwitchIndices
+
+            #Temporarily pretend we don't depend on any switchboards and
+            # by default display the user-specified index
+            self.switchboards = []
+            self.sbSwitchIndices = []
+            self.switchpos_map = { (): index }
+
+            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+                    'singleItem': self}
+            _merge.merge_html_template(qtys, "standalone.html", filename,
+                                       verbosity=verbosity)
+
+            self.switchpos_map   = saved_switchposmap
+            self.switchboards    = saved_switchboards
+            self.sbSwitchIndices = saved_switchinds  
+
+        elif filename.endswith(".pkl"):
+            #Note: Same as WorkspaceTable except for N
+            if index is None and N==1: index = 0
+            overrides = {i: "index%d" % i for i in range(N)}
+            self.set_render_options(switched_item_mode="inline",
+                                    switched_item_id_overrides=overrides) 
+            render_out = self.render("python")
+
+            if index is not None: #just pickle a single element
+                to_pickle = render_out['python']['index%d' % index]
+            else: #pickle dictionary of all indices
+                to_pickle = render_out['python']
+            
+            with open(filename,'wb') as f:
+                _pickle.dump(to_pickle, f)
+
+        elif filename.endswith(".tex"):
+            raise ValueError("Cannot save a WorkspacePlot as LaTeX - try PDF.")
+        
+        elif filename.endswith(".pdf"):
+            from .mpl_colormaps import plotly_to_matplotlib as _plotly_to_matplotlib
+            
+            if index is None:
+                if N == 1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspacePlot")
+            _plotly_to_matplotlib(self.figs[index], filename)
+
+        else:
+            raise ValueError("Unknown file type for %s" % filename)
+
             
 
     def _form_plot_js(self, plotID, plot_handlers, switchboard_init_js):
