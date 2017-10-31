@@ -840,7 +840,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
             width = 1) # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
         )
 
-    log = True
+    log = True    
     layout = go.Layout(
             width=500*scale,
             height=350*scale,
@@ -2108,7 +2108,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         LOWER_LOG_THRESHOLD = -6 #so don't plot all the way down to, e.g., 1e-13
         ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
-        minlog = max( _np.floor(min(log_ys)), LOWER_LOG_THRESHOLD)
+        minlog = max( _np.floor(min(log_ys))-0.1, LOWER_LOG_THRESHOLD)
         maxlog = max(_np.ceil(max(log_ys)), minlog+1)
 
 

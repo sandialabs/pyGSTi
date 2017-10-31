@@ -47,10 +47,8 @@ formatDict = dict()
 # Replace rho with &rho;
 # Numbers following 'rho' -> subscripts
 formatDict['Rho'] = {
-    'html'  : _Formatter(stringreplacers=[('rho', '&rho;')],
-                         regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
-    'latex' : _Formatter(stringreplacers=[('rho', '\\rho')],
-                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'),
+    'html'  : _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
+    'latex' : _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')), #OLD formatstring='$%s$'),
     'python' : _no_format}
 
 # 'E' (POVM) effect formatting
@@ -58,9 +56,9 @@ formatDict['Effect'] = {
     # If label == 'remainder', return E sub C
     # Otherwise, match regex and replace with subscript
     'html'  : _Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),
-                         regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
+                         regexreplace=('E([0-9]+)$', 'E<sub>%s</sub>')),
     'latex' : _Formatter(stringreturn=('remainder', '$E_C$'),
-                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'),
+                         regexreplace=('E([0-9]+)$', '$E_{%s}$')), #OLD formatstring='$%s$'),
     'python' : _no_format}
 
 NormalHTML = _Formatter(html, 
@@ -147,10 +145,23 @@ def special_convert_latex(x, specs):
 
 convert_latex = NormalLatex.variant(custom=special_convert_latex)
 
+mathtext_htmlorlatex = _Formatter(
+    stringreplacers=[('log','\\log'),
+                     ('Re','\\mathrm{Re}'),
+                     ('Im','\\mathrm{Im}'),
+                     ('*','\\cdot ')],
+    formatstring='$%s$')
+
 formatDict['Conversion'] = {
     'html'  : convert_html,
     'latex' : convert_latex,
     'python'  : _no_format }
+
+formatDict['MathText'] = {
+    'html'  : mathtext_htmlorlatex,
+    'latex' : mathtext_htmlorlatex,
+    'python'  : _no_format }
+
 
 formatDict['Vec'] = {
     'html'  : NormalHTML,

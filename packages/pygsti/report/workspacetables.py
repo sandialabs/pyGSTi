@@ -1308,46 +1308,71 @@ class GateEigenvalueTable(WorkspaceTable):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        formatters = [None]
         for disp in display:
             if disp == "evals":
-                colHeadings.append('Eigenvalues (E)')
+                colHeadings.append('Eigenvalues ($E$)')
+                formatters.append(None)
+                
             elif disp == "target":
-                colHeadings.append('Target Evals. (T)')
+                colHeadings.append('Target Evals. ($T$)')
+                formatters.append(None)
+                
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals (R)')
+                    colHeadings.append('Rel. Evals ($R$)')
+                    formatters.append(None)
+                    
             elif disp == "log-evals":
                 colHeadings.append('Re log(E)')
                 colHeadings.append('Im log(E)')
+                formatters.append('MathText')
+                formatters.append('MathText')
+                
             elif disp == "log-rel":
                 colHeadings.append('Re log(R)')
                 colHeadings.append('Im log(R)')
+                formatters.append('MathText')
+                formatters.append('MathText')
+                
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
+                formatters.append(None)
+                
             elif disp == "relpolar":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals')
+                    colHeadings.append('Rel. Evals ($R$)')
+                    formatters.append(None)
+                    
             elif disp == "absdiff-evals":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('|E - T|')
+                    formatters.append('MathText')
+                    
             elif disp == "infdiff-evals":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('1.0 - Re(T.C*E)')
+                    colHeadings.append('1.0 - Re(\\bar{T}*E)')
+                    formatters.append('MathText')
+                    
             elif disp == "absdiff-log-evals":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('|Re(log E) - Re(log T)|')
                     colHeadings.append('|Im(log E) - Im(log T)|')
+                    formatters.append('MathText')
+                    formatters.append('MathText')
+                    
             elif disp == "gidm":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Gauge-inv. diamond norm')
+                    colHeadings.append('Gauge-inv. Diamond norm')
+                    formatters.append('Conversion')
+                    
             elif disp == "giinf":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Gauge-inv. infidelity')
+                    formatters.append(None)
             else:
                 raise ValueError("Invalid display element: %s" % disp)
 
-        formatters = [None]*len(colHeadings)
-    
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         if virtual_gates is None:
