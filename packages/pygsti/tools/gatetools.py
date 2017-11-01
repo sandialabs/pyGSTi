@@ -795,11 +795,12 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    typ : {"logG-logT", "logTiG"}
+    typ : {"logG-logT", "logTiG", "logGTi"}
       The type of error generator to compute.  Allowed values are:
       
       - "logG-logT" : errgen = log(gate) - log(target_gate)
       - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+      - "logGTi" : errgen = log( dot(gate,inv(target_gate)) )
 
     Returns
     -------
@@ -824,7 +825,7 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
         # raise an error for now (maybe return a dummy if needed elsewhere?)
         raise ValueError("Could not construct a real logarithms for the" +
                          "'logG-logT' generator.  Perhaps you should use " +
-                         "the 'logTiG' generator instead?")
+                         "the 'logTiG' or 'logGTi' generator instead?")
 
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
@@ -839,6 +840,21 @@ def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
             _warnings.warn("Falling back to approximate log for logTiG error generator")
             errgen = _mt.approximate_matrix_log(_np.dot(target_gate_inv,gate),
                                                 _np.zeros(gate.shape,'d'), TOL=TOL)
+
+    elif typ == "logGTi":
+        target_gate_inv = _spl.inv(target_gate)
+        try:
+            errgen = _mt.near_identity_matrix_log(_np.dot(gate,target_gate_inv), TOL)
+        except AssertionError: #not near the identity, fall back to the real log
+            _warnings.warn(("Near-identity matrix log failed; falling back "
+                            "to approximate log for logGTi error generator"))
+            errgen = _mt.real_matrix_log(_np.dot(gate,target_gate_inv), "warn", TOL)
+            
+        if _np.linalg.norm(errgen.imag) > TOL:
+            _warnings.warn("Falling back to approximate log for logGTi error generator")
+            errgen = _mt.approximate_matrix_log(_np.dot(gate,target_gate_inv),
+                                                _np.zeros(gate.shape,'d'), TOL=TOL)
+
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 

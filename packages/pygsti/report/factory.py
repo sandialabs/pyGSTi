@@ -46,12 +46,12 @@ def _errgen_formula(errgen_type, typ):
         gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
         desc = ('<em>pre-gate</em> generator, so it answers the question '
                 '"If all the noise occurred <em>before</em> the ideal gate,'
-                ' what Lindbladian would generate it?"') + notDuringTxt
+                ' what Lindbladian would generate it?" ') + notDuringTxt
     elif errgen_type == "logGTi": # G = exp(L)*T (post-error)
         gen = '<span class="math">G = e^{\mathbb{L}} G_0</span>'
         desc = ('<em>post-gate</em> generator, so it answers the question '
                 '"If all the noise occurred <em>after</em> the ideal gate,'
-                ' what Lindbladian would generate it?"') + notDuringTxt
+                ' what Lindbladian would generate it?" ') + notDuringTxt
     elif errgen_type == "logG-logT":
         gen = '<span class="math">G = e^{\mathbb{L} + \log G_0}</span>'
         desc = ('<em>during-gate</em> generator, so it answers the question '
@@ -403,11 +403,12 @@ def create_general_report(results, filename, title="auto",
         expected chi2 distribution is shown in a linear grayscale, and the 
         top `linlogPercentile` is shown on a logarithmic colored scale.
 
-    errgen_type: {"logG-logT", "logTiG"}
+    errgen_type: {"logG-logT", "logTiG", "logGTi"}
         The type of error generator to compute.  Allowed values are:
         
         - "logG-logT" : errgen = log(gate) - log(target_gate)
         - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+        - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
 
     nmthreshold : float, optional
         The threshold, in units of standard deviations, that triggers the

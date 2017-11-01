@@ -821,11 +821,12 @@ class ErrgenTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
     
-        genType : {"logG-logT", "logTiG"}
+        genType : {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
             
             - "logG-logT" : errgen = log(gate) - log(target_gate)
             - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
         
         Returns
         -------
@@ -893,6 +894,9 @@ class ErrgenTable(WorkspaceTable):
                     gateset, targetGateset, gl), confidenceRegionInfo)
             elif genType == "logTiG":
                 info = _ev(_reportables.LogTiG_and_projections(
+                    gateset, targetGateset, gl), confidenceRegionInfo)
+            elif genType == "logGTi":
+                info = _ev(_reportables.LogGTi_and_projections(
                     gateset, targetGateset, gl), confidenceRegionInfo)
             else: raise ValueError("Invalid generator type: %s" % genType)
             errgenAndProjs[gl] = info
