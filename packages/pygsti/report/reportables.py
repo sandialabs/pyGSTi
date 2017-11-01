@@ -650,6 +650,11 @@ def rel_logTiG_eigvals(A, B, mxBasis):
 Rel_logTiG_eigvals = _gsf.gatesfn_factory(rel_logTiG_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
+def rel_logGTi_eigvals(A, B, mxBasis):
+    rel_gate = _tools.error_generator(A, B, "logGTi")
+    return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
+Rel_logGTi_eigvals = _gsf.gatesfn_factory(rel_logGTi_eigvals)
+# init args == (gateset1, gateset2, gateLabel)
 
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     rel_gate = _tools.error_generator(A, B, "logG-logT")
@@ -665,10 +670,8 @@ Rel_gate_eigenvalues = _gsf.gatesfn_factory(rel_gate_eigenvalues)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-def logTiG_and_projections(A, B, mxBasis):
+def errgen_and_projections(errgen, mxBasis):
     ret = {}
-
-    errgen = _tools.error_generator(A, B, mxBasis, "logTiG")
     egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
     proj, scale = \
@@ -698,44 +701,22 @@ def logTiG_and_projections(A, B, mxBasis):
                                      if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
       #sum of squared projections of normalized error generator onto normalized projectors  
     return ret
+
+def logTiG_and_projections(A, B, mxBasis):
+    errgen = _tools.error_generator(A, B, mxBasis, "logTiG")
+    return errgen_and_projections(errgen, mxBasis)
 LogTiG_and_projections = _gsf.gatesfn_factory(logTiG_and_projections)
 # init args == (gateset1, gateset2, gateLabel)
 
-
+def logGTi_and_projections(A, B, mxBasis):
+    errgen = _tools.error_generator(A, B, mxBasis, "logGTi")
+    return errgen_and_projections(errgen, mxBasis)
+LogGTi_and_projections = _gsf.gatesfn_factory(logGTi_and_projections)
+# init args == (gateset1, gateset2, gateLabel)
 
 def logGmlogT_and_projections(A, B, mxBasis):
-    ret = {}
-
     errgen = _tools.error_generator(A, B, mxBasis, "logG-logT")
-    egnorm = _np.linalg.norm(errgen.flatten())
-    ret['error generator'] = errgen
-    proj, scale = \
-        _tools.std_errgen_projections( 
-            errgen,"hamiltonian",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
-    ret['hamiltonian projections'] = proj
-    ret['hamiltonian projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
-                                           if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-      #sum of squared projections of normalized error generator onto normalized projectors
-      
-    proj, scale = \
-        _tools.std_errgen_projections( 
-            errgen,"stochastic",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
-    ret['stochastic projections'] = proj
-    ret['stochastic projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
-                                          if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-      #sum of squared projections of normalized error generator onto normalized projectors
-
-    proj, scale = \
-        _tools.std_errgen_projections( 
-            errgen,"affine",mxBasis.name,mxBasis,return_scale_fctr=True)
-        # mxBasis.name because projector dim is not the same as gate dim
-    ret['affine projections'] = proj
-    ret['affine projection power'] =  float(_np.sum(proj**2)/scale**2) / egnorm**2 \
-                                      if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-      #sum of squared projections of normalized error generator onto normalized projectors  
-    return ret
+    return errgen_and_projections(errgen, mxBasis)
 LogGmlogT_and_projections = _gsf.gatesfn_factory(logGmlogT_and_projections)
 # init args == (gateset1, gateset2, gateLabel)
 

@@ -108,8 +108,9 @@ def mpl_besttxtcolor( x, cmap, norm ):
     P = _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
     return "black" if 0.5 <= P else "white"
 
-def mpl_process_lbl(lbl):
-    math = ('<sup>' in lbl) or ('<sub>' in lbl) or ('_' in lbl) or (len(lbl) == 1)
+def mpl_process_lbl(lbl, math=False):
+    math = math or ('<sup>' in lbl) or ('<sub>' in lbl) or \
+           ('_' in lbl) or ('|' in lbl) or (len(lbl) == 1)
     try:
         float(lbl)
         math=True
@@ -119,7 +120,14 @@ def mpl_process_lbl(lbl):
     l = lbl
     l = l.replace("<i>","").replace("</i>","")
     l = l.replace("<sup>","^{").replace("</sup>","}")
+    l = l.replace("<sub>","_{").replace("</sub>","}")
     l = l.replace("<br>","\n")
+
+    if math:
+        l = l.replace("alpha","\\alpha")
+        l = l.replace("beta","\\beta")
+        l = l.replace("sigma","\\sigma")
+    
     if math or (len(l) == 1): l = "$" + l + "$"
     return l
 
@@ -127,6 +135,7 @@ def mpl_process_lbls(lblList):
     return [ mpl_process_lbl(lbl) for lbl in lblList ]
     
 def mpl_color(plotly_color):
+    #_compat.isstr
     plotly_color = plotly_color.strip() #remove any whitespace
     if plotly_color.startswith('#'):
         return plotly_color # matplotlib understands "#FF0013"
@@ -142,10 +151,9 @@ def mpl_color(plotly_color):
     else:
         return plotly_color #hope this is a color name matplotlib understands
 
-def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
+def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'):
     fig = pygsti_fig['plotlyfig']
     data_trace_list = fig['data']
-    prec = 'compact' #TODO: make this variable?
     
     #if axes is None: 
     mpl_fig,axes = _plt.subplots()  # create a new figure if no axes are given    
@@ -163,6 +171,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
     annotations = layout.get('annotations',[])
     title = layout.get('title',None)
     shapes = layout.get('shapes',[]) # assume only shapes are grid lines
+    bargap = layout.get('bargap',0)
     
     xlabel = xaxis.get('title',None)
     ylabel = yaxis.get('title',None)
@@ -172,8 +181,23 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
     ytickvals = yaxis.get('tickvals',None)
     xaxistype = xaxis.get('type',None)
     yaxistype = yaxis.get('type',None)
+    xaxisside = xaxis.get('side','bottom')
+    yaxisside = yaxis.get('side','left')
+    xtickangle = xaxis.get('tickangle',0)
+
+    if xaxisside == "top":
+        axes.xaxis.set_label_position('top') 
+        axes.xaxis.tick_top()
+        #axes.yaxis.set_ticks_position('both')
+
+    if yaxisside == "right":
+        axes.yaxis.set_label_position('right') 
+        axes.yaxis.tick_right()
+        #axes.yaxis.set_ticks_position('both')
     
     if title is not None:
+        if xaxisside == "top":
+            axes.set_title( mpl_process_lbl(title), fontsize=fontsize, y=2.5 ) #push title up higher
         axes.set_title( mpl_process_lbl(title), fontsize=fontsize )
 
     if xlabel is not None:
@@ -194,12 +218,20 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
     if ylabels is not None:
         axes.set_yticklabels( mpl_process_lbls(ylabels), fontsize=(fontsize-2) )
 
+    if xtickangle != 0:
+        _plt.xticks(rotation=-xtickangle) #minus b/c ploty & matplotlib have different sign conventions
         
     if xaxistype == 'log':
         axes.set_xscale("log")
     if yaxistype == 'log':
         axes.set_yscale("log")
 
+    #figure out barwidth and offsets for bar plots
+    num_bars = sum([d.get('type','')=='bar' for d in data_trace_list])
+    currentBarOffset = 0
+    barWidth = (1.0-bargap)/num_bars if num_bars > 0 else 1.0
+
+    #process traces
     handles = []; labels = [] #for the legend
     for i,traceDict in enumerate(data_trace_list):
         typ = traceDict.get('type','unknown')
@@ -253,11 +285,11 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
                 for y in range(plt_data.shape[0]):
                     for x in range(plt_data.shape[1]):
                         if _np.isnan(plt_data[y, x]): continue
-                        axes.text(x + 0.5, y + 0.5, mpl_process_lbl(_eformat(plt_data[y, x], prec)),
+                        axes.text(x + 0.5, y + 0.5, mpl_process_lbl(_eformat(plt_data[y, x], prec),math=True),
                                 horizontalalignment='center',
                                 verticalalignment='center',
                                 color=mpl_besttxtcolor( plt_data[y,x], cmap, norm),
-                                fontsize=(fontsize-2))
+                                fontsize=(fontsize-6))
 
             if show_colorscale:
                 _plt.colorbar(heatmap)
@@ -297,44 +329,33 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
                 labels.append(name)   
             
         elif typ == "bar": 
-            barWidth = 1.0
             xlabels = [str(xl) for xl in traceDict['x']] # x "values" are actually bar labels in plotly
 
             #always grey=pos, red=neg type of bar plot for now (since that's all pygsti uses)
-            if 'plt_y' in pygsti_fig:
-                y = _np.asarray(pygsti_fig['plt_y']) 
+            y = _np.asarray(traceDict['y'])
+            if 'plt_yerr' in pygsti_fig:
                 yerr = pygsti_fig['plt_yerr']
             else:
-                y = _np.asarray(traceDict['y'])
                 yerr = None
 
-            x = _np.arange(y.size)  # actual x values are just the integers
-    
+            # actual x values are just the integers + offset
+            x = _np.arange(y.size) + currentBarOffset
+            currentBarOffset += barWidth #so next bar trace will be offset correctly
+
+            marker = traceDict.get('marker',None)
+            if marker and ('color' in marker):
+                if _compat.isstr(marker['color']):
+                    color = mpl_color(marker['color'])
+                elif isinstance(marker['color'],list):
+                    color = [mpl_color(c) for c in marker['color']] # b/c axes.bar can take a list of colors
+                else: color = "gray"
+
             if yerr is None:
-                pos_y = _np.maximum(y.flatten().real,0.0)
-                neg_y = _np.abs(_np.minimum(y.flatten().real,0.0))
-                if _np.any(pos_y > 0): rects = axes.bar(x, pos_y, barWidth, color=(0.5,0.5,0.5)) #pylint: disable=unused-variable                                         
-                if _np.any(neg_y > 0): rects = axes.bar(x, neg_y, barWidth, color='r') #pylint: disable=unused-variable 
+                rects = axes.bar(x, y, barWidth, color=color)
             else:
-                yerr = _np.asarray(yerr)
-                pos_y = []; pos_err = []
-                neg_y = []; neg_err = []
-                for val,eb in zip(y.flatten().real, yerr.flatten().real):
-                    if (val+eb) < 0.0: #if entire error interval is less than zero                                                                       
-                        neg_y.append(abs(val)); neg_err.append(eb)
-                        pos_y.append(0);        pos_err.append(0)
-                    else:
-                        pos_y.append(abs(val)); pos_err.append(eb)
-                        neg_y.append(0);        neg_err.append(0)
-                pos_y = _np.array(pos_y)
-                neg_y = _np.array(neg_y)
-                
-                if _np.any(pos_y > 0):
-                    rects = axes.bar(x, pos_y, barWidth, color=(0.5,0.5,0.5),
-                                 yerr=pos_err)
-                if _np.any(neg_y > 0):
-                    rects = axes.bar(x, neg_y, barWidth, color='r',yerr=neg_err)
-                    
+                rects = axes.bar(x, y, barWidth, color=color,
+                                 yerr=yerr.flatten().real)
+                                
             if xtickvals is not None:
                 xtics = _np.array(xtickvals)+0.5 #_np.arange(plt_data.shape[1])+0.5
             else: xtics = x
@@ -345,18 +366,31 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
             histnorm = traceDict.get('histnorm',None)
             marker = traceDict.get('marker',None)
             color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
-            xbins = traceDict['xbins'] 
+            xbins = traceDict['xbins']
             histdata = traceDict['x'] 
-            
-            histBins = int(round( (xbins['end'] - xbins['start'])/xbins['size']))
+
+            if abs(xbins['size']) < 1e-6:
+                histBins = 1
+            else:
+                histBins = int(round( (xbins['end'] - xbins['start'])/xbins['size']))
              
-            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)                
+            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
+            if yaxistype == 'log':
+                TOL = 1e-6
+                if len(histdata_finite) == 0:
+                    axes.set_yscale("linear") #no data, and will get an error with log-scale, so switch to linear
+            
             #histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
             #histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
             #_plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
             #          range=[histMin, histMax], facecolor='gray', align='mid')
-            _plt.hist(histdata_finite, histBins,
-                      facecolor=color, align='mid')
+            n, bins, patches = _plt.hist(histdata_finite, histBins,
+                                         facecolor=color, align='mid')
+
+            #If we've been given an array of colors
+            if marker and ('color' in marker) and isinstance(marker['color'],list):
+                for p,c in zip(patches,marker['color']):
+                    _plt.setp(p, 'facecolor', mpl_color(c))
         
     if len(handles) > 0:
         _plt.legend(handles, labels, bbox_to_anchor=(1.01, 1.0),
@@ -364,7 +398,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=14):
         
     if save_to:
         _plt.savefig(save_to, bbox_extra_artists=(axes,),
-                     bbox_inches='tight') #need extra artists otherwise                                                                                                                   #axis labels get clipped 
+                     bbox_inches='tight') #need extra artists otherwise
+                                          #axis labels get clipped 
         _plt.cla()
         _plt.close(mpl_fig)
         del mpl_fig

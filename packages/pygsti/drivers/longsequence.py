@@ -981,11 +981,26 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                     stages.append(
                         {
                             'itemWeights': {'gates': 0.0, 'spam': 1.0},
+                            'spam_penalty_factor': 1.0,
                             'gauge_group': s3gg(gs_target.dim),
                             'verbosity': printer
                         })
                     
                     gaugeOptSuite_dict['single'] = stages #can be a list of stage dictionaries
+
+                    if "unreliable2Q" in gaugeOptSuites and gs_target.dim == 16:
+                        if advancedOptions is not None:
+                            advanced = advancedOptions.get('all',{}) #'unreliableGates' can only be specified in 'all' options
+                        else: advanced = {}
+                        unreliableGates = advanced.get('unreliableGates',['Gcnot','Gcphase','Gms','Gcn','Gcx','Gcz'])
+                        if any([gl in gs_target.gates.keys() for gl in unreliableGates]):
+                            stage2_item_weights = {'gates': 1, 'spam': 0.0}
+                            for gl in unreliableGates:
+                                if gl in gs_target.gates.keys(): stage2_item_weights[gl] = 0.01
+                            stages_2QUR = [stage.copy() for stage in stages] # ~deep copy of stages
+                            iStage2 = 1 if gg.name in ("Full", "TP") else 0
+                            stages_2QUR[iStage2]['itemweights'] = stage2_item_weights
+                            gaugeOptSuite_dict['single-2QUR'] = stages_2QUR #add additional gauge opt
     
         
             elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
@@ -1024,8 +1039,8 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                                 'spam_penalty_factor': vSpam, 'verbosity': printer }
 
             elif suiteName == "unreliable2Q":
-                assert( any([nm in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam")
-                            for nm in gaugeOptSuite])), "'unreliable2Q' suite must be used with a spam suite."
+                assert( any([nm in ("single", "varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam")
+                            for nm in gaugeOptSuite])), "'unreliable2Q' suite must be used with a spam or single suite."
 
             elif suiteName == "none":
                 pass #add nothing

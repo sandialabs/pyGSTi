@@ -17,13 +17,6 @@
     %(CSS)s
 
     <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> -->
-
-    <script type="text/javascript">
-      testLocalAjax("tabs/test.html", function(errstatus) {
-        console.log("AJAX ERROR: " + errstatus);
-        $('#AjaxError').show()
-      });
-    </script>
     
   </head>
   
@@ -65,6 +58,10 @@
         <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">For Reference</p>
 	<a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
 	<a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
+      </div>
+
+      <div class="linkgroup">
+	<a href="#" class="linkgroupheading tablink" onclick="openTab(event, 'Help')" id="defaultOpen">Help</a>
       </div>
       
       %(topSwitchboard)s
@@ -118,6 +115,9 @@
       </div>
       <div id="Meta" class="tabcontent">
       </div>
+      <div id="Help" class="tabcontent">	
+      </div>
+
 
       <!-- <div id="NEWTAB" class="tabcontent">
 	<h1>TAB Title</h1>
@@ -145,6 +145,13 @@
     <div id="status">
       No message
     </div>
-    
+
+    <script type="text/javascript">
+      testLocalAjax("tabs/test.html", function(errstatus) {
+        console.log("AJAX ERROR: " + errstatus);
+        $('#AjaxError').show()
+      });
+    </script>
+
   </body>
 </html>

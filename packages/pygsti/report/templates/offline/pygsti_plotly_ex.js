@@ -10,10 +10,20 @@ function max_height(els) {
     return Math.max.apply(null, hs);
 }
 
+function get_wsobj_group(id) {
+    var obj = $("#" + id);
+    if(obj.hasClass("pygsti-wsoutput-group")) {
+        return obj; // then id was the id of the entire group (OK)
+    } else { // assume id was for one of the items within a group
+        return obj.closest(".pygsti-wsoutput-group");
+    }
+}
+
 function make_wstable_resizable(id) {
-    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
-    $("#" + id).resizable({
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("padding-bottom", "7px"); //weird jqueryUI hack: to compensate for handle(?)
@@ -42,9 +52,10 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
-    if( $("#" + id).hasClass('ui-resizable')) return; //already make resizable
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
-    $("#" + id).resizable({
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("max-width","none"); //remove max-width restriction
@@ -138,7 +149,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	if(plotman != null) {
 	    plotman.enqueue( function() {
 		$("#"+id).trigger("after_createplots");
-	    });
+	    }, "Finishing table " + id + " plot creation");
 	} else {
 	    wstable.trigger("after_createplots");
 	}
@@ -223,7 +234,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
 	wsplotgroup.css("max-height","none");
     }
 
-    var plots = wsplot.find(".plotly-graph-div");
+    var plots = wsplotgroup.find(".plotly-graph-div");
     var maxDesiredWidth = max_width(plots);
     var maxDesiredHeight = max_height(plots);
     wsplotgroup.css("width", maxDesiredWidth);
@@ -246,7 +257,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     // aspect ratio restrictions may have caused plots to be smaller
     // than desired, leaving free space.
     wsplotgroup.css("width", max_width(plots));
-    wsplotgriup.css("height", max_height(plots));
+    wsplotgroup.css("height", max_height(plots));
     console.log("Handshake: resizing container to = " + max_width(plots) + ", " + max_height(plots));
 
     // 6) If this table is within a <figure> tag try to set
@@ -257,7 +268,6 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     }
 
 }
-
 
 
 function make_wsobj_autosize(boxid) {

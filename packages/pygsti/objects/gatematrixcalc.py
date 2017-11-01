@@ -149,6 +149,45 @@ class GateMatrixCalc(GateCalc):
                 #OLD: G = _np.dot(G,self[lGate]) LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
+        
+    def _process_wrtFilter_for_gate(self, wrtFilter, gateLabel):
+        """ Helper function for dgate and hgate below: pulls out pieces of
+            a wrtFilter argument relevant for a single gate """
+        
+        #Create per-gate with-respect-to parameter filters, used to
+        # select a subset of all the derivative columns, essentially taking
+        # a derivative of only a *subset* of all the gate's parameters
+        if wrtFilter is not None:
+            gate_wrtFilter = [] # values = per-gate param indices
+            gate_nParams = {gl: 0 for gl in self.gates} # number of parameters (after filtering) per gate
+
+            #TODO: move construction of wrtIndexToGatelabelIndexPair to __init__??
+            wrtIndexToGatelabelIndexPair = [] # maps all-gate-params-index => (gateLabel, gate-param-index) pairs
+            for lbl,g in self.gates.items():
+                for k in range(g.num_params()):
+                    wrtIndexToGatelabelIndexPair.append((lbl,k))
+
+            for i in wrtFilter:
+                lbl,k = wrtIndexToGatelabelIndexPair[i]
+                gate_nParams[lbl] += 1
+                if lbl == gateLabel:
+                    gate_wrtFilter.append(k)                    
+        else:
+            gate_wrtFilter = None
+            gate_nParams = { gl: G.num_params() for gl,G in self.gates.items()}
+
+        #offsets to beginning & end of current gate's parameters within all-gate-params
+        iBegin = iEnd = 0 
+        if gate_wrtFilter is None or len(gate_wrtFilter) > 0:
+            for gl in self.gates:
+                if gl == gateLabel:
+                    iEnd = iBegin + gate_nParams[gl]; break
+                iBegin += gate_nParams[gl]
+            else: raise ValueError("Couldn't find gate label %s in gate set!" % gateLabel)
+
+        return gate_wrtFilter, iBegin, iEnd
+        
+
 
     #Vectorizing Identities. (Vectorization)
     # Note when vectorizing op uses numpy.flatten rows are kept contiguous, so the first identity below is valid.
@@ -165,42 +204,13 @@ class GateMatrixCalc(GateCalc):
     def dgate(self, gateLabel, flat=False, wrtFilter=None):
         """ Return the derivative of a length-1 (single-gate) sequence """
         dim = self.dim
-
-        #Create per-gate with-respect-to parameter filters, used to
-        # select a subset of all the derivative columns, essentially taking
-        # a derivative of only a *subset* of all the gate's parameters
-        if wrtFilter is not None:
-            gate_wrtFilter = [] # values = per-gate param indices
-            gate_nParams = {gl: 0 for gl in self.gates} # number of parameters (after filtering) per gate
-
-            #TODO: move construction of wrtIndexToGatelableIndexPair to __init__??
-            wrtIndexToGatelableIndexPair = [] # maps all-gate-params-index => (gateLabel, gate-param-index) pairs
-            for lbl,g in self.gates.items():
-                for k in range(g.num_params()):
-                    wrtIndexToGatelableIndexPair.append((lbl,k))
-
-            for i in wrtFilter:
-                lbl,k = wrtIndexToGatelableIndexPair[i]
-                gate_nParams[lbl] += 1
-                if lbl == gateLabel: gate_wrtFilter.append(k)
-        else:
-            gate_wrtFilter = None
-            gate_nParams = { gl: G.num_params() for gl,G in self.gates.items()}
+        gate_wrtFilter, iBegin, iEnd = self._process_wrtFilter_for_gate(wrtFilter, gateLabel)
 
         # Allocate memory for the final result
         num_deriv_cols =  self.tot_gate_params if (wrtFilter is None) else len(wrtFilter)
         flattened_dprod = _np.zeros((dim**2, num_deriv_cols),'d')
 
-        if gate_wrtFilter is None or len(gate_wrtFilter) > 0:
-            
-            #offsets to beginning & end of current gate's parameters within all-gate-params
-            iBegin = iEnd = 0 
-            for gl in self.gates:
-                if gl == gateLabel:
-                    iEnd = iBegin + gate_nParams[gl]; break
-                iBegin += gate_nParams[gl]
-            else: raise ValueError("Couldn't find gate label %s in gate set!" % gateLabel)
-                    
+        if iEnd > iBegin:                    
             # Compute the derivative of the entire gate string with respect to the 
             # gate's parameters and fill appropriate columns of flattened_dprod.
             gate = self.gates[gateLabel]
@@ -212,6 +222,32 @@ class GateMatrixCalc(GateCalc):
         else:
             return _np.swapaxes( flattened_dprod, 0, 1 ).reshape( (num_deriv_cols, dim, dim) ) # axes = (gate_ij, prod_row, prod_col)
 
+    def hgate(self, gateLabel, flat=False, wrtFilter1=None, wrtFilter2=None):
+        """ Return the hessian of a length-1 (single-gate) sequence """
+        dim = self.dim
+
+        gate_wrtFilter1, iBegin1, iEnd1 = self._process_wrtFilter_for_gate(wrtFilter1, gateLabel)
+        gate_wrtFilter2, iBegin2, iEnd2 = self._process_wrtFilter_for_gate(wrtFilter2, gateLabel)
+
+        # Allocate memory for the final result
+        num_deriv_cols1 =  self.tot_gate_params if (wrtFilter1 is None) else len(wrtFilter1)
+        num_deriv_cols2 =  self.tot_gate_params if (wrtFilter2 is None) else len(wrtFilter2)
+        flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2),'d')
+
+        if iEnd1 > iBegin1 and iEnd2 > iBegin2:
+            # Compute the derivative of the entire gate string with respect to the 
+            # gate's parameters and fill appropriate columns of flattened_dprod.
+            gate = self.gates[gateLabel]
+            flattened_hprod[:,iBegin1:iEnd1,iBegin2:iEnd2] = \
+                gate.hessian_wrt_params(gate_wrtFilter1, gate_wrtFilter2)
+                
+        if flat:
+            return flattened_hprod
+        else:
+            return _np.transpose( flattened_hprod, (1,2,0) ).reshape(
+                (num_deriv_cols1, num_deriv_cols2, dim, dim) ) # axes = (gate_ij1, gateij2, prod_row, prod_col)
+
+        
 
     def dproduct(self, gatestring, flat=False, wrtFilter=None):
         """
@@ -278,17 +314,17 @@ class GateMatrixCalc(GateCalc):
         # a derivative of only a *subset* of all the gate's parameters
         fltr = {} #keys = gate labels, values = per-gate param indices
         if wrtFilter is not None:
-            #TODO: move construction of wrtIndexToGatelableIndexPair to __init__??
-            wrtIndexToGatelableIndexPair = []
+            #TODO: move construction of wrtIndexToGatelabelIndexPair to __init__??
+            wrtIndexToGatelabelIndexPair = []
             for lbl,g in self.gates.items():
                 for k in range(g.num_params()):
-                    wrtIndexToGatelableIndexPair.append((lbl,k))
+                    wrtIndexToGatelabelIndexPair.append((lbl,k))
 
             for gateLabel in list(self.gates.keys()):
                 fltr[gateLabel] = []
 
             for i in wrtFilter:
-                lbl,k = wrtIndexToGatelableIndexPair[i]
+                lbl,k = wrtIndexToGatelabelIndexPair[i]
                 fltr[lbl].append(k)
 
         #Cache partial products (relatively little mem required)
@@ -403,23 +439,23 @@ class GateMatrixCalc(GateCalc):
         fltr1 = {} #keys = gate labels, values = per-gate param indices
         fltr2 = {} #keys = gate labels, values = per-gate param indices
         if wrtFilter1 is not None or wrtFilter2 is not None:
-            wrtIndexToGatelableIndexPair = []
+            wrtIndexToGatelabelIndexPair = []
             for lbl,g in self.gates.items():
                 for k in range(g.num_params()):
-                    wrtIndexToGatelableIndexPair.append((lbl,k))
+                    wrtIndexToGatelabelIndexPair.append((lbl,k))
 
             if wrtFilter1 is not None:
                 for gateLabel in list(self.gates.keys()):
                     fltr1[gateLabel] = []
                 for i in wrtFilter1:
-                    lbl,k = wrtIndexToGatelableIndexPair[i]
+                    lbl,k = wrtIndexToGatelabelIndexPair[i]
                     fltr1[lbl].append(k)
 
             if wrtFilter2 is not None:
                 for gateLabel in list(self.gates.keys()):
                     fltr2[gateLabel] = []
                 for i in wrtFilter2:
-                    lbl,k = wrtIndexToGatelableIndexPair[i]
+                    lbl,k = wrtIndexToGatelabelIndexPair[i]
                     fltr2[lbl].append(k)
         
         #Cache partial products (relatively little mem required)
@@ -1049,19 +1085,18 @@ class GateMatrixCalc(GateCalc):
         hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
-        for i,_ in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
-            hProdCache[i] = _np.zeros( hessn_shape )
-            #assume all gate elements are at most linear in params,
-            # all hessiansl for single- or zero-gate strings are zero.
-
-            #OLD (slow and unnecessary unless we relax linear assumption):
-            #if gateLabel == "": #special case of empty label == no gate
-            #    hProdCache[i] = _np.zeros( hessn_shape )
-            #else:
-            #    hgate = self.hproduct( (gateLabel,), 
-            #                           wrtFilter1=_slct.indices(wrtSlice1),
-            #                           wrtFilter2=_slct.indices(wrtSlice2))
-            #    hProdCache[i] = hgate / _np.exp(scaleCache[i])
+        for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
+            if gateLabel == "": #special case of empty label == no gate
+                hProdCache[i] = _np.zeros( hessn_shape )
+            elif not self.gates[gateLabel].has_nonzero_hessian():
+                #all gate elements are at most linear in params, so
+                # all hessians for single- or zero-gate strings are zero.
+                hProdCache[i] = _np.zeros( hessn_shape )
+            else:
+                hgate = self.hgate(gateLabel,
+                                   wrtFilter1=_slct.indices(wrtSlice1),
+                                   wrtFilter2=_slct.indices(wrtSlice2))
+                hProdCache[i] = hgate / _np.exp(scaleCache[i])            
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
         for i in evalTree.get_evaluation_order():

@@ -28,6 +28,7 @@ from .. import tools as _tools
 
 from . import workspace as _ws
 from . import autotitle as _autotitle
+from . import merge_helpers as _merge
 from .notebook import Notebook as _Notebook
 
 import functools as _functools
@@ -35,349 +36,39 @@ import functools as _functools
 from pprint import pprint as _pprint
 
 ROBUST_SUFFIX = ".robust"
-
-def _read_and_preprocess_template(templateFilename, toggles):
-    template = ''
-    with open(templateFilename, 'r') as templatefile:
-        template = templatefile.read()
-        
-    try: # convert to unicode if Python2 
-        template = template.decode('utf-8')
-    except AttributeError: pass #Python3 case
-
-    if toggles is None:
-        toggles = {}
-        
-    def preprocess(txt):
-        try: i = txt.index("#iftoggle(")
-        except ValueError: i = None
-
-        try: k = txt.index("#elsetoggle")
-        except ValueError: k = None
-
-        try: j = txt.index("#endtoggle")
-        except ValueError: j = None
-
-        if i is None:
-            return txt #no iftoggle, so no further processing to do
-            
-        if (k is not None and k < i) or (j is not None and j < i):
-            return txt # else/end appears *before* if - so don't process the if
-
-        #Process the #iftoggle
-        off = len("#iftoggle(")
-        end = txt[i+off:].index(')')
-        toggleName = txt[i+off:i+off+end]
-        pre_text = txt[0:i]  #text before our #iftoggle
-        post_text = preprocess(txt[i+off+end+1:]) #text after
-        
-        if_text = ""
-        else_text = ""
-
-        #Process #elsetoggle or #endtoggle - whichever is first
-        try: k = post_text.index("#elsetoggle") # index in (new) *post_text*
-        except ValueError: k = None
-        try: j = post_text.index("#endtoggle") # index in (new) *post_text*
-        except ValueError: j = None
-
-        if k is not None and (j is None or k < j): # if-block ends at #else
-            #process #elsetoggle
-            if_text = post_text[0:k]
-            post_text = preprocess(post_text[k+len("#elsetoggle"):])
-            else_processed = True
-        else: else_processed = False
-
-        #Process #endtoggle
-        try: j = post_text.index("#endtoggle") # index in (new) *post_text*
-        except ValueError: j = None
-        assert(j is not None), "#iftoggle(%s) without corresponding #endtoggle" % toggleName
-        
-        if not else_processed: # if-block ends at #endtoggle
-            if_text = post_text[0:j]
-        else: # if-block already captured; else-block ends at #endtoggle
-            else_text = post_text[0:j]
-        post_text = preprocess(post_text[j+len("#endtoggle"):])
-                
-        if toggles[toggleName]:
-            return pre_text + if_text + post_text
-        else:
-            return pre_text + else_text + post_text
-    
-    return preprocess(template)
-
-def _merge_template(qtys, templateFilenameOrDir, outputFilename, auto_open,
-                    precision, link_to,
-                    CSSnames=("pygsti_dataviz.css","pygsti_report.css","pygsti_fonts.css"),
-                    connected=False, toggles=None, renderMath=True, resizable=True,
-                    autosize='none', verbosity=0):
-
-    printer = VerbosityPrinter.build_printer(verbosity)
-
-    #Figure out which rendering mode we'll use
-    full = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                          "templates", templateFilenameOrDir )
-    if _os.path.isdir(full) or not outputFilename.endswith(".html"):
-        #template is a directory, so we must outputFilename must also be a directory
-        render_typ = "htmldir" # output is a dir of html files
-        if outputFilename.endswith(".html") or outputFilename.endswith(".pdf"):
-            outputDir = _os.path.splitext(outputFilename)[0] #remove extension
-        else:
-            outputDir = outputFilename #assume any .ext is desired in folder name
-        outputFilename = _os.path.join(outputDir, 'main.html')
-
-        def clearDir(path):
-            if not _os.path.isdir(path): return
-            for fn in _os.listdir(path):
-                full_fn = _os.path.join(path,fn)
-                if _os.path.isdir(full_fn):
-                    clearDir(full_fn)
-                    _os.rmdir(full_fn)
-                else:
-                    _os.remove( full_fn )
-        
-        #Create figures directory if it doesn't already exist,
-        # otherwise clear it
-        figDir = _os.path.join(outputDir, 'figures')
-        if not _os.path.exists(figDir):
-            _os.makedirs(figDir)
-        else:
-            assert(_os.path.isdir(figDir)), "%s exists but isn't a directory!" % figDir
-            clearDir(figDir)
-
-        #Create tabs directory if it doesn't already exist,
-        # otherwise clear it
-        tabDir = _os.path.join(outputDir, 'tabs')
-        if not _os.path.exists(tabDir):
-            _os.makedirs(tabDir)
-        else:
-            assert(_os.path.isdir(tabDir)), "%s exists but isn't a directory!" % tabDir
-            clearDir(tabDir)
-
-        #clear offline dir if it exists
-        offlineDir = _os.path.join(outputDir, 'offline')
-        if _os.path.isdir(offlineDir):
-            clearDir(offlineDir)
-            _os.rmdir(offlineDir) #otherwise rsync doesn't work (?)
-            
-    else:
-        assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
-        render_typ = "html"
-        outputDir = _os.path.dirname(outputFilename)
-
-    #Copy offline directory into position
-    if not connected:
-        _ws.rsync_offline_dir(outputDir)
-
-    figureDir = _os.path.join(outputDir, 'figures')
-
-    #Add favicon
-    if 'favicon' not in qtys:
-        if connected:
-            favpath = "https://raw.githubusercontent.com/pyGSTio/pyGSTi/gh-pages"
-        else:
-            favpath = "offline/images"
-            
-        qtys['favicon'] = (
-            '<link rel="icon" type="image/png" sizes="16x16" href="{fp}/favicon-16x16.png">\n'
-            '<link rel="icon" type="image/png" sizes="32x32" href="{fp}/favicon-32x32.png">\n'
-            '<link rel="icon" type="image/png" sizes="96x96" href="{fp}/favicon-96x96.png">\n'
-            ).format(fp=favpath)
-            
-    #Add inline or CDN javascript    
-    if 'jqueryLIB' not in qtys:
-        qtys['jqueryLIB'] = _ws.insert_resource(
-            connected, "https://code.jquery.com/jquery-3.2.1.min.js", "jquery-3.2.1.min.js",
-            "sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=",
-            "anonymous")
-        
-    if 'jqueryUILIB' not in qtys:
-        qtys['jqueryUILIB'] = _ws.insert_resource(
-            connected, "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js", "jquery-ui.min.js",
-            "sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=",
-            "anonymous")
-        
-        qtys['jqueryUILIB'] += _ws.insert_resource(
-            connected, "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css",
-            "smoothness-jquery-ui.css")
-        
-    if 'plotlyLIB' not in qtys:
-        qtys['plotlyLIB'] = _ws.insert_resource(
-            connected, "https://cdn.plot.ly/plotly-latest.min.js", "plotly-polarfixed.min.js")
-
-    #if 'mathjaxLIB' not in qtys:
-    #    assert(connected),"MathJax cannot be used unless connected=True."
-    #    src = _ws.insert_resource(
-    #        connected, "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML",
-    #        None)
-    #
-    #    #this *might* need to go at the very top of the HTML page to work
-    #    qtys['mathjaxLIB'] = ('<script>'
-    #         'var waitForPlotly = setInterval( function() {'
-    #         '    if( typeof(window.Plotly) !== "undefined" && typeof(window.MathJax) !== "undefined" ){'
-    #         '            MathJax.Hub.Config({ SVG: { font: "STIX-Web" }, displayAlign: "center" });'
-    #         '            MathJax.Hub.Queue(["setRenderer", MathJax.Hub, "SVG"]);'
-    #         '            clearInterval(waitForPlotly);'
-    #         '    }}, 250 );'
-    #         '</script>')
-    #
-    #    qtys['mathjaxLIB'] += '<script type="text/x-mathjax-config"> MathJax.Hub.Config({ ' + \
-    #                         'tex2jax: {inlineMath: [["$","$"] ]} ' + \
-    #                         '}); </script>' + src + \
-    #                         '<style type="text/css"> ' + \
-    #                         '.MathJax_MathML {text-indent: 0;} ' + \
-    #                         '</style>'
-    #    # removed ,["\\(","\\)"] from inlineMath so parentheses work in html
-
-    if 'masonryLIB' not in qtys:
-        qtys['masonryLIB'] = _ws.insert_resource(
-            connected, "https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js",
-            "masonry.pkgd.min.js")
-
-    if 'katexLIB' not in qtys:
-        qtys['katexLIB'] = _ws.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
-            "katex.css")
-
-        qtys['katexLIB'] += _ws.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
-            "katex.min.js")
-        
-        qtys['katexLIB'] += _ws.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js",
-            "auto-render.min.js")
-
-        if renderMath:
-            qtys['katexLIB'] += (
-                '\n<script>'
-                'document.addEventListener("DOMContentLoaded", function() {'
-                '  $("#status").show();\n'
-                '  $("#status").text("Rendering body math");\n'
-                '  $(".math").each(function() {\n'
-                '    console.log("Rendering KateX");\n'
-                '    var texTxt = $(this).text();\n'
-                '    el = $(this).get(0);\n'
-                '    if(el.tagName == "DIV"){\n'
-                '       addDisp = "\\displaystyle";\n'
-                '    } else {\n'
-                '    addDisp = "";\n'
-                '    }\n'
-                '    try {\n'
-                '      katex.render(addDisp+texTxt, el);\n'
-                '    }\n'
-                '    catch(err) {\n'
-                '      $(this).html("<span class=\'err\'>"+err);\n'
-                '    }\n'
-                '  });\n'
-                '});\n'
-                '</script>' )
-
-#OLD: auto-render entire document
-#        qtys['katexLIB'] += ('\n<script>'
-#                'document.addEventListener("DOMContentLoaded", function() {'
-#                'renderMathInElement(document.body, { delimiters: ['
-#                '{left: "$$", right: "$$", display: true},'
-#                '{left: "$", right: "$", display: false},'
-#                '] } ); });'
-#                '</script>')
-        # removed so parens work:
-        # '{left: "\\[", right: "\\]", display: true},'
-        # '{left: "\\(", right: "\\)", display: false}'
-
-    if 'plotlyexLIB' not in qtys:
-        qtys['plotlyexLIB'] = _ws.insert_resource(
-            connected, None, "pygsti_plotly_ex.js")
-
-    if 'dashboardLIB' not in qtys:
-        qtys['dashboardLIB'] = _ws.insert_resource(
-            connected, None, "pygsti_dashboard.js")
-    
-    #Add inline CSS
-    if 'CSS' not in qtys:
-        qtys['CSS'] = "\n".join( [_ws.insert_resource(
-            connected, None, cssFile)
-                for cssFile in CSSnames] )
-
-    #render quantities as HTML
-    qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
-    for key,val in qtys.items():
-        if _compat.isstr(val):
-            qtys_html[key] = val
-
-        else:
-
-            printer.log("Rendering %s" % key, 3)
-            if isinstance(val,_ws.WorkspaceOutput): #switchboards don't have render options yet...
-                val.set_render_options(resizable=resizable, autosize=autosize,
-                                       output_dir=figureDir, link_to=link_to,
-                                       precision=precision)
-                if link_to:
-                    val.set_render_options(leave_includes_src=('tex' in link_to),
-                                           render_includes=('pdf' in link_to) )
-            
-                out = val.render(render_typ)
-                if link_to:
-                    if 'tex' in link_to or 'pdf' in link_to: val.render("latexdir") 
-                    if 'pkl' in link_to: val.render("pythondir")
-
-            else: #switchboards usually
-                out = val.render(render_typ)
-                
-            # Note: out is a dictionary of rendered portions
-            qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
-
-        
-    #Insert qtys into template file(s)
-    if _os.path.isdir(full):
-        baseTemplateDir = full
-        templateFilenames = [fn for fn in _os.listdir(baseTemplateDir) if fn.endswith(".html")]
-        outputFilenames = []
-        for fn in templateFilenames:
-            outfn = _os.path.join(outputDir, fn) if (fn == 'main.html') else \
-                    _os.path.join(outputDir, 'tabs', fn)
-            outputFilenames.append( outfn )
-    else:
-        baseTemplateDir = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)), "templates" )
-        templateFilenames = [templateFilenameOrDir]
-        outputFilenames = [outputFilename]
-        
-    for templateFilename,outputName in zip(templateFilenames,outputFilenames):
-        templateFilename = _os.path.join( baseTemplateDir, templateFilename )
-        template = _read_and_preprocess_template(templateFilename, toggles)
-    
-        #Do actual fill -- everything needs to be unicode at this point.
-        filled_template = template % qtys_html
-          #.format_map(qtys_html) #need python 3.2+
-      
-        if _sys.version_info <= (3, 0): # Python2: need to re-encode for write(...)
-            filled_template = filled_template.encode('utf-8')
-
-        with open(outputName, 'w') as outputfile:
-            outputfile.write(filled_template)
-
-    if render_typ == "html":
-        printer.log("Output written to %s" % outputFilename)
-    else: # render_typ == "htmldir"
-        printer.log("Output written to %s directory" % outputDir)
-
-    if auto_open:
-        url = 'file://' + _os.path.abspath(outputFilename)
-        printer.log("Opening %s..." % outputFilename)
-        _webbrowser.open(url)
         
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html','latex'))
-    if errgen_type == "logTiG":
-        ret = '<span class="math">\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}</span>'
+
+    notDuringTxt = """This is <em>not</em> the Lindblad-type generator that would produce this noise if it acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that reporting the continuous-time-generator would encourage a false sense of understanding the physics behind the noise, which is explicitly invalid if the gates were produced by anything other than a simple pulse."""
+    
+    if errgen_type == "logTiG": # G = T*exp(L) (pre-error)
+        gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
+        desc = ('<em>pre-gate</em> generator, so it answers the question '
+                '"If all the noise occurred <em>before</em> the ideal gate,'
+                ' what Lindbladian would generate it?" ') + notDuringTxt
+    elif errgen_type == "logGTi": # G = exp(L)*T (post-error)
+        gen = '<span class="math">G = e^{\mathbb{L}} G_0</span>'
+        desc = ('<em>post-gate</em> generator, so it answers the question '
+                '"If all the noise occurred <em>after</em> the ideal gate,'
+                ' what Lindbladian would generate it?" ') + notDuringTxt
     elif errgen_type == "logG-logT":
-        ret = '<span class="math">\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}</span>'
+        gen = '<span class="math">G = e^{\mathbb{L} + \log G_0}</span>'
+        desc = ('<em>during-gate</em> generator, so it answers the question '
+                '"What Lindblad-type generate would produce this noise if it'
+                ' acted continuously <em>during</em> the gate?"  Note that '
+                'this does <em>not necessarily</em> give insight into physics'
+                ' producing the noise.')
     else:
-        ret = "???"
+        gen = desc = "???"
     
     if typ == "latex": #minor modifications for latex versino
-        ret = ret.replace('<span class="math">','$')
-        ret = ret.replace('</span>','$')
+        gen = gen.replace('<span class="math">','$')
+        gen = gen.replace('</span>','$')
+        desc = desc.replace('<em>','\\emph{')
+        desc = desc.replace('</em>','}')
 
-    return ret
+    return gen, desc
 
 def _add_new_labels(running_lbls, current_lbls):
     """ 
@@ -398,7 +89,6 @@ def _add_new_estimate_labels(running_lbls, estimates):
     Like _add_new_labels but perform robust-suffix processing.
     """
     current_lbls = list(estimates.keys())
-    print("DB: add new labels: ",current_lbls, " to ", running_lbls)
     
     def add_lbl(lst, lbl):
         if lbl.endswith(ROBUST_SUFFIX) and \
@@ -418,7 +108,6 @@ def _add_new_estimate_labels(running_lbls, estimates):
             if lbl not in running_lbls:
                 add_lbl(running_lbls, lbl)
 
-    print("DB: returning: ",running_lbls)
     return running_lbls
 
 
@@ -543,7 +232,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     multiL = bool(len(Ls) > 1)
             
     switchBd = ws.Switchboard(
-        ["Dataset","Estimate","G-Opt","max(L)"],
+        ["Dataset","Estimate","Gauge-Opt","max(L)"],
         [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
         ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
         show=[multidataset,multiest,multiGO,False] # "global" switches only + gauge-opt (OK if doesn't apply)
@@ -714,11 +403,12 @@ def create_general_report(results, filename, title="auto",
         expected chi2 distribution is shown in a linear grayscale, and the 
         top `linlogPercentile` is shown on a logarithmic colored scale.
 
-    errgen_type: {"logG-logT", "logTiG"}
+    errgen_type: {"logG-logT", "logTiG", "logGTi"}
         The type of error generator to compute.  Allowed values are:
         
         - "logG-logT" : errgen = log(gate) - log(target_gate)
         - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+        - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
 
     nmthreshold : float, optional
         The threshold, in units of standard deviations, that triggers the
@@ -824,7 +514,7 @@ def create_general_report(results, filename, title="auto",
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
-    qtys['errorgenformula'] = _errgen_formula(errgen_type, 'html')
+    qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, 'html')
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
@@ -908,6 +598,8 @@ def create_general_report(results, filename, title="auto",
                                                            "boxes", errgen_type)
     addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty('softwareEnvTable', ws.SoftwareEnvTable)
+    addqty('exampleTable', ws.ExampleTable)
+    qtys['exampleTable'].set_render_options(click_to_display=True)
 
     #Ls and Germs specific
     gss = switchBd.gss
@@ -939,7 +631,7 @@ def create_general_report(results, filename, title="auto",
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
-        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=False)
+        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=False, valign='bottom')
         
         addqty('bestEstimateColorScatterPlot', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
@@ -1004,7 +696,10 @@ def create_general_report(results, filename, title="auto",
         
         qtys['dscmpSwitchboard'] = dscmp_switchBd
         addqty('dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-        addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp)
+        #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+        addqty('dsComparisonHistogram', ws.ColorBoxPlot,
+               'dscmp', dscmp_switchBd.dscmp_gss, None, None,
+               dscomparator=dscmp_switchBd.dscmp, typ="histogram")
         if not brief: 
             addqty('dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    None, None, dscomparator=dscmp_switchBd.dscmp)
@@ -1017,11 +712,11 @@ def create_general_report(results, filename, title="auto",
             # 3) populate template html file => report html file
             printer.log("*** Merging into template file ***")
             #template = "report_dashboard.html"
-            template = "general_report"
-            _merge_template(qtys, template, filename, auto_open, precision, link_to,
-                            connected=connected, toggles=toggles, renderMath=renderMath,
-                            resizable=resizable, autosize=autosize, verbosity=printer,
-                            CSSnames=("pygsti_dataviz.css","pygsti_dashboard.css","pygsti_fonts.css"))
+            templateDir = "general_report"
+            _merge.merge_html_template_dir(
+                qtys, templateDir, filename, auto_open, precision, link_to,
+                connected=connected, toggles=toggles, renderMath=renderMath,
+                resizable=resizable, autosize=autosize, verbosity=printer)
             #SmartCache.global_status(printer)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
@@ -1042,7 +737,7 @@ def create_report_notebook(results, filename, title="auto",
     
     #Copy offline directory into position
     if not connected:
-        _ws.rsync_offline_dir(outputDir)
+        _merge.rsync_offline_dir(outputDir)
 
     #Save results to file
     basename = _os.path.splitext(_os.path.basename(filename))[0]
