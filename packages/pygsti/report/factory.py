@@ -39,18 +39,36 @@ ROBUST_SUFFIX = ".robust"
         
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html','latex'))
-    if errgen_type == "logTiG":
-        ret = '<span class="math">\hat{G} = G_{\mathrm{target}}e^{\mathbb{L}}</span>'
+
+    notDuringTxt = """This is <em>not</em> the Lindblad-type generator that would produce this noise if it acted continuously <em>during</em> the gate (i.e., simultaneously with a Hamiltonian that generates the ideal gate).  This choice is explicit; the authors of pyGSTi are concerned that reporting the continuous-time-generator would encourage a false sense of understanding the physics behind the noise, which is explicitly invalid if the gates were produced by anything other than a simple pulse."""
+    
+    if errgen_type == "logTiG": # G = T*exp(L) (pre-error)
+        gen = '<span class="math">G = G_0 e^{\mathbb{L}}</span>'
+        desc = ('<em>pre-gate</em> generator, so it answers the question '
+                '"If all the noise occurred <em>before</em> the ideal gate,'
+                ' what Lindbladian would generate it?"') + notDuringTxt
+    elif errgen_type == "logGTi": # G = exp(L)*T (post-error)
+        gen = '<span class="math">G = e^{\mathbb{L}} G_0</span>'
+        desc = ('<em>post-gate</em> generator, so it answers the question '
+                '"If all the noise occurred <em>after</em> the ideal gate,'
+                ' what Lindbladian would generate it?"') + notDuringTxt
     elif errgen_type == "logG-logT":
-        ret = '<span class="math">\hat{G} = e^{\mathbb{L} + \log G_{\mathrm{target}}}</span>'
+        gen = '<span class="math">G = e^{\mathbb{L} + \log G_0}</span>'
+        desc = ('<em>during-gate</em> generator, so it answers the question '
+                '"What Lindblad-type generate would produce this noise if it'
+                ' acted continuously <em>during</em> the gate?"  Note that '
+                'this does <em>not necessarily</em> give insight into physics'
+                ' producing the noise.')
     else:
-        ret = "???"
+        gen = desc = "???"
     
     if typ == "latex": #minor modifications for latex versino
-        ret = ret.replace('<span class="math">','$')
-        ret = ret.replace('</span>','$')
+        gen = gen.replace('<span class="math">','$')
+        gen = gen.replace('</span>','$')
+        desc = desc.replace('<em>','\\emph{')
+        desc = desc.replace('</em>','}')
 
-    return ret
+    return gen, desc
 
 def _add_new_labels(running_lbls, current_lbls):
     """ 
@@ -495,7 +513,7 @@ def create_general_report(results, filename, title="auto",
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
-    qtys['errorgenformula'] = _errgen_formula(errgen_type, 'html')
+    qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, 'html')
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
@@ -718,7 +736,7 @@ def create_report_notebook(results, filename, title="auto",
     
     #Copy offline directory into position
     if not connected:
-        _ws.rsync_offline_dir(outputDir)
+        _merge.rsync_offline_dir(outputDir)
 
     #Save results to file
     basename = _os.path.splitext(_os.path.basename(filename))[0]
