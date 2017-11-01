@@ -797,7 +797,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 ys.append( subMxs[iy][ix][N-1-iiy][iix] )
 
     minval = 0
-    maxval = _np.max(ys)
+    maxval = max(minval+1e-3,_np.max(ys)) #don't let minval==maxval
     nvals = len(ys)
     cumulative = dict(enabled=False)
     #             marker=dict(color=barcolor),
