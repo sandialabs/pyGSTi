@@ -9,7 +9,7 @@
 	<figure id="dsComparisonHistogram">
 	  %(dsComparisonHistogram)s
 	  %(dscmpSwitchboard)s
-	  <figcaption><span class="captiontitle">Histogram of per-circuit p-values between two data sets.</span> <span class="captiondetail">Given two datasets to compare, the frequencies observed <em>each individual circuit</em> can be evaluated for consistency.  The result defines a p-value, which is simply the probability that something at least this unlikely would be observed if the underlying probability (for this circuit) really was constant between the two datasets.  This plot shows a histogram of all the resulting p-values, for all the GST circuits.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
+	  <figcaption><span class="captiontitle">Histogram of per-circuit <span class="math">2\Delta\log(\mathcal{L})</span> values between two data sets.</span> <span class="captiondetail">Given two datasets to compare, the frequencies observed <em>each individual circuit</em> can be evaluated for consistency.  The result defines a loglikelihood ratio (<span class="math">2\Delta\log(\mathcal{L})</span>) value, which indicates the amount the single-generating-gateset model is violated.  The line shows what would be expected for perfectly consistent data.</span></figcaption>
 	</figure>
 	
 	<figure id="dsComparisonBoxPlot">
