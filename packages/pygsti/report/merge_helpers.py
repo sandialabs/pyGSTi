@@ -320,7 +320,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
     printer = VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as HTML
-    qtys_html = _collections.defaultdict(lambda x=0: "BLANK")
+    qtys_html = _collections.defaultdict(lambda x=0: "OMITTED")
     for key,val in qtys.items():
         if _compat.isstr(val):
             qtys_html[key] = val
@@ -349,7 +349,7 @@ def render_as_latex(qtys, render_options, verbosity):
     printer = VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as Latex
-    qtys_latex = _collections.defaultdict(lambda x=0: "BLANK")
+    qtys_latex = _collections.defaultdict(lambda x=0: "OMITTED")
     for key,val in qtys.items():
         if _compat.isstr(val):
             qtys_latex[key] = val

@@ -190,11 +190,11 @@ def create_offline_zip(outputDir="."):
             zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
     zipHandle.close()
 
-def _set_toggles(results_dict):
+def _set_toggles(results_dict, brevity):
     #Determine when to get gatestring weight (scaling) values and show via
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
-    toggles = {}
+    toggles = { }
     
     toggles["ShowScaling"] = False
     for res in results_dict.values():
@@ -202,6 +202,11 @@ def _set_toggles(results_dict):
             weights = est.parameters.get("weights",None)
             if weights is not None and len(weights) > 0:
                 toggles["ShowScaling"] = True
+
+    toggles['BrevityLT1'] = bool(brevity < 1)
+    toggles['BrevityLT2'] = bool(brevity < 2)
+    toggles['BrevityLT3'] = bool(brevity < 3)
+    toggles['BrevityLT4'] = bool(brevity < 4)
 
     return toggles
     
@@ -437,7 +442,12 @@ def create_standard_report(results, filename, title="auto",
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
         "more briefr" reports, which reduce generation time, load time, and
-        disk space consumption.
+        disk space consumption.  In particular:
+
+        - 1: Plots showing per-sequences quantities disappear at brevity=1
+        - 2: Reference sections disappear at brevity=2
+        - 3: Germ-level estimate tables disappear at brevity=3
+        - 4: Everything but summary figures disappears at brevity=4
 
     advancedOptions : dict, optional
         A dictionary of advanced options for which the default values aer usually
@@ -532,7 +542,7 @@ def create_standard_report(results, filename, title="auto",
                          " for you: '{}'.").format(autoname))
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
-    toggles = _set_toggles(results_dict)
+    toggles = _set_toggles(results_dict, brevity)
 
     #DEBUG
     renderMath = True
@@ -540,9 +550,10 @@ def create_standard_report(results, filename, title="auto",
     #_ws.WorkspaceOutput.default_render_options['render_math'] = renderMath #don't render any math
 
     qtys = {} # stores strings to be inserted into report template
-    def addqty(name, fn, *args, **kwargs):
-        with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
-            qtys[name] = fn(*args, **kwargs)
+    def addqty(b, name, fn, *args, **kwargs):
+        if b is None or brevity < b:
+            with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
+                qtys[name] = fn(*args, **kwargs)
 
     qtys['title'] = title
     qtys['date'] = _time.strftime("%B %d, %Y")
@@ -598,91 +609,103 @@ def create_standard_report(results, filename, title="auto",
     germs = switchBd.germs
     strs = switchBd.strs
     cliffcomp = switchBd.clifford_compilation
+    A = None # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
 
-    addqty('targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
-    addqty('targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
-    addqty('datasetOverviewTable', ws.DataSetOverviewTable, ds)
+    #Brevity key:
+    # 1: Plots involving quantities for individual sequences disappear at brevity=1
+    # 2: Input & Meta reference tables disappear at brevity=2
+    # 3: Germ estimate tables disappear at brevity=3
+    # 4: Everything but summary figs disappear at brevity=4
+    
+    addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
+    addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+    addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
     gsFinal = switchBd.gsFinal
     gsGIRep = switchBd.gsGIRep
     gsEP = switchBd.gsGIRepEP
     cri = switchBd.cri if (confidenceLevel is not None) else None
     criGIRep = switchBd.criGIRep if (confidenceLevel is not None) else None
-    addqty('bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
+
+    # Non-summary gate estimates
+    # Germ
+    addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], cri)
-    addqty('bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
+    addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
            ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
-    addqty('bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
-    addqty('bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
-    addqty('bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
+    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+    addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+    addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
-    addqty('bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
-    addqty('bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, None) #cri) #TEST
-    addqty('bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep,
+    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
+    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, None) #cri) #TEST
+    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep,
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
-    addqty('bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep,
+    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep,
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
-           virtual_gates=germs) #don't display eigenvalues of all germs
+           virtual_gates=germs)
     #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    addqty('bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty('bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, 
+    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
+    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, 
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
-    addqty('bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, None, #cri, #TEST
+    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, None, #cri, #TEST
                                         display=('inf','trace','nuinf'), virtual_gates=germs)        
-    addqty('bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep, 
+    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep, 
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
-    addqty('bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, None, #criGIRep, #TEST
+    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, None, #criGIRep, #TEST
                                         display=('evdiamond','evnudiamond'), virtual_gates=germs)
-    addqty('bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
                                          display=('inf','trace','diamond','evinf','evdiamond'))
-    addqty('bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
+    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
-    addqty('metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
-    addqty('softwareEnvTable', ws.SoftwareEnvTable)
-    addqty('exampleTable', ws.ExampleTable)
+    addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty(2,'softwareEnvTable', ws.SoftwareEnvTable)
+    addqty(A,'exampleTable', ws.ExampleTable)
     qtys['exampleTable'].set_render_options(click_to_display=True)
 
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
     gssAllL = switchBd.gssAllL
-    addqty('fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
-    addqty('prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
-    addqty('effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
-    addqty('colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
-    addqty('germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
-    addqty('progressTable', ws.FitComparisonTable, 
+    addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
+    addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
+    addqty(2,'effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
+    addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
+    addqty(4,'progressTable', ws.FitComparisonTable, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
-    addqty('gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
-    addqty('progressBarPlot', ws.FitComparisonBarPlot, 
+    addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
-    addqty('progressBarPlot_sum', ws.FitComparisonBarPlot, 
+    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') #just duplicate for now
 
-    if brevity is None: 
-        addqty('dataScalingColorBoxPlot', ws.ColorBoxPlot, 
-               "scaling", switchBd.gssFinal, eff_ds, switchBd.gsGIRep,
-                submatrices=switchBd.scaledSubMxsDict)
     
-        #Not pagniated currently... just set to same full plot
-        addqty('bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc)
-        qtys['bestEstimateColorBoxPlotPages'].set_render_options(click_to_display=False, valign='bottom')
-        
-        addqty('bestEstimateColorScatterPlot', ws.ColorBoxPlot,
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, typ="scatter") #TODO: L-switchboard on summary page?
-        ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
-        ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
+    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot, 
+           "scaling", switchBd.gssFinal, eff_ds, switchBd.gsGIRep,
+            submatrices=switchBd.scaledSubMxsDict)
+    
+    #Not pagniated currently... just set to same full plot
+    addqty(1,'bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc)
+    if brevity < 1: qtys['bestEstimateColorBoxPlotPages'].set_render_options(
+            click_to_display=False, valign='bottom')
+    
+    addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc, typ="scatter") #TODO: L-switchboard on summary page?
+    ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
+    ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
-    addqty('bestEstimateColorHistogram', ws.ColorBoxPlot,
+
+    addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
         switchBd.objective, gss, eff_ds, gsL,
         linlg_pcntle=float(linlogPercentile) / 100,
         minProbClipForWeighting=switchBd.mpc, typ="histogram") #TODO: L-switchboard on summary page?
@@ -737,14 +760,13 @@ def create_standard_report(results, filename, title="auto",
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
         
         qtys['dscmpSwitchboard'] = dscmp_switchBd
-        addqty('dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+        addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
         #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-        addqty('dsComparisonHistogram', ws.ColorBoxPlot,
+        addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
                'dscmp', dscmp_switchBd.dscmp_gss, None, None,
                dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-        if brevity is None: 
-            addqty('dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   None, None, dscomparator=dscmp_switchBd.dscmp)
+        addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+               None, None, dscomparator=dscmp_switchBd.dscmp)
         toggles['CompareDatasets'] = True
     else:
         toggles['CompareDatasets'] = False
