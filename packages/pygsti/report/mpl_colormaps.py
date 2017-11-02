@@ -7,6 +7,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Plotly-to-Matplotlib conversion functions. """
 
 import numpy as _np
+from .. import objects as _objs
+
 from .plothelpers import _eformat
 from ..tools import compattools as _compat
 
@@ -154,6 +156,10 @@ def mpl_color(plotly_color):
 def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'):
     fig = pygsti_fig['plotlyfig']
     data_trace_list = fig['data']
+
+    if 'special' in pygsti_fig:
+        if pygsti_fig['special'] == "keyplot": return special_keyplot(pygsti_fig, save_to, fontsize)
+        else: raise ValueError("Invalid `special` label: %s" % special)
     
     #if axes is None: 
     mpl_fig,axes = _plt.subplots()  # create a new figure if no axes are given    
@@ -184,6 +190,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
     xaxisside = xaxis.get('side','bottom')
     yaxisside = yaxis.get('side','left')
     xtickangle = xaxis.get('tickangle',0)
+    xlim = xaxis.get('range',None)
+    ylim = yaxis.get('range',None)
 
     if xaxisside == "top":
         axes.xaxis.set_label_position('top') 
@@ -226,6 +234,16 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
     if yaxistype == 'log':
         axes.set_yscale("log")
 
+    if xlim is not None:
+        if xaxistype == 'log': #plotly's limits are already log10'd in this case
+            xlim = 10.0**xlim[0], 10.0**xlim[1] # but matplotlib's aren't
+        axes.set_xlim(xlim)
+        
+    if ylim is not None:
+        if yaxistype == 'log': #plotly's limits are already log10'd in this case
+            ylim = 10.0**ylim[0], 10.0**ylim[1] # but matplotlib's aren't
+        axes.set_ylim(ylim)
+
     #figure out barwidth and offsets for bar plots
     num_bars = sum([d.get('type','')=='bar' for d in data_trace_list])
     currentBarOffset = 0
@@ -245,8 +263,10 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             zmin = traceDict.get('zmin','default')
             zmax = traceDict.get('zmin','default')
             show_colorscale = traceDict.get('showscale',True)
-            
-            mpl_fig.set_size_inches( plt_data.shape[1]*0.4, plt_data.shape[0]*0.4)
+
+            mpl_size = (plt_data.shape[1]*0.5, plt_data.shape[0]*0.5)
+            mpl_fig.set_size_inches( *mpl_size )
+            #pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
             
             colormap = pygsti_fig['colormap']
             assert(colormap is not None), 'Must separately specify a colormap...'
@@ -285,6 +305,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 for y in range(plt_data.shape[0]):
                     for x in range(plt_data.shape[1]):
                         if _np.isnan(plt_data[y, x]): continue
+                        assert(_np.isfinite(plt_data[y, x])),"%s is not finite!" % str(plot_data[y,x])
                         axes.text(x + 0.5, y + 0.5, mpl_process_lbl(_eformat(plt_data[y, x], prec),math=True),
                                 horizontalalignment='center',
                                 verticalalignment='center',
@@ -328,7 +349,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 handles.append(s)
                 labels.append(name)   
             
-        elif typ == "bar": 
+        elif typ == "bar":
             xlabels = [str(xl) for xl in traceDict['x']] # x "values" are actually bar labels in plotly
 
             #always grey=pos, red=neg type of bar plot for now (since that's all pygsti uses)
@@ -406,3 +427,69 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         return None #figure is closed!
     else:
         return mpl_fig
+
+
+#Special processing for the key-plot: since it uses so much weird
+# plotly and matplotlib construction it makes no sense to try to
+# automatically convert.
+def special_keyplot(pygsti_fig, save_to, fontsize):
+    """
+    Create a plot showing the layout of a single sub-block of a goodness-of-fit
+    box plot.
+    """
+
+    #Hardcoded
+    title=""
+
+    #OLD xlabel="$\\rho_i$"
+    #OLD ylabel="$E_i$",
+    prepStrs, effectStrs, xlabel, ylabel = pygsti_fig['args']
+
+    fig, axes = _plt.subplots()
+    mpl_size = (len(prepStrs)*0.5,len(effectStrs)*0.5)
+    fig.set_size_inches(*mpl_size)
+    pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
+
+    if title is not None:
+        axes.set_title( title, fontsize=(fontsize+4) )
+
+    if xlabel is not None:
+        axes.set_xlabel( xlabel, fontsize=(fontsize+4) )
+
+    if ylabel is not None:
+        axes.set_ylabel( ylabel, fontsize=(fontsize+4) )
+
+    #Copied from generate_boxplot
+    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+        formatted_vals = []
+        for val in vals:
+            if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
+                if len(val) == 0:
+                    formatted_vals.append(r"$\{\}$")
+                else:
+                    formatted_vals.append( "$" + "\\cdot".join([("\\mathrm{%s}" % el) for el in val]) + "$" )
+            else:
+                formatted_vals.append(val)
+        return formatted_vals
+
+    axes.yaxis.tick_right()
+    axes.xaxis.set_label_position("top")
+    axes.set_xticklabels(val_filter(prepStrs), rotation=90, ha='center', fontsize=fontsize)
+    axes.set_yticklabels(list(reversed(val_filter(effectStrs))), fontsize=fontsize) # FLIP
+    axes.set_xticks(_np.arange(len(prepStrs))+.5)
+    axes.set_xticks(_np.arange(len(prepStrs)+1), minor = True)
+    axes.set_yticks(_np.arange(len(effectStrs))+.5)
+    axes.set_yticks(_np.arange(len(effectStrs)+1), minor = True)
+    axes.tick_params(which='major', bottom='off', top='off', left='off', right='off', pad=5 )
+    axes.yaxis.grid(True,linestyle='-',linewidth=1.0, which='minor')
+    axes.xaxis.grid(True,linestyle='-',linewidth=1.0, which='minor')
+
+    if save_to is not None:
+        if len(save_to) > 0: #So you can pass save_to="" and figure will be closed but not saved to a file
+            _plt.savefig(save_to, bbox_extra_artists=(axes,), bbox_inches='tight')
+
+        _plt.cla()
+        _plt.close(fig) #close the figure if we're saving it to a file
+    else:
+        return fig    
+

@@ -14,6 +14,7 @@ import copy        as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
+from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 
 #Class for holding confidence region factory keys
@@ -488,18 +489,55 @@ class Estimate(object):
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
         return (fitQty-k)/_np.sqrt(2*k)
 
+    
+    def view(self, gaugeopt_keys, parent=None):
+        """
+        Creates a shallow copy of this Results object containing only the
+        given gauge-optimization keys.
 
+        Parameters
+        ----------
+        gaugeopt_keys : str or list, optional
+            Either a single string-value gauge-optimization key or a list of
+            such keys.  If `None`, then all gauge-optimization keys are 
+            retained.
+
+        parent : Results, optional
+            The parent `Results` object of the view.  If `None`, then the
+            current `Estimate`'s parent is used.
+
+        Returns
+        -------
+        Estimate
+        """
+        if parent is None: parent = self.parent
+        view = Estimate(parent)
+        view.parameters = self.parameters
+        view.gatesets = self.gatesets
+        view.confidence_region_factories = self.confidence_region_factories
+        
+        if gaugeopt_keys is None:
+            gaugeopt_keys = list(self.goparameters.keys())
+        elif _compat.isstr(gaugeopt_keys):
+            gaugeopt_keys = [gaugeopt_keys]
+        for go_key in gaugeopt_keys:
+            if go_key in self.goparameters:
+                view.goparameters[go_key] = self.goparameters[go_key]
+
+        return view
+    
 
     def copy(self):
         """ Creates a copy of this Estimate object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
-        cpy = Estimate()
+        cpy = Estimate(self.parent)
         cpy.parameters = _copy.deepcopy(self.parameters)
         cpy.goparameters = _copy.deepcopy(self.goparameters)
         cpy.gatesets = self.gatesets.copy()
         cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
         return cpy
 
+    
     def __str__(self):
         s  = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Estimate Object ------------------\n"

@@ -1229,7 +1229,8 @@ class WorkspaceOutput(object):
         'valign': 'top',
 
         #Latex specific
-        'latex_call': "pdflatex",
+        'latex_cmd': "pdflatex",
+        'latex_flags': ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"],
         'page_size': (6.5,8.0),
         'render_includes': True,
         'leave_includes_src': False,
@@ -2017,24 +2018,25 @@ class WorkspaceTable(WorkspaceOutput):
                                                     _os.path.join(output_dir,"%s.tex" % tableDivID))
 
                     if render_includes:
-                        assert('latex_call' in self.options and self.options['latex_call']), \
-                            "Cannot render latex include files without a valid 'latex_call' render option"
+                        assert('latex_cmd' in self.options and self.options['latex_cmd']), \
+                            "Cannot render latex include files without a valid 'latex_cmd' render option"
     
                         try:
                             _os.chdir( render_dir )
-                            latex_cmd = [ self.options['latex_call'] ] + \
-                                        ["-shell-escape", "%s.tex" % tableDivID]
-                            stdout, stderr, returncode = _merge.process_call(latex_cmd)
-                            _merge.evaluate_call(latex_cmd, stdout, stderr, returncode, printer)
+                            latex_cmd = self.options['latex_cmd']
+                            latex_call = [ latex_cmd ] + self.options.get('latex_flags',[]) \
+                                         + ["%s.tex" % tableDivID]
+                            stdout, stderr, returncode = _merge.process_call(latex_call)
+                            _merge.evaluate_call(latex_call, stdout, stderr, returncode, printer)
                             if not _os.path.isfile("%s.pdf" % tableDivID):
-                                raise Exception("File %s.pdf was not created by pdflatex"
-                                                % tableDivID)
+                                raise Exception("File %s.pdf was not created by %s"
+                                                % (tableDivID,latex_cmd))
                             if not leave_src: _os.remove( "%s.tex" % tableDivID )
                             _os.remove( "%s.log" % tableDivID )
                             _os.remove( "%s.aux" % tableDivID )
                         except _subprocess.CalledProcessError as e:
-                            printer.error("pdflatex returned code %d " % e.returncode +
-                                          "trying to render standalone %s. " % tableDivID +
+                            printer.error("%s returned code %d " % (latex_cmd,e.returncode) +
+                                          "trying to render standalone %s.tex. " % tableDivID +
                                           "Check %s.log to see details." % tableDivID)
                         finally:
                             _os.chdir( cwd )

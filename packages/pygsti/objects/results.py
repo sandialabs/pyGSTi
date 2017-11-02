@@ -11,8 +11,10 @@ import itertools   as _itertools
 import warnings    as _warnings
 import time        as _time
 import numpy       as _np
+import copy        as _copy
 
 from .. import tools as _tools
+from ..tools import compattools as _compat
 from .gatestringstructure import LsGermsStructure as _LsGermsStructure
 from .estimate import Estimate as _Estimate
 
@@ -222,15 +224,48 @@ class Results(object):
         self.estimates[estimate_key].parameters['max length list'] = \
                                         self.gatestring_structs['final'].Ls
 
+    def view(self, estimate_keys, gaugeopt_keys=None):
+        """
+        Creates a shallow copy of this Results object containing only the
+        given estimate and gauge-optimization keys.
+
+        Parameters
+        ----------
+        estimate_keys : str or list
+            Either a single string-value estimate key or a list of such keys.
+
+        gaugeopt_keys : str or list, optional
+            Either a single string-value gauge-optimization key or a list of
+            such keys.  If `None`, then all gauge-optimization keys are 
+            retained.
+
+        Returns
+        -------
+        Results
+        """
+        view = Results()
+        view.dataset = self.dataset
+        view.gatestring_lists = self.gatestring_lists
+        view.gatestring_structs = self.gatestring_structs
+
+        if _compat.isstr(estimate_keys):
+            estimate_keys = [estimate_keys]
+        for ky in estimate_keys:
+            if ky in self.estimates:
+                view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys,view)
+        
+        return view
+
 
     def copy(self):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()
-        cpy.gatestring_lists = self.gatestring_lists.copy()
-        cpy.gatestring_structs = self.gatestring_structs.copy()
-        cpy.estimates = self.estimates.copy()
+        cpy.gatestring_lists = _copy.deepcopy(self.gatestring_lists)
+        cpy.gatestring_structs = _copy.deepcopy(self.gatestring_structs)
+        for est_key,est in self.estimates.items():
+            cpy.estimates[est_key] = est.copy()
         return cpy
 
 
@@ -347,10 +382,10 @@ class Results(object):
         _warnings.warn(
             ('create_full_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_brief_report_pdf(self, confidenceLevel=None,
                                 filename="auto", title="auto", datasetLabel="auto",
@@ -359,10 +394,10 @@ class Results(object):
         _warnings.warn(
             ('create_brief_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
                                 title="auto", datasetLabel="auto", suffix="",
@@ -372,9 +407,10 @@ class Results(object):
         _warnings.warn(
             ('create_presentation_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
-             '  Beamer presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  significantly upgraded.  As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
@@ -384,9 +420,10 @@ class Results(object):
         _warnings.warn(
             ('create_presentation_ppt(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
-             '  Powerpoint presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  significantly upgraded.  As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
@@ -395,10 +432,10 @@ class Results(object):
         _warnings.warn(
             ('create_general_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
 
 def enable_old_python_results_unpickling():

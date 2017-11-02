@@ -344,6 +344,25 @@ def render_as_html(qtys, render_options, link_to, verbosity):
             
     return qtys_html
 
+
+def render_as_latex(qtys, render_options, verbosity):
+    printer = VerbosityPrinter.build_printer(verbosity)
+    
+    #render quantities as Latex
+    qtys_latex = _collections.defaultdict(lambda x=0: "BLANK")
+    for key,val in qtys.items():
+        if _compat.isstr(val):
+            qtys_latex[key] = val
+        else:
+            printer.log("Rendering %s" % key, 3)
+            if hasattr(val,'set_render_options'):
+                val.set_render_options(**render_options)
+            render_out = val.render("latex")
+                
+            # Note: render_out is a dictionary of rendered portions
+            qtys_latex[key] = render_out['latex']
+            
+    return qtys_latex
         
             
 def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
@@ -468,9 +487,35 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
     if returncode > 0:
         raise _subprocess.CalledProcessError(returncode, call)
 
-def merge_latex_template(qtys, templateFilename, outputFilename):
+def merge_latex_template(qtys, templateFilename, outputFilename,
+                         toggles=None, precision=None, verbosity=0):
+    
+    printer = VerbosityPrinter.build_printer(verbosity)
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                           "templates", templateFilename )
+    output_dir = _os.path.dirname(outputFilename)
+    output_base = _os.path.splitext( _os.path.basename(outputFilename) )[0]
+
+    #render quantities as LaTeX within dir where report will be compiled
+    cwd = _os.getcwd()
+    _os.chdir(output_dir)
+    try:
+        fig_dir = output_base + "_files" #figure directory relative to output_dir
+        if not _os.path.isdir(fig_dir):
+            _os.mkdir(fig_dir)
+
+        qtys_latex = render_as_latex(qtys, dict(switched_item_mode="inline",
+                                                output_dir=fig_dir, 
+                                                precision=precision), printer)
+    finally:
+        _os.chdir(cwd)
+
+    if toggles:
+        qtys_latex['settoggles'] = ""
+        for toggleNm,val in toggles.items():
+            qtys_latex['settoggles'] +=  "\\toggle%s{%s}\n" % \
+                   ( ("true" if val else "false"), toggleNm)
+    
     template = ''
     with open(templateFilename, 'r') as templatefile:
         template = templatefile.read()
@@ -479,7 +524,70 @@ def merge_latex_template(qtys, templateFilename, outputFilename):
     template = _re.sub( r"\\putfield\{\{([^}]+)\}\}\{\{[^}]*\}\}", "{\\1}", template)
 
     # Replace str.format fields with values and write to output file
-    template = template.format(**qtys)
+    if _sys.version_info > (3, 0): 
+        filled_template = template.format_map(qtys_latex) #need python 3.2+
+    else:
+        filled_template = template.format(**qtys_latex) #no nice defaultdict behavior
+        filled_template = filled_template.encode('utf-8') # Python2: need to re-encode for write(...)
     
     with open(outputFilename, 'w') as outputfile:
-        outputfile.write(template)
+        outputfile.write(filled_template)
+
+
+def compile_latex_report(report_filename, latex_call, printer):
+    """
+    Compile a PDF report from a TeX file. Will compile twice
+    automatically.
+
+    Parameters
+    ----------
+    report_filename : string
+        The full file name, which may (but need not) include a ".tex" or ".pdf"
+        extension, of the report input tex and output pdf files.
+
+    latex_call : list of string
+        List containing the command and flags in the form that
+        :function:`subprocess.check_call` uses.
+
+    printer : VerbosityPrinter
+        Printer to handle logging.
+
+    Raises
+    ------
+    subprocess.CalledProcessException
+        If the call to the process comiling the PDF returns non-zero exit
+        status.
+
+    """
+    report_dir = _os.path.dirname(report_filename)
+    report_base = _os.path.splitext( _os.path.basename(report_filename) )[0]
+    texFilename = report_base + ".tex"
+    pdfPathname = _os.path.join(report_dir, report_base + ".pdf")
+    call = latex_call + [texFilename]
+    
+    cwd = _os.getcwd()
+    if len(report_dir) > 0:
+        _os.chdir(report_dir)
+                    
+    try:
+        #Run latex
+        stdout, stderr, returncode = process_call(call)
+        evaluate_call(call, stdout, stderr, returncode, printer)
+        printer.log("Initial output PDF %s successfully generated." %
+                    pdfPathname)
+        # We could check if the log file contains "Rerun" in it,
+        # but we'll just re-run all the time now
+        stdout, stderr, returncode = process_call(call)
+        evaluate_call(call, stdout, stderr, returncode, printer)
+        printer.log("Final output PDF %s successfully generated. " %
+                    pdfPathname + "Cleaning up .aux and .log files.")
+        _os.remove( report_base + ".log" )
+        _os.remove( report_base + ".aux" )
+    except _subprocess.CalledProcessError as e:
+        printer.error("pdflatex returned code %d " % e.returncode +
+                      "Check %s.log to see details." % report_base)
+    finally:
+        _os.chdir(cwd)
+
+    
+

@@ -19,7 +19,6 @@ from scipy.stats import chi2 as _chi2
 
 from ..objects import VerbosityPrinter, Basis, SmartCache
 from ..objects import DataComparator as _DataComparator
-from ..tools   import compattools as _compat
 from ..tools   import timed_block as _timed_block
 
 from ..tools.mpitools import distribute_indices as _distribute_indices
@@ -207,7 +206,7 @@ def _set_toggles(results_dict):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm, printer):
+                               nmthreshold, comm, printer, fmt):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -225,16 +224,21 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                                list(est.goparameters.keys()))            
 
     Ls = list(sorted(Ls)) #make sure Ls are sorted in increasing order
+    if fmt == "latex" and len(Ls) > 0:
+        swLs = [ Ls[-1] ] # "switched Ls" = just take the single largest L
+    else:
+        swLs = Ls #switch over all Ls
+
     
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
-    multiL = bool(len(Ls) > 1)
+    multiL = bool(len(swLs) > 1)
             
     switchBd = ws.Switchboard(
         ["Dataset","Estimate","Gauge-Opt","max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,Ls))],
-        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(Ls)-1],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str,swLs))],
+        ["dropdown","dropdown", "buttons", "slider"], [0,0,0,len(swLs)-1],
         show=[multidataset,multiest,multiGO,False] # "global" switches only + gauge-opt (OK if doesn't apply)
     )
 
@@ -279,7 +283,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         switchBd.germs[d] = results.gatestring_lists['germs']
 
         switchBd.gssFinal[d] = results.gatestring_structs['final']
-        for iL,L in enumerate(Ls): #allow different results to have different Ls
+        for iL,L in enumerate(swLs): #allow different results to have different Ls
             if L in results.gatestring_structs['final'].Ls:
                 k = results.gatestring_structs['final'].Ls.index(L)
                 switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
@@ -320,7 +324,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                           for l in gauge_opt_labels ]
             switchBd.goparams[d,i,:] = [ est.goparameters.get(l,NA) for l in gauge_opt_labels]
 
-            for iL,L in enumerate(Ls): #allow different results to have different Ls
+            for iL,L in enumerate(swLs): #allow different results to have different Ls
                 if L in results.gatestring_structs['final'].Ls:
                     k = results.gatestring_structs['final'].Ls.index(L)
                     switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
@@ -355,8 +359,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                                   else "non-markovian"
                     switchBd.criGIRep[d,i] = crf.view(confidenceLevel, region_type)
 
-    return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls
-
+    return switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs
 
 
 def create_general_report(results, filename, title="auto",
@@ -367,8 +370,19 @@ def create_general_report(results, filename, title="auto",
                           cachefile=None, brief=False, connected=False, 
                           link_to=None, resizable=True, autosize='initial',
                           verbosity=1):
+    _warnings.warn(
+            ('create_general_report(...) will be removed from pyGSTi.\n'
+             '  This function only ever existed in beta versions and will\n'
+             '  be removed completely soon.  Please update this call with:\n'
+             '  pygsti.report.create_standard_report(...)\n'))
+
+    
+def create_standard_report(results, filename, title="auto",
+                            confidenceLevel=None, comm=None, ws=None,
+                            auto_open=False, link_to=None, brevity=0,
+                            advancedOptions=None, verbosity=1):
     """
-    Create a "general" GST report.  This report is "general" in that it is
+    Create a html GST report.  This report is "general" in that it is
     suited to display results for any number of qubits/qutrits.  Along with
     the results, it includes background and explanation text.
 
@@ -397,32 +411,6 @@ def create_general_report(results, filename, title="auto",
        the computation of confidence regions/intervals. If None, no
        confidence regions or intervals are computed.
 
-    linlogPercentile : float, optional
-        Specifies the colorscale transition point for any logL or chi2 color
-        box plots.  The lower `(100 - linlogPercentile)` percentile of the
-        expected chi2 distribution is shown in a linear grayscale, and the 
-        top `linlogPercentile` is shown on a logarithmic colored scale.
-
-    errgen_type: {"logG-logT", "logTiG", "logGTi"}
-        The type of error generator to compute.  Allowed values are:
-        
-        - "logG-logT" : errgen = log(gate) - log(target_gate)
-        - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
-        - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
-
-    nmthreshold : float, optional
-        The threshold, in units of standard deviations, that triggers the
-        usage of non-Markovian error bars.  If None, then non-Markovian
-        error bars are never computed.
-
-    precision : int or dict, optional
-        The amount of precision to display.  A dictionary with keys
-        "polar", "sci", and "normal" can separately specify the 
-        precision for complex angles, numbers in scientific notation, and 
-        everything else, respectively.  If an integer is given, it this
-        same value is taken for all precision types.  If None, then
-        `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
-
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -437,18 +425,6 @@ def create_general_report(results, filename, title="auto",
         If True, automatically open the report in a web browser after it
         has been generated.
 
-    cachefile : str, optional
-        filename with cached workspace results
-
-    brief : bool, optional
-        Whether large, disk-space-consuming plots are omitted.
-
-    connected : bool, optional
-        Whether output HTML should assume an active internet connection.  If
-        True, then the resulting HTML file size will be reduced because it
-        will link to web resources (e.g. CDN libraries) instead of embedding
-        them.
-
     link_to : list, optional
         If not None, a list of one or more items from the set 
         {"tex", "pdf", "pkl"} indicating whether or not to 
@@ -458,14 +434,58 @@ def create_general_report(results, filename, title="auto",
         Python versions of plots (pickled python data) and tables (pickled
         pandas DataFrams).
 
-    resizable : bool, optional
-        Whether plots and tables are made with resize handles and can be 
-        resized within the report.
+    brevity : int, optional
+        Amount of detail to include in the report.  Larger values mean smaller
+        "more briefr" reports, which reduce generation time, load time, and
+        disk space consumption.
 
-    autosize : {'none', 'initial', 'continual'}
-        Whether tables and plots should be resized, either initially --
-        i.e. just upon first rendering (`"initial"`) -- or whenever
-        the browser window is resized (`"continual"`).
+    advancedOptions : dict, optional
+        A dictionary of advanced options for which the default values aer usually
+        are fine.  Here are the possible keys of `advancedOptions`:
+    
+        - connected : bool, optional
+            Whether output HTML should assume an active internet connection.  If
+            True, then the resulting HTML file size will be reduced because it
+            will link to web resources (e.g. CDN libraries) instead of embedding
+            them.
+
+        - cachefile : str, optional
+            filename with cached workspace results
+
+        - linlogPercentile : float, optional
+            Specifies the colorscale transition point for any logL or chi2 color
+            box plots.  The lower `(100 - linlogPercentile)` percentile of the
+            expected chi2 distribution is shown in a linear grayscale, and the 
+            top `linlogPercentile` is shown on a logarithmic colored scale.
+
+        - errgen_type: {"logG-logT", "logTiG", "logGTi"}
+            The type of error generator to compute.  Allowed values are:
+            
+            - "logG-logT" : errgen = log(gate) - log(target_gate)
+            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+            - "logGTi" : errgen = log( dot(gate, inv(target_gate)) )
+    
+        - nmthreshold : float, optional
+            The threshold, in units of standard deviations, that triggers the
+            usage of non-Markovian error bars.  If None, then non-Markovian
+            error bars are never computed.
+    
+        - precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the 
+            precision for complex angles, numbers in scientific notation, and 
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+    
+        - resizable : bool, optional
+            Whether plots and tables are made with resize handles and can be 
+            resized within the report.
+    
+        - autosize : {'none', 'initial', 'continual'}
+            Whether tables and plots should be resized, either initially --
+            i.e. just upon first rendering (`"initial"`) -- or whenever
+            the browser window is resized (`"continual"`).
 
     verbosity : int, optional
        How much detail to send to stdout.
@@ -478,6 +498,22 @@ def create_general_report(results, filename, title="auto",
     """
     tStart = _time.time()
     printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
+
+    if advancedOptions is None: advancedOptions = {}
+    linlogPercentile = advancedOptions.get('linlog percentile',5)
+    errgen_type = advancedOptions.get('error generator type', "logTiG")
+    nmthreshold = advancedOptions.get('nm threshold',50)
+    precision = advancedOptions.get('precision', None)
+    cachefile = advancedOptions.get('cachefile',None)
+    connected = advancedOptions.get('connected',False)
+    resizable = advancedOptions.get('resizable',True)
+    autosize = advancedOptions.get('autosize','initial')
+
+    if filename and filename.endswith(".pdf"):
+        fmt = "latex"
+    else:
+        fmt = "html"
+
     printer.log('*** Creating workspace ***')
     if ws is None: ws = _ws.Workspace(cachefile)
 
@@ -514,15 +550,19 @@ def create_general_report(results, filename, title="auto",
         confidenceLevel if confidenceLevel is not None else "NOT-SET"
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
-    qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, 'html')
+    qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
     #Create master switchboard
-    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls = \
-            _create_master_switchboard(ws, results_dict,
-                                       confidenceLevel, nmthreshold, comm, printer)
+    switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
+            _create_master_switchboard(ws, results_dict, confidenceLevel,
+                                       nmthreshold, comm, printer, fmt)
+    if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
+                         len(gauge_opt_labels) > 1 or len(swLs) > 1):
+        raise ValueError("PDF reports can only show a *single* dataset," +
+                         " estimate, and gauge optimization.")
 
     # Generate Tables
     printer.log("*** Generating tables ***")
@@ -537,17 +577,18 @@ def create_general_report(results, filename, title="auto",
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
-    multiL = bool(len(Ls) > 1)
+    multiL = bool(len(swLs) > 1)
 
     ##goView = [multidataset,multiest,multiGO,False]
     ##maxLView = [multidataset,multiest,False,multiL]
     #goView = [False,False,multiGO,False]
     maxLView = [False,False,False,multiL]
 
-    qtys['topSwitchboard'] = switchBd
-    #qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
-    #qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
-    qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
+    if fmt == "html":
+        qtys['topSwitchboard'] = switchBd
+        #qtys['goSwitchboard1'] = switchBd.view(goView,"v1")
+        #qtys['goSwitchboard2'] = switchBd.view(goView,"v2")
+        qtys['maxLSwitchboard1'] = switchBd.view(maxLView,"v6")
 
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
@@ -608,6 +649,7 @@ def create_general_report(results, filename, title="auto",
     addqty('fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
     addqty('prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
     addqty('effectStrListTable', ws.GatestringTable, effectStrs,"Measurement Fiducials")
+    addqty('colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty('germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
     addqty('progressTable', ws.FitComparisonTable, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
@@ -621,7 +663,7 @@ def create_general_report(results, filename, title="auto",
     addqty('progressBarPlot_sum', ws.FitComparisonBarPlot, 
            Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') #just duplicate for now
 
-    if not brief: 
+    if brevity is None: 
         addqty('dataScalingColorBoxPlot', ws.ColorBoxPlot, 
                "scaling", switchBd.gssFinal, eff_ds, switchBd.gsGIRep,
                 submatrices=switchBd.scaledSubMxsDict)
@@ -640,10 +682,10 @@ def create_general_report(results, filename, title="auto",
         ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
         ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
-        addqty('bestEstimateColorHistogram', ws.ColorBoxPlot,
-            switchBd.objective, gss, eff_ds, gsL,
-            linlg_pcntle=float(linlogPercentile) / 100,
-            minProbClipForWeighting=switchBd.mpc, typ="histogram") #TODO: L-switchboard on summary page?
+    addqty('bestEstimateColorHistogram', ws.ColorBoxPlot,
+        switchBd.objective, gss, eff_ds, gsL,
+        linlg_pcntle=float(linlogPercentile) / 100,
+        minProbClipForWeighting=switchBd.mpc, typ="histogram") #TODO: L-switchboard on summary page?
 
 
     if multidataset:
@@ -700,7 +742,7 @@ def create_general_report(results, filename, title="auto",
         addqty('dsComparisonHistogram', ws.ColorBoxPlot,
                'dscmp', dscmp_switchBd.dscmp_gss, None, None,
                dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-        if not brief: 
+        if brevity is None: 
             addqty('dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    None, None, dscomparator=dscmp_switchBd.dscmp)
         toggles['CompareDatasets'] = True
@@ -709,15 +751,32 @@ def create_general_report(results, filename, title="auto",
 
     if filename is not None:
         if comm is None or comm.Get_rank() == 0:
-            # 3) populate template html file => report html file
+            # 3) populate template file => report file
             printer.log("*** Merging into template file ***")
-            #template = "report_dashboard.html"
-            templateDir = "general_report"
-            _merge.merge_html_template_dir(
-                qtys, templateDir, filename, auto_open, precision, link_to,
-                connected=connected, toggles=toggles, renderMath=renderMath,
-                resizable=resizable, autosize=autosize, verbosity=printer)
-            #SmartCache.global_status(printer)
+
+            if fmt == "html":
+                templateDir = "standard_html_report"
+                _merge.merge_html_template_dir(
+                    qtys, templateDir, filename, auto_open, precision, link_to,
+                    connected=connected, toggles=toggles, renderMath=renderMath,
+                    resizable=resizable, autosize=autosize, verbosity=printer)
+                
+            elif fmt == "latex":
+                templateFile = "standard_pdf_report.tex"
+                base = _os.path.splitext(filename)[0] # no extension
+                _merge.merge_latex_template(qtys, templateFile, base+".tex", toggles,
+                                            precision, printer)
+
+                # compile report latex file into PDF
+                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd',None)
+                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags',[])
+                assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
+                printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
+                _merge.compile_latex_report(base, [cmd] + flags, printer)
+            else:
+                raise ValueError("Unrecognized format: %s" % fmt)
+
+            #SmartCache.global_status(printer)            
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
     printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time()-tStart))
@@ -728,7 +787,7 @@ def create_general_report(results, filename, title="auto",
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,    
                            auto_open=False, connected=False, verbosity=0):
-    """ TODO: docstring - but just a subset of args for create_general_report"""
+    """ TODO: docstring - but just a subset of args for create_standard_report"""
     printer = VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates")
