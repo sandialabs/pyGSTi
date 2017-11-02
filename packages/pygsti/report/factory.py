@@ -790,7 +790,7 @@ def create_report_notebook(results, filename, title="auto",
     """ TODO: docstring - but just a subset of args for create_standard_report"""
     printer = VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                 "templates")
+                                 "templates","report_notebook")
     assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
     outputDir = _os.path.dirname(filename)
     
@@ -887,6 +887,9 @@ def create_report_notebook(results, filename, title="auto",
         gs_final   = gatesets['final iteration estimate'] #ITER
         gs_target  = gatesets['target']
         gsPerIter  = gatesets['iteration estimates']
+
+        gs_eigenspace_projected = \
+            pygsti.tools.project_to_target_eigenspace(gs, gs_target)
 
         goparams = estimate.goparameters[gopt]
 
