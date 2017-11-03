@@ -1794,7 +1794,7 @@ class NotApplicable(WorkspaceOutput):
         """
         super(NotApplicable, self).__init__(ws)
 
-    def render(self, typ="html"):
+    def render(self, typ="html", ID=None):
         """
         Renders this object into the specifed format, specifically for
         embedding it within a larger document.
@@ -1804,6 +1804,9 @@ class NotApplicable(WorkspaceOutput):
         typ : str
             The format to render as.  Allowed options are `"html"`,
             `"latex"`, and `"python"`.
+
+        ID : str, optional
+            An DOM ID used in place of the objects internal ID.
 
         Returns
         -------

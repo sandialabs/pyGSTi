@@ -534,7 +534,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
         outputfile.write(filled_template)
 
 
-def compile_latex_report(report_filename, latex_call, printer):
+def compile_latex_report(report_filename, latex_call, printer, auto_open):
     """
     Compile a PDF report from a TeX file. Will compile twice
     automatically.
@@ -588,6 +588,12 @@ def compile_latex_report(report_filename, latex_call, printer):
                       "Check %s.log to see details." % report_base)
     finally:
         _os.chdir(cwd)
+
+    if auto_open:
+        url = 'file://' + _os.path.abspath(pdfPathname)
+        printer.log("Opening %s..." % pdfPathname)
+        _webbrowser.open(url)
+
 
     
 

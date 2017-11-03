@@ -712,62 +712,73 @@ def create_standard_report(results, filename, title="auto",
 
 
     if multidataset:
-        #initialize a new "dataset comparison switchboard"
-        dscmp_switchBd = ws.Switchboard(
-            ["Dataset1","Dataset2"],
-            [dataset_labels, dataset_labels],
-            ["buttons","buttons"], [0,1]
-        )
-        dscmp_switchBd.add("dscmp",(0,1))
-        dscmp_switchBd.add("dscmp_gss",(0,))
+        #check if data sets are comparable (if they have the same sequences)
+        comparable = True
+        gstrCmpList = list(results_dict[ dataset_labels[0] ].dataset.keys()) #maybe use gatestring_lists['final']??
+        for dslbl in dataset_labels:
+            if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
+                _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
+                comparable=False; break
 
-        for d1, dslbl1 in enumerate(dataset_labels):
-            dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
-
-        dsComp = dict()
-        all_dsComps = dict()        
-        indices = []
-        for i in range(len(dataset_labels)):
-            for j in range(len(dataset_labels)):
-                indices.append((i, j))
-        if comm is not None:
-            _, indexDict, _ = _distribute_indices(indices, comm)
-            rank = comm.Get_rank()
-            for k, v in indexDict.items():
-                if v == rank:
-                    d1, d2 = k
+        if comparable:
+            #initialize a new "dataset comparison switchboard"
+            dscmp_switchBd = ws.Switchboard(
+                ["Dataset1","Dataset2"],
+                [dataset_labels, dataset_labels],
+                ["buttons","buttons"], [0,1]
+            )
+            dscmp_switchBd.add("dscmp",(0,1))
+            dscmp_switchBd.add("dscmp_gss",(0,))
+    
+            for d1, dslbl1 in enumerate(dataset_labels):
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+    
+            dsComp = dict()
+            all_dsComps = dict()        
+            indices = []
+            for i in range(len(dataset_labels)):
+                for j in range(len(dataset_labels)):
+                    indices.append((i, j))
+            if comm is not None:
+                _, indexDict, _ = _distribute_indices(indices, comm)
+                rank = comm.Get_rank()
+                for k, v in indexDict.items():
+                    if v == rank:
+                        d1, d2 = k
+                        dslbl1 = dataset_labels[d1]
+                        dslbl2 = dataset_labels[d2]
+    
+                        ds1 = results_dict[dslbl1].dataset
+                        ds2 = results_dict[dslbl2].dataset
+                        dsComp[(d1, d2)] = _DataComparator(
+                            [ds1, ds2], DS_names=[dslbl1, dslbl2])
+                dicts = comm.gather(dsComp, root=0)
+                if rank == 0:
+                    for d in dicts:
+                        for k, v in d.items():
+                            d1, d2 = k
+                            dscmp_switchBd.dscmp[d1, d2] = v
+                            all_dsComps[(d1,d2)] = v
+            else:
+                for d1, d2 in indices:
                     dslbl1 = dataset_labels[d1]
                     dslbl2 = dataset_labels[d2]
-
                     ds1 = results_dict[dslbl1].dataset
                     ds2 = results_dict[dslbl2].dataset
-                    dsComp[(d1, d2)] = _DataComparator(
-                        [ds1, ds2], DS_names=[dslbl1, dslbl2])
-            dicts = comm.gather(dsComp, root=0)
-            if rank == 0:
-                for d in dicts:
-                    for k, v in d.items():
-                        d1, d2 = k
-                        dscmp_switchBd.dscmp[d1, d2] = v
-                        all_dsComps[(d1,d2)] = v
+                    all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])                
+                    dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
+            
+            qtys['dscmpSwitchboard'] = dscmp_switchBd
+            addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
+            #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
+            addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
+                   'dscmp', dscmp_switchBd.dscmp_gss, None, None,
+                   dscomparator=dscmp_switchBd.dscmp, typ="histogram")
+            addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
+                   None, None, dscomparator=dscmp_switchBd.dscmp)
+            toggles['CompareDatasets'] = True
         else:
-            for d1, d2 in indices:
-                dslbl1 = dataset_labels[d1]
-                dslbl2 = dataset_labels[d2]
-                ds1 = results_dict[dslbl1].dataset
-                ds2 = results_dict[dslbl2].dataset
-                all_dsComps[(d1,d2)] =  _DataComparator([ds1, ds2], DS_names=[dslbl1,dslbl2])                
-                dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1,d2)]
-        
-        qtys['dscmpSwitchboard'] = dscmp_switchBd
-        addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-        #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
-        addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
-               'dscmp', dscmp_switchBd.dscmp_gss, None, None,
-               dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-        addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-               None, None, dscomparator=dscmp_switchBd.dscmp)
-        toggles['CompareDatasets'] = True
+            toggles['CompareDatasets'] = False # not comparable!
     else:
         toggles['CompareDatasets'] = False
 
@@ -794,7 +805,7 @@ def create_standard_report(results, filename, title="auto",
                 flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags',[])
                 assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
                 printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
-                _merge.compile_latex_report(base, [cmd] + flags, printer)
+                _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
             else:
                 raise ValueError("Unrecognized format: %s" % fmt)
 
