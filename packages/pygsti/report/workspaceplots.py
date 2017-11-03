@@ -1319,6 +1319,7 @@ class BoxKeyPlot(WorkspacePlot):
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
         return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'special': 'keyplot', 'args': (prepStrs, effectStrs, xlabel, ylabel),
                 'pythonValue': "No data in box key plot!"}
 
 
@@ -2306,8 +2307,10 @@ class FitComparisonBarPlot(WorkspacePlot):
             texts.append("%g<br>rating: %d" % (Nsig,rating))
             colors.append(color)
 
+        MIN_BAR = 1e-4 #so all bars have positive height (since log scale)
+        plotted_ys = [ max(y,MIN_BAR) for y in ys]
         trace = go.Bar(
-            x=xs, y=ys, text=texts,
+            x=xs, y=plotted_ys, text=texts,
             marker=dict(color=colors),
             hoverinfo='text'
         )
@@ -2348,8 +2351,12 @@ class FitComparisonBarPlot(WorkspacePlot):
                 ),
             bargap=0.1
         )
-        if max(ys) < 1.0:
-            layout['yaxis']['range'] = [min(ys)/2.0,1]
+        if max(plotted_ys) < 1.0:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(1.0)]
+        else:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(max(plotted_ys)*2.0)]
         
         return {'plotlyfig': go.Figure(data=data, layout=layout),
                 'pythonValue': {'x': xs, 'y': ys} }

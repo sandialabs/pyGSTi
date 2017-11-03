@@ -30,8 +30,8 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportA.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
+                                            confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
 
@@ -39,8 +39,8 @@ class TestReport(ReportBaseCase):
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
         self.results.estimates['default'].parameters['hessianProjection'] = 'intrinsic error'
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportB.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
+                                            "Report B", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 
@@ -48,16 +48,16 @@ class TestReport(ReportBaseCase):
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
         self.results.estimates['default'].parameters['hessianProjection'] = 'std'
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportE.html",
-                                                 confidenceLevel=-95, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
+                                            "Report E", confidenceLevel=-95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportC.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportC",
+                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -65,8 +65,8 @@ class TestReport(ReportBaseCase):
     def test_reports_logL_TP_wCIs(self):
         vs = self.versionsuffix
         self.results.estimates['default'].parameters['hessianProjection'] = 'optimal gate CIs' #only do this on one test since (takes a long time)
-        pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportD.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
+                                             "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
 

@@ -732,8 +732,9 @@ def run1Q_end2end(comm):
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
 
-    pygsti.report.create_general_report(results, "mpi_test_report.html",
-                                        confidenceLevel=95, verbosity=2, comm=comm)
+    pygsti.report.create_standard_report(results, "mpi_test_report",
+                                         "MPI test report", confidenceLevel=95,
+                                         verbosity=2, comm=comm)
 
 
 @mpitest(4)

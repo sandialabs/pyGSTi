@@ -570,7 +570,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         if "comm" not in gaugeOptParams:
             gaugeOptParams["comm"] = comm
 
-        go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
+        gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
+        gaugeOptParams['gateset'] = gs_lsgst_list[-1] #starting gate set
+        _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
+        gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
                                                  None, printer)
 

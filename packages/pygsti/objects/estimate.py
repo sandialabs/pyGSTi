@@ -14,6 +14,7 @@ import copy        as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
+from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 
 #Class for holding confidence region factory keys
@@ -296,7 +297,7 @@ class Estimate(object):
         
     def gauge_propagate_confidence_region_factory(
             self, to_gateset_label, from_gateset_label='final iteration estimate',
-            gatestrings_label = 'final', EPS=1e-3):
+            gatestrings_label = 'final', EPS=1e-3, verbosity=0):
         """
         Propagates an existing "reference" confidence region for a GateSet
         "G0" to a new confidence region for a gauge-equivalent gateset "G1".
@@ -327,12 +328,18 @@ class Estimate(object):
             A small offset used for constructing finite-difference derivatives.
             Usually the default value is fine.
 
+        verbosity : int, optional
+            A non-negative integer indicating the amount of detail to print
+            to stdout.
+
         Returns
         -------
         ConfidenceRegionFactory
             Note: this region is also stored internally and as such the return
             value of this function can often be ignored.
         """
+        printer = _VerbosityPrinter.build_printer(verbosity)
+        
         ref_gateset = self.gatesets[from_gateset_label]
         goparams = self.goparameters[to_gateset_label]
         start_gateset = goparams['gateset'].copy()
@@ -358,17 +365,23 @@ class Estimate(object):
         TMx = _np.empty( (final_gateset.num_params(), ref_gateset.num_params()), 'd' )
         v0, w0 = ref_gateset.to_vector(), final_gateset.to_vector()
         gs = ref_gateset.copy()
-        for iCol in range(ref_gateset.num_params()):
-            v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
-            gs.from_vector(v)
-            for gaugeGroupEl in gaugeGroupEls:
-                gs.transform(gaugeGroupEl)
-            w = gs.to_vector()
-            dw = (w - w0)/EPS
-            if iCol % 10 == 0: print("DB: col %d/%d: %g" % (iCol, ref_gateset.num_params(),_np.linalg.norm(dw)))
-            TMx[:,iCol] = dw
 
-        rank = _np.linalg.matrix_rank(TMx)
+        printer.log(" *** Propagating Hessian from '%s' to '%s' ***" %
+                    (from_gateset_label, to_gateset_label))
+
+        with printer.progress_logging(1):
+            for iCol in range(ref_gateset.num_params()):
+               v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
+               gs.from_vector(v)
+               for gaugeGroupEl in gaugeGroupEls:
+                   gs.transform(gaugeGroupEl)
+               w = gs.to_vector()
+               dw = (w - w0)/EPS
+               TMx[:,iCol] = dw
+               printer.show_progress(iCol, ref_gateset.num_params(), prefix='Column: ')
+                 #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
+
+        #rank = _np.linalg.matrix_rank(TMx)
         #print("DEBUG: constructed TMx: rank = ", rank)
         
         # Hessian is gauge-transported via H -> TMx_inv^T * H * TMx_inv
@@ -380,7 +393,7 @@ class Estimate(object):
                                            gatestrings_label, new_hessian,
                                            crf.nonMarkRadiusSq)
         self.confidence_region_factories[CRFkey(to_gateset_label, gatestrings_label)] = new_crf
-        print("DEBUG: Done transporting CI.  Success!")
+        printer.log("   Successfully transported Hessian and ConfidenceRegionFactory.")
 
         return new_crf
 
@@ -488,18 +501,55 @@ class Estimate(object):
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
         return (fitQty-k)/_np.sqrt(2*k)
 
+    
+    def view(self, gaugeopt_keys, parent=None):
+        """
+        Creates a shallow copy of this Results object containing only the
+        given gauge-optimization keys.
 
+        Parameters
+        ----------
+        gaugeopt_keys : str or list, optional
+            Either a single string-value gauge-optimization key or a list of
+            such keys.  If `None`, then all gauge-optimization keys are 
+            retained.
+
+        parent : Results, optional
+            The parent `Results` object of the view.  If `None`, then the
+            current `Estimate`'s parent is used.
+
+        Returns
+        -------
+        Estimate
+        """
+        if parent is None: parent = self.parent
+        view = Estimate(parent)
+        view.parameters = self.parameters
+        view.gatesets = self.gatesets
+        view.confidence_region_factories = self.confidence_region_factories
+        
+        if gaugeopt_keys is None:
+            gaugeopt_keys = list(self.goparameters.keys())
+        elif _compat.isstr(gaugeopt_keys):
+            gaugeopt_keys = [gaugeopt_keys]
+        for go_key in gaugeopt_keys:
+            if go_key in self.goparameters:
+                view.goparameters[go_key] = self.goparameters[go_key]
+
+        return view
+    
 
     def copy(self):
         """ Creates a copy of this Estimate object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
-        cpy = Estimate()
+        cpy = Estimate(self.parent)
         cpy.parameters = _copy.deepcopy(self.parameters)
         cpy.goparameters = _copy.deepcopy(self.goparameters)
         cpy.gatesets = self.gatesets.copy()
         cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
         return cpy
 
+    
     def __str__(self):
         s  = "----------------------------------------------------------\n"
         s += "---------------- pyGSTi Estimate Object ------------------\n"

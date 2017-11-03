@@ -725,7 +725,7 @@ class Switchboard(_collections.OrderedDict):
         """ 
         Break off this implementation so SwitchboardViews can use.
         """
-        assert(typ == "html" or typ == "htmldir"), "Can't render Switchboards as anything but HTML"
+        assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
         for i,(name,baseID,styp,posLbls,ipos,bShow) in enumerate(
@@ -1229,7 +1229,8 @@ class WorkspaceOutput(object):
         'valign': 'top',
 
         #Latex specific
-        'latex_call': "pdflatex",
+        'latex_cmd': "pdflatex",
+        'latex_flags': ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"],
         'page_size': (6.5,8.0),
         'render_includes': True,
         'leave_includes_src': False,
@@ -1793,7 +1794,7 @@ class NotApplicable(WorkspaceOutput):
         """
         super(NotApplicable, self).__init__(ws)
 
-    def render(self, typ="html"):
+    def render(self, typ="html", ID=None):
         """
         Renders this object into the specifed format, specifically for
         embedding it within a larger document.
@@ -1802,9 +1803,10 @@ class NotApplicable(WorkspaceOutput):
         ----------
         typ : str
             The format to render as.  Allowed options are `"html"`,
-            `"latex"`, and `"python"`, as well as `"htmldir"`,
-            `"latexdir"`, and `"pythondir"` (primarily used for 
-            internal report creation).
+            `"latex"`, and `"python"`.
+
+        ID : str, optional
+            An DOM ID used in place of the objects internal ID.
 
         Returns
         -------
@@ -1816,13 +1818,13 @@ class NotApplicable(WorkspaceOutput):
         """
         if ID is None: ID=self.ID
         
-        if typ == "html" or typ == "htmldir":
+        if typ == "html":
             return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js':"" }
 
-        elif typ == "latex" or typ == "latexdir":
+        elif typ == "latex":
             return {'latex': "Not applicable" }
 
-        elif typ == "python" or typ == "pythondir":
+        elif typ == "python":
             return "Not Applicable"
         else:
             raise ValueError("NotApplicable render type not supported: %s" % typ)
@@ -1867,10 +1869,8 @@ class WorkspaceTable(WorkspaceOutput):
         Parameters
         ----------
         typ : str
-            The format to render as.  Currently `"html"`, and `"latex"`
-            are supported, as well as the `"htmldir"` and `"latexdir"`
-            counterparts, though these are of primarily of internal 
-            use when creating reports.
+            The format to render as.  Currently `"html"`, `"latex"`
+            and `"python"` are supported.
 
         Returns
         -------
@@ -1940,7 +1940,7 @@ class WorkspaceTable(WorkspaceOutput):
                   # creates JS for everything: plot creation, switchboard init, autosize
                 
             elif switched_item_mode == 'separate files':
-                assert(output_dir), "Cannot render 'htmldir' without a valid 'output_dir' render option"
+                assert(output_dir), "Cannot render 'html' in separate files without a valid 'output_dir' render option"
                 base = self._render_html(tableID, divHTML, divJS, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, None, 
                                          self.options.get('link_to',None), True, output_dir)
@@ -2017,24 +2017,25 @@ class WorkspaceTable(WorkspaceOutput):
                                                     _os.path.join(output_dir,"%s.tex" % tableDivID))
 
                     if render_includes:
-                        assert('latex_call' in self.options and self.options['latex_call']), \
-                            "Cannot render latex include files without a valid 'latex_call' render option"
+                        assert('latex_cmd' in self.options and self.options['latex_cmd']), \
+                            "Cannot render latex include files without a valid 'latex_cmd' render option"
     
                         try:
                             _os.chdir( render_dir )
-                            latex_cmd = [ self.options['latex_call'] ] + \
-                                        ["-shell-escape", "%s.tex" % tableDivID]
-                            stdout, stderr, returncode = _merge.process_call(latex_cmd)
-                            _merge.evaluate_call(latex_cmd, stdout, stderr, returncode, printer)
+                            latex_cmd = self.options['latex_cmd']
+                            latex_call = [ latex_cmd ] + self.options.get('latex_flags',[]) \
+                                         + ["%s.tex" % tableDivID]
+                            stdout, stderr, returncode = _merge.process_call(latex_call)
+                            _merge.evaluate_call(latex_call, stdout, stderr, returncode, printer)
                             if not _os.path.isfile("%s.pdf" % tableDivID):
-                                raise Exception("File %s.pdf was not created by pdflatex"
-                                                % tableDivID)
+                                raise Exception("File %s.pdf was not created by %s"
+                                                % (tableDivID,latex_cmd))
                             if not leave_src: _os.remove( "%s.tex" % tableDivID )
                             _os.remove( "%s.log" % tableDivID )
                             _os.remove( "%s.aux" % tableDivID )
                         except _subprocess.CalledProcessError as e:
-                            printer.error("pdflatex returned code %d " % e.returncode +
-                                          "trying to render standalone %s. " % tableDivID +
+                            printer.error("%s returned code %d " % (latex_cmd,e.returncode) +
+                                          "trying to render standalone %s.tex. " % tableDivID +
                                           "Check %s.log to see details." % tableDivID)
                         finally:
                             _os.chdir( cwd )
@@ -2283,10 +2284,8 @@ class WorkspacePlot(WorkspaceOutput):
         Parameters
         ----------
         typ : str
-            The format to render as.  Currently `"html"`, and `"latex"`
-            are supported, as well as the `"htmldir"` and `"latexdir"`
-            counterparts, though these are of primarily of internal 
-            use when creating reports.
+            The format to render as.  Currently `"html"`, `"latex"`
+            and `"python"` are supported.
 
         ID : str, optional
             A base ID to use when rendering.  If None, the object's
@@ -2379,7 +2378,7 @@ class WorkspacePlot(WorkspaceOutput):
             elif switched_item_mode == 'separate files':
                 assert(handlersOnly == False) #doesn't make sense to put only handlers in a separate file
                 assert('output_dir' in self.options and self.options['output_dir']), \
-                    "Cannot render 'htmldir' without a valid 'output_dir' render option"
+                    "Cannot render 'html' in separate files without a valid 'output_dir' render option"
                 base = self._render_html(plotID, divHTML, divJS, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, [relwrap_cls],
                                          None, True, self.options['output_dir'])
