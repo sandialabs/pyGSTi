@@ -34,7 +34,9 @@ import functools as _functools
 
 from pprint import pprint as _pprint
 
+#maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX = ".robust"
+DEFAULT_BAD_FIT_THRESHOLD = 10.0
         
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html','latex'))
@@ -83,21 +85,18 @@ def _add_new_labels(running_lbls, current_lbls):
                 running_lbls.append(lbl)
     return running_lbls
 
-def _add_new_estimate_labels(running_lbls, estimates):
+def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     """ 
     Like _add_new_labels but perform robust-suffix processing.
+
+    In particular, if `combine_robust == True` then do not add
+    labels which have a ".robust" counterpart.
     """
     current_lbls = list(estimates.keys())
     
     def add_lbl(lst, lbl):
-        if lbl.endswith(ROBUST_SUFFIX) and \
-           lbl[:-len(ROBUST_SUFFIX)] in current_lbls:
-                return # add nothing: will get processed with the non-suffixed label
-
+        if combine_robust and (lbl+ROBUST_SUFFIX in current_lbls): return
         lst.append(lbl) #add label
-        if lbl+ROBUST_SUFFIX in current_lbls and \
-           not _robust_estimate_has_same_gatesets(estimates, lbl):
-            lst.append(lbl+ROBUST_SUFFIX) #add "robust" label
 
     if running_lbls is None:
         running_lbls = []
@@ -110,50 +109,41 @@ def _add_new_estimate_labels(running_lbls, estimates):
     return running_lbls
 
 
-def _robust_estimate_has_same_gatesets(estimates, est_lbl):
-    lbl_robust = est_lbl+ROBUST_SUFFIX
-    if lbl_robust not in estimates: return False #no robust estimate
+#def _robust_estimate_has_same_gatesets(estimates, est_lbl):
+#    lbl_robust = est_lbl+ROBUST_SUFFIX
+#    if lbl_robust not in estimates: return False #no robust estimate
+#
+#    for gs_lbl in list(estimates[est_lbl].goparameters.keys()) \
+#        + ['final iteration estimate']:
+#        if gs_lbl not in estimates[lbl_robust].gatesets:
+#            return False #robust estimate is missing gs_lbl!
+#
+#        gs = estimates[lbl_robust].gatesets[gs_lbl]
+#        if estimates[est_lbl].gatesets[gs_lbl].frobeniusdist(gs) > 1e-8:
+#            return False #gateset mismatch!
+#        
+#    return True
 
-    for gs_lbl in list(estimates[est_lbl].goparameters.keys()) \
-        + ['final iteration estimate']:
-        if gs_lbl not in estimates[lbl_robust].gatesets:
-            return False #robust estimate is missing gs_lbl!
-
-        gs = estimates[lbl_robust].gatesets[gs_lbl]
-        if estimates[est_lbl].gatesets[gs_lbl].frobeniusdist(gs) > 1e-8:
-            return False #gateset mismatch!
-        
-    return True
-
-def _get_viewable_crf(estimates, est_lbl, gs_lbl,
-                      return_misfit_sigma=False, verbosity=0):
+def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
     printer = VerbosityPrinter.build_printer(verbosity)
-    estimates_to_try = [ estimates[est_lbl] ]
-
-    #Fallback on robust estimate if it has the same gate sets
-    if _robust_estimate_has_same_gatesets(estimates, est_lbl):
-        estimates_to_try.append( estimates[est_lbl + ROBUST_SUFFIX] )
     
-    for est in estimates_to_try:
-        if est.has_confidence_region_factory(gs_lbl, 'final'):
-            crf = est.get_confidence_region_factory(gs_lbl,'final')
-            if crf.can_construct_views():
-                if return_misfit_sigma:
-                    return crf, est.misfit_sigma()
-                else: return crf
-            else:
-                printer.log(
-                    ("Note: Confidence interval factory for {estlbl}.{gslbl} "
-                     "gate set exists but cannot create views.  This could be "
-                     "because you forgot to create a Hessian *projection*"
-                    ).format(estlbl=est_lbl,gslbl=gs_lbl))
+    if est.has_confidence_region_factory(gs_lbl, 'final'):
+        crf = est.get_confidence_region_factory(gs_lbl,'final')
+        if crf.can_construct_views():
+            return crf
+        else:
+            printer.log(
+                ("Note: Confidence interval factory for {estlbl}.{gslbl} "
+                 "gate set exists but cannot create views.  This could be "
+                 "because you forgot to create a Hessian *projection*"
+                ).format(estlbl=est_lbl,gslbl=gs_lbl))
+    else:
+        printer.log(
+            ("Note: no factory to compute confidence "
+             "intervals for the '{estlbl}.{gslbl}' gate set."
+            ).format(estlbl=est_lbl,gslbl=gs_lbl))
                 
-    printer.log(
-        ("Note: no factory to compute confidence "
-         "intervals for the '{estlbl}.{gslbl}' gate set."
-        ).format(estlbl=est_lbl,gslbl=gs_lbl))
-                
-    return (None,None) if return_misfit_sigma else None
+    return None
 
 
 
@@ -190,7 +180,7 @@ def create_offline_zip(outputDir="."):
             zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
     zipHandle.close()
 
-def _set_toggles(results_dict, brevity):
+def _set_toggles(results_dict, brevity, combine_robust):
     #Determine when to get gatestring weight (scaling) values and show via
     # ColorBoxPlots below by checking whether any estimate has "weights"
     # parameter (a dict) with > 0 entries.
@@ -208,10 +198,12 @@ def _set_toggles(results_dict, brevity):
     toggles['BrevityLT3'] = bool(brevity < 3)
     toggles['BrevityLT4'] = bool(brevity < 4)
 
+    toggles['CombineRobust'] = bool(combine_robust)
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm, printer, fmt):
+                               nmthreshold, comm, printer, fmt,
+                               combine_robust):
     """
     Creates the "master switchboard" used by several of the reports
     """
@@ -222,7 +214,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     Ls = None        
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
+                                              combine_robust)
         Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)    
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
@@ -253,12 +246,15 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("strs",(0,))
     switchBd.add("germs",(0,))
 
-    switchBd.add("eff_ds",(0,1))    
+    switchBd.add("eff_ds",(0,1))
+    switchBd.add("modvi_ds",(0,1))    
     switchBd.add("scaledSubMxsDict",(0,1))
     switchBd.add("gsTarget",(0,1))
     switchBd.add("params",(0,1))
     switchBd.add("objective",(0,1))
+    switchBd.add("objective_modvi",(0,1))
     switchBd.add("mpc",(0,1))
+    switchBd.add("mpc_modvi",(0,1))
     switchBd.add("clifford_compilation",(0,1))
 
     switchBd.add("gsGIRep",(0,1))
@@ -268,9 +264,11 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("gsTargetAndFinal",(0,1,2)) #general only!
     switchBd.add("goparams",(0,1,2))
     switchBd.add("gsL",(0,1,3))
+    switchBd.add("gsL_modvi",(0,1,3))
     switchBd.add("gss",(0,3))
     switchBd.add("gssFinal",(0,))
     switchBd.add("gsAllL",(0,1))
+    switchBd.add("gsAllL_modvi",(0,1))
     switchBd.add("gssAllL",(0,))
 
     if confidenceLevel is not None:
@@ -299,26 +297,45 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             est = results.estimates.get(lbl,None)
             if est is None: continue
 
+            if combine_robust and lbl.endswith(ROBUST_SUFFIX):
+                est_modvi = results.estimates.get(lbl[:-len(ROBUST_SUFFIX)],est)
+            else:
+                est_modvi = est
+
             switchBd.params[d,i] = est.parameters
             switchBd.objective[d,i] = est.parameters['objective']
+            switchBd.objective_modvi[d,i] = est_modvi.parameters['objective']
             if est.parameters['objective'] == "logl":
                 switchBd.mpc[d,i] = est.parameters['minProbClip']
+                switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClip']
             else:
                 switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
+                switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClipForWeighting']
             switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",None)
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
-                GIcrf = _get_viewable_crf(results.estimates, lbl, GIRepLbl)
-                if GIcrf is None:
+                if _get_viewable_crf(est, lbl, GIRepLbl) is None:
                     for l in gauge_opt_labels:
-                        if _get_viewable_crf(results.estimates, lbl, l) is not None:
+                        if _get_viewable_crf(est, lbl, l) is not None:
                             GIRepLbl = l; break                            
 
+            # NOTE on modvi_ds (the dataset used in model violation plots)
+            # if combine_robust is True, modvi_ds is the unscaled dataset.
+            # if combine_robust is False, modvi_ds is the effective dataset
+            #     for the estimate (potentially just the unscaled one)
+
             NA = ws.NotApplicable()
-            effds, scale_subMxs = est.get_effective_dataset(True)
-            switchBd.eff_ds[d,i] = effds
-            switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
+            if est.parameters.get("weights",None): #if this estimate uses robust scaling
+                effds, scale_subMxs = est.get_effective_dataset(True)
+                switchBd.eff_ds[d,i] = effds
+                switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
+                switchBd.modvi_ds[d,i] = results.dataset if combine_robust else eff_ds
+            else:
+                switchBd.modvi_ds[d,i] = results.dataset
+                switchBd.eff_ds[d,i] = NA
+                switchBd.scaledSubMxsDict[d,i] = NA
+
             switchBd.gsTarget[d,i] = est.gatesets['target']
             switchBd.gsGIRep[d,i] = est.gatesets[GIRepLbl]
             switchBd.gsGIRepEP[d,i] = _tools.project_to_target_eigenspace(est.gatesets[GIRepLbl],
@@ -333,15 +350,18 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 if L in results.gatestring_structs['final'].Ls:
                     k = results.gatestring_structs['final'].Ls.index(L)
                     switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
+                    switchBd.gsL_modvi[d,i,iL] = est_modvi.gatesets['iteration estimates'][k]
             #OLD switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
             switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
+            switchBd.gsAllL_modvi[d,i] = est_modvi.gatesets['iteration estimates']
 
             if confidenceLevel is not None:
-
+                misfit_sigma = est.misfit_sigma()
+                
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
                         switchBd.cri[d,i,il] = None #default
-                        crf,misfit_sigma = _get_viewable_crf(results.estimates, lbl, l, True, printer-2)
+                        crf = _get_viewable_crf(est, lbl, l, printer-2)
                         
                         if crf is not None:
                             #Check whether we should use non-Markovian error bars:
@@ -358,7 +378,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 # If we can't compute CIs for this, ignore SILENTLY, since any
                 #  relevant warnings/notes should have been given above.
                 switchBd.criGIRep[d,i] = None #default
-                crf,misfit_sigma = _get_viewable_crf(results.estimates, lbl, GIRepLbl, True, 0)
+                crf = _get_viewable_crf(est, lbl, GIRepLbl)
                 if crf is not None:
                     region_type = "normal" if misfit_sigma <= nmthreshold \
                                   else "non-markovian"
@@ -497,6 +517,11 @@ def create_standard_report(results, filename, title="auto",
             i.e. just upon first rendering (`"initial"`) -- or whenever
             the browser window is resized (`"continual"`).
 
+        - combine_robust : bool, optional
+            Whether robust estimates should automatically be combined with
+            their non-robust counterpart when displayed in reports. (default
+            is True).
+
     verbosity : int, optional
        How much detail to send to stdout.
     
@@ -512,12 +537,13 @@ def create_standard_report(results, filename, title="auto",
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
     errgen_type = advancedOptions.get('error generator type', "logTiG")
-    nmthreshold = advancedOptions.get('nm threshold',50)
+    nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
     precision = advancedOptions.get('precision', None)
     cachefile = advancedOptions.get('cachefile',None)
     connected = advancedOptions.get('connected',False)
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
+    combine_robust = advancedOptions.get('combine_robust',True)
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -542,7 +568,7 @@ def create_standard_report(results, filename, title="auto",
                          " for you: '{}'.").format(autoname))
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
-    toggles = _set_toggles(results_dict, brevity)
+    toggles = _set_toggles(results_dict, brevity, combine_robust)
 
     #DEBUG
     renderMath = True
@@ -569,7 +595,8 @@ def create_standard_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
-                                       nmthreshold, comm, printer, fmt)
+                                       nmthreshold, comm, printer, fmt,
+                                       combine_robust)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
         raise ValueError("PDF reports can only show a *single* dataset," +
@@ -604,6 +631,7 @@ def create_standard_report(results, filename, title="auto",
     gsTgt = switchBd.gsTarget
     ds = switchBd.ds
     eff_ds = switchBd.eff_ds
+    modvi_ds = switchBd.modvi_ds
     prepStrs = switchBd.prepStrs
     effectStrs = switchBd.effectStrs
     germs = switchBd.germs
@@ -666,6 +694,7 @@ def create_standard_report(results, filename, title="auto",
     #Ls and Germs specific
     gss = switchBd.gss
     gsL = switchBd.gsL
+    gsL_modvi = switchBd.gsL_modvi
     gssAllL = switchBd.gssAllL
     addqty(2,'fiducialListTable', ws.GatestringTable, strs,["Prep.","Measure"], commonTitle="Fiducials")
     addqty(2,'prepStrListTable', ws.GatestringTable, prepStrs,"Preparation Fiducials")
@@ -673,42 +702,76 @@ def create_standard_report(results, filename, title="auto",
     addqty(1,'colorBoxPlotKeyPlot', ws.BoxKeyPlot, prepStrs, effectStrs)
     addqty(2,'germList2ColTable', ws.GatestringTable, germs, "Germ", nCols=2)
     addqty(4,'progressTable', ws.FitComparisonTable, 
-           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+           Ls, gssAllL, switchBd.gsAllL_modvi, ds, switchBd.objective_modvi, 'L')
     
     # Generate plots
     printer.log("*** Generating plots ***")
 
     addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
-    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot, 
-           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
-    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot, 
-           Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') #just duplicate for now
 
-    
-    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot, 
-           "scaling", switchBd.gssFinal, eff_ds, switchBd.gsGIRep,
-            submatrices=switchBd.scaledSubMxsDict)
-    
-    #Not pagniated currently... just set to same full plot
+
+    addqty(4,'progressBarPlot', ws.FitComparisonBarPlot, 
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L')
+    addqty(A,'progressBarPlot_sum', ws.FitComparisonBarPlot, 
+           Ls, gssAllL, switchBd.gsAllL_modvi, modvi_ds, switchBd.objective_modvi, 'L') #just duplicate for now
+
     addqty(1,'bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
-        switchBd.objective, gss, eff_ds, gsL,
-        linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc)
+           switchBd.objective, gss, modvi_ds, gsL_modvi,
+           linlg_pcntle=float(linlogPercentile) / 100,
+           minProbClipForWeighting=switchBd.mpc_modvi)
     if brevity < 1: qtys['bestEstimateColorBoxPlotPages'].set_render_options(
             click_to_display=False, valign='bottom')
-    
+
     addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
-        switchBd.objective, gss, eff_ds, gsL,
+        switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc, typ="scatter") #TODO: L-switchboard on summary page?
+        minProbClipForWeighting=switchBd.mpc_modvi, typ="scatter") #TODO: L-switchboard on modvi overview page?
     ##qtys['bestEstimateColorScatterPlot'].set_render_options(click_to_display=True)
     ##  Fast enough now thanks to scattergl, but webgl render issues so need to delay creation
 
-
     addqty(A,'bestEstimateColorHistogram', ws.ColorBoxPlot,
-        switchBd.objective, gss, eff_ds, gsL,
+        switchBd.objective, gss, modvi_ds, gsL_modvi,
         linlg_pcntle=float(linlogPercentile) / 100,
-        minProbClipForWeighting=switchBd.mpc, typ="histogram") #TODO: L-switchboard on summary page?
+        minProbClipForWeighting=switchBd.mpc_modvi, typ="histogram") #TODO: L-switchboard on summary page?
+
+
+    if combine_robust:
+        # model-violation (using _modvi variables) plots show pre-scaling
+        # violation, so we create# additional _scl plots to separately show
+        # post-scaling violation (using eff_ds and non-_modvi variables).
+        # Note that 'eff_ds' is NA for estimates that have no scaling, so that
+        # duplicate plots (for estiamtes without scaling) are avoided.
+
+        addqty(4,'progressTable_scl', ws.FitComparisonTable, 
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L')
+
+        addqty(4,'progressBarPlot_scl', ws.FitComparisonBarPlot, 
+               Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
+
+        #Not pagniated currently... just set to same full plot
+        addqty(1,'bestEstimateColorBoxPlotPages_scl', ws.ColorBoxPlot,
+            switchBd.objective, gss, eff_ds, gsL,
+            linlg_pcntle=float(linlogPercentile) / 100,
+            minProbClipForWeighting=switchBd.mpc)
+        if brevity < 1: qtys['bestEstimateColorBoxPlotPages_scl'].set_render_options(
+                click_to_display=False, valign='bottom')
+
+        addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
+               switchBd.objective, gss, eff_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, typ="scatter")
+
+        addqty(A,'bestEstimateColorHistogram_scl', ws.ColorBoxPlot,
+               switchBd.objective, gss, eff_ds, gsL,
+               linlg_pcntle=float(linlogPercentile) / 100,
+               minProbClipForWeighting=switchBd.mpc, typ="histogram")
+
+
+    #Note: this is the only plot that uses eff_ds (and is on robust-scaling
+    #  page) that is created when combine_robust == False
+    addqty(1,'dataScalingColorBoxPlot', ws.ColorBoxPlot, 
+           "scaling", switchBd.gssFinal, eff_ds, None,
+           submatrices=switchBd.scaledSubMxsDict)    
 
 
     if multidataset:

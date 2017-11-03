@@ -23,6 +23,7 @@ from .. import tools as _tools
 from ..tools import compattools as _compat
 
 ROBUST_SUFFIX = ".robust"
+DEFAULT_BAD_FIT_THRESHOLD = 10.0
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -581,7 +582,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
 
     #Perform extra analysis if a bad fit was obtained
-    badFitThreshold = advancedOptions.get('badFitThreshold',20)
+    badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
     if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
         onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
         if onBadFit in ("scale data","scale data and reopt") \
