@@ -297,7 +297,7 @@ class Estimate(object):
         
     def gauge_propagate_confidence_region_factory(
             self, to_gateset_label, from_gateset_label='final iteration estimate',
-            gatestrings_label = 'final', EPS=1e-3):
+            gatestrings_label = 'final', EPS=1e-3, verbosity=0):
         """
         Propagates an existing "reference" confidence region for a GateSet
         "G0" to a new confidence region for a gauge-equivalent gateset "G1".
@@ -328,12 +328,18 @@ class Estimate(object):
             A small offset used for constructing finite-difference derivatives.
             Usually the default value is fine.
 
+        verbosity : int, optional
+            A non-negative integer indicating the amount of detail to print
+            to stdout.
+
         Returns
         -------
         ConfidenceRegionFactory
             Note: this region is also stored internally and as such the return
             value of this function can often be ignored.
         """
+        printer = _VerbosityPrinter.build_printer(verbosity)
+        
         ref_gateset = self.gatesets[from_gateset_label]
         goparams = self.goparameters[to_gateset_label]
         start_gateset = goparams['gateset'].copy()
@@ -359,17 +365,23 @@ class Estimate(object):
         TMx = _np.empty( (final_gateset.num_params(), ref_gateset.num_params()), 'd' )
         v0, w0 = ref_gateset.to_vector(), final_gateset.to_vector()
         gs = ref_gateset.copy()
-        for iCol in range(ref_gateset.num_params()):
-            v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
-            gs.from_vector(v)
-            for gaugeGroupEl in gaugeGroupEls:
-                gs.transform(gaugeGroupEl)
-            w = gs.to_vector()
-            dw = (w - w0)/EPS
-            if iCol % 10 == 0: print("DB: col %d/%d: %g" % (iCol, ref_gateset.num_params(),_np.linalg.norm(dw)))
-            TMx[:,iCol] = dw
 
-        rank = _np.linalg.matrix_rank(TMx)
+        printer.log(" *** Propagating Hessian from '%s' to '%s' ***" %
+                    (from_gateset_label, to_gateset_label))
+
+        with printer.progress_logging(1):
+            for iCol in range(ref_gateset.num_params()):
+               v = v0.copy(); v[iCol] += EPS # dv is along iCol-th direction 
+               gs.from_vector(v)
+               for gaugeGroupEl in gaugeGroupEls:
+                   gs.transform(gaugeGroupEl)
+               w = gs.to_vector()
+               dw = (w - w0)/EPS
+               TMx[:,iCol] = dw
+               printer.show_progress(iCol, ref_gateset.num_params(), prefix='Column: ')
+                 #,suffix = "; finite_diff = %g" % _np.linalg.norm(dw)
+
+        #rank = _np.linalg.matrix_rank(TMx)
         #print("DEBUG: constructed TMx: rank = ", rank)
         
         # Hessian is gauge-transported via H -> TMx_inv^T * H * TMx_inv
@@ -381,7 +393,7 @@ class Estimate(object):
                                            gatestrings_label, new_hessian,
                                            crf.nonMarkRadiusSq)
         self.confidence_region_factories[CRFkey(to_gateset_label, gatestrings_label)] = new_crf
-        print("DEBUG: Done transporting CI.  Success!")
+        printer.log("   Successfully transported Hessian and ConfidenceRegionFactory.")
 
         return new_crf
 
