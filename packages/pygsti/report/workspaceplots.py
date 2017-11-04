@@ -2295,7 +2295,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             if   (fitQty-k) < _np.sqrt(2*k):
                 rating = 5; color="darkgreen"
             elif (fitQty-k) < 2*k:
-                rating = 4; color="blue"
+                rating = 4; color="lightgreen"
             elif (fitQty-k) < 5*k:
                 rating = 3; color="yellow"
             elif (fitQty-k) < 10*k:
