@@ -22,8 +22,8 @@ from .. import io as _io
 from .. import tools as _tools
 from ..tools import compattools as _compat
 
-ROBUST_SUFFIX = ".robust"
-DEFAULT_BAD_FIT_THRESHOLD = 10.0
+ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
+DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
 def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
                          prepStrsListOrFilename, effectStrsListOrFilename,
@@ -464,51 +464,39 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     
     #Run Long-sequence GST on data
     objective = advancedOptions.get('objective', 'logl')
+
+    args = dict(
+        dataset=ds,
+        startGateset=gs_start,
+        gateStringSetsToUseInEstimation=rawLists,
+        tol = advancedOptions.get('tolerance',1e-6),
+        cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
+        spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
+        maxiter = advancedOptions.get('maxIterations',100000),
+        probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
+        returnAll=True, 
+        gatestringWeightsDict=advancedOptions.get('gsWeights',None),
+        gateLabelAliases=aliases,
+        verbosity=printer,
+        memLimit=memLimit,
+        profiler=profiler,
+        comm=comm, distributeMethod=advancedOptions.get(
+            'distributeMethod',"deriv"),
+        check=advancedOptions.get('check',False) )
     
     if objective == "chi2":
-        gs_lsgst_list = _alg.do_iterative_mc2gst(
-            ds, gs_start, rawLists,
-            tol = advancedOptions.get('tolerance',1e-6),
-            cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
-            spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
-            maxiter = advancedOptions.get('maxIterations',100000),
-            minProbClipForWeighting=advancedOptions.get(
-                'minProbClipForWeighting',1e-4),
-            probClipInterval = advancedOptions.get(
-                'probClipInterval',(-1e6,1e6)),
-            returnAll=True, 
-            gatestringWeightsDict=advancedOptions.get('gsWeights',None),
-            gateLabelAliases=aliases,
-            verbosity=printer,
-            memLimit=memLimit,
-            useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), profiler=profiler,
-            comm=comm, distributeMethod=advancedOptions.get(
-                'distributeMethod',"deriv"),
-            check_jacobian=advancedOptions.get('check',False),
-            check=advancedOptions.get('check',False))
+        args['useFreqWeightedChiSq'] = advancedOptions.get(
+            'useFreqWeightedChiSq',False)
+        args['minProbClipForWeighting'] = advancedOptions.get(
+            'minProbClipForWeighting',1e-4),
+        args['check_jacobian'] = advancedOptions.get('check',False)
+        gs_lsgst_list = _alg.do_iterative_mc2gst(**args)
 
     elif objective == "logl":
-        gs_lsgst_list = _alg.do_iterative_mlgst(
-          ds, gs_start, rawLists,
-          tol = advancedOptions.get('tolerance',1e-6),
-          cptp_penalty_factor = advancedOptions.get('cptpPenaltyFactor',0),
-          spam_penalty_factor = advancedOptions.get('spamPenaltyFactor',0),
-          maxiter = advancedOptions.get('maxIterations',100000),
-          minProbClip = advancedOptions.get('minProbClip',1e-4),
-          probClipInterval = advancedOptions.get('probClipInterval',(-1e6,1e6)),
-          radius=advancedOptions.get('radius',1e-4),
-          returnAll=True, verbosity=printer,
-          memLimit=memLimit, profiler=profiler, comm=comm,
-          useFreqWeightedChiSq=advancedOptions.get(
-                'useFreqWeightedChiSq',False), 
-          distributeMethod=advancedOptions.get(
-                'distributeMethod',"deriv"),
-          check=advancedOptions.get('check',False),
-          gatestringWeightsDict=advancedOptions.get('gsWeights',None),
-          gateLabelAliases=aliases,
-          alwaysPerformMLE=advancedOptions.get('alwaysPerformMLE',False)
-        )
+        args['minProbClip'] = advancedOptions.get('minProbClip',1e-4)
+        args['radius'] = advancedOptions.get('radius',1e-4)
+        args['alwaysPerformMLE'] = advancedOptions.get('alwaysPerformMLE',False)
+        gs_lsgst_list = _alg.do_iterative_mlgst(**args)
     else:
         raise ValueError("Invalid objective: %s" % objective)
 
@@ -576,7 +564,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, printer)
+                                                 None, printer-1)
 
         tNxt = _time.time()
         profiler.add_time('do_long_sequence_gst: gauge optimization',tRef); tRef=tNxt
@@ -584,15 +572,10 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     #Perform extra analysis if a bad fit was obtained
     badFitThreshold = advancedOptions.get('badFitThreshold',DEFAULT_BAD_FIT_THRESHOLD)
     if ret.estimates[estlbl].misfit_sigma() > badFitThreshold:
-        onBadFit = advancedOptions.get('onBadFit',"scale data") # 'do nothing'
-        if onBadFit in ("scale data","scale data and reopt") \
-           and parameters['weights'] is None:
-        
-            expected = (len(ds.get_spam_labels())-1) # == "k"
-            dof_per_box = 1; nboxes = len(rawLists[-1])
-            pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
-            threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
-    
+        onBadFit = advancedOptions.get('onBadFit',["Robust+"]) # empty list => 'do nothing'
+        if len(onBadFit) > 0 and parameters['weights'] is None:
+            
+            # Get by-sequence goodness of fit
             if objective == "chi2":
                 fitQty = _tools.chi2_terms(ds, gs_lsgst_list[-1], rawLists[-1],
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
@@ -608,50 +591,119 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                                          advancedOptions.get('radius',1e-4),
                                          gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
                 fitQty = 2*(maxLogL - logL)
-                
-            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels
-            gsWeights = {}
-            for i,gstr in enumerate(rawLists[-1]):
-                if fitQty[i] > threshold:
-                    gsWeights[gstr] = expected/fitQty[i] #scaling factor
-    
-            scale_params = parameters.copy()
-            scale_params['weights'] = gsWeights
+            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels to get just "by-sequence"
 
-            if onBadFit == "scale data and reopt":
-                raise NotImplementedError("This option isn't implemented yet!")
-                # Need to re-run final iteration of GST with weights computed above,
-                # and just keep (?) old estimates of all prior iterations (or use "blank"
-                # sentinel once this is supported).
-                
-            ret.add_estimate(gs_target, gs_start, gs_lsgst_list, scale_params, estlbl+ROBUST_SUFFIX)
+            expected = (len(ds.get_spam_labels())-1) # == "k"
+            dof_per_box = expected; nboxes = len(rawLists[-1])
+            pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
 
-            #Do final gauge optimization to data-scaled estimate also
-            if gaugeOptParams != False:
-                gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
-                #if onBadFit == "scale data and reopt": # then will need to re-gauge-opt too, like:
-                #    if "targetGateset" not in gaugeOptParams:
-                #        gaugeOptParams["targetGateset"] = gs_target
-                #    if "comm" not in gaugeOptParams:
-                #        gaugeOptParams["comm"] = comm
-                #
-                #    go_gs_final = _alg.gaugeopt_to_target(gs_lsgst_list[-1],**gaugeOptParams)
-                #    ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final, None, printer)
-                #    
-                #    tNxt = _time.time()
-                #    profiler.add_time('do_long_sequence_gst: robust gauge optimization',tRef); tRef=tNxt
-                #else:
-                
-                # add same gauge-optimized result as above
-                ret.estimates[estlbl + ROBUST_SUFFIX].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                                     None, printer)
+            for scale_typ in onBadFit:
+                gsWeights = {}
+                if scale_typ in ("robust","Robust"):
+                    # Robust scaling V1: drastically scale down weights of especially bad sequences
+                    threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+                    for i,gstr in enumerate(rawLists[-1]):
+                        if fitQty[i] > threshold:
+                            gsWeights[gstr] = expected/fitQty[i] #scaling factor
+                    reopt = bool(scale_typ == "Robust")
 
+                elif scale_typ in ("robust+","Robust+"):
+                    # Robust scaling V2: V1 + rescale to desired chi2 distribution without reordering
+                    threshold = _np.ceil(_chi2.ppf(1 - pc/nboxes, dof_per_box))
+                    scaled_fitQty = fitQty.copy()
+                    for i,gstr in enumerate(rawLists[-1]):
+                        if fitQty[i] > threshold:
+                            gsWeights[gstr] = expected/fitQty[i] #scaling factor
+                            scaled_fitQty[i] = expected # (fitQty[i]*gsWeights[gstr])
 
-        elif onBadFit == "do nothing":
-            pass
-        else:
-            raise ValueError("Invalid onBadFit value: %s" % onBadFit)
-            
+                    N = len(fitQty)
+                    percentiles = [ _chi2.ppf((i+1)/(N+1), dof_per_box) for i in range(N) ]
+                    for iBin,i in enumerate(_np.argsort(scaled_fitQty)):
+                        gstr = rawLists[-1][i]
+                        fit, expected = scaled_fitQty[i], percentiles[iBin]
+                        if fit > expected:
+                            if gstr in gsWeights: gsWeights[gstr] *= expected/fit
+                            else: gsWeights[gstr] = expected/fit
+                            
+                    reopt = bool(scale_typ == "Robust+")
+                    
+                elif onBadFit == "do nothing":
+                    continue #go to next on-bad-fit directive
+                else:
+                    raise ValueError("Invalid on-bad-fit directive: %s" % scale_typ)
+
+                tNxt = _time.time()
+                profiler.add_time('do_long_sequence_gst: robust data scaling init',tRef); tRef=tNxt
+
+                scale_params = parameters.copy()
+                scale_params['weights'] = gsWeights
+
+                if reopt:
+                    #convert weights dict to an array for do_XXX methods below
+                    gsWeightsArray = _np.ones( len(rawLists[-1]), 'd')
+                    for gatestr, weight in gsWeights.items():
+                        gsWeightsArray[ rawLists[-1].index(gatestr) ] = weight
+                    
+                    reopt_args = dict(dataset=ds,
+                                      startGateset=gs_lsgst_list[-1],
+                                      gateStringsToUse=rawLists[-1],
+                                      gatestringWeights=gsWeightsArray,
+                                      verbosity=printer-1)
+                    for x in ('maxiter', 'tol', 'cptp_penalty_factor', 'spam_penalty_factor',
+                              'probClipInterval', 'check', 'gateLabelAliases',
+                              'memLimit', 'comm', 'distributeMethod', 'profiler'):
+                        reopt_args[x] = args[x]
+
+                    printer.log("--- Re-optimizing %s after robust data scaling ---" % objective)
+                    if objective == "chi2":
+                        reopt_args['useFreqWeightedChiSq'] = args['useFreqWeightedChiSq']
+                        reopt_args['minProbClipForWeighting'] = args['minProbClipForWeighting']
+                        reopt_args['check_jacobian'] = args['check_jacobian']
+                        _, gs_reopt = _alg.do_mc2gst(**reopt_args)
+                    
+                    elif objective == "logl":
+                        reopt_args['minProbClip'] = args['minProbClip']
+                        reopt_args['radius'] = args['radius']
+                        _, gs_reopt = _alg.do_mlgst(**reopt_args)
+
+                    tNxt = _time.time()
+                    profiler.add_time('do_long_sequence_gst: robust data scaling re-opt',tRef); tRef=tNxt
+                    
+                    # Re-run final iteration of GST with weights computed above,
+                    # and just keep (?) old estimates of all prior iterations (or use "blank"
+                    # sentinel once this is supported).
+                    ret.add_estimate(gs_target, gs_start, gs_lsgst_list[0:-1] + [gs_reopt],
+                                     scale_params, estlbl+"."+scale_typ)
+                else:
+                    ret.add_estimate(gs_target, gs_start, gs_lsgst_list,
+                                     scale_params, estlbl+"."+scale_typ)
+        
+                #Do final gauge optimization to data-scaled estimate also
+                if gaugeOptParams != False:
+                    if reopt:
+                        gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+                        
+                        if "targetGateset" not in gaugeOptParams:
+                            gaugeOptParams["targetGateset"] = gs_target
+                        if "comm" not in gaugeOptParams:
+                            gaugeOptParams["comm"] = comm
+
+                        gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
+                        gaugeOptParams['gateset'] = gs_reopt #starting gate set
+                        _, gaugeEl, go_gs_reopt = _alg.gaugeopt_to_target(**gaugeOptParams)
+                        gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
+
+                        tNxt = _time.time()
+                        profiler.add_time('do_long_sequence_gst: robust data scaling gauge-opt',tRef); tRef=tNxt
+
+                        # add new gauge-re-optimized result as above
+                        ret.estimates[estlbl+'.'+scale_typ].add_gaugeoptimized(
+                            gaugeOptParams, go_gs_reopt, None, printer-1)
+                    else:
+                        # add same gauge-optimized result as above
+                        ret.estimates[estlbl+'.'+scale_typ].add_gaugeoptimized(
+                            gaugeOptParams.copy(), go_gs_final, None, printer-1)
+
     profiler.add_time('do_long_sequence_gst: results initialization',tRef)
 
     #Write results to a pickle file if desired
@@ -854,24 +906,21 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             for goLabel,goparams in gaugeOptSuite_dict.items():
                 
                 printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
-                tGO = _time.time()
                 gsStart = ret.estimates[est_label].get_start_gateset(goparams)
-                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-2)
-                printer.log("-- Done gauge optimizing (%gs) -- " % (_time.time()-tGO),2)
+                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-3)
 
                 #Gauge optimize data-scaled estimate also
-                if est_label + ROBUST_SUFFIX in ret.estimates:
-                    gsStart_robust = ret.estimates[est_label+ROBUST_SUFFIX].get_start_gateset(goparams)
-                    if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
-                        printer.log("-- Conveying '%s' gauge optimization to %s estimate --" % (goLabel,est_label+ROBUST_SUFFIX),2)
-                        params = ret.estimates[est_label].goparameters[goLabel] #no need to copy here
-                        gsopt = ret.estimates[est_label].gatesets[goLabel].copy()
-                        ret.estimates[est_label + ROBUST_SUFFIX].add_gaugeoptimized(params, gsopt, goLabel, printer-2)
-                    else:
-                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+ROBUST_SUFFIX),2)
-                        tGO = _time.time()
-                        ret.estimates[est_label + ROBUST_SUFFIX].add_gaugeoptimized(goparams, None, goLabel, printer-2)
-                        printer.log("-- Done gauge optimizing (%gs) --" % (_time.time()-tGO),2)
+                for suffix in ROBUST_SUFFIX_LIST:
+                    if est_label + suffix in ret.estimates:
+                        gsStart_robust = ret.estimates[est_label+suffix].get_start_gateset(goparams)
+                        if gsStart_robust.frobeniusdist(gsStart) < 1e-8:
+                            printer.log("-- Conveying '%s' gauge optimization to %s estimate --" % (goLabel,est_label+suffix),2)
+                            params = ret.estimates[est_label].goparameters[goLabel] #no need to copy here
+                            gsopt = ret.estimates[est_label].gatesets[goLabel].copy()
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(params, gsopt, goLabel, printer-3)
+                        else:
+                            printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+suffix),2)
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, printer-3)
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):

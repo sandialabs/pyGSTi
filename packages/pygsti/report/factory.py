@@ -35,8 +35,8 @@ import functools as _functools
 from pprint import pprint as _pprint
 
 #maybe import these from drivers.longsequence so they stay synced?
-ROBUST_SUFFIX = ".robust"
-DEFAULT_BAD_FIT_THRESHOLD = 10.0
+ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
+DEFAULT_BAD_FIT_THRESHOLD = 2.0
         
 def _errgen_formula(errgen_type, typ):
     assert(typ in ('html','latex'))
@@ -95,7 +95,9 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     current_lbls = list(estimates.keys())
     
     def add_lbl(lst, lbl):
-        if combine_robust and (lbl+ROBUST_SUFFIX in current_lbls): return
+        if combine_robust and any([(lbl+suffix in current_lbls)
+                                   for suffix in ROBUST_SUFFIX_LIST]):
+            return #don't add label
         lst.append(lbl) #add label
 
     if running_lbls is None:
@@ -297,8 +299,10 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             est = results.estimates.get(lbl,None)
             if est is None: continue
 
-            if combine_robust and lbl.endswith(ROBUST_SUFFIX):
-                est_modvi = results.estimates.get(lbl[:-len(ROBUST_SUFFIX)],est)
+            for suffix in ROBUST_SUFFIX_LIST:
+                if combine_robust and lbl.endswith(suffix):
+                    est_modvi = results.estimates.get(lbl[:-len(suffix)],est)
+                    break
             else:
                 est_modvi = est
 

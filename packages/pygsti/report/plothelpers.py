@@ -463,7 +463,8 @@ def _all_same(items):
     return all(x == items[0] for x in items)
 
 
-def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
+def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp,
+                           element_dof):
     """
     A helper function to compute the number of boxes, and corresponding
     number of degrees of freedom, for the GST chi2/logl boxplots.
@@ -478,7 +479,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
         s = _np.shape(non_all_NaN)
-        dof_each_box = [_num_non_nan(k) for k in non_all_NaN]
+        dof_each_box = [_num_non_nan(k)*element_dof for k in non_all_NaN]
 
         # Don't assert this anymore -- just use average below
         if not _all_same(dof_each_box):
@@ -494,8 +495,9 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         else:
             dof_per_box = None #unknown, since there are no boxes
     else:
-        # Each box is a chi2_1 random variable
-        dof_per_box = 1
+        # Each box is a chi2_m random variable currently dictated by the number of
+        # dataset degrees of freedom.
+        dof_per_box = element_dof
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.

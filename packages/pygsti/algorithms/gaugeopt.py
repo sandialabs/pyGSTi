@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import warnings as _warnings
+import time as _time
 
 from .. import objects as _objs
 from .. import tools as _tools
@@ -225,6 +226,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     """
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    tStart = _time.time()
 
     if comm is not None:
         gs_cmp = comm.bcast(gateset if (comm.Get_rank() == 0) else None, root=0)
@@ -260,7 +262,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     else:
         call_jacobian_fn = None
 
-    
+    printer.log("--- Gauge Optimization (%s method) ---" % method,2)
     if method == 'ls':
         #minSol  = _opt.least_squares(call_objective_fn, x0, #jac=call_jacobian_fn,
         #                            max_nfev=maxfev, ftol=tol)
@@ -280,7 +282,7 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
             _warnings.warn("MPI comm was given for gauge optimization but can" +
                            " only be used with the least-squares method.")
 
-        bToStdout = (printer.verbosity > 2 and printer.filename is None)
+        bToStdout = (printer.verbosity >= 2 and printer.filename is None)
         if bToStdout and (comm is None or comm.Get_rank() == 0): 
             print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
             # print_obj_func(x0) #print initial point (can be a large vector though)
@@ -296,6 +298,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     gaugeGroupEl.from_vector(solnX)
     newGateset = gateset.copy()
     newGateset.transform(gaugeGroupEl)
+
+    printer.log("Gauge optimization completed in %gs." % (_time.time()-tStart))
 
     if returnAll:
         return solnF, gaugeGroupEl, newGateset

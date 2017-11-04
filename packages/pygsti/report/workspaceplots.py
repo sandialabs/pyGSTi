@@ -1586,8 +1586,10 @@ class ColorBoxPlot(WorkspacePlot):
                 else:
                     addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn,sumUp)
                 addl_hover_info[lbl] = addl_subMxs
-            
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
+
+                
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp,
+                                                              len(dataset.get_spam_labels())-1 )
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                  for subMxRow in subMxs for mx in subMxRow] )
