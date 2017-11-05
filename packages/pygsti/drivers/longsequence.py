@@ -488,7 +488,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         args['useFreqWeightedChiSq'] = advancedOptions.get(
             'useFreqWeightedChiSq',False)
         args['minProbClipForWeighting'] = advancedOptions.get(
-            'minProbClipForWeighting',1e-4),
+            'minProbClipForWeighting',1e-4)
         args['check_jacobian'] = advancedOptions.get('check',False)
         gs_lsgst_list = _alg.do_iterative_mc2gst(**args)
 
