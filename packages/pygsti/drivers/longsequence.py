@@ -682,6 +682,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
                 if gaugeOptParams != False:
                     if reopt:
                         gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
+                        if '_gaugeGroupEl' in gaugeOptParams: del gaugeOptParams['_gaugeGroupEl']
                         
                         if "targetGateset" not in gaugeOptParams:
                             gaugeOptParams["targetGateset"] = gs_target

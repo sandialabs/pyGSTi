@@ -38,7 +38,10 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
-        self.results.estimates['default'].parameters['hessianProjection'] = 'intrinsic error'
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('intrinsic error')
+
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
                                             "Report B", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
@@ -47,24 +50,41 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
-        self.results.estimates['default'].parameters['hessianProjection'] = 'std'
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('std')
+
+        #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
-                                            "Report E", confidenceLevel=-95, verbosity=3,  auto_open=False)
+                                             "Report E", confidenceLevel=95, verbosity=3,  auto_open=False,
+                                             advancedOptions={'nm threshold': -10})
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
         vs = self.versionsuffix
+        
+        #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportC",
-                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False)
+                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'combine_robust': False} )
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_wCIs(self):
         vs = self.versionsuffix
-        self.results.estimates['default'].parameters['hessianProjection'] = 'optimal gate CIs' #only do this on one test since (takes a long time)
+
+        #Use propagation method instead of directly computing a factory for the go0 gauge-opt
+        crfact = self.results.estimates['default'].add_confidence_region_factory('final iteration estimate', 'final')
+        crfact.compute_hessian(comm=None)
+
+        self.results.estimates['default'].gauge_propagate_confidence_region_factory('go0') #instead of computing one        
+        crfact = self.results.estimates['default'].get_confidence_region_factory('go0') #was created by propagation
+        crfact.project_hessian('optimal gate CIs')
+
+        #Note: this report will have Robust estimates too
         pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
                                              "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?

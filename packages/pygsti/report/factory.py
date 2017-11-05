@@ -334,7 +334,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 effds, scale_subMxs = est.get_effective_dataset(True)
                 switchBd.eff_ds[d,i] = effds
                 switchBd.scaledSubMxsDict[d,i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
-                switchBd.modvi_ds[d,i] = results.dataset if combine_robust else eff_ds
+                switchBd.modvi_ds[d,i] = results.dataset if combine_robust else effds
             else:
                 switchBd.modvi_ds[d,i] = results.dataset
                 switchBd.eff_ds[d,i] = NA
