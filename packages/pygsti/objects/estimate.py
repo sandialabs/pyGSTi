@@ -163,10 +163,9 @@ class Estimate(object):
         max_vb = verbosity if (verbosity is not None) else \
                  max( [ gop.get('verbosity',0) for gop in goparams_list ])
         printer = _VerbosityPrinter.build_printer(max_vb, comm)
-        printer.log("-- Adding Gauge Optimized (%s) --" % label, 1)
+        printer.log("-- Adding Gauge Optimized (%s) --" % label)
         
         for i,gop in enumerate(goparams_list):
-            printer.log("Stage %d:" % i, 2)
             
             if gateset is not None:
                 last_gs = gateset #just use user-supplied result
@@ -174,6 +173,7 @@ class Estimate(object):
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 gop = gop.copy() #so we don't change the caller's dict
 
+                printer.log("Stage %d:" % i, 2)
                 if verbosity is not None:
                     gop['verbosity'] = printer-1 #use common printer
 
