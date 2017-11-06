@@ -221,7 +221,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
         Ls = _add_new_labels(Ls, results.gatestring_structs['final'].Ls)    
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
-                                               list(est.goparameters.keys()))            
+                                               list(est.goparameters.keys()))
 
     Ls = list(sorted(Ls)) #make sure Ls are sorted in increasing order
     if fmt == "latex" and len(Ls) > 0:

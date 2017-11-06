@@ -190,7 +190,7 @@ class Estimate(object):
                     else: raise ValueError("Must supply 'targetGateset' in 'goparams' argument")
     
                 gop['returnAll'] = True
-                minF, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
+                _, gaugeGroupEl, last_gs = _gaugeopt_to_target(**gop)
                 gop['_gaugeGroupEl'] = gaugeGroupEl # an output stored here for convenience
 
             #sort the parameters by name for consistency

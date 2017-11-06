@@ -125,24 +125,24 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                                                        prepOrMeas='prep',
                                                        **algorithm_kwargs)
         if prepFidList is not None:
-            prepScore = compute_composite_score(
+            prepScore = compute_composite_fiducial_score(
                 gs_target, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList]), 1)
-            printer.log('Score: {}'.format(prepScore.score), 1)
+            printer.log('Score: {}'.format(prepScore.minor), 1)
 
             
         measFidList = optimize_integer_fiducials_slack(gateset=gs_target,
                                                        prepOrMeas='meas',
                                                        **algorithm_kwargs)
         if measFidList is not None:
-            measScore = compute_composite_score(
+            measScore = compute_composite_fiducial_score(
                 gs_target, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList]), 1)
-            printer.log('Score: {}'.format(measScore.score), 1)
+            printer.log('Score: {}'.format(measScore.minor), 1)
 
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
@@ -164,38 +164,38 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and prepFidList[0] is not None:
-            prepScore = compute_composite_score(
+            prepScore = compute_composite_fiducial_score(
                 gs_target, prepFidList[0], 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList[0]]), 1)
-            printer.log('Score: {}'.format(prepScore.score), 1)
+            printer.log('Score: {}'.format(prepScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and prepFidList is not None:
-            prepScore = compute_composite_score(
+            prepScore = compute_composite_fiducial_score(
                 gs_target, prepFidList, 'prep',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Preparation fiducials:', 1)
             printer.log(str([str(fid) for fid in prepFidList]), 1)
-            printer.log('Score: {}'.format(prepScore.score), 1)
+            printer.log('Score: {}'.format(prepScore.minor), 1)
 
         measFidList = grasp_fiducial_optimization(gateset=gs_target,
                                                   prepOrMeas='meas',
                                                   **algorithm_kwargs)
 
         if algorithm_kwargs['returnAll'] and measFidList[0] is not None:
-            measScore = compute_composite_score(
+            measScore = compute_composite_fiducial_score(
                 gs_target, measFidList[0], 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList[0]]), 1)
-            printer.log('Score: {}'.format(measScore.score), 1)
+            printer.log('Score: {}'.format(measScore.minor), 1)
         elif not algorithm_kwargs['returnAll'] and measFidList is not None:
-            measScore = compute_composite_score(
+            measScore = compute_composite_fiducial_score(
                 gs_target, measFidList, 'meas',
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Measurement fiducials:', 1)
             printer.log(str([str(fid) for fid in measFidList]), 1)
-            printer.log('Score: {}'.format(measScore.score), 1)
+            printer.log('Score: {}'.format(measScore.minor), 1)
 
     else:
         raise ValueError("'{}' is not a valid algorithm "
@@ -300,9 +300,9 @@ def make_meas_mxs(gs, prepMeasList):
     return outputMatList
 
 
-def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
-                            threshold=1e6, returnAll=False, gatePenalty=0.0,
-                            l1Penalty=0.0):
+def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='all',
+                                     threshold=1e6, returnAll=False, gatePenalty=0.0,
+                                     l1Penalty=0.0):
     """Compute a composite score for a fiducial list.
 
     Parameters
@@ -339,11 +339,11 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     l1Penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
-        added to ``score.score``.
+        added to ``score.minor``.
 
     gatePenalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
-        fiducials that is added to ``score.score``.
+        fiducials that is added to ``score.minor``.
 
     Returns
     -------
@@ -384,7 +384,7 @@ def compute_composite_score(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     nonzero_score += gatePenalty * sum([len(fiducial) for fiducial in fidList])
 
-    score = _scoring.CompositeScore(nonzero_score, N_nonzero)
+    score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
     return (score, spectrum) if returnAll else score
 
@@ -431,11 +431,11 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     l1Penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
-        added to ``score.score``.
+        added to ``score.minor``.
 
     gatePenalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
-        fiducials that is added to ``score.score``.
+        fiducials that is added to ``score.minor``.
 
     Returns
     -------
@@ -453,12 +453,10 @@ def test_fiducial_list(gateset, fidList, prepOrMeas, scoreFunc='all',
 
     """
 
-    score, spectrum = compute_composite_score(gateset, fidList, prepOrMeas,
-                                              scoreFunc=scoreFunc,
-                                              threshold=threshold,
-                                              returnAll=True,
-                                              l1Penalty=l1Penalty,
-                                              gatePenalty=gatePenalty)
+    score, spectrum = compute_composite_fiducial_score(
+        gateset, fidList, prepOrMeas, scoreFunc=scoreFunc,
+        threshold=threshold, returnAll=True, l1Penalty=l1Penalty,
+        gatePenalty=gatePenalty)
 
     if score.N < len(spectrum):
         testResult = False
@@ -920,14 +918,14 @@ def grasp_fiducial_optimization(gateset, fidsList, prepOrMeas, alpha,
     final_compute_kwargs = compute_kwargs.copy()
     final_compute_kwargs['l1Penalty'] = l1Penalty
 
-    scoreFn = lambda fidList: compute_composite_score(fidList=fidList,
-                                                      **compute_kwargs)
+    scoreFn = lambda fidList: compute_composite_fiducial_score(
+        fidList=fidList, **compute_kwargs)
 
-    finalScoreFn = lambda fidList: compute_composite_score(
+    finalScoreFn = lambda fidList: compute_composite_fiducial_score(
         fidList=fidList, **final_compute_kwargs)
 
     dimRho = gateset.get_dimension()
-    feasibleThreshold=_scoring.CompositeScore(threshold, dimRho)
+    feasibleThreshold=_scoring.CompositeScore(-dimRho, threshold, dimRho)
 
     rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)
 

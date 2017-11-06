@@ -2160,7 +2160,11 @@ class EigenvalueParameterizedGate(GateMatrix):
             for prefactor,(i,j) in pdesc:
                 dMx[i,j] = prefactor
             tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
-            assert(_np.linalg.norm(tmp.imag) < IMAG_TOL)
+            if _np.linalg.norm(tmp.imag) >= IMAG_TOL: #just a warning until we figure this out.
+                print("EigenvalueParameterizedGate deriv_wrt_params WARNING:" + 
+                      " Imag part = ",_np.linalg.norm(tmp.imag)," pdesc = ",pdesc)
+            #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
+            #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
             derivMx[:,k] = tmp.real.flatten()
 
         if wrtFilter is None:

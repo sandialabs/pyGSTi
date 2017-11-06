@@ -64,9 +64,15 @@ class TestReport(ReportBaseCase):
 
     def test_reports_logL_TP_noCIs(self):
         vs = self.versionsuffix
+
+        #Also test adding a model-test estimate to this report
+        gs_guess = std.gs_target.depolarize(gate_noise=0.07,spam_noise=0.03)
+        results = self.results_logL.copy()
+        results.add_model_test(std.gs_target, gs_guess, estimate_key='Test', gauge_opt_keys="auto")
+
         
         #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportC",
+        pygsti.report.create_standard_report(results,temp_files + "/general_reportC",
                                              "Report C", confidenceLevel=None, verbosity=3,  auto_open=False,
                                              advancedOptions={'combine_robust': False} )
         #Compare the html files?
@@ -89,6 +95,17 @@ class TestReport(ReportBaseCase):
                                              "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
+
+    def test_reports_multiple_ds(self):
+        vs = self.versionsuffix
+        
+        #Note: this report will have (un-combined) Robust estimates too
+        pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
+                                             temp_files + "/general_reportF",
+                                             "Report F", confidenceLevel=None, verbosity=3,  auto_open=False)
+        #Compare the html files?
+        #self.checkFile("general_reportC%s.html" % vs)
+
 
     def test_report_notebook(self):
         pygsti.report.create_report_notebook(self.results_logL, temp_files + "/report_notebook.ipynb", None,

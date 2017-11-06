@@ -49,6 +49,7 @@ from .gaugegroup import TPDiagGaugeGroup, TPDiagGaugeGroupElement
 from .gaugegroup import UnitaryGaugeGroup, UnitaryGaugeGroupElement
 from .gaugegroup import SpamGaugeGroup, SpamGaugeGroupElement
 from .gaugegroup import TPSpamGaugeGroup, TPSpamGaugeGroupElement
+from .gaugegroup import TrivialGaugeGroup, TrivialGaugeGroupElement
 
 from .results import Results
 
