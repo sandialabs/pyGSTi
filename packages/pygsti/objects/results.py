@@ -17,6 +17,8 @@ from .. import tools as _tools
 from ..tools import compattools as _compat
 from .gatestringstructure import LsGermsStructure as _LsGermsStructure
 from .estimate import Estimate as _Estimate
+from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
+from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
@@ -224,6 +226,86 @@ class Results(object):
         self.estimates[estimate_key].parameters['max length list'] = \
                                         self.gatestring_structs['final'].Ls
 
+    def add_model_test(self, targetGateset, modelGateset,
+                       estimate_key='test', gauge_opt_keys="auto"):
+        """
+        Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
+
+        Parameters
+        ----------
+        targetGateset : GateSet
+            The target gateset used for comparison to the model.
+
+        modelGateset : GateSet
+            The "model" gateset whose fit to the data and distance from
+            `targetGateset` are assessed.
+
+        estimate_key : str, optional
+            The key or label used to identify this estimate.
+
+        gauge_opt_keys : list, optional
+            A list of gauge-optimization keys to add to the estimate.  All
+            of these keys will correspond to trivial gauge optimizations,
+            as the model gate set is assumed to be fixed and to have no
+            gauge degrees of freedom.  The special value "auto" creates
+            gauge-optimized estimates for all the gauge optimization labels 
+            currently in this `Results` object.
+
+        Returns
+        -------
+        None
+        """
+        nIter = len(self.gatestring_structs['iteration'])
+
+        # base parameter values off of existing estimate parameters
+        defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
+                    'minProbClipForWeighting': 1e-4, 'gateLabelAliases': None,
+                    'truncScheme': "whole germ powers"}
+        for est in self.estimates.values():
+            for ky in defaults:
+                if ky in est.parameters: defaults[ky] = est.parameters[ky]
+
+        #Construct a parameters dict, similar to do_model_test(...)
+        parameters = _collections.OrderedDict()
+        parameters['objective'] = defaults['objective']
+        if parameters['objective'] == 'logl':
+            parameters['minProbClip'] = defaults['minProbClip']
+            parameters['radius'] = defaults['radius']
+        elif parameters['objective'] == 'chi2':
+            parameters['minProbClipForWeighting'] = defaults['minProbClipForWeighting']
+        else:
+            raise ValueError("Invalid objective: %s" % parameters['objective'])
+        parameters['profiler'] = None
+        parameters['gateLabelAliases'] = defaults['gateLabelAliases']
+        parameters['weights'] = None                     #Hardcoded
+
+
+        #Set default gate group to trival group to mimic do_model_test (an to
+        # be consistent with this function creating "gauge-optimized" gate sets
+        # by just copying the initial one).
+        modelGateset = modelGateset.copy()
+        modelGateset.default_gauge_group = _TrivialGaugeGroup(modelGateset.dim)
+
+        self.add_estimate(targetGateset, modelGateset, [modelGateset]*nIter,
+                          parameters, estimate_key=estimate_key)
+
+        #add gauge optimizations (always trivial)
+        if gauge_opt_keys == "auto":
+            gauge_opt_keys = []
+            for est in self.estimates.values():
+                for gokey in est.goparameters:
+                    if gokey not in gauge_opt_keys:
+                        gauge_opt_keys.append(gokey)
+
+        est = self.estimates[estimate_key]
+        for gokey in gauge_opt_keys:
+            trivialEl = _TrivialGaugeGroupElement(modelGateset.dim)
+            goparams = {'gateset': modelGateset,
+                        'targetGateset': targetGateset,
+                        '_gaugeGroupEl': trivialEl }
+            est.add_gaugeoptimized(goparams, modelGateset, gokey)
+
+        
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
         Creates a shallow copy of this Results object containing only the
