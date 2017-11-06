@@ -48,7 +48,6 @@ def do_model_test(modelGateFilenameOrSet,
     A :class:`~pygsti.report.Results` object is returned, which encapsulates
     the gate set estimate and related parameters, and can be used with 
     report-generation routines.
-
     Parameters
     ----------
     modelGateFilenameOrSet : GateSet or string
@@ -129,13 +128,14 @@ def do_model_test(modelGateFilenameOrSet,
         germsListOrFilename)
     
     #Get/load dataset
-    ds = _load_dataset(dataFilenameOrSet)
+    ds = _load_dataset(dataFilenameOrSet, comm, verbosity)
     
     #Construct GateString lists
     lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
                                   maxLengths, advancedOptions, comm, verbosity)
 
     if gaugeOptParams is None: gaugeOptParams = {}
+    if advancedOptions is None: advancedOptions = {}
     if advancedOptions.get('set trivial gauge group',True):
         gs_model = gs_model.copy()
         gs_model.default_gauge_group = _objs.TrivialGaugeGroup(gs_model.dim) #so no gauge opt is done
@@ -363,7 +363,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         germsListOrFilename)
     
     #Get/load dataset
-    ds = _load_dataset(dataFilenameOrSet)
+    ds = _load_dataset(dataFilenameOrSet, comm, verbosity)
     
     #Construct GateString lists
     lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
@@ -478,7 +478,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     gs_target = _load_gateset(targetGateFilenameOrSet)
     
     #Get/load dataset
-    ds = _load_dataset(dataFilenameOrSet)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
 
     gate_dim = gs_target.get_dimension()
 
@@ -769,7 +769,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
         germsListOrFilename)
     
     #Get/load dataset
-    ds = _load_dataset(dataFilenameOrSet)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
 
     ret = None
     modes = modes.split(",")
@@ -785,9 +785,10 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
 
             if mode == "Target":
                 est_label = mode
+                tgt = gs_target.copy() #no parameterization change
                 advanced.update( {'appendTo': ret, 'estimateLabel': est_label,
                                   'onBadFit': []} )
-                ret = do_model_test(gs_target, ds, gs_target, prepStrs,
+                ret = do_model_test(gs_target, ds, tgt, prepStrs,
                                     effectStrs, germs, maxLengths, False, advanced,
                                     comm, memLimit, None, printer-1)
                 
@@ -800,8 +801,9 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                                            None, printer-1)
             elif mode in modelsToTest:
                 est_label = mode
+                tgt = gs_target.copy() #no parameterization change
                 advanced.update( {'appendTo': ret, 'estimateLabel': est_label } )
-                ret = do_model_test(modelsToTest[mode], ds, gs_target, prepStrs,
+                ret = do_model_test(modelsToTest[mode], ds, tgt, prepStrs,
                                     effectStrs, germs, maxLengths, False, advanced,
                                     comm, memLimit, None, printer-1)
             else:
@@ -1054,8 +1056,9 @@ def _load_fiducials_and_germs(prepStrsListOrFilename,
     return prepStrs, effectStrs, germs
         
 
-def _load_dataset(dataFilenameOrSet):
+def _load_dataset(dataFilenameOrSet, comm, verbosity):
     """Loads a DataSet from the dataFilenameOrSet argument of functions in this module."""
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     if _compat.isstr(dataFilenameOrSet):
         if comm is None or comm.Get_rank() == 0:
             if _os.path.splitext(dataFilenameOrSet)[1] == ".pkl":
