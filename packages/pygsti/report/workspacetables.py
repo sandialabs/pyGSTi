@@ -342,17 +342,24 @@ class GatesTable(WorkspaceTable):
                     intervalMx = _np.concatenate( ( _np.zeros((1,gate_dim),'d'),
                                                     intervalVec.reshape(gate_dim-1,gate_dim)), axis=0 )
                 else:
-                    # we don't know how best to reshape
-                    # vector of parameter intervals, so just don't unless needed for boxes
-                    intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
-                    basis = None #we don't know how to label the params
-
+                    # we don't know how best to reshape interval matrix for gate, so
+                    # use derivative
+                    gate_dim   = gatesets[-1].get_dimension()
+                    basis = gatesets[-1].basis
+                    gate_deriv = gatesets[-1].gates[gl].deriv_wrt_params()
+                    intervalMx = _np.abs(_np.dot(gate_deriv, intervalVec).reshape(gate_dim,gate_dim))
+                    
+                    # vector of parameter intervals
+                    #OLD: intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
+                    
                 if display_as == "numbers":
                     row_data.append(intervalMx)
                     row_formatters.append('Brackets')
                     
                 elif display_as == "boxes":
+                    maxAbsVal = _np.max(_np.abs(intervalMx))
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                             m=-maxAbsVal, M=maxAbsVal,
                                              colorbar=False,
                                              mxBasis=basis)
                     row_data.append( fig )
@@ -814,11 +821,12 @@ class ErrgenTable(WorkspaceTable):
             If not None, specifies a confidence-region
             used to display error intervals.
     
-        genType : {"logG-logT", "logTiG"}
+        genType : {"logG-logT", "logTiG", "logGTi"}
             The type of error generator to compute.  Allowed values are:
             
             - "logG-logT" : errgen = log(gate) - log(target_gate)
             - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
         
         Returns
         -------
@@ -886,6 +894,9 @@ class ErrgenTable(WorkspaceTable):
                     gateset, targetGateset, gl), confidenceRegionInfo)
             elif genType == "logTiG":
                 info = _ev(_reportables.LogTiG_and_projections(
+                    gateset, targetGateset, gl), confidenceRegionInfo)
+            elif genType == "logGTi":
+                info = _ev(_reportables.LogGTi_and_projections(
                     gateset, targetGateset, gl), confidenceRegionInfo)
             else: raise ValueError("Invalid generator type: %s" % genType)
             errgenAndProjs[gl] = info
@@ -1056,11 +1067,16 @@ class GateDecompTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
         gateLabels = list(gateset.gates.keys())  # gate labels
 
-        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        colHeadings = ('Gate','Ham. Evals.','Rotn. angle','Rotn. axis','Log Error') \
+                      + tuple( [ "Axis angle w/%s" % gl for gl in gateLabels] )
+        tooltips = ('Gate','Hamiltonian Eigenvalues','Rotation angle','Rotation axis',
+                    'Taking the log of a gate may be performed approximately.  This is ' +
+                    'error in that estimate, i.e. norm(G - exp(approxLogG)).') + \
+                    tuple( [ "Angle between the rotation axis of %s and the gate of the current row" % gl for gl in gateLabels] )
         formatters = [None]*len(colHeadings)
 
         table = _ReportTable(colHeadings, formatters, 
-                             colHeadingLabels=colHeadings, confidenceRegionInfo=confidenceRegionInfo)
+                             colHeadingLabels=tooltips, confidenceRegionInfo=confidenceRegionInfo)
         formatters = (None, 'Pi','Pi', 'Figure', 'Normal') + ('Pi',)*len(gateLabels)
 
         decomp = _ev(_reportables.General_decomposition(
@@ -1296,46 +1312,71 @@ class GateEigenvalueTable(WorkspaceTable):
         
         gateLabels = list(gateset.gates.keys())  # gate labels
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
+        formatters = [None]
         for disp in display:
             if disp == "evals":
-                colHeadings.append('Eigenvalues (E)')
+                colHeadings.append('Eigenvalues ($E$)')
+                formatters.append(None)
+                
             elif disp == "target":
-                colHeadings.append('Target Evals. (T)')
+                colHeadings.append('Target Evals. ($T$)')
+                formatters.append(None)
+                
             elif disp == "rel":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals (R)')
+                    colHeadings.append('Rel. Evals ($R$)')
+                    formatters.append(None)
+                    
             elif disp == "log-evals":
                 colHeadings.append('Re log(E)')
                 colHeadings.append('Im log(E)')
+                formatters.append('MathText')
+                formatters.append('MathText')
+                
             elif disp == "log-rel":
                 colHeadings.append('Re log(R)')
                 colHeadings.append('Im log(R)')
+                formatters.append('MathText')
+                formatters.append('MathText')
+                
             elif disp == "polar":
                 colHeadings.append('Eigenvalues')
+                formatters.append(None)
+                
             elif disp == "relpolar":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals')
+                    colHeadings.append('Rel. Evals ($R$)')
+                    formatters.append(None)
+                    
             elif disp == "absdiff-evals":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('|E - T|')
+                    formatters.append('MathText')
+                    
             elif disp == "infdiff-evals":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('1.0 - Re(T.C*E)')
+                    colHeadings.append('1.0 - Re(\\bar{T}*E)')
+                    formatters.append('MathText')
+                    
             elif disp == "absdiff-log-evals":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('|Re(log E) - Re(log T)|')
                     colHeadings.append('|Im(log E) - Im(log T)|')
+                    formatters.append('MathText')
+                    formatters.append('MathText')
+                    
             elif disp == "gidm":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Gauge-inv. diamond norm')
+                    colHeadings.append('Gauge-inv. Diamond norm')
+                    formatters.append('Conversion')
+                    
             elif disp == "giinf":
                 if(targetGateset is not None): #silently ignore
                     colHeadings.append('Gauge-inv. infidelity')
+                    formatters.append(None)
             else:
                 raise ValueError("Invalid display element: %s" % disp)
 
-        formatters = [None]*len(colHeadings)
-    
         table = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
         if virtual_gates is None:
@@ -1426,7 +1467,7 @@ class GateEigenvalueTable(WorkspaceTable):
                     log_evals = evals.log()
                     re_diff, im_diff = log_evals.absdiff( _np.log(target_evals.astype(complex)), separate_re_im=True )
                     row_data.append( re_diff )
-                    row_data.append( im_diff/_np.pi )
+                    row_data.append( (im_diff/_np.pi).mod(2.0) )
                     row_formatters.append('Vec')
                     row_formatters.append('Pi')
 
@@ -1592,7 +1633,7 @@ class FitComparisonTable(WorkspaceTable):
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
                     'std deviation', 'number of std deviation', 'dataset dof',
-                    'number of gateset parameters', '1-5 star rating (like NetFlix)')
+                    'number of gateset parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
         
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
@@ -2132,5 +2173,30 @@ class SoftwareEnvTable(WorkspaceTable):
         table.addrow(("Machine", str(machine)), (None,'Verbatim'))
         table.addrow(("Processor", str(processor)), (None,'Verbatim'))
     
+        table.finish()
+        return table
+
+
+class ExampleTable(WorkspaceTable):
+    def __init__(self, ws):
+        """A table showing how to use table features."""
+        super(ExampleTable,self).__init__(ws, self._create)
+
+    def _create(self):
+        colHeadings = ["Hover over me...","And me!","Click the pig"]
+        tooltips = ["This tooltip can give more information about what this column displays",
+                    "Unfortunately, we can't show nicely formatted math in these tooltips (yet)",
+                    "Click on the pyGSTi logo below to create the non-automatically-generated plot;" +
+                    " then hover over the colored boxes."]
+        example_mx = _np.array( [[ 1.0,  1/3, -1/3, -1.0],
+                                 [ 1/3,  1.0,  0.0, -1/5],
+                                 [-1/3,  0.0,  1.0,  1/6],
+                                 [-1.0, -1/5,  1/6,  1.0]] )
+        example_ebmx = _np.abs(example_mx) * 0.05
+        example_fig =  _wp.GateMatrixPlot(self.ws, example_mx, -1.0,1.0,
+                                          "pp", EBmatrix=example_ebmx)
+        
+        table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
+        table.addrow(("Pi",_np.pi, example_fig), ('Normal','Normal','Figure'))
         table.finish()
         return table

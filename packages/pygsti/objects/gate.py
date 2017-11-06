@@ -501,6 +501,40 @@ class GateMatrix(Gate):
         """
         raise NotImplementedError("deriv_wrt_params(...) is not implemented")
 
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True #conservative
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        Construct the Hessian of this gate with respect to it's parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the gate's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension^2, num_params1, num_params2)
+        """
+        raise NotImplementedError("hessian_wrt_params(...) is not implemented")
+
 
     #Handled by derived classes
     #def __str__(self):
@@ -696,6 +730,20 @@ class StaticGate(GateMatrix):
             return derivMx
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
+
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
 
     def copy(self):
         """
@@ -928,6 +976,19 @@ class FullyParameterizedGate(GateMatrix):
             return derivMx
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
+
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
 
 
     def copy(self):
@@ -1176,6 +1237,19 @@ class TPParameterizedGate(GateMatrix):
             return derivMx
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
 
 
     def copy(self):
@@ -1510,6 +1584,19 @@ class LinearlyParameterizedGate(GateMatrix):
             return derivMx
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
+
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
 
 
     def copy(self):
@@ -2085,6 +2172,19 @@ class EigenvalueParameterizedGate(GateMatrix):
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
 
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
 
     def copy(self):
         """
@@ -2455,7 +2555,7 @@ class LindbladParameterizedGate(GateMatrix):
                 assert(otherParams.shape == (bsO-1,))
     
                 if self.cptp:
-                    otherCoeffs = otherParams**2
+                    otherCoeffs = otherParams**2 #Analagous to L*L_dagger
                 else:
                     otherCoeffs = otherParams
             else:
@@ -2530,6 +2630,7 @@ class LindbladParameterizedGate(GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
         self.base_deriv = None
+        self.base_hessian = None        
 
         ##TEST FOR CP: DEBUG!!!
         #from ..tools import jamiolkowski as _jt
@@ -2616,7 +2717,7 @@ class LindbladParameterizedGate(GateMatrix):
         self._construct_matrix()
 
 
-    def deriv_wrt_params(self, wrtFilter=None):
+    def old_deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the vectorized
         derivatives of the flattened gate matrix with respect to a
@@ -2732,6 +2833,260 @@ class LindbladParameterizedGate(GateMatrix):
             return self.base_deriv
         else:
             return _np.take( self.base_deriv, wrtFilter, axis=1 )
+
+    def _dHdp(self):
+        return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+
+    def _dOdp(self):
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+        nHam = bsH-1 if (bsH > 0) else 0
+        
+        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+        if self.nonham_diagonal_only:
+            otherParams = self.paramvals[nHam:]
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+            if self.cptp:
+                dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+            else:
+                dOdp  = _np.einsum('alj->lja', self.otherGens)
+                            
+        else: #all lindblad terms included                
+            if self.cptp:
+                L,Lbar = self.Lmx,self.Lmx.conjugate()
+                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
+                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+                
+                  # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+                dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+                dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+                dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+            else:
+                F0 = _np.identity(bsO-1,'d')
+                F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
+                F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+            
+                # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+                dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+                dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+                        _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+                dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+                        _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+
+        # apply basis transform
+        tr = len(dOdp.shape) #tensor rank
+        assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
+
+        if tr == 3:
+            dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+        elif tr == 4:
+            dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+        assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+        return dOdp
+
+
+    def _d2Odp2(self):
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+        nHam = bsH-1 if (bsH > 0) else 0
+        d2 = self.dim
+        
+        assert(bsO > 0),"Cannot construct dOdp when other_basis_size == 0!"
+        if self.nonham_diagonal_only:
+            otherParams = self.paramvals[nHam:]
+            nP = len(otherParams); assert(nP == bsO-1)
+            
+            # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+            if self.cptp:
+                d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+            else:
+                d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
+                            
+        else: #all lindblad terms included                
+            if self.cptp:
+                nP = bsO-1
+                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
+                
+                #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
+                # indices of d2Odp2 are [i,j,a,b,q,r]
+                
+                def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
+                    """ Generates (base,ab,qr) tuples such that `base` runs over
+                        all possible 'other' params and 'ab' and 'qr' run over
+                        parameter indices s.t. ab > base and qr > base.  If
+                        ab_inc_eq == True then the > becomes a >=, and likewise
+                        for qr_inc_eq.  Used for looping over nonzero hessian els. """
+                    for _base in range(nP):
+                        start_ab = _base if ab_inc_eq else _base+1
+                        start_qr = _base if qr_inc_eq else _base+1
+                        for _ab in range(start_ab,nP):
+                            for _qr in range(start_qr,nP):
+                                yield (_base,_ab,_qr)
+                                
+                for base,a,q in iter_base_ab_qr(True,True): # Case1: base=b=r, ab=a, qr=q
+                    d2Odp2[:,:,a,base,q,base] = self.otherGens[a,q] + self.otherGens[q,a]
+                for base,a,r in iter_base_ab_qr(True,False): # Case2: base=b=q, ab=a, qr=r
+                    d2Odp2[:,:,a,base,base,r] = -1j*self.otherGens[a,r] + 1j*self.otherGens[r,a]
+                for base,b,q in iter_base_ab_qr(False,True): # Case3: base=a=r, ab=b, qr=q
+                    d2Odp2[:,:,base,b,q,base] = 1j*self.otherGens[b,q] - 1j*self.otherGens[q,b]
+                for base,b,r in iter_base_ab_qr(False,False): # Case4: base=a=q, ab=b, qr=r
+                    d2Odp2[:,:,base,b,base,r] = self.otherGens[b,r] + self.otherGens[r,b]
+                
+            else:
+                d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'d') #all params linear
+
+        # apply basis transform
+        tr = len(d2Odp2.shape) #tensor rank
+        assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
+
+        if tr == 4:
+            d2Odp2  = _np.einsum('lk,knaq,nj->ljaq', self.leftTrans, d2Odp2, self.rightTrans)
+        elif tr == 6:
+            d2Odp2  = _np.einsum('lk,knabqr,nj->ljabqr', self.leftTrans, d2Odp2, self.rightTrans)
+        assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
+        return d2Odp2
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter.
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension^2, num_params)
+        """
+        if self.base_deriv is None:
+            G = self.base
+            d2 = self.dim
+            bsH = self.ham_basis_size
+            bsO = self.other_basis_size
+    
+            #Deriv wrt hamiltonian params
+            if bsH > 0:
+                dexpL = _dexpX(self.err_gen, self._dHdp(), self.exp_err_gen,
+                               self.unitary_prefactor)
+                dH = dexpL.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
+            else:
+                dH = _np.empty( (d2**2,0), 'd') #so concat works below
+    
+            #Deriv wrt other params
+            if bsO > 0:
+                dexpL = _dexpX(self.err_gen, self._dOdp(), self.exp_err_gen,
+                               self.unitary_prefactor)
+
+                #Reshape so index as [iFlattenedGate,iOtherParam]
+                # 2nd dim will be bsO-1 or (bsO-1)**2 depending on tensor rank
+                dO = dexpL.reshape((d2**2,-1)) 
+            else:
+                dO = _np.empty( (d2**2,0), 'd') #so concat works below
+            
+            derivMx = _np.concatenate((dH,dO), axis=1)
+            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
+            derivMx = _np.real(derivMx)
+            self.base_deriv = derivMx
+
+            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
+            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+            #derivMx = fd_deriv
+
+        if wrtFilter is None:
+            return self.base_deriv
+        else:
+            return _np.take( self.base_deriv, wrtFilter, axis=1 )
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        Construct the Hessian of this gate with respect to it's parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the gate's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension^2, num_params1, num_params2)
+        """
+        if self.base_hessian is None:
+            G = self.base
+            d2 = self.dim
+            bsH = self.ham_basis_size
+            bsO = self.other_basis_size
+            nHam = bsH-1 if (bsH > 0) else 0
+
+            #Split hessian in 4 pieces:   d2H  |  dHdO
+            #                             dHdO |  d2O
+            # But only d2O is non-zero - and only when cptp == True
+
+            nTotParams = self.num_params()
+            hessianMx = _np.zeros( (d2**2, nTotParams, nTotParams), 'd' )
+    
+            #Deriv wrt other params
+            if bsO > 0: #if there are any "other" params
+                dOdp = self._dOdp()
+                d2Odp2 = self._d2Odp2()
+                tr = len(dOdp.shape)
+                    
+                series, series2 = _d2expSeries(self.err_gen, dOdp, d2Odp2)
+                term1 = series2
+                if tr == 3: #one deriv dimension "a"
+                    term2 = _np.einsum("ija,jkq->ikaq",series,series)
+                    d2expL = _np.einsum("ik,klaq,lj", self.unitary_prefactor,
+                                        term1+term2, self.exp_err_gen)
+                    dO = d2expL.reshape((d2**2,bsO-1,bsO-1))
+                    #d2expL.shape = (d2**2,bsO-1,bsO-1); dO = d2expL
+
+                elif tr == 4: #two deriv dimension "ab"
+                    term2 = _np.einsum("ijab,jkqr->ikabqr",series,series)
+                    d2expL = _np.einsum("ik,klabqr,lj", self.unitary_prefactor,
+                                        term1+term2, self.exp_err_gen)
+                    dO = d2expL.reshape((d2**2, (bsO-1)**2, (bsO-1)**2 ))
+                    #d2expL.shape = (d2**2, (bsO-1)**2, (bsO-1)**2); dO = d2expL
+
+                #dO has been reshape so index as [iFlattenedGate,iDeriv1,iDeriv2]
+                assert(_np.linalg.norm(_np.imag(dO)) < IMAG_TOL)
+                hessianMx[:,nHam:,nHam:] = _np.real(dO) # d2O block of hessian
+
+            self.base_hessian = hessianMx
+
+            #TODO: check hessian with finite difference here?
+            
+        if wrtFilter1 is None:
+            if wrtFilter2 is None:
+                return self.base_hessian
+            else:
+                return _np.take(self.base_hessian, wrtFilter2, axis=2 )
+        else:
+            if wrtFilter2 is None:
+                return _np.take(self.base_hessian, wrtFilter1, axis=1 )
+            else:
+                return _np.take( _np.take(self.base_hessian, wrtFilter1, axis=1),
+                                 wrtFilter2, axis=2 )
 
 
     def copy(self):
@@ -2915,6 +3270,111 @@ class LindbladParameterizedGate(GateMatrix):
         return (LindbladParameterizedGate, 
                 (_np.identity(self.dim,'d'),), self.__dict__)
 
+
+
+def _dexpSeries(X, dX):
+    TERM_TOL = 1e-12
+    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
+    assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
+    series = last_commutant = term = dX; i=2
+
+    #take d(matrix-exp) using series approximation
+    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+        if tr == 3:
+            commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
+                        _np.einsum("ika,kj->ija",last_commutant,X)
+        elif tr == 4:
+            commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
+                    _np.einsum("ikab,kj->ijab",last_commutant,X)
+        term = 1/_np.math.factorial(i) * commutant
+        series += term #1/_np.math.factorial(i) * commutant
+        last_commutant = commutant; i += 1
+    return series
+
+def _d2expSeries(X, dX, d2X):
+    TERM_TOL = 1e-12
+    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
+    tr2 = len(d2X.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
+    assert( (tr-2,tr2-2) in [(1,2),(2,4)]), "Current support for only 1 or 2 derivative dimensions"
+    
+    series = term = last_commutant = dX
+    series2 = last_commutant2 = term2 = d2X
+    i=2
+
+    #take d(matrix-exp) using series approximation
+    while _np.amax(_np.abs(term)) > TERM_TOL or _np.amax(_np.abs(term2)) > TERM_TOL:
+        if tr == 3:
+            commutant = _np.einsum("ik,kja->ija",X,last_commutant) - \
+                        _np.einsum("ika,kj->ija",last_commutant,X)
+            commutant2A = _np.einsum("ikq,kja->ijaq",dX,last_commutant) - \
+                    _np.einsum("ika,kjq->ijaq",last_commutant,dX)
+            commutant2B = _np.einsum("ik,kjaq->ijaq",X,last_commutant2) - \
+                    _np.einsum("ikaq,kj->ijaq",last_commutant,X)
+
+        elif tr == 4:
+            commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
+                    _np.einsum("ikab,kj->ijab",last_commutant,X)
+            commutant2A = _np.einsum("ikqr,kjab->ijabqr",dX,last_commutant) - \
+                    _np.einsum("ikab,kjqr->ijabqr",last_commutant,dX)
+            commutant2B = _np.einsum("ik,kjabqr->ijabqr",X,last_commutant2) - \
+                    _np.einsum("ikabqr,kj->ijabqr",last_commutant2,X)
+
+        term = 1/_np.math.factorial(i) * commutant
+        term2 = 1/_np.math.factorial(i) * (commutant2A + commutant2B)
+        series += term 
+        series2 += term2
+        last_commutant = commutant
+        last_commutant2 = (commutant2A + commutant2B)
+        i += 1        
+    return series, series2
+
+def _dexpX(X,dX,expX=None,prefactor=None):
+    """ 
+    Computes the derivative of the exponential of X(t) using
+    the Haddamard lemma series expansion.
+
+    Parameters
+    ----------
+    X : ndarray
+        The 2-tensor being exponentiated
+
+    dX : ndarray
+        The derivative of X; can be either a 3- or 4-tensor where the
+        3rd+ dimensions are for (multi-)indexing the parameters which
+        are differentiated w.r.t.  For example, in the simplest case
+        dX is a 3-tensor s.t. dX[i,j,p] == d(X[i,j])/dp.
+
+    expX : ndarray, optional
+        The value of `exp(X)`, which can be specified in order to save
+        a call to `scipy.linalg.expm`.  If None, then the value is
+        computed internally.
+
+    prefactor : ndarray, optional
+        A 2-tensor of the same shape as X that pre-multiplies the
+        result.
+
+    Returns
+    -------
+    ndarray
+        The derivative of `prefactor*exp(X)` given as a tensor with the
+        same shape and axes as `dX`.
+    """
+    tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
+    assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
+
+    series = _dexpSeries(X,dX)
+    if expX is None: expX = _spl.expm(X)
+    
+    if tr == 3:
+        dExpX = _np.einsum('ika,kj->ija', series, expX)
+        if prefactor is not None:
+            dExpX = _np.einsum('il,lja->ija', prefactor, dExpX)
+    elif tr == 4:
+        dExpX = _np.einsum('ikab,kj->ijab', series, expX)
+        if prefactor is not None:
+            dExpX = _np.einsum('il,ljab->ijab', prefactor, dExpX)
+            
+    return dExpX
 
 
 

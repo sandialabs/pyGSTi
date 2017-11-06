@@ -12,6 +12,8 @@ import os                as _os
 import warnings          as _warnings
 import collections       as _collections
 
+from scipy.stats  import chi2 as _chi2
+    
 from .. import algorithms   as _alg
 from .. import tools        as _tools
 from .. import construction as _construction
@@ -795,7 +797,8 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 ys.append( subMxs[iy][ix][N-1-iiy][iix] )
 
     minval = 0
-    maxval = _np.max(ys)
+    maxval = max(minval+1e-3,_np.max(ys)) #don't let minval==maxval
+    nvals = len(ys)
     cumulative = dict(enabled=False)
     #             marker=dict(color=barcolor),
     #barcolor = 'gray'
@@ -803,6 +806,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
     nbins = 50
     binsize = (maxval-minval)/(nbins-1)
     bincenters = _np.linspace(minval, maxval, nbins)
+    bindelta = (maxval-minval)/(nbins-1) #spacing between bin centers
     
     trace = go.Histogram(
             x=[bincenters[0]] + ys, #artificially add 1 count in lowest bin so plotly anchors histogram properly
@@ -812,6 +816,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 end=maxval+binsize/2.0,
                 size=binsize
             ),
+            name = "count",
             marker=dict(
                 color=[colormap.get_color(t) for t in bincenters],
                 line=dict(
@@ -824,7 +829,18 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
             showlegend=False,
         )
 
-    log = True
+    dof = colormap.dof if hasattr(colormap,"dof") else 1
+    line_trace = go.Scatter(
+        x = bincenters,
+        y = [ nvals*bindelta*_chi2.pdf(xval, dof) for xval in bincenters ],
+        name = "expected",
+        showlegend=False,
+        line = dict(
+            color = ('rgb(0, 0, 0)'),
+            width = 1) # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
+        )
+
+    log = True    
     layout = go.Layout(
             width=500*scale,
             height=350*scale,
@@ -845,7 +861,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
         )
 
     pythonVal = {'histogram values': ys}
-    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap,
+    return { 'plotlyfig': go.Figure(data=[trace, line_trace], layout=layout), 'colormap': colormap,
              'pythonValue': pythonVal }
 
 
@@ -1303,6 +1319,7 @@ class BoxKeyPlot(WorkspacePlot):
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
         return {'plotlyfig': go.Figure(data=data, layout=layout),
+                'special': 'keyplot', 'args': (prepStrs, effectStrs, xlabel, ylabel),
                 'pythonValue': "No data in box key plot!"}
 
 
@@ -1569,8 +1586,10 @@ class ColorBoxPlot(WorkspacePlot):
                 else:
                     addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn,sumUp)
                 addl_hover_info[lbl] = addl_subMxs
-            
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
+
+                
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp,
+                                                              len(dataset.get_spam_labels())-1 )
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                  for subMxRow in subMxs for mx in subMxRow] )
@@ -1618,9 +1637,9 @@ class ColorBoxPlot(WorkspacePlot):
                 fig['plotlyfig']['data'].append(newfig['plotlyfig']['data'][0])
 
         nTraces = len(fig['plotlyfig']['data'])
-        assert(nTraces == len(plottypes))
+        assert(nTraces >= len(plottypes)) # not == b/c histogram adds line trace
 
-        if nTraces > 1:
+        if len(plottypes) > 1:
             buttons = []
             for i,nm in enumerate(plottypes):
                 visible = [False]*nTraces
@@ -2092,9 +2111,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         LOWER_LOG_THRESHOLD = -6 #so don't plot all the way down to, e.g., 1e-13
         ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
-        minlog = max( _np.floor(min(log_ys)), LOWER_LOG_THRESHOLD)
+        minlog = max( _np.floor(min(log_ys))-0.1, LOWER_LOG_THRESHOLD)
         maxlog = max(_np.ceil(max(log_ys)), minlog+1)
-
 
         #Set plot size and margins
         lmargin = rmargin = tmargin = bmargin = 10
@@ -2277,7 +2295,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             if   (fitQty-k) < _np.sqrt(2*k):
                 rating = 5; color="darkgreen"
             elif (fitQty-k) < 2*k:
-                rating = 4; color="blue"
+                rating = 4; color="lightgreen"
             elif (fitQty-k) < 5*k:
                 rating = 3; color="yellow"
             elif (fitQty-k) < 10*k:
@@ -2291,8 +2309,10 @@ class FitComparisonBarPlot(WorkspacePlot):
             texts.append("%g<br>rating: %d" % (Nsig,rating))
             colors.append(color)
 
+        MIN_BAR = 1e-4 #so all bars have positive height (since log scale)
+        plotted_ys = [ max(y,MIN_BAR) for y in ys]
         trace = go.Bar(
-            x=xs, y=ys, text=texts,
+            x=xs, y=plotted_ys, text=texts,
             marker=dict(color=colors),
             hoverinfo='text'
         )
@@ -2333,8 +2353,12 @@ class FitComparisonBarPlot(WorkspacePlot):
                 ),
             bargap=0.1
         )
-        if max(ys) < 1.0:
-            layout['yaxis']['range'] = [min(ys)/2.0,1]
+        if max(plotted_ys) < 1.0:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(1.0)]
+        else:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(max(plotted_ys)*2.0)]
         
         return {'plotlyfig': go.Figure(data=data, layout=layout),
                 'pythonValue': {'x': xs, 'y': ys} }
@@ -2391,7 +2415,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
 
 
 class DatasetComparisonHistogramPlot(WorkspacePlot):
-    """ """
+    """ TODO: docstring"""
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                   log=True, display='pvalue', scale=1.0):
         super(DatasetComparisonHistogramPlot,self).__init__(ws, self._create, dsc, nbins, frequency,

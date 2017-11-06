@@ -182,6 +182,25 @@ figure > div.pygsti-wsoutput-group {
   /*height: inherit; from td*/
 }
 
+/* relwrap elements typically have height=0 b/c they only contain an abswrap
+   element (which doesn't count) - so setting top to 100percent puts the
+   relwrap at the bottom of it's containing div, then setting bottom=0 in
+   abswrap aligns the bottom of the absolute-positioned div with the height=0
+   relwrap element at the bottom of the containing div, as desired.
+*/
+.bot_abswrap {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  text-align: left;
+}
+.bot_relwrap {
+  position: relative;
+  left: 0; top:100%;
+  /*height: inherit; from td*/
+}
+
+
 .plotContainingTD {
     text-align: left !important;
     vertical-align: top !important;
@@ -227,6 +246,10 @@ figure > div.pygsti-wsoutput-group {
     /* float: left; */
     padding: 5px;
     font-size: 9pt;
+}
+
+.switch_container .pygsti-slider-label {
+    margin-left: 1.5em; /* to match slider */
 }
 
 .sidenav .switch_container label {

@@ -17,13 +17,6 @@
     %(CSS)s
 
     <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script> -->
-
-    <script type="text/javascript">
-      testLocalAjax("tabs/test.html", function(errstatus) {
-        console.log("AJAX ERROR: " + errstatus);
-        $('#AjaxError').show()
-      });
-    </script>
     
   </head>
   
@@ -35,19 +28,24 @@
 	<a href="#" class="linkgroupheading tablink" onclick="openTab(event, 'Summary')" id="defaultOpen">Summary</a>
       </div>
 
+      #iftoggle(BrevityLT4)
       <div class="linkgroup">
         <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Model Violation</p>
         <a href="#" class="tablink" onclick="openTab(event, 'Goodness')">Overview</a>
+	#iftoggle(BrevityLT1)
 	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_colorboxplot')">Per-sequence detail</a>
 	#iftoggle(ShowScaling)
 	<a href="#" class="tablink" onclick="openTab(event, 'Goodness_scaling')">Robust data scaling</a>
+	#endtoggle
 	#endtoggle
       </div>
 
       <div class="linkgroup">
         <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">Gauge Invariant Error Metrics</p>
 	<a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants_gates')">Overview</a>
+	#iftoggle(BrevityLT3)
 	<a href="#" class="tablink" onclick="openTab(event, 'GaugeInvariants_germs')">Germs Detail</a>
+	#endtoggle
 	#iftoggle(CompareDatasets)
 	<a href="#" class="tablink" onclick="openTab(event, 'DataComparison')">Data Comparison</a>
 	#endtoggle
@@ -61,10 +59,18 @@
 	<a href="#" class="tablink" onclick="openTab(event, 'GaugeVariants_errgen')">Gate Error Generators</a>	
       </div>
 
+      #iftoggle(BrevityLT2)
       <div class="linkgroup">
         <p class="linkgroupheading" onclick="$(this).next('a')[0].click();">For Reference</p>
 	<a href="#" class="tablink" onclick="openTab(event, 'Input')">Input Reference</a>
 	<a href="#" class="tablink" onclick="openTab(event, 'Meta')">System Reference</a>
+      </div>
+      #endtoggle
+      
+      #endtoggle
+
+      <div class="linkgroup">
+	<a href="#" class="linkgroupheading tablink" onclick="openTab(event, 'Help')" id="defaultOpen">Help</a>
       </div>
       
       %(topSwitchboard)s
@@ -118,6 +124,9 @@
       </div>
       <div id="Meta" class="tabcontent">
       </div>
+      <div id="Help" class="tabcontent">	
+      </div>
+
 
       <!-- <div id="NEWTAB" class="tabcontent">
 	<h1>TAB Title</h1>
@@ -145,6 +154,13 @@
     <div id="status">
       No message
     </div>
-    
+
+    <script type="text/javascript">
+      testLocalAjax("tabs/test.html", function(errstatus) {
+        console.log("AJAX ERROR: " + errstatus);
+        $('#AjaxError').show()
+      });
+    </script>
+
   </body>
 </html>

@@ -28,6 +28,7 @@ from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
+from . import merge_helpers as _merge
 
 from pprint import pprint as _pprint
 #from IPython.display import clear_output as _clear_output
@@ -75,88 +76,6 @@ def randomID():
     """ Returns a random DOM ID """
     return str(int(10000*_random.random()))
     #return str(_uuid.uuid4().hex) #alternative
-
-def read_contents(filename):
-    contents = None
-    try: #on Windows using python3 open can fail when trying to read text files. encoding fixes this
-        f = open(filename)
-        contents = f.read()
-    except UnicodeDecodeError:
-        f = open(filename, encoding='utf-8') #try this, but not available in python 2.7!
-        contents = f.read()
-
-    f.close()
-    
-    try: # to convert to unicode since we use unicode literals
-        contents = contents.decode('utf-8')
-    except AttributeError: pass #Python3 case when unicode is read in natively (no need to decode)
-    
-    return contents
-
-def insert_resource(connected, online_url, offline_filename,
-                    integrity=None, crossorigin=None):
-    
-    if connected:
-        if online_url:
-            url = online_url
-        else:
-            #insert resource inline, since we don't want
-            # to depend on offline/ directory when connected=True
-            assert(offline_filename), \
-                "connected=True without `online_url` requires offline filename!"
-            absname = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                    "templates","offline",offline_filename)
-            
-            if offline_filename.endswith("js"):
-                return '<script type="text/javascript">\n' + \
-                    read_contents(absname) + "</script>\n"
-            
-            elif offline_filename.endswith("css"):
-                return '<style>\n' + read_contents(absname) + "</style>\n"
-            
-            else:
-                raise ValueError("Unknown resource type for %s" % offline_filename)
-            
-    else:
-        assert(offline_filename), "connected=False requires offline filename"
-        url = "offline/" + offline_filename
-        
-    if url.endswith("js"):
-        
-        tag = '<script src="%s"' % url
-        if connected:
-            if integrity: tag += ' integrity="%s"' % integrity
-            if crossorigin: tag += ' crossorigin="%s"' % crossorigin
-        tag += '></script>'
-        return tag
-
-    elif url.endswith("css"):
-        return '<link rel="stylesheet" href="%s">' % url
-    
-    else:
-        raise ValueError("Unknown resource type for %s" % url)
-
-
-def rsync_offline_dir(outputDir):
-    #Copy offline directory into outputDir updating any outdated files
-    destDir = _os.path.join(outputDir, "offline")
-    offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                               "templates","offline")
-    if not _os.path.exists(destDir):
-        _shutil.copytree(offlineDir, destDir)
-        
-    else:
-        for dirpath, dirnames, filenames in _os.walk(offlineDir):
-            for nm in filenames:
-                srcnm = _os.path.join(dirpath, nm)
-                relnm = _os.path.relpath(srcnm, offlineDir)
-                destnm = _os.path.join(destDir, relnm)
-
-                if not _os.path.isfile(destnm) or \
-                    (_os.path.getmtime(destnm) < _os.path.getmtime(srcnm)):
-                    _shutil.copyfile(srcnm, destnm)
-                    #print("COPYING to %s" % destnm)
-
 
 class Workspace(object):
     """
@@ -315,6 +234,7 @@ class Workspace(object):
         self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
         self.MetadataTable = makefactory(_wt.MetadataTable)
         self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
+        self.ExampleTable = makefactory(_wt.ExampleTable)
 
         #Plots
         self.ColorBoxPlot = makefactory(_wp.ColorBoxPlot)
@@ -365,7 +285,7 @@ class Workspace(object):
         script = ""
         
         if not connected:
-            rsync_offline_dir(_os.getcwd())
+            _merge.rsync_offline_dir(_os.getcwd())
 
         #If offline, add JS to head that will load local requireJS and/or
         # jQuery if needed (jupyter-exported html files always use CDN
@@ -374,15 +294,15 @@ class Workspace(object):
             script += "<script src='offline/jupyterlibload.js'></script>\n"
         
         #Load our custom plotly extension functions            
-        script += insert_resource(connected,None,"pygsti_plotly_ex.js")
+        script += _merge.insert_resource(connected,None,"pygsti_plotly_ex.js")
         script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
         # Load style sheets for displaying tables
-        script += insert_resource(connected,None,"pygsti_dataviz.css")
+        script += _merge.insert_resource(connected,None,"pygsti_dataviz.css")
 
         #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
         jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-        script += insert_resource(connected,jQueryUI_CSS,"smoothness-jquery-ui.css")
+        script += _merge.insert_resource(connected,jQueryUI_CSS,"smoothness-jquery-ui.css")
 
         #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
         if connected:
@@ -460,7 +380,7 @@ class Workspace(object):
         # if MathJax is loaded, wait for plotly to load before rendering SVG text
         # so math shows up properly in plots (maybe we could just use a require
         # statement for this instead of polling?)
-        script += insert_resource(
+        script += _merge.insert_resource(
             connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
             "katex.css")
 
@@ -805,7 +725,7 @@ class Switchboard(_collections.OrderedDict):
         """ 
         Break off this implementation so SwitchboardViews can use.
         """
-        assert(typ == "html" or typ == "htmldir"), "Can't render Switchboards as anything but HTML"
+        assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
         for i,(name,baseID,styp,posLbls,ipos,bShow) in enumerate(
@@ -913,7 +833,7 @@ class Switchboard(_collections.OrderedDict):
                                   % (ID,style)
                 html += "<fieldset>\n"
                 if name:
-                    html += "<label for='%s'>%s</label>\n" % (ID,name)
+                    html += "<label for='%s' class='pygsti-slider-label'>%s</label>\n" % (ID,name)
                 html += "<div name='%s' id='%s'>\n" % (ID,ID)
                 html += "<div id='%s-handle' class='ui-slider-handle'></div>" % ID
                 html += "</div>\n</fieldset></div>\n"
@@ -1291,18 +1211,29 @@ class WorkspaceOutput(object):
     an iPython notebook.
     """
     default_render_options = {
+        #General
+        'output_dir': False,
+        'precision': None,
+
+        'output_name': False,
+        'switched_item_mode': 'inline', # or 'separate files'
+        'switched_item_id_overrides': {},
+
+        #HTML specific
         'global_requirejs': False,
-        'resizable': True,
-        'autosize': 'none',
         'click_to_display': False,
         'render_math': True,
-        'output_dir': False,
-        'latex_call': "pdflatex",
+        'resizable': True,
+        'autosize': 'none',
         'link_to': None,
+        'valign': 'top',
+
+        #Latex specific
+        'latex_cmd': "pdflatex",
+        'latex_flags': ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"],
         'page_size': (6.5,8.0),
         'render_includes': True,
         'leave_includes_src': False,
-        'precision': None
     }
                                
     
@@ -1322,6 +1253,15 @@ class WorkspaceOutput(object):
     def set_render_options(self, **kwargs):
         """
         Sets rendering options, which affect how render() behaves.
+        
+        The reason render options are set via this function rather 
+        than passed directly as arguments to the render(...) call
+        is twofold.  First, it allows for global 'default' options
+        to be set before creating `WorkspaceOutput`-derived objects;
+        Secondly, it allows the user to set render options right after
+        an object is constructed, separately from the rendering process
+        (which is sometimes desirable).
+
         TODO: docstring - descriptions of different render options
 
         Parameters
@@ -1385,7 +1325,7 @@ class WorkspaceOutput(object):
     # other WorspaceOutput objects or computation functions - these objects
     # are cached using call_key.
 
-    def render(self, typ="html", ID=None):
+    def render(self, typ="html"):
         """
         Renders this object into the specifed format, specifically for
         embedding it within a larger document.
@@ -1395,10 +1335,6 @@ class WorkspaceOutput(object):
         typ : str
             The format to render as.  Currently `"html"` is widely supported
             and `"latex"` is supported for tables.
-
-        ID : str, optional
-            A base ID to use when rendering.  If None, the object's
-            persistent ID is used, which usually what you want.
 
         Returns
         -------
@@ -1440,9 +1376,58 @@ class WorkspaceOutput(object):
         #_display(self.widget)
         _display(_HTML(content))
 
-    def _render_html(self, ID, div_htmls, div_ids, switchpos_map,
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace output object to a file.
+
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `tex` (LaTeX), `pkl` (Python pickle) and `html` (HTML).  Since this
+        object may contain different instances of its data based on switch
+        positions, when their are multiple instances the user must specify
+        the `index` argument to disambiguate.
+
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        raise NotImplementedError()
+
+    
+    def _create_onready_handler(self, content): 
+        global_requirejs = self.options.get('global_requirejs',False)
+        ret = ""
+        
+        if global_requirejs:
+            ret += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
+            
+        ret += '  $(document).ready(function() {\n'
+        ret += content
+        ret += '}); //end on-ready handler\n'
+        
+        if global_requirejs:
+            ret += '}); //end require block\n'
+            
+        return ret
+        
+    def _render_html(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
                      switchboards, switchIndices, div_css_classes=None,
-                     link_to=None):
+                     link_to=None, lod_files=False, output_dir=None):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
@@ -1456,8 +1441,12 @@ class WorkspaceOutput(object):
             The identifier to use when constructing DOM ids.
 
         div_htmls : list
-            A list of html "<div>...</div>" blocks.  This is the content that
+            The html content for each switched block (typically a elements are
+            "<div>...</div>" blocks themselves).  This is the content that
             is switched between.
+
+        div_jss : list
+            Javascript content to accompany each switched block.
 
         div_ids : list
             A list giving the DOM ids for the div blocks given by `div_html`.
@@ -1485,6 +1474,13 @@ class WorkspaceOutput(object):
             include links to Latex, PDF, and Python pickle files,
             respectively.
 
+        lod_files : bool, optional
+            If True, each element of `div_htmls` is used to create a separate
+            "load-on-demand" html file that is loaded and inserted into the 
+            main html document the first time it is needed.  If False, then
+            the elements of `div_htmls` are joined together and placed
+            directly into the main document.
+
         Returns
         -------
         dict
@@ -1500,10 +1496,36 @@ class WorkspaceOutput(object):
         
         #build HTML as container div containing one or more plot divs
         # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
-        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
-        html += "\n".join([ "<div class='%s' id='%s'>\n%s\n</div>\n" %
-                            (cls,tup[0],tup[1]) for tup in zip(div_ids, div_htmls) ]) + "\n</div>\n"
+        #   style='display: none' or 'visibility: hidden'
+        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID
 
+        div_contents = []
+        if div_jss is None: div_jss = [""]*len(div_htmls)
+        for divID, divHTML, divJS in zip(div_ids, div_htmls, div_jss):
+            scriptJS = "<script>\n%s\n</script>\n" % divJS if divJS else ""
+            div_contents.append( ("{script}{html}".format(
+                script=scriptJS,html=divHTML)))
+
+        if lod_files:
+            #Create empty divs
+            html += "\n".join([ "<div class='%s' id='%s'></div>\n" %
+                                (cls,divID) for divID in div_ids ])
+            
+            #build a list of filenames based on the divIDs
+            div_filenames = [ (divID+".html") for divID in div_ids ]
+
+            #Create separate files with div contents
+            for divContent,divFilenm in zip(div_contents, div_filenames):
+                with open(_os.path.join(output_dir,divFilenm),'w') as f:
+                    f.write( divContent )
+        else:
+            #Inline div contents
+            html += "\n".join([ "<div class='%s' id='%s'>\n%s\n</div>\n" %
+                                (cls,divID,divContent) for divID,divContent
+                                in zip(div_ids, div_contents) ])
+            
+        html += "\n</div>\n" # ends pygsti-wsoutput-group div
+            
         #build javascript to map switch positions to div_ids
         js = "var switchmap_%s = new Array();\n" % ID
         for switchPositions, iDiv in switchpos_map.items():
@@ -1545,9 +1567,42 @@ class WorkspaceOutput(object):
                 handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
         handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
         handler_js += "  $( '#%s' ).children().hide();\n" % ID
-        handler_js += "  $( '#' + idToShow ).show();\n"
-        handler_js += "  $( '#' + idToShow ).parentsUntil('#%s').show();\n" % ID
-        handler_js += "}\n"
+        handler_js += "  divToShow = $( '#' + idToShow );\n"
+
+        #Javascript to switch to a new div
+        if lod_files:
+            handler_js += "  if( divToShow.children().length == 0 ) {\n"
+            handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
+            handler_js += "        divToShow = $( '#' + idToShow );\n"
+            handler_js += "        divToShow.show();\n"
+            handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
+            if link_to and ('tex' in link_to):
+                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+                handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
+            if link_to and ('pdf' in link_to):
+                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+                handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
+            if link_to and ('pkl' in link_to):
+                handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+                handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
+            handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
+            handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n" 
+            handler_js += "    });\n" # end load-complete handler
+            handler_js += "  }\n"
+            handler_js += "  else {\n"
+            handler_js += "    divToShow.show();\n"
+            handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
+            handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
+            handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "  }\n"
+            #Note: caption resizing also occurs after table & plot creation within 
+            # pygsti_plotly_ex.js trigger_* functions.
+        else:
+            handler_js += "  divToShow.show();\n"
+            handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
+            handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
+            handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+        handler_js += "}\n" # end <ID>_onchange function
                 
         #build change event listener javascript
         for sb, switchInds in zip(switchboards, switchIndices):
@@ -1575,154 +1630,157 @@ class WorkspaceOutput(object):
         #on-ready handler starts trying to connect to switches
         js += "$(document).ready(function() {\n" #
         js += "  connect_%s_to_switches();\n" % ID
-        if link_to and ('tex' in link_to):
-            for div_id in div_ids:
-                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-        if link_to and ('pdf' in link_to):
-            for div_id in div_ids:
-                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-        if link_to and ('pkl' in link_to):
-            for div_id in div_ids:
-                js += "    $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
-                js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
-        js += "});\n\n"
+
+        if not lod_files:
+            # Add download links for all divs at once since they're all ready
+            if link_to and ('tex' in link_to):
+                for div_id in div_ids:
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                    js += "%s.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
+            if link_to and ('pdf' in link_to):
+                for div_id in div_ids:
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                    js += "%s.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
+            if link_to and ('pkl' in link_to):
+                for div_id in div_ids:
+                    js += "  $('#%s').append('<a class=\"dlLink\" href=\"figures/" % div_id
+                    js += "%s.pkl\" target=\"_blank\">&#9660;PKL</a>');\n" % div_id
+
+        js += "});\n\n" # end on-ready handler
         js += handler_js
 
         return {'html':html, 'js':js}
 
 
-    def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
-                         switchboards, switchIndices, output_dir, div_css_classes=None,
-                         link_to=None):
-        """
-        TODO: docstring
-        """
-        #Build list of CSS classes for the created divs
-        classes = ['single_switched_value'] 
-        if div_css_classes is not None:
-            classes.extend(div_css_classes)
-        cls = ' '.join(classes)
-        
-        #build HTML as container div containing one or more plot divs
-        # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
-        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
-        html += "\n".join([ "<div class='%s' id='%s'></div>\n" %
-                             (cls,divID) for divID in div_ids ]) + "\n</div>\n"
-
-        #build a list of filenames based on the divIDs
-        div_filenames = [ (divID+".html") for divID in div_ids ] # "figures/"+
-        
-        #build javascript to map switch positions to div_ids
-        js = "var switchmap_%s = new Array();\n" % ID
-        for switchPositions, iDiv in switchpos_map.items():
-            #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
-            div_id = div_ids[iDiv]
-            flatPositions = []
-            for singleBoardSwitchPositions in switchPositions:
-                flatPositions.extend( singleBoardSwitchPositions )                
-            js += "switchmap_%s[ [%s] ] = '%s';\n" % \
-                    (ID, ",".join(map(str,flatPositions)), div_id)
-
-        js += "window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #ensure a *global* variable
-        js += "\n"
-
-
-        cnd = " && ".join([ "$('#switchbd%s_%d').hasClass('initializedSwitch')"
-                            % (sb.ID,switchIndex)
-                            for sb, switchInds in zip(switchboards, switchIndices)
-                            for switchIndex in switchInds ])
-        if len(cnd) == 0: cnd = "true"
-
-        #define fn to "connect" output object to switchboard, i.e.
-        #  register event handlers for relevant switches so output object updates
-        js += "function connect_%s_to_switches(){\n" % ID
-        js += "  if(%s) {\n" % cnd  # "if switches are ready"
-        # loop below adds event bindings to the body of this if-block
-
-        #build a handler function to get all of the relevant switch positions,
-        # build a (flattened) position array, and perform the lookup.  Note that
-        # this function does the same thing regardless of *which* switch was
-        # changed, and so is called by all relevant switch change handlers.
-        onchange_name = "%s_onchange" % ID
-        handler_js = "function %s() {\n" % onchange_name
-        handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
-        handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n" # short-circuit
-        handler_js += "  var curSwitchPos = new Array();\n"
-        for sb, switchInds in zip(switchboards, switchIndices):
-            for switchIndex in switchInds:
-                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
-        handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
-        handler_js += "  $( '#%s' ).children().hide();\n" % ID
-
-        handler_js += "  divToShow = $( '#' + idToShow );\n"
-        handler_js += "  if( divToShow.children().length == 0 ) {\n"
-        handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
-        handler_js += "        divToShow = $( '#' + idToShow );\n"
-        handler_js += "        divToShow.show();\n"
-        handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
-        if link_to and ('tex' in link_to):
-            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-            handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-        if link_to and ('pdf' in link_to):
-            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-            handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-        if link_to and ('pkl' in link_to):
-            handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-            handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
-        handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-        handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n" 
-        handler_js += "    });\n" # end load-complete handler
-        handler_js += "  }\n"
-        handler_js += "  else {\n"
-        handler_js += "    divToShow.show();\n"
-        handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
-        handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-        handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-        handler_js += "  }\n"
-        handler_js += "}\n"
-          #Note: caption resizing also occurs after table & plot creation within 
-          # pygsti_plotly_ex.js trigger_* functions.
-        
-        
-        #build change event listener javascript
-        for sb, switchInds in zip(switchboards, switchIndices):
-            # switchInds is a tuple containing the "used" switch indices of sb
-            for switchIndex in switchInds:
-                # part of if-block ensuring switches are ready (i.e. created)
-                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
-                              "%s(); });\n" % onchange_name
-
-        #bind onchange call to custom 'tabchange' event that we trigger when tab changes
-        js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
-        js +=                         "%s(); });\n" % onchange_name
-        js += "    %s();\n" % onchange_name # call onchange function *once* at end to update visibility
-
-        # end if-block
-        js += "    console.log('Switches initialized: %s handlers set');\n" % ID
-        js += "    $( '#%s' ).show()\n" % ID  #visibility updates are done: show parent container
-        js += "  }\n" #ends if-block
-        js += "  else {\n"  # switches aren't ready - so wait
-        js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
-        js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
-        js += "  }\n"
-        js += "};\n" #end of connect function
-        
-        #on-ready handler starts trying to connect to switches
-        js += "$(document).ready(function() {\n" #
-        js += "  connect_%s_to_switches();\n" % ID        
-        js += "});\n\n" # end on-ready handler
-        js += handler_js
-
-        ret = {'html':html, 'js':js}
-        for divID,divHTML,divJS,divFN in zip(div_ids, div_htmls, div_jss, div_filenames):
-            # OLD: ret[divID] = { 'html': divHTML, 'js': divJS, 'filename': divFN }
-            v = { 'html': divHTML, 'js': divJS }
-            with open(_os.path.join(output_dir,divFN),'w') as f:
-                f.write( "<script>\n%(js)s\n</script>\n\n%(html)s" % v )
-            
-        return ret
+#def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
+#                     switchboards, switchIndices, output_dir, div_css_classes=None,
+#                     link_to=None):
+#    """
+#    TODO: docstring
+#    """
+#    #Build list of CSS classes for the created divs
+#    classes = ['single_switched_value'] 
+#    if div_css_classes is not None:
+#        classes.extend(div_css_classes)
+#    cls = ' '.join(classes)
+#    
+#    #build HTML as container div containing one or more plot divs
+#    # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
+#    html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
+#    html += "\n".join([ "<div class='%s' id='%s'></div>\n" %
+#                         (cls,divID) for divID in div_ids ]) + "\n</div>\n"
+#
+#    #build a list of filenames based on the divIDs
+#    div_filenames = [ (divID+".html") for divID in div_ids ] # "figures/"+
+#    
+#    #build javascript to map switch positions to div_ids
+#    js = "var switchmap_%s = new Array();\n" % ID
+#    for switchPositions, iDiv in switchpos_map.items():
+#        #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
+#        div_id = div_ids[iDiv]
+#        flatPositions = []
+#        for singleBoardSwitchPositions in switchPositions:
+#            flatPositions.extend( singleBoardSwitchPositions )                
+#        js += "switchmap_%s[ [%s] ] = '%s';\n" % \
+#                (ID, ",".join(map(str,flatPositions)), div_id)
+#
+#    js += "window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #ensure a *global* variable
+#    js += "\n"
+#
+#
+#    cnd = " && ".join([ "$('#switchbd%s_%d').hasClass('initializedSwitch')"
+#                        % (sb.ID,switchIndex)
+#                        for sb, switchInds in zip(switchboards, switchIndices)
+#                        for switchIndex in switchInds ])
+#    if len(cnd) == 0: cnd = "true"
+#
+#    #define fn to "connect" output object to switchboard, i.e.
+#    #  register event handlers for relevant switches so output object updates
+#    js += "function connect_%s_to_switches(){\n" % ID
+#    js += "  if(%s) {\n" % cnd  # "if switches are ready"
+#    # loop below adds event bindings to the body of this if-block
+#
+#    #build a handler function to get all of the relevant switch positions,
+#    # build a (flattened) position array, and perform the lookup.  Note that
+#    # this function does the same thing regardless of *which* switch was
+#    # changed, and so is called by all relevant switch change handlers.
+#    onchange_name = "%s_onchange" % ID
+#    handler_js = "function %s() {\n" % onchange_name
+#    handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
+#    handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n" # short-circuit
+#    handler_js += "  var curSwitchPos = new Array();\n"
+#    for sb, switchInds in zip(switchboards, switchIndices):
+#        for switchIndex in switchInds:
+#            handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
+#    handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
+#    handler_js += "  $( '#%s' ).children().hide();\n" % ID
+#    handler_js += "  divToShow = $( '#' + idToShow );\n"
+#    handler_js += "  if( divToShow.children().length == 0 ) {\n"
+#    handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
+#    handler_js += "        divToShow = $( '#' + idToShow );\n"
+#    handler_js += "        divToShow.show();\n"
+#    handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
+#    if link_to and ('tex' in link_to):
+#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+#        handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
+#    if link_to and ('pdf' in link_to):
+#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+#        handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
+#    if link_to and ('pkl' in link_to):
+#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
+#        handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
+#    handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
+#    handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n" 
+#    handler_js += "    });\n" # end load-complete handler
+#    handler_js += "  }\n"
+#    handler_js += "  else {\n"        
+#    handler_js += "    divToShow.show();\n"
+#    handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
+#    handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
+#    handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+#    handler_js += "  }\n"
+#    handler_js += "}\n"
+#      #Note: caption resizing also occurs after table & plot creation within 
+#      # pygsti_plotly_ex.js trigger_* functions.
+#    
+#    
+#    #build change event listener javascript
+#    for sb, switchInds in zip(switchboards, switchIndices):
+#        # switchInds is a tuple containing the "used" switch indices of sb
+#        for switchIndex in switchInds:
+#            # part of if-block ensuring switches are ready (i.e. created)
+#            js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
+#                          "%s(); });\n" % onchange_name
+#
+#    #bind onchange call to custom 'tabchange' event that we trigger when tab changes
+#    js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
+#    js +=                         "%s(); });\n" % onchange_name
+#    js += "    %s();\n" % onchange_name # call onchange function *once* at end to update visibility
+#
+#    # end if-block
+#    js += "    console.log('Switches initialized: %s handlers set');\n" % ID
+#    js += "    $( '#%s' ).show()\n" % ID  #visibility updates are done: show parent container
+#    js += "  }\n" #ends if-block
+#    js += "  else {\n"  # switches aren't ready - so wait
+#    js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
+#    js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
+#    js += "  }\n"
+#    js += "};\n" #end of connect function
+#    
+#    #on-ready handler starts trying to connect to switches
+#    js += "$(document).ready(function() {\n" #
+#    js += "  connect_%s_to_switches();\n" % ID        
+#    js += "});\n\n" # end on-ready handler
+#    js += handler_js
+#
+#    ret = {'html':html, 'js':js}
+#    for divID,divHTML,divJS,divFN in zip(div_ids, div_htmls, div_jss, div_filenames):
+#        # OLD: ret[divID] = { 'html': divHTML, 'js': divJS, 'filename': divFN }
+#        v = { 'html': divHTML, 'js': divJS }
+#        with open(_os.path.join(output_dir,divFN),'w') as f:
+#            f.write( "<script>\n%(js)s\n</script>\n\n%(html)s" % v )
+#        
+#    return ret
 
 
 class NotApplicable(WorkspaceOutput):
@@ -1745,13 +1803,10 @@ class NotApplicable(WorkspaceOutput):
         ----------
         typ : str
             The format to render as.  Allowed options are `"html"`,
-            `"latex"`, and `"python"`, as well as `"htmldir"`,
-            `"latexdir"`, and `"pythondir"` (primarily used for 
-            internal report creation).
+            `"latex"`, and `"python"`.
 
         ID : str, optional
-            A base ID to use when rendering.  If None, the object's
-            persistent ID is used.
+            An DOM ID used in place of the objects internal ID.
 
         Returns
         -------
@@ -1763,13 +1818,13 @@ class NotApplicable(WorkspaceOutput):
         """
         if ID is None: ID=self.ID
         
-        if typ == "html" or typ == "htmldir":
+        if typ == "html":
             return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js':"" }
 
-        elif typ == "latex" or typ == "latexdir":
+        elif typ == "latex":
             return {'latex': "Not applicable" }
 
-        elif typ == "python" or typ == "pythondir":
+        elif typ == "python":
             return "Not Applicable"
         else:
             raise ValueError("NotApplicable render type not supported: %s" % typ)
@@ -1806,7 +1861,7 @@ class WorkspaceTable(WorkspaceOutput):
             self.ws.switchedCompute(self.tablefn, *self.initargs)
 
         
-    def render(self, typ, ID=None):
+    def render(self, typ):
         """
         Renders this table into the specifed format, specifically for
         embedding it within a larger document.
@@ -1814,14 +1869,8 @@ class WorkspaceTable(WorkspaceOutput):
         Parameters
         ----------
         typ : str
-            The format to render as.  Currently `"html"`, and `"latex"`
-            are supported, as well as the `"htmldir"` and `"latexdir"`
-            counterparts, though these are of primarily of internal 
-            use when creating reports.
-
-        ID : str, optional
-            A base ID to use when rendering.  If None, the object's
-            persistent ID is used, which usually what you want.
+            The format to render as.  Currently `"html"`, `"latex"`
+            and `"python"` are supported.
 
         Returns
         -------
@@ -1830,330 +1879,365 @@ class WorkspaceTable(WorkspaceOutput):
             embeddable output.  For `"html"`, keys are `"html"` and `"js"`.
             For `"latex"`, there is a single key `"latex"`.
         """
-
-        global_requirejs = self.options.get('global_requirejs',False)
         resizable = self.options.get('resizable',True)
         autosize = self.options.get('autosize','none')
         precision = self.options.get('precision',None)
+        switched_item_mode = self.options.get('switched_item_mode','inline')
+        overrideIDs = self.options.get('switched_item_id_overrides',{})
+        output_dir = self.options.get('output_dir',None)
         
         if precision is None:
             precDict = {'normal': 6, 'polar': 3, 'sci': 0}
-        elif _compat.isint(precDict):
+        elif _compat.isint(precision):
             precDict = {'normal':precision, 'polar':precision, 'sci':precision}
         else:
-            assert('normal' in precDict), "Must at least specify 'normal' precision"
+            assert('normal' in precision), "Must at least specify 'normal' precision"
             p = precision['normal']
             precDict = { 'normal': p,
                          'polar': precision.get(['polar'],p),
                          'sci': precision.get(['sci'],p) }
 
-        if ID is None: ID = self.ID
+        ID = self.ID
         tableID = "table_" + ID
-            
-        if typ == "html" or typ == "htmldir":
+
+        if typ == "html":
 
             divHTML = []
             divIDs = []
-            divJS = []
+            divJS = []            
             
-            if typ == "html":
-                for i, table in enumerate(self.tables):
-                    tableDivID = tableID + "_%d" % i
-                    if isinstance(table,NotApplicable):
-                        table_dict = table.render("html",tableDivID)
-                    else:
-                        table_dict = table.render("html", tableID=tableDivID + "_tbl",
-                                                  tableclass="dataTable",
-                                                  precision=precDict['normal'],
-                                                  polarprecision=precDict['polar'],
-                                                  sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=(autosize == "continual"),
-                                                  click_to_display=self.options['click_to_display'],
-                                                  link_to=self.options['link_to'])
-
-                    divHTML.append(table_dict['html'])
-                    divJS.append(table_dict['js'])
-                    divIDs.append(tableDivID)
-    
-                base = self._render_html(tableID, divHTML, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices)
-
-                ret = { 'html': base['html'], 'js': '' }
-
-                if global_requirejs:
-                    ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
-                ret['js'] += '  $(document).ready(function() {\n'
-    
-                #Table initialization javascript: this will either be within the math-rendering (queued) function
-                # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
-                init_table_js = ''
-                if resizable:
-                    init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-                if autosize == "continual":
-                    init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-                init_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
-                    tableID=tableID, initautosize=str(autosize in ("initial","continual")).lower())
-    
-                ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
-    
-                if '$' in ret['html'] and self.options['render_math']:
-                    # then there is math text that needs rendering,
-                    # so queue this, *then* trigger plot creation
-                    ret['js'] += ('  plotman.enqueue(function() {{ \n'
-                                  '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
-                                  '             {{left: "$$", right: "$$", display: true}},\n'
-                                  '             {{left: "$", right: "$", display: false}},\n'
-                                  '             ] }} );\n').format(tableID=tableID)
-                    ret['js'] += init_table_js
-                    ret['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
-                else:
-                    #Note: this MUST be below plot handler init, as this triggers plot creation
-                    ret['js'] += init_table_js 
-                
-                ret['js'] += '}); //end on-ready handler\n'
-                if global_requirejs:
-                    ret['js'] += '}); //end require block\n'
-    
-                return ret
-    
-            else: # typ == "htmldir"
-
-                for i, table in enumerate(self.tables):
-                    tableDivID = tableID + "_%d" % i
-                    if isinstance(table,NotApplicable):
-                        table_dict = table.render("html",tableDivID)
-                    else:
-                        table_dict = table.render("html", tableID=tableDivID + "_tbl",
-                                                  tableclass="dataTable",
-                                                  precision=precDict['normal'],
-                                                  polarprecision=precDict['polar'],
-                                                  sciprecision=precDict['sci'],
-                                                  resizable=resizable, autosize=(autosize == "continual"),
-                                                  click_to_display=self.options['click_to_display'],
-                                                  link_to=self.options['link_to'])
-    
-                    divHTML.append(table_dict['html'])
-
-                    pre_js = ""
-                    if global_requirejs:
-                        pre_js += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
-                    pre_js += '  $(document).ready(function() {\n'
-                    table_dict['js'] = pre_js + table_dict['js']
-                    
-                    # init_table_js work is peformed when divs are loaded
-                    init_single_table_js = ''
-                    if resizable: # make a resizable widget on *entire* plot (will only act on first call)
-                        init_single_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
-                    init_single_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
-                        tableID=tableDivID, initautosize=str(autosize in ("initial","continual")).lower())
-
-                    if '$' in table_dict['html'] and self.options['render_math']:
-                        # then there is math text that needs rendering,
-                        # so queue this, *then* trigger plot creation
-                        table_dict['js'] += ('  plotman.enqueue(function() {{ \n'
-                                             '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
-                                             '             {{left: "$$", right: "$$", display: true}},\n'
-                                             '             {{left: "$", right: "$", display: false}},\n'
-                                             '             ] }} );\n').format(tableID=tableDivID)
-                        table_dict['js'] += init_single_table_js
-                        table_dict['js'] += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableDivID) #end enqueue 
-                    else:
-                        #Note: this MUST be below plot handler init, as this triggers plot creation
-                        table_dict['js'] += init_single_table_js 
-
-                    table_dict['js'] += '}); //end on-ready handler\n'
-                    if global_requirejs:
-                        table_dict['js'] += '}); //end require block\n'
-                        
-                    divJS.append(table_dict['js'])
-                    divIDs.append(tableDivID)
-
-                assert('output_dir' in self.options and self.options['output_dir']), \
-                    "Cannot render 'htmldir' without a valid 'output_dir' render option"
-                base = self._render_html_dir(tableID, divHTML, divJS, divIDs, self.switchpos_map,
-                                             self.switchboards, self.sbSwitchIndices, self.options['output_dir'],
-                                             None, self.options.get('link_to',None) )
-                #base has keys == divIDs + 'main' for separate table html+js ; values = dict w/ 'filename' also?
-                # OR just returns a *list* of baseIDs?
-                # OR keys == filenames to put divIDs in
-                # base['main']['html'] -- should be empty divs and onchange handlers in base['main']['js'] should load divs that are empty
-
-                ret = base
-                switch_js = base['js']
-                ret['js'] = '' # start from scratch (we'll wrap switch_js)
-                
-                if global_requirejs:
-                    ret['js'] += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
-                ret['js'] += '  $(document).ready(function() {\n'
-                ret['js'] += switch_js # just switchboard init JS
-                
-                if autosize == "continual": # add window resize handler for *entire* plot
-                    ret['js'] += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
-
-                ret['js'] += '}); //end on-ready handler\n'
-                if global_requirejs:
-                    ret['js'] += '}); //end require block\n'
-
-                return ret
-
-        elif typ == "latex":
-            # table rendering returned in ret dict
-            assert('output_dir' in self.options and self.options['output_dir']), \
-                "Cannot render 'latex' without a valid 'output_dir' render option"
-            
-            tables_latex = []
             for i, table in enumerate(self.tables):
+                tableDivID = tableID + "_%d" % i
+                if i in overrideIDs: tableDivID = overrideIDs[i]
+                
+                if isinstance(table,NotApplicable):
+                    table_dict = table.render("html",tableDivID)
+                else:
+                    table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                                              tableclass="dataTable",
+                                              precision=precDict['normal'],
+                                              polarprecision=precDict['polar'],
+                                              sciprecision=precDict['sci'],
+                                              resizable=resizable, autosize=(autosize == "continual"),
+                                              click_to_display=self.options['click_to_display'],
+                                              link_to=self.options['link_to'])
+
+                if switched_item_mode == 'separate files':
+                    # form entire table init JS as _render_html will put this in a separate file
+                    divJS.append( self._form_table_js(
+                        tableDivID, table_dict['html'], table_dict['js'], None))
+                else:
+                    #otherwise just add plot handers (table_dict['js']) to divJS for later
+                    divJS.append(table_dict['js'])
+                    
+                divHTML.append(table_dict['html'])
+                divIDs.append(tableDivID)
+
+            if switched_item_mode == 'inline':
+                base = self._render_html(tableID, divHTML, None, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices) #no JS yet...
+                js = self._form_table_js(tableID, base['html'], '\n'.join(divJS), base['js'])
+                  # creates JS for everything: plot creation, switchboard init, autosize
+                
+            elif switched_item_mode == 'separate files':
+                assert(output_dir), "Cannot render 'html' in separate files without a valid 'output_dir' render option"
+                base = self._render_html(tableID, divHTML, divJS, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices, None, 
+                                         self.options.get('link_to',None), True, output_dir)
+                js = self._form_table_js(tableID, None, None, base['js']) #just switchboard init & autosize
+            else:
+                raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                 switched_item_mode)            
+
+            return { 'html': base['html'], 'js': js }
+
+            
+        elif typ == "latex":
+
+            render_includes = self.options.get('render_includes',True)
+            leave_src = self.options.get('leave_includes_src',False)
+            W,H = self.options.get('page_size',(6.5,8.0))
+            printer = _objs.VerbosityPrinter(1) #TEMP - add verbosity arg?
+
+
+            #Note: in both cases output_dir needs to be the *relative* path
+            # between the current directory and the output directory if
+            # \includegraphics statements are to work.  If this isn't needed
+            # (e.g. if just the standalone files are needed) then output_dir
+            # can be an absolute path as well.
+
+            # table rendering returned in ret dict
+            if switched_item_mode == 'inline':
+                # Assume current directory is where generated latex
+                # code will reside and output_dir is where figs go.
+                tablefig_output_dir = output_dir #(can be None, in
+                #which case an error will be raised if table has figs)
+                render_dir = None # no need to chdir for table render
+
+            #render each switched "item" as a separate standalone file
+            elif switched_item_mode == 'separate files':
+                # Assume current directory is where \includegraphics{...}
+                # latex will go, and that separate table TEX files *and*
+                # figures go in `output_dir`.  The table latex is given an
+                # output_dir of '.' because figure files will be in the same
+                # directory.
+                assert(output_dir), "Cannot render a table as 'latex' with " + \
+                    "switched items as separate files without a valid " + \
+                    "'output_dir' render option"
+                tablefig_output_dir = '.'
+                render_dir = output_dir
+
+            else:
+                raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                 switched_item_mode)
+
+            cwd = _os.getcwd()
+            latex_list = []
+            for i, table in enumerate(self.tables):
+                tableDivID = tableID + "_%d" % i
+                if i in overrideIDs: tableDivID = overrideIDs[i]
                 if isinstance(table,NotApplicable): continue
+                
+                if render_dir: _os.chdir( render_dir )
                 table_dict = table.render("latex", 
                                           precision=precDict['normal'],
                                           polarprecision=precDict['polar'],
                                           sciprecision=precDict['sci'],
-                                          output_dir=self.options['output_dir'],
-                                          render_includes=self.options.get('render_includes',True))
-                tables_latex.append(table_dict['latex'])
-    
-            return {'latex': "\n".join(tables_latex) }
-        
-        elif typ == "latexdir":
-            
-            # table rendering as standalone and put includegraphics in ret dict
-            assert('output_dir' in self.options and self.options['output_dir']), \
-                "Cannot render 'latexdir' without a valid 'output_dir' render option"
-            assert('latex_call' in self.options and self.options['latex_call']), \
-                "Cannot render 'latexdir' without a valid 'latex_call' render option"
-            
-            output_dir = self.options['output_dir']
-            W,H = self.options.get('page_size',(6.5,8.0))
-            render_includes = self.options.get('render_includes',True)
-            leave_src = self.options.get('leave_includes_src',False)
-
-            tables_latex = []
-            for i, table in enumerate(self.tables):
-                if isinstance(table,NotApplicable): continue
-                tableDivID = tableID + "_%d" % i
-                outputFilename = _os.path.join(output_dir, "%s.tex" % tableDivID)
-
-                cwd = _os.getcwd()
-
-                if render_includes or leave_src:
-                   _os.chdir( output_dir )
-                   table_dict = table.render("latex", 
-                                             precision=precDict['normal'],
-                                             polarprecision=precDict['polar'],
-                                             sciprecision=precDict['sci'],
-                                             output_dir=".",
-                                             render_includes=render_includes)
-                   # output_dir == "." b/c latex doc will be rendered in same dir
-                   #  as figure .pdf files
-                   _os.chdir(cwd)
-   
-                   d = {'toLatex': table_dict['latex'] }
-                   #printer.log("Latexing %s table..." % key)
-                   self._merge_latex_template(d, "standalone.tex", outputFilename)
-
-                if render_includes:
-                    cwd = _os.getcwd()
-                    _os.chdir( output_dir )
-    
-                    printer=_objs.VerbosityPrinter(1) #TEMP
-    
-                    try:
-                        latex_cmd = [ self.options['latex_call'] ] + \
-                                    ["-shell-escape", "%s.tex" % tableDivID]
-                        stdout, stderr, returncode = self._process_call(latex_cmd)
-                        self._evaluate_call(latex_cmd, stdout, stderr, returncode,
-                                            printer)
-                        # Check to see if the PNG was generated                                                                                          
-                        if not _os.path.isfile("%s.pdf" % tableDivID):
-                            raise Exception("File %s.pdf was not created by pdflatex"
-                                            % tableDivID)
-                        if not leave_src: _os.remove( "%s.tex" % tableDivID )
-                        _os.remove( "%s.log" % tableDivID )
-                        _os.remove( "%s.aux" % tableDivID )
-                    except _subprocess.CalledProcessError as e:
-                        printer.error("pdflatex returned code %d " % e.returncode +
-                                      "trying to render standalone %s. " % tableDivID +
-                                      "Check %s.log to see details." % tableDivID)
-                    finally:
-                        _os.chdir(cwd)
-                    
-                    tables_latex.append( "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
-                                    (W,H, _os.path.join('figure',"%s.pdf" % tableDivID)) ) #inclue "figure" here?
-                    
-                elif leave_src:
-                    tables_latex.append( "%% Generated but didn't compile %s.tex" % tableDivID )
-                else:
-                    tables_latex.append( "%% Didn't generated anything for tableID=%s" % tableDivID )
+                                          output_dir=tablefig_output_dir,
+                                          render_includes=render_includes)
+                if render_dir: _os.chdir(cwd)
                 
-            return {'latex': "\n".join(tables_latex) }
+                if switched_item_mode == 'inline':
+                    latex_list.append( table_dict['latex'] )
+                    
+                elif switched_item_mode == 'separate files':
+                    if render_includes or leave_src:
+                        d = {'toLatex': table_dict['latex'] }
+                        _merge.merge_latex_template(d, "standalone.tex",
+                                                    _os.path.join(output_dir,"%s.tex" % tableDivID))
+
+                    if render_includes:
+                        assert('latex_cmd' in self.options and self.options['latex_cmd']), \
+                            "Cannot render latex include files without a valid 'latex_cmd' render option"
+    
+                        try:
+                            _os.chdir( render_dir )
+                            latex_cmd = self.options['latex_cmd']
+                            latex_call = [ latex_cmd ] + self.options.get('latex_flags',[]) \
+                                         + ["%s.tex" % tableDivID]
+                            stdout, stderr, returncode = _merge.process_call(latex_call)
+                            _merge.evaluate_call(latex_call, stdout, stderr, returncode, printer)
+                            if not _os.path.isfile("%s.pdf" % tableDivID):
+                                raise Exception("File %s.pdf was not created by %s"
+                                                % (tableDivID,latex_cmd))
+                            if not leave_src: _os.remove( "%s.tex" % tableDivID )
+                            _os.remove( "%s.log" % tableDivID )
+                            _os.remove( "%s.aux" % tableDivID )
+                        except _subprocess.CalledProcessError as e:
+                            printer.error("%s returned code %d " % (latex_cmd,e.returncode) +
+                                          "trying to render standalone %s.tex. " % tableDivID +
+                                          "Check %s.log to see details." % tableDivID)
+                        finally:
+                            _os.chdir( cwd )
+
+                        latex_list.append( "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
+                                           (W,H, _os.path.join(output_dir,"%s.pdf" % tableDivID)) )
+                    elif leave_src:
+                        latex_list.append("\\input{%s}" % _os.path.join(output_dir,"%s.tex" % tableDivID))
+                    else:
+                        latex_list.append("%% Didn't generated anything for tableID=%s" % tableDivID )
+                else:
+                    raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                     switched_item_mode)
+
+
+            return {'latex': "\n".join(latex_list) }
+
 
         elif typ == "python":
 
-            tables_python = {}
+            if switched_item_mode == 'separate files':
+                assert(output_dir), "Cannot render tables as 'python' in separate" \
+                    + " files without a valid 'output_dir' render option"
+
+            tables_python = _collections.OrderedDict()
             for i, table in enumerate(self.tables):
                 if isinstance(table,NotApplicable): continue
                 tableDivID = tableID + "_%d" % i
-                outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
-                table_dict = table.render("python", output_dir=None)
-                   #( setting output_dir generates separate files for plots in table )
-                tables_python[tableDivID] = table_dict['python']
-                
+                if i in overrideIDs: tableDivID = overrideIDs[i]
+
+                if switched_item_mode == "inline":
+                    table_dict = table.render("python", output_dir=None)
+                    tables_python[tableDivID] = table_dict['python']
+                elif switched_item_mode == "separate files":
+                    outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
+                    table_dict = table.render("python", output_dir=output_dir)
+                    #( setting output_dir generates separate files for plots in table )
+                    table_dict['python'].to_pickle(outputFilename) # a DataFrame
+                    tables_python[tableDivID] = "df_%s = pd.read_pickle('%s')" \
+                                                % (tableDivID,outputFilename)
+                else:
+                    raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                     switched_item_mode)
+
             return {'python': tables_python }
-
-        elif typ == "pythondir":
-
-            assert('output_dir' in self.options and self.options['output_dir']), \
-                "Cannot render 'pythondir' without a valid 'output_dir' render option"
-
-            output_dir = self.options['output_dir']
-
-            tables_python = []
-            for i, table in enumerate(self.tables):
-                if isinstance(table,NotApplicable): continue
-                tableDivID = tableID + "_%d" % i
-                outputFilename = _os.path.join(output_dir, "%s.pkl" % tableDivID)
-                table_dict = table.render("python", output_dir=output_dir)
-                  #( setting output_dir generates separate files for plots in table )
-                table_dict['python'].to_pickle(outputFilename) # a DataFrame
-                tables_python.append("df_%s = pd.read_pickle('%s');"
-                                     % (tableDivID,outputFilename))
-            return {'python': "\n".join(tables_python) }
                                      
         else:
             assert(len(self.tables) == 1), \
                 "Can only render %s format for a non-switched table" % typ
             return {typ: self.tables[0].render(typ)}
-
-
-    def _process_call(self, call):
-        process = _subprocess.Popen(call, stdout=_subprocess.PIPE,
-                                    stderr=_subprocess.PIPE)
-        stdout, stderr = process.communicate()
-        return stdout, stderr, process.returncode
-
-    def _evaluate_call(self, call, stdout, stderr, returncode, printer):
-        if len(stderr) > 0:
-            printer.error(stderr)
-        if returncode > 0:
-            raise _subprocess.CalledProcessError(returncode, call)
-
-    def _merge_latex_template(self, qtys, templateFilename, outputFilename):
-        templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
-                                              "templates", templateFilename )
-        template = ''
-        with open(templateFilename, 'r') as templatefile:
-            template = templatefile.read()
-        template = template.replace("{", "{{").replace("}", "}}") #double curly braces (for format processing)                                   
-        # Replace template field markers with `str.format` fields.
-        template = _re.sub( r"\\putfield\{\{([^}]+)\}\}\{\{[^}]*\}\}", "{\\1}", template)
-
-        # Replace str.format fields with values and write to output file
-        template = template.format(**qtys)
         
-        with open(outputFilename, 'w') as outputfile:
-            outputfile.write(template)
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace table object to a file.
 
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `tex` (LaTeX), `pkl` (Python pickle) and `html` (HTML).  Since this
+        object may contain different instances of its data based on switch
+        positions, when their are multiple instances the user must specify
+        the `index` argument to disambiguate.
 
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        N = len(self.tables)
+        
+        if filename.endswith(".html"):
+            if index is None and N==1: index = 0
+            else: raise ValueError("Must supply `index` argument for a" +
+                                   "non-trivially-switched WorkspaceTable")
+
+            saved_switchposmap = self.switchpos_map
+            saved_switchboards = self.switchboards
+            saved_switchinds   = self.sbSwitchIndices
+
+            #Temporarily pretend we don't depend on any switchboards and
+            # by default display the user-specified index
+            self.switchboards = []
+            self.sbSwitchIndices = []
+            self.switchpos_map = { (): index }
+
+            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+                    'singleItem': self}
+            _merge.merge_html_template(qtys, "standalone.html", filename,
+                                       verbosity=verbosity)
+
+            self.switchpos_map   = saved_switchposmap
+            self.switchboards    = saved_switchboards
+            self.sbSwitchIndices = saved_switchinds  
+
+        elif filename.endswith(".pkl"):
+            if index is None and N==1: index = 0
+            overrides = {i: "index%d" % i for i in range(N)}
+            self.set_render_options(switched_item_mode="inline",
+                                    switched_item_id_overrides=overrides) 
+            render_out = self.render("python")
+
+            if index is not None: #just pickle a single element
+                to_pickle = render_out['python']['index%d' % index]
+            else: #pickle dictionary of all indices
+                to_pickle = render_out['python']
+            
+            with open(filename,'wb') as f:
+                _pickle.dump(to_pickle, f)
+
+        else:
+            if index is None:
+                if N == 1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceTable")
+                
+            output_dir = _os.path.dirname(filename)
+            filebase,ext = _os.path.splitext(_os.path.basename(filename))
+
+            tempDir = _os.path.join(output_dir,"%s_temp" % filebase)
+            _os.mkdir(tempDir)
+
+            self.set_render_options(switched_item_mode="separate files",
+                                    switched_item_id_overrides={index: filebase},
+                                    output_dir=tempDir)
+
+            if ext == ".tex":
+                self.set_render_options(render_includes=False,
+                                        leave_includes_src=True)
+            elif ext == ".pdf":
+                self.set_render_options(render_includes=True,
+                                        leave_includes_src=False)
+            else:
+                raise ValueError("Unknown file type for %s" % filename)
+                
+            self.render("latex") #renders everything in temp dir
+            _os.rename(_os.path.join(tempDir,"%s%s" % (filebase,ext)),
+                       _os.path.join(output_dir,"%s%s" % (filebase,ext)))
+            
+            #remove all other files
+            _shutil.rmtree(tempDir)
+                        
+
+    
+    def _form_table_js(self, tableID, table_html, table_plot_handlers,
+                       switchboard_init_js):
+        
+        resizable = self.options.get('resizable',True)
+        autosize = self.options.get('autosize','none')
+        create_table_plots = bool(table_plot_handlers is not None)        
+        queue_math_render = bool(table_html and '$' in table_html
+                                 and self.options.get('render_math',True))
+        add_autosize_handler = bool(switchboard_init_js is not None)
+          #only add ws-table-wide autosize handler when initializing the table's switchboard (once
+          # per workspace table)
+
+        content = ""
+
+        # put plot handlers *above* switchboard init JS
+        if table_plot_handlers: content += table_plot_handlers
+        if switchboard_init_js: content += switchboard_init_js 
+            
+        #Table initialization javascript: this will either be within the math-rendering (queued) function
+        # (if '$' in ret['html']) or else at the *end* of the ready handler (if no math needed rendering).
+        init_table_js = ''
+        if create_table_plots and resizable: # make a resizable widget on *entire* plot
+             # (will only act on first call, but wait until first plots are created)
+            init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+        if add_autosize_handler and autosize == "continual":
+            init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+        if create_table_plots:                
+            init_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
+                tableID=tableID, initautosize=str(autosize in ("initial","continual")).lower())
+    
+        if queue_math_render:
+            # then there is math text that needs rendering,
+            # so queue this, *then* trigger plot creation
+            content += ('  plotman.enqueue(function() {{ \n'
+                        '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                        '             {{left: "$$", right: "$$", display: true}},\n'
+                        '             {{left: "$", right: "$", display: false}},\n'
+                        '             ] }} );\n').format(tableID=tableID)
+            content += init_table_js
+            content += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID) #end enqueue 
+        else:
+            #Note: this MUST be below plot handler init, when it triggers plot creation
+            content += init_table_js
+
+        return self._create_onready_handler(content)
+                
         
 class WorkspacePlot(WorkspaceOutput):
     """
@@ -2200,10 +2284,8 @@ class WorkspacePlot(WorkspaceOutput):
         Parameters
         ----------
         typ : str
-            The format to render as.  Currently `"html"`, and `"latex"`
-            are supported, as well as the `"htmldir"` and `"latexdir"`
-            counterparts, though these are of primarily of internal 
-            use when creating reports.
+            The format to render as.  Currently `"html"`, `"latex"`
+            and `"python"` are supported.
 
         ID : str, optional
             A base ID to use when rendering.  If None, the object's
@@ -2215,14 +2297,27 @@ class WorkspacePlot(WorkspaceOutput):
             A dictionary of strings giving the HTML and Javascript portions
             of the embeddable output.  Keys are `"html"` and `"js"`.
         """
-        global_requirejs = self.options.get('global_requirejs',False)
         resizable = self.options.get('resizable',True)
         autosize = self.options.get('autosize','none')
+        valign = self.options.get('valign','top')
+        overrideIDs = self.options.get('switched_item_id_overrides',{})
+        switched_item_mode = self.options.get('switched_item_mode','inline')
+        output_dir = self.options.get('output_dir',None)
+
+        if valign == 'top':
+            abswrap_cls = 'abswrap'
+            relwrap_cls = 'relwrap'
+        elif valign == 'bottom':
+            abswrap_cls = 'bot_abswrap'
+            relwrap_cls = 'bot_relwrap'
+        else:
+            raise ValueError("Invalid 'valign' value: %s" % valign)
+            
 
         if ID is None: ID = self.ID
         plotID = "plot_" + ID
         
-        if typ == "html" or typ == "htmldir":
+        if typ == "html":
     
             def getPlotlyDivID(html):
                 #could make this more robust using lxml or something later...
@@ -2240,117 +2335,66 @@ class WorkspacePlot(WorkspaceOutput):
     
             # "handlers only" mode is when plot is embedded in something
             #  larger (e.g. a table) that takes responsibility for putting
-            #  the JS in an on-ready handler and initializing and creating
-            #  the plots.
+            #  the JS returned into an on-ready handler and triggering the
+            #  initialization and creation of the plots.
             handlersOnly = bool(resizable == "handlers only")
             
             divHTML = []
             divIDs = []
             divJS = []
             
-            if typ == "html":
-                            
-                for i,fig in enumerate(self.figs):
-                    plotDivID = plotID + "_%d" % i
-                    if isinstance(fig,NotApplicable):
-                        fig_dict = fig.render(typ, plotDivID)
-                    else:
-                        #use auto-sizing (fluid layout)
-                        fig_dict = _plotly_ex.plot_ex(
-                            fig['plotlyfig'], show_link=False,
-                            autosize=(autosize == "continual"), resizable=resizable,
-                            lock_aspect_ratio=True, master=True, # bool(i==iMaster)
-                            click_to_display=self.options['click_to_display'],
-                            link_to=self.options['link_to'], link_to_id=plotDivID)
+            for i,fig in enumerate(self.figs):
+                plotDivID = plotID + "_%d" % i
+                if i in overrideIDs: plotDivID = overrideIDs[i]
+                
+                if isinstance(fig,NotApplicable):
+                    fig_dict = fig.render(typ, plotDivID)
+                else:
+                    #use auto-sizing (fluid layout)
+                    fig_dict = _plotly_ex.plot_ex(
+                        fig['plotlyfig'], show_link=False,
+                        autosize=(autosize == "continual"), resizable=resizable,
+                        lock_aspect_ratio=True, master=True, # bool(i==iMaster)
+                        click_to_display=self.options['click_to_display'],
+                        link_to=self.options['link_to'], link_to_id=plotDivID)
 
-                    divIDs.append(plotDivID)  # getPlotlyDivID(fig_dict['html'])
-                    divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
+                if switched_item_mode == 'separate files':
+                    assert(handlersOnly == False) #doesn't make sense to put only handlers in a separate file
+                    divJS.append( self._form_plot_js(plotDivID, fig_dict['js'], None) )
+                else:
                     divJS.append( fig_dict['js'] )
                     
-                base = self._render_html(plotID, divHTML, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices, ['relwrap'])
-                ret = { 'html': base['html'], 'js': '' }
+                divIDs.append(plotDivID)
+                divHTML.append("<div class='%s'>%s</div>" % (abswrap_cls,fig_dict['html']))
+                
+            if switched_item_mode == 'inline':
+                base = self._render_html(plotID, divHTML, None, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices, [relwrap_cls])
+                if handlersOnly:
+                    js = '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
+                else:
+                    js = self._form_plot_js(plotID, '\n'.join(divJS), base['js'])
                     
-                if not handlersOnly:
-                    if global_requirejs:
-                        ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
-                    ret['js'] += '  $(document).ready(function() {\n'
-                ret['js'] += '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
-        
-                if not handlersOnly:
-                    if resizable: # make a resizable widget
-                        ret['js'] += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
-                    if autosize == "continual": # add window resize handler
-                        ret['js'] += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
-
-                    #trigger init & create of plots
-                    ret['js'] += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
-                        plotID=plotID, initautosize=str(autosize in ("initial","continual")).lower())
-        
-                    ret['js'] += '}); //end on-ready handler\n'
-                    if global_requirejs:
-                        ret['js'] += '}); //end require block\n'
-                                
-                return ret
-    
-            else:  # typ == "htmldir"
-    
-                for i,fig in enumerate(self.figs):
-                    plotDivID = plotID + "_%d" % i
-                    if isinstance(fig,NotApplicable):
-                        fig_dict = fig.render(typ, plotDivID)
-                    else:
-                        #use auto-sizing (fluid layout)
-                        fig_dict = _plotly_ex.plot_ex(
-                            fig['plotlyfig'], show_link=False,
-                            autosize=(autosize == "continual"), resizable=resizable,
-                            lock_aspect_ratio=True, master=True, # bool(i==iMaster)
-                            click_to_display=self.options['click_to_display'],
-                            link_to=self.options['link_to'], link_to_id=plotDivID)
-                        
-                    divIDs.append(plotDivID) # getPlotlyDivID(fig_dict['html'])
-                    divHTML.append("<div class='abswrap'>%s</div>" % fig_dict['html'])
-    
-                    # init_table_js work is peformed when divs are loaded
-                    init_single_plot_js = ''
-                    if not handlersOnly:
-                        if resizable: # make a resizable widget on *entire* plot (will only act on first call)
-                            init_single_plot_js += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
-                        #trigger init & create of plots
-                        init_single_plot_js += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
-                            plotID=plotDivID, initautosize=str(autosize in ("initial","continual")).lower())
-    
-                    divJS.append( fig_dict['js'] + init_single_plot_js )
-    
+            elif switched_item_mode == 'separate files':
+                assert(handlersOnly == False) #doesn't make sense to put only handlers in a separate file
                 assert('output_dir' in self.options and self.options['output_dir']), \
-                    "Cannot render 'htmldir' without a valid 'output_dir' render option"
-                base = self._render_html_dir(plotID, divHTML, divJS, divIDs, self.switchpos_map,
-                                             self.switchboards, self.sbSwitchIndices,
-                                             self.options['output_dir'], ['relwrap'], False)
-                                             # Don't link_to b/c plots will all have download buttons
-                ret = base
-                switch_js = base['js']
-                ret['js'] = '' # start from scratch (we'll wrap switch_js)
-        
-                if not handlersOnly:
-                    if global_requirejs:
-                        ret['js'] += "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {\n"
-                    ret['js'] += '  $(document).ready(function() {\n'
-                    
-                ret['js'] += switch_js # just switchboard init JS
-            
-                if not handlersOnly:
-                    if autosize == "continual": # add window resize handler for *entire* plot
-                        ret['js'] += '    make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
-                    ret['js'] += '}); //end on-ready handler\n'
-                    if global_requirejs:
-                        ret['js'] += '}); //end require block\n'
-                                
-                return ret
+                    "Cannot render 'html' in separate files without a valid 'output_dir' render option"
+                base = self._render_html(plotID, divHTML, divJS, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices, [relwrap_cls],
+                                         None, True, self.options['output_dir'])
+                                         # Don't link_to b/c plots will all have download buttons
+                js = self._form_plot_js(plotID, None, base['js'])
+            else:
+                raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                 switched_item_mode)
 
-        elif typ == "latex" or typ == "latexdir":
+
+            return { 'html': base['html'], 'js': js }
+
+        elif typ == "latex":
             assert('output_dir' in self.options and self.options['output_dir']), \
-                    "Cannot render 'latex' without a valid 'output_dir' render option"
+                    "Cannot render a plot as 'latex' without a valid " +\
+                    "'output_dir' render option (regardless of switched_item_mode)"
 
             from .mpl_colormaps import plotly_to_matplotlib as _plotly_to_matplotlib
 
@@ -2360,6 +2404,7 @@ class WorkspacePlot(WorkspaceOutput):
             for i,fig in enumerate(self.figs):
                 if isinstance(fig,NotApplicable): continue
                 plotDivID = plotID + "_%d" % i
+                if i in overrideIDs: plotDivID = overrideIDs[i]
 
                 if self.options.get('render_includes',True):
                     filename = _os.path.join(output_dir, plotDivID+".pdf")
@@ -2370,6 +2415,7 @@ class WorkspacePlot(WorkspaceOutput):
                         figW,figH = fig['mpl_fig_size'] #gives the "normal size" of the figure
                         W = min(W, figW)
                         W = min(H, figH)
+                        del fig['mpl_fig_size']
     
                     includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
                                     (W,H,filename))
@@ -2379,41 +2425,148 @@ class WorkspacePlot(WorkspaceOutput):
 
         elif typ == "python":
 
-            plots_python = {}
+            if switched_item_mode == 'separate files':
+                assert(output_dir), "Cannot render plots as 'python' in separate" \
+                    + " files without a valid 'output_dir' render option"
+
+            plots_python = _collections.OrderedDict()
             for i,fig in enumerate(self.figs):
                 plotDivID = plotID + "_%d" % i
+                if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
+                
                 if 'pythonValue' in fig:
                     data = {'value': fig['pythonValue'] }
                     if "pythonErrorBar" in fig:
                         data['errorbar'] = fig['pythonErrorBar']
                 else:
                     data = {'value': "Opaque Figure"}
-                plots_python[plotDivID] = data
+
+                if switched_item_mode == "inline":
+                    plots_python[plotDivID] = data
+                elif switched_item_mode == "separate files":
+                    outputFilename = _os.path.join(output_dir, "%s.pkl" % plotDivID)
+                    _pickle.dump(data, open(outputFilename,"wb"))
+                    plots_python[plotDivID] = "data_%s = pickle.load(open('%s','rb'))" \
+                                                         % (plotDivID,outputFilename)
+                else:
+                    raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                     switched_item_mode)
+                
             return {'python': plots_python }
 
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace plot object to a file.
 
-        elif typ == "pythondir":
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `pkl` (Python pickle) and `html` (HTML).  Since this object may
+        contain different instances of its data based on switch positions,
+        when their are multiple instances the user must specify the `index`
+        argument to disambiguate.
 
-            assert('output_dir' in self.options and self.options['output_dir']), \
-                "Cannot render 'pythondir' without a valid 'output_dir' render option"
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
 
-            output_dir = self.options['output_dir']
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
 
-            plots_python = []
-            for i,fig in enumerate(self.figs):
-                plotDivID = plotID + "_%d" % i
-                if isinstance(fig,NotApplicable): continue
-                outputFilename = _os.path.join(output_dir, "%s.pkl" % plotDivID)
-                if 'pythonValue' in fig:
-                    data_to_pickle = {'value': fig['pythonValue'] }
-                    if "pythonErrorBar" in fig:
-                        data_to_pickle['errorbar'] = fig['pythonErrorBar']
-                else:
-                    data_to_pickle = "Opaque Figure"
-                _pickle.dump(data_to_pickle, open(outputFilename,"wb"))
-                plots_python.append("data_%s = pd.read_pickle('%s');"
-                                     % (plotDivID,outputFilename))
-            return {'python': "\n".join(plots_python) }
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        N = len(self.figs)
+        
+        if filename.endswith(".html"):
+            #Note: Same as WorkspaceTable except for N
+            if index is None and N==1: index = 0
+            else: raise ValueError("Must supply `index` argument for a" +
+                                   "non-trivially-switched WorkspacePlot")
+
+            saved_switchposmap = self.switchpos_map
+            saved_switchboards = self.switchboards
+            saved_switchinds   = self.sbSwitchIndices
+
+            #Temporarily pretend we don't depend on any switchboards and
+            # by default display the user-specified index
+            self.switchboards = []
+            self.sbSwitchIndices = []
+            self.switchpos_map = { (): index }
+
+            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+                    'singleItem': self}
+            _merge.merge_html_template(qtys, "standalone.html", filename,
+                                       verbosity=verbosity)
+
+            self.switchpos_map   = saved_switchposmap
+            self.switchboards    = saved_switchboards
+            self.sbSwitchIndices = saved_switchinds  
+
+        elif filename.endswith(".pkl"):
+            #Note: Same as WorkspaceTable except for N
+            if index is None and N==1: index = 0
+            overrides = {i: "index%d" % i for i in range(N)}
+            self.set_render_options(switched_item_mode="inline",
+                                    switched_item_id_overrides=overrides) 
+            render_out = self.render("python")
+
+            if index is not None: #just pickle a single element
+                to_pickle = render_out['python']['index%d' % index]
+            else: #pickle dictionary of all indices
+                to_pickle = render_out['python']
+            
+            with open(filename,'wb') as f:
+                _pickle.dump(to_pickle, f)
+
+        elif filename.endswith(".tex"):
+            raise ValueError("Cannot save a WorkspacePlot as LaTeX - try PDF.")
+        
+        elif filename.endswith(".pdf"):
+            from .mpl_colormaps import plotly_to_matplotlib as _plotly_to_matplotlib
+            
+            if index is None:
+                if N == 1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspacePlot")
+            _plotly_to_matplotlib(self.figs[index], filename)
+
+        else:
+            raise ValueError("Unknown file type for %s" % filename)
+
             
 
+    def _form_plot_js(self, plotID, plot_handlers, switchboard_init_js):
+                
+        resizable = self.options.get('resizable',True)
+        autosize = self.options.get('autosize','none')
+        create_plots = bool(plot_handlers is not None)        
+        add_autosize_handler = bool(switchboard_init_js is not None)
+          #only add ws-plot-wide autosize handler when initializing the plot's switchboard (once
+          # per workspace table)
+
+        content = ""
+
+        #put plot handlers above switchboard init JS
+        if plot_handlers: content += plot_handlers
+        if switchboard_init_js: content += switchboard_init_js
+        
+        if resizable: # make a resizable widget
+            content += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
+        if add_autosize_handler and autosize == "continual": # add window resize handler
+            content += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
+        if create_plots:
+            #trigger init & create of plots
+            content += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
+                plotID=plotID, initautosize=str(autosize in ("initial","continual")).lower())
+
+        return self._create_onready_handler(content)

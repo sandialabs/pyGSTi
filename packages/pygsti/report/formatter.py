@@ -112,10 +112,10 @@ class Formatter(object):
                 item = item.replace(stringreplace[0], stringreplace[1])
         # And then replace all occurrences of certain regexes
         if self.regexreplace is not None:
-            result = _re.match(self.regexreplace[0], item)
-            if result is not None:
-                grouped = result.group(1)
-                item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
+            result = _re.search(self.regexreplace[0], item)
+            if result is not None:  #Note: specific to 1-group regexps currently...
+                s,e = result.span() # same as result.start(), result.end()
+                item = item[0:s] + (self.regexreplace[1] % result.group(1)) + item[e:]
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
         return formatstring % item

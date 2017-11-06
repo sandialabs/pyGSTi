@@ -11,10 +11,14 @@ import itertools   as _itertools
 import warnings    as _warnings
 import time        as _time
 import numpy       as _np
+import copy        as _copy
 
 from .. import tools as _tools
+from ..tools import compattools as _compat
 from .gatestringstructure import LsGermsStructure as _LsGermsStructure
 from .estimate import Estimate as _Estimate
+from .gaugegroup import TrivialGaugeGroup as _TrivialGaugeGroup
+from .gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 #A flag to enable fast-loading of old results files (should
 # only be changed by experts)
@@ -222,15 +226,128 @@ class Results(object):
         self.estimates[estimate_key].parameters['max length list'] = \
                                         self.gatestring_structs['final'].Ls
 
+    def add_model_test(self, targetGateset, modelGateset,
+                       estimate_key='test', gauge_opt_keys="auto"):
+        """
+        Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
+
+        Parameters
+        ----------
+        targetGateset : GateSet
+            The target gateset used for comparison to the model.
+
+        modelGateset : GateSet
+            The "model" gateset whose fit to the data and distance from
+            `targetGateset` are assessed.
+
+        estimate_key : str, optional
+            The key or label used to identify this estimate.
+
+        gauge_opt_keys : list, optional
+            A list of gauge-optimization keys to add to the estimate.  All
+            of these keys will correspond to trivial gauge optimizations,
+            as the model gate set is assumed to be fixed and to have no
+            gauge degrees of freedom.  The special value "auto" creates
+            gauge-optimized estimates for all the gauge optimization labels 
+            currently in this `Results` object.
+
+        Returns
+        -------
+        None
+        """
+        nIter = len(self.gatestring_structs['iteration'])
+
+        # base parameter values off of existing estimate parameters
+        defaults = {'objective': 'logl', 'minProbClip': 1e-4, 'radius': 1e-4,
+                    'minProbClipForWeighting': 1e-4, 'gateLabelAliases': None,
+                    'truncScheme': "whole germ powers"}
+        for est in self.estimates.values():
+            for ky in defaults:
+                if ky in est.parameters: defaults[ky] = est.parameters[ky]
+
+        #Construct a parameters dict, similar to do_model_test(...)
+        parameters = _collections.OrderedDict()
+        parameters['objective'] = defaults['objective']
+        if parameters['objective'] == 'logl':
+            parameters['minProbClip'] = defaults['minProbClip']
+            parameters['radius'] = defaults['radius']
+        elif parameters['objective'] == 'chi2':
+            parameters['minProbClipForWeighting'] = defaults['minProbClipForWeighting']
+        else:
+            raise ValueError("Invalid objective: %s" % parameters['objective'])
+        parameters['profiler'] = None
+        parameters['gateLabelAliases'] = defaults['gateLabelAliases']
+        parameters['weights'] = None                     #Hardcoded
+
+
+        #Set default gate group to trival group to mimic do_model_test (an to
+        # be consistent with this function creating "gauge-optimized" gate sets
+        # by just copying the initial one).
+        modelGateset = modelGateset.copy()
+        modelGateset.default_gauge_group = _TrivialGaugeGroup(modelGateset.dim)
+
+        self.add_estimate(targetGateset, modelGateset, [modelGateset]*nIter,
+                          parameters, estimate_key=estimate_key)
+
+        #add gauge optimizations (always trivial)
+        if gauge_opt_keys == "auto":
+            gauge_opt_keys = []
+            for est in self.estimates.values():
+                for gokey in est.goparameters:
+                    if gokey not in gauge_opt_keys:
+                        gauge_opt_keys.append(gokey)
+
+        est = self.estimates[estimate_key]
+        for gokey in gauge_opt_keys:
+            trivialEl = _TrivialGaugeGroupElement(modelGateset.dim)
+            goparams = {'gateset': modelGateset,
+                        'targetGateset': targetGateset,
+                        '_gaugeGroupEl': trivialEl }
+            est.add_gaugeoptimized(goparams, modelGateset, gokey)
+
+        
+    def view(self, estimate_keys, gaugeopt_keys=None):
+        """
+        Creates a shallow copy of this Results object containing only the
+        given estimate and gauge-optimization keys.
+
+        Parameters
+        ----------
+        estimate_keys : str or list
+            Either a single string-value estimate key or a list of such keys.
+
+        gaugeopt_keys : str or list, optional
+            Either a single string-value gauge-optimization key or a list of
+            such keys.  If `None`, then all gauge-optimization keys are 
+            retained.
+
+        Returns
+        -------
+        Results
+        """
+        view = Results()
+        view.dataset = self.dataset
+        view.gatestring_lists = self.gatestring_lists
+        view.gatestring_structs = self.gatestring_structs
+
+        if _compat.isstr(estimate_keys):
+            estimate_keys = [estimate_keys]
+        for ky in estimate_keys:
+            if ky in self.estimates:
+                view.estimates[ky] = self.estimates[ky].view(gaugeopt_keys,view)
+        
+        return view
+
 
     def copy(self):
         """ Creates a copy of this Results object. """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Results()
         cpy.dataset = self.dataset.copy()
-        cpy.gatestring_lists = self.gatestring_lists.copy()
-        cpy.gatestring_structs = self.gatestring_structs.copy()
-        cpy.estimates = self.estimates.copy()
+        cpy.gatestring_lists = _copy.deepcopy(self.gatestring_lists)
+        cpy.gatestring_structs = _copy.deepcopy(self.gatestring_structs)
+        for est_key,est in self.estimates.items():
+            cpy.estimates[est_key] = est.copy()
         return cpy
 
 
@@ -347,10 +464,10 @@ class Results(object):
         _warnings.warn(
             ('create_full_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_brief_report_pdf(self, confidenceLevel=None,
                                 filename="auto", title="auto", datasetLabel="auto",
@@ -359,10 +476,10 @@ class Results(object):
         _warnings.warn(
             ('create_brief_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_presentation_pdf(self, confidenceLevel=None, filename="auto",
                                 title="auto", datasetLabel="auto", suffix="",
@@ -372,9 +489,10 @@ class Results(object):
         _warnings.warn(
             ('create_presentation_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
-             '  Beamer presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  significantly upgraded.  As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_presentation_ppt(self, confidenceLevel=None, filename="auto",
                             title="auto", datasetLabel="auto", suffix="",
@@ -384,9 +502,10 @@ class Results(object):
         _warnings.warn(
             ('create_presentation_ppt(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
-             '  Powerpoint presentations have been removed.  Please try using\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  significantly upgraded.  As a part of this change,\n'
+             '  the functions that generate reports are now separate functions.\n'
+             '  Please update this call with one to:\n'
+             '  pygsti.report.create_standard_report(...)\n'))
 
     def create_general_report_pdf(self, confidenceLevel=None, filename="auto",
                                   title="auto", datasetLabel="auto", suffix="",
@@ -395,10 +514,10 @@ class Results(object):
         _warnings.warn(
             ('create_general_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
-             '  replaced with (better) HTML ones. As a part of this change,\n'
+             '  significantly upgraded.  As a part of this change,\n'
              '  the functions that generate reports are now separate functions.\n'
              '  Please update this call with one to:\n'
-             '  pygsti.report.create_general_report(...)\n'))
+             '  pygsti.report.create_standard_report(...)\n'))
 
 
 def enable_old_python_results_unpickling():

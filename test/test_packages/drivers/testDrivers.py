@@ -34,9 +34,16 @@ class DriversTestCase(BaseTestCase):
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
         #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
+        #datagen_gateset2 = self.gateset.depolarize(gate_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
         #ds = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings[-1],
         #    nSamples=1000,sampleError='binomial', seed=100)
+        #ds2 = pygsti.construction.generate_fake_data(
+        #    datagen_gateset2, self.lsgstStrings[-1],
+        #    nSamples=1000,sampleError='binomial', seed=100)
+        #ds2 = ds2.copy_nonstatic()
+        #ds2.add_counts_from_dataset(ds)
+        #ds2.done_adding_data()
         #
         #ds_tgp = pygsti.construction.generate_fake_data(
         #    datagen_gateset, self.lsgstStrings_tgp[-1],
@@ -47,6 +54,7 @@ class DriversTestCase(BaseTestCase):
         #    nSamples=1000,sampleError='binomial', seed=100)
         #
         #ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        #ds2.save(compare_files + "/drivers2.dataset%s" % self.versionsuffix) #non-markovian
         #ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
         #ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
 
@@ -187,8 +195,8 @@ class TestDriversMethods(DriversTestCase):
             fidPairs=fidPairs)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.gs_target, gfprStructs, verbosity=0)
-        pygsti.report.create_general_report(result, temp_files + "/full_report_GFPR.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_GFPR",
+                                             "GFPR report", verbosity=2)
                 
 
         #Per-germ FPR
@@ -213,8 +221,8 @@ class TestDriversMethods(DriversTestCase):
             fidPairs=fidPairsDict)
 
         result = pygsti.do_long_sequence_gst_base(ds, std.gs_target, pfprStructs, verbosity=0)
-        pygsti.report.create_general_report(result, temp_files + "/full_report_PFPR.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_PFPR",
+                                             "PFPR report", verbosity=2)
         
 
 
@@ -233,8 +241,8 @@ class TestDriversMethods(DriversTestCase):
             advancedOptions={'truncScheme': ts})
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_RFPR.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_RFPR",
+                                             "RFPR report", verbosity=2)
 
         #With fixed initial fiducial pairs
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
@@ -247,8 +255,8 @@ class TestDriversMethods(DriversTestCase):
                                  advancedOptions={'truncScheme': ts})
 
         #create a report...
-        pygsti.report.create_general_report(result2, temp_files + "/full_report_RFPR2.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result2, temp_files + "/full_report_RFPR2.html",
+                                             verbosity=2)
 
 
     def test_longSequenceGST_linearGates(self):
@@ -273,8 +281,8 @@ class TestDriversMethods(DriversTestCase):
                                 # very small changes (~0.0001) to the total chi^2.
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_LPGates.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_LPGates",
+                                             "LPGates report", verbosity=2)
 
 
     def test_longSequenceGST_CPTP(self):
@@ -289,8 +297,8 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens)
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_CPTPGates.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_CPTPGates",
+                                             "CPTP Gates report", verbosity=2)
 
 
     def test_longSequenceGST_Sonly(self):
@@ -305,8 +313,8 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens)
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_SGates.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_SGates.html",
+                                             "SGates report", verbosity=2)
 
 
     def test_longSequenceGST_GLND(self):
@@ -328,8 +336,8 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens)
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_SGates.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_SGates",
+                                             "SGates report", verbosity=2)
 
 
     def test_longSequenceGST_HplusS(self):
@@ -344,8 +352,8 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens)
 
         #create a report...
-        pygsti.report.create_general_report(result, temp_files + "/full_report_HplusSGates.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_HplusSGates",
+                                             "HpS report", verbosity=2)
 
 
 
@@ -373,8 +381,8 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens, advancedOptions={'truncScheme': ts,
                                                                      'badFitThreshold': -100})
         
-        pygsti.report.create_general_report(result, temp_files + "/full_report_badfit.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_badfit",
+                                             "badfit report", verbosity=2)
 
         result_chi2 = self.runSilent(pygsti.do_long_sequence_gst,
                                      ds, std.gs_target, std.fiducials, std.fiducials,
@@ -382,19 +390,40 @@ class TestDriversMethods(DriversTestCase):
                                                                           'badFitThreshold': -100,
                                                                           'objective': 'chi2'})
 
+    def test_model_test(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
 
+        maxLens = self.maxLens
+        result = self.runSilent(pygsti.do_model_test, gs_guess,
+                                ds, std.gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens)
+
+
+    def test_robust_data_scaling(self):
+        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers2.dataset%s" % self.versionsuffix)
+        gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
+
+        #lower bad-fit threshold to zero to trigger bad-fit additional processing
+        maxLens = self.maxLens
+        result = self.runSilent(pygsti.do_long_sequence_gst,
+                                ds, std.gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens, advancedOptions={'badFitThreshold': -100,
+                                                                     'onBadFit': ["robust","Robust","robust+","Robust+"]})
 
     def test_stdpracticeGST(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
 
         #lower bad-fit threshold to zero to trigger bad-fit additional processing
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_stdpractice_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens, modes="TP,CPTP,Target",
+                                std.germs, maxLens, modes="TP,CPTP,Test,Target",
+                                modelsToTest = {"Test": gs_guess},
                                 comm=None, memLimit=None, verbosity=5)
-        pygsti.report.create_general_report(result, temp_files + "/full_report_stdpractice.html",
-                                            verbosity=2)
+        pygsti.report.create_standard_report(result, temp_files + "/full_report_stdpractice",
+                                             "Std Practice Test Report", verbosity=2)
 
         #with string args
         result = self.runSilent(pygsti.do_stdpractice_gst,
@@ -405,11 +434,10 @@ class TestDriversMethods(DriversTestCase):
                                 temp_files + "/driver_germs.txt",
                                 maxLens, modes="TP", comm=None, memLimit=None, verbosity=5)
 
-        #can't only run Target mode (yet)
-        with self.assertRaises(NotImplementedError):
-            self.runSilent(pygsti.do_stdpractice_gst,
-                           ds, std.gs_target, std.fiducials, std.fiducials,
-                           std.germs, maxLens, modes="Target")
+        # test running just Target mode
+        self.runSilent(pygsti.do_stdpractice_gst,
+                       ds, std.gs_target, std.fiducials, std.fiducials,
+                       std.germs, maxLens, modes="Target")
 
 
 

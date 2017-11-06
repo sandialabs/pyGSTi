@@ -190,3 +190,44 @@ class TPSpamGaugeGroup(GateGaugeGroup):
 class TPSpamGaugeGroupElement(GateGaugeGroupElement):
     def __init__(self, gate):
         GateGaugeGroupElement.__init__(self,gate)
+
+
+
+class TrivialGaugeGroup(GaugeGroup):
+    def __init__(self, dim):
+        self.dim = dim
+        GaugeGroup.__init__(self,"Trivial")
+
+    def num_params(self):
+        return 0
+
+    def get_element(self, param_vec):
+        assert(len(param_vec) == 0)
+        return TrivialGaugeGroupElement(self.dim)
+    
+    def get_initial_params(self):
+        return _np.empty(0,'d')
+
+        
+class TrivialGaugeGroupElement(GaugeGroupElement):
+    def __init__(self, dim):  
+        self._matrix = _np.identity(dim,'d')
+        GaugeGroupElement.__init__(self)
+
+    def get_transform_matrix(self): 
+        return self._matrix
+
+    def get_transform_matrix_inverse(self):
+        return self._matrix #inverse of identity is itself!
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        return _np.empty(0,'d')
+
+    def to_vector(self):
+        return _np.empty(0,'d')
+
+    def from_vector(self,v):
+        assert(len(v) == 0)
+
+    def num_params(self):
+        return 0

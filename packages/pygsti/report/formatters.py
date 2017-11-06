@@ -47,10 +47,8 @@ formatDict = dict()
 # Replace rho with &rho;
 # Numbers following 'rho' -> subscripts
 formatDict['Rho'] = {
-    'html'  : _Formatter(stringreplacers=[('rho', '&rho;')],
-                         regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
-    'latex' : _Formatter(stringreplacers=[('rho', '\\rho')],
-                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'),
+    'html'  : _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
+    'latex' : _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')), #OLD formatstring='$%s$'),
     'python' : _no_format}
 
 # 'E' (POVM) effect formatting
@@ -58,14 +56,14 @@ formatDict['Effect'] = {
     # If label == 'remainder', return E sub C
     # Otherwise, match regex and replace with subscript
     'html'  : _Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),
-                         regexreplace=('.*?([0-9]+)$', '<sub>%s</sub>')),
+                         regexreplace=('E([0-9]+)$', 'E<sub>%s</sub>')),
     'latex' : _Formatter(stringreturn=('remainder', '$E_C$'),
-                         regexreplace=('.*?([0-9]+)$', '_{%s}'), formatstring='$%s$'),
+                         regexreplace=('E([0-9]+)$', '$E_{%s}$')), #OLD formatstring='$%s$'),
     'python' : _no_format}
 
 NormalHTML = _Formatter(html, 
-                        ebstring='%s <span class="errorbar">+/- %s</span>', 
-                        nmebstring='%s <span class="nmerrorbar">+/- %s</span>')
+                        ebstring='%s <span class="errorbar">&plusmn; %s</span>', 
+                        nmebstring='%s <span class="nmerrorbar">&plusmn; %s</span>')
 NormalLatex = _Formatter(latex,
                         ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $') #nmebstring will match
 
@@ -104,8 +102,8 @@ PiPython = _Formatter(_pi_python)
 # Pi formatters
 formatDict['Pi'] = {
     'html'  : NormalHTML.variant(formatstring='%s&pi;',
-                                 ebstring='%s <span class="errorbar">+/- %s</span>&pi;', 
-                                 nmebstring='%s <span class="nmerrorbar">+/- %s</span>&pi;'),
+                                 ebstring='%s&pi; <span class="errorbar">&plusmn; %s</span>&pi;', 
+                                 nmebstring='%s&pi; <span class="nmerrorbar">&plusmn; %s</span>&pi;'),
     'latex' : NormalLatex.variant(formatstring='%s$\\pi$',
                                   ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'),
     'python' : PiPython}
@@ -147,10 +145,23 @@ def special_convert_latex(x, specs):
 
 convert_latex = NormalLatex.variant(custom=special_convert_latex)
 
+mathtext_htmlorlatex = _Formatter(
+    stringreplacers=[('log','\\log'),
+                     ('Re','\\mathrm{Re}'),
+                     ('Im','\\mathrm{Im}'),
+                     ('*','\\cdot ')],
+    formatstring='$%s$')
+
 formatDict['Conversion'] = {
     'html'  : convert_html,
     'latex' : convert_latex,
     'python'  : _no_format }
+
+formatDict['MathText'] = {
+    'html'  : mathtext_htmlorlatex,
+    'latex' : mathtext_htmlorlatex,
+    'python'  : _no_format }
+
 
 formatDict['Vec'] = {
     'html'  : NormalHTML,
@@ -168,30 +179,36 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
-    fig.value.set_render_options(click_to_display=specs['click_to_display'],
-                                 output_dir=specs['output_dir'],
+    #Create figure inline with 'js' set to only handlers (no further plot init)
+    fig.value.set_render_options(switched_item_mode = "inline",
+                                 resizable="handlers only",
+                                 click_to_display=specs['click_to_display'],
                                  link_to=specs['link_to'],
-                                 autosize=specs['autosize'],
-                                 resizable="handlers only" if specs['resizable'] else False)
+                                 autosize=specs['autosize'])
     render_out = fig.value.render("html")
     return render_out #a dictionary with 'html' and 'js' keys
 
 def latex_figure(fig, specs):
-    fig.value.set_render_options(output_dir=specs['output_dir'], render_includes=specs['render_includes'])
+    assert('output_dir' in specs and specs['output_dir']), \
+        "Cannot render a figure-containing table as 'latex' without a valid 'output_dir' render option"
+    fig.value.set_render_options(output_dir=specs['output_dir'],
+                                 render_includes=specs['render_includes'])
     render_out = fig.value.render('latex')
     render_out['latex'] = "\\vcenteredhbox{%s}" % render_out['latex'] #wrap std latex output
     return render_out
 
 def python_figure(fig, specs):
+    fig.value.set_render_options(switched_item_mode = "inline")
     render_out = fig.value.render('python') # a dict w/keys == plotIDs
     plotDivID = list(render_out['python'].keys())[0] #just take info for the first figure (assume only one figure)
 
     if specs['output_dir'] is not None: # setting output_dir signals that fig should also be rendered
-        fig.value.set_render_options(output_dir=specs['output_dir'])
-        fig.value.render('pythondir') #  to a separate python file
+        fig.value.set_render_options(switched_item_mode = "separate files",
+                                     output_dir=specs['output_dir'])
+        fig.value.render('python') #  to a separate python file
 
     return _ReportableQty( render_out['python'][plotDivID]['value'],
-                           render_out['python'][plotDivID].get('erorbar',None) )
+                           render_out['python'][plotDivID].get('errorbar',None) )
     
 
 formatDict['Figure'] = {
