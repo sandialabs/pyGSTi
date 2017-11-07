@@ -154,6 +154,18 @@ class GatestringStructure(object):
         """Lists the y-values which have at least one non-empty plaquette"""
         return [ y for y in self.yvals() if any([ len(self.get_plaquette(x,y)) > 0
                                                   for x in self.xvals()]) ]
+
+    def plaquette_rows_cols(self):
+        """
+        Return the number of rows and columns contained in each plaquette of 
+        this GateStringStructure.
+
+        Returns
+        -------
+        rows, cols : int
+        """
+        return len(self.effectStrs), len(self.prepStrs)
+
     
     def get_basestrings(self):
         """Lists the base strings (without duplicates) of all the plaquettes"""
@@ -161,7 +173,8 @@ class GatestringStructure(object):
         for x in self.xvals():
             for y in self.yvals():
                 p = self.get_plaquette(x,y)
-                if p is not None: baseStrs.add(p.base)
+                if p is not None and p.base is not None:
+                    baseStrs.add(p.base)
         return list(baseStrs)
         
 
@@ -316,7 +329,8 @@ class LsGermsStructure(GatestringStructure):
         """
         #placeholder in case there's some additional init we need to do.
         pass
-                
+
+    
     def get_plaquette(self, L, germ, onlyfirst=True):
         """
         Returns a the plaquette at `(L,germ)`.
@@ -340,6 +354,9 @@ class LsGermsStructure(GatestringStructure):
         -------
         GatestringPlaquette
         """
+        if (L,germ) not in self._plaquettes:
+            return self.create_plaquette(None,[]) # no elements
+        
         if not onlyfirst or (L,germ) in self._firsts:
             return self._plaquettes[(L,germ)]
         else:
@@ -380,6 +397,17 @@ class LsGermsStructure(GatestringStructure):
         
         return GatestringPlaquette(baseStr, len(self.effectStrs),
                             len(self.prepStrs), elements, self.aliases)
+
+    def plaquette_rows_cols(self):
+        """
+        Return the number of rows and columns contained in each plaquette of 
+        this LsGermsStructure.
+
+        Returns
+        -------
+        rows, cols : int
+        """
+        return len(self.effectStrs), len(self.prepStrs)
 
     def copy(self):
         """

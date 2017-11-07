@@ -430,18 +430,19 @@ class Estimate(object):
         
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
-
+            nRows, nCols = gss.plaquette_rows_cols()
+            
             subMxs = []
             for y in gss.used_yvals():
                 subMxs.append( [] )
                 for x in gss.used_xvals():
+                    scalingMx = _np.nan * _np.ones( (nRows,nCols), 'd')
                     plaq = gss.get_plaquette(x,y).expand_aliases()
-                    scalingMx = _np.nan * _np.ones( (plaq.rows,plaq.cols), 'd')
-                    
-                    for i,j,gstr in plaq:
-                        scalingMx[i,j] = weights.get(gstr,1.0)
-                        if scalingMx[i,j] != 1.0:
-                            scaled_dataset[gstr].scale(scalingMx[i,j])
+                    if len(plaq) > 0:
+                        for i,j,gstr in plaq:
+                            scalingMx[i,j] = weights.get(gstr,1.0)
+                            if scalingMx[i,j] != 1.0:
+                                scaled_dataset[gstr].scale(scalingMx[i,j])
 
                     #build up a subMxs list-of-lists as a plotting
                     # function does, so we can easily plot the scaling
