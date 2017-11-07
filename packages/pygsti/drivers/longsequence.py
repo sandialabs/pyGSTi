@@ -972,7 +972,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                                 if gl in gs_target.gates.keys(): stage2_item_weights[gl] = 0.01
                             stages_2QUR = [stage.copy() for stage in stages] # ~deep copy of stages
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                            stages_2QUR[iStage2]['itemweights'] = stage2_item_weights
+                            stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR #add additional gauge opt
     
         
