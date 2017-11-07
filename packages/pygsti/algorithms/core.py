@@ -1411,7 +1411,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
-        assert(converged)
+        assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
@@ -2592,7 +2592,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
-        assert(converged)
+        assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
