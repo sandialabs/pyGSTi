@@ -19,7 +19,8 @@ from . import spamspecconstruction as _ssc
 
 def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
                      fidPairs=None, truncScheme="whole germ powers", nest=True,
-                     keepFraction=1, keepSeed=None, includeLGST=True):
+                     keepFraction=1, keepSeed=None, includeLGST=True,
+                     germLengthLimits=None):
     """
     Create a set of gate string lists for LSGST based on germs and max-lengths.
 
@@ -115,6 +116,14 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         empty list.  This means that when `nest == True`, the LGST 
         sequences will be included in all the lists.
 
+    germLengthLimits : dict, optional
+        A dictionary limiting the max-length values used for specific germs.
+        Keys are germ sequences and values are integers.  For example, if
+        this argument is `{('Gx',): 4}` and `maxLengthList = [1,2,4,8,16]`,
+        then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
+        and 4 (whereas other germs use all the values in `maxLengthList`).
+
+
     Returns
     -------
     list of (lists of GateStrings)
@@ -123,7 +132,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         repeated germs limited to previous max-lengths are also included.
         Note that a "0" maximum-length corresponds to the LGST strings.
     """
-
+    if germLengthLimits is None: germLengthLimits = {}
     if nest == True and includeLGST == True and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
@@ -178,6 +187,8 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         else:
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
+                if maxLen > germLengthLimits.get(germ,1e100): continue
+                
                 if rndm is None:
                     fiducialPairsThisIter = fiducialPairs[germ]
     
@@ -222,7 +233,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                        fidPairs=None, truncScheme="whole germ powers", nest=True,
                        keepFraction=1, keepSeed=None, includeLGST=True,
                        gateLabelAliases=None, sequenceRules=None,
-                       dscheck=None, actionIfMissing="raise",
+                       dscheck=None, actionIfMissing="raise", germLengthLimits=None,
                        verbosity=0):
     """
     Create a set of gate string structures for LSGST.
@@ -342,6 +353,13 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         a ValueError to be raised; "drop" causes the missing sequences to be
         dropped from the returned set.
 
+    germLengthLimits : dict, optional
+        A dictionary limiting the max-length values used for specific germs.
+        Keys are germ sequences and values are integers.  For example, if
+        this argument is `{('Gx',): 4}` and `maxLengthList = [1,2,4,8,16]`,
+        then the germ `('Gx',)` is only repeated using max-lengths of 1, 2,
+        and 4 (whereas other germs use all the values in `maxLengthList`).
+
     verbosity : int, optional
         The level of output to print to stdout.
 
@@ -356,6 +374,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
     """
 
     printer = _VerbosityPrinter.build_printer(verbosity)
+    if germLengthLimits is None: germLengthLimits = {}
     
     if nest == True and includeLGST == True and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
@@ -419,6 +438,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         else:
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
+                if maxLen > germLengthLimits.get(germ,1e100): continue
                 germ_power = truncFn(germ,maxLen)
                 
                 if rndm is None:

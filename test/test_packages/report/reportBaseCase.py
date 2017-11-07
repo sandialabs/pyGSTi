@@ -109,7 +109,8 @@ class ReportBaseCase(BaseTestCase):
                                                        std.germs, cls.maxLengthList, verbosity=0,
                                                        advancedOptions={'tolerance': 1e-6, 'starting point': 'LGST',
                                                                         'onBadFit': ["robust","Robust","robust+","Robust+"],
-                                                                        'badFitThreshold': -1.0 })
+                                                                        'badFitThreshold': -1.0,
+                                                                        'germLengthLimits': {('Gx','Gi','Gi'): 2} })
         #OLD
         #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.gs_clgst_tp, cls.lsgstStrings, verbosity=0,
         #                                           minProbClip=1e-4, probClipInterval=(-1e6,1e6),

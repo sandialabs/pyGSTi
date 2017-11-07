@@ -68,11 +68,11 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         max([len(germ) for germ in germs])
 
-        germsMaxLength5 = germsel.generate_germs(gs_target, maxGermLength=5)
+        germsMaxLength5 = germsel.generate_germs(gs_target, candidateGermCounts={5: 'all upto'})
 
         max([len(germ) for germ in germsMaxLength5])
 
-        germsMaxLength3 = germsel.generate_germs(gs_target, maxGermLength=3)
+        germsMaxLength3 = germsel.generate_germs(gs_target, candidateGermCounts={3: 'all upto'})
 
         uniformPrepFids, uniformMeasFids = fidsel.generate_fiducials(gs_target, maxFidLength=3,
                                                                      algorithm='grasp',
@@ -81,7 +81,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         incompletePrepFids, incompleteMeasFids = fidsel.generate_fiducials(gs_target, maxFidLength=1)
 
-        nonSingletonGerms = germsel.generate_germs(gs_target, force=None, maxGermLength=4,
+        nonSingletonGerms = germsel.generate_germs(gs_target, force=None, candidateGermCounts={4: 'all upto'},
                                                    algorithm='grasp', algorithm_kwargs={'iterations': 5})
 
 

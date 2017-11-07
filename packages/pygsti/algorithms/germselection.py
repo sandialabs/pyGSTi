@@ -20,8 +20,8 @@ from . import scoring as _scoring
 FLOATSIZE = 8 # in bytes: TODO: a better way
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
-                   numGSCopies=5, seed=None, maxGermLength=6,
-                   force="singletons", algorithm='greedy',
+                   numGSCopies=5, seed=None, candidateGermCounts=None,
+                   candidateSeed=None, force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, memLimit=None, comm=None,
                    profiler=None, verbosity=1):
     """
@@ -63,11 +63,19 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         Seed for generating random unitary perturbations to gatesets. Also
         passed along to stochastic germ-selection algorithms.
 
-    maxGermsLength : int, optional
-        The maximum length (in terms of gates) of any germ allowed in the germ
-        set. Currently will construct a list of all non-equivalent germs of
-        length up to `maxGermsLength` for the germ selection algorithms to play
-        around with.
+    candidateGermCounts : dict, optional
+        A dictionary of *germ_length* : *count* key-value pairs, specifying 
+        the germ "candidate list" - a list of potential germs to draw from.
+        *count* is either an integer specifying the number of random germs
+        considered at the given *germ_length* or the special values `"all upto"`
+        that considers all of the of all non-equivalent germs of length up to
+        the corresponding *germ_length*.  If None, all germs of up to length
+        6 are used, the equivalent of `{6: 'all upto'}`.
+
+    candidateSeed : int, optional
+        A seed value used when randomly selecting candidate germs.  For each
+        germ length being randomly selected, the germ length is added to 
+        the value of `candidateSeed` to get the actual seed used.
 
     force : str or list, optional
         A list of GateStrings which *must* be included in the final germ set.
@@ -121,10 +129,18 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     gatesetList = setup_gateset_list(gs_target, randomize,
                                      randomizationStrength, numGSCopies, seed)
-    gates = gs_target.gates.keys()
-    availableGermsList = _constr.list_all_gatestrings_without_powers_and_cycles(
-        gates, maxGermLength)
-
+    gates = list(gs_target.gates.keys())
+    availableGermsList = []
+    if candidateGermCounts is None: candidateGermCounts = {6: 'all upto'}
+    for i,(germLength, count) in enumerate(candidateGermCounts.items()):
+        if count == "all upto":
+            availableGermsList.extend( _constr.list_all_gatestrings_without_powers_and_cycles(
+                    gates, maxLength=germLength) )
+        else:
+            seed = None if candidateSeed is None else candidateSeed+germLength
+            availableGermsList.extend( _constr.list_random_gatestrings_onelen(
+                    gates, germLength, count, seed=seed))
+            
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
         algorithm_kwargs = {}
@@ -1749,7 +1765,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         printer.warning("Complete initial germ set FAILS on gateset "
                         + str(undercompleteGatesetNum) + ".")
         printer.warning("Aborting search.")
-        return None
+        return (None,None,None) if returnAll else None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
     printer.log("Now searching for best germ set.", 1)
@@ -1783,7 +1799,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                           final_nonAC_kwargs, initN=1))
 
     #OLD: feasibleThreshold = _scoring.CompositeScore(-numNonGaugeParams,threshold,numNonGaugeParams))
-    def feasibleFn(germset): #now that scoring is not ordered entirely by N
+    def feasibleFn(germSet): #now that scoring is not ordered entirely by N
         s = germ_breadth_score_fn(germSet, germsList,
                                   twirledDerivDaggerDerivList, nonAC_kwargs,
                                   initN=1)
