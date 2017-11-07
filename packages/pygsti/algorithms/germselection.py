@@ -1783,7 +1783,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                           final_nonAC_kwargs, initN=1))
 
     #OLD: feasibleThreshold = _scoring.CompositeScore(-numNonGaugeParams,threshold,numNonGaugeParams))
-    def feasibleFn(germset): #now that scoring is not ordered entirely by N
+    def feasibleFn(germSet): #now that scoring is not ordered entirely by N
         s = germ_breadth_score_fn(germSet, germsList,
                                   twirledDerivDaggerDerivList, nonAC_kwargs,
                                   initN=1)
