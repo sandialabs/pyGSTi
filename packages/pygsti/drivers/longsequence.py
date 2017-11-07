@@ -284,6 +284,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - estimateLabel = str (default = "default")
         - missingDataAction = {'drop','raise'} (default = 'drop')
         - stringManipRules = list of (find,replace) tuples
+        - germLengthLimits = dict of form {germ: maxlength}
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -1104,7 +1105,9 @@ def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
         includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
         gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
         sequenceRules = advancedOptions.get('stringManipRules',None),
-        dscheck=dschk, actionIfMissing=actionIfMissing, verbosity=verbosity)
+        dscheck=dschk, actionIfMissing=actionIfMissing,
+        germLengthLimits=advancedOptions.get('germLengthLimits',None),
+        verbosity=verbosity)
     assert(len(maxLengths) == len(lsgstLists))
 
     return lsgstLists
