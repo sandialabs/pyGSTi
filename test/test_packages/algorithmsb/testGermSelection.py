@@ -74,9 +74,19 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                   randomizationStrength=randomizationStrength,
                                   numCopies=neighborhoodSize, seed=2014)
 
-        max_length   = 6
-        gates        = std.gs_target.gates.keys()
-        superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+        # max_length   = 6
+        gates        = list(std.gs_target.gates.keys())
+        superGermSet = [] #OLD: pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+        superGermSet.extend( pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
+            gates, maxLength=3) )
+        superGermSet.extend( pygsti.construction.list_random_gatestrings_onelen(
+            gates, 4, 10, seed=2017)) # add 10 random candidates of length 4
+        superGermSet.extend( pygsti.construction.list_random_gatestrings_onelen(
+            gates, 5, 10, seed=2017)) # add 10 random candidates of length 5
+        superGermSet.extend( pygsti.construction.list_random_gatestrings_onelen(
+            gates, 6, 10, seed=2017)) # add 10 random candidates of length 6
+        superGermSet.extend(std.germs) #so we know we have enough good ones!
+            
         soln = pygsti.alg.grasp_germ_set_optimization(gatesetList=gatesetNeighborhood, germsList=superGermSet,
                                             alpha=0.1, randomize=False, seed=2014, scoreFunc='all',
                                             threshold=threshold, verbosity=1, iterations=1,
@@ -149,28 +159,28 @@ class GermSelectionTestCase(AlgorithmTestCase):
         #GREEDY
         options = {'threshold': 1e6 }
         germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                               numGSCopies=5, seed=2017, maxGermLength=6,
-                               force="singletons", algorithm='greedy',
+                               numGSCopies=5, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                               candidateSeed=2017, force="singletons", algorithm='greedy',
 	                       algorithm_kwargs=options, memLimit=None, comm=None,
 		               profiler=None, verbosity=1)
 
         #GRASP
         options = dict(l1Penalty=1e-2,
-                       gatePenalty=1.0,
+                       gatePenalty=0.1,
                        scoreFunc='all',
                        tol=1e-6, threshold=1e6,
                        iterations=2)
         germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                               numGSCopies=5, seed=2017, maxGermLength=6,
-                               force="singletons", algorithm='grasp',
+                               numGSCopies=2, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                               candidateSeed=2017, force="singletons", algorithm='grasp',
 	                       algorithm_kwargs=options, memLimit=None, comm=None,
 		               profiler=None, verbosity=1)
 
         #more args
         options['returnAll'] = True #but doesn't change generate_germs return value
         germs2 = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                                           numGSCopies=5, seed=2017, maxGermLength=6,
-                                           force="singletons", algorithm='grasp',
+                                           numGSCopies=2, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                           candidateSeed=2017, force="singletons", algorithm='grasp',
 	                                   algorithm_kwargs=options, memLimit=None, comm=None,
 		                           profiler=None, verbosity=1)
 
@@ -178,16 +188,16 @@ class GermSelectionTestCase(AlgorithmTestCase):
         #SLACK
         options = dict(fixedSlack=False, slackFrac=0.1)
         germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                               numGSCopies=5, seed=2017, maxGermLength=6,
-                               force="singletons", algorithm='slack',
+                               numGSCopies=2, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                               candidateSeed=2017, force="singletons", algorithm='slack',
 	                       algorithm_kwargs=options, memLimit=None, comm=None,
 		               profiler=None, verbosity=1)
 
         #no options -> use defaults
         options = {}
         germs = pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                                          numGSCopies=5, seed=2017, maxGermLength=6,
-                                          force="singletons", algorithm='slack',
+                                          numGSCopies=2, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                          candidateSeed=2017, force="singletons", algorithm='slack',
 	                                  algorithm_kwargs=options, memLimit=None, comm=None,
 		                          profiler=None, verbosity=1)
 
@@ -195,8 +205,8 @@ class GermSelectionTestCase(AlgorithmTestCase):
         #INVALID
         with self.assertRaises(ValueError):
             pygsti.alg.generate_germs(std.gs_target, randomize=True, randomizationStrength=1e-3,
-                                      numGSCopies=5, seed=2017, maxGermLength=6,
-                                      force="singletons", algorithm='foobar',
+                                      numGSCopies=2, seed=2017, candidateGermCounts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                      candidateSeed=2017, force="singletons", algorithm='foobar',
 	                              algorithm_kwargs=options, memLimit=None, comm=None,
 		                      profiler=None, verbosity=1)
 
