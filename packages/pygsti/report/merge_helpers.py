@@ -101,13 +101,7 @@ def rsync_offline_dir(outputDir):
 
 
 def read_and_preprocess_template(templateFilename, toggles):
-    template = ''
-    with open(templateFilename, 'r') as templatefile:
-        template = templatefile.read()
-        
-    try: # convert to unicode if Python2 
-        template = template.decode('utf-8')
-    except AttributeError: pass #Python3 case
+    template = read_contents(templateFilename)
 
     if toggles is None:
         toggles = {}

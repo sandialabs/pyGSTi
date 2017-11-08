@@ -210,7 +210,9 @@ class Results(object):
             raise ValueError(("Gate sequences must be initialized"
                               "*before* adding estimates"))
 
-        assert(len(self.gatestring_structs['iteration']) == len(gatesetsByIter))
+
+        la,lb = len(self.gatestring_structs['iteration']), len(gatesetsByIter)
+        assert(la==lb), "Number of iterations (%d) must equal %d!" % (lb,la)
 
         if estimate_key in self.estimates:
             _warnings.warn("Re-initializing the %s estimate" % estimate_key

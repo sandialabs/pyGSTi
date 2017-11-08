@@ -27,8 +27,8 @@ from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
 #from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
-from ..tools.basis import Basis, change_basis, _mut
-
+from ..tools.basis import Basis, change_basis
+from ..tools.gatetools import _mut
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix

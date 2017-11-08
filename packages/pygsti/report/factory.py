@@ -354,7 +354,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsAllL_modvi[d,i] = est_modvi.gatesets['iteration estimates']
 
             if confidenceLevel is not None:
-                misfit_sigma = est.misfit_sigma()
+                misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
                 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
@@ -790,9 +790,11 @@ def create_standard_report(results, filename, title="auto",
             )
             dscmp_switchBd.add("dscmp",(0,1))
             dscmp_switchBd.add("dscmp_gss",(0,))
+            dscmp_switchBd.add("refds",(0,))
     
             for d1, dslbl1 in enumerate(dataset_labels):
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
     
             dsComp = dict()
             all_dsComps = dict()        
@@ -833,7 +835,7 @@ def create_standard_report(results, filename, title="auto",
             addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
-                   'dscmp', dscmp_switchBd.dscmp_gss, None, None,
+                   'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    None, None, dscomparator=dscmp_switchBd.dscmp)
@@ -1073,10 +1075,13 @@ def find_std_clifford_compilation(gateset, verbosity):
     import importlib
     for module_name in std_modules:
         mod = importlib.import_module("pygsti.construction." + module_name)
-        if mod.gs_target.frobeniusdist(gateset) < 1e-6:
-            if hasattr(mod,"clifford_compilation"):
-                printer.log("Found standard clifford compilation from %s" % module_name)
-                return mod.clifford_compilation
+        if set(mod.gs_target.gates.keys()) == set(gateset.gates.keys()) and \
+           set(mod.gs_target.preps.keys()) == set(gateset.preps.keys()) and \
+           set(mod.gs_target.effects.keys()) == set(gateset.effects.keys()):
+            if mod.gs_target.frobeniusdist(gateset) < 1e-6:
+                if hasattr(mod,"clifford_compilation"):
+                    printer.log("Found standard clifford compilation from %s" % module_name)
+                    return mod.clifford_compilation
     return None
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to

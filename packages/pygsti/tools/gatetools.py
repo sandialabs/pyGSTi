@@ -17,6 +17,10 @@ from . import compattools as _compat
 from . import basis as _basis
 from .basis import change_basis
 
+def _mut(i,j,N):
+    mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
+    return mx
+
 def _hack_sqrtm(A):
     sqrt,errest =  _spl.sqrtm(A, disp=False) #Travis found this scipy function
                                              # to be incorrect in certain cases (we need a workaround)
@@ -453,10 +457,6 @@ def get_povm_map(gateset):
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    def _mut(i,j,N):
-        mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
-        return mx
-
     # Note: get_effect_labels includes remainder label
     povmVectors = [gateset.effects[lbl] for lbl in gateset.get_effect_labels()]
     d = len(povmVectors)
