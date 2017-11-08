@@ -315,7 +315,10 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             else:
                 switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
                 switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClipForWeighting']
-            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",None)
+            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",'auto')
+            if switchBd.clifford_compilation[d,i] == 'auto':
+                switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
+                    est.gatesets['target'],printer)
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
@@ -1043,6 +1046,47 @@ def create_report_notebook(results, filename, title="auto",
         nb.save_to(filename)
 
 
+def find_std_clifford_compilation(gateset, verbosity):
+    """
+    Returns the standard cliffor compilation for `gateset`, if
+    one exists.  Otherwise returns None.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The ideal (target) gate set of primitive gates.
+
+    Returns
+    -------
+    dict or None
+        The clifford compilation dictionary (if one can be found).
+    """
+    printer = VerbosityPrinter.build_printer(verbosity)
+    std_modules = ("std1Q_XY",
+                   "std1Q_XYI",
+                   "std1Q_XYZI",
+                   "std1Q_XZ",
+                   "std1Q_ZN",
+                   "std1Q_pi4_pi2_XZ",
+                   "std2Q_XXII",
+                   "std2Q_XXYYII",
+                   "std2Q_XY",
+                   "std2Q_XYCNOT",
+                   "std2Q_XYCPHASE",
+                   "std2Q_XYI",
+                   "std2Q_XYI1",
+                   "std2Q_XYI2",
+                   "std2Q_XYICNOT",
+                   "std2Q_XYICPHASE",
+                   "std2Q_XYZICNOT")
+    import importlib
+    for module_name in std_modules:
+        mod = importlib.import_module("pygsti.construction." + module_name)
+        if mod.gs_target.frobeniusdist(gateset) < 1e-6:
+            if hasattr(mod,"clifford_compilation"):
+                printer.log("Found standard clifford compilation from %s" % module_name)
+                return mod.clifford_compilation
+    return None
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.
