@@ -15,7 +15,6 @@ from . import basis as _basis
 from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
-from . import slicetools as _slct
 from .smartcache import smart_cached
 
 TOL = 1e-20

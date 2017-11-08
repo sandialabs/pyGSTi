@@ -1,5 +1,4 @@
-from collections  import OrderedDict, namedtuple
-from functools    import wraps, partial
+from functools    import partial
 from itertools    import product
 
 import numbers as _numbers
@@ -7,8 +6,6 @@ import collections as _collections
 
 from numpy.linalg import inv as _inv
 import numpy as _np
-
-from pprint import pprint
 
 import math
 
@@ -667,7 +664,6 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='
         return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 
 from ..tools.basisconstructors import *
-from ..tools.basisconstructors import _mut
 
 def basis_longname(basis):
     """

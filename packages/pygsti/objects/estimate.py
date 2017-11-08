@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy       as _np
 import collections as _collections
 import warnings    as _warnings
-import time        as _time
 import copy        as _copy
 
 from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter

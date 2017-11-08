@@ -6,7 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the GatestringStructure class and supporting functionality."""
 
-import collections as _collections
 import itertools as _itertools
 from ..tools import listtools as _lt
 

@@ -9,8 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools   as _itertools
 import warnings    as _warnings
-import time        as _time
-import numpy       as _np
 import copy        as _copy
 
 from .. import tools as _tools

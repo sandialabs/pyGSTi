@@ -8,16 +8,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import pickle as _pickle
 import os  as _os
-import sys as _sys
 import time as _time
-import numpy as _np
 import warnings as _warnings
-import collections as _collections
-import webbrowser as _webbrowser
 import zipfile as _zipfile
-from scipy.stats import chi2 as _chi2
 
-from ..objects import VerbosityPrinter, Basis, SmartCache
+from ..objects import VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools   import timed_block as _timed_block
 
@@ -29,10 +24,6 @@ from . import workspace as _ws
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from .notebook import Notebook as _Notebook
-
-import functools as _functools
-
-from pprint import pprint as _pprint
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]

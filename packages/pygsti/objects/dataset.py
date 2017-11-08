@@ -13,7 +13,6 @@ import uuid     as _uuid
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
-from ..tools import digest as _digest
 from . import gatestring as _gs
 
 

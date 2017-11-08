@@ -9,12 +9,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
-from ... import objects as _objs
 from ... import construction as _cnst
 from ... import algorithms as _algs
 from ... import tools as _tls
 from scipy.linalg import sqrtm
-from scipy.linalg import eig
 import itertools as _ittls
 
 # ---- Fitting functions ----#

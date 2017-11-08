@@ -11,7 +11,6 @@ html.py has for HTML conversion.
 
 import numpy as _np
 import cmath
-from .. import objects as _objs
 from ..tools import compattools as _compat
 
 '''

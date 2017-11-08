@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .formatters import formatDict  as _formatDict
 from .convert    import convertDict as _convertDict
 
-import pickle as _pickle
 
 class Cell(object):
     '''

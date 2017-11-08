@@ -15,13 +15,8 @@ latex = converter('latex')
 from .formatter import Formatter as _Formatter
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 
-import cgi     as _cgi
 import numpy   as _np
 import numbers as _numbers
-import re      as _re
-import os      as _os
-
-from plotly.offline import plot as _plot
 
 ##############################################################################
 #                          Formatting functions                              #

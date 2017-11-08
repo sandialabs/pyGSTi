@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os as _os
 import warnings as _warnings
 import numpy as _np
-import sys as _sys
 import time as _time
 import collections as _collections
 import pickle as _pickle

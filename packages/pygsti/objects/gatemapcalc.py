@@ -8,16 +8,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import warnings as _warnings
 import numpy as _np
-import numpy.linalg as _nla
 import time as _time
-import collections as _collections
 
-from ..tools import gatetools as _gt
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from .profiler import DummyProfiler as _DummyProfiler
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
 

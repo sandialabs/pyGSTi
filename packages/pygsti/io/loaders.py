@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Functions for loading GST objects from text files."""
 
 import os as _os
-import json as _json
 
 from . import stdinput as _stdinput
 from .. import objects as _objs

@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import collections as _collections
 import numbers     as _numbers
-import numpy       as _np
 
 class Dim(object):
     '''

@@ -15,17 +15,11 @@ Named quantities as well as their confidence-region error bars are
 import numpy as _np
 import scipy.linalg as _spl
 import warnings as _warnings
-from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
-from ..objects import smart_cached as _smart_cached
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
-
-import functools as _functools
-
-from pprint import pprint
 
 FINITE_DIFF_EPS = 1e-7
 
@@ -234,7 +228,7 @@ Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
 try:
-    import cvxpy as _cvxpy
+    import cvxpy as _cvxpy # pylint: disable=unused-import
 
     class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
         def __init__(self, gatesetA, gatesetB, gatestring):

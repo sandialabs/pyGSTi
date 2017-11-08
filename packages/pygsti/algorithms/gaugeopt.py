@@ -17,9 +17,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 
 
-from ..objects import Basis
-
-
 def gaugeopt_to_target(gateset, targetGateset, itemWeights=None,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        gatesMetric="frobenius", spamMetric="frobenius",

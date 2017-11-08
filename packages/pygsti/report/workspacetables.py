@@ -8,10 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import warnings           as _warnings
 import numpy              as _np
-import scipy.stats        as _stats
-import scipy.linalg       as _spl
 
-from .. import algorithms as _alg
 from .. import construction as _cnst
 from .. import tools      as _tools
 from .. import objects    as _objs

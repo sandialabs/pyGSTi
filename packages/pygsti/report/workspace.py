@@ -11,21 +11,16 @@ import collections as _collections
 import os          as _os
 import shutil      as _shutil
 import numpy       as _np
-import uuid        as _uuid
+#import uuid        as _uuid
 import random      as _random
 import inspect     as _inspect
 import sys         as _sys
-import hashlib     as _hashlib
-import functools   as _functools
 import pickle      as _pickle
-import json        as _json
 
-import re  as _re
 import subprocess  as _subprocess
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from ..tools import timed_block as _timed_block
 
 from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge
