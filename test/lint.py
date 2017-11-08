@@ -41,6 +41,9 @@ if __name__ == "__main__":
                         help='check for warnings in the repo')
     parser.add_argument('--adjustables', '-a', action='store_true',
                         help='check for refactors in the repo')
+    parser.add_argument('--andtests', '-t', action='store_true',
+                        help='include tests in specific items being linted for')
+
 
     parsed = parser.parse_args(sys.argv[1:])
 
@@ -55,4 +58,4 @@ if __name__ == "__main__":
     if parsed.adjustables:
         run_adjustables()
     if parsed.specific != []:
-        look_for(parsed.specific)
+        look_for(parsed.specific, not parsed.andtests)
