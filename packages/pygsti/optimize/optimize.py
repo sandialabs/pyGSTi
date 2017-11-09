@@ -539,7 +539,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         Includes members 'x', 'fun', 'success', and 'message'.
     """
 
-    import deap as _deap
     import deap.creator as _creator
     import deap.base as _base
     import deap.tools as _tools

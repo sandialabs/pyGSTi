@@ -63,8 +63,7 @@ def get_swap_neighbors(weights, forcedWeights=None, shuffle=False):
 
 
 def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
-                              feasibleFn=None, initialElements=None,
-                              seed=None):
+                              feasibleFn=None, initialElements=None):
     if initialElements is None:
         weights = _np.zeros(len(elements))
     else:
@@ -230,7 +229,7 @@ def do_grasp_iteration(elements, greedyScoreFn, rclFn, localScoreFn,
 
     initialSoln = grasp_greedy_construction(elements, greedyScoreFn, rclFn,
                                             feasibleThreshold, feasibleFn,
-                                            initialElements, seed)
+                                            initialElements)
     printer.log('Initial construction:', 1)
     printer.log(str([str(element) for element in initialSoln]), 1)
 
@@ -321,7 +320,7 @@ def do_grasp(elements, greedyScoreFn, rclFn, localScoreFn, getNeighborsFn,
     bestSoln = None
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
-        initialSoln, localSoln = do_grasp_iteration(elements, greedyScoreFn,
+        _, localSoln = do_grasp_iteration(elements, greedyScoreFn,
                                                     rclFn, localScoreFn,
                                                     getNeighborsFn,
                                                     feasibleThreshold,

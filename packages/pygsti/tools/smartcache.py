@@ -305,7 +305,7 @@ def smart_cached(obj):
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
     @_functools.wraps(obj)
     def cacher(*args, **kwargs):
-        k, v = cache.cached_compute(obj, args, kwargs)
+        _, v = cache.cached_compute(obj, args, kwargs)
         return v
     return cacher
 
@@ -316,12 +316,12 @@ def digest(obj, custom_digests=None):
     """Returns an MD5 digest of an arbitary Python object, `obj`."""
     if custom_digests is None:
         custom_digests = []
-    if _sys.version_info > (3, 0): # Python3?
-        longT = int      # define long and unicode
-        unicodeT = str   #  types to mimic Python2
-    else:
-        longT = long
-        unicodeT = unicode
+    #if _sys.version_info > (3, 0): # Python3?
+    #    longT = int      # define long and unicode
+    #    unicodeT = str   #  types to mimic Python2
+    #else:
+    #    longT = long
+    #    unicodeT = unicode
 
     # a function to recursively serialize 'v' into an md5 object
     def add(md5, v):
@@ -333,7 +333,7 @@ def digest(obj, custom_digests=None):
             else:
                 try:
                     md5.update(str(hash(v)).encode('utf-8'))
-                except TypeError as hashException:
+                except TypeError: # as hashException:
                     if isinstance(v, _np.ndarray):
                         md5.update(v.tostring() + str(v.shape).encode('utf-8') ) # numpy gives us bytes
                     elif isinstance(v, (tuple, list)):

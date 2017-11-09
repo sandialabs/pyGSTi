@@ -786,7 +786,6 @@ class GateSet(object):
         #   above to get the general case projector.
 
         nParams = self.num_params()
-        nElements = self.num_elements()
         dPG = self._buildup_dPG()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
@@ -799,6 +798,7 @@ class GateSet(object):
         #  (below) is (nParams)x(nParams) as desired.
 
         #DEBUG
+        #nElements = self.num_elements()
         #for iRow in range(nElements):
         #    pNorm = _np.linalg.norm(dP[iRow])
         #    if pNorm < 1e-6:
@@ -2715,7 +2715,6 @@ class GateSet(object):
 
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
-            D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].depolarize(gate_noise)
 
@@ -2735,9 +2734,9 @@ class GateSet(object):
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
-            for lbl,rhoVec in self.preps.items():
+            for lbl in self.preps.keys():
                 newGateset.preps[lbl].depolarize(spam_noise)
-            for lbl,EVec in self.effects.items():
+            for lbl in self.effects.keys():
                 newGateset.effects[lbl].depolarize(spam_noise)
 
         return newGateset

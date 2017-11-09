@@ -788,7 +788,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
     float
     """
     maxLogLTerms = logl_max_terms(dataset, gatestring_list, countVecMx,
-                                  totalCntVec, poissonPicture, check,
+                                  totalCntVec, poissonPicture,
                                   gateLabelAliases)
     
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
@@ -814,7 +814,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
 
 @smart_cached
 def logl_max_terms(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
-                   poissonPicture=True, check=False, gateLabelAliases=None):
+                   poissonPicture=True, gateLabelAliases=None):
     """
     The vector of maximum log-likelihood contributions for each gate string
     & SPAM label.

@@ -723,9 +723,9 @@ class Switchboard(_collections.OrderedDict):
         assert(typ == "html"), "Can't render Switchboards as anything but HTML"
 
         switch_html = []; switch_js = []
-        for i,(name,baseID,styp,posLbls,ipos,bShow) in enumerate(
-                zip(self.switchNames, self.switchIDs, self.switchTypes,
-                    self.positionLabels, self.initialPositions, show)):
+        for name,baseID,styp,posLbls,ipos,bShow in zip(
+                self.switchNames, self.switchIDs, self.switchTypes,
+                self.positionLabels, self.initialPositions, show):
             
             ID = (baseID + view_suffix) if view_suffix else baseID
             style = "" if bShow else " style='display: none'"
@@ -821,7 +821,7 @@ class Switchboard(_collections.OrderedDict):
                     float_vals = list(range(len(posLbls)))
                     m,M = 0, len(posLbls)-1
 
-                ml = max(list(map(len,posLbls)))
+                #ml = max(list(map(len,posLbls)))
                 w = 3.0 #1.0*ml
 
                 html  = "<div id='%s-container' class='switch_container'%s>\n" \
@@ -1496,7 +1496,7 @@ class WorkspaceOutput(object):
 
         div_contents = []
         if div_jss is None: div_jss = [""]*len(div_htmls)
-        for divID, divHTML, divJS in zip(div_ids, div_htmls, div_jss):
+        for divHTML, divJS in zip(div_htmls, div_jss):
             scriptJS = "<script>\n%s\n</script>\n" % divJS if divJS else ""
             div_contents.append( ("{script}{html}".format(
                 script=scriptJS,html=divHTML)))
@@ -2313,12 +2313,12 @@ class WorkspacePlot(WorkspaceOutput):
         plotID = "plot_" + ID
         
         if typ == "html":
-    
-            def getPlotlyDivID(html):
-                #could make this more robust using lxml or something later...
-                iStart = html.index('div id="')
-                iEnd = html.index('"', iStart+8)
-                return html[iStart+8:iEnd]
+
+            #def getPlotlyDivID(html):
+            #    #could make this more robust using lxml or something later...
+            #    iStart = html.index('div id="')
+            #    iEnd = html.index('"', iStart+8)
+            #    return html[iStart+8:iEnd]
     
             ##pick "master" plot, whose resizing dictates the resizing of other plots,
             ## as the largest-height plot.

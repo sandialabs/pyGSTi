@@ -494,7 +494,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         else:
             raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
 
-    for i,(maxL,struct) in enumerate(zip(maxLengthList,lsgst_listOfStructs)):
+    for i,struct in enumerate(lsgst_listOfStructs):
         if nest:
             assert(struct.Ls == maxLengthList[0:i+1]) #Make sure lengths are correct!
         else:

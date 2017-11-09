@@ -167,7 +167,7 @@ def create_offline_zip(outputDir="."):
 
     zipFName = _os.path.join(outputDir, "offline.zip")
     zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)    
-    for root, dirs, files in _os.walk(_os.path.join(templatePath,"offline")):
+    for root, _, files in _os.walk(_os.path.join(templatePath,"offline")):
         for f in files:
             fullPath = _os.path.join(root, f)
             zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
@@ -181,7 +181,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     
     toggles["ShowScaling"] = False
     for res in results_dict.values():
-        for i,(lbl,est) in enumerate(res.estimates.items()):
+        for est in res.estimates.values():
             weights = est.parameters.get("weights",None)
             if weights is not None and len(weights) > 0:
                 toggles["ShowScaling"] = True
@@ -195,7 +195,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm, printer, fmt,
+                               nmthreshold, printer, fmt,
                                combine_robust):
     """
     Creates the "master switchboard" used by several of the reports
@@ -224,7 +224,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
-    multiL = bool(len(swLs) > 1)
+    #multiL = bool(len(swLs) > 1)
             
     switchBd = ws.Switchboard(
         ["Dataset","Estimate","Gauge-Opt","max(L)"],
@@ -593,7 +593,7 @@ def create_standard_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
-                                       nmthreshold, comm, printer, fmt,
+                                       nmthreshold, printer, fmt,
                                        combine_robust)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
@@ -611,8 +611,8 @@ def create_standard_report(results, filename, title="auto",
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 
     multidataset = bool(len(dataset_labels) > 1)
-    multiest = bool(len(est_labels) > 1)
-    multiGO = bool(len(gauge_opt_labels) > 1)
+    #multiest = bool(len(est_labels) > 1)
+    #multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(swLs) > 1)
 
     ##goView = [multidataset,multiest,multiGO,False]
@@ -1031,6 +1031,8 @@ def create_report_notebook(results, filename, title="auto",
     nb.add_notebook_text_files([
         _os.path.join(templatePath,'input.txt'),
         _os.path.join(templatePath,'meta.txt')])
+
+    printer.log("Report Notebook created as %s" % filename)
 
     if auto_open:
         port = "auto" if auto_open == True else int(auto_open)

@@ -379,11 +379,10 @@ class GateMapCalc(GateCalc):
         int
             The memory estimate in bytes.
         """
-        ng,Ng,np1,np2 = num_subtrees, num_subtree_proc_groups, num_param1_groups, num_param2_groups
+        np1,np2 = num_param1_groups, num_param2_groups
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
-        nspam = len(self.spamdefs)
         wrtLen1 = (self.tot_params+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.tot_params+np2-1) // np2 # ceiling(num_params / np2)
 
@@ -457,8 +456,6 @@ class GateMapCalc(GateCalc):
         -------
         None
         """
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
@@ -468,12 +465,7 @@ class GateMapCalc(GateCalc):
             evalSubTree = subtrees[iSubTree]
             fslc = evalSubTree.final_slice(evalTree)
 
-            #Free memory from previous subtree iteration before computing caches
-            prCache = None
-
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-                tm = _time.time()
-                
                 #Fill cache info
                 prCache = self._compute_pr_cache(spamLabel, evalSubTree, mySubComm)
 
@@ -586,8 +578,6 @@ class GateMapCalc(GateCalc):
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice = _slct.list_to_slice(wrtFilter) #for now, require the filter specify a slice (could break up into contiguous parts later?)
@@ -607,7 +597,6 @@ class GateMapCalc(GateCalc):
             fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
-            prCache = dprCache = None
             paramSlice = slice(None)
             fillComm = mySubComm #comm used by calc_and_fill
 
@@ -674,7 +663,6 @@ class GateMapCalc(GateCalc):
                         (mxToFill,), spam_label_rows, fslc, 
                         blocks[iBlk], slice(None), calc_and_fill )
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
-                    dProdCache = dGs = None #free mem
 
                 #gather results
                 tm = _time.time()
@@ -797,8 +785,6 @@ class GateMapCalc(GateCalc):
         -------
         None
         """
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         if wrtFilter1 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice (could break up into contiguous parts later?)
@@ -822,7 +808,6 @@ class GateMapCalc(GateCalc):
             fillComm = mySubComm
 
             #Free memory from previous subtree iteration before computing caches
-            prCache = dprCache1 = dprCache2 = hprCache = None
             paramSlice1 = slice(None)
             paramSlice2 = slice(None)
 
@@ -916,9 +901,6 @@ class GateMapCalc(GateCalc):
 
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]
-                        effectSlice2 = _slct.shift( _slct.intersect(blocks2[iBlk2],slice(self.tot_rho_params,self.tot_spam_params)), -self.tot_rho_params)
-                        gateSlice2 = _slct.shift( _slct.intersect(blocks2[iBlk2],slice(self.tot_spam_params,None)), -self.tot_spam_params)
-
                         self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
                                                 spam_label_rows, fslc, blocks1[iBlk1], blocks2[iBlk2],
                                                 calc_and_fill)

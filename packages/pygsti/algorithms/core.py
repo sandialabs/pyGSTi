@@ -874,7 +874,7 @@ def do_iterative_exlgst(
 
         #printer.log('', 2) #newline if we have more info to print
         extraMessages = ["(%s)" % gateStringSetLabels[i]] if gateStringSetLabels else []
-        printer.show_progress(i, nIters, messageLevel=1, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
+        printer.show_progress(i, nIters, prefix='--- Iterative eLGST: ', suffix = '; %s gate strings ---' % len(stringsToEstimate),
                   verboseMessages=extraMessages)
 
         minErr, elgstGateset = do_exlgst(
@@ -1042,7 +1042,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
-    ne = gs.num_params(); gd = gs.get_dimension()
+    ne = gs.num_params()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -1216,10 +1216,15 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                 return _np.concatenate( (v.reshape([KM]), gsVecNorm) )
             elif cptp_penalty_factor != 0 or spam_penalty_factor != 0:
-                cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
-                spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
+                if cptp_penalty_factor != 0:
+                    cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
+                else: cpPenaltyVec = []
+            
+                if spam_penalty_factor != 0:
+                    spamPenaltyVec = _spam_penalty(gs,spam_penalty_factor,gateBasis)
+                else: spamPenaltyVec = []
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
-                return _np.concatenate( (v.reshape([KM]), cpPenaltyVec) )
+                return _np.concatenate( (v.reshape([KM]), cpPenaltyVec, spamPenaltyVec) )
             else:
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                 v.shape = [KM] #reshape ensuring no copy is needed
@@ -1302,7 +1307,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                         vec_gs_len, nGateParams, nSpamParams,
                         gateBasis)
 
-                if check_jacobian: _,_,fd_jac = _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 profiler.add_time("do_mc2gst: JACOBIAN",tm)
                 return jac
 
@@ -2267,7 +2272,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
-    ne = gs.num_params(); gd = gs.get_dimension()
+    ne = gs.num_params()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -2991,7 +2996,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
     
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     k = nSpamParams # offset to beginning of current gate's params
-    for i,(gl,gate) in enumerate(gs.iter_gates()):
+    for i,(_,gate) in enumerate(gs.iter_gates()):
         nP = gate.num_params()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
@@ -3066,12 +3071,12 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
     
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
     k = nSpamParams # offset to beginning of current gate's params
-    for i,(lbl,prepvec) in enumerate(gs.iter_preps()):
+    for i,(_,prepvec) in enumerate(gs.iter_preps()):
         nP = prepvec.num_params()
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
+        # dmDim = denMx.shape[0]
         denMx = _tools.vec_to_stdmx(prepvec, gateBasis)
-        dmDim = denMx.shape[0]
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -3116,7 +3121,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
 
 
     #Compute derivatives for effect terms
-    for i,(lbl,effectvec) in enumerate(gs.iter_effects(),start=len(gs.preps)):
+    for i,(_,effectvec) in enumerate(gs.iter_effects(),start=len(gs.preps)):
         nP = effectvec.num_params()
 
         #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
@@ -3152,7 +3157,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
             spamPenaltyVecGradToFill[iC,k:k+effectvec.num_params()] = vc.real
             vc = None
         
-        Emx = sgnE = dVdp = v = None #free mem
+        sgnE = dVdp = v = None #free mem
         k += effectvec.num_params()
 
     #return the number of leading-dim indicies we filled in

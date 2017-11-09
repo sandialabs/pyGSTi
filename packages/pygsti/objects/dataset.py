@@ -690,7 +690,7 @@ class DataSet(object):
             return copyOfMe
 
 
-    def copy_nonstatic(self, collisionAction=None):
+    def copy_nonstatic(self):
         """ Make a non-static copy of this DataSet. """
         if self.bStatic:
             copyOfMe = DataSet(spamLabels=self.get_spam_labels(),

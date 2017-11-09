@@ -968,16 +968,16 @@ class TDDataSet(object):
         self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
     else:
       self.sliData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.sliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       self.timeData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       if useReps:
         self.repData = []
-        for i in range(state_dict['nRows']):
+        for _ in range(state_dict['nRows']):
           self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
       else:
         self.repData = None

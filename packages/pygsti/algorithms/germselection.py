@@ -132,7 +132,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
     gates = list(gs_target.gates.keys())
     availableGermsList = []
     if candidateGermCounts is None: candidateGermCounts = {6: 'all upto'}
-    for i,(germLength, count) in enumerate(candidateGermCounts.items()):
+    for germLength, count in candidateGermCounts.items():
         if count == "all upto":
             availableGermsList.extend( _constr.list_all_gatestrings_without_powers_and_cycles(
                     gates, maxLength=germLength) )
@@ -929,8 +929,7 @@ def build_up(gatesetList, germsList, randomize=True,
                                      randomizationStrength, numCopies, seed)
 
     (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+     numGaugeParams, _, _) = get_gateset_params(gatesetList)
 
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
     numGerms = len(germsList)
@@ -1116,9 +1115,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     #assert(all([(gs.num_params() == Np) for gs in gatesetList])), \
     #    "All gate sets must have the same number of parameters!"
 
-    (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+    (_, numGaugeParams,
+     numNonGaugeParams, _) = get_gateset_params(gatesetList)
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
 
     numGerms = len(germsList)
@@ -1190,7 +1188,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     elif mode == "single-Jac":
         currentDDDList = [ _np.zeros((Np,Np),'complex') for gs in gatesetList ]
 
-        loc_Indices, owners, _ = _mpit.distribute_indices(
+        loc_Indices, _, _ = _mpit.distribute_indices(
             list(range(len(goodGerms))), comm, False)
         
         with printer.progress_logging(3):
@@ -1738,9 +1736,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     gatesetList = setup_gateset_list(gatesetList, randomize,
                                      randomizationStrength, numCopies, seed)
 
-    (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+    (_,  numGaugeParams,
+     numNonGaugeParams, _) = get_gateset_params(gatesetList)
 
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
 

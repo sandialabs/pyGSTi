@@ -342,7 +342,7 @@ class ConfidenceRegionFactory(object):
 
 
 
-    def enable_linear_response_errorbars(self, linresponse_mlgst_params):
+    def enable_linear_response_errorbars(self):
         """
         Stores the parameters needed to run (on-demand) the ML-GST
         optimizations needed to compute error bars on quantities.
@@ -353,11 +353,9 @@ class ConfidenceRegionFactory(object):
         computation of the entire Hessian matrix, which can be 
         prohibitively costly on large parameter spaces.
 
-        Parameters
-        ----------
-        linresponse_mlgst_params : dict
-            the arguments passed to the :func:`do_mlgst`
-            calls used to compute linear-response error bars.
+        Returns
+        -------
+        None
         """
         assert(self.parent is not None) # Estimate
         assert(self.parent.parent is not None) # Results
@@ -367,7 +365,7 @@ class ConfidenceRegionFactory(object):
 
         parameters = self.parent.parameters
         minProbClip = parameters.get('minProbClip', 1e-4)
-        minProbClipForWeighting = parameters.get('minProbClipForWeighting',1e-4)
+        #minProbClipForWeighting = parameters.get('minProbClipForWeighting',1e-4)
         probClipInterval = parameters.get('probClipInterval',(-1e6,1e6))
         radius = parameters.get('radius',1e-4)
         cptp_penalty_factor = parameters.get('cptpPenaltyFactor',0)
@@ -388,7 +386,8 @@ class ConfidenceRegionFactory(object):
             'radius': radius,
             'poissonPicture': True, 'verbosity': 2, #NOTE: HARDCODED
             'memLimit': memLimit, 'comm': comm,
-            'distributeMethod': distributeMethod, 'profiler': None
+            'distributeMethod': distributeMethod, 'profiler': None,
+            'gateLabelAliases': aliases
             }
 
 
@@ -899,7 +898,7 @@ class ConfidenceRegionFactoryView(object):
         mlgst_args['forcefn_grad'] = gradF
         mlgst_args['shiftFctr'] = 100.0
         mlgst_args['evaltree_cache'] = self.mlgst_evaltree_cache
-        maxLogL, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
+        _, bestGS = _alg.core._do_mlgst_base(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.gateset) #maybe more params here?
         norms = _np.array([_np.dot(gradF[i],gradF[i]) for i in range(gradF.shape[0])])
         delta2 = _np.abs(_np.dot(gradF, bestGS.to_vector() - self.gateset.to_vector()) \
