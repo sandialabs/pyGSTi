@@ -6,12 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .row         import Row
-from .formatters  import formatDict    as _formatDict
-from ..objects.reportableqty import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
-import re as _re
-
+from .row         import Row
 from .convert import convertDict as _convertDict
 
 class ReportTable(object):

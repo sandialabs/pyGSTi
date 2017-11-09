@@ -11,9 +11,7 @@ latex.py has for latex conversion.
 
 import numpy as _np
 import cmath
-from .. import objects as _objs
 from ..tools import compattools as _compat
-from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation

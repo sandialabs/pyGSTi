@@ -15,19 +15,16 @@ Named quantities as well as their confidence-region error bars are
 import numpy as _np
 import scipy.linalg as _spl
 import warnings as _warnings
-from collections import OrderedDict as _OrderedDict
 
 from .. import tools as _tools
 from .. import algorithms as _alg
-from ..objects import smart_cached as _smart_cached
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
-import functools as _functools
-
-from pprint import pprint
-
 FINITE_DIFF_EPS = 1e-7
+
+def _nullFn(*arg):
+    return None
 
 def _projectToValidProb(p, tol=1e-9):
     if p < tol: return tol
@@ -234,7 +231,7 @@ Gatestring_jt_diff = _gsf.gatesetfn_factory(gatestring_jt_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
 try:
-    import cvxpy as _cvxpy
+    import cvxpy as _cvxpy # pylint: disable=unused-import
 
     class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
         def __init__(self, gatesetA, gatesetB, gatestring):
@@ -267,7 +264,7 @@ try:
 
 except ImportError:
     gatestring_half_diamond_norm = None
-    Gatestring_half_diamond_norm = None
+    Gatestring_half_diamond_norm = _nullFn
 
 
 def gatestring_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
@@ -341,9 +338,15 @@ def povm_jt_diff(gatesetA, gatesetB):
     return _tools.povm_jtracedist(gatesetA, gatesetB)
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
 
-def povm_half_diamond_norm(gatesetA, gatesetB):
-    return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
-POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
+try:
+    import cvxpy as _cvxpy # pylint: disable=unused-import
+
+    def povm_half_diamond_norm(gatesetA, gatesetB):
+        return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
+    POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
+except ImportError:
+    povm_half_diamond_norm = None
+    POVM_half_diamond_norm = _nullFn
 
 
 
@@ -465,7 +468,7 @@ Jt_diff = _gsf.gatesfn_factory(jt_diff)
 
 
 try:
-    import cvxpy as _cvxpy
+    import cvxpy as _cvxpy # pylint: disable=unused-import
 
     class Half_diamond_norm(_gsf.GateSetFunction):
         def __init__(self, gatesetA, gatesetB, gatelabel):
@@ -496,7 +499,7 @@ try:
 
 except ImportError:
     half_diamond_norm = None
-    Half_diamond_norm = None
+    Half_diamond_norm = _nullFn
 
 
 def std_unitarity(A,B, mxBasis):

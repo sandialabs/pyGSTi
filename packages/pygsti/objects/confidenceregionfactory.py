@@ -910,7 +910,7 @@ class ConfidenceRegionFactoryView(object):
         if hasattr(f0,'shape'):
             delta.shape = f0.shape #reshape to un-flattened
         else:
-            assert(type(f0) == float)
+            assert(isinstance(f0,float))
             delta = float(delta)
 
         return delta
@@ -931,7 +931,7 @@ class ConfidenceRegionFactoryView(object):
 
         printer.log("gradF = %s" % gradF)
 
-        if type(f0) == float:
+        if isinstance(f0,float) or isinstance(f0,int):
             gradFdag = _np.conjugate(_np.transpose(gradF))
 
             #DEBUG
@@ -991,7 +991,7 @@ class ConfidenceRegionFactoryView(object):
 #Helper functions
 def _create_empty_grad(val, nParams):
     """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
-    if type(val) == float:
+    if isinstance(val,float) or isinstance(val,int):
         gradVal = _np.zeros( nParams, 'd' )
     else:
         gradSize = (nParams,) + tuple(val.shape)

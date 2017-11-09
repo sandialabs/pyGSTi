@@ -8,7 +8,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy             as _np
 import scipy             as _scipy
-import os                as _os
 import warnings          as _warnings
 import collections       as _collections
 
@@ -16,7 +15,6 @@ from scipy.stats  import chi2 as _chi2
     
 from .. import algorithms   as _alg
 from .. import tools        as _tools
-from .. import construction as _construction
 from .. import objects      as _objs
 
 from .workspace import WorkspacePlot

@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the GateSet class and supporting functionality."""
 
 import numpy as _np
-import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
@@ -20,17 +19,16 @@ from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
 
-from . import evaltree as _evaltree
 from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
-from .gatemapcalc import GateMapCalc as _GateMapCalc
+#from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
-from ..tools.basis import Basis, change_basis, _mut
-
+from ..tools.basis import Basis, change_basis
+from ..tools.gatetools import _mut
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix

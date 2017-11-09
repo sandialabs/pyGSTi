@@ -4,6 +4,7 @@ import pygsti
 from pygsti.construction import std1Q_XYI as stdxyi
 from pygsti.construction import std1Q_XY as stdxy
 from pygsti.objects import gatesetfunction as gsf
+from pygsti.objects.gatemapcalc import GateMapCalc
 
 import numpy as np
 import sys, os
@@ -323,7 +324,7 @@ class TestHessianMethods(BaseTestCase):
                                         returnHessian=True)
         
         gs_mapcalc = self.gateset.copy()
-        gs_mapcalc._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        gs_mapcalc._calcClass = GateMapCalc
         chi2, chi2Hessian_mapcalc = pygsti.chi2(self.ds, self.gateset,
                                         returnHessian=True)
 

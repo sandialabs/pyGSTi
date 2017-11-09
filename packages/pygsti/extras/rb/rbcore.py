@@ -17,7 +17,6 @@ import itertools as _itertools
 import numpy as _np
 from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
-from collections import OrderedDict as _OrderedDict
 
 def create_random_gatestring(m, group_or_gateset, inverse = True,
                              interleaved = None, seed=None,

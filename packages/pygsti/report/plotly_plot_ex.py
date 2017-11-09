@@ -9,9 +9,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os as _os
 from plotly import tools as _plotlytools
 from plotly.offline.offline import _plot_html
-from plotly.offline.offline import get_plotlyjs
-from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
-from pkg_resources import resource_string
+#from plotly.offline.offline import get_plotlyjs
+#from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
+#from pkg_resources import resource_string
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
             validate=True, resizable=False, autosize=False,

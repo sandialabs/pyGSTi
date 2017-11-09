@@ -7,10 +7,6 @@ import inspect   as _inspect
 import pickle    as _pickle
 
 from collections import Counter, defaultdict
-from pprint      import pprint
-from copy        import deepcopy
-
-from . import compattools as _compat
 
 from .opttools import timed_block as _timed_block
 

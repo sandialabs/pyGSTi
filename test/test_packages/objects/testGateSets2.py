@@ -6,6 +6,7 @@ import warnings
 import os
 
 from .testGateSets import GateSetTestCase
+from pygsti.objects.gatemapcalc import GateMapCalc
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
 FD_HESS_PLACES = 3 # looser checking when computing finite difference hessians (currently in map calcs)
@@ -25,7 +26,7 @@ class TestGateSetMethods(GateSetTestCase):
                       '1': ('remainder','remainder') } )
 
         self.mgateset = self.gateset.copy()
-        self.mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        self.mgateset._calcClass = GateMapCalc
 
 
     def test_creation(self):

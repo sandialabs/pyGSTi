@@ -5,6 +5,7 @@ import warnings
 import os
 
 from .testGateSets import GateSetTestCase
+from pygsti.objects.gatemapcalc import GateMapCalc
 
 class TestGateSetMethods(GateSetTestCase):
 
@@ -39,7 +40,7 @@ class TestGateSetMethods(GateSetTestCase):
                       '1': ('rho0','remainder') } )
 
         mgateset = self.gateset.copy()
-        mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        mgateset._calcClass = GateMapCalc
 
         est = gateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
                                                  cache_size=100, num_subtrees=2, 

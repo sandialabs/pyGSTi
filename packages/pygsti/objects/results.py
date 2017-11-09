@@ -9,8 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import itertools   as _itertools
 import warnings    as _warnings
-import time        as _time
-import numpy       as _np
 import copy        as _copy
 
 from .. import tools as _tools
@@ -212,7 +210,9 @@ class Results(object):
             raise ValueError(("Gate sequences must be initialized"
                               "*before* adding estimates"))
 
-        assert(len(self.gatestring_structs['iteration']) == len(gatesetsByIter))
+
+        la,lb = len(self.gatestring_structs['iteration']), len(gatesetsByIter)
+        assert(la==lb), "Number of iterations (%d) must equal %d!" % (lb,la)
 
         if estimate_key in self.estimates:
             _warnings.warn("Re-initializing the %s estimate" % estimate_key

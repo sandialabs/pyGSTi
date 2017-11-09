@@ -41,13 +41,25 @@ setup(name='pyGSTi',
       author_email='pygsti@sandia.gov',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.construction', 'pygsti.drivers', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
-      package_data={'pygsti.report': ['templates/*.html', 'templates/css/*.css']},
+      package_data={'pygsti.report': ['templates/*.tex', 'templates/*.html', 'templates/*.json',
+                                      'templates/report_notebook/*.txt',
+                                      'templates/standard_html_report/*.html',
+                                      'templates/offline/README.txt',
+                                      'templates/offline/*.js',
+                                      'templates/offline/*.css',
+                                      'templates/offline/fonts/*',
+                                      'templates/offline/images/*']},
       requires=['numpy','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
            'image comparison' : ['Pillow'],
-           'accurate memory profiling' : ['psutil']
+           'accurate memory profiling' : ['psutil'],
+           'multi-processor support' : ['mpi4py'],
+           'evolutionary optimization algorithm': ['deap'],
+           'pickling report tables': ['pandas'],
+           'generating PDFs of report figures': ['matplotlib'],
+           'generating report notebooks': ['ipython','notebook']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
@@ -55,5 +67,3 @@ setup(name='pyGSTi',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
       classifiers = filter(None, classifiers.split("\n")),
      )
-
-#other optional requirements: deap, pptx, Pillow, cvxpy

@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the EvalTree class which implements an evaluation tree. """
 
 from . import gatestring as _gs
-from ..tools import mpitools as _mpit
 from .verbosityprinter import VerbosityPrinter
 from .evaltree import EvalTree
 

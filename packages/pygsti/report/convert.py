@@ -9,7 +9,6 @@ from . import latex
 from . import python
 
 import numpy as _np
-import cmath
 import functools
 from .. import objects as _objs
 from ..tools import compattools as _compat
