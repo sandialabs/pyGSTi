@@ -932,13 +932,11 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
                 
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
-        if mxBasis.dim.gateDim > 1: yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
         
     if mxBasisY is not None:
         ylabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasisY.labels]
-        if mxBasisY.dim.gateDim > 1: yextra += .5
     else:
         ylabels = [""] * gateMatrix.shape[0]
 
@@ -971,10 +969,6 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     xlabel, ylabel : str, optional
         Axis labels for the plot.
-
-    xextra, yextra : float, optional
-        Amount of extra horizontal and vertical padding used when
-        computing the width and height of the box (in internal units).
 
     boxLabels : bool, optional
         Whether box labels are displayed.

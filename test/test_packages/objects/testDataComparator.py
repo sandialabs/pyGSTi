@@ -46,7 +46,7 @@ class DataComparatorTestCase(BaseTestCase):
 
         #Also test "rectification" (re-scaling to make consistent) here:
         comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof',x0=0.5,method='Nelder-Mead')
+                                        target_score='dof')
 
 
 
@@ -96,7 +96,7 @@ class DataComparatorTestCase(BaseTestCase):
 
         #Also test "rectification" (re-scaling to make consistent) here:
         comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof',x0=0.5,method='Nelder-Mead')
+                                        target_score='dof')
 
 
         

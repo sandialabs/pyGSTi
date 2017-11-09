@@ -188,12 +188,12 @@ def nullspace_qr(m, tol=1e-7):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
-    #if M,N = m.shape, and q,r,p = _spl.qr(..mode='full'..), then
+    #if M,N = m.shape, and q,r,p = _spl.qr(...)
     # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
-    r,_ = _spl.qr(m.T, mode='r', pivoting=True)
+    q,r,_ = _spl.qr(m.T, mode='full', pivoting=True)
     rank = (_np.abs(_np.diagonal(r)) > tol).sum()
     
-    #DEBUG: requires q,r,p = _sql.qr(..mode='full'..) above
+    #DEBUG: requires q,r,p = _sql.qr(...) above
     #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
     #print("Rank QR = ",rank)
     #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))

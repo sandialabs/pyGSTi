@@ -21,7 +21,7 @@ def _generate_with(printer):
                 printer.error(errorMessage)
             with printer.progress_logging(2):
                 for i, item in enumerate(data):
-                    printer.show_progress(i, len(data), messageLevel=2)
+                    printer.show_progress(i, len(data)) #, messageLevel=2)
 
 def _to_temp_file(printer):
     data     = list(range(2))
