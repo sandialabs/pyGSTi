@@ -6,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """ Defines the rpeconfig class and supporting functionality."""
 
-import numpy as _np
-
 class rpeconfig:
     """
     Encapsulates a collection of settings for an RPE run.  Provides full specifications,

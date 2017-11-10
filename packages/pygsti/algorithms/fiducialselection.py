@@ -355,7 +355,7 @@ def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='al
         matrix.
 
     """
-    dimRho = gateset.get_dimension()
+    # dimRho = gateset.get_dimension()
     if prepOrMeas == 'prep':
         fidArrayList = make_prep_mxs(gateset, fidList)
     elif prepOrMeas == 'meas':
@@ -363,8 +363,7 @@ def compute_composite_fiducial_score(gateset, fidList, prepOrMeas, scoreFunc='al
     else:
         raise ValueError('Invalid value "{}" for prepOrMeas (must be "prep" '
                          'or "meas")!'.format(prepOrMeas))
-    numMxs = len(fidArrayList)
-
+    
     numFids = len(fidList)
     scoreMx = _np.concatenate(fidArrayList, axis=1) # shape = (dimRho, nFiducials*nPrepsOrEffects)
     scoreSqMx = _np.dot(scoreMx, scoreMx.T) # shape = (dimRho, dimRho)

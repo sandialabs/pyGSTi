@@ -1,5 +1,4 @@
 import warnings  as _warnings
-import functools as _functools
 
 from .parameterized import *
 

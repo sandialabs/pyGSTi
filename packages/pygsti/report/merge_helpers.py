@@ -88,7 +88,7 @@ def rsync_offline_dir(outputDir):
         _shutil.copytree(offlineDir, destDir)
         
     else:
-        for dirpath, dirnames, filenames in _os.walk(offlineDir):
+        for dirpath, _, filenames in _os.walk(offlineDir):
             for nm in filenames:
                 srcnm = _os.path.join(dirpath, nm)
                 relnm = _os.path.relpath(srcnm, offlineDir)
@@ -101,13 +101,7 @@ def rsync_offline_dir(outputDir):
 
 
 def read_and_preprocess_template(templateFilename, toggles):
-    template = ''
-    with open(templateFilename, 'r') as templatefile:
-        template = templatefile.read()
-        
-    try: # convert to unicode if Python2 
-        template = template.decode('utf-8')
-    except AttributeError: pass #Python3 case
+    template = read_contents(templateFilename)
 
     if toggles is None:
         toggles = {}
@@ -449,7 +443,7 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
     outputFilenames = []
     for fn in templateFilenames:
         outfn = _os.path.join(outputDir, fn) if (fn == 'main.html') else \
-                _os.path.join(outputDir, 'tabs', fn)
+                _os.path.join(tabDir, fn)
         outputFilenames.append( outfn )
         
     for templateFilename,outputName in zip(templateFilenames,outputFilenames):

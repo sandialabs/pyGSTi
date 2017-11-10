@@ -8,7 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 '''
 This module defines tools for optimization and profiling
 '''
-from functools   import partial, wraps
+from functools   import wraps
 from time        import time
 from contextlib  import contextmanager
 from collections import defaultdict

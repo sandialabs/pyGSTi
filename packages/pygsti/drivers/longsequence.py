@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import os as _os
 import warnings as _warnings
 import numpy as _np
-import sys as _sys
 import time as _time
 import collections as _collections
 import pickle as _pickle
@@ -132,7 +131,7 @@ def do_model_test(modelGateFilenameOrSet,
     
     #Construct GateString lists
     lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
-                                  maxLengths, advancedOptions, comm, verbosity)
+                                  maxLengths, advancedOptions, verbosity)
 
     if gaugeOptParams is None: gaugeOptParams = {}
     if advancedOptions is None: advancedOptions = {}
@@ -172,13 +171,7 @@ def do_model_test(modelGateFilenameOrSet,
     parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
     parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
     parameters['weights'] = None
-    
-    #parameters['starting point'] = startingPt
-    #parameters['memLimit'] = None
-    #
-    #  #from advanced options
-    #parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
-    
+        
     return _post_opt_processing('do_model_test', ds, gs_target, gs_model,
                                 lsgstLists, parameters, None, gs_lsgst_list,
                                 gaugeOptParams, advancedOptions, comm, memLimit,
@@ -272,7 +265,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - radius = float (default == 1e-4)
         - useFreqWeightedChiSq = True / False (default)
         - nestedGateStringLists = True (default) / False
-        - includeLGST = True / False (default is True if starting point == LGST)
+        - includeLGST = True / False (default is True)
         - distributeMethod = "gatestrings" or "deriv" (default)
         - profile = int (default == 1)
         - check = True / False (default)
@@ -368,7 +361,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     
     #Construct GateString lists
     lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
-                                 maxLengths, advancedOptions, comm, verbosity)
+                                 maxLengths, advancedOptions, verbosity)
     
     return do_long_sequence_gst_base(ds, gs_target, lsgstLists, gaugeOptParams,
                                      advancedOptions, comm, memLimit,
@@ -629,7 +622,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     parameters['check'] = advancedOptions.get('check',False)
     parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
     parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
-    parameters['includeLGST'] = advancedOptions.get('includeLGST', startingPt == "LGST")
+    parameters['includeLGST'] = advancedOptions.get('includeLGST', True)
 
     return _post_opt_processing('do_long_sequence_gst', ds, gs_target, gs_start,
                                 lsgstLists, parameters, args, gs_lsgst_list,
@@ -1077,7 +1070,7 @@ def _load_dataset(dataFilenameOrSet, comm, verbosity):
 
 
 def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
-                     maxLengths, advancedOptions, comm, verbosity):
+                     maxLengths, advancedOptions, verbosity):
     """ 
     Sequence construction logic, fatctored into this separate
     function because it's shared do_long_sequence_gst and 
@@ -1085,14 +1078,15 @@ def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
     """
     if advancedOptions is None: advancedOptions = {}
 
+    #Update: now always include LGST strings unless advanced options says otherwise
     #Get starting point (so we know whether to include LGST strings)
-    LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
-                                isinstance(g,_objs.TPParameterizedGate))
-                               for g in gs_target.gates.values()])
-    if  LGSTcompatibleGates:
-        startingPt = advancedOptions.get('starting point',"LGST")
-    else:
-        startingPt = advancedOptions.get('starting point',"target")
+    #LGSTcompatibleGates = all([(isinstance(g,_objs.FullyParameterizedGate) or
+    #                            isinstance(g,_objs.TPParameterizedGate))
+    #                           for g in gs_target.gates.values()])
+    #if  LGSTcompatibleGates:
+    #    startingPt = advancedOptions.get('starting point',"LGST")
+    #else:
+    #    startingPt = advancedOptions.get('starting point',"target")
 
     #Construct gate sequences
     actionIfMissing = advancedOptions.get('missingDataAction','drop')
@@ -1102,7 +1096,7 @@ def _get_lsgst_lists(dschk, gs_target, prepStrs, effectStrs, germs,
         gateLabels, prepStrs, effectStrs, germs, maxLengths,
         truncScheme = advancedOptions.get('truncScheme',"whole germ powers"),
         nest = advancedOptions.get('nestedGateStringLists',True),
-        includeLGST = advancedOptions.get('includeLGST', startingPt == "LGST"),
+        includeLGST = advancedOptions.get('includeLGST', True),
         gateLabelAliases = advancedOptions.get('gateLabelAliases',None),
         sequenceRules = advancedOptions.get('stringManipRules',None),
         dscheck=dschk, actionIfMissing=actionIfMissing,
@@ -1139,6 +1133,11 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         assert(ret.dataset is ds), "DataSet inconsistency: cannot append!"
         assert(len(lsgstLists) == len(ret.gatestring_structs['iteration'])), \
             "Iteration count inconsistency: cannot append!"
+        for i,(a,b) in enumerate(zip(lsgstLists,ret.gatestring_structs['iteration'])):
+            assert(len(a.allstrs)==len(b.allstrs)), \
+                "Iteration %d should have %d of sequences but has %d" % (i,len(b.allstrs),len(a.allstrs))
+            assert(set(a.allstrs)==set(b.allstrs)), \
+                "Iteration %d: sequences don't match existing Results object!" % i
 
     #add estimate to Results
     estlbl = advancedOptions.get('estimateLabel','default')
@@ -1180,7 +1179,9 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                            advancedOptions.get('gateLabelAliases',None))
             else:
                 maxLogL = _tools.logl_max_terms(ds, rawLists[-1],
-                                                gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
+                                                gateLabelAliases=advancedOptions.get(
+                                                    'gateLabelAliases',None))
+                
                 logL = _tools.logl_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                          advancedOptions.get('minProbClip',1e-4),
                                          advancedOptions.get('probClipInterval',(-1e6,1e6)),

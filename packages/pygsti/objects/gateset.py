@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the GateSet class and supporting functionality."""
 
 import numpy as _np
-import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
@@ -20,17 +19,16 @@ from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
 
-from . import evaltree as _evaltree
 from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
-from .gatemapcalc import GateMapCalc as _GateMapCalc
+#from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from .verbosityprinter import VerbosityPrinter
-from ..tools.basis import Basis, change_basis, _mut
-
+from ..tools.basis import Basis, change_basis
+from ..tools.gatetools import _mut
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -788,7 +786,6 @@ class GateSet(object):
         #   above to get the general case projector.
 
         nParams = self.num_params()
-        nElements = self.num_elements()
         dPG = self._buildup_dPG()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
@@ -801,6 +798,7 @@ class GateSet(object):
         #  (below) is (nParams)x(nParams) as desired.
 
         #DEBUG
+        #nElements = self.num_elements()
         #for iRow in range(nElements):
         #    pNorm = _np.linalg.norm(dP[iRow])
         #    if pNorm < 1e-6:
@@ -2717,7 +2715,6 @@ class GateSet(object):
 
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
-            D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].depolarize(gate_noise)
 
@@ -2737,9 +2734,9 @@ class GateSet(object):
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
-            for lbl,rhoVec in self.preps.items():
+            for lbl in self.preps.keys():
                 newGateset.preps[lbl].depolarize(spam_noise)
-            for lbl,EVec in self.effects.items():
+            for lbl in self.effects.keys():
                 newGateset.effects[lbl].depolarize(spam_noise)
 
         return newGateset

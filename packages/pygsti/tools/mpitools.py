@@ -614,9 +614,11 @@ def parallel_apply(f, l, comm):
     results : list
         list of items after f has been applied
     '''
-    locIndices, owners, locComm = distribute_indices(l, comm)
-    locResults = [f(l[i]) for i in locIndices]
-    results = comm.gather(locResults, root=0) # Certain there is a better way to do this (see above)
+    locIndices, _, locComm = distribute_indices(l, comm)
+    if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group 
+        locResults = [f(l[i]) for i in locIndices] # needs to do anything
+    else: locResults = []
+    results = comm.allgather(locResults, root=0) # Certain there is a better way to do this (see above)
     return results
 
 def get_comm():

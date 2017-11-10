@@ -936,7 +936,15 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
                   gateLabels, gateExpressions,
                   prepLabels, prepExpressions,
                   effectLabels, effectExpressions,
-                  spamdefs, basis="gm", parameterization="full"):
+                  spamdefs, basis="auto", parameterization="full"):
+
+    if basis == "auto":
+        if len(stateSpaceDims) == 1 and \
+           _np.isclose(_np.log2(stateSpaceDims[0]),
+                       round(_np.log2(stateSpaceDims[0]))):
+            basis = "pp"
+        else: basis = "gm"
+
     return basis_build_gateset(stateSpaceLabels,
                   gateLabels, gateExpressions,
                   prepLabels, prepExpressions,

@@ -385,7 +385,7 @@ class VerbosityPrinter():
             self._end_progress()
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
-    def show_progress(self, iteration, total, messageLevel=1, barLength = 50, numDecimals=2, fillChar='#',
+    def show_progress(self, iteration, total, barLength = 50, numDecimals=2, fillChar='#',
                     emptyChar='-', prefix='Progress:', suffix='', verboseMessages=[], indentChar='  ', end='\n'):
 
         """
@@ -471,7 +471,7 @@ if __name__ == "__main__":
         data    = range(10)
         with printer.progress_logging(2):
             for i, item in enumerate(data):
-                printer.show_progress(i, len(data)-1, messageLevel=2,
+                printer.show_progress(i, len(data)-1,
                           verboseMessages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
                 time.sleep(.05)
 
@@ -481,7 +481,7 @@ if __name__ == "__main__":
         data    = range(10)
         with printer.progress_logging(1):
             for i, item in enumerate(data):
-                printer.show_progress(i, len(data)-1, messageLevel=1,
+                printer.show_progress(i, len(data)-1,
                       verboseMessages=['%s gate strings' % i], prefix='-- IterativeGST (', suffix=') --')
                 if i == 5:
                     printer.error('The iterator is five. This caused an error, apparently')

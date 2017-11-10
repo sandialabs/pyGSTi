@@ -8,16 +8,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import pickle as _pickle
 import os  as _os
-import sys as _sys
 import time as _time
-import numpy as _np
 import warnings as _warnings
-import collections as _collections
-import webbrowser as _webbrowser
 import zipfile as _zipfile
-from scipy.stats import chi2 as _chi2
 
-from ..objects import VerbosityPrinter, Basis, SmartCache
+from ..objects import VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools   import timed_block as _timed_block
 
@@ -29,10 +24,6 @@ from . import workspace as _ws
 from . import autotitle as _autotitle
 from . import merge_helpers as _merge
 from .notebook import Notebook as _Notebook
-
-import functools as _functools
-
-from pprint import pprint as _pprint
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -176,7 +167,7 @@ def create_offline_zip(outputDir="."):
 
     zipFName = _os.path.join(outputDir, "offline.zip")
     zipHandle = _zipfile.ZipFile(zipFName, 'w', _zipfile.ZIP_DEFLATED)    
-    for root, dirs, files in _os.walk(_os.path.join(templatePath,"offline")):
+    for root, _, files in _os.walk(_os.path.join(templatePath,"offline")):
         for f in files:
             fullPath = _os.path.join(root, f)
             zipHandle.write(fullPath, _os.path.relpath(fullPath,templatePath))
@@ -190,7 +181,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     
     toggles["ShowScaling"] = False
     for res in results_dict.values():
-        for i,(lbl,est) in enumerate(res.estimates.items()):
+        for est in res.estimates.values():
             weights = est.parameters.get("weights",None)
             if weights is not None and len(weights) > 0:
                 toggles["ShowScaling"] = True
@@ -204,7 +195,7 @@ def _set_toggles(results_dict, brevity, combine_robust):
     return toggles
     
 def _create_master_switchboard(ws, results_dict, confidenceLevel,
-                               nmthreshold, comm, printer, fmt,
+                               nmthreshold, printer, fmt,
                                combine_robust):
     """
     Creates the "master switchboard" used by several of the reports
@@ -233,7 +224,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     multidataset = bool(len(dataset_labels) > 1)
     multiest = bool(len(est_labels) > 1)
     multiGO = bool(len(gauge_opt_labels) > 1)
-    multiL = bool(len(swLs) > 1)
+    #multiL = bool(len(swLs) > 1)
             
     switchBd = ws.Switchboard(
         ["Dataset","Estimate","Gauge-Opt","max(L)"],
@@ -315,7 +306,10 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             else:
                 switchBd.mpc[d,i] = est.parameters['minProbClipForWeighting']
                 switchBd.mpc_modvi[d,i] = est_modvi.parameters['minProbClipForWeighting']
-            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",None)
+            switchBd.clifford_compilation[d,i] = est.parameters.get("clifford compilation",'auto')
+            if switchBd.clifford_compilation[d,i] == 'auto':
+                switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
+                    est.gatesets['target'],printer)
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
@@ -360,7 +354,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             switchBd.gsAllL_modvi[d,i] = est_modvi.gatesets['iteration estimates']
 
             if confidenceLevel is not None:
-                misfit_sigma = est.misfit_sigma()
+                misfit_sigma = est.misfit_sigma(use_accurate_Np=True)
                 
                 for il,l in enumerate(gauge_opt_labels):
                     if l in est.gatesets:
@@ -599,7 +593,7 @@ def create_standard_report(results, filename, title="auto",
     #Create master switchboard
     switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
             _create_master_switchboard(ws, results_dict, confidenceLevel,
-                                       nmthreshold, comm, printer, fmt,
+                                       nmthreshold, printer, fmt,
                                        combine_robust)
     if fmt == "latex" and (len(dataset_labels) > 1 or len(est_labels) > 1 or
                          len(gauge_opt_labels) > 1 or len(swLs) > 1):
@@ -617,8 +611,8 @@ def create_standard_report(results, filename, title="auto",
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 
     multidataset = bool(len(dataset_labels) > 1)
-    multiest = bool(len(est_labels) > 1)
-    multiGO = bool(len(gauge_opt_labels) > 1)
+    #multiest = bool(len(est_labels) > 1)
+    #multiGO = bool(len(gauge_opt_labels) > 1)
     multiL = bool(len(swLs) > 1)
 
     ##goView = [multidataset,multiest,multiGO,False]
@@ -796,9 +790,11 @@ def create_standard_report(results, filename, title="auto",
             )
             dscmp_switchBd.add("dscmp",(0,1))
             dscmp_switchBd.add("dscmp_gss",(0,))
+            dscmp_switchBd.add("refds",(0,))
     
             for d1, dslbl1 in enumerate(dataset_labels):
                 dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].gatestring_structs['final']
+                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset #only used for #of spam labels below
     
             dsComp = dict()
             all_dsComps = dict()        
@@ -839,7 +835,7 @@ def create_standard_report(results, filename, title="auto",
             addqty(4,'dsComparisonSummary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
             #addqty('dsComparisonHistogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp, display='pvalue')
             addqty(4,'dsComparisonHistogram', ws.ColorBoxPlot,
-                   'dscmp', dscmp_switchBd.dscmp_gss, None, None,
+                   'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
                    None, None, dscomparator=dscmp_switchBd.dscmp)
@@ -1036,6 +1032,8 @@ def create_report_notebook(results, filename, title="auto",
         _os.path.join(templatePath,'input.txt'),
         _os.path.join(templatePath,'meta.txt')])
 
+    printer.log("Report Notebook created as %s" % filename)
+
     if auto_open:
         port = "auto" if auto_open == True else int(auto_open)
         nb.launch(filename, port=port)
@@ -1043,6 +1041,50 @@ def create_report_notebook(results, filename, title="auto",
         nb.save_to(filename)
 
 
+def find_std_clifford_compilation(gateset, verbosity):
+    """
+    Returns the standard cliffor compilation for `gateset`, if
+    one exists.  Otherwise returns None.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The ideal (target) gate set of primitive gates.
+
+    Returns
+    -------
+    dict or None
+        The clifford compilation dictionary (if one can be found).
+    """
+    printer = VerbosityPrinter.build_printer(verbosity)
+    std_modules = ("std1Q_XY",
+                   "std1Q_XYI",
+                   "std1Q_XYZI",
+                   "std1Q_XZ",
+                   "std1Q_ZN",
+                   "std1Q_pi4_pi2_XZ",
+                   "std2Q_XXII",
+                   "std2Q_XXYYII",
+                   "std2Q_XY",
+                   "std2Q_XYCNOT",
+                   "std2Q_XYCPHASE",
+                   "std2Q_XYI",
+                   "std2Q_XYI1",
+                   "std2Q_XYI2",
+                   "std2Q_XYICNOT",
+                   "std2Q_XYICPHASE",
+                   "std2Q_XYZICNOT")
+    import importlib
+    for module_name in std_modules:
+        mod = importlib.import_module("pygsti.construction." + module_name)
+        if set(mod.gs_target.gates.keys()) == set(gateset.gates.keys()) and \
+           set(mod.gs_target.preps.keys()) == set(gateset.preps.keys()) and \
+           set(mod.gs_target.effects.keys()) == set(gateset.effects.keys()):
+            if mod.gs_target.frobeniusdist(gateset) < 1e-6:
+                if hasattr(mod,"clifford_compilation"):
+                    printer.log("Found standard clifford compilation from %s" % module_name)
+                    return mod.clifford_compilation
+    return None
 
 ##Scratch: SAVE!!! this code generates "projected" gatesets which can be sent to
 ## FitComparisonTable (with the same gss for each) to make a nice comparison plot.

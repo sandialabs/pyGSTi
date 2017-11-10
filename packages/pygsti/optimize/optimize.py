@@ -19,8 +19,6 @@ except:
 
 from .customcg import fmax_cg
 
-from scipy.optimize import least_squares
-
 
 def minimize(fn,x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
@@ -541,7 +539,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         Includes members 'x', 'fun', 'success', and 'message'.
     """
 
-    import deap as _deap
     import deap.creator as _creator
     import deap.base as _base
     import deap.tools as _tools

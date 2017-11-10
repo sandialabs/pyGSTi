@@ -1,5 +1,4 @@
-from collections  import OrderedDict, namedtuple
-from functools    import wraps, partial
+from functools    import partial
 from itertools    import product
 
 import numbers as _numbers
@@ -7,8 +6,6 @@ import collections as _collections
 
 from numpy.linalg import inv as _inv
 import numpy as _np
-
-from pprint import pprint
 
 import math
 
@@ -237,7 +234,6 @@ class Basis(object):
         x = sum(len(mxs) for mxs in self._blockMatrices)
         y = sum(mxs[0].shape[0] for mxs in self._blockMatrices) ** 2
         expandMx = _np.zeros((x, y), 'complex')
-        start = 0
         for i, compMx in enumerate(self.get_composite_matrices()):
             flattened = compMx.flatten()
             assert len(flattened) == y, '{} != {}'.format(len(flattened), y)
@@ -599,7 +595,7 @@ def flexible_change_basis(mx, startBasis, endBasis):
         resize = 'contract'
     stdBasis1 = startBasis.std_equivalent()
     stdBasis2 = endBasis.std_equivalent()
-    start = change_basis(mx, startBasis, stdBasis1)
+    #start = change_basis(mx, startBasis, stdBasis1)
     mid   = resize_std_mx(mx, resize, stdBasis1, stdBasis2)
     end   = change_basis(mid, stdBasis2, endBasis)
     return end
@@ -667,7 +663,6 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='
         return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 
 from ..tools.basisconstructors import *
-from ..tools.basisconstructors import _mut
 
 def basis_longname(basis):
     """

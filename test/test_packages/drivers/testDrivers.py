@@ -529,8 +529,6 @@ class TestDriversMethods(DriversTestCase):
 
         pygsti.drivers.gs_stdev(gsFn, bootgs_p)
         pygsti.drivers.gs_mean(gsFn, bootgs_p)
-        pygsti.drivers.gs_stdev1(gsFn, bootgs_p)
-        pygsti.drivers.gs_mean1(gsFn, bootgs_p)
         pygsti.drivers.to_vector(bootgs_p[0])
 
         pygsti.drivers.to_mean_gateset(bootgs_p, tp_target)

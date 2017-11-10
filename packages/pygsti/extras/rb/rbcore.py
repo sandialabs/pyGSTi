@@ -17,7 +17,6 @@ import itertools as _itertools
 import numpy as _np
 from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
-from collections import OrderedDict as _OrderedDict
 
 def create_random_gatestring(m, group_or_gateset, inverse = True,
                              interleaved = None, seed=None,
@@ -959,7 +958,8 @@ def generate_sim_rb_data(gateset, expRBdataset, seed=None):
     gateStrings = list(expRBdataset.keys(stripOccurrenceTags=True))
     Ns = [ expRBdataset[s].total() for s in gateStrings ]
     return _cnst.generate_fake_data(gateset,gateStrings,Ns,sampleError='multinomial',
-                                    collisionAction=expRBdataset.collisionAction)
+                                    collisionAction=expRBdataset.collisionAction,
+                                    seed=seed)
 
 
 def generate_sim_rb_data_perfect(gateset,expRBdataset,N=1e6):

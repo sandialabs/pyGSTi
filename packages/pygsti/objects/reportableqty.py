@@ -7,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ The ReportableQty class """
 
 from copy import deepcopy as _deepcopy
-import pickle as _pickle
 import numpy as _np
 
 class ReportableQty(object):

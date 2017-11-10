@@ -55,7 +55,9 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     if spamLabels is None:
         spamLabels = inputDataSet.get_spam_labels()
 
-    rndm = _np.random.RandomState(seed)
+    rndm = seed if isinstance(seed, _np.random.RandomState) \
+           else _np.random.RandomState(seed)
+    
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
             print("Generating non-parametric dataset.")
@@ -334,18 +336,14 @@ def gauge_optimize_gs_list(gsList, targetGateset,
 ################################################################################
 
 #For metrics that evaluate gateset with single scalar:
-def gs_stdev(gsFunc, gsEnsemble, ddof=1, **kwargs):
-    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],ddof=ddof)
+def gs_stdev(gsFunc, gsEnsemble, ddof=1, axis=None, **kwargs):
+    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis, ddof=ddof)
 
-def gs_mean(gsFunc, gsEnsemble, axis = 0,**kwargs):
-    return _np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble])
+def gs_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
+    return _np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble], axis=axis)
 
-#For metrics that evaluate gateset with scalar for each gate
-def gs_stdev1(gsFunc, gsEnsemble, ddof=1,axis=0, **kwargs):
-    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis,ddof=ddof)
-
-def gs_mean1(gsFunc, gsEnsemble, axis = 0,**kwargs):
-    return _np.mean([gsFunc(gs,**kwargs) for gs in gsEnsemble],axis=axis)
+#For metrics that evaluate gateset with scalar for each gate, use axis=0
+# argument to above functions
 
 def to_vector(gs):
     return gs.to_vector()

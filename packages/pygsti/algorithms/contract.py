@@ -12,7 +12,6 @@ import warnings as _warnings
 from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
-from ..objects import Basis
 
 def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead", verbosity=0):
     """
@@ -73,24 +72,24 @@ def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirect
 
     if toWhat == 'CPTP':
         if useDirectCP:
-            distance,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=True, maxiter=maxiter)
+            _,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=True, maxiter=maxiter)
         else:
-            distance,contractedGateset = _contractToTP(gateset,verbosity)
-            distance,contractedGateset = _contractToCP(contractedGateset, printer, method, maxiter, tol)
+            _,contractedGateset = _contractToTP(gateset,verbosity)
+            _,contractedGateset = _contractToCP(contractedGateset, printer, method, maxiter, tol)
     elif toWhat == 'XPTP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        distance,contractedGateset = _contractToTP(gateset,verbosity)
-        distance,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
+        _,contractedGateset = _contractToTP(gateset,verbosity)
+        _,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
     elif toWhat == 'CP':
         if useDirectCP:
-            distance,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=False, maxiter=maxiter)
+            _,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=False, maxiter=maxiter)
         else:
-            distance,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
+            _,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
     elif toWhat == 'TP':
-        distance,contractedGateset = _contractToTP(gateset,verbosity)
+        _,contractedGateset = _contractToTP(gateset,verbosity)
     elif toWhat == 'XP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        distance,contractedGateset = _contractToXP(gateset,dataset,verbosity,method,maxiter,tol)
+        _,contractedGateset = _contractToXP(gateset,dataset,verbosity,method,maxiter,tol)
     elif toWhat == 'vSPAM':
         contractedGateset = _contractToValidSPAM(gateset, printer)
     elif toWhat == 'nothing':

@@ -7,6 +7,7 @@ import pickle
 import os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
+from pygsti.objects.gatemapcalc import GateMapCalc
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
 FD_HESS_PLACES = 3 # looser checking when computing finite difference hessians (currently in map calcs)
@@ -48,7 +49,7 @@ class GateSetTestCase(BaseTestCase):
             parameterization="static")
 
         self.mgateset = self.gateset.copy()
-        self.mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        self.mgateset._calcClass = GateMapCalc
 
 
 class TestGateSetMethods(GateSetTestCase):

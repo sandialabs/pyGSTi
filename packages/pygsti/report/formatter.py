@@ -7,8 +7,6 @@
 import re as _re
 from copy import deepcopy
 
-from functools import partial
-
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 class Formatter(object):

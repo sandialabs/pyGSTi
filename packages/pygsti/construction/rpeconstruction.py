@@ -339,8 +339,8 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
 
 
 #TODO savePlot arg is never used?
-def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
-                  plot=False, savePlot=False):
+def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs):
+#                  plot=False):
 
     """ Experimental test function """
     kList = [2**k for k in range(log2kMax+1)]
@@ -349,8 +349,8 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
     thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
 
-    percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
-    percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
+    #percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
+    #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
     simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'],
                                       [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
@@ -373,7 +373,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 
     thetaTrue = _tools.rpe.extract_theta(simGateset)
 
-    SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
+    #SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
 
     jMax = runs
 

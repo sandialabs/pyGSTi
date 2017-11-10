@@ -7,10 +7,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """ Defines the DataSet class and supporting classes and functions """
 
 import numpy as _np
-import scipy.special as _sps
-import scipy.fftpack as _fft
-from scipy.integrate import quad as _quad
-from scipy.interpolate import interp1d as _interp1d
+#import scipy.special as _sps
+#import scipy.fftpack as _fft
+#from scipy.integrate import quad as _quad
+#from scipy.interpolate import interp1d as _interp1d
 import pickle as _pickle
 import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
@@ -18,7 +18,7 @@ from collections import OrderedDict as _OrderedDict
 from ..tools import listtools as _lt
 
 from . import gatestring as _gs
-from . import dataset as _ds
+#from . import dataset as _ds
 
 
 class TDDataSet_KeyValIterator(object):
@@ -968,16 +968,16 @@ class TDDataSet(object):
         self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
     else:
       self.sliData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.sliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       self.timeData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       if useReps:
         self.repData = []
-        for i in range(state_dict['nRows']):
+        for _ in range(state_dict['nRows']):
           self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
       else:
         self.repData = None

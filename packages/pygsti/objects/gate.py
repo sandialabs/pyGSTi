@@ -297,7 +297,6 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
     #print("deriv_wrt_params deriv = \n",deriv_to_check)
     #print("deriv_wrt_params - finite diff deriv = \n",
     #      deriv_to_check - fd_deriv)
-    d2 = gate.dim
     for i in range(deriv_to_check.shape[0]):
         for j in range(deriv_to_check.shape[1]):
             diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])
@@ -2155,7 +2154,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         derivMx = _np.zeros( (self.dim**2, self.num_params()), 'd' )
 
         # Compute d(diag)/d(param) for each params, then apply B & Bi
-        for k,(pdesc,pval) in enumerate(zip(self.params, self.paramvals)):
+        for k,pdesc in enumerate(self.params):
             dMx = _np.zeros( (self.dim,self.dim), 'complex')
             for prefactor,(i,j) in pdesc:
                 dMx[i,j] = prefactor
@@ -2730,7 +2729,6 @@ class LindbladParameterizedGate(GateMatrix):
             Array of derivatives, shape == (dimension^2, num_params)
         """
         if self.base_deriv is None:
-            G = self.base
             d2 = self.dim
             bsH = self.ham_basis_size
             bsO = self.other_basis_size
@@ -2962,7 +2960,6 @@ class LindbladParameterizedGate(GateMatrix):
             Array of derivatives, shape == (dimension^2, num_params)
         """
         if self.base_deriv is None:
-            G = self.base
             d2 = self.dim
             bsH = self.ham_basis_size
             bsO = self.other_basis_size
@@ -3033,7 +3030,6 @@ class LindbladParameterizedGate(GateMatrix):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if self.base_hessian is None:
-            G = self.base
             d2 = self.dim
             bsH = self.ham_basis_size
             bsO = self.other_basis_size

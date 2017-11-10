@@ -12,12 +12,10 @@ import numpy.linalg as _nla
 import time as _time
 import collections as _collections
 
-from ..tools import gatetools as _gt
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from .profiler import DummyProfiler as _DummyProfiler
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .gatecalc import GateCalc
 
@@ -407,11 +405,6 @@ class GateMatrixCalc(GateCalc):
               product with respect to the k-th then k-th gateset parameters.
         """
 
-        gatesToVectorize1 = list(self.gates.keys()) #which differentiation w.r.t. gates should be done
-                                              # (which is all the differentiation done here)
-        gatesToVectorize2 = list(self.gates.keys()) # (possibility to later specify different sets of gates
-                                              #to differentiate firstly and secondly with)
-
         # LEXICOGRAPHICAL VS MATRIX ORDER
         revGateLabelList = tuple(reversed(tuple(gatestring))) # we do matrix multiplication in this order (easier to think about)
 
@@ -510,7 +503,7 @@ class GateMatrixCalc(GateCalc):
             for l,gateLabel2 in enumerate(revGateLabelList):
                 i2 = gateLabels.index(gateLabel2)
                 s2,e2 = cum2[i2:i2+2] #start and ending indices for gate2's parameters in (3rd index of) flattened_d2prod
-                nDerivCols2 = dgate_dgateLabel2[gateLabel2].shape[1]
+                #nDerivCols2 = dgate_dgateLabel2[gateLabel2].shape[1]
                 
                 # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
                 # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
@@ -536,58 +529,6 @@ class GateMatrixCalc(GateCalc):
                       # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
 
                #else l==m, in which case there's no contribution since we assume all gate elements are at most linear in the parameters
-
-#        d2prod_dgateLabels = { };
-#        for gateLabel1 in gatesToVectorize1:
-#            for gateLabel2 in gatesToVectorize2:
-#                d2prod_dgateLabels[(gateLabel1,gateLabel2)] = _np.zeros( (dim**2, nParams[gateLabel1], nParams[gateLabel2]), 'd')
-#
-#        #Add contributions for each gate in list
-#        N = len(revGateLabelList)
-#        for m,gateLabel1 in enumerate(revGateLabelList):
-#            #OLD shortcut: if gateLabel1 in gatesToVectorize1: (and indent below)
-#            for l,gateLabel2 in enumerate(revGateLabelList):
-#                #OLD shortcut: if gateLabel2 in gatesToVectorize2: (and indent below)
-#                # FUTURE: we could add logic that accounts for the symmetry of the Hessian, so that
-#                # if gl1 and gl2 are both in gatesToVectorize1 and gatesToVectorize2 we only compute d2(prod)/d(gl1)d(gl2)
-#                # and not d2(prod)/d(gl2)d(gl1) ...
-#                if m < l:
-#                    x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,l-1)])  # (dim**2, dim**2)
-#                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
-#                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
-#                    y = _np.dot( _np.kron(xv, _np.transpose(prods[(l+1,N-1)])), dgate_dgateLabel[gateLabel2] )
-#                    # above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
-#                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
-#                            # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
-#                elif l < m:
-#                    x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-#                    x  = _np.dot( _np.transpose(dgate_dgateLabel[gateLabel1]), x0); xv = x.view() # (nParams[gateLabel1],dim**2)
-#                    xv.shape = (nParams[gateLabel1], dim, dim) # (reshape without copying - throws error if copy is needed)
-#                    xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
-#                    y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel[gateLabel2] )
-## above: (nParams1,dim**2,dim**2) * (dim**2,nParams[gateLabel2]) = (nParams1,dim**2,nParams2)
-#                    d2prod_dgateLabels[(gateLabel1,gateLabel2)] += _np.swapaxes(y,0,1)
-#                    # above: dim = (dim2, nParams1, nParams2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
-#               #else l==m, in which case there's no contribution since we assume all gate elements are at most linear in the parameters
-#
-#        #Concatenate per-gateLabel results to get final result (Note: this is the lengthy step for 2Q hessian calcs)
-#        to_concat = []
-#        for gateLabel1 in gatesToVectorize1:
-#            to_concat.append( _np.concatenate( [ d2prod_dgateLabels[(gateLabel1,gateLabel2)] for gateLabel2 in gatesToVectorize2 ], axis=2 ) ) #concat along ij (nParams2)
-#        flattened_d2prod = _np.concatenate( to_concat, axis=1 ) # concat along kl (nParams1)
-
-#        if wrtFilter1 is not None:
-#            flattened_d2prod = flattened_d2prod.take(wrtFilter1, axis=1)
-#              #take subset of 1st derivatives w.r.t. gateset parameter
-#
-#        if wrtFilter2 is not None:
-#            flattened_d2prod = flattened_d2prod.take(wrtFilter2, axis=2)
-#              #take subset of 2nd derivatives w.r.t. gateset parameter
-#
-#            # Alternate to take() above, but may be slow (no copyList precomputed) and
-#            # this shouldn't be a mem bottleneck, so just use numpy.take :
-#            #flattened_d2prod = inplace_take(flattened_d2prod, wrtFilter2, axis=2) 
-
 
         if flat:
             return flattened_d2prod # axes = (vectorized_gate_el_index, gateset_parameter1, gateset_parameter2)
@@ -1174,7 +1115,7 @@ class GateMatrixCalc(GateCalc):
         int
             The memory estimate in bytes.
         """
-        ng,Ng,np1,np2 = num_subtrees, num_subtree_proc_groups, num_param1_groups, num_param2_groups
+        np1,np2 = num_param1_groups, num_param2_groups
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
@@ -1608,7 +1549,7 @@ class GateMatrixCalc(GateCalc):
             E   = _np.conjugate(_np.transpose(Eraw))
         return rho,E
 
-    def _probs_from_rhoE(self, spamLabel, rho, E, Gs, scaleVals):
+    def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
         #Compute probability and save in return array
         # want vp[iFinal] = float(dot(E, dot(G, rho)))  ##OLD, slightly slower version: p = trace(dot(self.SPAMs[spamLabel], G))
         #  vp[i] = sum_k,l E[0,k] Gs[i,k,l] rho[l,0] * scaleVals[i]
@@ -2019,8 +1960,6 @@ class GateMatrixCalc(GateCalc):
         None
         """
 
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
@@ -2042,15 +1981,12 @@ class GateMatrixCalc(GateCalc):
               # ( nGateStrings, dim, dim )
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-                tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
                 if sumInto:
-                    mxToFill[isp,fslc] += self._probs_from_rhoE(spamLabel, rho,
-                                                              E, Gs, scaleVals)
+                    mxToFill[isp,fslc] += self._probs_from_rhoE(rho, E, Gs, scaleVals)
                 else:
-                    mxToFill[isp,fslc] =  self._probs_from_rhoE(spamLabel, rho,
-                                                              E, Gs, scaleVals)
+                    mxToFill[isp,fslc] =  self._probs_from_rhoE(rho, E, Gs, scaleVals)
                 _np.seterr(**old_err)
 
             self._fill_result_tuple( (mxToFill,), spam_label_rows,
@@ -2153,8 +2089,6 @@ class GateMatrixCalc(GateCalc):
         tStart = _time.time()
         if profiler is None: profiler = _dummy_profiler
 
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
             tot_rho = self.tot_rho_params
@@ -2216,13 +2150,13 @@ class GateMatrixCalc(GateCalc):
                 if sumInto:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] += \
-                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
                     mxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
                 else:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] = \
-                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
                     mxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs, scaleVals, wrtSlices)
 
@@ -2439,8 +2373,6 @@ class GateMatrixCalc(GateCalc):
         -------
         None
         """
-        remainder_row_index = self._get_remainder_row_index(spam_label_rows)
-
         if wrtFilter1 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
             tot_rho = self.tot_rho_params
@@ -2477,14 +2409,13 @@ class GateMatrixCalc(GateCalc):
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
 
         #eval on each local subtree
-        my_results = []
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
             fslc = evalSubTree.final_slice(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
             scaleVals = Gs = dGs1 = dGs2 = hGs = None
-            prodCache = scaleCache = dProdCache = None
+            prodCache = scaleCache = None
 
             #Fill product cache info (not requiring row or column distribution)
             prodCache, scaleCache = self._compute_product_cache(evalSubTree, mySubComm)
@@ -2493,14 +2424,13 @@ class GateMatrixCalc(GateCalc):
               #( nGateStrings, dim, dim )
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-                tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
                 
                 if sumInto:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] += \
-                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
                     if deriv1MxToFill is not None:
                         deriv1MxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
                             spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSlices1)
@@ -2514,7 +2444,7 @@ class GateMatrixCalc(GateCalc):
                 else:
                     if prMxToFill is not None:
                         prMxToFill[isp,fslc] = \
-                            self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
                     if deriv1MxToFill is not None:
                         deriv1MxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
                             spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSlices1)
@@ -2606,7 +2536,6 @@ class GateMatrixCalc(GateCalc):
                             dProdCache2 =self._compute_dproduct_cache(
                                 evalSubTree, prodCache, scaleCache, blk2Comm, gateSlice2)
                             dGs2 = evalSubTree.final_view(dProdCache2, axis=0) 
-                        rank = comm.Get_rank()
 
                         hProdCache = self._compute_hproduct_cache(
                             evalSubTree, prodCache, dProdCache1, dProdCache2,
@@ -2744,14 +2673,13 @@ class GateMatrixCalc(GateCalc):
 
         #Same as in bulk_fill_hprobs (TODO consolidate?)
         def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-            tm = _time.time()
             old_err = _np.seterr(over='ignore')
             rho,E = self._rhoE_from_spamLabel(spamLabel)
             
             if sumInto:
                 if prMxToFill is not None:
                     prMxToFill[isp,fslc] += \
-                        self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                        self._probs_from_rhoE(rho, E, Gs, scaleVals)
                 if deriv1MxToFill is not None:
                     deriv1MxToFill[isp,fslc,pslc1] += self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSPAMSlices1)
@@ -2765,7 +2693,7 @@ class GateMatrixCalc(GateCalc):
             else:
                 if prMxToFill is not None:
                     prMxToFill[isp,fslc] = \
-                        self._probs_from_rhoE(spamLabel, rho, E, Gs, scaleVals)
+                        self._probs_from_rhoE(rho, E, Gs, scaleVals)
                 if deriv1MxToFill is not None:
                     deriv1MxToFill[isp,fslc,pslc1] = self._dprobs_from_rhoE( 
                         spamLabel, rho, E, Gs, dGs1, scaleVals, wrtSPAMSlices1)

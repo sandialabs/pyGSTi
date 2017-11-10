@@ -17,9 +17,13 @@ from . import compattools as _compat
 from . import basis as _basis
 from .basis import change_basis
 
+def _mut(i,j,N):
+    mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
+    return mx
+
 def _hack_sqrtm(A):
-    sqrt,errest =  _spl.sqrtm(A, disp=False) #Travis found this scipy function
-                                             # to be incorrect in certain cases (we need a workaround)
+    sqrt,_ = _spl.sqrtm(A, disp=False) #Travis found this scipy function
+                                       # to be incorrect in certain cases (we need a workaround)
     if _np.any(_np.isnan(sqrt)):  #this is sometimes a good fallback when sqrtm doesn't work.
         ev,U = _np.linalg.eig(A)
         sqrt = _np.dot( U, _np.dot( _np.diag(_np.sqrt(ev)), _np.linalg.inv(U)))
@@ -453,10 +457,6 @@ def get_povm_map(gateset):
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    def _mut(i,j,N):
-        mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
-        return mx
-
     # Note: get_effect_labels includes remainder label
     povmVectors = [gateset.effects[lbl] for lbl in gateset.get_effect_labels()]
     d = len(povmVectors)
@@ -1062,7 +1062,7 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     errgen_std = change_basis(errgen, mxBasis, "std")
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
-    nQubits = _np.log2(d)
+    # nQubits = _np.log2(d)
 
     #Get a list of the d2 generators (in corresspondence with the
     #  Pauli-product matrices given by _basis.pp_matrices(d) ).
@@ -1524,7 +1524,6 @@ def project_gateset(gateset, targetGateset,
     """
     
     gateLabels = list(gateset.gates.keys())  # gate labels
-    mxBasis = gateset.basis
     
     if basis.name != targetGateset.basis.name:
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
@@ -1648,7 +1647,7 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     for gl,gate in gateset.iter_gates():
         tgt_gate = targetGateset.gates[gl].copy()
         tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
-        evals_gate,Ugate = _np.linalg.eig(gate)
+        evals_gate = _np.linalg.eigvals(gate)
         evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
         _, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
         

@@ -8,10 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import warnings           as _warnings
 import numpy              as _np
-import scipy.stats        as _stats
-import scipy.linalg       as _spl
 
-from .. import algorithms as _alg
 from .. import construction as _cnst
 from .. import tools      as _tools
 from .. import objects    as _objs
@@ -741,7 +738,7 @@ class SpamVsTargetTable(WorkspaceTable):
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
         prepLabels   = gateset.get_prep_labels()
-        effectLabels = gateset.get_effect_labels()
+        #effectLabels = gateset.get_effect_labels()
     
         colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist") #HERE
         formatters   = (None,'Conversion','Conversion','Conversion')
@@ -886,9 +883,6 @@ class ErrgenTable(WorkspaceTable):
     
         #Do computation, so shared color scales can be computed
         for gl in gateLabels:
-            gate = gateset.gates[gl]
-            targetGate = targetGateset.gates[gl]
-
             if genType == "logG-logT":
                 info = _ev(_reportables.LogGmlogT_and_projections(
                     gateset, targetGateset, gl), confidenceRegionInfo)
@@ -1091,7 +1085,7 @@ class GateDecompTable(WorkspaceTable):
                        decomp[gl + ' angle'], axisFig,
                        decomp[gl + ' log inexactness'] ]
 
-            for j,gl_other in enumerate(gateLabels):
+            for gl_other in gateLabels:
                 rotnAngle = decomp[gl + ' angle'].get_value()
                 rotnAngle_other = decomp[gl_other + ' angle'].get_value()
     
@@ -1213,8 +1207,6 @@ class old_RotationAxisTable(WorkspaceTable):
     
         rotnAxisAngles, rotnAxisAnglesEB = _ev(_reportables.Angles_btwn_rotn_axes(gateset),
                                                confidenceRegionInfo)
-        rotnAngles = [ qtys['%s decomposition' % gl].get_value().get('pi rotations','X') \
-                           for gl in gateLabels ] #OLD
     
         for i,gl in enumerate(gateLabels):
             decomp, decompEB = decomps[i].get_value_and_err_bar() #OLD
@@ -1934,7 +1926,7 @@ class StandardErrgenTable(WorkspaceTable):
             rowData = [rowLabels[i]]
             rowFormatters = [None]
     
-            for j,xlabel in enumerate(xLabels):
+            for xlabel in xLabels:
                 projector = lindbladMxs[iCur]; iCur += 1
                 projector = _tools.change_basis(projector,"std",projection_basis)
                 m,M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
@@ -2164,10 +2156,9 @@ class SoftwareEnvTable(WorkspaceTable):
         table.addrow(("Python revision", str(platform.python_revision())), (None,'Verbatim'))
     
         #Platform information
-        (system, node, release, version, machine, processor) = platform.uname()
+        (system, _, release, version, machine, processor) = platform.uname()
         table.addrow(("Platform summary", str(platform.platform())), (None,'Verbatim'))
         table.addrow(("System", str(system)), (None,'Verbatim'))
-        #table.addrow(("Sys Node", str(node)), (None,'Verbatim')) #seems unnecessary
         table.addrow(("Sys Release", str(release)), (None,'Verbatim'))
         table.addrow(("Sys Version", str(version)), (None,'Verbatim'))
         table.addrow(("Machine", str(machine)), (None,'Verbatim'))

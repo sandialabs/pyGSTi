@@ -15,7 +15,6 @@ from . import basis as _basis
 from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
-from . import slicetools as _slct
 from .smartcache import smart_cached
 
 TOL = 1e-20
@@ -789,7 +788,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
     float
     """
     maxLogLTerms = logl_max_terms(dataset, gatestring_list, countVecMx,
-                                  totalCntVec, poissonPicture, check,
+                                  totalCntVec, poissonPicture,
                                   gateLabelAliases)
     
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
@@ -815,7 +814,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
 
 @smart_cached
 def logl_max_terms(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
-                   poissonPicture=True, check=False, gateLabelAliases=None):
+                   poissonPicture=True, gateLabelAliases=None):
     """
     The vector of maximum log-likelihood contributions for each gate string
     & SPAM label.
