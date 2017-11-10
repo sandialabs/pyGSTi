@@ -353,9 +353,9 @@ except ImportError:
 def decomposition(gate):
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
-        angleQty   = decompDict.get('pi rotations',0)
-        diagQty    = decompDict.get('decay of diagonal rotation terms',0)
-        offdiagQty = decompDict.get('decay of off diagonal rotation terms',0)
+        #angleQty   = decompDict.get('pi rotations',0)
+        #diagQty    = decompDict.get('decay of diagonal rotation terms',0)
+        #offdiagQty = decompDict.get('decay of off diagonal rotation terms',0)
         errBarDict = { 'pi rotations': None,
                        'decay of diagonal rotation terms': None,
                        'decay of off diagonal rotation terms': None }
@@ -751,7 +751,6 @@ def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
             
-        dim = gatesetA.dim
         decomp[gl + ' angle'] = norm * 2.0 / _np.pi
         # Units: hamProjs (and norm) are already in "Hamiltonian-coefficient" units,
         # (see 'std_scale_factor' fn), but because of convention the "angle" is equal

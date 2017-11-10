@@ -210,7 +210,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
 
     if hoverLabelFn:
         hoverLabels = []
-        for k in range(elRows*nRows + (nRows-1)): hoverLabels.append( [""]*(elCols*nCols + (nCols-1)) )
+        for _ in range(elRows*nRows + (nRows-1)):
+            hoverLabels.append( [""]*(elCols*nCols + (nCols-1)) )
 
         for i in range(nRows):
             for j in range(nCols):
@@ -587,8 +588,8 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
 
 def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
-                             colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
-                             sumUp=False,ylabel="",scale=1.0,addl_hover_subMxs=None):
+                                 colorbar=False, hoverInfo=True, sumUp=False,
+                                 ylabel="",scale=1.0,addl_hover_subMxs=None):
     """
     Similar to :func:`gatestring_color_boxplot` except a scatter plot is created.
 
@@ -747,7 +748,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
 
 
 def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
-                             sumUp=False, ylabel="",scale=1.0):
+                               ylabel="",scale=1.0):
     """
     Similar to :func:`gatestring_color_boxplot` except a histogram is created.
 
@@ -791,7 +792,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
             plaq = g.get_plaquette(x,y)
             N = len(subMxs[iy][ix])
             #TODO: if sumUp then need to sum before appending...
-            for iiy,iix,gstr in plaq:
+            for iiy,iix,_ in plaq:
                 ys.append( subMxs[iy][ix][N-1-iiy][iix] )
 
     minval = 0
@@ -918,9 +919,6 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
     plotly.Figure
     """
 
-    xextra = 2.25 if ylabel is None else 2.5
-    yextra = 2.25 if xlabel is None else 2.5
-
     if _tools.isstr(mxBasis):
         if mxBasisY is None:
             mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[0]))))
@@ -934,30 +932,26 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
                 
     if mxBasis is not None:
         xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
-        if mxBasis.dim.gateDim > 1: yextra += .5
     else:
         xlabels = [""] * gateMatrix.shape[1]
         
     if mxBasisY is not None:
         ylabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasisY.labels]
-        if mxBasisY.dim.gateDim > 1: yextra += .5
     else:
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
     thickLineInterval = 4 if (mxBasis is not None and mxBasis.name == "pp") \
                         else None #TODO: separate X and Y thick lines?
-    return matrix_color_boxplot(gateMatrix, m, M, xlabels, ylabels,
-                                xlabel, ylabel, xextra, yextra,
-                                boxLabels, thickLineInterval,
+    return matrix_color_boxplot(gateMatrix, xlabels, ylabels,
+                                xlabel, ylabel, boxLabels, thickLineInterval,
                                 colorbar, colormap, prec, scale,
                                 EBmatrix, title)
 
 
-def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
-                         xlabel=None, ylabel=None, xextra=2.5, yextra=2.5,
-                         boxLabels=False, thickLineInterval=None,
-                         colorbar=None, colormap=None,
+def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
+                         xlabel=None, ylabel=None, boxLabels=False,
+                         thickLineInterval=None, colorbar=None, colormap=None,
                          prec=0, scale=1.0, EBmatrix=None, title=None):
     """
     Creates a color box plot for visualizing a single matrix.
@@ -975,10 +969,6 @@ def matrix_color_boxplot(matrix, m, M, xlabels=None, ylabels=None,
 
     xlabel, ylabel : str, optional
         Axis labels for the plot.
-
-    xextra, yextra : float, optional
-        Amount of extra horizontal and vertical padding used when
-        computing the width and height of the box (in internal units).
 
     boxLabels : bool, optional
         Whether box labels are displayed.
@@ -1522,7 +1512,7 @@ class ColorBoxPlot(WorkspacePlot):
 
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
                 def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
-                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, dataset, directGSTgatesets) ]] )
+                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTgatesets) ]] )
 
             elif ptyp == "directchi2":
                 precomp=False
@@ -1575,18 +1565,18 @@ class ColorBoxPlot(WorkspacePlot):
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+                subMxs = _ph._computeSubMxs(gss,mx_fn)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl,addl_mx_fn in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl] #ever useful?
                 else:
-                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn,sumUp)
+                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn)
                 addl_hover_info[lbl] = addl_subMxs
 
                 
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp,
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp,
                                                               len(dataset.get_spam_labels())-1 )
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
@@ -1619,12 +1609,11 @@ class ColorBoxPlot(WorkspacePlot):
                 
             elif typ == "scatter":
                 newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
-                                                      False, boxLabels, prec,
-                                                      hoverInfo, sumUp, ytitle,
+                                                      False, hoverInfo, sumUp, ytitle,
                                                       scale, addl_hover_info)
             elif typ == "histogram":
                 newfig = gatestring_color_histogram(gss, subMxs, colormap,
-                                                      False, ytitle, scale)
+                                                    ytitle, scale)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
 
@@ -1805,8 +1794,8 @@ class MatrixPlot(WorkspacePlot):
             colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
             
         return matrix_color_boxplot(
-            matrix, m, M, xlabels, ylabels, xlabel, ylabel,
-            2.5, 2.5, boxLabels, None, colorbar, colormap, prec, scale)
+            matrix, xlabels, ylabels, xlabel, ylabel,
+            boxLabels, None, colorbar, colormap, prec, scale)
 
 
 
@@ -2220,7 +2209,7 @@ class GramMatrixBarPlot(WorkspacePlot):
         )
 
         pythonVal = {}
-        for i,tr in enumerate(data):
+        for tr in data:
             pythonVal[tr['name']] = tr['y']
         return {'plotlyfig': go.Figure(data=data, layout=layout),
                 'pythonValue': pythonVal }
@@ -2398,8 +2387,8 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
     def _create(self, dslabels, dsc_dict, scale):
         nSigmaMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
         max_nSigma = 0.0
-        for i,dslabel1 in enumerate(dslabels):
-            for j,dslabel2 in enumerate(dslabels[i+1:],start=i+1):
+        for i,_ in enumerate(dslabels):
+            for j,_ in enumerate(dslabels[i+1:],start=i+1):
                 dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
                 val = dsc.get_composite_nsigma() if (dsc is not None) else None
                 nSigmaMx[i,j] = nSigmaMx[j,i] = val
@@ -2407,7 +2396,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
 
         colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_nSigma)
         return matrix_color_boxplot(
-            nSigmaMx, 0.0, max_nSigma, dslabels, dslabels, "Dataset 1", "Dataset 2",
+            nSigmaMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
             boxLabels=True, prec=1, colormap=colormap, scale=scale)
 
 
@@ -2554,7 +2543,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
                  gs_target=False,group=False, norm='1to1', legend=True,
-                 title=True, scale=1.0):
+                 title='Randomized Benchmarking Decay', scale=1.0):
         """
         Plot RB decay curve, as a function of some the sequence length
         computed using the `gstyp` gate-label-set.
@@ -2630,8 +2619,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         legend : bool, optional
             Specifies whether a legend is added to the graph
             
-        title : bool, optional
-            Specifies whether a title is added to the graph
+        title : str, optional
+            Specifies a title for the graph
             
         Returns
         -------
@@ -2664,8 +2653,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         A = rbR.results['A']
         B = rbR.results['B']
         f = rbR.results['f']
-        if fit == 'first order':
-            C = rbR.dicts[gstyp]['C1']
+        #if fit == 'first order':
+        #    C = rbR.dicts[gstyp]['C1']
         pre_avg = rbR.pre_avg
         
         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
@@ -2870,7 +2859,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         layout = go.Layout(
             width=800*scale,
             height=400*scale,
-            title='Randomized Benchmarking Decay',
+            title=title,
             titlefont=dict(size=16),
             xaxis=dict(
                 title=xlabel,

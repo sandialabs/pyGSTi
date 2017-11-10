@@ -741,7 +741,7 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
     m = _np.zeros(1+i_max,int)
     P_m = _np.zeros(1+i_max,float)
     group_dim = len(group)
-    R_dim = group_dim * d**2
+    #R_dim = group_dim * d**2
     # need the more subtle new version of R
     R = R_matrix(gs,group,subset_sampling=subset_sampling,
                  group_to_gateset=group_to_gateset,d=d)
@@ -850,7 +850,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
     """      
     gs_go = _algs.gaugeopt_to_target(gs,gs_target)
     L = L_matrix(gs_go,gs_target)
-    dim = len(gs_target.gates.keys())
+    #dim = len(gs_target.gates.keys())
     rho_index = gs.spamdefs[success_spamlabel][0]
     E_index = gs.spamdefs[success_spamlabel][1]
     emaps = errormaps(gs_go,gs_target)

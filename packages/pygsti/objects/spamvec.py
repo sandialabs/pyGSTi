@@ -198,7 +198,6 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
     #print("deriv_wrt_params - finite diff deriv = \n",
     #      deriv_to_check - fd_deriv)
     
-    d2 = spamvec.dim
     for i in range(deriv_to_check.shape[0]):
         for j in range(deriv_to_check.shape[1]):
             diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])

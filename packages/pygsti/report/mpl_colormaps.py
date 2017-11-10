@@ -174,7 +174,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
     
     xaxis, yaxis = layout['xaxis'], layout['yaxis']
-    annotations = layout.get('annotations',[])
+    #annotations = layout.get('annotations',[])
     title = layout.get('title',None)
     shapes = layout.get('shapes',[]) # assume only shapes are grid lines
     bargap = layout.get('bargap',0)
@@ -251,17 +251,15 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
     #process traces
     handles = []; labels = [] #for the legend
-    for i,traceDict in enumerate(data_trace_list):
+    for traceDict in data_trace_list:
         typ = traceDict.get('type','unknown')
         
         name = traceDict.get('name',None)
         showlegend = traceDict.get('showlegend',True)
         
         if typ == "heatmap":
-            colorscale = traceDict.get('colorscale','unknown')
+            #colorscale = traceDict.get('colorscale','unknown')
             plt_data = pygsti_fig['plt_data'] #traceDict['z'] is *normalized* already - maybe would work here but not for box value labels
-            zmin = traceDict.get('zmin','default')
-            zmax = traceDict.get('zmin','default')
             show_colorscale = traceDict.get('showscale',True)
 
             mpl_size = (plt_data.shape[1]*0.5, plt_data.shape[0]*0.5)
@@ -372,9 +370,9 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 else: color = "gray"
 
             if yerr is None:
-                rects = axes.bar(x, y, barWidth, color=color)
+                axes.bar(x, y, barWidth, color=color)
             else:
-                rects = axes.bar(x, y, barWidth, color=color,
+                axes.bar(x, y, barWidth, color=color,
                                  yerr=yerr.flatten().real)
                                 
             if xtickvals is not None:
@@ -384,7 +382,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             axes.set_xticklabels( mpl_process_lbls(xlabels) ,rotation=0, fontsize=(fontsize-4) )    
             
         elif typ == "histogram":
-            histnorm = traceDict.get('histnorm',None)
+            #histnorm = traceDict.get('histnorm',None)
             marker = traceDict.get('marker',None)
             color = mpl_color(marker['color'] if marker and _compat.isstr(marker['color']) else "gray")
             xbins = traceDict['xbins']
@@ -397,7 +395,6 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
              
             histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0] #take gives back (1,N) shaped array (why?)
             if yaxistype == 'log':
-                TOL = 1e-6
                 if len(histdata_finite) == 0:
                     axes.set_yscale("linear") #no data, and will get an error with log-scale, so switch to linear
             
@@ -405,8 +402,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             #histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
             #_plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
             #          range=[histMin, histMax], facecolor='gray', align='mid')
-            n, bins, patches = _plt.hist(histdata_finite, histBins,
-                                         facecolor=color, align='mid')
+            _, _, patches = _plt.hist(histdata_finite, histBins,
+                                      facecolor=color, align='mid')
 
             #If we've been given an array of colors
             if marker and ('color' in marker) and isinstance(marker['color'],list):

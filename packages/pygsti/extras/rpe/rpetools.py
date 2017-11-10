@@ -420,7 +420,7 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
             resultsD['alphaCheckMat'] = _np.zeros([num_ks,num_ks],float)
             resultsD['epsilonCheckMat'] = _np.zeros([num_ks,num_ks],float)
             resultsD['thetaCheckMat'] = _np.zeros([num_ks,num_ks],float)
-            for k_final_ind, k_final_val in enumerate(k_list):
+            for k_final_ind,_ in enumerate(k_list):
                 alpha_final_k = alphaHatList[k_final_ind]
                 epsilon_final_k = epsilonHatList[k_final_ind]
                 theta_final_k = thetaHatList[k_final_ind]

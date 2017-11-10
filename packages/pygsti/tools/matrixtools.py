@@ -188,14 +188,13 @@ def nullspace_qr(m, tol=1e-7):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
-    M,N = m.shape
-    q,r,p = _spl.qr(m.T,mode='full', pivoting=True)
-      # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
-      
-    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
+    #if M,N = m.shape, and q,r,p = _spl.qr(...)
+    # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
+    q,r,_ = _spl.qr(m.T, mode='full', pivoting=True)
     rank = (_np.abs(_np.diagonal(r)) > tol).sum()
     
-    #DEBUG
+    #DEBUG: requires q,r,p = _sql.qr(...) above
+    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
     #print("Rank QR = ",rank)
     #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
     #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
@@ -203,7 +202,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:,rank:]
 
 def matrix_sign(M):
-    U,s,Vt = _np.linalg.svd(M)
+    U,_,Vt = _np.linalg.svd(M)
     return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):

@@ -190,7 +190,7 @@ class DataComparator():
         self.composite_thresh = composite_thresh
         self.composite_score = composite_score
         
-    def rectify_datasets(self,confidence_level=0.95,target_score='dof',x0=0.5,method='Nelder-Mead'):
+    def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
         if target_score == 'dof':
             target_score = self.dof
         single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)

@@ -147,7 +147,6 @@ class Colormap(object):
         str
             A string representation of the plotly color of the form `"rgb(R,G,B)"`.
         """
-        colorscale = self.get_colorscale()
         normalized_value = self.normalize(value)
 
         for i,(val,color) in enumerate(self.rgb_colors[:-1]):

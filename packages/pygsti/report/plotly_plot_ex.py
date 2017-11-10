@@ -66,7 +66,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
 
     #Note: removing width and height from layout above causes default values to
     # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
-    plot_html, plotdivid, width, height = _plot_html(
+    plot_html, plotdivid, _, _ = _plot_html(
         figure_or_data, config, validate,
         '100%', '100%', global_requirejs=False)
        #Note: no need for global_requirejs here since we now extract js and remake full script.

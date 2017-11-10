@@ -355,7 +355,7 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
 
 
 
-def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
+def small_eigval_err_rate(sigma, directGSTgatesets):
     """
     Compute per-gate error rate.
 
@@ -463,8 +463,7 @@ def _all_same(items):
     return all(x == items[0] for x in items)
 
 
-def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp,
-                           element_dof):
+def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
     """
     A helper function to compute the number of boxes, and corresponding
     number of degrees of freedom, for the GST chi2/logl boxplots.
@@ -525,7 +524,7 @@ def _computeProbabilities(gss, gateset, dataset):
 
     
 #@smart_cached
-def _computeSubMxs(gss, subMxCreationFn, sumUp):
+def _computeSubMxs(gss, subMxCreationFn):
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage

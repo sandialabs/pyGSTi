@@ -331,7 +331,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
         # the before-they're-squared difference terms and there's an analytic jacobian
 
         def objective_fn(gs):
-            residuals, nsummands = gs.residuals(targetGateset, None, itemWeights)
+            residuals,_ = gs.residuals(targetGateset, None, itemWeights)
 
             if cptp_penalty_factor > 0:
                 gs.basis = mxBasis
@@ -391,7 +391,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             my_jacMx = jacMx[:,myDerivColSlice] #just the columns I'm responsible for
 
             # S, and S_inv are shape (d,d)
-            S       = gaugeGroupEl.get_transform_matrix()
+            #S       = gaugeGroupEl.get_transform_matrix()
             S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
             dS      = gaugeGroupEl.deriv_wrt_params(wrtIndices) # shape (d*d),n
             dS.shape = (d, d, n) # call it (d1,d2,n)
@@ -599,7 +599,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
     # S, and S_inv are shape (d,d)
     d,N     = gs_pre.dim, gaugeGroupEl.num_params()
     n       = N if (wrtFilter is None) else len(wrtFilter)
-    S       = gaugeGroupEl.get_transform_matrix()
+    #S       = gaugeGroupEl.get_transform_matrix()
     S_inv   = gaugeGroupEl.get_transform_matrix_inverse()
     dS      = gaugeGroupEl.deriv_wrt_params(wrtFilter) # shape (d*d),n
     dS.shape = (d, d, n) # call it (d1,d2,n)
@@ -683,8 +683,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     for i,(lbl,prepvec) in enumerate(gs_post.iter_preps()):
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
+        # dmDim = denMx.shape[0]
         denMx = _tools.vec_to_stdmx(prepvec, gateBasis)
-        dmDim = denMx.shape[0]
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
         

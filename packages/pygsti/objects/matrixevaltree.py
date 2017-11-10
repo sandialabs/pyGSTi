@@ -297,7 +297,6 @@ class MatrixEvalTree(EvalTree):
             if numSubTrees is None or numSubTrees == 1: return
 
         self.subTrees = []
-        subTreesFinalList = [None]*self.num_final_strings()
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
 
@@ -400,8 +399,8 @@ class MatrixEvalTree(EvalTree):
 
                 printer.log("EvalTree.split deleted initial indices in %.0fs" %
                             (_time.time()-tm)); tm = _time.time()
-                merge_method = "fast"
-
+                
+                #merge_method = "fast"
                 #Another possible algorith (but slower)
                 #if merge_method == "best":
                 #    while len(indicesLeft) > 0:
@@ -421,7 +420,6 @@ class MatrixEvalTree(EvalTree):
                 #        
                 #elif merge_method == "fast":
                 most_at_once = 10
-                desiredLength = int(len(self) / numSubTrees)
                 while len(indicesLeft) > 0:
                     iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
                                          key=lambda x: x[1]) #argmin

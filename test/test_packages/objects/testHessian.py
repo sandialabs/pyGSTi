@@ -162,8 +162,8 @@ class TestHessianMethods(BaseTestCase):
         cfctry.project_hessian('optimal gate CIs')
         cfctry.project_hessian('intrinsic error')
 
-        cfctry.enable_linear_response_errorbars({'dataset': self.ds,
-                                               'gateStringsToUse': list(self.ds.keys())})
+        cfctry.enable_linear_response_errorbars()
+        #{'dataset': self.ds, 'gateStringsToUse': list(self.ds.keys())})
 
         ci_std = cfctry.view( 95.0, 'normal', 'std')
         ci_noproj = cfctry.view( 95.0, 'normal', 'none')

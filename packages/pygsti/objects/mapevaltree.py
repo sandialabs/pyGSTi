@@ -88,7 +88,6 @@ class MapEvalTree(EvalTree):
         #DEBUG
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
-        lastStr = None
         for k,(iStr,gateString) in enumerate(sorted_strs):
             L = len(gateString)
             
@@ -186,7 +185,7 @@ class MapEvalTree(EvalTree):
         int
         """
         ops = 0
-        for iStart, remainder in self:
+        for _,remainder in self:
             ops += len(remainder)
         return ops
 
@@ -231,7 +230,6 @@ class MapEvalTree(EvalTree):
             if numSubTrees is None or numSubTrees == 1: return
 
         self.subTrees = []
-        subTreesFinalList = [None]*self.num_final_strings()
         evalOrder = self.get_evaluation_order()
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
@@ -258,7 +256,7 @@ class MapEvalTree(EvalTree):
             curTreeCost = cost_fn(self[evalOrder[0]][1]) #remainder length of 0th evaluant
             totalCost = 0
             
-            for i,k in enumerate(evalOrder):
+            for k in evalOrder:
                 iStart,remainder = self[k]
 
                 #compute the cost (additional #applies) which results from
@@ -304,7 +302,6 @@ class MapEvalTree(EvalTree):
         ##################################################################
         # Part I: find a list of where the current tree should be broken #
         ##################################################################
-        startIndices = None #eval-order indices of starting indices for subtrees
                         
         if numSubTrees is not None:
             maxCost = self.get_num_applies() / numSubTrees
