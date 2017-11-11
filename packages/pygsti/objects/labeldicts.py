@@ -100,6 +100,22 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
                            self.remainderLabel, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.items()])
 
+    #def __pygsti_getstate__(self):
+    #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
+    #    # don't want this json-serializer to interfere with the '__reduce__'
+    #    # function, which is needed b/c OrderedDicts use __reduce__ when pickling.
+    #    d = self.__dict__.copy()
+    #    d['parent'] = None #reset parent when saving
+    #    return d
+
+    def __pygsti_reduce__(self):
+        #Call constructor to create object, but with parent == None to avoid
+        # circular pickling of GateSets.  Must set parent separately.
+        items = [(k,v) for k,v in self.items()]
+        return (OrderedSPAMVecDict,
+                (None, self.default_param,
+                 self.remainderLabel, self._prefix, items), None)
+    
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
@@ -187,6 +203,21 @@ class OrderedGateDict(PrefixOrderedDict):
         return OrderedGateDict(parent, self.default_param, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.items()])
 
+    #def __pygsti_getstate__(self):
+    #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
+    #    # don't want this json-serializer to interfere with the '__reduce__'
+    #    # function, which is needed b/c OrderedDicts use __reduce__ when pickling.
+    #    d = self.__dict__.copy()
+    #    d['parent'] = None #reset parent when saving
+    #    return d
+
+    def __pygsti_reduce__(self):
+        #Call constructor to create object, but with parent == None to avoid
+        # circular pickling of GateSets.  Must set parent separately.
+        items = [(k,v) for k,v in self.items()]
+        return (OrderedGateDict,
+                (None, self.default_param, self._prefix, items), None)
+
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
@@ -240,6 +271,19 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
     def copy(self):
         return OrderedSPAMLabelDict(self.remainderLabel,
                                     [(lbl,val) for lbl,val in self.items()])
+
+
+    #def __pygsti_getstate__(self):
+    #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
+    #    # don't want this json-serializer to interfere with the '__reduce__'
+    #    # function, which is needed b/c OrderedDicts use __reduce__ when pickling.
+    #    d = self.__dict__.copy()
+    #    d['parent'] = None #reset parent when saving
+    #    return d
+
+    def __pygsti_reduce__(self):
+        items = [(k,v) for k,v in self.items()]
+        return (OrderedSPAMLabelDict, (self.remainderLabel, items), None)
 
     def __reduce__(self):
         items = [(k,v) for k,v in self.items()]

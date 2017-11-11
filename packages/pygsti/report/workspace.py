@@ -121,6 +121,15 @@ class Workspace(object):
                     v.ws = self
             self.smartCache.cache.update(oldCache)
 
+            
+    def __getstate__(self):
+        return {'smartCache': self.smartCache}
+
+    def __setstate__(self,state_dict):
+        self._register_components(False)
+        self.smartCache = state_dict['smartCache']
+
+        
     def _makefactory(self, cls, autodisplay):#, printer=_objs.VerbosityPrinter(1)):
         PY3 = bool(_sys.version_info > (3, 0))
 
