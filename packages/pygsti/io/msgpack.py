@@ -17,19 +17,19 @@ def encode_msgpack_obj(obj):
 def decode_msgpack_obj(obj):
     return decode_obj(obj, binary=True)
 
-def dumps(obj):
+def dumps(obj, **kwargs):
     enc = encode_msgpack_obj(obj)
-    return _msgpack.packb(enc) #, default=encode_msgpack_obj)
+    return _msgpack.packb(enc, **kwargs) #, default=encode_msgpack_obj)
 
-def dump(obj, f):
+def dump(obj, f, **kwargs):
     enc = encode_msgpack_obj(obj)
-    _msgpack.pack(enc, f) #, default=encode_msgpack_obj)
+    _msgpack.pack(enc, f, **kwargs) #, default=encode_msgpack_obj)
 
-def loads(s):
-    decoded_msgpack = _msgpack.unpackb(s) #load normal MSGPACK
+def loads(s, **kwargs):
+    decoded_msgpack = _msgpack.unpackb(s, **kwargs) #load normal MSGPACK
     return decode_msgpack_obj(decoded_msgpack) #makes pygsti objects
 
-def load(f):
-    decoded_msgpack = _msgpack.unpack(f) #load normal MSGPACK
+def load(f, **kwargs):
+    decoded_msgpack = _msgpack.unpack(f, **kwargs) #load normal MSGPACK
     return decode_msgpack_obj(decoded_msgpack) #makes pygsti objects
 
