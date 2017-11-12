@@ -1,3 +1,11 @@
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+""" Defines JSON-format encoding and decoding functions """
+
 import sys as _sys
 import importlib as _importlib
 import json as _json
@@ -12,17 +20,12 @@ if _sys.version_info >= (3, 0):
 else:
     range_type = xrange
 
-
 def class_hasattr(instance, attr):
     return hasattr(instance.__class__,attr)
 
-class PygstiJSONEncoder(_json.JSONEncoder):
-    def encode(self, item):
-        return super(PygstiJSONEncoder, self).encode( encode_obj(item) )
-
-def encode_obj(item):
+def encode_obj(item, binary=False):
     """ Returns json-able version of item """
-    print("DB: encoding type ", type(item)) #DEBUG
+    #print("DB: encoding type ", type(item)) #DEBUG
     is_pygsti_obj = hasattr(item,'__class__') and \
                     hasattr(item.__class__,'__module__') and \
                     item.__class__.__module__.startswith('pygsti')
@@ -62,18 +65,18 @@ def encode_obj(item):
                 raise ValueError("Can't get state of %s object" % type(item))
             
 
-        #d = { k: encode_obj(v) for k,v in state.items() }
+        d = { k: encode_obj(v,binary) for k,v in state.items() }
 
         #DEBUG (instead of above line)
-        d = {}
-        #print("DB: Encoding state for %s object:" % type(item))
-        for k,v in state.items():
-            #print("Encoding key: ",k)
-            d[k] = encode_obj(v)
-            try: _json.dumps(d[k])
-            except Exception as e:
-                print("Cannot JSON %s key: " % k, d[k])
-                raise e
+        #d = {}
+        ##print("DB: Encoding state for %s object:" % type(item))
+        #for k,v in state.items():
+        #    #print("Encoding key: ",k)
+        #    d[k] = encode_obj(v)
+        #    try: _json.dumps(d[k])
+        #    except Exception as e:
+        #        print("Cannot JSON %s key: " % k, d[k])
+        #        raise e
 
 
         d.update({ '__pygstiobj__': (item.__class__.__module__,
@@ -85,50 +88,52 @@ def encode_obj(item):
         encode_std_base = bool('__init_args__' not in d)
         
         if encode_std_base:
-            std_encode = encode_std_obj(item)
+            std_encode = encode_std_obj(item, binary)
             if std_encode is not item: #if there's something to encode
                 # this pygsti object is also a standard-object instance
                 assert(isinstance(std_encode,dict))
                 d['__std_base__'] = std_encode
 
-        try:
-            _json.dumps(d)
-        except Exception as e:
-            print("Cannot JSON ",type(item))
-            raise e
+        #try:
+        #    _json.dumps(d)
+        #except Exception as e:
+        #    print("Cannot JSON ",type(item))
+        #    raise e
             
         return d
     else:
-        return encode_std_obj(item)
+        return encode_std_obj(item, binary)
 
-def encode_std_obj(item):
+def encode_std_obj(item, binary):
     # Other builtin or standard object encoding
     if isinstance(item, tuple):
-        return {'__tuple__': [encode_obj(v) for v in item]}
+        return {'__tuple__': [encode_obj(v,binary) for v in item]}
     elif isinstance(item, list):
-        return {'__list__': [encode_obj(v) for v in item]}
+        return {'__list__': [encode_obj(v,binary) for v in item]}
     elif isinstance(item, set):
-        return {'__set__': [encode_obj(v) for v in item]}
+        return {'__set__': [encode_obj(v,binary) for v in item]}
     elif isinstance(item, range_type):
         if _sys.version_info >= (3, 0):
             return {'__range__': (item.start, item.stop, item.step) }
         else:
             return {'__list__': list(item) } #python2 -> serialze ranges as lists
     elif isinstance(item, _collections.OrderedDict):
-        return {'__odict__': [(encode_obj(k),encode_obj(v))
+        return {'__odict__': [(encode_obj(k,binary),encode_obj(v,binary))
                               for k,v in item.items()]}
     elif isinstance(item, _collections.Counter):
-        return {'__counter__': [(encode_obj(k),encode_obj(v))
+        return {'__counter__': [(encode_obj(k,binary),encode_obj(v,binary))
                               for k,v in dict(item).items()]}
     elif isinstance(item, dict):
-        return {'__ndict__': [(encode_obj(k),encode_obj(v))
+        return {'__ndict__': [(encode_obj(k,binary),encode_obj(v,binary))
                               for k,v in item.items()]}
     elif isinstance(item, _uuid.UUID):
         return {'__uuid__': str(item.hex) }
     elif isinstance(item, complex):
         return  {'__complex__': item.__repr__()}
-    elif isinstance(item, bytes):
+    elif not binary and isinstance(item, bytes):
         return {'__bytes__': tostr(_base64.b64encode(item)) }
+    elif binary and isinstance(item, str):
+        return {'__string__': tobin(item) }
         
     #Numpy encoding
     elif isinstance(item, _np.ndarray):
@@ -136,17 +141,19 @@ def encode_std_obj(item):
         # otherwise, store the corresponding array protocol type string:
         if item.dtype.kind == 'V':
             kind = 'V'
-            descr = tostr(item.dtype.descr)
+            descr = tobin(item.dtype.descr) if binary else tostr(item.dtype.descr)
         else:
             kind = ''
-            descr = tostr(item.dtype.str)
-        return {'__ndarray__': tostr(_base64.b64encode(item.tobytes())),
+            descr = tobin(item.dtype.str) if binary else tostr(item.dtype.str)
+        data = item.tobytes() if binary else tostr(_base64.b64encode(item.tobytes()))
+        return {'__ndarray__': data,
                 'dtype': descr,
                 'kind': kind,
                 'shape': item.shape}
         
     elif isinstance(item, (_np.bool_, _np.number)):
-        return {'__npgeneric__': tostr(_base64.b64encode(item.tobytes())),
+        data = item.tobytes() if binary else tostr(_base64.b64encode(item.tobytes()))
+        return {'__npgeneric__': data,
                 'dtype': tostr(item.dtype.str)}
 
     elif callable(item): #functions
@@ -156,27 +163,29 @@ def encode_std_obj(item):
 
 
 
-def decode_obj(obj):
+def decode_obj(obj, binary=False):
+    B = tobin if binary else ident
+    
     if isinstance(obj, dict):
-        if '__pygsticlass__' in obj:
-            modname, clsname = obj['__pygsticlass__']
-            module = _importlib.import_module(modname)
-            class_ = getattr(module, clsname)
+        if B('__pygsticlass__') in obj:
+            modname, clsname = obj[B('__pygsticlass__')]
+            module = _importlib.import_module(tostr(modname))
+            class_ = getattr(module, tostr(clsname))
             return class_
             
-        elif '__pygstiobj__' in obj:
+        elif B('__pygstiobj__') in obj:
             #DEBUG
             #print("DB: creating %s" % str(obj['__pygstiobj__']))
             #print("DB: obj is type %s with keyvals:" % type(obj))
             #for k,v in obj.items():
             #    print("%s (%s): %s (%s)" % (k,type(k),v,type(v)))
             
-            modname, clsname = obj['__pygstiobj__']
-            module = _importlib.import_module(modname)
-            class_ = getattr(module, clsname)
+            modname, clsname = obj[B('__pygstiobj__')]
+            module = _importlib.import_module(tostr(modname))
+            class_ = getattr(module, tostr(clsname))
 
-            if '__init_args__' in obj: # construct via __init__
-                args = decode_obj(obj['__init_args__'])
+            if B('__init_args__') in obj: # construct via __init__
+                args = decode_obj(obj[B('__init_args__')], binary)
                 instance = class_(*args)
                 
             else: #init via __new__ and set state
@@ -185,8 +194,8 @@ def decode_obj(obj):
             #Create state dict
             state_dict = {}
             for k,v in obj.items():
-                if k in ('__pygstiobj__','__init_args__','__std_base__'): continue
-                state_dict[k] = decode_obj(v)
+                if k in (B('__pygstiobj__'),B('__init_args__'),B('__std_base__')): continue
+                state_dict[tostr(k)] = decode_obj(v, binary)
 
             #Set state
             if class_hasattr(instance, '__pygsti_setstate__'):
@@ -199,96 +208,104 @@ def decode_obj(obj):
                 raise ValueError("Cannot set nontrivial state of %s object" % type(instance))
 
             #update instance with std-object info if needed (only if __init__ not called)
-            if '__std_base__' in obj:
-                decode_std_base(obj['__std_base__'], instance)
+            if B('__std_base__') in obj:
+                decode_std_base(obj[B('__std_base__')], instance, binary)
 
             return instance
         else:
-            return decode_std_obj(obj)
+            return decode_std_obj(obj, binary)
     else:
         return obj
 
-def decode_std_base(obj,start):
-    if '__tuple__' in obj:
+def decode_std_base(obj,start,binary):
+    B = tobin if binary else ident
+    
+    if B('__tuple__') in obj:
         #OK if __init_args since this means we knew how to construct it (e.g. namedtuples)
-        assert('__init_args' in obj), "No support for sub-classing tuple"
-    elif '__list__' in obj:
-        for v in obj['__list__']:
-            start.append(decode_obj(v))
-    elif '__set__' in obj:
-        for v in obj['__set__']:
-            start.add(decode_obj(v))
-    elif '__ndict__' in obj:
-        for k,v in obj['__ndict__']:
-            start[decode_obj(k)] = decode_obj(v)
-    elif '__odict__' in obj:
-        for k,v in obj['__odict__']:
-            start[decode_obj(k)] = decode_obj(v)
-    elif '__uuid__' in obj:
+        assert(B('__init_args') in obj), "No support for sub-classing tuple"
+    elif B('__list__') in obj:
+        for v in obj[B('__list__')]:
+            start.append(decode_obj(v,binary))
+    elif B('__set__') in obj:
+        for v in obj[B('__set__')]:
+            start.add(decode_obj(v,binary))
+    elif B('__ndict__') in obj:
+        for k,v in obj[B('__ndict__')]:
+            start[decode_obj(k,binary)] = decode_obj(v,binary)
+    elif B('__odict__') in obj:
+        for k,v in obj[B('__odict__')]:
+            start[decode_obj(k,binary)] = decode_obj(v,binary)
+    elif B('__uuid__') in obj:
         assert(False), "No support for sub-classing UUID"
-    elif '__ndarray__' in obj:
+    elif B('__ndarray__') in obj:
         assert(False), "No support for sub-classing ndarray"
-    elif '__npgeneric__' in obj:
+    elif B('__npgeneric__') in obj:
         assert(False), "No support for sub-classing numpy generics"
-    elif '__complex__' in obj:
+    elif B('__complex__') in obj:
         assert(False), "No support for sub-classing complex"
-    elif '__counter__' in obj:
+    elif B('__counter__') in obj:
         assert(False), "No support for sub-classing Counter"
         
-def decode_std_obj(obj):
-    if '__tuple__' in obj:
-        return tuple([decode_obj(v) for v in obj['__tuple__']])
-    elif '__list__' in obj:
-        return list([decode_obj(v) for v in obj['__list__']])
-    elif '__set__' in obj:
-        return set([decode_obj(v) for v in obj['__set__']])
-    elif '__range__' in obj:
-        start,stop,step = obj['__range__']
+def decode_std_obj(obj, binary):
+    B = tobin if binary else ident
+    
+    if B('__tuple__') in obj:
+        return tuple([decode_obj(v,binary) for v in obj[B('__tuple__')]])
+    elif B('__list__') in obj:
+        return list([decode_obj(v,binary) for v in obj[B('__list__')]])
+    elif B('__set__') in obj:
+        return set([decode_obj(v,binary) for v in obj[B('__set__')]])
+    elif B('__range__') in obj:
+        start,stop,step = obj[B('__range__')]
         if _sys.version_info >= (3, 0):
             return range(start,stop,step)
         else:
             return list(xrange(start,stop,step)) #lists in python2
-    elif '__ndict__' in obj:
-        return dict([(decode_obj(k),decode_obj(v))
-                     for k,v in obj['__ndict__']])
-    elif '__odict__' in obj:
+    elif B('__ndict__') in obj:
+        return dict([(decode_obj(k,binary),decode_obj(v,binary))
+                     for k,v in obj[B('__ndict__')]])
+    elif B('__odict__') in obj:
         return _collections.OrderedDict(
-            [(decode_obj(k),decode_obj(v)) for k,v in obj['__odict__']])
-    elif '__odict__' in obj:
+            [(decode_obj(k,binary),decode_obj(v,binary)) for k,v in obj[B('__odict__')]])
+    elif B('__odict__') in obj:
         return _collections.Counter(
-            {decode_obj(k): decode_obj(v) for k,v in obj['__counter__']})
-    elif '__uuid__' in obj:
-        return _uuid.UUID(hex=obj['__uuid__'])
-    elif '__bytes__' in obj:
-        return _base64.b64decode(obj['__bytes__'])
+            {decode_obj(k,binary): decode_obj(v,binary) for k,v in obj[B('__counter__')]})
+    elif B('__uuid__') in obj:
+        return _uuid.UUID(hex=tostr(obj[B('__uuid__')]))
+    elif B('__bytes__') in obj:
+        return obj[B('__bytes__')] if binary else \
+            _base64.b64decode(obj[B('__bytes__')])
+    elif B('__string__') in obj:
+        return tostr(obj[B('__string__')]) if binary else \
+            obj[B('__string__')]
     
     # check for numpy
-    elif '__ndarray__' in obj:
+    elif B('__ndarray__') in obj:
         # Check if 'kind' is in obj to enable decoding of data
         # serialized with older versions:
-        if obj['kind'] == 'V':
+        if obj[B('kind')] == 'V':
             descr = [tuple(tostr(t) if isinstance(t,bytes) else t for t in d)
-                     for d in obj['dtype']]
+                     for d in obj[B('dtype')]]
         else:
-            descr = obj['dtype']
-        return _np.fromstring(_base64.b64decode(obj['__ndarray__']),
-                        dtype=_np.dtype(descr)).reshape(obj['shape'])
-    elif '__npgeneric__' in obj:
+            descr = obj[B('dtype')]
+        data = obj[B('__ndarray__')] if binary else \
+               _base64.b64decode(obj[B('__ndarray__')])
+        return _np.fromstring(data, dtype=_np.dtype(descr)).reshape(obj[B('shape')])
+    elif B('__npgeneric__') in obj:
+        data = obj[B('__npgeneric__')] if binary else \
+               _base64.b64decode(obj[B('__npgeneric__')])
         return _np.fromstring(
-            _base64.b64decode(obj['__npgeneric__']),
-            dtype=_np.dtype(obj['dtype'])
+            data, dtype=_np.dtype(obj[B('dtype')])
         )[0]
-    elif '__complex__' in obj:
-        return complex(obj['__complex__'])
+    elif B('__complex__') in obj:
+        return complex(obj[B('__complex__')])
 
-    elif '__function__' in obj:
-        modname, fnname = obj['__function__']
-        module = _importlib.import_module(modname)
-        return getattr(module, fnname)
+    elif B('__function__') in obj:
+        modname, fnname = obj[B('__function__')]
+        module = _importlib.import_module(tostr(modname))
+        return getattr(module, tostr(fnname))
     
     return obj
-
-
 
 def tostr(x):
     if _sys.version_info >= (3, 0):
@@ -299,20 +316,16 @@ def tostr(x):
     else:
         return x        
 
-    
-def dumps(obj):
-    return _json.dumps(obj, cls=PygstiJSONEncoder)
 
-def dump(obj, f):
-    enc = encode_obj(obj) #this shouldn't be needed... bug in json I think.
-    return _json.dump(enc, f, cls=PygstiJSONEncoder)
-
-def loads(s):
-    decoded_json = _json.loads(s) #load normal JSON
-    return decode_obj(decoded_json) #makes pygsti objects
-
-def load(f):
-    decoded_json = _json.load(f) #load normal JSON
-    return decode_obj(decoded_json) #makes pygsti objects
+def tobin(x):
+    if _sys.version_info >= (3, 0):
+        if isinstance(x, str):
+            return bytes(x,'utf-8')
+        else:
+            return x
+    else:
+        return x        
 
 
+def ident(x):
+    return x

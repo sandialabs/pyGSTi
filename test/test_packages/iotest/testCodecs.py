@@ -4,7 +4,8 @@ import numpy as np
 
 import pygsti
 from pygsti.construction import std1Q_XY as std
-import pygsti.io.jsoncodec as jc
+import pygsti.io.json as json
+import pygsti.io.msgpack as msgpack
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -45,39 +46,75 @@ class CodecsTestCase(BaseTestCase):
 
 class TestCodecs(CodecsTestCase):
     
-    def test_json_codec(self):
+    def test_json(self):
 
         #string list
-        s = jc.dumps(self.lsgstStrings)
-        x = jc.loads(s)
+        s = json.dumps(self.lsgstStrings)
+        x = json.loads(s)
         self.assertEqual(x, self.lsgstStrings)
 
         # DataSet
-        s = jc.dumps(self.ds)
-        x = jc.loads(s)
+        s = json.dumps(self.ds)
+        x = json.loads(s)
         self.assertEqual(list(x.keys()), list(self.ds.keys()))
         self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
 
         # GateSet
-        s = jc.dumps(self.datagen_gateset)
+        s = json.dumps(self.datagen_gateset)
         with open(temp_files + "/gateset.json",'w') as f:
-            jc.dump(self.datagen_gateset, f)
+            json.dump(self.datagen_gateset, f)
         with open(temp_files + "/gateset.json",'r') as f:
-            x = jc.load(f)
+            x = json.load(f)
         self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
 
         # Results (containing confidence region)
         with open(temp_files + "/results.json",'w') as f:
-            jc.dump(self.results, f)
+            json.dump(self.results, f)
         with open(temp_files + "/results.json",'r') as f:
-            x = jc.load(f)
+            x = json.load(f)
         self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
         self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
                          list(self.results.estimates['default'].confidence_region_factories.keys()))
 
         # Workspace
-        s = jc.dumps(self.ws)
-        x = jc.loads(s)
+        s = json.dumps(self.ws)
+        x = json.loads(s)
+         #TODO: comparison (?)
+
+
+    def test_msgpack(self):
+
+        #string list
+        s = msgpack.dumps(self.lsgstStrings)
+        x = msgpack.loads(s)
+        self.assertEqual(x, self.lsgstStrings)
+
+        # DataSet
+        s = msgpack.dumps(self.ds)
+        x = msgpack.loads(s)
+        self.assertEqual(list(x.keys()), list(self.ds.keys()))
+        self.assertEqual(x[('Gx',)].as_dict(), self.ds[('Gx',)].as_dict())
+
+        # GateSet
+        s = msgpack.dumps(self.datagen_gateset)
+        with open(temp_files + "/gateset.json",'wb') as f:
+            msgpack.dump(self.datagen_gateset, f)
+        with open(temp_files + "/gateset.json",'rb') as f:
+            x = msgpack.load(f)
+        self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
+
+        # Results (containing confidence region)
+        with open(temp_files + "/results.json",'wb') as f:
+            msgpack.dump(self.results, f)
+        with open(temp_files + "/results.json",'rb') as f:
+            x = msgpack.load(f)
+        self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
+        self.assertEqual(list(x.estimates['default'].confidence_region_factories.keys()),
+                         list(self.results.estimates['default'].confidence_region_factories.keys()))
+
+        # Workspace
+        s = msgpack.dumps(self.ws)
+        x = msgpack.loads(s)
          #TODO: comparison (?)
 
 
