@@ -99,7 +99,10 @@ class SmartCache(object):
                 _pickle.dumps(v)
                 pickleableCache[k] = v
             except TypeError as e:
-                self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
+                if isinstance(v,dict):
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
+                else:
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
             except _pickle.PicklingError as e:
                 self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
         d['cache'] = pickleableCache

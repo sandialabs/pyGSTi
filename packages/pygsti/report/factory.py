@@ -838,7 +838,7 @@ def create_standard_report(results, filename, title="auto",
                    'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
                    dscomparator=dscmp_switchBd.dscmp, typ="histogram")
             addqty(1,'dsComparisonBoxPlot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   None, None, dscomparator=dscmp_switchBd.dscmp)
+                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
             toggles['CompareDatasets'] = True
         else:
             toggles['CompareDatasets'] = False # not comparable!

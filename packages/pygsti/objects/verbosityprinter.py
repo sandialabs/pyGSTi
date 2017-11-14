@@ -57,7 +57,7 @@ def _build_verbose_iteration(iteration, total, prefix, suffix, end):
 
 
 # The class responsible for optionally logging output
-class VerbosityPrinter():
+class VerbosityPrinter(object):
     '''Class responsible for logging things to stdout or a file.
 
     Controls verbosity and can print progress bars. ex:

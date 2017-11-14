@@ -7,3 +7,4 @@ pandas
 matplotlib
 ipython
 notebook
+msgpack-python
