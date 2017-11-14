@@ -16,7 +16,7 @@ class PygstiJSONEncoder(_json.JSONEncoder):
         return super(PygstiJSONEncoder, self).encode( encode_obj(item) )
 
 def dumps(obj, **kwargs):
-    kwargs['cls']=PygstiJSONEncoder, 
+    kwargs['cls']=PygstiJSONEncoder
     return _json.dumps(obj, **kwargs)
 
 def dump(obj, f, **kwargs):
