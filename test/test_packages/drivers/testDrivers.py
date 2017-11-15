@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-
+from pygsti.objects.gatemapcalc import GateMapCalc
 import sys, os
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -172,7 +172,7 @@ class TestDriversMethods(DriversTestCase):
             std.gs_target, std.fiducials, std.fiducials, std.germs, maxLens)
 
         lens = [ len(strct.allstrs) for strct in fullStructs ]
-        self.assertEqual(lens, [92,168,441]) # ,817,1201, 1585]
+        self.assertEqual(lens, [92,168,450]) # ,817,1201, 1585]
           
     
         #Global FPR
@@ -362,7 +362,7 @@ class TestDriversMethods(DriversTestCase):
         ts = "whole germ powers"
 
         gs_target = std.gs_target.copy()
-        gs_target._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        gs_target._calcClass = GateMapCalc
 
         maxLens = self.maxLens
         result = self.runSilent(pygsti.do_long_sequence_gst,
@@ -535,13 +535,14 @@ class TestDriversMethods(DriversTestCase):
         pygsti.drivers.to_std_gateset(bootgs_p, tp_target)
         pygsti.drivers.to_rms_gateset(bootgs_p, tp_target)
 
-        pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)
-        pygsti.drivers.gateset_process_fidelity(bootgs_p[0], tp_target)
-        pygsti.drivers.gateset_diamonddist(bootgs_p[0], tp_target)
-        pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
-        pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
-        pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])
-        pygsti.drivers.spamrameter(bootgs_p[0])
+        #Removed (unused)
+        #pygsti.drivers.gateset_jtracedist(bootgs_p[0], tp_target)
+        #pygsti.drivers.gateset_process_fidelity(bootgs_p[0], tp_target)
+        #pygsti.drivers.gateset_diamonddist(bootgs_p[0], tp_target)
+        #pygsti.drivers.gateset_decomp_angle(bootgs_p[0])
+        #pygsti.drivers.gateset_decomp_decay_diag(bootgs_p[0])
+        #pygsti.drivers.gateset_decomp_decay_offdiag(bootgs_p[0])
+        #pygsti.drivers.spamrameter(bootgs_p[0])
 
 
 

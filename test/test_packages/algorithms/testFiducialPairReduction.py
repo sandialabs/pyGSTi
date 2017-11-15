@@ -32,7 +32,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        std.germs, searchMode="random", nRandom=300,
                        seed=1234, verbosity=2)
 
-        self.assertEqual(suffPairs, [(0, 0), (0, 1), (1, 0)])
+        self.assertEqual(suffPairs, [(0, 0), (0, 1), (0, 2)])
 
     def test_memlimit(self):
         # A very low memlimit
