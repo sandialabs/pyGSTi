@@ -1,10 +1,10 @@
+"""Helper functions for creating HTML documents by "merging" with a template"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Helper functions for creating HTML documents by "merging" with a template"""
 
 import collections as _collections
 import os          as _os
@@ -19,6 +19,17 @@ from ..tools import compattools as _compat
 from ..objects import VerbosityPrinter
 
 def read_contents(filename):
+    """
+    Read the contents from `filename` as a string.
+
+    Parameters
+    ----------
+    filename : str
+    
+    Returns
+    -------
+    str
+    """
     contents = None
     try: #on Windows using python3 open can fail when trying to read text files. encoding fixes this
         f = open(filename)
@@ -38,6 +49,42 @@ def read_contents(filename):
 
 def insert_resource(connected, online_url, offline_filename,
                     integrity=None, crossorigin=None):
+    """
+    Return the HTML used to insert a resource into a larger HTML file.
+
+    When `connected==True`, an internet connection is assumed and 
+    `online_url` is used if it's non-None; otherwise `offline_filename` (assumed
+    to be relative to the "templates/offline" folder within pyGSTi) is inserted
+    inline.  When `connected==False` an offline folder is assumed to be present
+    in the same directory as the larger HTML file, and a reference to 
+    `offline_filename` is inserted.
+
+    Parameters
+    ----------
+    connected : bool
+        Whether an internet connection should be assumed.  If False, then an
+        'offline' folder is assumed to be present in the output HTML's folder.
+
+    online_url : str
+        The url of the inserted resource as available from the internet.  None
+        if there is no such availability.
+
+    offline_filename : str
+        The filename of the resource relative to the `templates/offline` pyGSTi
+        folder.
+
+    integrity : str, optional
+        The "integrity" attribute string of the <script> tag used to reference
+        a *.js (javascript) file on the internet.
+    
+    crossorigin : str, optional
+        The "crossorigin" attribute string of the <script> tag used to reference
+        a *.js (javascript) file on the internet.
+
+    Returns
+    -------
+    str
+    """
     if connected:
         if online_url:
             url = online_url
@@ -80,7 +127,10 @@ def insert_resource(connected, online_url, offline_filename,
 
 
 def rsync_offline_dir(outputDir):
-    #Copy offline directory into outputDir updating any outdated files
+    """
+    Copy the pyGSTi 'offline' directory into `outputDir` by creating or updating
+    any outdated files as needed.
+    """
     destDir = _os.path.join(outputDir, "offline")
     offlineDir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                "templates","offline")
@@ -101,12 +151,30 @@ def rsync_offline_dir(outputDir):
 
 
 def read_and_preprocess_template(templateFilename, toggles):
+    """ 
+    Load a HTML template from a file and perform an preprocessing,
+    indicated by "#iftoggle(name)", "#elsetoggle", and "#endtoggle".
+
+    Parameters
+    ----------
+    templateFilename : str
+        filename (no relative directory assumed).
+
+    toggles : dict
+        A dictionary of toggle_name:bool pairs specifying
+        how to preprocess the template.
+
+    Returns
+    -------
+    str
+    """
     template = read_contents(templateFilename)
 
     if toggles is None:
         toggles = {}
         
     def preprocess(txt):
+        """ Apply preprocessor directives on `txt` """
         try: i = txt.index("#iftoggle(")
         except ValueError: i = None
 
@@ -164,6 +232,7 @@ def read_and_preprocess_template(templateFilename, toggles):
     return preprocess(template)
 
 def clearDir(path):
+    """ If `path` is a directory, remove all the files within it """
     if not _os.path.isdir(path): return
     for fn in _os.listdir(path):
         full_fn = _os.path.join(path,fn)
@@ -174,6 +243,7 @@ def clearDir(path):
             _os.remove( full_fn )
 
 def makeEmptyDir(dirname):
+    """ Ensure that `dirname` names an empty directory """
     if not _os.path.exists(dirname):
         _os.makedirs(dirname)
     else:
@@ -183,6 +253,10 @@ def makeEmptyDir(dirname):
 
 
 def fill_std_qtys(qtys, connected, renderMath, CSSnames):
+    """
+    A helper to other merge functions, fills `qtys` dictionary with a standard
+    set of values used within HTML templates.
+    """
     #Add favicon
     if 'favicon' not in qtys:
         if connected:
@@ -311,6 +385,34 @@ def fill_std_qtys(qtys, connected, renderMath, CSSnames):
                 for cssFile in CSSnames] )
 
 def render_as_html(qtys, render_options, link_to, verbosity):
+    """ 
+    Render the workspace quantities (outputs and switchboards) in the `qtys`
+    dictionary as HTML.
+
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities to render.
+
+    render_options : dict
+        a dictionary of render options to set via the 
+        `WorkspaceOutput.set_render_options` method of workspace output objects.
+
+    link_to : tuple
+        If not None, a list of one or more items from the set 
+        {"tex", "pdf", "pkl"} indicating whether or not to 
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.
+
+    verbosity : int
+        How much detail to print to stdout.
+
+    Returns
+    -------
+    dict
+        With the same keys as `qtys` and values which contain the objects
+        rendered as strings.
+    """
     printer = VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as HTML
@@ -340,6 +442,28 @@ def render_as_html(qtys, render_options, link_to, verbosity):
 
 
 def render_as_latex(qtys, render_options, verbosity):
+    """ 
+    Render the workspace quantities (outputs; not switchboards) in the `qtys`
+    dictionary as LaTeX.
+
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities to render.
+
+    render_options : dict
+        a dictionary of render options to set via the 
+        `WorkspaceOutput.set_render_options` method of workspace output objects.
+
+    verbosity : int
+        How much detail to print to stdout.
+
+    Returns
+    -------
+    dict
+        With the same keys as `qtys` and values which contain the objects
+        rendered as strings.
+    """
     printer = VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as Latex
@@ -364,7 +488,68 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
                         renderMath=True, resizable=True, autosize='none', verbosity=0,
                         CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
                                   "pygsti_fonts.css")):
+    """
+    Renders `qtys` and merges them into `templateFilename`, saving the output as
+    `outputFilename`.
 
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities (switchboards and outputs).
+
+    templateFilename : str
+        The template filename, relative to pyGSTi's `templates` directory.
+
+    outputFilename : str
+        The merged-output filename.
+
+    auto_open : bool, optional
+        Whether the output file should be automatically opened in a web browser.
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the 
+        precision for complex angles, numbers in scientific notation, and 
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        a default is used.
+    link_to : list, optional
+        If not None, a list of one or more items from the set 
+        {"tex", "pdf", "pkl"} indicating whether or not to 
+        create and include links to Latex, PDF, and Python pickle
+        files, respectively.
+
+    connected : bool, optional
+        Whether an internet connection should be assumed.  If False, then an
+        'offline' folder is assumed to be present in the output HTML's folder.
+
+    toggles : dict, optional
+        A dictionary of toggle_name:bool pairs specifying
+        how to preprocess the template.
+
+    renderMath : bool, optional
+        Whether math should be rendered.
+
+    resizable : bool, optional
+        Whether figures should be resizable.
+    
+    autosize : {'none', 'initial', 'continual'}
+        Whether tables and plots should be resized, either initially --
+        i.e. just upon first rendering (`"initial"`) -- or whenever
+        the browser window is resized (`"continual"`).
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    CSSnames : list or tuple, optional
+        A list or tuple of the CSS files (relative to pyGSTi's 
+        `templates/offline` folder) to insert as resources into
+        the template.
+
+    Returns
+    -------
+    None
+    """
     printer = VerbosityPrinter.build_printer(verbosity)
 
     assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
@@ -410,7 +595,15 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
                             renderMath=True, resizable=True, autosize='none', verbosity=0,
                             CSSnames=("pygsti_dataviz.css", "pygsti_dashboard.css",
                                       "pygsti_fonts.css")):
-    
+    """
+    Renders `qtys` and merges them into the HTML files under `templateDir`,
+    saving the output under `outputDir`.  This functions parameters are the
+    same as those of :func:`merge_html_template_dir.
+
+    Returns
+    -------
+    None
+    """    
     printer = VerbosityPrinter.build_printer(verbosity)
         
     #Create directories if needed; otherwise clear it
@@ -470,12 +663,27 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
 
 
 def process_call(call):
+    """ 
+    Use subprocess to run `call`.
+
+    Parameters
+    ----------
+    call : list
+        A list of exec name and args, e.g. `['ls','-l','myDir']`
+
+    Returns
+    -------
+    stdout : str
+    stderr : str
+    return_code : int
+    """
     process = _subprocess.Popen(call, stdout=_subprocess.PIPE,
                                 stderr=_subprocess.PIPE)
     stdout, stderr = process.communicate()
     return stdout, stderr, process.returncode
 
 def evaluate_call(call, stdout, stderr, returncode, printer):
+    """ Run `call` and raise CalledProcessError if exit code > 0 """
     if len(stderr) > 0:
         printer.error(stderr)
     if returncode > 0:
@@ -483,7 +691,41 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
 
 def merge_latex_template(qtys, templateFilename, outputFilename,
                          toggles=None, precision=None, verbosity=0):
-    
+    """
+    Renders `qtys` and merges them into the LaTeX file `templateFilename`,
+    saving the output under `outputFilename`.
+
+    Parameters
+    ----------
+    qtys : dict
+        A dictionary of workspace quantities (outputs).
+
+    templateFilename : str
+        The template filename, relative to pyGSTi's `templates` directory.
+
+    outputFilename : str
+        The merged-output filename.
+
+    toggles : dict, optional
+        A dictionary of toggle_name:bool pairs specifying
+        how to preprocess the template.
+
+    precision : int or dict, optional
+        The amount of precision to display.  A dictionary with keys
+        "polar", "sci", and "normal" can separately specify the 
+        precision for complex angles, numbers in scientific notation, and 
+        everything else, respectively.  If an integer is given, it this
+        same value is taken for all precision types.  If None, then
+        a default is used.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    Returns
+    -------
+    None
+    """    
+
     printer = VerbosityPrinter.build_printer(verbosity)
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                           "templates", templateFilename )

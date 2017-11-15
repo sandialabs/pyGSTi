@@ -1,13 +1,13 @@
+"""
+Defines classes with represent SPAM operations, along with supporting
+functionality.
+"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""
-Defines classes with represent SPAM operations, along with supporting
-functionality.
-"""
 
 import numpy as _np
 from ..      import optimize as _opt
@@ -56,12 +56,12 @@ def optimize_spamvec(vecToOptimize, targetVec):
     assert(targetVec.dim == vecToOptimize.dim) #vectors must have the same overall dimension
     targetVector = _np.asarray(targetVec)
 
-    def objective_func(param_vec):
+    def _objective_func(param_vec):
         vecToOptimize.from_vector(param_vec)
         return _mt.frobeniusnorm(vecToOptimize-targetVector)
 
     x0 = vecToOptimize.to_vector()
-    minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+    minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     vecToOptimize.from_vector(minSol.x)

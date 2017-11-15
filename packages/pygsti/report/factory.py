@@ -1,10 +1,10 @@
+""" Report generation functions. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Report generation functions. """
 
 import pickle as _pickle
 import os  as _os
@@ -85,7 +85,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     """
     current_lbls = list(estimates.keys())
     
-    def add_lbl(lst, lbl):
+    def _add_lbl(lst, lbl):
         if combine_robust and any([(lbl+suffix in current_lbls)
                                    for suffix in ROBUST_SUFFIX_LIST]):
             return #don't add label
@@ -97,7 +97,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     if running_lbls != current_lbls:
         for lbl in current_lbls:
             if lbl not in running_lbls:
-                add_lbl(running_lbls, lbl)
+                _add_lbl(running_lbls, lbl)
 
     return running_lbls
 
@@ -393,6 +393,7 @@ def create_general_report(results, filename, title="auto",
                           cachefile=None, brief=False, connected=False, 
                           link_to=None, resizable=True, autosize='initial',
                           verbosity=1):
+    """ DEPRECATED: use pygsti.report.create_standard_report(...) """
     _warnings.warn(
             ('create_general_report(...) will be removed from pyGSTi.\n'
              '  This function only ever existed in beta versions and will\n'
@@ -575,6 +576,7 @@ def create_standard_report(results, filename, title="auto",
 
     qtys = {} # stores strings to be inserted into report template
     def addqty(b, name, fn, *args, **kwargs):
+        """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
             with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
                 qtys[name] = fn(*args, **kwargs)

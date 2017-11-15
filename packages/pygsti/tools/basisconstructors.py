@@ -1,3 +1,5 @@
+""" Functions for creating the standard sets of matrices in the standard,
+    pauli, gell mann, and qutrit bases """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -15,22 +17,20 @@ from .opttools      import cache_by_hashed_args
 
 import functools as _functools
 
-'''
-Functions for creating the standard sets of matrices in the standard, pauli, gell mann, and qutrit bases
-'''
 
 DefaultBasisInfo = _namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
 @_parameterized # this decorator takes additional arguments (other than just f)
 def basis_constructor(f, name, longname, real=True):
-    # This decorator saves f to a dictionary for constructing default bases,
-    #   as well as enabling caching on the basis creation function: (Important to CP/TP cases of gauge opt)
+    """ This decorator saves f to a dictionary for constructing default bases,
+        as well as enabling caching on the basis creation function: (Important
+        to CP/TP cases of gauge opt) """
     @cache_by_hashed_args
     @_functools.wraps(f)
-    def cached(*args, **kwargs):
+    def _cached(*args, **kwargs):
         return f(*args, **kwargs)
-    _basisConstructorDict[name] = DefaultBasisInfo(cached, longname, real)
-    return cached
+    _basisConstructorDict[name] = DefaultBasisInfo(_cached, longname, real)
+    return _cached
 
 _basisConstructorDict = dict()
 
@@ -241,7 +241,7 @@ def pp_matrices(dim, maxWeight=None):
 
     sigmaVec = (id2x2/sqrt2, sigmax/sqrt2, sigmay/sqrt2, sigmaz/sqrt2)
 
-    def is_integer(x):
+    def _is_integer(x):
         return bool( abs(x - round(x)) < 1e-6 )
 
     if not isinstance(dim, _numbers.Integral):
@@ -251,7 +251,7 @@ def pp_matrices(dim, maxWeight=None):
             raise ValueError("Dimension for Pauli tensor product matrices must be an *integer* power of 2 (got {})".format(dim))
 
     nQubits = _np.log2(dim)
-    if not is_integer(nQubits):
+    if not _is_integer(nQubits):
         raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
 
     if nQubits == 0: #special case: return single 1x1 identity mx
@@ -300,14 +300,14 @@ def qt_matrices(dim, selected_pp_indices=[0,5,10,11,1,2,3,6,7]):
                    [0,1./_np.sqrt(2),1./_np.sqrt(2),0],
                    [0,0,0,1]], 'd') #projector onto symmetric space
     
-    def toQutritSpace(inputMat):
+    def _toQutritSpace(inputMat):
         return _np.dot(A,_np.dot(inputMat,A.transpose()))
 
     qt_mxs = []
     pp_mxs = pp_matrices(4)
     #selected_pp_indices = [0,5,10,11,1,2,3,6,7] #which pp mxs to project
     # labels = ['II', 'XX', 'YY', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
-    qt_mxs = [toQutritSpace(pp_mxs[i]) for i in selected_pp_indices]
+    qt_mxs = [_toQutritSpace(pp_mxs[i]) for i in selected_pp_indices]
 
     # Normalize so Tr(BiBj) = delta_ij (done by hand, since only 3x3 mxs)
     qt_mxs[0] *= 1/_np.sqrt(0.75)

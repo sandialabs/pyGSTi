@@ -1,3 +1,4 @@
+""" Functions for generating report tables in different formats """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -6,7 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-""" Functions for generating report tables in different formats """
 
 from .convert import converter
 html  = converter('html')  # Retrieve low-level formatters
@@ -130,6 +130,7 @@ pre_convert_latex = _Formatter(stringreplacers=[
     ('<STAR>', '\\bigstar')])
 
 def special_convert_latex(x, specs):
+    """Special conversion rules for latex"""
     x = pre_convert_latex(str(x), specs)
     if '\\bigstar' in x:
         x = '${}$'.format(x)
@@ -174,6 +175,7 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 def html_figure(fig, specs):
+    """Render a html-format figure"""
     #Create figure inline with 'js' set to only handlers (no further plot init)
     fig.value.set_render_options(switched_item_mode = "inline",
                                  resizable="handlers only",
@@ -184,6 +186,7 @@ def html_figure(fig, specs):
     return render_out #a dictionary with 'html' and 'js' keys
 
 def latex_figure(fig, specs):
+    """Render a latex-format figure"""
     assert('output_dir' in specs and specs['output_dir']), \
         "Cannot render a figure-containing table as 'latex' without a valid 'output_dir' render option"
     fig.value.set_render_options(output_dir=specs['output_dir'],
@@ -193,6 +196,7 @@ def latex_figure(fig, specs):
     return render_out
 
 def python_figure(fig, specs):
+    """Render a python-format figure"""
     fig.value.set_render_options(switched_item_mode = "inline")
     render_out = fig.value.render('python') # a dict w/keys == plotIDs
     plotDivID = list(render_out['python'].keys())[0] #just take info for the first figure (assume only one figure)

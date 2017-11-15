@@ -1,10 +1,10 @@
+""" Plotly-to-Matplotlib conversion functions. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Plotly-to-Matplotlib conversion functions. """
 
 import numpy as _np
 from .. import objects as _objs
@@ -23,6 +23,7 @@ except ImportError:
 
 
 class mpl_LinLogNorm(_matplotlib.colors.Normalize):
+    """ Matplotlib version of lin-log colormap normalization """
     def __init__(self, linLogColormap, clip=False):
         cm = linLogColormap
         super(mpl_LinLogNorm, self).__init__(vmin=cm.vmin, vmax=cm.vmax, clip=clip)
@@ -30,6 +31,7 @@ class mpl_LinLogNorm(_matplotlib.colors.Normalize):
         self.cm = cm
 
     def inverse(self, value):
+        """ Inverse of __call__ as per matplotlib spec. """
         norm_trans = super(mpl_LinLogNorm, self).__call__(self.trans)
         deltav = self.vmax - self.vmin
         return_value = _np.where(_np.greater(0.5, value),
@@ -44,6 +46,7 @@ class mpl_LinLogNorm(_matplotlib.colors.Normalize):
         return self.cm.normalize(value)
 
 def mpl_make_linear_norm(vmin, vmax, clip=False):
+    """ Create a linear matplotlib normalization """
     return _matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=clip)
 
 def mpl_make_linear_cmap(rgb_colors, name=None):
@@ -111,6 +114,7 @@ def mpl_besttxtcolor( x, cmap, norm ):
     return "black" if 0.5 <= P else "white"
 
 def mpl_process_lbl(lbl, math=False):
+    """ Process a (plotly-compatible) text label `lbl` to matplotlb text."""
     math = math or ('<sup>' in lbl) or ('<sub>' in lbl) or \
            ('_' in lbl) or ('|' in lbl) or (len(lbl) == 1)
     try:
@@ -134,9 +138,11 @@ def mpl_process_lbl(lbl, math=False):
     return l
 
 def mpl_process_lbls(lblList):
+    """ Process a list of plotly labels into matplotlib ones"""
     return [ mpl_process_lbl(lbl) for lbl in lblList ]
     
 def mpl_color(plotly_color):
+    """ Convert a plotly color name to a matplotlib compatible one. """
     #_compat.isstr
     plotly_color = plotly_color.strip() #remove any whitespace
     if plotly_color.startswith('#'):
@@ -154,6 +160,30 @@ def mpl_color(plotly_color):
         return plotly_color #hope this is a color name matplotlib understands
 
 def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'):
+    """
+    Convert a pygsti (plotly) figure to a matplotlib figure.
+
+    Parameters
+    ----------
+    pygsti_fig : dict
+        A dictionary representing a pyGSTi figure.
+
+    save_to : str
+        Output filename.  Extension determines type.  If None, then the 
+        matplotlib figure is returned instead of saved.
+
+    fontsize : int
+        Base fontsize to use for converted figure.
+
+    prec : int or {"compact","compacth"}
+        Digits of precision to include in labels.
+
+    Returns
+    -------
+    matplotlib.Figure
+        Matplotlib figure, unless save_to is not None, in which case 
+        the figure is closed and None is returned.
+    """
     fig = pygsti_fig['plotlyfig']
     data_trace_list = fig['data']
 
@@ -284,10 +314,10 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
  
             grid = bool(len(shapes) > 1)
             if grid:
-                def get_minor_tics(t):
+                def _get_minor_tics(t):
                     return [ (t[i]+t[i+1])/2.0 for i in range(len(t)-1) ]
-                axes.set_xticks(get_minor_tics(xtics), minor=True)
-                axes.set_yticks(get_minor_tics(ytics), minor=True)
+                axes.set_xticks(_get_minor_tics(xtics), minor=True)
+                axes.set_yticks(_get_minor_tics(ytics), minor=True)
                 axes.grid(which='minor', axis='both', linestyle='-', linewidth=2)
 
             if xlabels is None and ylabels is None:
@@ -457,7 +487,7 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
         axes.set_ylabel( ylabel, fontsize=(fontsize+4) )
 
     #Copied from generate_boxplot
-    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+    def _val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
             if type(val) in (tuple,_objs.GateString) and all([type(el) == str for el in val]):
@@ -471,8 +501,8 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
 
     axes.yaxis.tick_right()
     axes.xaxis.set_label_position("top")
-    axes.set_xticklabels(val_filter(prepStrs), rotation=90, ha='center', fontsize=fontsize)
-    axes.set_yticklabels(list(reversed(val_filter(effectStrs))), fontsize=fontsize) # FLIP
+    axes.set_xticklabels(_val_filter(prepStrs), rotation=90, ha='center', fontsize=fontsize)
+    axes.set_yticklabels(list(reversed(_val_filter(effectStrs))), fontsize=fontsize) # FLIP
     axes.set_xticks(_np.arange(len(prepStrs))+.5)
     axes.set_xticks(_np.arange(len(prepStrs)+1), minor = True)
     axes.set_yticks(_np.arange(len(effectStrs))+.5)

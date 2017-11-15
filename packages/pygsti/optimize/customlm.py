@@ -1,10 +1,10 @@
+""" Custom implementation of the Levenberg-Marquardt Algorithm """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Custom implementation of the Levenberg-Marquardt Algorithm """
 
 import time as _time
 import numpy as _np
@@ -22,6 +22,65 @@ MACH_PRECISION = 1e-12
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, comm=None,
                    verbosity=0, profiler=None):
+    """
+    An implementation of the Levenberg-Marquardt least-squares optimization
+    algorithm customized for use within pyGSTi.  This general purpose routine
+    mimic to a large extent the interface used by `scipy.optimize.leastsq`,
+    though it implements a newer (and more robust) version of the algorithm.
+
+    Parameters
+    ----------
+    obj_fn : function
+        The objective function.  Must accept and return 1D numpy ndarrays of 
+        length N and M respectively.  Same form as scipy.optimize.leastsq.
+
+    jac_fn : function
+        The jacobian function (not optional!).  Accepts a 1D array of length N
+        and returns an array of shape (M,N).
+
+    x0 : numpy.ndarray
+        Initial evaluation point.
+
+    f_norm2_tol : float, optional
+        Tolerace for `F^2` where `F = `norm( sum(obj_fn(x)**2) )` is the
+        least-squares residual.  If `F**2 < f_norm2_tol`, then mark converged.
+
+    jac_norm_tol : float, optional
+        Tolerance for jacobian norm, namely if `infn(dot(J.T,f)) < jac_norm_tol`
+        then mark converged, where `infn` is the infinity-norm and 
+        `f = obj_fn(x)`.
+    
+    rel_ftol : float, optional
+        Tolerance on the relative reduction in `F^2`, that is, if 
+        `d(F^2)/F^2 < rel_ftol` then mark converged.
+    
+    rel_xtol : float, optional
+        Tolerance on the relative value of `|x|`, so that if
+        `d(|x|)/|x| < rel_xtol` then mark converged.
+
+    max_iter : int, optional
+        The maximum number of (outer) interations.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    profiler : Profiler, optional
+        A profiler object used for to track timing and memory usage.
+
+    Returns
+    -------
+    x : numpy.ndarray
+        The optimal solution.
+    converged : bool
+        Whether the solution converged.
+    msg : str
+        A message indicating why the solution converged (or didn't).
+    """
+    
     msg = ""
     converged = False
     x = x0

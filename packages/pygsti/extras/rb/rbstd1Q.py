@@ -1,10 +1,10 @@
+""" Defines canonical 1-qubit Clifford gateset and group"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines canonical 1-qubit Clifford gateset and group"""
 
 from ... import construction as _cnst
 from . import rbobjs as _rbobjs

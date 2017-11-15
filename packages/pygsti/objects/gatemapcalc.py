@@ -1,10 +1,10 @@
+""" Defines the GateMapCalc calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateMapCalc calculator class"""
 
 import warnings as _warnings
 import numpy as _np
@@ -139,6 +139,8 @@ class GateMapCalc(GateCalc):
         k = 0
 
         def fd_deriv(dct, kk):
+            """ Fill dp[0,kk:kk+nParams] with the concatenated finite-difference
+                derivatives of all the values of dct.  Returns kk+nParams. """
             for lbl in dct.keys():
                 orig_vec = dct[lbl].to_vector()
                 Np = dct[lbl].num_params()
@@ -173,6 +175,8 @@ class GateMapCalc(GateCalc):
         k = 0
 
         def fd_hessian(dct, kk):
+            """ Fill hp[0,kk:kk+nParams,:] with the concatenated finite-difference
+                hessians of all the values of dct.  Returns kk+nParams. """
             for lbl in dct.keys():
                 orig_vec = dct[lbl].to_vector()
                 Np = dct[lbl].num_params()
@@ -253,6 +257,9 @@ class GateMapCalc(GateCalc):
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
         
         def fd_deriv(dct, ip):
+            """ Fill dpr_cache[:,iParamToFinal[ip->ip+nParams]] with the
+                concatenated finite-difference derivatives of all the values
+                of dct.  Returns ip+nParams. """
             for lbl in dct.keys():
                 orig_vec = dct[lbl].to_vector()
                 Np = dct[lbl].num_params()
@@ -309,6 +316,9 @@ class GateMapCalc(GateCalc):
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
         
         def fd_hessian(dct, ip):
+            """ Fill hpr_cache[:,iParamToFinal[ip->ip+nParams],:] with the
+                concatenated finite-difference hessians of all the values
+                of dct.  Returns ip+nParams. """
             for lbl in dct.keys():
                 orig_vec = dct[lbl].to_vector()
                 Np = dct[lbl].num_params()
@@ -466,6 +476,7 @@ class GateMapCalc(GateCalc):
             fslc = evalSubTree.final_slice(evalTree)
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
                 #Fill cache info
                 prCache = self._compute_pr_cache(spamLabel, evalSubTree, mySubComm)
 
@@ -601,6 +612,7 @@ class GateMapCalc(GateCalc):
             fillComm = mySubComm #comm used by calc_and_fill
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
                 
                 if prMxToFill is not None:
@@ -812,7 +824,8 @@ class GateMapCalc(GateCalc):
             paramSlice2 = slice(None)
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
-
+                """ Compute and fill result quantities for given arguments """
+                
                 if prMxToFill is not None:
                     prCache = self._compute_pr_cache(spamLabel, evalSubTree, fillComm)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )

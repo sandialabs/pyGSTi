@@ -1,3 +1,4 @@
+"""Defines OrderedDict-derived classes used to store specific pyGSTi objects"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -13,7 +14,13 @@ from . import gate as _gate
 from ..tools import compattools as _compat
 
 class PrefixOrderedDict(_collections.OrderedDict):
+    """ 
+    A base class for an ordered dictionary whose keys *must* be strings
+    which begin with a given prefix.
+    """
     def __init__(self, prefix, items=[]):
+        """ Creates a new PrefixOrderedDict whose keys must begin
+            with the string `prefix`."""
         #** Note: if change __init__ signature, update __reduce__ below
         self._prefix = prefix
         super(PrefixOrderedDict,self).__init__(items)
@@ -32,7 +39,42 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
 
 class OrderedSPAMVecDict(PrefixOrderedDict):
+    """ 
+    An ordered dictionary whose keys must begin with a given prefix,
+    and which supports a "virtual key" equal to a remainder label.  This special
+    remainder-label-key has a value constructed by subtracting all of the
+    dictionary's other values from the parent `GateSet`'s `povm_identity`
+    vector.
+
+    This class also ensure that every value is a :class:`SPAMVec`-derived object
+    by converting any non-`SPAMVec` values into `SPAMVec`s upon assignment and
+    raising an error if this is not possible.
+    """
     def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
+        """
+        Creates a new OrderedSPAMVecDict.
+
+        Parameters
+        ----------
+        parent : GateSet
+            The parent gate set, needed to obtain the dimension and, more
+            importantly, the POVM identity vectory if `remainderLabel` is
+            given.
+        
+        default_param : {"TP","full"}
+            The default parameterization used when creating a `SPAMVec`-derived
+            object from a key assignment.
+
+        remainderLabel : str
+            If not None, the remainder label that will act as a "virtual key"
+            as described above.
+
+        prefix : str
+            The required prefix of all keys (which must be strings).
+
+        items : list, optional
+            Used by pickle and other serializations to initialize elements.
+        """
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
         self.default_param = default_param  # "TP" or "full"
@@ -129,10 +171,35 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
 
 class OrderedGateDict(PrefixOrderedDict):
+    """ 
+    An ordered dictionary whose keys must begin with a given prefix,
+    and which holds Gate objects.  This class ensures that every value is a
+    :class:`Gate`-derived object by converting any non-`Gate` values into
+    `Gate`s upon assignment and raising an error if this is not possible.
+    """
+
     def __init__(self, parent, default_param, prefix, items=[]):
+        """
+        Creates a new OrderedGateDict.
+
+        Parameters
+        ----------
+        parent : GateSet
+            The parent gate set, needed to obtain the dimension.
+        
+        default_param : {"TP","full","static"}
+            The default parameterization used when creating a `Gate`-derived
+            object from a key assignment.
+
+        prefix : str
+            The required prefix of all keys (which must be strings).
+
+        items : list, optional
+            Used by pickle and other serializations to initialize elements.
+        """
         #** Note: if change __init__ signature, update __reduce__ below
         self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "TP" or "full"
+        self.default_param = default_param  # "TP" or "full" or "static"
         super(OrderedGateDict,self).__init__(prefix, items)
 
 
@@ -229,7 +296,26 @@ class OrderedGateDict(PrefixOrderedDict):
 
 
 class OrderedSPAMLabelDict(_collections.OrderedDict):
+    """
+    An ordered dictionary of SPAM (outcome) labels, which associates string-type
+    keys with 2-tuple values of the form `(prepLabel,effectLabel)`.  It also 
+    allows a special "remainder label" which should downstream generate 
+    probabilities equal to `1-(probabilities_of_all_other_outcomes)`.
+    """
     def __init__(self, remainderLabel, items=[]):
+        """
+        Creates a new OrderedSPAMLabelDict.
+
+        Parameters
+        ----------
+        remainderLabel : str
+            If not None, the remainder label that will signify the special
+            computation of probabilities described above, and is not associated
+            with a particular `(prepLabel,effectLabel)` pair.
+
+        items : list, optional
+            Used by pickle and other serializations to initialize elements.
+        """  
         #** Note: if change __init__ signature, update __reduce__ below
         self.remainderLabel = remainderLabel
         super(OrderedSPAMLabelDict,self).__init__(items)
@@ -269,6 +355,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         super(OrderedSPAMLabelDict,self).__setitem__(key,val)
 
     def copy(self):
+        """ Return a copy of this OrderedSPAMLabelDict. """
         return OrderedSPAMLabelDict(self.remainderLabel,
                                     [(lbl,val) for lbl,val in self.items()])
 

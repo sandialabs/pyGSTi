@@ -1,16 +1,16 @@
+""" Routines for building qutrit gates and gate sets """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Routines for building qutrit gates and gate sets """
 
 import numpy as _np
 from scipy import linalg as _linalg
 
 from .. import objects as _objs
-from ..tools import change_basis, Basis
+from ..tools import unitary_to_process_mx, change_basis, Basis
 
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
@@ -23,18 +23,18 @@ A = _np.matrix([[1,0,0,0],
 X = _np.matrix([[0,1],[1,0]])
 Y = _np.matrix([[0,-1j],[1j,0]])
 
-#Returns X(theta)^\otimes 2
 def X2qubit(theta):
+    """ Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)"""
     x = _np.matrix(_linalg.expm(-1j/2. * theta * _np.matrix([[0,1],[1,0]])))
     return _np.kron(x,x)
 
-#Returns Y(theta)^\otimes 2
 def Y2qubit(theta):
+    """ Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)"""
     y = _np.matrix(_linalg.expm(-1j/2. * theta * _np.matrix([[0,-1j],[1j,0]])))
     return _np.kron(y,y)
 
-#Returns Molmer-Sorensen gate for two qubits
 def ms2qubit(theta,phi):
+    """ Returns Molmer-Sorensen gate for two qubits """
     return _np.matrix(_linalg.expm(-1j/2 * theta *
                                  _np.kron(
                                     _np.cos(phi) * X + _np.sin(phi) * Y,
@@ -57,18 +57,22 @@ def _remove_from_matrix(inputArr, columns, rows, outputType = _np.matrix):
            if not row_num in rows])
 
 def to_qutrit_space(inputMat):
+    """ Projects a 2-qubit unitary matrix onto the symmetric "qutrit space" """
     inputMat = _np.matrix(inputMat)
     return _remove_from_matrix(A * inputMat * A**-1,[2],[2])
 #    return (A * inputMat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
 def MS3(theta,phi):
+    """ Returns Qutrit Molmer-Sorenson unitary """
     return to_qutrit_space(ms2qubit(theta,phi))
 
 def XX3(theta):
+    """ Returns Qutrit XX unitary """
     return to_qutrit_space(X2qubit(theta))
 
 def YY3(theta):
+    """ Returns Qutrit YY unitary """
     return to_qutrit_space(Y2qubit(theta))
 
 def _random_rot(scale,arrType = _np.array, seed=None):
@@ -78,10 +82,50 @@ def _random_rot(scale,arrType = _np.array, seed=None):
     randU = _linalg.expm(-1j * randH)
     return arrType(randU)
 
+
 def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
                         MSglobal = _np.pi/2, MSlocal = 0,
-                        similarity=False,seed=None, basis='gm'):
+                        similarity=False, seed=None, basis='qt'):
+    """ 
+    Constructs a standard qutrit :class:`GateSet` containing the identity,
+    XX, YY, and Molmer-Sorenson gates.
 
+    Parameters
+    ----------
+    errorScale : float
+        Magnitude of random rotations to apply to the returned gateset.  If
+        zero, then perfect "ideal" gates are constructed.
+
+    Xangle, Yangle : float
+        The angle of the single-qubit 'X' and 'Y' rotations in the 'XX' and 'YY'
+        gates.  An X-rotation by `theta` is given by `U = exp(-i/2 * theta * X)`
+        where `X` is a Pauli matrix, and likewise for the Y-rotation.
+
+    MSglobal, MSlocal : float
+        "Global" and "local" angles for the Molmer-Sorenson gate, defined by
+        the corresponding 2-qubit unitary:
+
+        `U = exp(-i/2 * MSglobal * (cos(MSlocal)*X + sin(MSlocal)*Y)^2)`
+    
+        where `x^2` means the *tensor product* of `x` with itself.
+
+    similarity : bool, optional
+        If true, then apply the random rotations (whose strengths are given 
+        by `errorScale`) as similarity transformations rather than just as
+        post-multiplications to the ideal gate matrices.
+
+    seed : int, optional
+        The seed used to generate random rotations.
+
+    basis : str, optional
+        The string abbreviation of the basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm) and Qutrit (qt).  A `Basis`
+        object may also be used.
+
+    Returns
+    -------
+    GateSet
+    """
     arrType = _np.array#Are we casting gates as matrices or arrays?
 
     rho0 = arrType(([[1,0,0],
@@ -123,13 +167,13 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
         gateImx = _np.dot(gateImx, Mrand)
 
     #Change gate representation to superoperator in Gell-Mann basis
-    gateISO = _np.kron(_np.conj(gateImx),gateImx)
+    gateISO = unitary_to_process_mx(gateImx)
     gateISOfinal = change_basis(gateISO, "std", basis)
-    gateXSO = _np.kron(_np.conj(gateXmx),gateXmx)
+    gateXSO = unitary_to_process_mx(gateXmx)
     gateXSOfinal = change_basis(gateXSO, "std", basis)
-    gateYSO = _np.kron(_np.conj(gateYmx),gateYmx)
+    gateYSO = unitary_to_process_mx(gateYmx)
     gateYSOfinal = change_basis(gateYSO, "std", basis)
-    gateMSO = _np.kron(_np.conj(gateMmx),gateMmx)
+    gateMSO = unitary_to_process_mx(gateMmx)
     gateMSOfinal = change_basis(gateMSO, "std", basis)
 
     rho0final = change_basis(_np.reshape(rho0,(9,1)), "std", basis)

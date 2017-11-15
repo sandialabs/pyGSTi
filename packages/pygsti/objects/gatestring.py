@@ -1,10 +1,10 @@
+""" Defines the GateString class and derived classes which represent gate strings."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateString class and derived classes which represent gate strings."""
 
 import numpy as _np
 import uuid  as _uuid
@@ -212,6 +212,7 @@ class GateString(object):
     
     @property
     def tup(self):
+        """ This GateString as a standard Python tuple."""
         return self._tup
 
 

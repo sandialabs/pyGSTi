@@ -1,13 +1,12 @@
+""" Text-parsing classes and functions to read input files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-import re
 
-""" Text-parsering classes and functions to read input files."""
-
+import re as _re
 import os as _os
 import sys as _sys
 import time as _time
@@ -23,24 +22,28 @@ from .gatestringparser import GateStringParser as _GateStringParser
 
 
 def get_display_progress_fn(showProgress):
+    """
+    Create and return a progress-displaying function if `showProgress == True`
+    and it's run within an interactive environment.
+    """
     
-    def is_interactive():
+    def _is_interactive():
         import __main__ as main
         return not hasattr(main, '__file__')
 
-    if is_interactive() and showProgress:
+    if _is_interactive() and showProgress:
         try:
             from IPython.display import clear_output
-            def display_progress(i,N,filename):
+            def _display_progress(i,N,filename):
                 _time.sleep(0.001); clear_output()
                 print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
                 _sys.stdout.flush()
         except:
-            def display_progress(i,N,f): pass
+            def _display_progress(i,N,f): pass
     else:
-        def display_progress(i,N,f): pass
+        def _display_progress(i,N,f): pass
         
-    return display_progress
+    return _display_progress
 
 
 class StdInputParser(object):
@@ -52,6 +55,7 @@ class StdInputParser(object):
     _string_parser = _GateStringParser()
 
     def __init__(self):
+        """ Create a new standard-input parser object """
         pass
 
     def parse_gatestring(self, s, lookup={}):
@@ -149,7 +153,7 @@ class StdInputParser(object):
             The gate string as represented as a string in the dictline.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
-        match = re.match(label, s)
+        match = _re.match(label, s)
         if not match:
             raise ValueError("'{}' is not a valid dictline".format(s))
         gateStringLabel = match.group(1)
@@ -618,7 +622,7 @@ def read_gateset(filename):
     GateSet
     """
 
-    def add_current_label():
+    def _add_current_label():
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
@@ -674,7 +678,7 @@ def read_gateset(filename):
             if len(line) == 0:
                 state = "look for label"
                 if len(cur_label) > 0:
-                    add_current_label()
+                    _add_current_label()
                     cur_label = ""; cur_rows = []
                 continue
 
@@ -720,7 +724,7 @@ def read_gateset(filename):
                 cur_rows.append( line.split() )
 
     if len(cur_label) > 0:
-        add_current_label()
+        _add_current_label()
 
     #Try to infer basis dimension if none is given
     if basis_dims is None:

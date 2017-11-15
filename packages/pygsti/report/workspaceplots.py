@@ -1,10 +1,10 @@
+""" Classes corresponding to plots within a Workspace context."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Classes corresponding to plots within a Workspace context."""
 
 import numpy             as _np
 import scipy             as _scipy
@@ -343,7 +343,8 @@ def generate_boxplot(subMxs,
                          sumUp, False, scale)
                                 
 
-    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+    def val_filter(vals):
+        """filter to latex-ify gate strings.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
             if (isinstance(val,tuple) or isinstance(val,_objs.GateString)) \
@@ -359,6 +360,7 @@ def generate_boxplot(subMxs,
         return formatted_vals
 
     def sum_up_mx(mx):
+        """ Sum up `mx` in a NAN-ignoring way """
         flat_mx = mx.flatten()
         if any([_np.isnan(x) for x in flat_mx]):
             if all([_np.isnan(x) for x in flat_mx]):
@@ -374,6 +376,7 @@ def generate_boxplot(subMxs,
 
         if hoverInfo == True:
             def hoverLabelFn(val,i,j):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]), val)
@@ -396,6 +399,7 @@ def generate_boxplot(subMxs,
 
         if hoverInfo == True:
             def hoverLabelFn(val,i,j,ii,jj):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]),
@@ -535,6 +539,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     if hoverInfo and invert == False and isinstance(g, _objs.LsGermsStructure):
         if sumUp:
             def hoverLabelFn(val,iy,ix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
@@ -555,6 +560,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                     
         else:
             def hoverLabelFn(val,iy,ix,iiy,iix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
@@ -656,6 +662,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     if hoverInfo and isinstance(g, _objs.LsGermsStructure):
         if sumUp:
             def hoverLabelFn(val,iy,ix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
@@ -676,6 +683,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                     
         else:
             def hoverLabelFn(val,iy,ix,iiy,iix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
@@ -1021,12 +1029,14 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     # doesn't work for certain (e.g. linear-log) color maps
     if EBmatrix is None:
         def hoverLabelFn(i,j):
+            """ Standard hover labels """
             val = flipped_mx[i, j]
             if _np.isnan(val): return ""
             return "%s" % round(val,HOVER_PREC) #TODO: something better - or user-specifiable
     else:
         flipped_EBmx = _np.flipud(EBmatrix)  # FLIP so [0,0] matrix el is at *top* left
         def hoverLabelFn(i,j):
+            """ Standard hover labels w/error bars"""
             val,eb = flipped_mx[i,j], flipped_EBmx[i,j]
             if _np.isnan(val): return ""
             return "%s <br>+/- %s" % (round(val,HOVER_PREC),round(eb,HOVER_PREC)) #TODO: something better - or user-specifiable
@@ -1183,6 +1193,10 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
 
 class BoxKeyPlot(WorkspacePlot):
+    """
+    Plot serving as a key for fiducial rows/columns of each plaquette of 
+    a gatestring color box plot.
+    """
     def __init__(self, ws, prepStrs, effectStrs,
                  xlabel="Preparation fiducial", ylabel="Measurement fiducial", scale=1.0):
         """
@@ -1209,7 +1223,8 @@ class BoxKeyPlot(WorkspacePlot):
     def _create(self, prepStrs, effectStrs, xlabel, ylabel, scale):
         
         #Copied from generate_boxplot
-        def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+        def val_filter(vals):
+            """filter to latex-ify gate strings.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
                 if isinstance(val, (tuple,_objs.GateString)) and all([_tools.isstr(el) for el in val]):
@@ -1313,6 +1328,10 @@ class BoxKeyPlot(WorkspacePlot):
 
     
 class ColorBoxPlot(WorkspacePlot):
+    """ 
+    Plot of colored boxes arranged into plaquettes showing various quanties
+    for each gate sequence in an analysis.
+    """
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
@@ -1411,7 +1430,7 @@ class ColorBoxPlot(WorkspacePlot):
         addl_hover_info_fns = _collections.OrderedDict()
 
         # Begin "Additional sub-matrix" functions for adding more info to hover text
-        def list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
+        def _list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
             mxs = mxs_with_leading_spam_dim
             list_mx = _np.empty( (mxs.shape[1],mxs.shape[2]), dtype=_np.object)
             for i in range(mxs.shape[1]):
@@ -1419,25 +1438,25 @@ class ColorBoxPlot(WorkspacePlot):
                     list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else (fmt % x) for x in mxs[:,i,j]])
             return list_mx
 
-        def addl_mx_fn_sl(plaq,x,y):
+        def _addl_mx_fn_sl(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
             slmx[:,:] = ", ".join(spamlabels)
             return slmx
 
-        def addl_mx_fn_p(plaq,x,y):
+        def _addl_mx_fn_p(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             probMxs = _ph.probability_matrices( plaq, gateset, spamlabels,
                                             probs_precomp_dict)
-            return list_spam_dimension(probMxs, "%.5g")
+            return _list_spam_dimension(probMxs, "%.5g")
 
-        def addl_mx_fn_f(plaq,x,y):
+        def _addl_mx_fn_f(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             plaq_ds = plaq.expand_aliases(dataset)
             freqMxs = _ph.frequency_matrices( plaq_ds, dataset, spamlabels)
-            return list_spam_dimension(freqMxs, "%.5g")
+            return _list_spam_dimension(freqMxs, "%.5g")
 
-        def addl_mx_fn_cnt(plaq,x,y):
+        def _addl_mx_fn_cnt(plaq,x,y):
             plaq_ds = plaq.expand_aliases(dataset)
             cntMxs = _ph.total_count_matrix(plaq_ds, dataset)
             return cntMxs
@@ -1445,10 +1464,10 @@ class ColorBoxPlot(WorkspacePlot):
             # Could do this to get counts for all spam labels
             #spamlabels = gateset.get_spam_labels()
             #cntMxs  = _ph.count_matrices( plaq_ds, dataset, spamlabels)
-            #return list_spam_dimension(cntMxs, "%d")
+            #return _list_spam_dimension(cntMxs, "%d")
 
         #DEBUG: for checking
-        #def addl_mx_fn_chk(plaq,x,y):
+        #def _addl_mx_fn_chk(plaq,x,y):
         #    gsplaq_ds = plaq.expand_aliases(dataset)
         #    spamlabels = gateset.get_spam_labels()
         #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
@@ -1471,14 +1490,14 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "red"
                 ytitle="chi<sup>2</sup>"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
-                addl_hover_info_fns['p'] = addl_mx_fn_p
-                addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
+                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
+                addl_hover_info_fns['p'] = _addl_mx_fn_p
+                addl_hover_info_fns['f'] = _addl_mx_fn_f
+                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
 
             elif ptyp == "logl":
                 precomp=True
@@ -1486,22 +1505,22 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "red"
                 ytitle="2 log(L ratio)"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
-                addl_hover_info_fns['p'] = addl_mx_fn_p
-                addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
-                #DEBUG: addl_hover_info_fns['chk'] = addl_mx_fn_chk
+                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
+                addl_hover_info_fns['p'] = _addl_mx_fn_p
+                addl_hover_info_fns['f'] = _addl_mx_fn_f
+                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+                #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
 
             elif ptyp == "blank":
                 precomp=False
                 colormapType = "trivial"
                 ytitle = ""
 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _np.nan * _np.zeros( (len(gss.minor_yvals()),
                                                  len(gss.minor_xvals())), 'd')
 
@@ -1511,7 +1530,7 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle="error rate"
 
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
-                def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
+                def _mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
                     return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTgatesets) ]] )
 
             elif ptyp == "directchi2":
@@ -1520,7 +1539,7 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "yellow"
                 ytitle="chi<sup>2</sup>"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.direct_chi2_matrix(
                         plaq, gss, dataset,
                         directGSTgatesets.get(plaq.base,None),
@@ -1532,7 +1551,7 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "yellow"
                 ytitle="Direct 2 log(L ratio)"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.direct_logl_matrix(
                         plaq, gss, dataset,
                         directGSTgatesets.get(plaq.base,None),
@@ -1546,7 +1565,7 @@ class ColorBoxPlot(WorkspacePlot):
                 assert(dscomparator is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
             elif (submatrices is not None) and ptyp in submatrices:
@@ -1565,7 +1584,7 @@ class ColorBoxPlot(WorkspacePlot):
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,mx_fn)
+                subMxs = _ph._computeSubMxs(gss,_mx_fn)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl,addl_mx_fn in addl_hover_info_fns.items():
@@ -1659,6 +1678,10 @@ class ColorBoxPlot(WorkspacePlot):
 #                        mxBasisDims=None, xlabel=None, ylabel=None,
 #                        title=None, boxLabels=False, prec=0, mxBasisDimsY=None):
 class GateMatrixPlot(WorkspacePlot):
+    """ 
+    Plot of a gate matrix using colored boxes.  More specific than MatrixPlot
+    because of basis formatting for x and y labels.
+    """
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
                  mxBasis=None, xlabel=None, ylabel=None,
@@ -1733,6 +1756,7 @@ class GateMatrixPlot(WorkspacePlot):
 
 
 class MatrixPlot(WorkspacePlot):
+    """ Plot of a general matrix using colored boxes """
     def __init__(self, ws, matrix, m=-1.0, M=1.0,
                  xlabels=None, ylabels=None, xlabel=None, ylabel=None,
                  boxLabels=False, colorbar=None, colormap=None, prec=0, scale=1.0):
@@ -1806,6 +1830,7 @@ class MatrixPlot(WorkspacePlot):
 #    rel_evals10 = rel_evals**10
    
 class PolarEigenvaluePlot(WorkspacePlot):
+    """ Polar plot of complex eigenvalues """
     def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=None,
                  centerText=None):
         """
@@ -1946,6 +1971,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
 
 
 class ProjectionsBoxPlot(WorkspacePlot):
+    """ Plot of matrix of (usually error-generator) projections """
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
                  boxLabels=False, colorbar=None, prec="compacthp", scale=1.0,
                  EBmatrix=None, title=None):
@@ -2054,6 +2080,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # xlabel="index", ylabel="Re[eigenvalue]", title=None
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
+    """ Bar plot of eigenvalues showing red bars for negative values """
     def __init__(self, ws, evals, errbars=None, scale=1.0):
         """
         Creates a bar plot showing the real parts of each of the eigenvalues
@@ -2139,6 +2166,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
 
 
 class GramMatrixBarPlot(WorkspacePlot):
+    """ Bar plot of Gram matrix eigenvalues stacked against those of target """
     def __init__(self, ws, dataset, target, maxlen=10,
                  fixedLists=None, scale=1.0):
         """
@@ -2215,6 +2243,7 @@ class GramMatrixBarPlot(WorkspacePlot):
                 'pythonValue': pythonVal }
 
 class FitComparisonBarPlot(WorkspacePlot):
+    """ Bar plot showing the overall (aggregate) goodness of fit """
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
                  objective="logl", Xlabel='L', NpByX=None, scale=1.0):
         """
@@ -2352,6 +2381,7 @@ class FitComparisonBarPlot(WorkspacePlot):
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):
+    """ A grid of grayscale boxes comparing data sets pair-wise."""
     def __init__(self, ws, dslabels, dsc_dict, scale=1.0):
         """
         Creates a plot showing the total 2*deltaLogL values for each pair of
@@ -2402,7 +2432,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
 
 
 class DatasetComparisonHistogramPlot(WorkspacePlot):
-    """ TODO: docstring"""
+    """ Histogram of p-values comparing two data sets """
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                   log=True, display='pvalue', scale=1.0):
         super(DatasetComparisonHistogramPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
@@ -2538,6 +2568,7 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
+    """ Plot of RB Decay curve """
     def __init__(self, ws, rbR,xlim=None, ylim=None,
                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,

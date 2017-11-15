@@ -127,3 +127,7 @@ germs_lite = _strc.gatestring_list([
 #Construct a target gateset: Identity, sym X(pi/2), sym Y(pi/2), Molmer-Sorenson
 gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
                                        MSglobal=_pi/2, MSlocal=0, basis="qt")
+
+legacy_gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=-_pi/2, Yangle=_pi/2,
+                                       MSglobal=-_pi/2, MSlocal=0, basis="qt")
+  #Note: negative signs from weird/incorrect conventions

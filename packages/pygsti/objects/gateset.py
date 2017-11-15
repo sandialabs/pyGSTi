@@ -1,10 +1,10 @@
+""" Defines the GateSet class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSet class and supporting functionality."""
 
 import numpy as _np
 import scipy as _scipy
@@ -118,10 +118,12 @@ class GateSet(object):
 
     @property
     def povm_identity(self):
+        """ The POVM identity vector, used when 'remainder' is used. """
         return self._povm_identity
 
     @povm_identity.setter
     def povm_identity(self, value):
+        """ The POVM identity vector, used when 'remainder' is used. """
         if value is None:
             self._povm_identity = None
             return
@@ -179,16 +181,19 @@ class GateSet(object):
         return self._dim
 
     def get_basis_name(self):
+        """ DEPRECATED: use `<this object>.basis.name` instead. """
         _warnings.warn('gs.get_basis_name() is deprecated. ' + \
                 'Use gs.basis.name instead.')
         return self.basis.name
 
     def get_basis_dimension(self):
+        """ DEPRECATED: use `<this object>.basis.dim.dmDim` instead. """
         _warnings.warn('gs.get_basis_dimension() is deprecated. ' + \
                 'Use gs.basis.dim.dmDim (same functionality) or gs.basis.dim.blockDims (full blockDims) instead')
         return self.basis.dim.dmDim
 
     def set_basis(self, name, dimension):
+        """ DEPRECATED: use `<this object>.basis = Basis(...) instead. """
         _warnings.warn('gs.set_basis() is deprecated. ' + \
                 'Use gs.basis = Basis({}, {}) ' + \
                 '(or another method of basis construction, ' + \
@@ -1327,6 +1332,7 @@ class GateSet(object):
                         % (distributeMethod, memLimit*C))
 
         def prime_factors(n):  #TODO: move this fn somewhere else
+            """ GCD algorithm to produce prime factors of `n` """
             i = 2; factors = []
             while i * i <= n:
                 if n % i:
@@ -1339,6 +1345,7 @@ class GateSet(object):
             return factors
 
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
+            """ Returns a memory estimate based on arguments """
             tm = _time.time()
             
             #Get cache size
@@ -1404,9 +1411,9 @@ class GateSet(object):
                 
         elif distributeMethod == "deriv":
 
-            #Set Ng, the number of subTree processor groups, such
-            # that Ng divides nprocs evenly or vice versa
             def set_Ng(desired_Ng):
+                """ Set Ng, the number of subTree processor groups, such
+                    that Ng divides nprocs evenly or vice versa. """
                 if desired_Ng >= nprocs:
                     return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
