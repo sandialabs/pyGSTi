@@ -14,27 +14,64 @@ from plotly.offline.offline import _plot_html
 #from pkg_resources import resource_string
 
 def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
-            validate=True, resizable=False, autosize=False,
-            lock_aspect_ratio=False, master=True, click_to_display=False,
-            link_to=None, link_to_id=False):
+            validate=True, resizable=False, lock_aspect_ratio=False,
+            master=True, click_to_display=False, link_to=None,link_to_id=False):
     """ 
-    TODO: docstring
     Create a pyGSTi plotly graph locally, returning HTML & JS separately.
 
-    figure_or_data -- a plotly.graph_objs.Figure or plotly.graph_objs.Data or
-                      dict or list that describes a Plotly graph.
-                      See https://plot.ly/python/ for examples of
-                      graph descriptions.
+    Parameters
+    ----------
+    figure_or_data : plotly.graph_objs.Figure or .Data or dict or list
+        object that describes a Plotly graph. See https://plot.ly/python/
+        for examples of graph descriptions.
 
-    Keyword arguments:
-    show_link (default=True) -- display a link in the bottom-right corner of
-        of the chart that will export the chart to Plotly Cloud or
-        Plotly Enterprise
-    link_text (default='Export to plot.ly') -- the text of export link
-    validate (default=True) -- validate that all of the keys in the figure
-        are valid? omit if your version of plotly.js has become outdated
-        with your version of graph_reference.json or if you need to include
-        extra, unnecessary keys in your figure.
+    show_link : bool, optional
+        display a link in the bottom-right corner of
+
+    link_text : str, optional
+        the text of export link
+
+    validate : bool, optional
+        validate that all of the keys in the figure are valid? omit if you
+        need to include extra, unnecessary keys in your figure.
+
+    resizable : bool, optional
+        Make the plot resizable by including a "resize" event handler and
+        any additional initialization.
+    
+    lock_aspect_ratio : bool, optional
+        Whether the aspect ratio of the plot should be allowed to change
+        when it is sized based on it's container.
+
+    master : bool, optional
+        Whether this plot represents the "master" of a group of plots,
+        all of the others which are "slaves".  The relative sizing of the
+        master of a group will determine the relative sizing of the slaves,
+        rather than the slave's containing element.  Useful for preserving the
+        size of the features in a group of plots that may be different overall
+        sizes.
+
+    click_to_display : bool, optional
+        Whether the plot should be rendered immediately or whether a "click"
+        icon should be shown instead, which must be clicked on to render the
+        plot.
+
+    link_to : None or tuple of {"pdf", "pkl"}
+        If not-None, the types of pre-rendered/computed versions of this plot
+        that can be assumed to be present, and therefore linked to by additional
+        items in the hover-over menu of the plotly plot.
+
+    link_to_id : str, optional
+        The base name (without extension) of the ".pdf" or ".pkl" files that are
+        to be linked to by menu items.  For example, if `link_to` equals
+        `("pdf",)` and `link_to_id` equals "plot1234", then a menu item linking
+        to the file "plot1234.pdf" will be added to the renderd plot.
+
+    Returns
+    -------
+    dict
+        With 'html' and 'js' keys separately specifying the HTML and javascript
+        needed to embed the plot.
     """
 
     #Processing to enable automatic-resizing & aspect ratio locking
@@ -46,8 +83,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     if lock_aspect_ratio and orig_width and orig_height:
         aspect_ratio = orig_width / orig_height
     else: aspect_ratio = None
-
-    #if autosize or resizable: #always do this now b/c gives better control over sizing
 
     #Remove original dimensions of plot so default of 100% is used below
     # (and triggers resize-script creation)
@@ -71,7 +106,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         '100%', '100%', global_requirejs=False)
        #Note: no need for global_requirejs here since we now extract js and remake full script.
 
-    #if autosize or resizable: #always do this now
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height
 
@@ -93,7 +127,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     plotly_create_js = plot_js #the ususal plotly creation javascript
     plotly_resize_js = None
 
-    if resizable or autosize:
+    if resizable:
         #the ususal plotly resize javascript
         plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
 
@@ -175,7 +209,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
              plotlyResizeJS=plotly_resize_js)
 
     #Add resize handler if needed
-    if resizable or autosize:
+    if resizable:
         full_script += (
             '  $("#{id}").on("resize", function(event,fracw,frach) {{\n'
             '    pex_update_plotdiv_size($("#{id}"), {ratio}, fracw, frach, {ow}, {oh});\n'

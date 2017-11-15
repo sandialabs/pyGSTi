@@ -333,7 +333,7 @@ def gauge_optimize_gs_list(gsList, targetGateset,
 
 
 ################################################################################
-#TODO: need to add docstrings and perhaps relocate the utility functions below #
+# Utility functions (perhaps relocate?)
 ################################################################################
 
 #For metrics that evaluate gateset with single scalar:

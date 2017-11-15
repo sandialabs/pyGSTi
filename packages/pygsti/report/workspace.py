@@ -1297,17 +1297,48 @@ class WorkspaceOutput(object):
         an object is constructed, separately from the rendering process
         (which is sometimes desirable).
 
-        TODO: docstring - descriptions of different render options
-
         Parameters
         ----------
-        kwargs : variable
-            Sets any available render options.
+        output_dir : str or False
+            The name of the output directory under which all output files
+            should be created.  The names of these files just the IDs of the 
+            items being rendered.
+
+        precision : int or dict, optional
+            The amount of precision to display.  A dictionary with keys
+            "polar", "sci", and "normal" can separately specify the 
+            precision for complex angles, numbers in scientific notation, and 
+            everything else, respectively.  If an integer is given, it this
+            same value is taken for all precision types.  If None, then
+            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+
+
+        switched_item_mode : {'inline','separate files'}, optional
+            Whether switched items should be rendered inline within the 'html'
+            and 'js' blocks of the return value of :func:`render`, or whether
+            each switched item (corresponding to a single "switch position")
+            should be rendered in a separate file and loaded on-demand only
+            when it is needed.
+
+        switched_item_id_overrides : dict, optional
+            A dictionary of *index*:*id* pairs, where *index* is a 0-based index
+            into the list of switched items (plots or tables), and *id* is a 
+            string ID.  Since the ID is used as the filename when saving files,
+            overriding the ID is useful when writing a single plot or table to
+            a specific filename.
 
         global_requirejs : bool, optional
             Whether the table is going to be embedded in an environment
             with a globally defined RequireJS library.  If True, then
             rendered output will make use of RequireJS.
+
+        click_to_display : bool, optional
+            If True, table plots are not initially created but must
+            be clicked to prompt creation.  This is False by default,
+            and can be useful to set to True for tables with
+            especially complex plots whose creation would slow down
+            page loading significantly.
 
         resizable : bool, optional
             Whether or not to place table inside a JQueryUI 
@@ -1319,20 +1350,42 @@ class WorkspaceOutput(object):
             the browser window is resized (`"continual"`).  This option only
             applies for html rendering.
 
-        click_to_display : bool, optional
-            If True, table plots are not initially created but must
-            be clicked to prompt creation.  This is False by default,
-            and can be useful to set to True for tables with
-            especially complex plots whose creation would slow down
-            page loading significantly.
+        link_to : tuple of {"tex", "pdf", "pkl"} or None, optional
+            If not None, a list of one or more items from the given set 
+            indicating whether or not to include links to Latex, PDF, and
+            Python pickle files, respectively.  Note that setting this
+            render option does not automatically *create/render* additional
+            formats of this output object (you need to make multiple `render`
+            calls for that) - it just creates the *links* to these files when
+            rendering as "html".
+          
+        valign : {"top","bottom"}
+            Whether the switched items should be vertically aligned by their
+            tops or bottoms (when they're different heights).
+            
 
-        precision : int or dict, optional
-            The amount of precision to display.  A dictionary with keys
-            "polar", "sci", and "normal" can separately specify the 
-            precision for complex angles, numbers in scientific notation, and 
-            everything else, respectively.  If an integer is given, it this
-            same value is taken for all precision types.  If None, then
-            `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
+
+        latex_cmd : str, optional 
+            The system command or executable used to compile LaTeX documents.
+            Usually `"pdflatex"`.
+
+        latex_flags : list, optional
+            A list of (string-valued) flags to pass to `latex_cmd` when
+            compiling LaTeX documents.  Defaults to 
+            `["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]`
+
+        page_size : tuple
+            The usable page size for LaTeX documents, as (*width*,*height*) 
+            where *width* and *height* are in inches.  Note that this does not
+            include margins.  Defaults to `(6.5,8.0)`.
+
+        render_includes : bool, optional
+            When rendering as "latex", whether included files should also be
+            rendered (either by compiling latex to PDF or saving plots as PDFs).
+
+        leave_includes_src : bool, optional
+            When LaTeX compilation is done, should the source "*.tex" files be
+            removed? If `False`, then they *are* removed.
 
         Returns
         -------
@@ -1691,7 +1744,7 @@ class WorkspaceOutput(object):
 #                     switchboards, switchIndices, output_dir, div_css_classes=None,
 #                     link_to=None):
 #    """
-#    TODO: docstring
+#    TODO REMOVE
 #    """
 #    #Build list of CSS classes for the created divs
 #    classes = ['single_switched_value'] 
@@ -2387,8 +2440,7 @@ class WorkspacePlot(WorkspaceOutput):
                 else:
                     #use auto-sizing (fluid layout)
                     fig_dict = _plotly_ex.plot_ex(
-                        fig['plotlyfig'], show_link=False,
-                        autosize=(autosize == "continual"), resizable=resizable,
+                        fig['plotlyfig'], show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID)

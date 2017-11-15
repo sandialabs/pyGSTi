@@ -2751,27 +2751,30 @@ class GateSet(object):
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
-        Apply rotation uniformly or randomly to this gateset,
-        and return the result, without modifying the original
-        (this) gateset.  You must specify either 'rotate' or
-        'max_rotate'. This method currently only works on
-        n-qubit gatesets.
+        Apply a rotation uniformly (the same rotation applied to each gate)
+        or randomly (different random rotations to each gate) to this gateset,
+        and return the result, without modifying the original (this) gateset.
+
+        You must specify either 'rotate' or 'max_rotate'. This method currently
+        only works on n-qubit gatesets.
 
         Parameters
         ----------
-        rotate : float or tuple of floats, optional
-          if a single float, apply rotation of rotate radians along each of
-          the pauli-product axes (X,Y,Z for 1-qubit) of all gates in the gateset.
-          For a 1-qubit gateset, a 3-tuple of floats can be specifed to apply
-          separate rotations along the X, Y, and Z axes.  For a 2-qubit gateset,
-          a 15-tuple of floats can be specified to apply separate rotations along
-          the IX, IY, IZ, XI, XX, XY, XZ, YI, YX, YY, YZ, ZI, ZX, ZY, ZZ axes.
-
+        rotate : tuple of floats, optional
+            If you specify the `rotate` argument, then the same rotation
+            operation is applied to each gate.  That is, each gate’s matrix `G`
+            is composed with a rotation operation `R`  (so `G` -> `dot(R, G)` )
+            where `R` is the unitary superoperator corresponding to the unitary
+            operator `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here
+            `Pauli_k` ranges over all of the non-identity un-normalized Pauli
+            operators (e.g. {X,Y,Z} for 1 qubit, {IX, IY, IZ, XI, XX, XY, XZ,
+            YI, YX, YY, YZ, ZI, ZX, ZY, ZZ} for 2 qubits).
+  
         max_rotate : float, optional
-          specified instead of 'rotate'; apply a random rotation with
-          maximum max_rotate radians along each of the relevant axes
-          of each each gate in the gateset.  That is, rotations of a
-          particular gate around different axes are different random amounts.
+            If `max_rotate` is specified (*instead* of `rotate`), then pyGSTi 
+            randomly generates a different `rotate` tuple, and applies the 
+            corresponding rotation, to each gate in this `GateSet`.  Each
+            component of each tuple is drawn uniformly from [0, `max_rotate`).
 
         seed : int, optional
           if  not None, seed numpy's random number generator with this value
@@ -2798,7 +2801,8 @@ class GateSet(object):
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or _compat.isint(rotate) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(len(rotate) == dim-1), \
+                "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim-1)
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].rotate(rotate, myBasis)
 

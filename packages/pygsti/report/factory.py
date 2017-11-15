@@ -885,7 +885,58 @@ def create_standard_report(results, filename, title="auto",
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,    
                            auto_open=False, connected=False, verbosity=0):
-    """ TODO: docstring - but just a subset of args for create_standard_report"""
+    """
+    Create a "report notebook": a Jupyter ipython notebook file which, when its
+    cells are executed, will generate similar figures to those contained in an
+    html report (via :func:`create_standard_report`).
+
+    A notebook report allows the user to interact more flexibly with the data
+    underlying the figures, and to easily generate customized variants on the
+    figures.  As such, this type of report will be most useful for experts
+    who want to tinker with the standard analysis presented in the static 
+    HTML or LaTeX format reports.
+
+    Parameters
+    ----------
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running 
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        dictionary of such objects, representing multiple GST runs to be
+        compared (typically all with *different* data sets). The keys of this
+        dictionary are used to label different data sets that are selectable
+        (via setting Python variables) in the report.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.  Must end
+       in ".ipynb". 
+
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
+    confidenceLevel : int, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
+
+    connected : bool, optional
+        Whether output notebook should assume an active internet connection.  If
+        True, then the resulting file size will be reduced because it will link
+        to web resources (e.g. CDN libraries) instead of embedding them.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+    
+
+    Returns
+    -------
+    None
+    """
     printer = VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates","report_notebook")
