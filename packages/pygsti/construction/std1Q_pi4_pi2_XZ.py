@@ -31,9 +31,10 @@ effectStrs = _strc.gatestring_list([(),
 
 germs = _strc.gatestring_list( [('Gx',),
                                 ('Gz',),
+                                ('Gz','Gx'),
                                 ('Gz','Gz','Gx'),
-                                ('Gz','Gz','Gx','Gz','Gx','Gx','Gx'),
-                                ('Gz','Gx','Gz','Gz','Gx','Gx','Gx')] )
+                                ('Gz','Gz','Gx','Gz','Gx','Gx')] )
+germs_lite = germs[0:4]
 
 #Construct a target gateset:  X(pi/4), Z(pi/2)
 gs_target = _setc.build_gateset( [2], [('Q0',)],['Gx','Gz'],
@@ -43,18 +44,19 @@ gs_target = _setc.build_gateset( [2], [('Q0',)],['Gx','Gz'],
                                  spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
                                  basis='pp')
 
+
 global_fidPairs =  [
-    (0, 0), (2, 3), (5, 2), (5, 4)]
+    (0, 3), (3, 2), (4, 0), (5, 3)]
 
 pergerm_fidPairsDict = {
   ('Gx',): [
         (1, 1), (3, 4), (4, 2), (5, 5)],
   ('Gz',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
   ('Gz', 'Gz', 'Gx'): [
         (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
-  ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx', 'Gx'): [
+  ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gz', 'Gx', 'Gz', 'Gz', 'Gx', 'Gx', 'Gx'): [
-        (0, 0), (0, 4), (2, 5), (5, 4)],
 }

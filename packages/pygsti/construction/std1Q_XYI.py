@@ -19,10 +19,19 @@ fiducials = _strc.gatestring_list( [ (), ('Gx',), ('Gy',), ('Gx','Gx'),
                                      ('Gx','Gx','Gx'), ('Gy','Gy','Gy') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.gatestring_list( [('Gi',), ('Gx',), ('Gy',), ('Gx', 'Gy'),
-                                ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'), ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'),
-                                  ('Gx', 'Gx', 'Gi', 'Gy'), ('Gx', 'Gy', 'Gy', 'Gi'),
-                                  ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')] )
+germs = _strc.gatestring_list( 
+    [('Gi',), ('Gx',), ('Gy',), ('Gx', 'Gy'),
+     ('Gx', 'Gx', 'Gy'), ('Gx', 'Gy', 'Gy'), 
+     ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'),
+     ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'),
+     ('Gx', 'Gy', 'Gy', 'Gi'), ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')] )
+germs_lite = germs[0:5]
+
+legacy_germs = _strc.gatestring_list( 
+    [('Gi',), ('Gx',), ('Gy',), ('Gx', 'Gy'),
+     ('Gx', 'Gy', 'Gi'), ('Gx', 'Gi', 'Gy'), ('Gx', 'Gi', 'Gi'), ('Gy', 'Gi', 'Gi'),
+     ('Gx', 'Gx', 'Gi', 'Gy'), ('Gx', 'Gy', 'Gy', 'Gi'),
+     ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')] )
 
 #Construct a target gateset: Identity, X(pi/2), Y(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
@@ -59,9 +68,8 @@ clifford_compilation["Gc22"] = ['Gx','Gx','Gx','Gy','Gy',]
 clifford_compilation["Gc23"] = ['Gx','Gy','Gx','Gx','Gx',]
 
 
-
 global_fidPairs =  [
-    (0, 0), (2, 3), (5, 2), (5, 4)]
+    (0, 3), (3, 2), (4, 0), (5, 3)]
 
 pergerm_fidPairsDict = {
   ('Gx',): [
@@ -72,16 +80,18 @@ pergerm_fidPairsDict = {
         (0, 2), (2, 2), (2, 4), (4, 4)],
   ('Gx', 'Gy'): [
         (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gx', 'Gy', 'Gy'): [
+        (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
   ('Gy', 'Gi', 'Gi'): [
         (0, 2), (2, 2), (2, 4), (4, 4)],
-  ('Gx', 'Gi', 'Gy'): [
-        (0, 0), (0, 4), (2, 5), (5, 4)],
   ('Gx', 'Gy', 'Gi'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gx', 'Gx', 'Gy'): [
+        (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
+  ('Gx', 'Gi', 'Gy'): [
         (0, 0), (0, 4), (2, 5), (5, 4)],
   ('Gx', 'Gi', 'Gi'): [
         (1, 1), (3, 4), (4, 2), (5, 5)],
-  ('Gx', 'Gx', 'Gi', 'Gy'): [
-        (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
   ('Gx', 'Gy', 'Gy', 'Gi'): [
         (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
   ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [

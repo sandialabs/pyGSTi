@@ -58,6 +58,7 @@ clifford_compilation['Gc22c0'] = ['Gxi', 'Gxi', 'Gxi', 'Gyi', 'Gyi', 'Gii', 'Gii
 clifford_compilation['Gc23c0'] = ['Gxi', 'Gyi', 'Gxi', 'Gxi', 'Gxi', 'Gii', 'Gii']   
 
 
+
 global_fidPairs =  [
     (0, 1), (2, 0), (2, 1), (3, 3)]
 

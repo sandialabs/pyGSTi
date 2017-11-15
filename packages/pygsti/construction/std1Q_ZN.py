@@ -35,11 +35,11 @@ effectStrs = _strc.gatestring_list([(),
 
 germs = _strc.gatestring_list([ ('Gz',),
                                 ('Gn',),
-                                ('Gn','Gn','Gz','Gn','Gz'),
-                                ('Gn','Gz','Gn','Gz','Gz'),
-                                ('Gn','Gz','Gn','Gn','Gz','Gz'),
-                                ('Gn','Gn','Gz','Gn','Gz','Gz'),
-                                ('Gn','Gn','Gn','Gz','Gz','Gz') ])
+                                ('Gz','Gn'),
+                                ('Gz','Gz','Gn'),
+                                ('Gz','Gn','Gn'),
+                                ('Gz','Gz','Gn','Gz','Gn','Gn') ])
+germs_lite = germs[:] #same list!
 
 
 global_fidPairs =  [
@@ -50,14 +50,12 @@ pergerm_fidPairsDict = {
         (0, 0), (2, 3), (5, 2), (5, 4)],
   ('Gn',): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gn', 'Gn', 'Gz', 'Gn', 'Gz'): [
+  ('Gz', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gn', 'Gz', 'Gn', 'Gz', 'Gz'): [
+  ('Gz', 'Gn', 'Gn'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
-  ('Gn', 'Gn', 'Gz', 'Gn', 'Gz', 'Gz'): [
-        (0, 0), (2, 3), (3, 0), (5, 0), (5, 2), (5, 4)],
-  ('Gn', 'Gz', 'Gn', 'Gn', 'Gz', 'Gz'): [
+  ('Gz', 'Gz', 'Gn'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gz', 'Gn', 'Gz', 'Gn', 'Gn'): [
         (0, 0), (0, 2), (1, 1), (4, 0), (4, 2), (5, 5)],
-  ('Gn', 'Gn', 'Gn', 'Gz', 'Gz', 'Gz'): [
-        (0, 0), (2, 3), (5, 2), (5, 4)],
 }

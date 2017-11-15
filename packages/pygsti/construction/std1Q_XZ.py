@@ -28,6 +28,16 @@ effectStrs = _strc.gatestring_list([(),
                                   ('Gx','Gx','Gx'),
                                   ('Gx','Gx','Gz','Gx')])
 
+germs = _strc.gatestring_list(
+    [ ('Gx',),
+      ('Gz',),
+      ('Gx','Gz',),
+      ('Gx','Gx','Gz'),
+      ('Gx','Gz','Gz'),
+      ('Gx','Gx','Gz','Gx','Gz','Gz',)])
+germs_lite = germs[0:4]
+
+
 germs = _strc.gatestring_list( [('Gx',), ('Gz',), ('Gz','Gx','Gx'), ('Gz','Gz','Gx')] )
 
 #Construct a target gateset:  X(pi/2), Z(pi/2)
