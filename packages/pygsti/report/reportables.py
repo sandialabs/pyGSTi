@@ -1,3 +1,4 @@
+"""Functions which compute named quantities for GateSets and Datasets."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -5,8 +6,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 """
-Functions which compute named quantities for GateSets and Datasets.
-
 Named quantities as well as their confidence-region error bars are
  computed by the functions in this module. These quantities are
  used primarily in reports, so we refer to these quantities as
@@ -47,6 +46,26 @@ def _make_reportable_qty_or_dict(f0, df=None, nonMarkovianEBs=False):
         return _ReportableQty(f0, df, nonMarkovianEBs)
 
 def evaluate(gatesetFn, cri=None, verbosity=0):
+    """ 
+    Evaluate a GateSetFunction object using confidence region information
+
+    Parameters
+    ----------
+    gatesetFn : GateSetFunction
+        The function to evaluate
+
+    cri : ConfidenceRegionFactoryView, optional
+        View for computing confidence intervals.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    Returns
+    -------
+    ReportableQty or dict
+        If `gatesetFn` does returns a dict of ReportableQty objects, otherwise
+        a single ReportableQty.
+    """
     if gatesetFn is None: # so you can set fn to None when they're missing (e.g. diamond norm)
         return _ReportableQty(_np.nan)
     
@@ -61,6 +80,7 @@ def evaluate(gatesetFn, cri=None, verbosity=0):
 
 
 def spam_dotprods(rhoVecs, EVecs):
+    """SPAM dot products"""
     ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
     for i,rhoVec in enumerate(rhoVecs):
         for j,EVec in enumerate(EVecs):
@@ -70,11 +90,13 @@ Spam_dotprods = _gsf.spamfn_factory(spam_dotprods) #init args == (gateset)
 
 
 def choi_matrix(gate, mxBasis):
+    """Choi matrix"""
     return _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
 Choi_matrix = _gsf.gatefn_factory(choi_matrix) # init args == (gateset, gateLabel)
 
 
 def choi_evals(gate, mxBasis):
+    """Choi matrix eigenvalues"""
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     choi_eigvals = _np.linalg.eigvals(choi)
     return _np.array(sorted(choi_eigvals))
@@ -82,6 +104,7 @@ Choi_evals = _gsf.gatefn_factory(choi_evals) # init args == (gateset, gateLabel)
 
 
 def choi_trace(gate, mxBasis):
+    """Trace of the Choi matrix"""
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
     return _np.trace(choi)
 Choi_trace = _gsf.gatefn_factory(choi_trace) # init args == (gateset, gateLabel)
@@ -89,11 +112,13 @@ Choi_trace = _gsf.gatefn_factory(choi_trace) # init args == (gateset, gateLabel)
 
 
 class Gate_eigenvalues(_gsf.GateSetFunction):
+    """Gate eigenvalues"""
     def __init__(self, gateset, gatelabel):
         self.gatelabel = gatelabel
         _gsf.GateSetFunction.__init__(self, gateset, ["gate:" + gatelabel])
             
     def evaluate(self, gateset):
+        """Evaluate at `gateset`"""
         evals,evecs = _np.linalg.eig(gateset.gates[self.gatelabel])
         
         ev_list = list(enumerate(evals))
@@ -109,6 +134,7 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
         return self.evals
 
     def evaluate_nearby(self, nearby_gateset):
+        """Evaluate at a nearby gate set"""
         #avoid calling minweight_match again
         dMx = nearby_gateset.gates[self.gatelabel] - self.G0
         #evalsM = evals0 + Uinv * (M-M0) * U
@@ -154,11 +180,13 @@ class Gate_eigenvalues(_gsf.GateSetFunction):
 
 
 class Gatestring_eigenvalues(_gsf.GateSetFunction):
+    """Gate sequence eigenvalues"""
     def __init__(self, gateset, gatestring):
         self.gatestring = gatestring
         _gsf.GateSetFunction.__init__(self, gateset, ["all"])
             
     def evaluate(self, gateset):
+        """Evaluate at `gateset`"""
         Mx = gateset.product(self.gatestring)
         evals,evecs = _np.linalg.eig(Mx)
         
@@ -175,6 +203,7 @@ class Gatestring_eigenvalues(_gsf.GateSetFunction):
         return self.evals
 
     def evaluate_nearby(self, nearby_gateset):
+        """Evaluate at nearby gate set"""
         #avoid calling minweight_match again
         Mx = nearby_gateset.product(self.gatestring)
         dMx = Mx - self.Mx
@@ -192,6 +221,7 @@ class Gatestring_eigenvalues(_gsf.GateSetFunction):
 
   
 def rel_gatestring_eigenvalues(gatesetA, gatesetB, gatestring):
+    """Eigenvalues of dot(productB(gatestring)^-1, productA(gatestring))"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
@@ -201,6 +231,7 @@ Rel_gatestring_eigenvalues = _gsf.gatesetfn_factory(rel_gatestring_eigenvalues)
 
 
 def gatestring_fro_diff(gatesetA, gatesetB, gatestring):
+    """ Frobenius distance btwn productA(gatestring) and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return fro_diff(A,B,gatesetB.basis)
@@ -208,6 +239,8 @@ Gatestring_fro_diff = _gsf.gatesetfn_factory(gatestring_fro_diff)
 # init args == (gatesetA, gatesetB, gatestring)
 
 def gatestring_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    """ Entanglement infidelity btwn productA(gatestring)
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return entanglement_infidelity(A,B,gatesetB.basis)
@@ -215,7 +248,8 @@ Gatestring_entanglement_infidelity = _gsf.gatesetfn_factory(gatestring_entanglem
 # init args == (gatesetA, gatesetB, gatestring)
 
 def gatestring_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
-    """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
+    """ Average gate infidelity between productA(gatestring) 
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return avg_gate_infidelity(A,B,gatesetB.basis)
@@ -224,6 +258,8 @@ Gatestring_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_avg_gate_infi
 
 
 def gatestring_jt_diff(gatesetA, gatesetB, gatestring):
+    """ Jamiolkowski trace distance between productA(gatestring) 
+        and productB(gatestring)"""
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return jt_diff(A, B, gatesetB.basis)
@@ -234,6 +270,8 @@ try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
 
     class Gatestring_half_diamond_norm(_gsf.GateSetFunction):
+        """ 1/2 diamond norm of difference between productA(gatestring)
+            and productB(gatestring)"""
         def __init__(self, gatesetA, gatesetB, gatestring):
             self.gatestring = gatestring
             self.B = gatesetB.product(gatestring)
@@ -241,6 +279,7 @@ try:
             _gsf.GateSetFunction.__init__(self, gatesetA, ["all"])
                 
         def evaluate(self, gateset):
+            """Evaluate this function at `gateset`"""
             A = gateset.product(self.gatestring)
             dm, W = _tools.diamonddist(A, self.B, gateset.basis,
                                        return_x=True)
@@ -248,6 +287,7 @@ try:
             return 0.5*dm
     
         def evaluate_nearby(self, nearby_gateset):
+            """Evaluate at a nearby gate set"""
             mxBasis = nearby_gateset.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
                 nearby_gateset.product(self.gatestring), mxBasis)
@@ -268,6 +308,8 @@ except ImportError:
 
 
 def gatestring_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    """ Nonunitary entanglement infidelity between productA(gatestring) 
+        and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
@@ -276,6 +318,8 @@ Gatestring_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factory(gatestrin
 
 
 def gatestring_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    """ Nonunitary average gate infidelity between productA(gatestring) 
+        and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
@@ -284,6 +328,8 @@ Gatestring_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_no
 
 
 def gatestring_eigenvalue_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue entanglement infidelity between productA(gatestring) 
+        and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_entanglement_infidelity(A,B,gatesetB.basis)
@@ -292,6 +338,8 @@ Gatestring_eigenvalue_entanglement_infidelity = _gsf.gatesetfn_factory(gatestrin
 
 
 def gatestring_eigenvalue_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue average gate infidelity between productA(gatestring) 
+        and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_avg_gate_infidelity(A,B,gatesetB.basis)
@@ -299,6 +347,8 @@ Gatestring_eigenvalue_avg_gate_infidelity = _gsf.gatesetfn_factory(gatestring_ei
   # init args == (gatesetA, gatesetB, gatestring)
 
 def gatestring_eigenvalue_nonunitary_entanglement_infidelity(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue nonunitary entanglement infidelity between 
+        productA(gatestring) and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_entanglement_infidelity(A,B,gatesetB.basis)
@@ -307,6 +357,8 @@ Gatestring_eigenvalue_nonunitary_entanglement_infidelity = _gsf.gatesetfn_factor
 
 
 def gatestring_eigenvalue_nonunitary_avg_gate_infidelity(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue nonunitary average gate infidelity between 
+        productA(gatestring) and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_avg_gate_infidelity(A,B,gatesetB.basis)
@@ -315,6 +367,8 @@ Gatestring_eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesetfn_factory(ga
 
   
 def gatestring_eigenvalue_diamondnorm(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue diamond distance between 
+        productA(gatestring) and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_diamondnorm(A,B,gatesetB.basis)
@@ -323,6 +377,8 @@ Gatestring_eigenvalue_diamondnorm = _gsf.gatesetfn_factory(gatestring_eigenvalue
 
 
 def gatestring_eigenvalue_nonunitary_diamondnorm(gatesetA, gatesetB, gatestring):
+    """ Eigenvalue nonunitary diamond distance between 
+        productA(gatestring) and productB(gatestring)"""    
     A = gatesetA.product(gatestring) # "gate"
     B = gatesetB.product(gatestring) # "target gate"
     return eigenvalue_nonunitary_diamondnorm(A,B,gatesetB.basis)
@@ -331,10 +387,22 @@ Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring
 
 
 def povm_entanglement_infidelity(gatesetA, gatesetB):
+    """ 
+    POVM entanglement infidelity between `gatesetA` and `gatesetB`, equal to 
+    `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is the extension
+    of the POVM from the classical space of k-outcomes to the space of
+    (diagonal) k by k density matrices.
+    """
     return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB)
 POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
 
 def povm_jt_diff(gatesetA, gatesetB):
+    """ 
+    POVM Jamiolkowski trace distance between `gatesetA` and `gatesetB`, equal to
+    `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the extension
+    of the POVM from the classical space of k-outcomes to the space of
+    (diagonal) k by k density matrices.
+    """
     return _tools.povm_jtracedist(gatesetA, gatesetB)
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
 
@@ -342,6 +410,12 @@ try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
 
     def povm_half_diamond_norm(gatesetA, gatesetB):
+        """ 
+        Half the POVM diamond distance between `gatesetA` and `gatesetB`, equal
+        to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
+        of the POVM from the classical space of k-outcomes to the space of
+        (diagonal) k by k density matrices.
+        """
         return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
     POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
 except ImportError:
@@ -351,6 +425,9 @@ except ImportError:
 
 
 def decomposition(gate):
+    """
+    DEPRECATED: Decompose a 1Q `gate` into rotations about axes.
+    """
     decompDict = _tools.decompose_gate_matrix(gate)
     if decompDict['isValid']:
         #angleQty   = decompDict.get('pi rotations',0)
@@ -364,12 +441,14 @@ def decomposition(gate):
         return _ReportableQty({})
 
 def upper_bound_fidelity(gate, mxBasis):
+    """ Upper bound on entanglement fidelity """
     return _tools.fidelity_upper_bound(gate)[0]
 Upper_bound_fidelity = _gsf.gatefn_factory(upper_bound_fidelity)
 # init args == (gateset, gateLabel)
 
 
 def closest_ujmx(gate, mxBasis):
+    """ Jamiolkowski state of closest unitary to `gate` """
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     return _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
 Closest_ujmx = _gsf.gatefn_factory(closest_ujmx)
@@ -377,6 +456,7 @@ Closest_ujmx = _gsf.gatefn_factory(closest_ujmx)
 
 
 def maximum_fidelity(gate, mxBasis):
+    """ Fidelity between `gate` and its closest unitary"""
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     choi = _tools.jamiolkowski_iso(gate, mxBasis, mxBasis)
@@ -386,6 +466,7 @@ Maximum_fidelity = _gsf.gatefn_factory(maximum_fidelity)
 
 
 def maximum_trace_dist(gate, mxBasis):
+    """ Jamiolkowski trace distance between `gate` and its closest unitary"""
     closestUGateMx = _alg.find_closest_unitary_gatemx(gate)
     #closestUJMx = _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
     _tools.jamiolkowski_iso(closestUGateMx, mxBasis, mxBasis)
@@ -395,6 +476,14 @@ Maximum_trace_dist = _gsf.gatefn_factory(maximum_trace_dist)
 
 
 def angles_btwn_rotn_axes(gateset):
+    """
+    Array of angles between the rotation axes of the gates of `gateset`.
+    
+    Returns
+    -------
+    numpy.ndarray
+        Of size `(nGates,nGate)` where `nGates=len(gateset.gates)`
+    """
     gateLabels = list(gateset.gates.keys())
     angles_btwn_rotn_axes = _np.zeros( (len(gateLabels), len(gateLabels)), 'd' )
 
@@ -425,18 +514,21 @@ Angles_btwn_rotn_axes = _gsf.gatesetfn_factory(angles_btwn_rotn_axes)
 
 
 def entanglement_fidelity(A, mxBasis, B):
+    """Entanglement fidelity between A and B"""
     return _tools.process_fidelity(A, B, mxBasis)
 Entanglement_fidelity = _gsf.gatesfn_factory(entanglement_fidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def entanglement_infidelity(A, B, mxBasis):
+    """Entanglement infidelity between A and B"""
     return 1 - _tools.process_fidelity(A, B, mxBasis)
 Entanglement_infidelity = _gsf.gatesfn_factory(entanglement_infidelity)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def closest_unitary_fidelity(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    """Entanglement infidelity between closest unitaries to A and B"""
     decomp1 = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
 
@@ -456,12 +548,14 @@ Closest_unitary_fidelity = _gsf.gatesfn_factory(closest_unitary_fidelity)
 
 
 def fro_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    """ Frobenius distance between A and B """
     return _tools.frobeniusdist(A, B)
 Fro_diff = _gsf.gatesfn_factory(fro_diff)
 # init args == (gateset1, gateset2, gateLabel)
 
 
 def jt_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    """ Jamiolkowski trace distance between A and B"""
     return _tools.jtracedist(A, B, mxBasis)
 Jt_diff = _gsf.gatesfn_factory(jt_diff)
 # init args == (gateset1, gateset2, gateLabel)
@@ -471,6 +565,8 @@ try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
 
     class Half_diamond_norm(_gsf.GateSetFunction):
+        """Half the diamond distance bewteen `gatesetA.gates[gateLabel]` and
+           `gatesetB.gates[gateLabel]` """
         def __init__(self, gatesetA, gatesetB, gatelabel):
             self.gatelabel = gatelabel
             self.B = gatesetB.gates[gatelabel]
@@ -478,6 +574,7 @@ try:
             _gsf.GateSetFunction.__init__(self, gatesetA, ["gate:"+gatelabel])
                 
         def evaluate(self, gateset):
+            """Evaluate at `gatesetA = gateset` """
             gl = self.gatelabel
             dm, W = _tools.diamonddist(gateset.gates[gl], self.B, gateset.basis,
                                        return_x=True)
@@ -485,6 +582,7 @@ try:
             return 0.5*dm
     
         def evaluate_nearby(self, nearby_gateset):
+            """Evaluates at a nearby gate set"""
             gl = self.gatelabel; mxBasis = nearby_gateset.basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
                 nearby_gateset.gates[gl], mxBasis)
@@ -548,6 +646,7 @@ Eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_nonu
 
 
 def eigenvalue_entanglement_infidelity(A, B, mxBasis):
+    """ Eigenvalue entanglement infidelity between A and B """
     d2 = A.shape[0]
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
@@ -559,6 +658,7 @@ Eigenvalue_entanglement_infidelity = _gsf.gatesfn_factory(eigenvalue_entanglemen
 
 
 def eigenvalue_avg_gate_infidelity(A, B, mxBasis):
+    """ Eigenvalue average gate infidelity between A and B """
     d2 = A.shape[0]; d = int(round(_np.sqrt(d2)))
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
@@ -570,6 +670,7 @@ Eigenvalue_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_avg_gate_infide
 
 
 def eigenvalue_diamondnorm(A, B, mxBasis):
+    """ Eigenvalue diamond distance between A and B """
     d2 = A.shape[0]
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
@@ -580,6 +681,7 @@ Eigenvalue_diamondnorm = _gsf.gatesfn_factory(eigenvalue_diamondnorm)
 
 
 def eigenvalue_nonunitary_diamondnorm(A, B, mxBasis):
+    """ Eigenvalue nonunitary diamond distance between A and B """
     d2 = A.shape[0]
     evA = _np.linalg.eigvals(A)
     evB = _np.linalg.eigvals(B)
@@ -616,6 +718,7 @@ Avg_gate_infidelity = _gsf.gatesfn_factory(avg_gate_infidelity)
 
 
 def gateset_gateset_angles_btwn_axes(A, B, mxBasis): #Note: default 'gm' basis
+    """ Angle between the rotation axes of A and B (1-qubit gates)"""
     decomp = _tools.decompose_gate_matrix(A)
     decomp2 = _tools.decompose_gate_matrix(B)
     axisOfRotn = decomp.get('axis of rotation', None)
@@ -641,6 +744,7 @@ Gateset_gateset_angles_btwn_axes = _gsf.gatesfn_factory(gateset_gateset_angles_b
 
 
 def rel_eigvals(A, B, mxBasis):
+    """ Eigenvalues of B^{-1} * A"""
     target_gate_inv = _np.linalg.inv(B)
     rel_gate = _np.dot(target_gate_inv, A)
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
@@ -648,25 +752,29 @@ Rel_eigvals = _gsf.gatesfn_factory(rel_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logTiG_eigvals(A, B, mxBasis):
+    """ Eigenvalues of log(B^{-1} * A)"""
     rel_gate = _tools.error_generator(A, B, "logTiG")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logTiG_eigvals = _gsf.gatesfn_factory(rel_logTiG_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logGTi_eigvals(A, B, mxBasis):
+    """ Eigenvalues of log(A * B^{-1})"""
     rel_gate = _tools.error_generator(A, B, "logGTi")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logGTi_eigvals = _gsf.gatesfn_factory(rel_logGTi_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logGmlogT_eigvals(A, B, mxBasis):
+    """ Eigenvalues of log(A) - log(B)"""
     rel_gate = _tools.error_generator(A, B, "logG-logT")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logGmlogT_eigvals = _gsf.gatesfn_factory(rel_logGmlogT_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 
-def rel_gate_eigenvalues(A, B, mxBasis):
+def rel_gate_eigenvalues(A, B, mxBasis):  #DUPLICATE of rel_eigvals TODO
+    """ Eigenvalues of B^{-1} * A """
     rel_gate = _np.dot(_np.linalg.inv(B), A) # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_gate_eigenvalues = _gsf.gatesfn_factory(rel_gate_eigenvalues)
@@ -674,6 +782,16 @@ Rel_gate_eigenvalues = _gsf.gatesfn_factory(rel_gate_eigenvalues)
 
 
 def errgen_and_projections(errgen, mxBasis):
+    """
+    Project `errgen` on all of the standard sets of error generators.
+
+    Returns
+    -------
+    dict
+        Dictionary of 'error generator', '*X* projections', and 
+        '*X* projection power' keys, where *X* is 'hamiltonian', 
+        'stochastic', and 'affine'.
+    """
     ret = {}
     egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
@@ -706,18 +824,33 @@ def errgen_and_projections(errgen, mxBasis):
     return ret
 
 def logTiG_and_projections(A, B, mxBasis):
+    """
+    Projections of `log(B^{-1}*A)`.  Returns a dictionary of quantities with
+    keys 'error generator', '*X* projections', and '*X* projection power',
+    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    """
     errgen = _tools.error_generator(A, B, mxBasis, "logTiG")
     return errgen_and_projections(errgen, mxBasis)
 LogTiG_and_projections = _gsf.gatesfn_factory(logTiG_and_projections)
 # init args == (gateset1, gateset2, gateLabel)
 
 def logGTi_and_projections(A, B, mxBasis):
+    """
+    Projections of `log(A*B^{-1})`.  Returns a dictionary of quantities with
+    keys 'error generator', '*X* projections', and '*X* projection power',
+    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    """
     errgen = _tools.error_generator(A, B, mxBasis, "logGTi")
     return errgen_and_projections(errgen, mxBasis)
 LogGTi_and_projections = _gsf.gatesfn_factory(logGTi_and_projections)
 # init args == (gateset1, gateset2, gateLabel)
 
 def logGmlogT_and_projections(A, B, mxBasis):
+    """
+    Projections of `log(A)-log(B)`.  Returns a dictionary of quantities with
+    keys 'error generator', '*X* projections', and '*X* projection power',
+    where *X* is 'hamiltonian', 'stochastic', and 'affine'.
+    """
     errgen = _tools.error_generator(A, B, mxBasis, "logG-logT")
     return errgen_and_projections(errgen, mxBasis)
 LogGmlogT_and_projections = _gsf.gatesfn_factory(logGmlogT_and_projections)
@@ -725,7 +858,17 @@ LogGmlogT_and_projections = _gsf.gatesfn_factory(logGmlogT_and_projections)
 
 
 
-def general_decomposition(gatesetA, gatesetB): # B is target gateset usually but must be "gatsetB" b/c of decorator coding...
+def general_decomposition(gatesetA, gatesetB):
+    """
+    Decomposition of gates in `gatesetA` using those in `gatesetB` as their
+    targets.  This function uses a generalized decomposition algorithm that
+    can gates acting on a Hilbert space of any dimension.
+
+    Returns
+    -------
+    dict
+    """
+    # B is target gateset usually but must be "gatsetB" b/c of decorator coding...
     decomp = {}
     gateLabels = list(gatesetA.gates.keys())  # gate labels
     mxBasis = gatesetB.basis # B is usually the target which has a well-defined basis
@@ -785,7 +928,9 @@ General_decomposition = _gsf.gatesetfn_factory(general_decomposition)
 # init args == (gatesetA, gatesetB)
 
 
-def average_gateset_infidelity(gatesetA, gatesetB): # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
+def average_gateset_infidelity(gatesetA, gatesetB):
+    """ Average gate set infidelity """
+    # B is target gateset usually but must be "gatesetB" b/c of decorator coding...
     from ..extras.rb import rbutils as _rbutils
     return _rbutils.average_gateset_infidelity(gatesetA,gatesetB)
 Average_gateset_infidelity = _gsf.gatesetfn_factory(average_gateset_infidelity)
@@ -793,6 +938,9 @@ Average_gateset_infidelity = _gsf.gatesetfn_factory(average_gateset_infidelity)
 
 
 def predicted_rb_number(gatesetA, gatesetB):
+    """ 
+    Prediction of RB number based on estimated (A) and target (B) gate sets
+    """
     from ..extras.rb import rbutils as _rbutils
     return _rbutils.predicted_RB_number(gatesetA, gatesetB)
 Predicted_rb_number = _gsf.gatesetfn_factory(predicted_rb_number)
@@ -800,6 +948,7 @@ Predicted_rb_number = _gsf.gatesetfn_factory(predicted_rb_number)
 
 
 def vec_fidelity(A, B, mxBasis):
+    """ State fidelity between SPAM vectors A and B """
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return _tools.fidelity(rhoMx1, rhoMx2)
@@ -808,6 +957,7 @@ Vec_fidelity = _gsf.vecsfn_factory(vec_fidelity)
 
 
 def vec_infidelity(A, B, mxBasis):
+    """ State infidelity fidelity between SPAM vectors A and B """
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return 1 - _tools.fidelity(rhoMx1, rhoMx2)
@@ -816,6 +966,7 @@ Vec_infidelity = _gsf.vecsfn_factory(vec_infidelity)
 
 
 def vec_tr_diff(A, B, mxBasis): # assume vary gateset1, gateset2 fixed
+    """ Trace distance between SPAM vectors A and B """
     rhoMx1 = _tools.vec_to_stdmx(A, mxBasis)
     rhoMx2 = _tools.vec_to_stdmx(B, mxBasis)
     return _tools.tracedist(rhoMx1, rhoMx2)
@@ -823,23 +974,12 @@ Vec_tr_diff = _gsf.vecsfn_factory(vec_tr_diff)
 # init args == (gateset1, gateset2, label, typ)
 
 def vec_as_stdmx(vec, mxBasis):
+    """ SPAM vectors as a standard density matrix """
     return _tools.vec_to_stdmx(vec, mxBasis)
 Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
 
 def vec_as_stdmx_eigenvalues(vec, mxBasis):
+    """ Eigenvalues of the density matrix corresponding to a SPAM vector """
     mx = _tools.vec_to_stdmx(vec, mxBasis)
     return _np.linalg.eigvals(mx)
 Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
-
-
-def labeled_data_rows(labels, confidenceRegionInfo, *reportableQtyLists):
-    for items in zip(labels, *reportableQtyLists):
-        # Python2 friendly unpacking
-        label          = items[0]
-        reportableQtys = items[1:]
-        rowData = [label]
-        if confidenceRegionInfo is None:
-            rowData.extend([(reportableQty.get_value(), None) for reportableQty in reportableQtys])
-        else:
-            rowData.extend([reportableQty.get_value_and_err_bar() for reportableQty in reportableQtys])
-        yield rowData

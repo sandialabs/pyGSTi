@@ -1,13 +1,13 @@
+"""
+Routines for converting python objects to HTML.  Parallel rountines as
+latex.py has for latex conversion.
+"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""
-Routines for converting python objects to HTML.  Parallel rountines as
-latex.py has for latex conversion.
-"""
 
 import numpy as _np
 import cmath
@@ -210,6 +210,7 @@ def value(el, specs, mathmode=False):
     complexAsPolar = specs['complexAsPolar']
 
     def render(x):
+        """Render a single float (can be real or imag part)"""
         if abs(x) < 5*10**(-(precision+1)):
             s = "%.*e" % (sciprecision,x)
         elif abs(x) < 1:

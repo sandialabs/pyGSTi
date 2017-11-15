@@ -1,10 +1,10 @@
+""" Defines the Results class."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the Results class."""
 
 import collections as _collections
 import itertools   as _itertools
@@ -461,6 +461,7 @@ class Results(object):
                                pixelPlotAppendix=False, whackamoleAppendix=False,
                                pureDataAppendix=False,  m=0, M=10, tips=False,
                                verbosity=0, comm=None):
+        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_full_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
@@ -473,6 +474,7 @@ class Results(object):
                                 filename="auto", title="auto", datasetLabel="auto",
                                 suffix="", m=0, M=10, tips=False, verbosity=0,
                                 comm=None):
+        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_brief_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
@@ -486,6 +488,7 @@ class Results(object):
                                 debugAidsAppendix=False,
                                 pixelPlotAppendix=False, whackamoleAppendix=False,
                                 m=0, M=10, verbosity=0, comm=None):
+        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_presentation_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
@@ -499,6 +502,7 @@ class Results(object):
                             debugAidsAppendix=False,
                             pixelPlotAppendix=False, whackamoleAppendix=False,
                             m=0, M=10, verbosity=0, pptTables=False, comm=None):
+        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_presentation_ppt(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
@@ -511,6 +515,7 @@ class Results(object):
                                   title="auto", datasetLabel="auto", suffix="",
                                   tips=False, verbosity=0, comm=None,
                                   showAppendix=False):
+        """ DEPRECATED: use pygsti.report.create_standard_report(...) """
         _warnings.warn(
             ('create_general_report_pdf(...) has been removed from pyGSTi.\n'
              '  Starting in version 0.9.4, pyGSTi\'s PDF reports have been\n'
@@ -521,12 +526,18 @@ class Results(object):
 
 
 def enable_old_python_results_unpickling():
+    """ Perform some monkeying so that old results pickle files can load. """
     
     #Define empty ResultCache class in resultcache module to enable loading old Results pickles
     import sys as _sys
-    class dummy_ResultCache(object): pass
-    class dummy_ResultOptions(object): pass
+    class dummy_ResultCache(object):
+        """ Dummy """
+        pass
+    class dummy_ResultOptions(object):
+        """ Dummy """
+        pass
     class dummy_resultcache_module(object):
+        """ Dummy """
         def __init__(self):
             self.ResultCache = dummy_ResultCache
     _sys.modules[__name__].ResultOptions = dummy_ResultOptions

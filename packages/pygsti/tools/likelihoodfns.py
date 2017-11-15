@@ -1,10 +1,10 @@
+"""Functions related to computation of the log-likelihood."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions related to computation of the log-likelihood."""
 
 import numpy as _np
 import warnings as _warnings
@@ -573,6 +573,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     if poissonPicture:
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+            """ Factored-out computation of hessian from raw components """
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
             totCnts = totalCntVec[None,:]  #shorthand (just a view)
             S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
@@ -620,6 +621,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+            """ Factored-out computation of hessian from raw components """
             S = cntVecMx / min_p # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
 

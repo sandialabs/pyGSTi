@@ -1,10 +1,11 @@
+""" Functions for generating Direct-(LGST, MC2GST, MLGST) gatesets """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for generating Direct-(LGST, MC2GST, MLGST) gatesets """
+
 
 from .. import tools        as _tools
 from .. import construction as _construction

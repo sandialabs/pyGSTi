@@ -1,10 +1,11 @@
+""" Functions for reducing the number of required fiducial pairs for analysis."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for reducing the number of required fiducial pairs for analysis."""
+
 
 import numpy      as _np
 import itertools  as _itertools
@@ -121,8 +122,10 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     nGatesetParams = targetGateset.num_params()
 
-    #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
+        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
+            where i = composite EVec & fiducial index and j similar """
+
         dP = _np.empty( (len(germList),len(spamLabels),len(effectStrs)*len(prepStrs), nGatesetParams) )
            #indexed by [iGerm,iSpamLabel,iFiducialPair,iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
 
@@ -158,6 +161,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         return dP
 
     def get_number_amplified(M0,M1,L0,L1,verb):
+        """ Return the number of amplified parameters """
         printer = _objs.VerbosityPrinter.build_printer(verb)
         L_ratio = float(L1)/float(L0)
         try:
@@ -541,8 +545,10 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
 
     nGatesetParams = targetGateset.num_params()
 
-    #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
+        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> 
+            where i = composite EVec & fiducial index and j similar """
+
         gatestrings = []
         for germ in germList:
             expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
@@ -563,6 +569,7 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
         return dP
 
     def get_number_amplified(M0,M1,L0,L1):
+        """ Return the number of amplified parameters """
         L_ratio = float(L1)/float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)

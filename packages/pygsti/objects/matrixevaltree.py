@@ -1,10 +1,10 @@
+""" Defines the MatrixEvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the EvalTree class which implements an evaluation tree. """
 
 from . import gatestring as _gs
 from .verbosityprinter import VerbosityPrinter
@@ -354,6 +354,10 @@ class MatrixEvalTree(EvalTree):
                 #elif start_select_method == "fast":
                 
                 def get_start_indices(maxIntersect):
+                    """ Builds an initial set of indices by merging single-
+                        item trees that don't intersect too much (intersection
+                        is less than `maxIntersect`.  Returns a list of the
+                        single-item tree indices and the final set of indices."""
                     starting = [0] #always start with 0th tree
                     startingSet = singleItemTreeSetList[0].copy() 
                     for i,s in enumerate(singleItemTreeSetList[1:],start=1):

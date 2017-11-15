@@ -1,3 +1,11 @@
+""" Defines SmartCache and supporting functions """
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
 import hashlib   as _hashlib
 import functools as _functools
 import sys       as _sys
@@ -15,6 +23,7 @@ DIGEST_TIMES = defaultdict(list)
 csize = lambda counter : len(list(counter.elements()))
 
 def average(l):
+    """ Computes the average of the items in a list """
     nCalls = max(1, len(l))
     return sum(l) / nCalls
 
@@ -99,19 +108,33 @@ class SmartCache(object):
                 _pickle.dumps(v)
                 pickleableCache[k] = v
             except TypeError as e:
-                self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
+                if isinstance(v,dict):
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.keys())))
+                else:
+                    self.unpickleable.add(str(k[0]) + str(type(v)) + str(e) + str(list(v.__dict__.keys())))
             except _pickle.PicklingError as e:
                 self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
         d['cache'] = pickleableCache
         return d
 
     def add_digest(self, custom):
+        '''
+        Add a "custom" digest function, used for hashing otherwise un-hashable
+        types.
+
+        Parameters
+        ----------
+        custom : function
+            A hashing function, which takes two arguments: `md5` (a running MD5
+            hash) and `val` (the value to be hashed).  It should call
+            `md5.update` to add to the running hash, and needn't return anything.
+        '''
         self.customDigests.append(custom)
 
     def low_overhead_cached_compute(self, fn, argVals, kwargs=None):
         '''
         Cached compute with less profiling: 
-            see cached_compute docstring
+            see :method:`cached_compute` docstring
         '''
         if kwargs is None:
             kwargs = dict()
@@ -249,6 +272,8 @@ class SmartCache(object):
         printer.log('    {} seconds saved total'.format(totalSaved))
 
     def avg_timedict(self, d):
+        """ Given a dictionary of lists of times (`d`), returns a dict of the
+            summed times.  """
         ret = dict()
         for k, v in d.items():
             if k not in self.fhits:
@@ -304,12 +329,13 @@ def smart_cached(obj):
     '''
     cache = obj.cache = SmartCache(decorating=(obj.__module__, obj.__name__))
     @_functools.wraps(obj)
-    def cacher(*args, **kwargs):
+    def _cacher(*args, **kwargs):
         _, v = cache.cached_compute(obj, args, kwargs)
         return v
-    return cacher
+    return _cacher
 
 class CustomDigestError(Exception):
+    """ Custom Digest Exception type """
     pass
 
 def digest(obj, custom_digests=None):
@@ -367,6 +393,7 @@ def digest(obj, custom_digests=None):
     return M.digest() #return native hash of the MD5 digest
 
 def get_fn_name_key(fn):
+    """ Get the name (str) used to has the function `fn` """
     name = fn.__name__
     if hasattr(fn, '__self__'):
         name = fn.__self__.__class__.__name__ + '.' + name

@@ -1,10 +1,10 @@
+""" Colormap and derived class definitions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Colormap and derived class definitions """
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
@@ -20,6 +20,10 @@ def _vnorm(x, vmin, vmax):
 
 @smart_cached
 def as_rgb_array(colorStr):
+    """ 
+    Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"`
+    to a numpy array of length 3.
+    """
     colorStr = colorStr.strip() #remove any whitespace                                                                           
     if colorStr.startswith('#') and len(colorStr) >= 7:
         r,g,b = colorStr[1:3], colorStr[3:5], colorStr[5:7]
@@ -80,6 +84,12 @@ def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
 
 
 class Colormap(object):
+    """ 
+    A color map which encapsulates a plotly colorscale with a normalization,
+    and contains additional functionality such as the ability to compute the
+    color corresponding to a particular value and extract matplotlib
+    colormap and normalization objects.
+    """
     def __init__(self, rgb_colors, hmin, hmax):
         """
         Create a new Colormap.
@@ -109,6 +119,19 @@ class Colormap(object):
         return _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
 
     def besttxtcolor(self, value):
+        """ 
+        Return the better text color, "black" or "white", given an
+        un-normalized `value`.
+
+        Parameters
+        ----------
+        value : float
+            An un-normalized value.
+
+        Returns
+        -------
+        str
+        """
         z = _vnorm( self.normalize(value), self.hmin, self.hmax) # norm_value <=> color
         for i in range(1,len(self.rgb_colors)):
             if z < self.rgb_colors[i][0]:
@@ -125,6 +148,14 @@ class Colormap(object):
         return "black" if 0.5 <= P else "white"
 
     def get_colorscale(self):
+        """
+        Construct and return the plotly colorscale of this color map.
+        
+        Returns
+        -------
+        list 
+            A list of `[float_value, "rgb(R,G,B)"]` items.
+        """
         plotly_colorscale = [ [z, 'rgb(%d,%d,%d)' %
                                (round(r*255),round(g*255),round(b*255))]
                               for z,(r,g,b) in self.rgb_colors ]
@@ -186,7 +217,35 @@ class Colormap(object):
     
 
 class LinlogColormap(Colormap):
+    """
+    Colormap which combines a linear grayscale portion with a logarithmic
+    color (by default red) portion.  The transition between these occurs
+    at a point based on a percentile of chi^2 distribution.
+    """
     def __init__(self, vmin, vmax, n_boxes, pcntle, dof_per_box, color="red"):
+        """
+        Create a new LinlogColormap.
+
+        Parameters
+        ----------
+        vmin, vmax : float
+            The min and max values of the data being colormapped.
+
+        n_boxes : int
+            The number of boxes in the plot this colormap is being used with,
+            so that `pcntle` gives a percentage of the *worst* box being "red".
+        
+        pcntle : float
+            A number between 0 and 1 giving the probability that the worst box
+            in the plot will be red.  Typically a value of 0.05 is used.
+
+        dof_per_box : int
+            The number of degrees of freedom represented by each box, so the
+            expected distribution of each box's values is chi^2_[dof_per_box].
+
+        color : {"red","blue","green","cyan","yellow","purple"}
+            the color to use for the non-grayscale part of the color scale.
+        """
         self.N = n_boxes
         self.percentile = pcntle
         self.dof = dof_per_box
@@ -317,7 +376,23 @@ class LinlogColormap(Colormap):
 
 
 class DivergingColormap(Colormap):
+    """ A diverging color map """
+    
     def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
+        """
+        Create a new DivergingColormap
+        
+        Parameters
+        ----------
+        vmin, vmax : float
+            Min and max values of the data being colormapped.
+
+        midpoint : float, optional
+            The midpoint of the color scale.
+        
+        color : {"RdBu"}
+            What colors to use.
+        """
         hmin = vmin
         hmax = vmax
         self.midpoint = midpoint
@@ -334,6 +409,13 @@ class DivergingColormap(Colormap):
 
         
     def normalize(self, value):
+        """ 
+        Normalize value as it would be prior to linearly interpolating
+        onto the [0,1] range of the color map.
+
+        In this case, no additional normalization is performed, so this 
+        function just returns `value`.
+        """
         #no normalization is done automatically by plotly,
         # (using zmin and zmax values of heatmap)
         return value
@@ -373,7 +455,19 @@ class DivergingColormap(Colormap):
         
 
 class SequentialColormap(Colormap):
+    """ A sequential color map """
     def __init__(self, vmin, vmax, color="whiteToBlack"):
+        """
+        Create a new SequentialColormap
+        
+        Parameters
+        ----------
+        vmin, vmax : float
+            Min and max values of the data being colormapped.
+
+        color : {"whiteToBlack", "blackToWhite"}
+            What colors to use.
+        """
         hmin = vmin
         hmax = vmax
 
@@ -387,6 +481,13 @@ class SequentialColormap(Colormap):
         super(SequentialColormap, self).__init__(rgb_colors, hmin,hmax)
 
     def normalize(self, value):
+        """ 
+        Normalize value as it would be prior to linearly interpolating
+        onto the [0,1] range of the color map.
+
+        In this case, no additional normalization is performed, so this 
+        function just returns `value`.
+        """
         #no normalization is done automatically by plotly,
         # (using zmin and zmax values of heatmap)
         return value

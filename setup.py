@@ -59,7 +59,8 @@ setup(name='pyGSTi',
            'evolutionary optimization algorithm': ['deap'],
            'pickling report tables': ['pandas'],
            'generating PDFs of report figures': ['matplotlib'],
-           'generating report notebooks': ['ipython','notebook']
+           'generating report notebooks': ['ipython','notebook'],
+           'read/write message pack format': ['msgpack-python']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',

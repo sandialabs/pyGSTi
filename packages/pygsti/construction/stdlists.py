@@ -1,10 +1,10 @@
+""" Gate string list creation functions using repeated-germs limited by a max-length."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Gate string list creation functions using repeated-germs limited by a max-length."""
 
 import numpy.random as _rndm
 import itertools as _itertools
@@ -761,7 +761,7 @@ def _getTruncFunction(truncScheme):
     elif truncScheme == "truncated germ powers":
         Rfn = _gsc.repeat_and_truncate
     elif truncScheme == "length as exponent":
-        def Rfn(germ,N): return germ*N
+        Rfn = lambda germ,N : germ*N
     else:
         raise ValueError("Invalid truncation scheme: %s" % truncScheme)
     return Rfn

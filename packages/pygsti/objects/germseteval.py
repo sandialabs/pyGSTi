@@ -1,10 +1,10 @@
+"""Classes for evaluating germ set performance."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Classes for evaluating germ set performance."""
 
 import numpy as _np
 #import matplotlib.pyplot as plt #REMOVED
@@ -149,7 +149,7 @@ class GermSetEval:
                              'cannot plot error ranges!')
 
         clickNums = set()
-        for trueGatesetNum, numClicks, run in self.errorDict:
+        for trueGatesetNum, numClicks, _ in self.errorDict:
             clickNums.add(numClicks)
         clickNums = sorted(list(clickNums))
         numClickNums = len(clickNums)

@@ -1,10 +1,10 @@
+""" Defines the Workspace class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the Workspace class and supporting functionality."""
 
 import itertools   as _itertools
 import collections as _collections
@@ -39,6 +39,8 @@ def enable_plotly_pickling():
     """
     import plotly
     def setitem(self, key, value, _raise=True):
+        """Sets an item of a dict using the standard dict's  __setitem__ 
+           to restore normal dict behavior"""
         return dict.__setitem__(self,key,value)
     
     plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
@@ -60,6 +62,7 @@ def disable_plotly_pickling():
     del plotlyDictClass.__saved_setattr__
 
 def ws_custom_digest(md5, v):
+    """ A "digest" function for hashing several special types"""
     if isinstance(v,NotApplicable):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
@@ -102,6 +105,22 @@ class Workspace(object):
         self.smartCache.add_digest(ws_custom_digest)
 
     def save_cache(self, cachefile, showUnpickled=False):
+        """ 
+        Save this Workspace's cache to a file.
+        
+        Parameters
+        ----------
+        cachefile : str
+            The filename to save the cache to.
+
+        showUnpickled : bool, optional
+            Whether to print quantities (keys) of cache that could not be
+            saved because they were not pickle-able.
+        
+        Returns
+        -------
+        None
+        """
         with open(cachefile, 'wb') as outfile:
             enable_plotly_pickling()
             _pickle.dump(self.smartCache, outfile)
@@ -111,6 +130,18 @@ class Workspace(object):
             _pprint(self.smartCache.unpickleable)
 
     def load_cache(self, cachefile):
+        """ 
+        Load this Workspace's cache from `cachefile`.
+        
+        Parameters
+        ----------
+        cachefile : str
+            The filename to load the cache from.
+
+        Returns
+        -------
+        None
+        """
         with open(cachefile, 'rb') as infile:
             enable_plotly_pickling()
             oldCache = _pickle.load(infile).cache
@@ -121,6 +152,15 @@ class Workspace(object):
                     v.ws = self
             self.smartCache.cache.update(oldCache)
 
+            
+    def __getstate__(self):
+        return {'smartCache': self.smartCache}
+
+    def __setstate__(self,state_dict):
+        self._register_components(False)
+        self.smartCache = state_dict['smartCache']
+
+        
     def _makefactory(self, cls, autodisplay):#, printer=_objs.VerbosityPrinter(1)):
         PY3 = bool(_sys.version_info > (3, 0))
 

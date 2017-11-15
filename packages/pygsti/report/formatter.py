@@ -1,3 +1,4 @@
+"""Defines the Formatter class"""
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed

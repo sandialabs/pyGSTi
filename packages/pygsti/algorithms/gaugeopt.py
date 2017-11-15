@@ -1,10 +1,10 @@
+""" GST gauge optimization algorithms """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" GST gauge optimization algorithms """
 
 import numpy as _np
 import warnings as _warnings
@@ -247,35 +247,35 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
     x0 = gauge_group.get_initial_params() #gauge group picks a good initial el
     gaugeGroupEl = gauge_group.get_element(x0) #re-used element for evals
 
-    def call_objective_fn(gaugeGroupElVec):
+    def _call_objective_fn(gaugeGroupElVec):
         gaugeGroupEl.from_vector(gaugeGroupElVec)
         gs = gateset.copy()
         gs.transform(gaugeGroupEl)
         return objective_fn(gs)
 
     if jacobian_fn:
-        def call_jacobian_fn(gaugeGroupElVec):
+        def _call_jacobian_fn(gaugeGroupElVec):
             gaugeGroupEl.from_vector(gaugeGroupElVec)
             gs = gateset.copy()
             gs.transform(gaugeGroupEl)
             return jacobian_fn(gateset, gs, gaugeGroupEl)
     else:
-        call_jacobian_fn = None
+        _call_jacobian_fn = None
 
     printer.log("--- Gauge Optimization (%s method) ---" % method,2)
     if method == 'ls':
-        #minSol  = _opt.least_squares(call_objective_fn, x0, #jac=call_jacobian_fn,
+        #minSol  = _opt.least_squares(_call_objective_fn, x0, #jac=_call_jacobian_fn,
         #                            max_nfev=maxfev, ftol=tol)
         #solnX = minSol.x
-        assert(call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
+        assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         solnX,converged,msg = _opt.custom_leastsq(
-            call_objective_fn, call_jacobian_fn, x0, f_norm2_tol=tol,
+            _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-2)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged)
-        solnF = call_objective_fn(solnX) if returnAll else None
+        solnF = _call_objective_fn(solnX) if returnAll else None
 
     else:
         if comm is not None and comm.Get_rank() == 0:
@@ -284,13 +284,13 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
         bToStdout = (printer.verbosity >= 2 and printer.filename is None)
         if bToStdout and (comm is None or comm.Get_rank() == 0): 
-            print_obj_func = _opt.create_obj_func_printer(call_objective_fn) #only ever prints to stdout!
+            print_obj_func = _opt.create_obj_func_printer(_call_objective_fn) #only ever prints to stdout!
             # print_obj_func(x0) #print initial point (can be a large vector though)
         else: print_obj_func = None
             
-        minSol = _opt.minimize(call_objective_fn, x0,
+        minSol = _opt.minimize(_call_objective_fn, x0,
                                method=method, maxiter=maxiter, maxfev=maxfev,
-                               tol=tol, jac=call_jacobian_fn,                               
+                               tol=tol, jac=_call_jacobian_fn,                               
                                callback = print_obj_func)
         solnX = minSol.x
         solnF = minSol.fun
@@ -330,7 +330,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
         # least-squares case where objective function returns an array of
         # the before-they're-squared difference terms and there's an analytic jacobian
 
-        def objective_fn(gs):
+        def _objective_fn(gs):
             residuals,_ = gs.residuals(targetGateset, None, itemWeights)
 
             if cptp_penalty_factor > 0:
@@ -346,7 +346,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             return _np.concatenate( (residuals, cpPenaltyVec, spamPenaltyVec) )
 
         
-        def jacobian_fn(gs_pre, gs_post, gaugeGroupEl):
+        def _jacobian_fn(gs_pre, gs_post, gaugeGroupEl):
             
             # Indices: Jacobian output matrix has shape (L, N)
             start = 0
@@ -458,14 +458,14 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             #Note jacMx is completely filled (on all procs)
 
             if checkJac and (comm is None or comm.Get_rank() == 0):
-                def mock_objective_fn(v):
+                def _mock_objective_fn(v):
                     gaugeGroupEl.from_vector(v)
                     gs = gs_pre.copy()
                     gs.transform(gaugeGroupEl)
-                    return objective_fn(gs)
+                    return _objective_fn(gs)
 
                 vec = gaugeGroupEl.to_vector()
-                _opt.check_jac(mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, errType='abs',
+                _opt.check_jac(_mock_objective_fn, vec, jacMx, tol=1e-5, eps=1e-9, errType='abs',
                                verbosity=1)
                 
             return jacMx
@@ -474,7 +474,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
         # non-least-squares case where objective function returns a single float
         # and (currently) there's no analytic jacobian
         
-        def objective_fn(gs):
+        def _objective_fn(gs):
             ret = 0
     
             if cptp_penalty_factor > 0:
@@ -533,9 +533,9 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
     
             return ret
 
-        jacobian_fn = None
+        _jacobian_fn = None
         
-    return objective_fn, jacobian_fn
+    return _objective_fn, _jacobian_fn
 
 
 def _cptp_penalty_size(gs):

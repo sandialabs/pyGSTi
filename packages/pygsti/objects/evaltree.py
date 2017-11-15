@@ -1,10 +1,10 @@
+""" Defines the EvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the EvalTree class which implements an evaluation tree. """
 
 from ..tools import mpitools as _mpit
 from .verbosityprinter import VerbosityPrinter
@@ -261,14 +261,14 @@ class EvalTree(list):
         nFinal = self.num_final_strings()
         ret = a.copy()
 
-        def mkindx(i):
+        def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
             return mi
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
                 if iorig < nFinal: 
-                    ret[mkindx(icur)] = a[mkindx(iorig)]
+                    ret[_mkindx(icur)] = a[_mkindx(iorig)]
 
         return ret
 
@@ -300,14 +300,14 @@ class EvalTree(list):
         nFinal = self.num_final_strings()
         ret = a.copy()
 
-        def mkindx(i):
+        def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
             return mi
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
                 if iorig < nFinal: 
-                    ret[mkindx(iorig)] = a[mkindx(icur)]
+                    ret[_mkindx(iorig)] = a[_mkindx(icur)]
 
         return ret
         

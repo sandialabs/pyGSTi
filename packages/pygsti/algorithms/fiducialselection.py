@@ -1,10 +1,10 @@
+""" Functions for selecting a complete set of fiducials for a GST analysis."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for selecting a complete set of fiducials for a GST analysis."""
 
 import numpy as _np
 import scipy
@@ -679,6 +679,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     numMxs = len(fidArrayList)
 
     def compute_score(wts, cache_score=True):
+        """ objective function for optimization """
         score = None
         if forceEmpty and _np.count_nonzero(wts[:1]) != 1:
             score = forceEmptyScore
@@ -767,6 +768,7 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
         return best_score, best_weights, finalFidList #pylint: disable=undefined-variable
 
     def get_neighbors(boolVec):
+        """ Iterate over neighbors of `boolVec` """
         for i in range(nFids):
             v = boolVec.copy()
             v[i] = (v[i] + 1) % 2 #toggle v[i] btwn 0 and 1

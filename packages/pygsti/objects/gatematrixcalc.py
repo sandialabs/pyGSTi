@@ -1,10 +1,10 @@
+""" Defines the GateMatrixCalc calculator class"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateMatrixCalc calculator class"""
 
 import warnings as _warnings
 import numpy as _np
@@ -1981,6 +1981,7 @@ class GateMatrixCalc(GateCalc):
               # ( nGateStrings, dim, dim )
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
                 if sumInto:
@@ -2143,6 +2144,7 @@ class GateMatrixCalc(GateCalc):
             profiler.mem_check("bulk_fill_dprobs: post compute product")
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -2218,6 +2220,7 @@ class GateMatrixCalc(GateCalc):
                        +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
 
                 def calc_and_fill_blk(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                    """ Compute and fill result quantities blocks for given arguments """
                     tm = _time.time()
                     old_err = _np.seterr(over='ignore')
                     rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -2424,6 +2427,7 @@ class GateMatrixCalc(GateCalc):
               #( nGateStrings, dim, dim )
 
             def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                """ Compute and fill result quantities for given arguments """
                 old_err = _np.seterr(over='ignore')
                 rho,E = self._rhoE_from_spamLabel(spamLabel)
                 
@@ -2673,6 +2677,7 @@ class GateMatrixCalc(GateCalc):
 
         #Same as in bulk_fill_hprobs (TODO consolidate?)
         def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+            """ Compute and fill result quantities for given arguments """
             old_err = _np.seterr(over='ignore')
             rho,E = self._rhoE_from_spamLabel(spamLabel)
             

@@ -128,6 +128,10 @@ germs_lite = _strc.gatestring_list([
 gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=_pi/2, Yangle=_pi/2,
                                        MSglobal=_pi/2, MSlocal=0, basis="qt")
 
+legacy_gs_target = _qutrit.make_qutrit_gateset(errorScale=0, Xangle=-_pi/2, Yangle=_pi/2,
+                                       MSglobal=-_pi/2, MSlocal=0, basis="qt")
+  #Note: negative signs from weird/incorrect conventions
+
 global_fidPairs =  [
     (0, 0), (0, 4), (3, 6), (4, 5), (5, 3), (6, 0), (7, 5), (7, 6), 
     (8, 4)]

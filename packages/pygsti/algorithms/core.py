@@ -1,10 +1,11 @@
+""" Core GST algorithms """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Core GST algorithms """
+
 
 import numpy          as _np
 import scipy.optimize as _spo
@@ -613,14 +614,14 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     if printer.verbosity < 3:
 
         if regularizeFactor == 0:
-            def objective_func(vectorGS):
+            def _objective_func(vectorGS):
                 gs.from_vector(vectorGS)
                 prods = gs.bulk_product(evTree, comm=comm)
                 ret = (prods - estimates).flatten()
                 #assert( len( (_np.isnan(ret)).nonzero()[0] ) == 0 )
                 return ret
         else:
-            def objective_func(vectorGS):
+            def _objective_func(vectorGS):
                 gs.from_vector(vectorGS)
                 prods = gs.bulk_product(evTree, comm=comm)
                 gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
@@ -629,7 +630,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
                 return ret
 
     else:
-        def objective_func(vectorGS):
+        def _objective_func(vectorGS):
             gs.from_vector(vectorGS)
             prods = gs.bulk_product(evTree, comm=comm)
             ret = (prods - estimates).flatten()
@@ -662,26 +663,26 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
 
     if printer.verbosity < 3:
         if regularizeFactor == 0:
-            def jacobian(vectorGS):
+            def _jacobian(vectorGS):
                 gs.from_vector(vectorGS)
                 jac = gs.bulk_dproduct(evTree, flat=True, comm=comm)
                     # shape == nGateStrings*nFlatGate, nDerivCols
-                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 return jac
         else:
-            def jacobian(vectorGS):
+            def _jacobian(vectorGS):
                 gs.from_vector(vectorGS)
                 gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] )
                 jac = gs.bulk_dproduct(evTree, flat=True, comm=comm)
                     # shape == nGateStrings*nFlatGate, nDerivCols
                 jac = _np.concatenate( (jac, gsVecGrad), axis=0 )  # shape == nGateStrings*nFlatGate+nDerivCols, nDerivCols
-                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 return jac
             #OLD return _np.concatenate( [ gs.dproduct(gateStr, flat=True) \
             #                           for gateStr in gateStringsToUseInEstimation ], axis=0 )
 
     else:
-        def jacobian(vectorGS):
+        def _jacobian(vectorGS):
             gs.from_vector(vectorGS)
             jac = gs.bulk_dproduct(evTree, flat=True, comm=comm)
                 # shape == nGateStrings*nFlatGate, nDerivCols
@@ -690,7 +691,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
                 jac = _np.concatenate( (jac, gsVecGrad), axis=0 )
 
             if check_jacobian:
-                errSum, errs, fd_jac = _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]*jac.shape[1]), 3)
                 if len(errs) > 0:
                     i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
@@ -704,10 +705,10 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
 
 
     #def checked_jacobian(vectorGS):
-    #  def obj_i(x, i): return objective_func(x)[i]
-    #  def jac_i(x, i): return (jacobian(x))[i]
-    #  y = objective_func(vectorGS)
-    #  jac = jacobian(vectorGS); nJ = _np.linalg.norm(jac)
+    #  def obj_i(x, i): return _objective_func(x)[i]
+    #  def jac_i(x, i): return (_jacobian(x))[i]
+    #  y = _objective_func(vectorGS)
+    #  jac = _jacobian(vectorGS); nJ = _np.linalg.norm(jac)
     #  for i in range(len(y)):
     #    err = _spo.check_grad(obj_i, jac_i, vectorGS, i)
     #    if err/nJ > 1e-6: print "Jacobian(%d) Error = %g (jac norm = %g)" % (i,err,nJ)
@@ -716,16 +717,16 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
     #Step 3: solve least squares minimization problem
     x0 = gs.to_vector()
     opt_x, _, _, _, _ = \
-        _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                 maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian)
-    full_minErrVec = objective_func(opt_x)
+        _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                 maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian)
+    full_minErrVec = _objective_func(opt_x)
     minErrVec = full_minErrVec if regularizeFactor == 0 else full_minErrVec[0:-len(x0)] #don't include regularization terms
 
     #DEBUG: check without using our jacobian
     #opt_x_chk, opt_jac_chk, info_chk, msg_chk, flag_chk = \
-    #    _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+    #    _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
     #             maxfev=maxfev*(len(x0)+1), full_output=True, epsfcn=1e-30)
-    #minErrVec_chk = objective_func(opt_x_chk)
+    #minErrVec_chk = _objective_func(opt_x_chk)
 
     gs.from_vector(opt_x)
     #gs.log("ExLGST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
@@ -1130,15 +1131,15 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     maxGateStringLength = max([len(x) for x in gateStringsToUse])
 
     if useFreqWeightedChiSq:
-        def get_weights(p):
+        def _get_weights(p):
             return fweights
-        def get_dweights(p,wts):
+        def _get_dweights(p,wts):
             return z
     else:
-        def get_weights(p):
+        def _get_weights(p):
             cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
             return _np.sqrt(N / cp)  # nSpamLabels x nGateStrings array (K x M)
-        def get_dweights(p,wts):  #derivative of weights w.r.t. p
+        def _get_dweights(p,wts):  #derivative of weights w.r.t. p
             cp = _np.clip(p,minProbClipForWeighting,1-minProbClipForWeighting)
             dw = -0.5 * wts / cp   # nSpamLabels x nGateStrings array (K x M)
             dw[ _np.logical_or(p < minProbClipForWeighting, p>(1-minProbClipForWeighting)) ] = 0.0
@@ -1147,12 +1148,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Objective Function
     if printer.verbosity < 4:  # Fast versions of functions
         if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0:
-            def objective_func(vectorGS):
+            def _objective_func(vectorGS):
                 tm = _time.time()
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                    check, comm)
-                v = (probs-f)*get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
+                v = (probs-f)*_get_weights(probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
                 v.shape = [KM] #reshape ensuring no copy is needed
                 return v
@@ -1160,12 +1161,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         elif regularizeFactor != 0:
             assert(cptp_penalty_factor == 0), "Cannot have regularizeFactor and cptp_penalty_factor != 0"
             assert(spam_penalty_factor == 0), "Cannot have regularizeFactor and spam_penalty_factor != 0"
-            def objective_func(vectorGS):
+            def _objective_func(vectorGS):
                 tm = _time.time()
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                    check, comm)
-                weights = get_weights(probs)
+                weights = _get_weights(probs)
                 v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nGateStrings)
                 gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
                 profiler.add_time("do_mc2gst: OBJECTIVE",tm)
@@ -1173,12 +1174,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
         else: #cptp_pentalty_factor != 0 and/or spam_pentalty_factor != 0
             assert(regularizeFactor == 0), "Cannot have regularizeFactor and other penalty factors > 0"
-            def objective_func(vectorGS):
+            def _objective_func(vectorGS):
                 tm = _time.time()
                 gs.from_vector(vectorGS)
                 gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                    check, comm)
-                weights = get_weights(probs)
+                weights = _get_weights(probs)
                 v = (probs-f)*weights # dims K x M (K = nSpamLabels, M = nGateStrings)
                 if cptp_penalty_factor > 0:
                     cpPenaltyVec = _cptp_penalty(gs,cptp_penalty_factor,gateBasis)
@@ -1193,12 +1194,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     else:  # Verbose (DEBUG) version of objective_func
 
-        def objective_func(vectorGS):
+        def _objective_func(vectorGS):
             tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
                                check, comm)
-            weights = get_weights(probs)
+            weights = _get_weights(probs)
 
             v = (probs - f) * weights;  chisq = _np.sum(v*v)
             nClipped = len((_np.logical_or(probs < minProbClipForWeighting,
@@ -1235,7 +1236,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     # Jacobian function
     if printer.verbosity < 4: # Fast versions of functions
         if regularizeFactor == 0 and cptp_penalty_factor == 0 and spam_penalty_factor == 0: # Fast un-regularized version
-            def jacobian(vectorGS):
+            def _jacobian(vectorGS):
                 tm = _time.time()
                 dprobs = jac.view() #avoid mem copying: use jac mem for dprobs
                 dprobs.shape = (ns,ng,vec_gs_len)
@@ -1244,13 +1245,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = get_weights( probs )
-                dprobs *= (weights+(probs-f)*get_dweights(probs, weights ))[:,:,None]
+                weights  = _get_weights( probs )
+                dprobs *= (weights+(probs-f)*_get_dweights(probs, weights ))[:,:,None]
                   # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
                   # this multiply also computes jac, which is just dprobs
                   # with a different shape (jac.shape == [KM,vec_gs_len])
                 
-                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nGateStrings, nDerivCols), weights has shape == (nGateStrings,)
                 # return shape == (nGateStrings, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
@@ -1258,7 +1259,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 return jac
 
         elif regularizeFactor != 0:
-            def jacobian(vectorGS): # Fast regularized version
+            def _jacobian(vectorGS): # Fast regularized version
                 tm = _time.time()
                 dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
                 dprobs.shape = (ns,ng,vec_gs_len)
@@ -1267,14 +1268,14 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = get_weights( probs )
-                dprobs *= (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]
+                weights  = _get_weights( probs )
+                dprobs *= (weights+(probs-f)*_get_dweights( probs, weights ))[:,:,None]
                   # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
                   # Note: this also computes jac[0:KM,:]
                 gsVecGrad = _np.diag( [ (regularizeFactor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in vectorGS ] ) # (N,N)
                 jac[KM:,:] = gsVecGrad # jac.shape == (KM+N,N)
 
-                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
 
                 # dpr has shape == (nGateStrings, nDerivCols), gsVecGrad has shape == (nDerivCols, nDerivCols)
                 # return shape == (nGateStrings+nDerivCols, nDerivCols)
@@ -1282,7 +1283,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 return jac
 
         else: #cptp_pentalty_factor != 0 and/or spam_penalty_factor != 0
-            def jacobian(vectorGS): # Fast cptp-penalty version
+            def _jacobian(vectorGS): # Fast cptp-penalty version
                 tm = _time.time()
                 dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
                 dprobs.shape = (ns,ng,vec_gs_len)
@@ -1291,8 +1292,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                                     prMxToFill=probs, clipTo=probClipInterval,
                                     check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                     profiler=profiler, gatherMemLimit=gthrMem)
-                weights  = get_weights( probs )
-                dprobs *= (weights+(probs-f)*get_dweights( probs, weights ))[:,:,None]
+                weights  = _get_weights( probs )
+                dprobs *= (weights+(probs-f)*_get_dweights( probs, weights ))[:,:,None]
                   # (K,M,N) * (K,M,1)   (N = dim of vectorized gateset)
                   # Note: this also computes jac[0:KM,:]
                 off = 0
@@ -1307,13 +1308,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                         vec_gs_len, nGateParams, nSpamParams,
                         gateBasis)
 
-                if check_jacobian: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 profiler.add_time("do_mc2gst: JACOBIAN",tm)
                 return jac
 
 
     else: # Verbose (DEBUG) version
-        def jacobian(vectorGS):
+        def _jacobian(vectorGS):
             tm = _time.time()
             dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
             dprobs.shape = (ns,ng,vec_gs_len)
@@ -1322,12 +1323,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                                 prMxToFill=probs, clipTo=probClipInterval,
                                 check=check, comm=comm, wrtBlockSize=wrtBlkSize,
                                 profiler=profiler, gatherMemLimit=gthrMem)
-            weights  = get_weights( probs )
+            weights  = _get_weights( probs )
 
             #Attempt to control leastsq by zeroing clipped weights -- this doesn't seem to help (nor should it)
             #weights[ _np.logical_or(pr < minProbClipForWeighting, pr > (1-minProbClipForWeighting)) ] = 0.0
 
-            dPr_prefactor = (weights+(probs-f)*get_dweights( probs, weights )) # (K,M)
+            dPr_prefactor = (weights+(probs-f)*_get_dweights( probs, weights )) # (K,M)
             dprobs *= dPr_prefactor[:,:,None]  #  (K,M,N) * (K,M,1) = (K,M,N)  (N = dim of vectorized gateset)
 
             if regularizeFactor != 0:
@@ -1368,7 +1369,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                         "         maxLen = %d, nClipped = %d" % (maxGateStringLength, nClipped), 4)
 
             if check_jacobian:
-                errSum, errs, fd_jac = _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+                errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]*jac.shape[1]), 4)
                 if len(errs) > 0:
                     i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
@@ -1379,28 +1380,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
             profiler.add_time("do_mc2gst: JACOBIAN",tm)
             return jac
 
-        # OLD: return _np.concatenate( [ weights[i] * dPr_list[i] for i in range(len(gateStringsToUse)) ], axis=0 )
-        #return _np.concatenate( [ weights[i] * gs.dpr('plus', gateStr) \
-        #                           for (i,gateStr) in enumerate(gateStringsToUse) ], axis=0 ) #RESTRICTION: 'plus' assumes only a single 'plus' spam label
-        # jacobian[k,l] = derivative of p[k] wrt vectorGS[l].  Just concatenate derivative of p[k]'s multiplied by weights
-
-#OLD CPTP penalty factors
-#    else:
-#        raise NotImplementedError("CPTP-penalized MC2GST not implemented.")
-#        #def objective_func(vectorGS):  #TODO: Upgrade from 'plus' restricted case
-#        #  gs.from_vector(vectorGS)
-#        #  p = gs.bulk_pr('plus', evTree, clipTo=probClipInterval, check=check) #RESTRICTION: 'plus' assumes only a single 'plus' spam label
-#        #  #p = _np.array( [ gs.pr('plus',gateStr) for gateStr in gateStringsToUse ] ) #OLD
-#        #  negEvals = cptp_penalty_factor * _np.array(_tools.mags_of_negative_choi_evals(gs))
-#        #  rhoPenalties = cptp_penalty_factor * _np.array([ _tools.prep_penalty(r) for r in gs.preps ])
-#        #  EPenalties   = cptp_penalty_factor * _np.array([ _tools.effect_penalty(e) for e in gs.effects ])
-#        #
-#        #  if regularizeFactor > 0:
-#        #    gsVecNorm = regularizeFactor * _np.array( [ max(0,absx-1.0) for absx in map(abs,vectorGS) ], 'd')
-#        #    return _np.concatenate( ((p - f) * get_weights(p), negEvals, rhoPenalties, EPenalties, gsVecNorm) )
-#        #  else: return _np.concatenate( ((p - f) * get_weights(p), negEvals, rhoPenalties, EPenalties) )
-#        #
-#        #jacobian = None
 
     profiler.add_time("do_mc2gst: pre-opt",tStart)
 
@@ -1410,7 +1389,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     x0 = gs.to_vector()
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm2_tol=tol,
+            _objective_func, _jacobian, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
@@ -1418,12 +1397,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+            _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
 
 
-    full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
+    full_minErrVec = _objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
     soln_gs = gs.copy();
     profiler.add_time("do_mc2gst: leastsq",tm)
@@ -1462,7 +1441,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     #if targetGateset is not None:
     #  target_vec = targetGateset.to_vector()
-    #  targetErrVec = objective_func(target_vec)
+    #  targetErrVec = _objective_func(target_vec)
     #  return minErrVec, soln_gs, targetErrVec
     profiler.add_time("do_mc2gst: post-opt", tm) #all in num_nongauge_params
     profiler.add_time("do_mc2gst: total time", tStart)
@@ -2399,7 +2378,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         #
         # See LikelihoodFunctions.py for details on patching
 
-        def objective_func(vectorGS):
+        def _objective_func(vectorGS):
             tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
@@ -2438,7 +2417,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
         #   and deriv == 0.5 / sqrt(...) * S * dp
 
-        def jacobian(vectorGS):
+        def _jacobian(vectorGS):
             tm = _time.time()
             dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
             dprobs.shape = (ns,ng,vec_gs_len)
@@ -2479,7 +2458,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             if forcefn_grad is not None:
                 jac[forceOffset:,:] = -forcefn_grad
 
-            if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+            if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
 
@@ -2500,7 +2479,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         #
         # See LikelihoodFunction.py for details on patching
 
-        def objective_func(vectorGS):
+        def _objective_func(vectorGS):
             tm = _time.time()
             gs.from_vector(vectorGS)
             gs.bulk_fill_probs(probs, spam_lbl_rows, evTree, probClipInterval,
@@ -2539,7 +2518,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
         #   and deriv == 0.5 / sqrt(...) * S * dp
 
-        def jacobian(vectorGS):
+        def _jacobian(vectorGS):
             tm = _time.time()
             dprobs = jac[0:KM,:] #avoid mem copying: use jac mem for dprobs
             dprobs.shape = (ns,ng,vec_gs_len)
@@ -2580,7 +2559,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             if forcefn_grad is not None:
                 jac[forceOffset:,:] = -forcefn_grad
 
-            if check: _opt.check_jac(objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
+            if check: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
             profiler.add_time("do_mlgst: JACOBIAN",tm)
             return jac
 
@@ -2591,7 +2570,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     x0 = gs.to_vector()
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            objective_func, jacobian, x0, f_norm2_tol=tol,
+            _objective_func, _jacobian, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
@@ -2599,8 +2578,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( objective_func, x0, xtol=tol, ftol=tol, gtol=0,
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=jacobian )
+            _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=0,
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
     profiler.add_time("do_mlgst: leastsq",tm)
 
@@ -2608,7 +2587,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     gs.from_vector(opt_x)
     #gs.log("MLGST", { 'tol': tol,  'maxiter': maxiter } )
 
-    full_minErrVec = objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
+    full_minErrVec = _objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
     deltaLogL = sum([x**2 for x in minErrVec]) # upperBoundLogL - logl (a positive number)
 
@@ -3189,7 +3168,7 @@ def find_closest_unitary_gatemx(gateMx):
 
     #def getu_1q(basisVec):  # 1 qubit version
     #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
-    def get_gate_mx_1q(basisVec):  # 1 qubit version
+    def _get_gate_mx_1q(basisVec):  # 1 qubit version
         return _pc.single_qubit_gate(basisVec[0],
                                         basisVec[1],
                                         basisVec[2])
@@ -3199,12 +3178,12 @@ def find_closest_unitary_gatemx(gateMx):
     #bell = _np.transpose(_np.array( [[1,0,0,1]] )) / _np.sqrt(2)
         initialBasisVec = [ 0, 0, 0]  #start with I until we figure out how to extract target unitary
         #getU = getu_1q
-        getGateMx = get_gate_mx_1q
+        getGateMx = _get_gate_mx_1q
     #Note: seems like for 2 qubits bell = [1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 ]/sqrt(4) (4 zeros between 1's since state dimension is 4 ( == sqrt(gate dimension))
     else:
         raise ValueError("Can't get closest unitary for > 1 qubits yet -- need to generalize.")
 
-    def objective_func(basisVec):
+    def _objective_func(basisVec):
         gateMx = getGateMx(basisVec)
         JU = _tools.jamiolkowski_iso( gateMx, choiMxBasis="std" )
         # OLD: but computes JU in Pauli basis (I think) -> wrong matrix to fidelity check with gate_JMx
@@ -3213,8 +3192,8 @@ def find_closest_unitary_gatemx(gateMx):
         #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
         return -_tools.fidelity(gate_JMx, JU)
 
-    # print_obj_func = _opt.create_obj_func_printer(objective_func)
-    solution = _spo.minimize(objective_func, initialBasisVec,  options={'maxiter': 10000},
+    # print_obj_func = _opt.create_obj_func_printer(_objective_func)
+    solution = _spo.minimize(_objective_func, initialBasisVec,  options={'maxiter': 10000},
                              method='Nelder-Mead',callback=None, tol=1e-8) # if verbosity > 2 else None
     gateMx = getGateMx(solution.x)
 

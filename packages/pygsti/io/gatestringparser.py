@@ -1,3 +1,5 @@
+""" A text parser for reading GST input files. """
+from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -27,6 +29,8 @@ from ply import lex, yacc
 
 
 class GateStringLexer:
+    """ Lexer for matching and interpreting text-format gate sequences """
+    
     # List of token names.   This is always required
     tokens = (
         'EXPOP',
@@ -93,6 +97,7 @@ class GateStringLexer:
 
 
 class GateStringParser(object):
+    """ Parser for text-format gate sequences """
     tokens = GateStringLexer.tokens
 
     def __init__(self, lexer_object=None, lookup={}):
@@ -102,10 +107,12 @@ class GateStringParser(object):
 
     @property
     def lookup(self):
+        """ The lookup dictionary for expanding references """
         return self._lookup
 
     @lookup.setter
     def lookup(self, newdict):
+        """ The lookup dictionary for expanding references """
         self._lookup = newdict
 
     def p_strref(self, p):
@@ -175,6 +182,7 @@ class GateStringParser(object):
         raise ValueError(message)
 
     def parse(self, code):
+        """ Perform lexing and parsing of `code` """
         self._lexer.input(code)
         result = self._parser.parse(lexer=self._lexer)
         return result

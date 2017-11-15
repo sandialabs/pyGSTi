@@ -1,10 +1,10 @@
+""" Defines the DataSet class and supporting classes and functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the DataSet class and supporting classes and functions """
 
 import numpy    as _np
 import pickle   as _pickle
@@ -820,7 +820,8 @@ class DataSet(object):
             f = fileOrFilename
 
         state_dict = _pickle.load(f)
-        def expand(x): #to be backward compatible
+        def expand(x):
+            """Backard-compatible expansion of a CompressedGateString"""
             if isinstance(x,_gs.CompressedGateString): return x.expand()
             else:
                 _warnings.warn("Deprecated dataset format.  Please re-save " +

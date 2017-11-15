@@ -1,10 +1,10 @@
+""" GST contraction algorithms """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" GST contraction algorithms """
 
 import numpy as _np
 import warnings as _warnings
@@ -111,19 +111,19 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
     printer.log("--- Contract to XP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
 
-    def objective_func(vectorGS):
+    def _objective_func(vectorGS):
         gs.from_vector(vectorGS)
         forbiddenProbPenalty = _tools.forbidden_prob(gs,dataset)
         return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) \
             + gs.frobeniusdist(gateset)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
-    if objective_func(gs.to_vector()) < 1e-8:
+    print_obj_func = _opt.create_obj_func_printer(_objective_func) #only ever prints to stdout!
+    if _objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in XP - no contraction necessary', 1)
         return 0.0, gs
 
-    optSol = _opt.minimize(objective_func,gs.to_vector(),
+    optSol = _opt.minimize(_objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
                           callback = print_obj_func if bToStdout else None)
 
@@ -147,19 +147,19 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
     mxBasis = gs.basis
 
-    def objective_func(vectorGS):
+    def _objective_func(vectorGS):
         gs.from_vector(vectorGS)
         gs.basis = mxBasis #set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
-    if objective_func(gs.to_vector()) < 1e-8:
+    print_obj_func = _opt.create_obj_func_printer(_objective_func) #only ever prints to stdout!
+    if _objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in CP - no contraction necessary', 1)
         return 0.0, gs
 
-    optSol = _opt.minimize(objective_func,gs.to_vector(),
+    optSol = _opt.minimize(_objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
                           callback = print_obj_func if bToStdout else None)
 

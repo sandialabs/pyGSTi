@@ -1,10 +1,11 @@
+""" Functions for generating bootstrapped error bars """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for generating bootstrapped error bars """
+
 import numpy as _np
 #import matplotlib as _mpl #REMOVED
 from . import longsequence as _longseq
@@ -337,18 +338,76 @@ def gauge_optimize_gs_list(gsList, targetGateset,
 
 #For metrics that evaluate gateset with single scalar:
 def gs_stdev(gsFunc, gsEnsemble, ddof=1, axis=None, **kwargs):
+    """ 
+    Standard deviation of `gsFunc` over an ensemble of gate sets.
+
+    Parameters
+    ----------
+    gsFunc : function
+        A function that takes a :class:`GateSet` as its first argument, and
+        whose additional arguments may be given by keyword arguments.
+
+    gsEnsemble : list
+        A list of `GateSet` objects.
+
+    ddof : int, optional
+       As in numpy.std
+
+    axis : int or None, optional
+       As in numpy.std
+
+    Returns
+    -------
+    numpy.ndarray
+        The output of numpy.std
+    """
     return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis, ddof=ddof)
 
 def gs_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
+    """ 
+    Mean of `gsFunc` over an ensemble of gate sets.
+
+    Parameters
+    ----------
+    gsFunc : function
+        A function that takes a :class:`GateSet` as its first argument, and
+        whose additional arguments may be given by keyword arguments.
+
+    gsEnsemble : list
+        A list of `GateSet` objects.
+
+    axis : int or None, optional
+       As in numpy.mean
+
+    Returns
+    -------
+    numpy.ndarray
+        The output of numpy.mean
+    """
     return _np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble], axis=axis)
 
-#For metrics that evaluate gateset with scalar for each gate, use axis=0
+#Note: for metrics that evaluate gateset with scalar for each gate, use axis=0
 # argument to above functions
 
-def to_vector(gs):
-    return gs.to_vector()
-
 def to_mean_gateset(gsList,target_gs):
+    """ 
+    Return the :class:`Gateset` constructed from the mean parameter
+    vector of the gate sets in `gsList`, that is, the mean of the
+    parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    Returns
+    -------
+    GateSet
+    """
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -358,6 +417,27 @@ def to_mean_gateset(gsList,target_gs):
     return output_gs
 
 def to_std_gateset(gsList,target_gs,ddof=1):
+    """ 
+    Return the :class:`Gateset` constructed from the standard-deviation
+    parameter vector of the gate sets in `gsList`, that is, the standard-
+    devaiation of the parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    ddof : int, optional
+       As in numpy.std
+
+    Returns
+    -------
+    GateSet
+    """
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -367,6 +447,24 @@ def to_std_gateset(gsList,target_gs,ddof=1):
     return output_gs
 
 def to_rms_gateset(gsList,target_gs):
+    """ 
+    Return the :class:`Gateset` constructed from the root-mean-squared
+    parameter vector of the gate sets in `gsList`, that is, the RMS
+    of the parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    Returns
+    -------
+    GateSet
+    """
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -375,50 +473,51 @@ def to_rms_gateset(gsList,target_gs):
     output_gs.from_vector(_np.mean(gsVecArray))
     return output_gs
 
-def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.jtracedist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
-#    print output
-    return output
-
-def gateset_process_fidelity(gs,gs_target):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
-    return output
-
-def gateset_decomp_angle(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('pi rotations',0)
-    return output
-
-def gateset_decomp_decay_diag(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of diagonal rotation terms',0)
-    return output
-
-def gateset_decomp_decay_offdiag(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of off diagonal rotation terms',0)
-    return output
-
-#def gateset_fidelity(gs,gs_target,mxBasis="gm"):
+#Unused?
+#def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
 #    output = _np.zeros(3,dtype=float)
 #    for i, gate in enumerate(gs_target.gates.keys()):
-#        output[i] = _tools.fidelity(gs.gates[gate],gs_target.gates[gate])
+#        output[i] = _tools.jtracedist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
+##    print output
 #    return output
-
-def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
-    return output
-
-def spamrameter(gs):
-    firstRho = list(gs.preps.keys())[0]
-    firstE = list(gs.effects.keys())[0]
-    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]
+#
+#def gateset_process_fidelity(gs,gs_target):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs_target.gates.keys()):
+#        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
+#    return output
+#
+#def gateset_decomp_angle(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('pi rotations',0)
+#    return output
+#
+#def gateset_decomp_decay_diag(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of diagonal rotation terms',0)
+#    return output
+#
+#def gateset_decomp_decay_offdiag(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of off diagonal rotation terms',0)
+#    return output
+#
+##def gateset_fidelity(gs,gs_target,mxBasis="gm"):
+##    output = _np.zeros(3,dtype=float)
+##    for i, gate in enumerate(gs_target.gates.keys()):
+##        output[i] = _tools.fidelity(gs.gates[gate],gs_target.gates[gate])
+##    return output
+#
+#def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs_target.gates.keys()):
+#        output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
+#    return output
+#
+#def spamrameter(gs):
+#    firstRho = list(gs.preps.keys())[0]
+#    firstE = list(gs.effects.keys())[0]
+#    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]

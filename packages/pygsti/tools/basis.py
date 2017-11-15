@@ -1,3 +1,11 @@
+""" Defines the Basis object and supporting functions """
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
 from functools    import partial
 from itertools    import product
 
@@ -90,8 +98,9 @@ class Basis(object):
         for mx in self._matrices:
             mx.flags.writeable = False
 
-        # Shorthand for retrieving a default value from the _basisConstructorDict dict
         def get_info(attr, default):
+            """ Shorthand for retrieving a default value from the
+                _basisConstructorDict dict """
             try:
                 return getattr(_basisConstructorDict[self.name], attr)
             except KeyError:
@@ -287,17 +296,46 @@ class Basis(object):
         return _inv(self.get_to_std())
 
     def equivalent(self, otherName):
+        """ 
+        Return a `Basis` of the type given by `otherName` and the dimensions
+        of this `Basis`.
+        
+        Parameters
+        ----------
+        otherName : {'std', 'gm', 'pp', 'qt'}
+            A standard basis abbreviation.
+
+        Returns
+        -------
+        Basis
+        """
         return Basis(otherName, self.dim.blockDims)
 
     def expanded_equivalent(self, otherName=None):
+        """ 
+        Return a single-block `Basis` of the type given by `otherName` and
+        dimension given by the sum of the block dimensions of this `Basis`.
+        
+        Parameters
+        ----------
+        otherName : {'std', 'gm', 'pp', 'qt', None}
+            A standard basis abbreviation.  If None, then this
+            `Basis`'s name is used.
+
+        Returns
+        -------
+        Basis
+        """
         if otherName is None:
             otherName = self.name
         return Basis(otherName, sum(self.dim.blockDims))
 
     def std_equivalent(self):
+        """ Convenience method identical to `.equivalent('std')` """
         return self.equivalent('std')
 
     def expanded_std_equivalent(self):
+        """ Convenience method identical to `.expanded_equivalent('std')` """
         return self.expanded_equivalent('std')
 
 def _build_composite_basis(bases):
@@ -357,6 +395,29 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
     return from_basis.transform_matrix(to_basis)
 
 def build_basis_pair(mx, from_basis, to_basis):
+    """
+    Construct a pair of `Basis` objects with types `from_basis` and `to_basis`,
+    and dimension appropriate for transforming `mx` (if they're not already
+    given by `from_basis` or `to_basis` being a `Basis` rather than a `str`).
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        A matrix, assumed to be square and have a dimension that is a perfect
+        square.
+
+    from_basis, to_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
+        The two bases (named as they are because usually they're the 
+        source and destination basis for a basis change).  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).  If a custom basis 
+        object is provided, it's dimension should be equal to
+        `sqrt(mx.shape[0]) == sqrt(mx.shape[1])`.
+
+    Returns
+    -------
+    from_basis, to_basis : Basis
+    """
     if isinstance(from_basis, Basis) and not isinstance(to_basis, Basis):
         to_basis = from_basis.equivalent(to_basis)
     elif isinstance(to_basis, Basis) and not isinstance(from_basis, Basis):
@@ -368,6 +429,27 @@ def build_basis_pair(mx, from_basis, to_basis):
     return from_basis, to_basis
 
 def build_basis_for_matrix(mx, basis):
+    """
+    Construct a Basis object with type given by `basis` and dimension (if it's
+    not given by `basis`) approprate for transforming `mx`, that is, equal to
+    `sqrt(mx.shape[0])`.
+    
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        A matrix, assumed to be square and have a dimension that is a perfect
+        square.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        A basis name or `Basis` object.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt) (or a custom basis
+        object).  If a custom basis object is provided, it's dimension must
+        equal `sqrt(mx.shape[0])`, as this will be checked.
+
+    Returns
+    -------
+    Basis
+    """
     dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
     return Basis(basis, dimOrBlockDims)
 
@@ -410,20 +492,7 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
 
     if from_basis.dim.gateDim != to_basis.dim.gateDim: 
-        raise ValueError('Automatic basis expanding/contracting temporarily disabled')
-        #or \
-        #    resize is not None:
-        if resize is None:
-            assert len(to_basis.dim.blockDims) == 1 or len(from_basis.dim.blockDims) == 1, \
-                    'Cannot convert from composite basis {} to another composite basis {}'.format(from_basis, to_basis)
-            '''
-            WRONG
-            if from_basis.dim.gateDim < to_basis.dim.gateDim:
-                resize = 'contract'
-            else:
-                resize = 'expand'
-            '''
-        return resize_mx(mx, resize=resize, startBasis=from_basis, endBasis=to_basis)
+        raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
 
     if from_basis.name == to_basis.name:
         return mx.copy()
@@ -571,6 +640,40 @@ def basis_matrices(nameOrBasis, dim):
     return f(dim)
 
 def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
+    """
+    Change the basis of `mx`, which is assumed to be in the 'std'-type basis
+    given by `stdBasis1`, to a potentially larger or smaller 'std'-type basis
+    given by `stdBasis2`.
+
+    This is possible when the two 'std'-type bases have the same "embedding
+    dimension", equal to the sum of their block dimensions.  If, for example,
+    `stdBasis1` has block dimensions (kite structure) of (4,2,1) then `mx`,
+    expressed as a sum of `4^2 + 2^2 + 1^2 = 21` basis elements, can be 
+    "embedded" within a larger 'std' basis having a single block with 
+    dimension 7 (`7^2 = 49` elements).
+
+    When `stdBasis2` is smaller than `stdBasis1` the reverse happens and `mx`
+    is irreversibly truncated, or "contracted" to a basis having a particular
+    kite structure.
+
+    Parameters
+    ----------
+    mx : numpy array
+        A square matrix in the `stdBasis1` basis.
+
+    resize : {'expand','contract'}
+        Whether `mx` can be expanded or contracted.
+    
+    stdBasis1 : Basis
+        The 'std'-type basis that `mx` is currently in.
+
+    stdBasis2 : Basis
+        The 'std'-type basis that `mx` should be converted to.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     assert stdBasis1.dim.embedDim == stdBasis2.dim.embedDim
     if stdBasis1.dim.gateDim == stdBasis2.dim.gateDim:
         return mx
@@ -587,6 +690,22 @@ def resize_std_mx(mx, resize, stdBasis1, stdBasis2):
     return mid
 
 def flexible_change_basis(mx, startBasis, endBasis):
+    """ 
+    Change `mx` from `startBasis` to `endBasis` allowing embedding expansion
+    and contraction if needed (see :func:`resize_std_mx` for more details).
+
+    Parameters
+    ----------
+    mx : numpy array
+        The gate matrix (a 2D square array) in the `startBasis` basis.
+
+    startBasis, endBasis : Basis
+        The source and destination bases, respectively.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     if startBasis.dim.gateDim == endBasis.dim.gateDim:
         return change_basis(mx, startBasis, endBasis)
     if startBasis.dim.gateDim < endBasis.dim.gateDim:
@@ -600,7 +719,29 @@ def flexible_change_basis(mx, startBasis, endBasis):
     end   = change_basis(mid, stdBasis2, endBasis)
     return end
 
-def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='std'):
+def resize_mx(mx, dimOrBlockDims=None, resize=None):
+    """ 
+    Wrapper for :func:`resize_std_mx` that first constructs two 'std'-type bases
+    using `dimOrBlockDims` and `sum(dimOrBlockDims)`.  The matrix `mx` is converted
+    from the former to the latter when `resize == "expand"`, and from the latter to
+    the former when `resize == "contract"`.
+
+    Parameters
+    ----------
+    mx: numpy array
+        Matrix of size N x N, where N is the dimension
+        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
+
+    dimOrBlockDims : int or list of ints
+        Structure of the density-matrix space.
+
+    resize : {'expand','contract'}
+        Whether `mx` should be expanded or contracted.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
     if dimOrBlockDims is None:
         return mx
     if resize == 'expand':
@@ -612,55 +753,56 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None, startBasis='std', endBasis='
     return resize_std_mx(mx, resize, a, b)
 
 
-    '''
-    Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
-    space to a matrix in the same basis in the opposite space.
-
-    Parameters
-    ----------
-    mx: numpy array
-        Matrix of size N x N, where N is the dimension
-        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
-
-    dimOrBlockDims : int or list of ints
-        Structure of the density-matrix space.
-
-    Returns
-    -------
-    numpy array
-        A M x M matrix, where M is the dimension of the
-        embedding density matrix space, i.e.
-        sum( dimOrBlockDims_i )^2
-    '''
-    bothBases = isinstance(startBasis, Basis) and isinstance(endBasis, Basis)
-    if resize is not None and \
-            bothBases or \
-            (dimOrBlockDims is not None):
-        if dimOrBlockDims is not None:# not bothBases:
-            dim = Dim(dimOrBlockDims)
-            startBasis = Basis(startBasis, dim)
-            endBasis   = Basis(endBasis, dim)
-        else:
-            assert bothBases
-        stdBasis1  = Basis('std', startBasis.dim.blockDims)
-        stdBasis2  = Basis('std', endBasis.dim.blockDims)
-        try:
-            assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
-
-            start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
-            mid = resize_std_mx(start, resize, stdBasis1, stdBasis2)
-            # No else case needed, see assert
-            return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
-        except ValueError:
-            print('startBasis: {}'.format(startBasis))
-            print('endBasis: {}'.format(endBasis))
-            print('stdBasis1: {}'.format(stdBasis1))
-            print(stdBasis1.dim)
-            print('stdBasis2: {}'.format(stdBasis2))
-            print(stdBasis2.dim)
-            raise
-    else:
-        return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
+#OLD: scratch?? (Lucas) TODO REMOVE
+#    '''
+#    Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
+#    space to a matrix in the same basis in the opposite space.
+#
+#    Parameters
+#    ----------
+#    mx: numpy array
+#        Matrix of size N x N, where N is the dimension
+#        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
+#
+#    dimOrBlockDims : int or list of ints
+#        Structure of the density-matrix space.
+#
+#    Returns
+#    -------
+#    numpy array
+#        A M x M matrix, where M is the dimension of the
+#        embedding density matrix space, i.e.
+#        sum( dimOrBlockDims_i )^2
+#    '''
+#    bothBases = isinstance(startBasis, Basis) and isinstance(endBasis, Basis)
+#    if resize is not None and \
+#            bothBases or \
+#            (dimOrBlockDims is not None):
+#        if dimOrBlockDims is not None:# not bothBases:
+#            dim = Dim(dimOrBlockDims)
+#            startBasis = Basis(startBasis, dim)
+#            endBasis   = Basis(endBasis, dim)
+#        else:
+#            assert bothBases
+#        stdBasis1  = Basis('std', startBasis.dim.blockDims)
+#        stdBasis2  = Basis('std', endBasis.dim.blockDims)
+#        try:
+#            assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
+#
+#            start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
+#            mid = resize_std_mx(start, resize, stdBasis1, stdBasis2)
+#            # No else case needed, see assert
+#            return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
+#        except ValueError:
+#            print('startBasis: {}'.format(startBasis))
+#            print('endBasis: {}'.format(endBasis))
+#            print('stdBasis1: {}'.format(stdBasis1))
+#            print(stdBasis1.dim)
+#            print('stdBasis2: {}'.format(stdBasis2))
+#            print(stdBasis2.dim)
+#            raise
+#    else:
+#        return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 
 from ..tools.basisconstructors import *
 
@@ -761,14 +903,14 @@ def basis_element_labels(basis, dimOrBlockDims):
 
         else:
             #Some extra checking, since list-of-dims not supported for pp matrices yet.
-            def is_integer(x):
+            def _is_integer(x):
                 return bool( abs(x - round(x)) < 1e-6 )
             if isinstance(dimOrBlockDims, _numbers.Integral):
                 dimOrBlockDims = [dimOrBlockDims]
             assert isinstance(dimOrBlockDims, _collections.Container)
             for i, dim in enumerate(dimOrBlockDims):
                 nQubits = _np.log2(dim)
-                if not is_integer(nQubits):
+                if not _is_integer(nQubits):
                     raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
                 nQubits = int(round(nQubits))
 
