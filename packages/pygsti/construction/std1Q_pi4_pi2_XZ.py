@@ -15,19 +15,19 @@ description = "X(pi/4) and Z(pi/2) gates"
 gates = ['Gx','Gz']
 
 prepStrs = _strc.gatestring_list([(),
-                                       ('Gx','Gx',),
-                                       ('Gx','Gx','Gz'),
-                                       ('Gx','Gx','Gx','Gx'),
-                                       ('Gx','Gx','Gx','Gx','Gx','Gx'),
-                                       ('Gx','Gx','Gz','Gz','Gz')])
+                                  ('Gx','Gx',),
+                                  ('Gx','Gx','Gz'),
+                                  ('Gx','Gx','Gx','Gx'),
+                                  ('Gx','Gx','Gx','Gx','Gx','Gx'),
+                                  ('Gx','Gx','Gz','Gz','Gz')])
 
 
 effectStrs = _strc.gatestring_list([(),
-                                       ('Gx','Gx',),
-                                       ('Gz','Gx','Gx'),
-                                       ('Gx','Gx','Gx','Gx'),
-                                       ('Gx','Gx','Gx','Gx','Gx','Gx'),
-                                       ('Gz','Gz','Gz','Gx','Gx')])
+                                    ('Gx','Gx',),
+                                    ('Gz','Gx','Gx'),
+                                    ('Gx','Gx','Gx','Gx'),
+                                    ('Gx','Gx','Gx','Gx','Gx','Gx'),
+                                    ('Gz','Gz','Gz','Gx','Gx')])
 
 germs = _strc.gatestring_list( [('Gx',),
                                 ('Gz',),
@@ -59,4 +59,18 @@ pergerm_fidPairsDict = {
         (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
   ('Gz', 'Gz', 'Gx', 'Gz', 'Gx', 'Gx'): [
         (0, 0), (2, 3), (5, 2), (5, 4)],
+}
+
+global_fidPairs_lite =  [
+    (0, 1), (1, 2), (4, 3), (4, 4)]
+
+pergerm_fidPairsDict_lite = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gz',): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+  ('Gz', 'Gx'): [
+        (0, 3), (3, 2), (4, 0), (5, 3)],
+  ('Gz', 'Gz', 'Gx'): [
+        (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
 }
