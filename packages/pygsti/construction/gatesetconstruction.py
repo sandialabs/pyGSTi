@@ -10,6 +10,7 @@ import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import scipy.linalg as _spl
+import warnings as _warnings
 
 
 from ..tools import gatetools as _gt
