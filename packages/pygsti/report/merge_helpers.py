@@ -16,6 +16,7 @@ import re  as _re
 import subprocess  as _subprocess
 
 from ..tools import compattools as _compat
+from ..tools import timed_block as _timed_block
 from ..objects import VerbosityPrinter
 
 def read_contents(filename):
@@ -421,22 +422,22 @@ def render_as_html(qtys, render_options, link_to, verbosity):
         if _compat.isstr(val):
             qtys_html[key] = val
         else:
-            printer.log("Rendering %s" % key, 3)
-            if hasattr(val,'set_render_options'):
-                val.set_render_options(**render_options)
+            with _timed_block(key, formatStr='Rendering {:35}', printer=printer, verbosity=2):
+                if hasattr(val,'set_render_options'):
+                    val.set_render_options(**render_options)
+                    
+                    out = val.render("html")
+                    if link_to:
+                        val.set_render_options(leave_includes_src=('tex' in link_to),
+                                               render_includes=('pdf' in link_to) )
+                        if 'tex' in link_to or 'pdf' in link_to: val.render("latex") 
+                        if 'pkl' in link_to: val.render("python")
+    
+                else: #switchboards usually
+                    out = val.render("html")
                 
-                out = val.render("html")
-                if link_to:
-                    val.set_render_options(leave_includes_src=('tex' in link_to),
-                                           render_includes=('pdf' in link_to) )
-                    if 'tex' in link_to or 'pdf' in link_to: val.render("latex") 
-                    if 'pkl' in link_to: val.render("python")
-
-            else: #switchboards usually
-                out = val.render("html")
-                
-            # Note: out is a dictionary of rendered portions
-            qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
+                # Note: out is a dictionary of rendered portions
+                qtys_html[key] = "<script>\n%(js)s\n</script>\n\n%(html)s" % out
             
     return qtys_html
 
