@@ -143,6 +143,11 @@ class DataComparator():
         composite_score = _np.sum(self.llrVals)
         k = self.num_strs*self.dof
         return (composite_score - k) / _np.sqrt(2*k)
+
+    def get_composite_2DeltaLogL(self):
+        composite_score = _np.sum(self.llrVals)
+        return composite_score
+
 #            
 #    def report(self,confidence_level=0.95,verbosity=1):
 #        single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)

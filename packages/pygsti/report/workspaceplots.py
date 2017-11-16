@@ -847,7 +847,12 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
             width = 1) # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
         )
 
-    log = True    
+    xbins_for_numpy = _np.linspace(minval-binsize/2.0,maxval+binsize/2.0,nbins+1)
+    hist_values, np_bins = _np.histogram(ys, nbins, range=(minval-binsize/2.0,
+                                                     maxval+binsize/2.0))        
+    minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
+    maxlog = _np.log10(1.5*_np.max(hist_values) )
+    
     layout = go.Layout(
             width=500*scale,
             height=350*scale,
@@ -857,10 +862,11 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
                 showline=True
                 ),
             yaxis=dict(
-                type='log' if log else 'linear',
+                type='log',
                 #tickformat='g',
                 exponentformat='power',
-                showline=True
+                showline=True,
+                range=[minlog,maxlog]
             ),
             bargap=0,
             bargroupgap=0,
@@ -2416,18 +2422,67 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         
     def _create(self, dslabels, dsc_dict, scale):
         nSigmaMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
-        max_nSigma = 0.0
+        logLMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
+        max_nSigma = max_2DeltaLogL = 0.0
         for i,_ in enumerate(dslabels):
             for j,_ in enumerate(dslabels[i+1:],start=i+1):
                 dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
-                val = dsc.get_composite_nsigma() if (dsc is not None) else None
+                
+                val = dsc.get_composite_nsigma() if (dsc is not None) else None                
                 nSigmaMx[i,j] = nSigmaMx[j,i] = val
                 if val and val > max_nSigma: max_nSigma = val
 
+                val = dsc.get_composite_2DeltaLogL() if (dsc is not None) else None
+                logLMx[i,j] = logLMx[j,i] = val
+                if val and val > max_2DeltaLogL: max_2DeltaLogL = val
+                
         colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_nSigma)
-        return matrix_color_boxplot(
+        nSigma_fig = matrix_color_boxplot(
             nSigmaMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
             boxLabels=True, prec=1, colormap=colormap, scale=scale)
+
+        colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_2DeltaLogL)
+        logL_fig = matrix_color_boxplot(
+            logLMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
+            boxLabels=True, prec=1, colormap=colormap, scale=scale)
+        
+        #Combine plotly figures into one
+        combined_fig = nSigma_fig
+        logL_fig['plotlyfig']['data'][0].update(visible=False)
+        combined_fig['plotlyfig']['data'].append(logL_fig['plotlyfig']['data'][0])
+        annotations = [ nSigma_fig['plotlyfig']['layout']['annotations'],
+                        logL_fig['plotlyfig']['layout']['annotations'] ]
+        
+        buttons = []; nTraces = 2
+        for i,nm in enumerate(['Nsigma','2DeltaLogL']):
+            visible = [False]*nTraces
+            visible[i] = True
+            buttons.append(
+                dict(args=[{'visible': visible},
+                           {'annotations': annotations[i]}],
+                     label=nm,
+                     method='update') ) #'restyle'
+        combined_fig['plotlyfig']['layout'].update(
+            updatemenus=list([
+                dict(buttons=buttons,
+                     direction = 'left',
+                     #pad = {'r': 1, 'b': 1},
+                     showactive = True, type = 'buttons',
+                     x = 0.0, xanchor = 'left',
+                     y = -0.1, yanchor = 'top')
+                ]) )
+        m = combined_fig['plotlyfig']['layout']['margin']
+        w = combined_fig['plotlyfig']['layout']['width']
+        h = combined_fig['plotlyfig']['layout']['height']
+        exr = 0 if w > 240 else 240-w # extend to right
+        combined_fig['plotlyfig']['layout'].update(
+            margin=go.Margin(l=m['l'],r=m['r']+exr,b=m['b']+40,t=m['t']),
+            width=w+exr,
+            height=h+40
+        )
+
+        return combined_fig
+
 
 
 
