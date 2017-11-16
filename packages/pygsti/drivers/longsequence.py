@@ -1,10 +1,10 @@
+""" End-to-end functions for performing long-sequence GST """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" End-to-end functions for performing long-sequence GST """
 
 import os as _os
 import warnings as _warnings
@@ -257,7 +257,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - depolarizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
-        - tolerance = float
+        - tolerance = float or dict w/'relx','relf','f','jac' keys
         - maxIterations = int
         - minProbClip = float
         - minProbClipForWeighting = float (default == 1e-4)
@@ -966,7 +966,7 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                                 if gl in gs_target.gates.keys(): stage2_item_weights[gl] = 0.01
                             stages_2QUR = [stage.copy() for stage in stages] # ~deep copy of stages
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
-                            stages_2QUR[iStage2]['itemweights'] = stage2_item_weights
+                            stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR #add additional gauge opt
     
         

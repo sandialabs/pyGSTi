@@ -1,10 +1,10 @@
+""" Classes corresponding to tables within a Workspace context."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Classes corresponding to tables within a Workspace context."""
 
 import warnings           as _warnings
 import numpy              as _np
@@ -21,6 +21,7 @@ from .workspace import WorkspaceTable
 from . import workspaceplots as _wp
 
 class BlankTable(WorkspaceTable):
+    """A completely blank placeholder table."""
     def __init__(self, ws):
         """A completely blank placeholder table."""
         super(BlankTable,self).__init__(ws, self._create)
@@ -31,6 +32,7 @@ class BlankTable(WorkspaceTable):
         return table
     
 class SpamTable(WorkspaceTable):
+    """ A table of one or more gateset's SPAM elements. """
     def __init__(self, ws, gatesets, titles=None,
                  display_as="boxes", confidenceRegionInfo=None,
                  includeHSVec=True):
@@ -185,8 +187,8 @@ class SpamTable(WorkspaceTable):
 
 
 
-#def get_gateset_spam_parameters_table(gateset, confidenceRegionInfo=None):
 class SpamParametersTable(WorkspaceTable):
+    """ A table for "SPAM parameters" (dot products of SPAM vectors)"""
     def __init__(self, ws, gatesets, titles=None, confidenceRegionInfo=None):
         """
         Create a table for gateset's "SPAM parameters", that is, the
@@ -245,8 +247,8 @@ class SpamParametersTable(WorkspaceTable):
         return table
     
     
-#def get_gateset_gates_table(gateset, confidenceRegionInfo=None):
 class GatesTable(WorkspaceTable):
+    """ Create a table showing a gateset's raw gates. """
     def __init__(self, ws, gatesets, titles=None, display_as="boxes",
                  confidenceRegionInfo=None):
         """
@@ -370,8 +372,8 @@ class GatesTable(WorkspaceTable):
         return table
         
     
-#    def get_gateset_choi_table(gateset, confidenceRegionInfo=None):
 class ChoiTable(WorkspaceTable):
+    """A table of the Choi representations of a GateSet's gates"""
     def __init__(self, ws, gatesets, titles=None,
                  confidenceRegionInfo=None,
                  display=("matrix","eigenvalues","barplot")):
@@ -394,10 +396,10 @@ class ChoiTable(WorkspaceTable):
             used to display eigenvalue error intervals for the
             *final* GateSet in `gatesets`.
 
-        display : tuple or list of {"matrices","eigenvalues","barplot"}
+        display : tuple/list of {"matrices","eigenvalues","barplot","boxplot"}
             Which columns to display: the Choi matrices (as numerical grids),
-            the Choi matrix eigenvalues (as a numerical list), and/or the
-            eigenvalues on a bar plot.
+            the Choi matrix eigenvalues (as a numerical list), the eigenvalues
+            on a bar plot, and/or the matrix as a plot of colored boxes.
 
     
         Returns
@@ -420,7 +422,7 @@ class ChoiTable(WorkspaceTable):
         for gateset in gatesets:
             gateLabels = list(gateset.gates.keys()) # gate labels
             #qtys_to_compute = []
-            if 'matrix' in display:
+            if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(gateset,gl)) for gl in gateLabels]
             else:
                 choiMxs = None
@@ -444,6 +446,11 @@ class ChoiTable(WorkspaceTable):
                 for gateset,title in zip(gatesets,titles):
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
+            elif disp == "boxplot":
+                for gateset,title in zip(gatesets,titles):
+                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    pre = (title+' ' if title else '')
+                    colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
                 raise ValueError("Invalid element of `display`: %s" % disp)                    
         formatters = [None]*len(colHeadings)
@@ -474,19 +481,30 @@ class ChoiTable(WorkspaceTable):
                         row_formatters.append('Normal')
                             
                 elif disp == "barplot":
-                    for gateset in gatesets:
-                        for gateset, (_, evals) in zip(gatesets,qtysList):
-                            evs, evsEB = evals[i].get_value_and_err_bar()
-                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
-                            row_data.append(fig)
-                            row_formatters.append('Figure')
-                            
+                    for gateset, (_, evals) in zip(gatesets,qtysList):
+                        evs, evsEB = evals[i].get_value_and_err_bar()
+                        fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+
+                elif disp == "boxplot":
+                    for gateset, (choiMxs, _) in zip(gatesets, qtysList):
+                        choiMx_real = choiMxs[i].hermitian_to_real()
+                        choiMx, EB = choiMx_real.get_value_and_err_bar()
+                        fig = _wp.GateMatrixPlot(self.ws, choiMx,
+                                                 colorbar=False,
+                                                 mxBasis=gateset.basis,
+                                                 EBmatrix=EB)
+                        row_data.append( fig )
+                        row_formatters.append('Figure')
+
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
 
 
 class GatesetVsTargetTable(WorkspaceTable):
+    """ Table comparing a GateSet (as a whole) to a target """
     def __init__(self, ws, gateset, targetGateset, clifford_compilation, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset (as a whole) to a target gateset
@@ -544,8 +562,8 @@ class GatesetVsTargetTable(WorkspaceTable):
         return table
 
     
-#    def get_gates_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class GatesVsTargetTable(WorkspaceTable):
+    """ Table comparing a GateSet's gates to those of a target gate set """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=('inf','agi','trace','diamond','nuinf','nuagi'),
                  virtual_gates=None):
@@ -712,8 +730,8 @@ class GatesVsTargetTable(WorkspaceTable):
         return table
         
     
-#    def get_spam_vs_target_table(gateset, targetGateset, confidenceRegionInfo=None):
 class SpamVsTargetTable(WorkspaceTable):
+    """ Table comparing a GateSet's SPAM vectors to those of a target """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing a gateset's SPAM operations to a target gateset
@@ -756,8 +774,8 @@ class SpamVsTargetTable(WorkspaceTable):
                                                         'prep'), confidenceRegionInfo)
                             for l in prepLabels]
         prepDiamondDists = [ _objs.reportableqty.ReportableQty(_np.nan) ] * len(prepLabels)
-        for rowData in _reportables.labeled_data_rows(prepLabels, confidenceRegionInfo,
-                                                      prepInfidelities, prepTraceDists):
+        for rowData in zip(prepLabels, prepInfidelities, prepTraceDists,
+                           prepDiamondDists):
             table.addrow(rowData, formatters)
             
         #OLD - when per-effect metrics were displayed
@@ -768,8 +786,8 @@ class SpamVsTargetTable(WorkspaceTable):
         #effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
         #                                                'effect'), confidenceRegionInfo)
         #                    for l in effectLabels]
-        #for rowData in _reportables.labeled_data_rows(effectLabels, confidenceRegionInfo, 
-        #                                              effectInfidelities, effectTraceDists):
+        #for rowData in zip(effectLabels, confidenceRegionInfo, effectInfidelities,
+        #                   effectTraceDists):
         #    table.addrow(rowData, formatters)
 
         formatters = [ None ] + [ 'Normal' ] * (len(colHeadings) - 1)
@@ -787,8 +805,9 @@ class SpamVsTargetTable(WorkspaceTable):
     
     
 
-#    def get_gates_vs_target_err_gen_table(gateset, targetGateset, confidenceRegionInfo=None, genType="logG-logT"):
 class ErrgenTable(WorkspaceTable):
+    """ Table displaying the error generators of a GateSet's gates as well
+        as their projections onto spaces of standard generators """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S","A"), display_as="boxes",
                  genType="logTiG"):
@@ -866,7 +885,8 @@ class ErrgenTable(WorkspaceTable):
         affProjsM = []
 
         def getMinMax(max_lst, M):
-            #return a [min,max] already in list if there's one within an order of magnitude
+            """return a [min,max] already in list if there's one within an
+               order of magnitude"""
             M = max(M, ABS_THRESHOLD) 
             for mx in max_lst:
                 if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
@@ -875,6 +895,8 @@ class ErrgenTable(WorkspaceTable):
 
         ABS_THRESHOLD = 1e-6 #don't let color scales run from 0 to 0: at least this much!
         def addMax(max_lst, M):
+            """add `M` to a list of maximas if it's different enough from
+               existing elements"""
             M = max(M, ABS_THRESHOLD) 
             if not getMinMax(max_lst,M):
                 max_lst.append(M)
@@ -979,8 +1001,8 @@ class ErrgenTable(WorkspaceTable):
     
     
     
-#    def get_gates_vs_target_angles_table(gateset, targetGateset, confidenceRegionInfo=None):
 class old_RotationAxisVsTargetTable(WorkspaceTable):
+    """ Old 1-qubit-only gate rotation axis table """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create a table comparing the rotation axes of the single-qubit gates in
@@ -1026,8 +1048,8 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         return table
         
     
-#    def get_gateset_decomp_table(gateset, confidenceRegionInfo=None):
 class GateDecompTable(WorkspaceTable):
+    """ Table of angle & axis decompositions of a GateSet's gates """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None):
         """
         Create table for decomposing a gateset's gates.
@@ -1101,6 +1123,7 @@ class GateDecompTable(WorkspaceTable):
     
 
 class old_GateDecompTable(WorkspaceTable):
+    """ 1-qubit-only table of gate decompositions """
     def __init__(self, ws, gateset, confidenceRegionInfo=None):
         """
         Create table for decomposing a single-qubit gateset's gates.
@@ -1154,8 +1177,8 @@ class old_GateDecompTable(WorkspaceTable):
         return table
 
     
-#    def get_gateset_rotn_axis_table(gateset, confidenceRegionInfo=None, showAxisAngleErrBars=True):
 class old_RotationAxisTable(WorkspaceTable):
+    """ 1-qubit-only table of gate rotation angles and axes """
     def __init__(self, ws, gateset, confidenceRegionInfo=None, showAxisAngleErrBars=True):
         """
         Create a table of the angle between a gate rotation axes for
@@ -1238,9 +1261,9 @@ class old_RotationAxisTable(WorkspaceTable):
         return table
     
     
-#    def get_gateset_eigenval_table(gateset, targetGateset, figFilePrefix, maxWidth=6.5, maxHeight=8.0,
-#                                   confidenceRegionInfo=None):
 class GateEigenvalueTable(WorkspaceTable):
+    """ Table displaying, in a variety of ways, the eigenvalues of a
+        GateSet's gates """
     def __init__(self, ws, gateset, targetGateset=None,
                  confidenceRegionInfo=None,
                  display=('evals','rel','log-evals','log-rel','polar','relpolar'),
@@ -1501,9 +1524,8 @@ class GateEigenvalueTable(WorkspaceTable):
     
         
     
-#    def get_dataset_overview_table(dataset, target, maxlen=10, fixedLists=None,
-#                                   maxLengthList=None):
 class DataSetOverviewTable(WorkspaceTable):
+    """ Table giving a summary of the properties of `dataset`. """
     def __init__(self, ws, dataset, maxLengthList=None):
         """
         Create a table that gives a summary of the properties of `dataset`.
@@ -1549,9 +1571,8 @@ class DataSetOverviewTable(WorkspaceTable):
         return table
     
     
-#    def get_chi2_progress_table(Ls, gatesetsByL, gateStringsByL, dataset,
-#                                gateLabelAliases=None):
 class FitComparisonTable(WorkspaceTable):
+    """ Table showing how the goodness-of-fit evolved over GST iterations """
     def __init__(self, ws, Xs, gssByX, gatesetByX, dataset, objective="logl",
                  Xlabel='L', NpByX=None):
         """
@@ -1659,8 +1680,8 @@ class FitComparisonTable(WorkspaceTable):
         return table
         
     
-#    def get_gatestring_multi_table(gsLists, titles, commonTitle=None):
 class GatestringTable(WorkspaceTable):
+    """ Table which simply displays list(s) of gate strings """
     def __init__(self, ws, gsLists, titles, nCols=1, commonTitle=None):
         """
         Creates a table of enumerating one or more sets of gate strings.
@@ -1741,10 +1762,10 @@ class GatestringTable(WorkspaceTable):
         return table
         
     
-#    def get_projected_err_gen_comparison_table(gateset, targetGateset,
-#                                               compare_with="target",
-#                                               genType="logG-logT"):
 class GatesSingleMetricTable(WorkspaceTable):
+    """ Table that compares the gates of many GateSets which share the same gate
+        labels to a target GateSet using a single metric, so that the GateSet
+        titles can be used as the column headers (and gate labels as rows) """
     def __init__(self, ws, gatesets, titles, targetGateset,
                  metric="infidelity"):
         """
@@ -1809,6 +1830,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         else: raise ValueError("Invalid `metric` argument: %s" % metric)
 
         def mknice(x):
+            """Typeset known titles more nicely"""
             if x == "H": return "$\mathcal{H}$"
             if x == "S": return "$\mathcal{H}$"
             if x in ("H + S","H+S"): return "$\mathcal{H} + \mathcal{S}$"
@@ -1843,10 +1865,9 @@ class GatesSingleMetricTable(WorkspaceTable):
         return table
     
     
-#    def get_err_gen_projector_boxes_table(gateset_dim, projection_type,
-#                                          projection_basis, figFilePrefix,
-#                                          maxWidth=6.5, maxHeight=8.0):
 class StandardErrgenTable(WorkspaceTable):
+    """ A table showing what the standard error generators' superoperator 
+        matrices look like."""
     def __init__(self, ws, gateset_dim, projection_type,
                  projection_basis):
         """
@@ -1940,8 +1961,8 @@ class StandardErrgenTable(WorkspaceTable):
     
     
     
-#    def get_gaugeopt_params_table(gaugeOptArgs):
 class GaugeOptParamsTable(WorkspaceTable):
+    """ Table of gauge optimization parameters """
     def __init__(self, ws, gaugeOptArgs):
         """
         Create a table displaying a list of gauge
@@ -1999,8 +2020,8 @@ class GaugeOptParamsTable(WorkspaceTable):
     
     
     
-#    def get_metadata_table(gateset, result_options, result_params):
 class MetadataTable(WorkspaceTable):
+    """ Table of raw parameters, often taken directly from a `Results` object"""
     def __init__(self, ws, gateset, params):
         """
         Create a table of parameters and options from a `Results` object.
@@ -2093,8 +2114,8 @@ class MetadataTable(WorkspaceTable):
         return table
     
     
-#    def get_software_environment_table():
 class SoftwareEnvTable(WorkspaceTable):
+    """ Table showing details about the current software environment """
     def __init__(self, ws):
         """
         Create a table displaying the software environment relevant to pyGSTi.
@@ -2110,6 +2131,7 @@ class SoftwareEnvTable(WorkspaceTable):
         import platform
         
         def get_version(moduleName):
+            """ Extract the current version of a python module """
             if moduleName == "cvxopt":
                 #special case b/c cvxopt can be weird...
                 try:
@@ -2167,6 +2189,8 @@ class SoftwareEnvTable(WorkspaceTable):
 
 
 class ExampleTable(WorkspaceTable):
+    """ Table used just as an example of what tables can do/look like for use
+        within the "Help" section of reports. """
     def __init__(self, ws):
         """A table showing how to use table features."""
         super(ExampleTable,self).__init__(ws, self._create)

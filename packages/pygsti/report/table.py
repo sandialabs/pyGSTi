@@ -1,3 +1,4 @@
+""" Defines the ReportTable class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -58,11 +59,28 @@ class ReportTable(object):
             self._headings    = Row(colHeadings, formatters, colHeadingLabels, self.nonMarkovianEBs)
 
     def addrow(self, data, formatters=None, labels=None, nonMarkovianEBs=None):
+        """
+        Adds a row to the table.
+
+        Parameters
+        ----------
+        data, formatters, labels : list
+            Parallel lists of the data, formatter names, and labels for each
+            cell within the new row.
+
+        nonMarkovianEBs : bool, optional
+            Whether non-Markovian error bars should be indicated.
+
+        Returns
+        -------
+        None
+        """
         if nonMarkovianEBs is None:
             nonMarkovianEBs = self.nonMarkovianEBs
         self._rows.append(Row(data, formatters, labels, nonMarkovianEBs))
 
     def finish(self):
+        """ Finish table creation.  Indicates no more rows will be added."""
         pass #nothing to do currently
 
     def _get_col_headings(self, fmt, spec):
@@ -149,11 +167,11 @@ class ReportTable(object):
 
     def __str__(self):
 
-        def strlen(x):
+        def _strlen(x):
             return max([len(p) for p in str(x).split('\n')])
-        def nlines(x):
+        def _nlines(x):
             return len(str(x).split('\n'))
-        def getline(x,i):
+        def _getline(x,i):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
 
@@ -163,13 +181,13 @@ class ReportTable(object):
         header_lines = 0
 
         for i,nm in enumerate(self._columnNames):
-            col_widths[i] = max( strlen(nm), col_widths[i] )
-            header_lines = max(header_lines, nlines(nm))
+            col_widths[i] = max( _strlen(nm), col_widths[i] )
+            header_lines = max(header_lines, _nlines(nm))
         for k,row in enumerate(self._rows):
             for i,el in enumerate(row.cells):
                 el = el.data.get_value()
-                col_widths[i] = max( strlen(el), col_widths[i] )
-                row_lines[k] = max(row_lines[k], nlines(el))
+                col_widths[i] = max( _strlen(el), col_widths[i] )
+                row_lines[k] = max(row_lines[k], _nlines(el))
 
         row_separator = "|" + '-'*(sum([w+5 for w in col_widths])-1) + "|\n"
           # +5 for pipe & spaces, -1 b/c don't count first pipe
@@ -179,7 +197,7 @@ class ReportTable(object):
 
         for k in range(header_lines):
             for i,nm in enumerate(self._columnNames):
-                s += "|  %*s  " % (col_widths[i],getline(nm,k))
+                s += "|  %*s  " % (col_widths[i],_getline(nm,k))
             s += "|\n"
         s += row_separator
 
@@ -187,7 +205,7 @@ class ReportTable(object):
             for k in range(row_lines[rowIndex]):
                 for i, el in enumerate(row.cells):
                     el = el.data.get_value()
-                    s += "|  %*s  " % (col_widths[i],getline(el,k))
+                    s += "|  %*s  " % (col_widths[i],_getline(el,k))
                 s += "|\n"
             s += row_separator
 
@@ -229,9 +247,18 @@ class ReportTable(object):
         return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
 
     def has_key(self, key):
+        """ Whether `key` exists (as the first element of some row) """
         return key in list(self.keys())
 
     def row(self, key=None, index=None):
+        """ 
+        Retrieve a row's cell data.  A row is identified by either its `key`
+        (its first cell's value) OR its `index` (0-based).
+
+        Returns
+        -------
+        list
+        """
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
@@ -252,6 +279,14 @@ class ReportTable(object):
 
 
     def col(self, key=None, index=None):
+        """ 
+        Retrieve a column's cell data.  A column is identified by either its
+        `key` (its column header's value) OR its `index` (0-based).
+
+        Returns
+        -------
+        list
+        """
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
@@ -272,16 +307,20 @@ class ReportTable(object):
 
     @property
     def num_rows(self):
+        """ The number of rows in this table """
         return len(self._rows)
 
     @property
     def num_cols(self):
+        """ The number of columns in this table """
         return len(self._columnNames)
 
     @property
     def row_names(self):
+        """ The names (keys) of the rows in this table """
         return list(self.keys())
 
     @property
     def col_names(self):
+        """ The names (keys) of the columns in this table """
         return self._columnNames

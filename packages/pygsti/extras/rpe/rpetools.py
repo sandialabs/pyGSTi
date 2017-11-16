@@ -1,10 +1,11 @@
+""" Utility functions for RPE """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions for RPE """
+
 import numpy as _np
 from scipy import optimize as _opt
 from ...tools import decompose_gate_matrix as _decompose_gate_matrix
@@ -307,6 +308,7 @@ def extract_theta(gateset,rpeconfig_inst):
 
 
 def consistency_check(angle_k, angle_final, k):
+    """ Check internal consistency """
     wedge_size = _np.pi/(2*k)
     angle_k += _np.pi
     angle_k = angle_k % (2*_np.pi)

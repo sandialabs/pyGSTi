@@ -1,10 +1,11 @@
+""" Functions for creating RPE GateSets and GateString lists """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for creating RPE GateSets and GateString lists """
+
 import numpy as _np
 from . import rpetools as _rpetools
 from ... import construction as _cnst

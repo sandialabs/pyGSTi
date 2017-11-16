@@ -1,3 +1,4 @@
+""" Defines the Row class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -55,6 +56,7 @@ class Row(object):
         self.__dict__.update(d)
 
     def add(self, data, formatter=None, label=None):
+        """ Adds a cell with the given `data`, `formatter` and `label` """
         self.cells.append(Cell(data, formatter, label))
 
     def render(self, fmt, specs):

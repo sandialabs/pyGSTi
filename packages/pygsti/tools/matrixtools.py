@@ -1,10 +1,10 @@
+""" Matrix related utility functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Matrix related utility functions """
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -12,6 +12,7 @@ import scipy.optimize as _spo
 import warnings as _warnings
 
 def array_eq(a, b, tol=1e-8):
+    """Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol` """
     print(_np.linalg.norm(a-b))
     return _np.linalg.norm(a-b) < tol
 
@@ -202,6 +203,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:,rank:]
 
 def matrix_sign(M):
+    """ The "sign" matrix of `M` """
     U,_,Vt = _np.linalg.svd(M)
     return _np.dot(U,Vt)
 
@@ -404,7 +406,7 @@ def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     assert(_np.linalg.norm(M.imag) < 1e-8), "Argument `M` must be a *real* matrix!"
     mx_shape = M.shape
     
-    def objective(flat_logM):
+    def _objective(flat_logM):
         logM = flat_logM.reshape(mx_shape)
         testM = _spl.expm(logM)
         ret=  targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
@@ -421,24 +423,24 @@ def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
         #        _np.linalg.norm(testM - M)**2
 
     #from .. import optimize as _opt
-    #print_obj_func = _opt.create_obj_func_printer(objective) #only ever prints to stdout!                    
+    #print_obj_func = _opt.create_obj_func_printer(_objective) #only ever prints to stdout!                    
     print_obj_func = None
 
     logM = _np.real( real_matrix_log(M, actionIfImaginary="ignore") ) #just drop any imaginary part
     initial_flat_logM = logM.flatten() # + 0.1*target_logM.flatten()
       # Note: adding some of target_logM doesn't seem to help; and hurts in easy cases
 
-    if objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
+    if _objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
         
-        #print("Initial objective fn val = ",objective(initial_flat_logM))
+        #print("Initial objective fn val = ",_objective(initial_flat_logM))
         #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
         #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
         #      _np.linalg.norm(logM-target_logM)**2)
     
-        solution = _spo.minimize(objective, initial_flat_logM,  options={'maxiter': 1000},
+        solution = _spo.minimize(_objective, initial_flat_logM,  options={'maxiter': 1000},
                                            method='L-BFGS-B',callback=print_obj_func, tol=TOL)
         logM = solution.x.reshape(mx_shape)
-        #print("Final objective fn val = ",objective(solution.x))
+        #print("Final objective fn val = ",_objective(solution.x))
         #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
         #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
         #      _np.linalg.norm(logM-target_logM)**2)

@@ -1,15 +1,16 @@
+"""Functions for the construction of new gate sets."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for the construction of new gate sets."""
 
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import scipy.linalg as _spl
+import warnings as _warnings
 
 
 from ..tools import gatetools as _gt
@@ -69,6 +70,11 @@ def basis_build_vector(vecExpr, basis):
     return _basis.change_basis(vecInReducedStdBasis, 'std', basis)
 
 def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
+    """
+    DEPRECATED: use :func:`basis_build_vector` instead.
+    """
+    _warnings.warn(("This function is deprecated and will be removed in the"
+                    " future.  Please use `basis_build_vector` instead."))
     return basis_build_vector(vecExpr, _basis.Basis(basis, stateSpaceDims))
 
 def basis_build_identity_vec(basis):
@@ -101,6 +107,24 @@ def basis_build_identity_vec(basis):
     return _basis.change_basis(vecInReducedStdBasis, "std", basis)
 
 def build_identity_vec(stateSpaceDims, basis="gm"):
+    """
+    Build the identity vector given a certain density matrix struture.
+
+    Parameters
+    ----------
+    stateSpaceDims : list
+        A list of integers specifying the dimension of each block
+        of a block-diagonal the density matrix.
+
+    basis : str, optional
+        The string abbreviation of the basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt).
+
+    Returns
+    -------
+    numpy array
+    """
     return basis_build_identity_vec(_basis.Basis(basis, stateSpaceDims))
 
 def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
@@ -437,12 +461,16 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
     # ----------------------------------------------------------------------------------------------------------------------------------------
 
     def equals_except(list1, list2, exemptIndices):
+        """ Test equivalence of list1 and list2 except for certain indices """
         for i,(l1,l2) in enumerate(zip(list1,list2)):
             if i in exemptIndices: continue
             if l1 != l2: return False
         return True
 
-    def embed_gate_unitary(Ugate, labels):  # Ugate should be in std basis (really no other basis it could be since gm and pp are only for acting on dm space)
+    def embed_gate_unitary(Ugate, labels):
+        """ Use the "unitary method" to embed a gate within it's larger Hilbert space """
+        # Note: Ugate should be in std basis (really no other basis it could be
+        # since gm and pp are only for acting on dm space)
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) > 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
@@ -499,6 +527,8 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
 
     def embed_gate(gatemx, labels, indicesToParameterize="all"):
+        """ Embed "local" gate matrix into gate for larger Hilbert space using
+            our standard method """
         #print "DEBUG: embed_gate gatemx = \n", gatemx
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
@@ -811,7 +841,13 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
     return gateInFinalBasis # a Gate object
 
 def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
+    """
+    DEPRECATED: use :func:`basis_build_gate` instead.
+    """
+    _warnings.warn(("This function is deprecated and will be removed in the"
+                    " future.  Please use `basis_build_gate` instead."))
     return basis_build_gate(stateSpaceLabels, gateExpr, _basis.Basis(basis, stateSpaceDims), parameterization, unitaryEmbedding)
+
 
 def basis_build_gateset(stateSpaceLabels,
                   gateLabels, gateExpressions,
@@ -937,7 +973,87 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
                   prepLabels, prepExpressions,
                   effectLabels, effectExpressions,
                   spamdefs, basis="auto", parameterization="full"):
+    """
+    Build a new GateSet given lists of gate labels and expressions.
 
+    Parameters
+    ----------
+    stateSpaceDims : list of ints
+       Dimensions specifying the structure of the density-matrix space.
+        Elements correspond to block dimensions of an allowed density matrix in
+        the standard basis, and the density-matrix space is the direct sum of
+        linear spaces of dimension block-dimension^2.
+
+    stateSpaceLabels : a list of tuples
+        Each tuple corresponds to a block of a density matrix in the standard
+        basis (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with "L"
+        (single level) or "Q" (two-level; qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.
+
+    gateLabels : list of strings
+       A list of labels for each created gate in the final gateset.  To
+        conform with text file parsing conventions these names should begin
+        with a capital G and can be followed by any number of lowercase
+        characters, numbers, or the underscore character.
+
+    gateExpressions : list of strings
+        A list of gate expressions, each corresponding to a gate label in
+        gateLabels, which determine what operation each gate performs (see
+        documentation for :meth:`build_gate`).
+
+    prepLabels : list of string
+        A list of labels for each created state preparation in the final
+        gateset.  To conform with conventions these labels should begin with
+        "rho".
+
+    prepExpressions : list of strings
+        A list of vector expressions for each state preparation vector (see
+        documentation for :meth:`build_vector`).
+
+    effectLabels : list of string
+        A list of labels for each created and *parameterized* POVM effect in
+        the final gateset.  To conform with conventions these labels should
+        begin with "E".
+
+    effectExpressions : list of strings
+        A list of vector expressions for each POVM effect vector (see
+        documentation for :meth:`build_vector`).
+
+    spamdefs : dict
+       A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples
+        associating a particular state preparation and effect vector with a
+        label.  prepLabel and ELabel must be contained in prepLabels and
+        effectLabels respectively except for two special cases:
+
+        1.  ELabel can be set to "remainder" to mean an effect vector that is
+            the identity - (other effect vectors)
+        2.  ELabel and prepLabel can both be "remainder" to mean a spam label
+            that generates probabilities that are 1.0 - (sum of probabilities
+            from all other spam labels).
+
+    basis : {'gm','pp','std','qt'}, optional
+        the basis of the matrices in the returned GateSet
+
+        - "std" = gate matrix operates on density mx expressed as sum of matrix
+          units
+        - "gm"  = gate matrix operates on dentity mx expressed as sum of
+          normalized Gell-Mann matrices
+        - "pp"  = gate matrix operates on density mx expresses as sum of
+          tensor-product of Pauli matrices
+        - "qt"  = gate matrix operates on density mx expressed as sum of
+          Qutrit basis matrices
+
+    parameterization : {"full","TP","linear","linearTP"}, optional
+        How to parameterize the gates of the resulting GateSet (see
+        documentation for :meth:`build_gate`).
+
+    Returns
+    -------
+    GateSet
+        The created gate set.
+    """
     if basis == "auto":
         if len(stateSpaceDims) == 1 and \
            _np.isclose(_np.log2(stateSpaceDims[0]),

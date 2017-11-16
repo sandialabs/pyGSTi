@@ -1,10 +1,10 @@
+""" Functions for selecting a complete set of germs for a GST analysis."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for selecting a complete set of germs for a GST analysis."""
 
 import warnings as _warnings
 
@@ -596,6 +596,17 @@ def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
 
 
 def removeSPAMVectors(gateset):
+    """
+    Returns a copy of `gateset` with state preparations and effects removed.
+
+    Parameters
+    ----------
+    gateset : GateSet
+
+    Returns
+    -------
+    GateSet
+    """
     reducedGateset = gateset.copy()
     for prepLabel in list(reducedGateset.preps.keys()):
         del reducedGateset.preps[prepLabel]
@@ -604,15 +615,19 @@ def removeSPAMVectors(gateset):
     return reducedGateset
 
 
-def get_neighbors(boolVec):
-    for i in range(len(boolVec)):
-        v = boolVec.copy()
-        v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
-        yield v
-
-
 def num_non_spam_gauge_params(gateset):
-    """Return number of non-gauge, non-SPAM parameters in a GateSet.
+    """
+    Return the number of non-gauge, non-SPAM parameters in `gateset`.
+
+    Equivalent to `removeSPAMVectors(gateset).num_gauge_params()`.
+
+    Parameters
+    ---------
+    gateset : GateSet
+    
+    Returns
+    -------
+    int
     """
     return removeSPAMVectors(gateset).num_gauge_params()
 
@@ -1512,13 +1527,20 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
     printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
+    def _get_neighbors(boolVec):
+        for i in range(len(boolVec)):
+            v = boolVec.copy()
+            v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
+            yield v
+
+
     with printer.progress_logging(1):
         for iIter in range(maxIter):
             printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighbor in get_neighbors(weights):
+            for neighbor in _get_neighbors(weights):
                 neighborScoreList = []
                 for gateset_num in range(len(gatesetList)):
                     if (gateset_num, tuple(neighbor)) not in scoreD:
@@ -1560,7 +1582,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 # now...
                 score += slack
 
-                for neighbor in get_neighbors(weights):
+                for neighbor in _get_neighbors(weights):
                     scoreList = [scoreD[gateset_num, tuple(neighbor)]
                                  for gateset_num in range(len(gatesetList))]
                     maxScore = _np.max(scoreList)
@@ -1796,7 +1818,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                           final_nonAC_kwargs, initN=1))
 
     #OLD: feasibleThreshold = _scoring.CompositeScore(-numNonGaugeParams,threshold,numNonGaugeParams))
-    def feasibleFn(germSet): #now that scoring is not ordered entirely by N
+    def _feasibleFn(germSet): #now that scoring is not ordered entirely by N
         s = germ_breadth_score_fn(germSet, germsList,
                                   twirledDerivDaggerDerivList, nonAC_kwargs,
                                   initN=1)
@@ -1820,7 +1842,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                     elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                     localScoreFn=scoreFn,
                     getNeighborsFn=getNeighborsFn,
-                    feasibleFn=feasibleFn,
+                    feasibleFn=_feasibleFn,
                     initialElements=initialWeights, seed=seed,
                     verbosity=verbosity)
 

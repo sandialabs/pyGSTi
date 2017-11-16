@@ -1,10 +1,10 @@
+""" Report generation functions. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Report generation functions. """
 
 import pickle as _pickle
 import os  as _os
@@ -85,7 +85,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     """
     current_lbls = list(estimates.keys())
     
-    def add_lbl(lst, lbl):
+    def _add_lbl(lst, lbl):
         if combine_robust and any([(lbl+suffix in current_lbls)
                                    for suffix in ROBUST_SUFFIX_LIST]):
             return #don't add label
@@ -97,7 +97,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     if running_lbls != current_lbls:
         for lbl in current_lbls:
             if lbl not in running_lbls:
-                add_lbl(running_lbls, lbl)
+                _add_lbl(running_lbls, lbl)
 
     return running_lbls
 
@@ -393,6 +393,7 @@ def create_general_report(results, filename, title="auto",
                           cachefile=None, brief=False, connected=False, 
                           link_to=None, resizable=True, autosize='initial',
                           verbosity=1):
+    """ DEPRECATED: use pygsti.report.create_standard_report(...) """
     _warnings.warn(
             ('create_general_report(...) will be removed from pyGSTi.\n'
              '  This function only ever existed in beta versions and will\n'
@@ -575,6 +576,7 @@ def create_standard_report(results, filename, title="auto",
 
     qtys = {} # stores strings to be inserted into report template
     def addqty(b, name, fn, *args, **kwargs):
+        """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
             with _timed_block(name, formatStr='{:45}', printer=printer, verbosity=2):
                 qtys[name] = fn(*args, **kwargs)
@@ -663,7 +665,7 @@ def create_standard_report(results, filename, title="auto",
     addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
                                                      ['Target','Estimated'], "boxes", cri)
-    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("barplot",))
+    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("boxplot","barplot"))
     addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, None) #cri) #TEST
     addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep,
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
@@ -883,7 +885,58 @@ def create_standard_report(results, filename, title="auto",
 def create_report_notebook(results, filename, title="auto",
                            confidenceLevel=None,    
                            auto_open=False, connected=False, verbosity=0):
-    """ TODO: docstring - but just a subset of args for create_standard_report"""
+    """
+    Create a "report notebook": a Jupyter ipython notebook file which, when its
+    cells are executed, will generate similar figures to those contained in an
+    html report (via :func:`create_standard_report`).
+
+    A notebook report allows the user to interact more flexibly with the data
+    underlying the figures, and to easily generate customized variants on the
+    figures.  As such, this type of report will be most useful for experts
+    who want to tinker with the standard analysis presented in the static 
+    HTML or LaTeX format reports.
+
+    Parameters
+    ----------
+    results : Results
+        An object which represents the set of results from one *or more* GST
+        estimation runs, typically obtained from running 
+        :func:`do_long_sequence_gst` or :func:`do_stdpractice_gst`, OR a
+        dictionary of such objects, representing multiple GST runs to be
+        compared (typically all with *different* data sets). The keys of this
+        dictionary are used to label different data sets that are selectable
+        (via setting Python variables) in the report.
+
+    filename : string, optional
+       The output filename where the report file(s) will be saved.  Must end
+       in ".ipynb". 
+
+    title : string, optional
+       The title of the report.  "auto" causes a random title to be
+       generated (which you may or may not like).
+
+    confidenceLevel : int, optional
+       If not None, then the confidence level (between 0 and 100) used in
+       the computation of confidence regions/intervals. If None, no
+       confidence regions or intervals are computed.
+
+    auto_open : bool, optional
+        If True, automatically open the report in a web browser after it
+        has been generated.
+
+    connected : bool, optional
+        Whether output notebook should assume an active internet connection.  If
+        True, then the resulting file size will be reduced because it will link
+        to web resources (e.g. CDN libraries) instead of embedding them.
+
+    verbosity : int, optional
+       How much detail to send to stdout.
+    
+
+    Returns
+    -------
+    None
+    """
     printer = VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates","report_notebook")

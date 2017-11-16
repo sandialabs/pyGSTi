@@ -1,10 +1,10 @@
+""" Classes for constructing confidence regions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Classes for constructing confidence regions """
 
 import numpy       as _np
 import scipy.stats as _stats
@@ -469,7 +469,7 @@ class ConfidenceRegionFactory(object):
         printer.log('', 3)
         printer.log("--- Hessian Projector Optimization for gate CIs (%s) ---" % method, 2, indentOffset=-1)
     
-        def objective_func(vectorM):
+        def _objective_func(vectorM):
             matM = vectorM.reshape( (self.nNonGaugeParams,self.nGaugeParams) )
             proj_extra = gateset.get_nongauge_projector(nonGaugeMixMx=matM)
             projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
@@ -486,8 +486,8 @@ class ConfidenceRegionFactory(object):
         #Run Minimization Algorithm
         startM = _np.zeros( (self.nNonGaugeParams,self.nGaugeParams), 'd')
         x0 = startM.flatten()
-        print_obj_func = _opt.create_obj_func_printer(objective_func)
-        minSol = _opt.minimize(objective_func, x0,
+        print_obj_func = _opt.create_obj_func_printer(_objective_func)
+        minSol = _opt.minimize(_objective_func, x0,
                                method=method, maxiter=maxiter,
                                maxfev=maxfev, tol=tol,
                                callback = print_obj_func if verbosity > 2 else None)
@@ -561,6 +561,14 @@ class ConfidenceRegionFactory(object):
 
 
 class ConfidenceRegionFactoryView(object):
+    """ 
+    Encapsulates a lightweight "view" of a ConfidenceRegionFactory,
+    which is principally defined by it's having a fixed confidence-level.
+    Thus, a "view" is like a factory that generates confidence intervals for
+    just a single confidence level.  As such, it is a useful object to pass
+    around to routines which compute and display error bars, as these routines
+    typically don't depend on what confidence-level is being used.
+    """
 
     def __init__(self, gateset, inv_projected_hessian, mlgst_params, confidenceLevel,
                  nonMarkRadiusSq, nNonGaugeParams, nGaugeParams):

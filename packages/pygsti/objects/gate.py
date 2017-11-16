@@ -1,10 +1,10 @@
+""" Defines classes which represent gates, as well as supporting functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines classes which represent gates, as well as supporting functions """
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -55,12 +55,12 @@ def optimize_gate(gateToOptimize, targetGate):
 
     assert(targetGate.dim == gateToOptimize.dim) #gates must have the same overall dimension
     targetMatrix = _np.asarray(targetGate)
-    def objective_func(param_vec):
+    def _objective_func(param_vec):
         gateToOptimize.from_vector(param_vec)
         return _mt.frobeniusnorm(gateToOptimize - targetMatrix)
 
     x0 = gateToOptimize.to_vector()
-    minSol = _opt.minimize(objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
+    minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     gateToOptimize.from_vector(minSol.x)
@@ -311,6 +311,8 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
 
 
 class Gate(object):
+    """ Base class for all gate representations """
+    
     def __init__(self, dim):
         """ Initialize a new Gate """
         self.dim = dim
@@ -451,13 +453,31 @@ class GateMatrix(Gate):
                     otherGate)
 
     def residuals(self, otherGate, transform=None, inv_transform=None):
+        """
+        The per-element difference between this `GateMatrix` and `otherGate`,
+        possibly after transforming this gate as 
+        `G => inv_transform * G * transform`.
+
+        Parameters
+        ----------
+        otherGate : GateMatrix
+            The gate to compare against.
+
+        transform, inv_transform : numpy.ndarray, optional
+            The transform and its inverse, respectively, to apply before
+            taking the element-wise difference.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D-array of size equal to that of the flattened gate matrix.
+        """
         if transform is None and inv_transform is None:
             return _gt.residuals(self.base,otherGate)
         else:
             return _gt.residuals(_np.dot(
                     inv_transform,_np.dot(self.base,transform)),
                     otherGate)
-
 
     def jtracedist(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -825,10 +845,13 @@ class StaticGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -1069,10 +1092,13 @@ class FullyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -1083,8 +1109,6 @@ class FullyParameterizedGate(GateMatrix):
         -------
         None
         """
-        if isinstance(amount,float):
-            amount = (amount,)*(self.dim-1)
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
         self.set_matrix(_np.dot(rotnMx,self))
 
@@ -1331,10 +1355,13 @@ class TPParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -1345,8 +1372,6 @@ class TPParameterizedGate(GateMatrix):
         -------
         None
         """
-        if isinstance(amount,float):
-            amount = (amount,)*(self.dim-1)
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
         self.set_matrix(_np.dot(rotnMx,self))
 
@@ -1373,21 +1398,39 @@ class TPParameterizedGate(GateMatrix):
 
 
     def __str__(self):
+        """ Return string representation """
         s = "TP Parameterized gate with shape %s\n" % str(self.base.shape)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
     def __reduce__(self):
+        """ Reduce for pickling as an element of an :class:`OrderedDict` """
         return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)
 
 
 
 class LinearlyParameterizedElementTerm(object):
+    """
+    Encapsulates a single term within a LinearlyParameterizedGate.
+    """
     def __init__(self, coeff=1.0, paramIndices=[]):
+        """
+        Create a new LinearlyParameterizedElementTerm
+
+        Parameters
+        ----------
+        coeff : float
+            The term's coefficient
+
+        paramIndices : list
+            A list of integers, specifying which parameters are muliplied
+            together (and finally, with `coeff`) to form this term.
+        """
         self.coeff = coeff
         self.paramIndices = paramIndices
 
     def copy(self):
+        """ Copy this term. """
         return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
 
 
@@ -1685,10 +1728,13 @@ class LinearlyParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -1859,7 +1905,8 @@ class EigenvalueParameterizedGate(GateMatrix):
             else: return 0
         cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
 
-        def isreal(a): #b/c numpy's isreal test for equality w/0
+        def isreal(a):
+            """ b/c numpy's isreal tests for strict equality w/0 """
             return _np.isclose(_np.imag(a),0.0)
 
         # Since matrix is real, eigenvalues must either be real or occur in
@@ -2277,10 +2324,13 @@ class EigenvalueParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -3201,10 +3251,13 @@ class LindbladParameterizedGate(GateMatrix):
 
         Parameters
         ----------
-        amount : float or tuple of floats, optional
-          If a single float, apply rotation of rotate radians along each of
-          the Pauli-product axes (X,Y,Z for 1-qubit). A tuple specifies separate
-          rotations along each of the non-identity Pauli-product axes.
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
 
         mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -3215,8 +3268,6 @@ class LindbladParameterizedGate(GateMatrix):
         -------
         None
         """
-        if isinstance(amount,float):
-            amount = (amount,)*(self.dim-1)
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
         mx = _np.dot(rotnMx,self.base)
         tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,

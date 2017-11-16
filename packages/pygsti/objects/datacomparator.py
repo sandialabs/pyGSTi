@@ -1,10 +1,10 @@
+""" Defines the DataComparator class used to compare multiple DataSets."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the DataComparator class used to compare multiple DataSets."""
 
 import numpy as _np
 import scipy as _scipy
@@ -143,6 +143,11 @@ class DataComparator():
         composite_score = _np.sum(self.llrVals)
         k = self.num_strs*self.dof
         return (composite_score - k) / _np.sqrt(2*k)
+
+    def get_composite_2DeltaLogL(self):
+        composite_score = _np.sum(self.llrVals)
+        return composite_score
+
 #            
 #    def report(self,confidence_level=0.95,verbosity=1):
 #        single_string_thresh = find_thresh(confidence_level,self.num_strs,self.dof)

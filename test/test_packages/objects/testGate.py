@@ -147,7 +147,7 @@ class GateTestCase(BaseTestCase):
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
-                gate.rotate(0.01,'gm')
+                #gate.rotate(0.01,'gm') #float as arg is no longer allowed
                 gate.rotate([0.01,0.02,0.03],'gm')
             except ValueError: pass #OK, as this is unallowed for some gate types
             

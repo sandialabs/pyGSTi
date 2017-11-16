@@ -55,16 +55,20 @@ class LogLTestCase(BaseTestCase):
         L1 = pygsti.logl(gateset, ds,
                          probClipInterval=(-1e6,1e6), countVecMx=None,
                          poissonPicture=True, check=False)
-        self.assertAlmostEqual(L1,-21579292.1837, 2)
+        self.assertAlmostEqual(L1,-22711008.7481, 2)
+        #self.assertAlmostEqual(L1,-21579292.1837, 2) #OLD2
         #self.assertAlmostEqual(L1, -4531934.43735, 2) #OLD
         
         L2 = pygsti.logl_max(ds)
-        self.assertAlmostEqual(L2, -13402461.9294, 2)
+        
+        self.assertAlmostEqual(L2, -14144760.2866, 2)
+        #self.assertAlmostEqual(L2, -13402461.9294, 2) #OLD2
         #self.assertAlmostEqual(L2, -1329179.7675, 5) #OLD
 
     def test_memory(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
+
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6),
@@ -82,7 +86,7 @@ class LogLTestCase(BaseTestCase):
         with self.assertRaises(MemoryError):
             pygsti.logl_hessian(gateset, ds,
                                 probClipInterval=(-1e6,1e6),
-                                poissonPicture=True, check=False, memLimit=100000) # Splitting unproductive
+                                poissonPicture=True, check=False, memLimit=70000) # Splitting unproductive
 
 
         #print("****DEBUG LOGL HESSIAN L****")

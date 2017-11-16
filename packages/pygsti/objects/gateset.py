@@ -1,10 +1,10 @@
+""" Defines the GateSet class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSet class and supporting functionality."""
 
 import numpy as _np
 import scipy as _scipy
@@ -118,10 +118,12 @@ class GateSet(object):
 
     @property
     def povm_identity(self):
+        """ The POVM identity vector, used when 'remainder' is used. """
         return self._povm_identity
 
     @povm_identity.setter
     def povm_identity(self, value):
+        """ The POVM identity vector, used when 'remainder' is used. """
         if value is None:
             self._povm_identity = None
             return
@@ -179,16 +181,19 @@ class GateSet(object):
         return self._dim
 
     def get_basis_name(self):
+        """ DEPRECATED: use `<this object>.basis.name` instead. """
         _warnings.warn('gs.get_basis_name() is deprecated. ' + \
                 'Use gs.basis.name instead.')
         return self.basis.name
 
     def get_basis_dimension(self):
+        """ DEPRECATED: use `<this object>.basis.dim.dmDim` instead. """
         _warnings.warn('gs.get_basis_dimension() is deprecated. ' + \
                 'Use gs.basis.dim.dmDim (same functionality) or gs.basis.dim.blockDims (full blockDims) instead')
         return self.basis.dim.dmDim
 
     def set_basis(self, name, dimension):
+        """ DEPRECATED: use `<this object>.basis = Basis(...) instead. """
         _warnings.warn('gs.set_basis() is deprecated. ' + \
                 'Use gs.basis = Basis({}, {}) ' + \
                 '(or another method of basis construction, ' + \
@@ -1327,6 +1332,7 @@ class GateSet(object):
                         % (distributeMethod, memLimit*C))
 
         def prime_factors(n):  #TODO: move this fn somewhere else
+            """ GCD algorithm to produce prime factors of `n` """
             i = 2; factors = []
             while i * i <= n:
                 if n % i:
@@ -1339,6 +1345,7 @@ class GateSet(object):
             return factors
 
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
+            """ Returns a memory estimate based on arguments """
             tm = _time.time()
             
             #Get cache size
@@ -1404,9 +1411,9 @@ class GateSet(object):
                 
         elif distributeMethod == "deriv":
 
-            #Set Ng, the number of subTree processor groups, such
-            # that Ng divides nprocs evenly or vice versa
             def set_Ng(desired_Ng):
+                """ Set Ng, the number of subTree processor groups, such
+                    that Ng divides nprocs evenly or vice versa. """
                 if desired_Ng >= nprocs:
                     return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
@@ -2744,27 +2751,30 @@ class GateSet(object):
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
-        Apply rotation uniformly or randomly to this gateset,
-        and return the result, without modifying the original
-        (this) gateset.  You must specify either 'rotate' or
-        'max_rotate'. This method currently only works on
-        n-qubit gatesets.
+        Apply a rotation uniformly (the same rotation applied to each gate)
+        or randomly (different random rotations to each gate) to this gateset,
+        and return the result, without modifying the original (this) gateset.
+
+        You must specify either 'rotate' or 'max_rotate'. This method currently
+        only works on n-qubit gatesets.
 
         Parameters
         ----------
-        rotate : float or tuple of floats, optional
-          if a single float, apply rotation of rotate radians along each of
-          the pauli-product axes (X,Y,Z for 1-qubit) of all gates in the gateset.
-          For a 1-qubit gateset, a 3-tuple of floats can be specifed to apply
-          separate rotations along the X, Y, and Z axes.  For a 2-qubit gateset,
-          a 15-tuple of floats can be specified to apply separate rotations along
-          the IX, IY, IZ, XI, XX, XY, XZ, YI, YX, YY, YZ, ZI, ZX, ZY, ZZ axes.
-
+        rotate : tuple of floats, optional
+            If you specify the `rotate` argument, then the same rotation
+            operation is applied to each gate.  That is, each gate's matrix `G`
+            is composed with a rotation operation `R`  (so `G` -> `dot(R, G)` )
+            where `R` is the unitary superoperator corresponding to the unitary
+            operator `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here
+            `Pauli_k` ranges over all of the non-identity un-normalized Pauli
+            operators (e.g. {X,Y,Z} for 1 qubit, {IX, IY, IZ, XI, XX, XY, XZ,
+            YI, YX, YY, YZ, ZI, ZX, ZY, ZZ} for 2 qubits).
+  
         max_rotate : float, optional
-          specified instead of 'rotate'; apply a random rotation with
-          maximum max_rotate radians along each of the relevant axes
-          of each each gate in the gateset.  That is, rotations of a
-          particular gate around different axes are different random amounts.
+            If `max_rotate` is specified (*instead* of `rotate`), then pyGSTi 
+            randomly generates a different `rotate` tuple, and applies the 
+            corresponding rotation, to each gate in this `GateSet`.  Each
+            component of each tuple is drawn uniformly from [0, `max_rotate`).
 
         seed : int, optional
           if  not None, seed numpy's random number generator with this value
@@ -2791,7 +2801,8 @@ class GateSet(object):
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or _compat.isint(rotate) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(len(rotate) == dim-1), \
+                "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim-1)
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].rotate(rotate, myBasis)
 

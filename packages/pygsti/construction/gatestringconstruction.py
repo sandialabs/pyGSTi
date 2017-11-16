@@ -1,10 +1,10 @@
+""" Utility functions for creating and acting on lists of gate strings."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions for creating and acting on lists of gate strings."""
 
 import itertools as _itertools
 import numpy as _np
@@ -332,13 +332,34 @@ def gen_all_gatestrings_onelen(gateLabels, length):
 
 
 def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
+    """
+    Generate all distinct gate strings up to a maximum length that are 
+    aperiodic, i.e., that are not a shorter gate sequence raised to a power,
+    and are also distinct up to cycling (e.g. `('Gx','Gy','Gy')` and 
+    `('Gy','Gy','Gx')` are considered equivalent and only one would be
+    included in the returned list).
+
+    Parameters
+    ----------
+    gateLabels : list
+        A list of the gate labels to for gate strings from.
+
+    maxLength : int
+        The maximum length strings to return.  Gatestrings from length 1
+        to `maxLength` will be returned.
+
+    Returns
+    -------
+    list
+       Of :class:`GateString` objects.
+    """
 
     #Are we trying to add a germ that is a permutation of a germ we already have?  False if no, True if yes.
-    def perm_check(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
+    def _perm_check(testStr,strList): # works with python strings, so can use "in" to test for substring inclusion
         return any( [ testStr in s*2 for s in strList ] )
 
     #Are we trying to add a germ that is a power of a germ we already have?  False if no, True if yes.
-    def pow_check(testStr,strListDict):
+    def _pow_check(testStr,strListDict):
         L = len(testStr)
         for k in list(strListDict.keys()):
             if L % k == 0:
@@ -353,12 +374,12 @@ def list_all_gatestrings_without_powers_and_cycles(gateLabels, maxLength):
         permCheckedStrs = []
         for s in gen_all_gatestrings_onelen(gateLabels, length):
             pys = s.to_pythonstr(gateLabels)
-            if not perm_check(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
+            if not _perm_check(pys,permCheckedStrs):#Sequence is not a cycle of anything in permCheckedStrs
                 permCheckedStrs.append(pys)
 
         outputDict[length] = []
         for pys in permCheckedStrs:#Now check to see if any elements of tempList2 are powers of elements already in output
-            if not pow_check(pys,outputDict):#Seqeunce is not a power of anything in output
+            if not _pow_check(pys,outputDict):#Seqeunce is not a power of anything in output
                 outputDict[length].append(pys)
 
     output = []
@@ -474,7 +495,7 @@ def list_strings_lgst_can_estimate(dataset, specs):
     pre = tuple(effectSpecs[0].str);     l0 = len(pre)   #the first effectSpec string prefix
     post = tuple(prepSpecs[0].str); l1 = len(post)  #the first prepSpec string postfix
 
-    def root_is_ok(rootStr):
+    def _root_is_ok(rootStr):
         for espec in effectSpecs:
             for rhospec in prepSpecs:
                 if tuple(rhospec.str) + tuple(rootStr) + tuple(espec.str) not in gateStrings: # LEXICOGRAPHICAL VS MATRIX ORDER
@@ -486,7 +507,7 @@ def list_strings_lgst_can_estimate(dataset, specs):
     for s in gateStrings:
         if s[0:l0] == pre and s[len(s)-l1:] == post:
             root = s[l0:len(s)-l1]
-            if root_is_ok( root ):
+            if _root_is_ok( root ):
                 estimatable.append( root )
 
     return gatestring_list(estimatable)

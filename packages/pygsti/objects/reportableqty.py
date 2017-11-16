@@ -1,10 +1,10 @@
+""" The ReportableQty class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" The ReportableQty class """
 
 from copy import deepcopy as _deepcopy
 import numpy as _np
@@ -37,8 +37,7 @@ class ReportableQty(object):
         self.nonMarkovianEBs = nonMarkovianEBs
 
     def __str__(self):
-        def f(x,y): 
-            return (str(x) + " +/- " + str(y)) if y else str(x)
+        f = lambda x,y : (str(x) + " +/- " + str(y)) if y else str(x)
         return self.render_with(f)
 
     def __repr__(self):
@@ -176,7 +175,7 @@ class ReportableQty(object):
         if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
 
-        def convert(A):
+        def _convert(A):
             ret = _np.empty(A.shape,'d')
             for i in range(A.shape[0]):
                 ret[i,i] = A[i,i].real
@@ -185,9 +184,9 @@ class ReportableQty(object):
                     ret[j,i] = A[i,j].imag
             return ret
 
-        v = convert(self.value)
+        v = _convert(self.value)
         if self.has_eb():
-            eb = convert(self.errbar)
+            eb = _convert(self.errbar)
             return ReportableQty( v, eb, self.nonMarkovianEBs)
         else:
             return ReportableQty( v )
@@ -232,6 +231,9 @@ class ReportableQty(object):
             return ReportableQty(value, nonMarkovianEBs=nonMarkovianEBs)
 
     def has_eb(self):
+        """
+        Return whether this quantity is storing an error bar (bool).
+        """
         return self.errbar is not None
 
     def scale(self, factor):
@@ -260,6 +262,32 @@ class ReportableQty(object):
         return self.value, self.errbar
 
     def render_with(self, f, specs=None, ebstring='%s +/- %s', nmebstring=None):
+        """
+        Render this `ReportableQty` using the function `f`.
+
+        Parameters
+        ----------
+        f : function
+           The `formatter` function which separately converts the stored value
+           and error bar (if present) to string quantities that are then
+           formatted using `ebstring`, `nmebstring` or just `"%s"` (if there's
+           no error bar).  This function must have the signature `f(val, specs)`
+           where `val` is either the value or error bar and `specs` is a
+           dictionary given by the next argument.
+
+        specs : dict, optional
+            Additional parameters to pass to the formatter function `f`.
+
+        ebstring, nmebstring : str, optional
+            The formatting strings used to format the values returned from `f`
+            for normal and non-Markovian error bars, respectively.  If 
+            `nmebstring` is None then `ebstring` is used for both types of
+            error bars.
+
+        Returns
+        -------
+        str
+        """
         if nmebstring is None:
             nmebstring = ebstring
         if specs is None:
