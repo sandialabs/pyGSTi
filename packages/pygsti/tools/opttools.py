@@ -59,8 +59,8 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
         formats the `label` arguent, e.g. `"My label is {}"`.
 
     formatStr : str, optional
-        The format string used for the timer's message, which formats
-        the `label` and the time (a float).  The default is
+        A format string used to format the label before the resulting "rendered
+        label" is used as the first argument in the final formatting string
         `"{} took {} seconds"`.
     """
     def put(message):
