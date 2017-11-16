@@ -396,10 +396,10 @@ class ChoiTable(WorkspaceTable):
             used to display eigenvalue error intervals for the
             *final* GateSet in `gatesets`.
 
-        display : tuple or list of {"matrices","eigenvalues","barplot"}
+        display : tuple/list of {"matrices","eigenvalues","barplot","boxplot"}
             Which columns to display: the Choi matrices (as numerical grids),
-            the Choi matrix eigenvalues (as a numerical list), and/or the
-            eigenvalues on a bar plot.
+            the Choi matrix eigenvalues (as a numerical list), the eigenvalues
+            on a bar plot, and/or the matrix as a plot of colored boxes.
 
     
         Returns
@@ -422,7 +422,7 @@ class ChoiTable(WorkspaceTable):
         for gateset in gatesets:
             gateLabels = list(gateset.gates.keys()) # gate labels
             #qtys_to_compute = []
-            if 'matrix' in display:
+            if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(gateset,gl)) for gl in gateLabels]
             else:
                 choiMxs = None
@@ -446,6 +446,11 @@ class ChoiTable(WorkspaceTable):
                 for gateset,title in zip(gatesets,titles):
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
+            elif disp == "boxplot":
+                for gateset,title in zip(gatesets,titles):
+                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    pre = (title+' ' if title else '')
+                    colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
                 raise ValueError("Invalid element of `display`: %s" % disp)                    
         formatters = [None]*len(colHeadings)
@@ -476,13 +481,23 @@ class ChoiTable(WorkspaceTable):
                         row_formatters.append('Normal')
                             
                 elif disp == "barplot":
-                    for gateset in gatesets:
-                        for gateset, (_, evals) in zip(gatesets,qtysList):
-                            evs, evsEB = evals[i].get_value_and_err_bar()
-                            fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
-                            row_data.append(fig)
-                            row_formatters.append('Figure')
-                            
+                    for gateset, (_, evals) in zip(gatesets,qtysList):
+                        evs, evsEB = evals[i].get_value_and_err_bar()
+                        fig = _wp.ChoiEigenvalueBarPlot(self.ws, evs, evsEB)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+
+                elif disp == "boxplot":
+                    for gateset, (choiMxs, _) in zip(gatesets, qtysList):
+                        choiMx_real = choiMxs[i].hermitian_to_real()
+                        choiMx, EB = choiMx_real.get_value_and_err_bar()
+                        fig = _wp.GateMatrixPlot(self.ws, choiMx,
+                                                 colorbar=False,
+                                                 mxBasis=gateset.basis,
+                                                 EBmatrix=EB)
+                        row_data.append( fig )
+                        row_formatters.append('Figure')
+
             table.addrow(row_data, row_formatters)
         table.finish()
         return table
