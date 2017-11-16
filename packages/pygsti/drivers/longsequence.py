@@ -257,7 +257,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - depolarizeStart = float (default == 0)
         - contractStartToCPTP = True / False (default)
         - cptpPenaltyFactor = float (default = 0)
-        - tolerance = float
+        - tolerance = float or dict w/'relx','relf','f','jac' keys
         - maxIterations = int
         - minProbClip = float
         - minProbClipForWeighting = float (default == 1e-4)

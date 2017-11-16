@@ -933,8 +933,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         Maximum number of function evaluations for the chi^2 optimization.
         Defaults to maxiter.
 
-    tol : float, optional
-        The tolerance for the chi^2 optimization.
+    tol : float or dict, optional
+        The tolerance for the chi^2 optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -1387,17 +1389,18 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Step 3: solve least squares minimization problem
     tm = _time.time()
     x0 = gs.to_vector()
+    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            _objective_func, _jacobian, x0, f_norm2_tol=tol,
-            jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
+            _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
+            jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=tol,
+            _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
                           maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
 
@@ -1489,7 +1492,9 @@ def do_mc2gst_with_model_selection(
         Defaults to maxiter.
 
     tol : float, optional
-        The tolerance for the chi^2 optimization.
+        The tolerance for the chi^2 optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the optimization also contains CPTP penalty
@@ -1705,7 +1710,9 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
         Maximum number of function evaluations for the chi^2 optimization.
 
     tol : float, optional
-        The tolerance for the chi^2 optimization.
+        The tolerance for the chi^2 optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the optimization also contains CPTP penalty
@@ -1900,7 +1907,9 @@ def do_iterative_mc2gst_with_model_selection(
         Defaults to maxiter.
 
     tol : float, optional
-        The tolerance for the chi^2 optimization.
+        The tolerance for the chi^2 optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the optimization also contains CPTP penalty
@@ -2102,7 +2111,9 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
         Defaults to maxiter.
 
     tol : float, optional
-        The tolerance for the logL optimization.
+        The tolerance for the logL optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
@@ -2568,17 +2579,18 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     #Run optimization (use leastsq)
     tm = _time.time()
     x0 = gs.to_vector()
+    if isinstance(tol,float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }
     if CUSTOMLM:
         opt_x,converged,msg = _opt.custom_leastsq(
-            _objective_func, _jacobian, x0, f_norm2_tol=tol,
-            jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
+            _objective_func, _jacobian, x0, f_norm2_tol=tol['f'],
+            jac_norm_tol=tol['jac'], rel_ftol=tol['relf'], rel_xtol=tol['relx'],
             max_iter=maxiter, comm=comm,
             verbosity=printer.verbosity-1, profiler=profiler)
         printer.log("Least squares message = %s" % msg,2)
         assert(converged), "Failed to converge: %s" % msg
     else:
         opt_x, _, _, msg, flag = \
-            _spo.leastsq( _objective_func, x0, xtol=tol, ftol=tol, gtol=0,
+            _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relx'], gtol=0,
                           maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
         printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
     profiler.add_time("do_mlgst: leastsq",tm)
@@ -2705,7 +2717,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         Maximum number of function evaluations for the logL optimization.
 
     tol : float, optional
-        The tolerance for the logL optimization.
+        The tolerance for the logL optimization.  If a dict, allowed keys are
+        `'relx'`, `'relf'`, `'f'`, and `'jac'`.  If a float, then 
+        `{'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol }` is used.
 
     cptp_penalty_factor : float, optional
         If greater than zero, the least squares optimization also contains CPTP penalty
