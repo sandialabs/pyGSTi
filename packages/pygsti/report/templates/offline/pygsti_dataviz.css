@@ -260,6 +260,9 @@ figure > div.pygsti-wsoutput-group {
     color: black;
 }
 
+.switch_container .ui-menu-item {
+    font-size: 8pt; /* combo-box options text (select text governed by "span" above) */
+}
 
 .switch_container .ui-slider {
     width: 80%;
