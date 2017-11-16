@@ -25,7 +25,7 @@ class TestGateSetMethods(GateSetTestCase):
         copiedGateset = self.gateset.copy()
         copiedGateset = copiedGateset.increase_dimension(11)
         with self.assertRaises(AssertionError):
-            copiedGateset.rotate(0.1)
+            copiedGateset.rotate((0.1,0.1,0.1))
         with self.assertRaises(AssertionError):
             copiedGateset.randomize_with_unitary(1, randState=np.random.RandomState()) # scale shouldn't matter
 

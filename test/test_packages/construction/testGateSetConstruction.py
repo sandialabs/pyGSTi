@@ -589,7 +589,7 @@ SPAMLABEL 1 = rho remainder
         self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2,rotYPiOv2))
 
         gateset_2q_rot = gateset_2q.rotate(rotate=list(np.zeros(15,'d')))
-        gateset_2q_rot_same = gateset_2q.rotate(rotate=0.01)
+        gateset_2q_rot_same = gateset_2q.rotate(rotate=(0.01,)*15)
         gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01)
         gateset_2q_randu = gateset_2q.randomize_with_unitary(0.01,seed=1234)
 
@@ -630,13 +630,13 @@ SPAMLABEL 1 = rho remainder
         gateset_rand_rot = gateset.rotate(max_rotate=0.2)
         gateset_rand_rot = gateset.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
-            gateset.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
+            gateset.rotate(rotate=(0.2,)*3,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
             gateset.rotate() #must specify rotate or max_rotate
         with self.assertRaises(AssertionError):
-            gateset.rotate( (1,2,3,4) ) #tuple must be length 3 (or a float)
+            gateset.rotate( (1,2,3,4) ) #tuple must be length 3
         with self.assertRaises(AssertionError):
-            gateset.rotate( "a string!" ) #must be a 3-tuple or float
+            gateset.rotate( "a string!" ) #must be a 3-tuple
         with self.assertRaises(AssertionError):
             gateset_2q.rotate(rotate=(0,0,0)) #wrong dimension gateset
 
@@ -644,13 +644,13 @@ SPAMLABEL 1 = rho remainder
         gateset_2q_rand_rot = gateset_2q.rotate(max_rotate=0.2)
         gateset_2q_rand_rot = gateset_2q.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
-            gateset_2q.rotate(rotate=0.2,max_rotate=0.2) #can't specify both
+            gateset_2q.rotate(rotate=(0.2,)*15,max_rotate=0.2) #can't specify both
         with self.assertRaises(ValueError):
             gateset_2q.rotate() #must specify rotate or max_rotate
         with self.assertRaises(AssertionError):
-            gateset_2q.rotate( (1,2,3,4) ) #tuple must be length 15 (or a float)
+            gateset_2q.rotate( (1,2,3,4) ) #tuple must be length 15
         with self.assertRaises(AssertionError):
-            gateset_2q.rotate( "a string!" ) #must be a 3-tuple or float
+            gateset_2q.rotate( "a string!" ) #must be a 15-tuple
         with self.assertRaises(AssertionError):
             gateset.rotate( rotate=np.zeros(15,'d')) #wrong dimension gateset
 

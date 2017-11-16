@@ -849,9 +849,12 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
 
     xbins_for_numpy = _np.linspace(minval-binsize/2.0,maxval+binsize/2.0,nbins+1)
     hist_values, np_bins = _np.histogram(ys, nbins, range=(minval-binsize/2.0,
-                                                     maxval+binsize/2.0))        
-    minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
-    maxlog = _np.log10(1.5*_np.max(hist_values) )
+                                                     maxval+binsize/2.0))
+    if len(hist_values) > 0 and len(hist_values[hist_values>0]) > 0:
+        minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
+        maxlog = _np.log10(1.5*_np.max(hist_values) )
+    else:
+        minlog, maxlog = -3,0 #defaults to (1e-3,1) when there's no data
     
     layout = go.Layout(
             width=500*scale,
