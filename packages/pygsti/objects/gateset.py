@@ -2762,7 +2762,7 @@ class GateSet(object):
         ----------
         rotate : tuple of floats, optional
             If you specify the `rotate` argument, then the same rotation
-            operation is applied to each gate.  That is, each gate’s matrix `G`
+            operation is applied to each gate.  That is, each gate's matrix `G`
             is composed with a rotation operation `R`  (so `G` -> `dot(R, G)` )
             where `R` is the unitary superoperator corresponding to the unitary
             operator `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here
