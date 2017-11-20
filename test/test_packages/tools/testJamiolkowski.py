@@ -3,7 +3,8 @@ import pygsti
 import os
 import numpy as np
 from pygsti.construction import std1Q_XYI as std1Q
-import pygsti.tools.basis as basis
+import pygsti.tools.basistools as bt
+from pygsti.baseobjs import Basis
 
 class JamiolkowskiTestCase(unittest.TestCase):
 
@@ -28,9 +29,9 @@ class JamiolkowskiTestCase(unittest.TestCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = pygsti.construction.build_gate(self.stateSpaceDims, self.stateSpaceLabels, "LX(pi,0,2)", "std")
-        self.testGateGM_mx = basis.change_basis(self.testGate, self.stdSmall, self.gmSmall)
-        self.expTestGate_mx = basis.flexible_change_basis(self.testGate, self.stdSmall, self.std)
-        self.expTestGateGM_mx = basis.change_basis(self.expTestGate_mx, self.std, self.gm)
+        self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
+        self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
+        self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)
 
     def tearDown(self):
         os.chdir(self.old)
@@ -62,7 +63,7 @@ class JamiolkowskiTestCase(unittest.TestCase):
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = pygsti.jamiolkowski_iso_inv(Jmx1,choiMxBasis=cmb,
                                                                       gateMxBasis=self.std)
-        self.assertArraysAlmostEqual( basis.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
+        self.assertArraysAlmostEqual( bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
                                       self.testGate)
 
 
@@ -72,24 +73,24 @@ class JamiolkowskiTestCase(unittest.TestCase):
 class TestJamiolkowskiMethods(JamiolkowskiTestCase):
 
     def test_std_basis(self):
-        cmb = basis.Basis('std', sum(self.stateSpaceDims))
+        cmb = Basis('std', sum(self.stateSpaceDims))
         self.checkBasis(cmb)
 
     def test_gm_basis(self):
-        cmb = basis.Basis('gm', sum(self.stateSpaceDims))
+        cmb = Basis('gm', sum(self.stateSpaceDims))
         self.checkBasis(cmb)
 
     def test_jamiolkowski_ops(self):
-        gm  = basis.Basis('gm', 2)
-        pp  = basis.Basis('pp', 2)
-        std = basis.Basis('std', 2)
+        gm  = Basis('gm', 2)
+        pp  = Basis('pp', 2)
+        std = Basis('std', 2)
         mxGM  = np.array([[1, 0, 0, 0],
                           [0, 0, 1, 0],
                           [0,-1, 0, 0],
                           [0, 0, 0, 1]], 'complex')
 
-        mxStd = basis.change_basis(mxGM, gm, std)
-        mxPP  = basis.change_basis(mxGM, gm, pp)
+        mxStd = bt.change_basis(mxGM, gm, std)
+        mxPP  = bt.change_basis(mxGM, gm, pp)
 
         choiStd = pygsti.jamiolkowski_iso(mxStd, std, std)
         choiStd2 = pygsti.jamiolkowski_iso(mxGM, gm, std)

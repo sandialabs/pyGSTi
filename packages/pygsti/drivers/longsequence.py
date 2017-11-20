@@ -20,6 +20,7 @@ from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
 from ..tools import compattools as _compat
+from ..baseobjs import DummyProfiler as _DummyProfiler
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -151,7 +152,7 @@ def do_model_test(modelGateFilenameOrSet,
 
     #Create profiler
     profile = advancedOptions.get('profile',1)
-    if profile == 0: profiler = _objs.DummyProfiler()
+    if profile == 0: profiler = _DummyProfiler()
     elif profile == 1: profiler = _objs.Profiler(comm,False)
     elif profile == 2: profiler = _objs.Profiler(comm,True)
     else: raise ValueError("Invalid value for 'profile' argument (%s)"%profile)
@@ -451,7 +452,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 
     profile = advancedOptions.get('profile',1)
 
-    if profile == 0: profiler = _objs.DummyProfiler()
+    if profile == 0: profiler = _DummyProfiler()
     elif profile == 1: profiler = _objs.Profiler(comm,False)
     elif profile == 2: profiler = _objs.Profiler(comm,True)
     else: raise ValueError("Invalid value for 'profile' argument (%s)"%profile)

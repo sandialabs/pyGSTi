@@ -12,7 +12,7 @@ import warnings as _warnings
 from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import GateSet as _GateSet
-from ..objects import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc
 

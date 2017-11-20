@@ -13,9 +13,9 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
-from ..tools import basis as _basis
+from ..tools import basistools as _bt
 from . import gaugegroup as _gaugegroup
-from .protectedarray import ProtectedArray as _ProtectedArray
+from ..baseobjs import ProtectedArray as _ProtectedArray
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -2474,7 +2474,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Assume gate in in the pauli-product basis for now, just for
         # simplicity.  I think everything should work fine in any other
         # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
+        mxBasisToStd = _bt.transform_matrix(mxBasis, "std", d)
         self.leftTrans  = _np.linalg.inv(mxBasisToStd)
         self.rightTrans = mxBasisToStd
 

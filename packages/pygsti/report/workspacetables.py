@@ -88,7 +88,7 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             gateset = gatesets[-1] #only show HSVec for last gateset
-            basisNm    = _objs.basis_longname(gateset.basis.name)
+            basisNm    = _tools.basis_longname(gateset.basis.name)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
             
@@ -294,7 +294,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            basisLongNm = _objs.basis_longname(gateset.basis.name)
+            basisLongNm = _tools.basis_longname(gateset.basis.name)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -435,7 +435,7 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    basisLongNm = _tools.basis_longname(gateset.basis.name)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -448,7 +448,7 @@ class ChoiTable(WorkspaceTable):
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
             elif disp == "boxplot":
                 for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    basisLongNm = _tools.basis_longname(gateset.basis.name)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:

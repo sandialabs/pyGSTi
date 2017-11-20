@@ -1,4 +1,4 @@
-from pygsti.objects.verbosityprinter import *
+from pygsti.baseobjs.verbosityprinter import *
 from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest, sys, os
 

@@ -18,6 +18,7 @@ from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
+from ..tools import basistools as _bt
 
 from . import gate as _gate
 from . import spamvec as _sv
@@ -26,9 +27,8 @@ from . import gaugegroup as _gg
 from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
 #from .gatemapcalc import GateMapCalc as _GateMapCalc
 
-from .verbosityprinter import VerbosityPrinter
-from ..tools.basis import Basis, change_basis
-from ..tools.gatetools import _mut
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs import Basis as _Basis
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -199,14 +199,14 @@ class GateSet(object):
                 '(or another method of basis construction, ' + \
                 'like gs.basis = Basis([(\'std\', 2), (\'gm\', 2)])) ' + \
                 'instead.'.format(name, dimension))
-        self.basis = Basis(name, dimension)
+        self.basis = _Basis(name, dimension)
 
     def reset_basis(self):
         """
         "Forgets" the basis name and dimension by setting
         these quantities to "unkown" and None, respectively.
         """
-        self.basis = Basis('unknown', None)
+        self.basis = _Basis('unknown', None)
 
     def get_prep_labels(self):
         """
@@ -676,7 +676,7 @@ class GateSet(object):
         dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _mut(i,j,dim)
+                unitMx = _bt.mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
                     gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl,EVec in self.effects.items():
@@ -1314,7 +1314,7 @@ class GateSet(object):
         #       - num_params % np == 0 (each param group has same size)
         #       - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
 
-        printer = VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.build_printer(verbosity, comm)
 
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
@@ -1567,7 +1567,7 @@ class GateSet(object):
             An evaluation tree object.
         """
         tm = _time.time()
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
         evalTree = self._calc().construct_evaltree()
         evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
 
@@ -2611,7 +2611,7 @@ class GateSet(object):
         newGateset._calcClass = self._calcClass
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
-            self.basis = Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
+            self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
         newGateset.basis = self.basis
         
         return newGateset
@@ -2859,7 +2859,7 @@ class GateSet(object):
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
             randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = change_basis(randGate, "std", self.basis)
+            randGate = _bt.change_basis(randGate, "std", self.basis)
 
             gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randGate,gate))

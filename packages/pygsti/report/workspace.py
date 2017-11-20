@@ -21,6 +21,7 @@ import subprocess  as _subprocess
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
+from ..baseobjs import CustomDigestError as _CustomDigestError
 
 from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge
@@ -68,7 +69,7 @@ def ws_custom_digest(md5, v):
     elif isinstance(v, SwitchValue):
         md5.update(v.base.tostring()) #don't recurse to parent switchboard
     else:
-        raise _objs.CustomDigestError()
+        raise _CustomDigestError()
 
 def randomID():
     """ Returns a random DOM ID """
@@ -170,7 +171,7 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        '''
+        ''' 
         if PY3:
             @_functools.wraps(cls.__init__)
             def factory_function(*args, **kwargs):

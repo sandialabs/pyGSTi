@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import pygsti
 
-from pygsti.tools.opttools import cache_by_hashed_args, timed_block
+from pygsti.tools import cache_by_hashed_args, timed_block
 
 from collections import defaultdict
 from functools import partial

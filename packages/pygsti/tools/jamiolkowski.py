@@ -7,8 +7,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-from . import basis as _basis
+from ..baseobjs.basis import basis_matrices as _basis_matrices
+from . import basistools as _bt
 from . import matrixtools as _mt
+
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP
@@ -82,13 +84,13 @@ def jamiolkowski_iso(gateMx, gateMxBasis='gm', choiMxBasis='gm'):
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-    gateMxBasis, choiMxBasis = _basis.build_basis_pair(gateMx, gateMxBasis, choiMxBasis)
+    gateMxBasis, choiMxBasis = _bt.build_basis_pair(gateMx, gateMxBasis, choiMxBasis)
     gateMx = _np.asarray(gateMx)
-    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
+    gateMxInStdBasis = _bt.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
     #expand gate matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'expand', gateMxBasis.std_equivalent(), gateMxBasis.expanded_std_equivalent())
+    gateMxInStdBasis = _bt.resize_std_mx(gateMxInStdBasis, 'expand', gateMxBasis.std_equivalent(), gateMxBasis.expanded_std_equivalent())
 
     N = gateMxInStdBasis.shape[0] #dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
@@ -99,7 +101,7 @@ def jamiolkowski_iso(gateMx, gateMxBasis='gm', choiMxBasis='gm'):
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Gate * B0), is not necessarily zero.
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim 
-    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
+    BVec = _basis_matrices(choiMxBasis, dmDim)
 
     assert len(BVec) == N, 'Expected {}, got {}'.format(len(BVec), N)  #make sure the number of basis matrices matches the dim of the gate given
 
@@ -142,12 +144,12 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='gm', gateMxBasis='gm'):
     numpy array
         gate matrix in the desired basis.
     """
-    gateMxBasis, choiMxBasis = _basis.build_basis_pair(choiMx, gateMxBasis, choiMxBasis)
+    gateMxBasis, choiMxBasis = _bt.build_basis_pair(choiMx, gateMxBasis, choiMxBasis)
     N = choiMx.shape[0] #dimension of full-basis (expanded) gate matrix
     dmDim = int(round(_np.sqrt(N))) #density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _basis.basis_matrices(choiMxBasis, dmDim)
+    BVec = _basis_matrices(choiMxBasis, dmDim)
     assert(len(BVec) == N) #make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
@@ -160,11 +162,11 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='gm', gateMxBasis='gm'):
             gateMxInStdBasis += choiMx_unnorm[i,j] * BiBj
 
     #project gate matrix so it acts only on the space given by the desired state space blocks
-    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'contract', 
+    gateMxInStdBasis = _bt.resize_std_mx(gateMxInStdBasis, 'contract', 
             gateMxBasis.expanded_std_equivalent(), gateMxBasis.std_equivalent())
 
     #transform gate matrix into appropriate basis
-    return _basis.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
+    return _bt.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
 
 
 def fast_jamiolkowski_iso_std(gateMx, gateMxBasis):
@@ -195,8 +197,8 @@ def fast_jamiolkowski_iso_std(gateMx, gateMxBasis):
 
     #first, get gate matrix into std basis
     gateMx = _np.asarray(gateMx)
-    gateMxBasis = _basis.build_basis_for_matrix(gateMx, gateMxBasis)
-    gateMxInStdBasis = _basis.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
+    gateMxBasis = _bt.build_basis_for_matrix(gateMx, gateMxBasis)
+    gateMxInStdBasis = _bt.change_basis(gateMx, gateMxBasis, gateMxBasis.std_equivalent())
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = gateMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
@@ -238,14 +240,14 @@ def fast_jamiolkowski_iso_std_inv(choiMx, gateMxBasis):
     gateMxInStdBasis = choiMx.reshape((N,N,N,N)) * N
     gateMxInStdBasis = _np.swapaxes(gateMxInStdBasis,1,2).flatten()
     gateMxInStdBasis = gateMxInStdBasis.reshape((N2,N2))
-    gateMxBasis = _basis.build_basis_for_matrix(gateMxInStdBasis, gateMxBasis)
+    gateMxBasis = _bt.build_basis_for_matrix(gateMxInStdBasis, gateMxBasis)
 
     #project gate matrix so it acts only on the space given by the desired state space blocks
-    gateMxInStdBasis = _basis.resize_std_mx(gateMxInStdBasis, 'contract', 
+    gateMxInStdBasis = _bt.resize_std_mx(gateMxInStdBasis, 'contract', 
             gateMxBasis.expanded_std_equivalent(), gateMxBasis.std_equivalent())
 
     #transform gate matrix into appropriate basis
-    return _basis.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
+    return _bt.change_basis(gateMxInStdBasis, gateMxBasis.std_equivalent(), gateMxBasis)
 
 
 def sum_of_negative_choi_evals(gateset, weights=None):

@@ -12,11 +12,10 @@ import collections  as _collections
 import numpy        as _np
 
 from collections    import namedtuple as _namedtuple
-from .parameterized import parameterized as _parameterized
-from .opttools      import cache_by_hashed_args
-
 import functools as _functools
 
+from .parameterized import parameterized as _parameterized
+from .opttools import cache_by_hashed_args
 
 DefaultBasisInfo = _namedtuple('DefaultBasisInfo', ['constructor', 'longname', 'real'])
 
@@ -42,14 +41,14 @@ sigmay = _np.array([[0,-1.0j],[1.0j,0]])
 sigmaz = _np.array([[1,0],[0,-1]])
 
 ##Matrix unit basis
-def _mut(i,j,N):
+def mut(i,j,N):
     mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
     return mx
-mxUnitVec = ( _mut(0,0,2), _mut(0,1,2), _mut(1,0,2), _mut(1,1,2) )
-mxUnitVec_2Q = ( _mut(0,0,4), _mut(0,1,4), _mut(0,2,4), _mut(0,3,4),
-                 _mut(1,0,4), _mut(1,1,4), _mut(1,2,4), _mut(1,3,4),
-                 _mut(2,0,4), _mut(2,1,4), _mut(2,2,4), _mut(2,3,4),
-                 _mut(3,0,4), _mut(3,1,4), _mut(3,2,4), _mut(3,3,4)  )
+mxUnitVec = ( mut(0,0,2), mut(0,1,2), mut(1,0,2), mut(1,1,2) )
+mxUnitVec_2Q = ( mut(0,0,4), mut(0,1,4), mut(0,2,4), mut(0,3,4),
+                 mut(1,0,4), mut(1,1,4), mut(1,2,4), mut(1,3,4),
+                 mut(2,0,4), mut(2,1,4), mut(2,2,4), mut(2,3,4),
+                 mut(3,0,4), mut(3,1,4), mut(3,2,4), mut(3,3,4)  )
 
 @basis_constructor('std', 'Matrix-unit', real=False)
 def std_matrices(dim):
@@ -88,7 +87,7 @@ def std_matrices(dim):
     mxList = []
     for i in range(dim):
         for j in range(dim):
-            mxList.append(_mut(i, j, dim))
+            mxList.append(mut(i, j, dim))
     assert len(mxList) == gateDim
     return mxList
 

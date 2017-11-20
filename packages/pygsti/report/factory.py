@@ -12,7 +12,7 @@ import time as _time
 import warnings as _warnings
 import zipfile as _zipfile
 
-from ..objects import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools   import timed_block as _timed_block
 
@@ -118,7 +118,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
 #    return True
 
 def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     
     if est.has_confidence_region_factory(gs_lbl, 'final'):
         crf = est.get_confidence_region_factory(gs_lbl,'final')
@@ -531,7 +531,7 @@ def create_standard_report(results, filename, title="auto",
         The workspace object used to create the report
     """
     tStart = _time.time()
-    printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
 
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
@@ -937,7 +937,7 @@ def create_report_notebook(results, filename, title="auto",
     -------
     None
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates","report_notebook")
     assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
@@ -1109,7 +1109,7 @@ def find_std_clifford_compilation(gateset, verbosity):
     dict or None
         The clifford compilation dictionary (if one can be found).
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     std_modules = ("std1Q_XY",
                    "std1Q_XYI",
                    "std1Q_XYZI",

@@ -688,13 +688,13 @@ SPAMLABEL 1 = rho remainder
             pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
 
     def test_protected_array(self):
-        pa1 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d') ) #nothing protected
-        pa2 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), 0 )
+        pa1 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d') ) #nothing protected
+        pa2 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), 0 )
             # protect first row (index 0 in 1st dimension) but no cols - so nothing protected
-        pa3 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,0) ) #protect (0,0) element
-        pa4 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,slice(None,None,None)) )
+        pa3 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,0) ) #protect (0,0) element
+        pa4 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,slice(None,None,None)) )
            #protect first row
-        pa5 = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,[0,1]) )
+        pa5 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,[0,1]) )
            #protect (0,0) and (0,1) elements
 
         s1 = pa5[0,:] #slice s1 should have first two elements protected:
@@ -706,10 +706,10 @@ SPAMLABEL 1 = rho remainder
             pa5["str"] = 4 #index invalid type
 
         with self.assertRaises(IndexError):
-            pa_bad = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,10) )
+            pa_bad = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,10) )
               #index out of range
         with self.assertRaises(TypeError):
-            pa_bad = pygsti.objects.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,"str") )
+            pa_bad = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d'), (0,"str") )
               #invalid index type
 
 

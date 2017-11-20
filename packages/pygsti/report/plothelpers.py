@@ -12,7 +12,7 @@ import warnings          as _warnings
 from .. import tools     as _tools
 from .. import objects   as _objs
 
-from ..objects import smart_cached
+from ..baseobjs import smart_cached
 
 
 def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,

@@ -16,8 +16,10 @@ import time           as _time
 from .. import optimize     as _opt
 from .. import tools        as _tools
 from .. import objects      as _objs
+from .. import baseobjs     as _baseobjs
 from .. import construction as _pc
-_dummy_profiler = _objs.profiler.DummyProfiler()
+from ..baseobjs import DummyProfiler as _DummyProfiler
+_dummy_profiler = _DummyProfiler()
 
 CUSTOMLM = True
 FLOATSIZE = 8 #TODO: better way?
@@ -1058,7 +1060,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #Create evaluation tree (split into subtrees if needed)
     tm = _time.time()
     if (memLimit is not None):
-        curMem = _objs.profiler._get_max_mem_usage(comm)
+        curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
         printer.log("Memory limit = %.2fGB" % (memLimit*C))
@@ -2274,7 +2276,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     #Get evaluation tree (split into subtrees if needed)
     if (memLimit is not None):
-        curMem = _objs.profiler._get_max_mem_usage(comm)
+        curMem = _baseobjs.profiler._get_max_mem_usage(comm)
         gthrMem = int(0.1*(memLimit-persistentMem))
         mlim = memLimit-persistentMem-gthrMem-curMem
         printer.log("Memory: limit = %.2fGB" % (memLimit*C) + 

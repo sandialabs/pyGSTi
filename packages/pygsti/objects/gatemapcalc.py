@@ -13,7 +13,7 @@ import time as _time
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
-from .profiler import DummyProfiler as _DummyProfiler
+from ..baseobjs import DummyProfiler as _DummyProfiler
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
 

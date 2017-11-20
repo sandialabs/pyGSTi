@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import uuid  as _uuid
 from ..tools import compattools as _compat
+from ..baseobjs import GateStringParser as _GateStringParser
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -56,9 +57,10 @@ class GateString(object):
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
 
         if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
-            from ..io import stdinput as _stdinput
-            parser = _stdinput.StdInputParser()
-            chkTuple = parser.parse_gatestring( stringRepresentation, lookup)
+            gsparser = _GateStringParser()
+            gsparser.lookup = lookup
+            chkTuple = gsparser.parse(stringRepresentation)
+
             if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
             elif tuple(tupleOfGateLabels) != chkTuple:
                 raise ValueError("Error intializing GateString: " +

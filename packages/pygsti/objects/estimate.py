@@ -11,7 +11,7 @@ import collections as _collections
 import warnings    as _warnings
 import copy        as _copy
 
-from .verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from .. import tools as _tools
 from ..tools import compattools as _compat
 from .confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
