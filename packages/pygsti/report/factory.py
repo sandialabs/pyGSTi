@@ -387,7 +387,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
 def create_general_report(results, filename, title="auto",
                           confidenceLevel=None,                          
-                          linlogPercentile=5, errgen_type="logTiG",
+                          linlogPercentile=5, errgen_type="logGTi",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False, 
@@ -535,7 +535,7 @@ def create_standard_report(results, filename, title="auto",
 
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
-    errgen_type = advancedOptions.get('error generator type', "logTiG")
+    errgen_type = advancedOptions.get('error generator type', "logGTi")
     nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
     precision = advancedOptions.get('precision', None)
     cachefile = advancedOptions.get('cachefile',None)

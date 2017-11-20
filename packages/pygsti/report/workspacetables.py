@@ -811,7 +811,7 @@ class ErrgenTable(WorkspaceTable):
         as their projections onto spaces of standard generators """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S","A"), display_as="boxes",
-                 genType="logTiG"):
+                 genType="logGTi"):
                  
         """
         Create a table listing the error generators obtained by

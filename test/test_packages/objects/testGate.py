@@ -119,7 +119,7 @@ class GateTestCase(BaseTestCase):
             TPconstrainedAndUnital=False) )
         
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
-            mx,unitaryPrefactor=None,
+            mx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
