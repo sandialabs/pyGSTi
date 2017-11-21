@@ -2054,7 +2054,7 @@ class MetadataTable(WorkspaceTable):
                              customHeader={'latex': latex_head} )
         
         for key in sorted(list(params_dict.keys())):
-            if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
+            if key in ['L,germ tuple base string dict', 'weights', 'profiler']: continue #skip these
             if key == 'gaugeOptParams':
                 if isinstance(params_dict[key],dict):
                     val = params_dict[key].copy()
