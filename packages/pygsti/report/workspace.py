@@ -2446,7 +2446,7 @@ class WorkspacePlot(WorkspaceOutput):
                 else:
                     #use auto-sizing (fluid layout)
                     fig_dict = _plotly_ex.plot_ex(
-                        fig['plotlyfig'], show_link=False, resizable=resizable,
+                        fig.plotlyfig, show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID)
@@ -2504,11 +2504,11 @@ class WorkspacePlot(WorkspaceOutput):
                     _plotly_to_matplotlib(fig, filename)
     
                     W,H = maxW,maxH
-                    if 'mpl_fig_size' in fig: #added by plotly_to_matplotlib call above
-                        figW,figH = fig['mpl_fig_size'] #gives the "normal size" of the figure
+                    if 'mpl_fig_size' in fig.metadata: #added by plotly_to_matplotlib call above
+                        figW,figH = fig.metadata['mpl_fig_size'] #gives the "normal size" of the figure
                         W = min(W, figW)
                         W = min(H, figH)
-                        del fig['mpl_fig_size']
+                        del fig.metadata['mpl_fig_size']
     
                     includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
                                     (W,H,filename))
@@ -2528,10 +2528,10 @@ class WorkspacePlot(WorkspaceOutput):
                 if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
                 
-                if 'pythonValue' in fig:
-                    data = {'value': fig['pythonValue'] }
-                    if "pythonErrorBar" in fig:
-                        data['errorbar'] = fig['pythonErrorBar']
+                if 'pythonValue' in fig.metadata:
+                    data = {'value': fig.pythonvalue }
+                    if "pythonErrorBar" in fig.metadata:
+                        data['errorbar'] = fig.metadata['pythonErrorBar']
                 else:
                     data = {'value': "Opaque Figure"}
 
