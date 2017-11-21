@@ -271,6 +271,7 @@ class Workspace(object):
         self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
         self.MetadataTable = makefactory(_wt.MetadataTable)
         self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
+        self.ProfilerTable = makefactory(_wt.ProfilerTable)
         self.ExampleTable = makefactory(_wt.ExampleTable)
 
         #Plots
@@ -2979,14 +2980,18 @@ class WorkspaceText(WorkspaceOutput):
                                  and self.options.get('render_math',True))
 
         if text_html is not None:
-            init_text_js = ('el = $("#{textid}");\n'
-                            'if(el.hasClass("pygsti-wsoutput-group")) {{\n'
-                            '  el.children("div.single_switched_value").each( function(i,el){{\n'
-                            '    CollapsibleLists.applyTo( el.find("ul").first()[0] );\n'
-                            '  }});\n'
-                            '}} else if(el.hasClass("single_switched_value")){{\n'
-                            '  CollapsibleLists.applyTo(el[0]);\n'
-                            '}}\n').format(textid=textID)
+            init_text_js = (
+                'el = $("#{textid}");\n'
+                'if(el.hasClass("pygsti-wsoutput-group")) {{\n'
+                '  el.children("div.single_switched_value").each( function(i,el){{\n'
+                '    CollapsibleLists.applyTo( el.find("ul").first()[0] );\n'
+                '  }});\n'
+                '}} else if(el.hasClass("single_switched_value")){{\n'
+                '  CollapsibleLists.applyTo(el[0]);\n'
+                '}}\n'
+                'caption = el.closest("figure").children("figcaption:first");\n'
+                'caption.css("width", Math.round(el.width()*0.9) + "px");\n'
+            ).format(textid=textID)
         else:
             init_text_js = "" #no per-div init needed
             

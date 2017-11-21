@@ -6,14 +6,23 @@
           %(metadataTable)s
 	</figure>
 
-	<figure id="softwareEnvTable" class='tbl'>
-	  <figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> This table describes the software environment of the machine used to generate this report.  It may not describe the machine used to perform the core GST gate set estimation.</span></figcaption>
-	  %(softwareEnvTable)s
+	<figure id="profilerTable" class='tbl'>
+          <figcaption><span class="captiontitle">Profiler timing.</span> <span class="captiondetail"> Timing information from pyGSTi's built-in lightweight profiler (if it was enabled).</span></figcaption>
+          %(profilerTable)s
 	</figure>
 
 	<figure id="stdoutBlock" class='txtblk'>
 	  <figcaption><span class="captiontitle">Standard output.</span> <span class="captiondetail"> The standard output text, along with warnings and errors, that was collected (recorded) when GST was run to create the results reported here.</span></figcaption>
 	  %(stdoutBlock)s
 	</figure>
+
+	<figure id="softwareEnvTable" class='tbl'>
+	  <figcaption><span class="captiontitle">Listing of the software environment.</span> <span class="captiondetail"> This table describes the software environment of the machine used to generate this report.  It may not describe the machine used to perform the core GST gate set estimation.</span></figcaption>
+	  %(softwareEnvTable)s
+	</figure>
+
+
+
+
 
 	

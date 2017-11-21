@@ -2189,6 +2189,50 @@ class SoftwareEnvTable(WorkspaceTable):
         return table
 
 
+class ProfilerTable(WorkspaceTable):
+    """ Table of profiler timing information """
+    def __init__(self, ws, profiler, sortBy="time"):
+        """
+        Create a table of profiler timing information.
+    
+        Parameters
+        ----------
+        profiler : Profiler
+            The profiler object to extract timings from.
+
+        sortBy : {"time", "name"}
+            What the timer values should be sorted by.
+        """
+        super(ProfilerTable,self).__init__(ws, self._create, profiler, sortBy)
+    
+    def _create(self, profiler, sortBy):
+    
+        colHeadings = ('Label','Time (sec)')
+        formatters = ('Bold','Bold')
+    
+        #custom latex header for maximum width imposed on 2nd col
+        latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+        latex_head += "\\textbf{Label} & \\textbf{Time} (sec) \\\\ \hline\n"
+        table = _ReportTable(colHeadings, formatters,
+                             customHeader={'latex': latex_head} )
+
+        if profiler is not None:
+            if sortBy == "name":
+                timerNames = sorted(list(profiler.timers.keys()))
+            elif sortBy == "time":
+                timerNames = sorted(list(profiler.timers.keys()),
+                                    key=lambda x: -profiler.timers[x])
+            else:
+                raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+        
+            for nm in timerNames:
+                table.addrow((nm, profiler.timers[nm]), (None,None))
+                
+        table.finish()
+        return table
+
+
+
 class ExampleTable(WorkspaceTable):
     """ Table used just as an example of what tables can do/look like for use
         within the "Help" section of reports. """

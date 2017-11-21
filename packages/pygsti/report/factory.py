@@ -250,6 +250,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("mpc_modvi",(0,1))
     switchBd.add("clifford_compilation",(0,1))
     switchBd.add("meta_stdout",(0,1))
+    switchBd.add("profiler",(0,1))
 
     switchBd.add("gsGIRep",(0,1))
     switchBd.add("gsGIRepEP",(0,1))
@@ -312,6 +313,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                 switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
                     est.gatesets['target'],printer)
 
+            switchBd.profiler[d,i] = est_modvi.parameters.get('profiler',None)
             switchBd.meta_stdout[d,i] = est_modvi.meta.get('stdout',[('LOG',1,"No standard output recorded")])
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
@@ -691,6 +693,7 @@ def create_standard_report(results, filename, title="auto",
                                                            "boxes", errgen_type)
     addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
+    addqty(2,'profilerTable', ws.ProfilerTable, switchBd.profiler)
     addqty(2,'softwareEnvTable', ws.SoftwareEnvTable)
     addqty(A,'exampleTable', ws.ExampleTable)
     qtys['exampleTable'].set_render_options(click_to_display=True)

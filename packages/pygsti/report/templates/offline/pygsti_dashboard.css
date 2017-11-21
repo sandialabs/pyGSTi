@@ -164,6 +164,12 @@ figure.tbl {
 figure.tbl > figcaption:before {
   content: "Table " counter(table) ". ";
 }
+figure.txtblk {
+  counter-increment: textblock;
+}
+figure.txtblk > figcaption:before {
+  content: "Listing " counter(textblock) ". ";
+}
 .footnote {
   counter-increment: footnote;
 }
