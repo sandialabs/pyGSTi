@@ -15,7 +15,7 @@ from ... import tools as _tls
 from scipy.linalg import sqrtm
 import itertools as _ittls
 
-# ---- Fitting functions ----#
+# ---- Fitting functions and related ----#
 def standard_fit_function(m,A,B,p):
     """
     The standard RB decay fitting function P_m = A + B * p^m. This is 
@@ -40,7 +40,7 @@ def first_order_fit_function(m,A,B,C,p):
     "Scalable and Robust Randomized Benchmarking of Quantum Processes" 
     (http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504).
     This is a simplified verion of the 'first order' in that paper (see Eq. 3),
-    as the model therein has 1 to many parameters for fitting. The conversion is
+    as the model therein has 1 too many parameters for fitting. The conversion is
     A = B_1
     B = A_1 - C_1(q/p^(-2) - 1)
     C = C_1(q/p^(-2) - 1)
@@ -60,7 +60,6 @@ def first_order_fit_function(m,A,B,C,p):
     """
     return A+(B+C*m)*p**m
 
-# ----- general gate and gateset tools ---- #
 def p_to_r(p,d=2):
     """
     Converts an RB decay rate (p) to the RB number (r), using the relation
@@ -93,13 +92,14 @@ def r_to_p(r,d=2):
     p = 1 - d * r / (d - 1)
     return p
 
+# ----- general gate and gateset tools ---- #
 def average_gate_infidelity(A,B,d=None,mxBasis="gm"):
     """
     Computes the average gate infidelity (AGI) between an actual and a target
-    gate. This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2)).
-    Calculated via the relationship between process fidelity (F_p) and average gate
-    fidelity (F_g): F_g = (d * F_p + 1)/(1 + d) given in
-    Phys. Lett. A 303 (2002) 249-252 (F_p is called entanglement Fidelity therein).
+    gate. This quantity is defined in, e.g., arXiv:1702.01853 (see Eq 2).
+    Calculated via the relationship between entanglement fidelity (F_p) and average 
+    gate fidelity (F_g): F_g = (d * F_p + 1)/(1 + d) given in Phys. Lett. A 303 
+    (2002) 249-252.
 
     Parameters
     ----------
@@ -126,16 +126,16 @@ def average_gate_infidelity(A,B,d=None,mxBasis="gm"):
     AGI = 1 - AGF
     return float(AGI)
 
-#### DONE + TESTED
 def unitarity(A,mxBasis="gm",d=2):
     """
     Returns the unitarity of a channel calculated using the equation
     u(A) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1), where A_u is the unital 
-    submatrix of A. This is the matrix obtained when the top row, and left 
-    hand column is removed from A when A is written in any basis for which
-    the first element is the normalized identity (so the pp or gm bases).    
-    This formula for unitarity is given in Prop 1 of ``Estimating the Coherence 
-    of noise'' by Wallman et al.
+    submatrix of A and d is the dimension. The unital submatrix of A is the 
+    matrix obtained when the top row, and left hand column is removed from A,
+    when A is written in any basis for which the first element is the 
+    normalized identity (e.g., the pp or gm bases). This formula for unitarity 
+    is given in Prop 1 of ``Estimating the Coherence of noise'' by Wallman et al, 
+    which also defines unitarity.
     
     Parameters
     ----------
@@ -169,7 +169,7 @@ def unitarity(A,mxBasis="gm",d=2):
 def average_gateset_infidelity(gs_actual,gs_target,mxBasis=None,d=None):
     """
     Computes the average gateset infidelity (AGsI) between noisy gates and target gates.
-    This quantity is defined in, e.g., arXiv:1702.01853 (see Eq (2) and below), and is 
+    This quantity is defined in, e.g., arXiv:1702.01853 (see Eq 2 and below), and is 
     the mean of the average gate infidelities of the actual to the target gates.
     
     Parameters
@@ -246,8 +246,8 @@ def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond',
     delta_avg = avg_i|| E_i - avg_i(E_i) ||, where E_i are the error maps, and
     the norm is either the diamond norm or the 1-to-1 norm. This quantity
     is defined in Magesan et al PRA 85 042311 2012, and is used to calculate
-    The the systematic error of the zeroth or first order theories of Magesan 
-    et al.
+    the systematic error of the zeroth or first order theories of Magesan 
+    et al, and also the theory in arXiv:1702.01853.
     
     Parameters
     ----------
@@ -295,21 +295,35 @@ def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond',
     return delta_avg
 
 # ----- Predicting the RB parameters and curve from a gateset ---- #
-def predicted_RB_number(gs,gs_target,d=None):
+def predicted_RB_number(gs,gs_target,weights=None,d=None):
     """
     Predicts the RB number (RB error rate) from a gateset, using the
-    essentially exact formula from arXiv:1702.01853. The gateset should
-    be trace preserving.
+    asymptotically exact formula from arXiv:1702.01853, which is valid
+    for various types of RB, including standard Clifford RB. The gateset 
+    should be trace preserving and completely positive in some representation,
+    but the particular representation of the gateset used is irrelevant as
+    the predicted RB error rate is a gauge-invariant quantity. The function
+    is likely reliable when complete positivity is slightly violated, although
+    the theory on which it is based assumes complete positivity.
     
     Parameters
     ----------
     gs : GateSet
         The gateset to calculate the RB number of (e.g., imperfect Cliffords).
-        Note that this is not necessarily the physical gateset -- it is the 
-        gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
+        Note that this is not necessarily the set of physical primitives -- it is
+        the  gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
 
     gs_target: GateSet
         The target gateset.
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
     
     d : int, optional
         The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
@@ -323,28 +337,34 @@ def predicted_RB_number(gs,gs_target,d=None):
         
     """
     if d is None: d = int(round(_np.sqrt(gs.dim)))
-    r_predicted = p_to_r(predicted_RB_decay_parameter(gs,gs_target,d))
+    r_predicted = p_to_r(predicted_RB_decay_parameter(gs,gs_target,weights=weights),d=d)
     return r_predicted
 
-def predicted_RB_decay_parameter(gs,gs_target,d=2):
+def predicted_RB_decay_parameter(gs,gs_target,weights=None):
     """
-    Computes the second largest eigenvalue of the 'L matrix', which
-    corrsponds to the RB decay rate for trace-preserving gates and
-    standard Clifford RB. This also acurately predicts the RB decay
-    parameter for a range of other variants of basic RB.
+    Computes the second largest eigenvalue of the 'L matrix' (see the L_matrix
+    function), which corresponds to the RB decay rate for trace preserving and 
+    completely positive gates and standard Clifford RB. This also acurately 
+    predicts the RB decay parameter for a range of other variants of basic RB.
     
     Parameters
     ----------
     gs : Gateset
-        The actual gateset. This need not form a group -- it is entirely
-        arbitrary. However, for predicting standard Clifford RB, it should
-        be the noisy Clifford gateset (not a "primitives" gateset).
+        The actual gateset. Note that this is not necessarily the set of physical 
+        primitives -- it is the  gateset randomly sampled over, e.g., the Cliffords, 
+        in the RB protocol.
   
     gs_target : Gateset
         The target gateset corresponding to gs.
-    
-    d : int, optional
-        The dimension.
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
 
     Returns
     -------
@@ -353,22 +373,26 @@ def predicted_RB_decay_parameter(gs,gs_target,d=2):
         The second largest eigenvalue of L. This is the RB decay parameter
         for various types of RB (see above).
     """
-    L = L_matrix(gs,gs_target)
+    L = L_matrix(gs,gs_target,weights=weights)
     E = _np.absolute(_np.linalg.eigvals(L))
     E = _np.flipud(_np.sort(E))
     if abs(E[0] - 1) > 10**(-12):
         _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
                        "Gateset is not (approximately) trace-preserving.")
-    if abs(E[1]) - abs(E[2]) < 10**(-1):
-        _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
-                       "There is more than one significant exponential in RB decay.")
+    #
+    # The warning commented out below is not very sensible. It will be replaced at some
+    # point by a more subtle method for checking that the relevant RB theory holds.
+    #
+    #if abs(E[1]) - abs(E[2]) < 10**(-1):
+    #    _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
+    #                   "There is more than one significant exponential in RB decay.")
     if E[1].imag > 10**(-10):
         _warnings.warn("Predicted RB decay parameter / error rate may be unreliable:\n" +
                        "The decay constant has a significant imaginary component.")
     p = E[1]
     return p
 
-def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
+def RB_gauge(gs,gs_target,weights=None,mxBasis=None,eigenvector_weighting=1.0):
     """
     Computes the gauge transformation required so that, when the gateset is transformed
     via this gauge-transformation, the RB number (as predicted by the function 
@@ -379,24 +403,33 @@ def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     Parameters
     ----------
     gs : Gateset
-        The actual gateset. This need not form a group -- it is entirely
-        arbitrary. However, for predicting standard Clifford RB, it should
-        be the noisy Clifford gateset (not a "primitives" gateset).
+        The gateset to calculate the RB number of (e.g., imperfect Cliffords).
+        Note that this is not necessarily the set of physical primitives -- it is
+        the  gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
   
     gs_target : Gateset
         The target gateset corresponding to gs.
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
                 
     mxBasis : {"std","gm","pp"}, optional
         The basis of the gatesets. If None, the basis is obtained from
         the gateset.
         
-    weighting : float, optional
+    eigenvector_weighting : float, optional
         Must be non-zero. A weighting on the eigenvector with eigenvalue that
-        is the RB decay parameter, in the sum of the this eigenvector and the
-        eigenvector with eigenvalue of 1 that defines the l_operator. The value
-        of this factor should not change whether this l_operator transforms into
-        a gauge in which r = AGsI, but it *might* impact on other properties of the
-        gates in that gauge (certainly in some cases its value is entirely irrelevant).
+        is the RB decay parameter, in the sum of this eigenvector and the
+        eigenvector with eigenvalue of 1 that defines the returned matrix `l_operator`. 
+        The value of this factor does not change whether this `l_operator` transforms into
+        a gauge in which r = AGsI, but it may impact on other properties of the
+        gates in that gauge (note that it is irrelevant if the gates are unital).
         
     Returns
     -------    
@@ -404,7 +437,7 @@ def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
         The matrix defining the gauge-transformation.
         
     """                    
-    gam, vecs = _np.linalg.eig(L_matrix(gs,gs_target))
+    gam, vecs = _np.linalg.eig(L_matrix(gs,gs_target,weights=weights))
     absgam = abs(gam)
     index_max = _np.argmax(absgam)
     gam_max = gam[index_max]
@@ -423,14 +456,17 @@ def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     if decay_constant.imag > 10**(-12):
         _warnings.warn("Decay constants have a significant imaginary component.\n" +
                        "RB theory may not apply")
-        
-    absgam[index_2ndmax] = 0.0
-    index_3rdmax = _np.argmax(absgam)
-    if abs(decay_constant) - abs(absgam[index_3rdmax]) < 10**(-1):
-        _warnings.warn("There is more than one significant exponential in RB decay.\n" + 
-                       "RB theory may not apply")
+    #
+    # The warning commented out below is not very sensible. It will be replaced at some
+    # point by a more subtle method for checking that the relevant RB theory holds.
+    #    
+    #absgam[index_2ndmax] = 0.0
+    #index_3rdmax = _np.argmax(absgam)
+    #if abs(decay_constant) - abs(absgam[index_3rdmax]) < 10**(-1):
+    #    _warnings.warn("There is more than one significant exponential in RB decay.\n" + 
+    #                   "RB theory may not apply")
 
-    vec_l_operator = vecs[:,index_max] + weighting*vecs[:,index_2ndmax]
+    vec_l_operator = vecs[:,index_max] + eigenvector_weighting*vecs[:,index_2ndmax]
     
     if mxBasis is None:
         mxBasis = gs.get_basis_name()
@@ -445,28 +481,37 @@ def RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
     
     return l_operator
 
-def transform_to_RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
+def transform_to_RB_gauge(gs,gs_target,weights=None,mxBasis=None,eigenvector_weighting=1.0):
     """
-    Transforms a GateSet into the "RB gauge" (see above), as introduced in  
-    arXiv:1702.01853. This gauge is a function of both the gateset and its 
-    target (both of which may be input in any gauge, for the purposes of obtaining 
-    r = average gateset infidelity between the output GateSet and gs_target).
+    Transforms a GateSet into the "RB gauge" (see the `RB_gauge` function), as 
+    introduced in  arXiv:1702.01853. This gauge is a function of both the gateset 
+    and its target (both of which may be input in any gauge, for the purposes of 
+    obtaining "r = average gateset infidelity" between the output GateSet and gs_target).
     
     Parameters
     ----------
     gs : Gateset
-        The actual gateset. This need not form a group -- it is entirely
-        arbitrary. However, for predicting standard Clifford RB, it should
-        be the noisy Clifford gateset (not a "primitives" gateset).
+        The gateset to calculate the RB number of (e.g., imperfect Cliffords).
+        Note that this is not necessarily the set of physical primitives -- it is
+        the  gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
   
     gs_target : Gateset
         The target gateset corresponding to gs.
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
                                 
     mxBasis : {"std","gm","pp"}, optional
         The basis of the gatesets. If None, the basis is obtained from
         the gateset.
         
-    weighting : float, optional
+    eigenvector_weighting : float, optional
         Must be non-zero. A weighting on the eigenvector with eigenvalue that
         is the RB decay parameter, in the sum of the this eigenvector and the
         eigenvector with eigenvalue of 1 that defines the l_operator. The value
@@ -480,7 +525,8 @@ def transform_to_RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
         The gateset `gs` transformed into the "RB gauge".
         
     """            
-    l = RB_gauge(gs,gs_target,mxBasis=mxBasis,weighting=weighting)
+    l = RB_gauge(gs,gs_target,weights=weights,mxBasis=mxBasis,
+                 eigenvector_weighting=eigenvector_weighting)
     gs_in_RB_gauge = gs.copy()
     for gate in gs.gates.keys():
         gs_in_RB_gauge.gates[gate] = _np.dot(l,_np.dot(gs.gates[gate],_np.linalg.inv(l)))
@@ -491,35 +537,55 @@ def transform_to_RB_gauge(gs,gs_target,mxBasis=None,weighting=1.0):
         
     return gs_in_RB_gauge
 
-def L_matrix(gs,gs_target):
+def L_matrix(gs,gs_target,weights=None):
     """
     Constructs the 'L' linear operator on superoperators, from arXiv:1702.01853,
-    represented as a matrix.
+    represented as a matrix via the "stack" operation. This eigenvalues of
+    this matrix describe the decay constant (or constants) in an RB decay
+    curve for an RB protocol whereby random elements of the provided gateset
+    are sampled according to the `weights` probability distribution over the
+    gateset.
     
     Parameters
     ----------
     gs : Gateset
-        The actual gateset. This need not form a group -- it is entirely
-        arbitrary. However, for predicting standard Clifford RB, it should
-        be the noisy Clifford gateset (not a "primitives" gateset).
+        The gateset to calculate the RB number of (e.g., imperfect Cliffords).
+        Note that this is not necessarily the set of physical primitives -- it is
+        the  gateset randomly sampled over, e.g., the Cliffords, in the RB protocol.
   
     gs_target : Gateset
         The target gateset corresponding to gs.
-
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
+        
     Returns
     -------
     L : float
-        The L operator from arXiv:1702.01853, represented as a matrix using
-        the 'stacking' convention.  
+        A weighted version of the L operator from arXiv:1702.01853, represented 
+        as a matrix using the 'stacking' convention.  
         
-    """  
+    """
+    if weights is None:
+        weights = {}
+        for key in gs_target.gates.keys():
+            weights[key] = 1.
+            
+    normalizer = _np.sum(_np.array([weights[key] for key in gs_target.gates.keys()]))
+            
     dim = len(gs_target.gates.keys())
-    L_matrix = (1 / dim) * _np.sum(_np.kron(gs.gates[key].T,
+    L_matrix = (1 / normalizer) * _np.sum(weights[key]*_np.kron(gs.gates[key].T,
                  _np.linalg.inv(gs_target.gates[key])) for key in gs_target.gates.keys())
     return L_matrix
 
-def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,
-                                          group_to_gateset=None,d=2):
+def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,group_to_gateset=None,
+                                          weights=None,d=None):
     """
     Constructs the second largest eigenvalue of the 'R' matrix (see below), which
     predicts the RB decay parameter for trace-preserving gates.
@@ -550,9 +616,18 @@ def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,
         of gs. Only used if subset_sampling is not None. If subset_sampling is 
         not None and the gs and group elements have the same labels, this dictionary
         is not required. Otherwise it is necessary.
+        
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs 
+        and the values are the unnormalized probabilities to apply each gate at 
+        each stage of the RB protocol. If not None, the values in weights must all
+        be positive or zero, and they must not all be zero (because, when divided by 
+        their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
       
     d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
     
     Returns
     -------
@@ -561,13 +636,16 @@ def R_matrix_predicted_RB_decay_parameter(gs,group,subset_sampling=None,
         RB with trace-preserving gates, and in a range of other circumstances.
         
     """ 
-    R = R_matrix(gs,group,subset_sampling=subset_sampling,group_to_gateset=group_to_gateset,d=d)
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
+    R = R_matrix(gs,group,subset_sampling=subset_sampling,
+                 group_to_gateset=group_to_gateset,weights=weights,d=d)
     E = _np.absolute(_np.linalg.eigvals(R))
     E = _np.flipud(_np.sort(E))
     p = E[1]
     return p
 
-def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
+def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,
+             weights=None,d=None):
     """
     Constructs the 'R' matrix of arXiv:1702.01853
     This matrix described the exact behaviour of the average surival
@@ -601,27 +679,48 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
         not None and the gs and group elements have the same labels, this dictionary
         is not required. Otherwise it is necessary.
       
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs if
+        subset_sampling is None, the keys are the gates in subset_sampling if
+        subset_sampling is not None, and the values are the unnormalized probabilities 
+        to apply each gate at each stage of the RB protocol. If not None, the values 
+        in weights must all be positive or zero, and they must not all be zero (because, 
+        when divided by their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
+      
     d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
     
     Returns
     -------
     R : float
-        The R matrix from arXiv:1702.01853 
+        A weighted version of the R matrix from arXiv:1702.01853. 
         
-    """    
+    """ 
+    #
+    # This function is currently more complicated than necessary (subset_sampling could
+    # be removed, as this can be achieved via the weights dict). However, as the
+    # function is currently working this has been left for now.
+    #
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
     group_dim = len(group)
     R_dim = group_dim * d**2
     R = _np.zeros([R_dim,R_dim],float)
     
     if subset_sampling is None:
+        if weights is None:
+            weights = {}
+            for key in gs.gates.keys():
+                weights[key] = 1.
+        normalizer = _np.sum(_np.array([weights[key] for key in gs.gates.keys()]))
         for i in range(0,group_dim):
             for j in range(0,group_dim):
                 label_itoj = group.product([group.get_inv(i),j])
                 for k in range (0,d**2):
                     for l in range(0,d**2):
-                        R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
-        R = R/group_dim
+                        R[j*d**2+k,i*d**2+l] = weights[group.labels[label_itoj]]*gs.gates[group.labels[label_itoj]][k,l]
+        R = R/normalizer
                 
     if subset_sampling is not None:
         if group_to_gateset is None:
@@ -629,6 +728,11 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                 assert(element in gs.gates.keys() and element in group.labels),  "The subset\
                    of gates should be elements of the gateset and group if group_to_gateset\
                    not specificed."
+            if weights is None:
+                weights = {}
+                for key in subset_sampling:
+                    weights[key] = 1.
+            normalizer = _np.sum(_np.array([weights[key] for key in subset_sampling]))
                 
             for i in range(0,group_dim):
                 for j in range(0,group_dim):
@@ -636,14 +740,20 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                     if group.labels[label_itoj] in subset_sampling:
                         for k in range (0,d**2):
                             for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = gs.gates[group.labels[label_itoj]][k,l]
-            R = R/len(subset_sampling)
+                                R[j*d**2+k,i*d**2+l] = weights[group.labels[label_itoj]]*gs.gates[group.labels[label_itoj]][k,l]
+            R = R/normalizer
         
         if group_to_gateset is not None:
             for key in group_to_gateset.keys():
                 assert(key in group.labels), "group_to_gateset dictionary invalid!"
                 assert(group_to_gateset[key] in gs.gates.keys()), "group_to_gateset \
                 dictionary invalid!"
+                
+            if weights is None:
+                weights = {}
+                for key in subset_sampling:
+                    weights[key] = 1.
+            normalizer = _np.sum(_np.array([weights[key] for key in subset_sampling]))
                     
             for i in range(0,group_dim):
                 for j in range(0,group_dim):
@@ -651,18 +761,22 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,d=2):
                     if group.labels[label_itoj] in group_to_gateset.keys():
                         for k in range (0,d**2):
                             for l in range(0,d**2):
-                                R[j*d**2+k,i*d**2+l] = gs.gates[group_to_gateset[
+                                R[j*d**2+k,i*d**2+l] = weights[group_to_gateset[
+                                        group.labels[label_itoj]]]*gs.gates[group_to_gateset[
                                         group.labels[label_itoj]]][k,l]
-            R = R/len(subset_sampling)
+            R = R/normalizer
             
     return R
 
-def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
-                  subset_sampling=None,group_to_gateset=None,
-                  fixed_length_each_m = False, compilation=None):
+def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_spamlabel='0',
+                  subset_sampling=None,group_to_gateset=None,weights=None,
+                  d=None, compilation=None, twirled=False):
     """
-    Calculates the exact RB average surival probablilites (ASP), using the 
-    formula given in Eq (2) and the surrounding text of arXiv:1702.01853
+    Calculates the exact RB average surival probablilites (ASP), using some
+    simple generalizations of the formula given in Eq (2) and the surrounding 
+    text of arXiv:1702.01853. This formula does not scale well with group size
+    and qubit number, and for the Clifford group it is likely only practical for 
+    a single qubit.
     
     Parameters
     ----------
@@ -688,9 +802,6 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
         
     m_step : int, optional
         step size between sequence lengths
-                     
-    d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
        
     success_spamlabel : str, optional
         Specifies the SPAM label associated with surival
@@ -707,26 +818,30 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
         of gs. Only used if subset_sampling is not None. If subset_sampling is 
         not None and the gs and group elements have the same labels, this dictionary
         is not required. Otherwise it is necessary.
-        
-    fixed_length_each_m : bool, optional
-        This does not do anything unless subset_sampling is not None. If
-        subset_sampling is not None, then it specifies the subset of the
-        group elements that are sampled randomly in RB sequences. In this
-        situation there are two different natural ways to enforce that a
-        sequence of m random gates compiles to the identity. The first way
-        is to apply the inverse group element, compiled into gates from
-        this subset. This setting is obtained by fixed_length_each_m = False,
-        and in this case the sequences averaged over for length m consist
-        of sequences of gates from subset_sampling of length >= m + 1. The
-        alternative is to consider only those sequences of m+1 gates from
-        subset_sampling that (ideally) compose to the identity. This is
-        obtained by setting fixed_length_each_m = True. *This setting is
-        currently not supported*.
+                      
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs if
+        subset_sampling is None, the keys are the gates in subset_sampling if
+        subset_sampling is not None, and the values are the unnormalized probabilities 
+        to apply each gate at each stage of the RB protocol. If not None, the values 
+        in weights must all be positive or zero, and they must not all be zero (because, 
+        when divided by their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
+      
+    d : int, optional
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
         
     compilation : dict, optional
         If subset_sampling is not None and fixed_length_each_m is False this
         specifies the compilation of group elements into the gates from 
         subset_sampling in order to apply the final inverse gate.
+    
+    twirled : bool, optional
+        If True, the state preparation is followed by a single uniformly random group
+        element. If subset_sampling and weights are None, there is no reason to set 
+        this to True, but otherwise it can significantly change the behaviour of the 
+        RB decay.
      
     Returns
     -------
@@ -736,36 +851,31 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
     P_m : float
         Array containing ASP values for the specified sequence length values.
         
-    """  
+    """
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
     i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
     m = _np.zeros(1+i_max,int)
     P_m = _np.zeros(1+i_max,float)
     group_dim = len(group)
-    #R_dim = group_dim * d**2
-    # need the more subtle new version of R
     R = R_matrix(gs,group,subset_sampling=subset_sampling,
-                 group_to_gateset=group_to_gateset,d=d)
+                 group_to_gateset=group_to_gateset,weights=weights,d=d)
     rho_index = gs.spamdefs[success_spamlabel][0]
     E_index = gs.spamdefs[success_spamlabel][1]
     extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs.effects[E_index].T)
-    if subset_sampling is None:
-            extended_E = group_dim*_np.dot(extended_E, R)
-    else:
-        if fixed_length_each_m is False:
-            full_gateset = _cnst.build_alias_gateset(gs,compilation)
-            Rinversion = R_matrix(full_gateset,group,d=d)
-            extended_E = group_dim*_np.dot(extended_E, Rinversion)
-        if fixed_length_each_m is True:
-            raise NotImplementedError("This functionality is not currently available! " +
-                                      "-- set fixed_length_each to False.")
-            ##extended_E = _np.dot(extended_E, R)
-            # To make this functionality work, we need to multiply
-            # P_m by an m-dependent factor, as the number of different
-            # sequences which compile to I changes with m. For m=1 it
-            # is 1 or 0 (depending on the generators), for m=2, it 
-            # depends on the generators, and is 1 for Gi, Gx, Gy.
-            
     extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[rho_index])
+    
+    if subset_sampling is None:
+        extended_E = group_dim*_np.dot(extended_E, R)
+        if twirled is True:  
+            extended_rho = _np.dot(R,extended_rho)
+    else:
+        full_gateset = _cnst.build_alias_gateset(gs,compilation)
+        R_fullgroup = R_matrix(full_gateset,group,d=d)
+        extended_E = group_dim*_np.dot(extended_E, R_fullgroup)
+        if twirled is True:        
+            extended_rho = _np.dot(R_fullgroup,extended_rho)
+            
+    
     Rstep = _np.linalg.matrix_power(R,m_step)
     Riterate =  _np.linalg.matrix_power(R,m_min)
     for i in range (0,1+i_max):
@@ -774,29 +884,9 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
         Riterate = _np.dot(Rstep,Riterate)
     return m, P_m
 
-#
-#
-# Here put a wrapped around exact_RB_ASPs() to calculate interleaved RB
-# ASPs. Ideally, it would optionally be a wrap-around L_matrix_ASPs() 
-# as well, so that it is efficient for >1 qubit
-#
-
-#
-#
-# Here write a function that calculates exact probs for non-inversion
-# random sequences, for, e.g., URB.
-#
-#
-
-#
-# The following function works, but it would be better if (1) the
-# error bounds where those from Wallman's paper, (2) if it didn't do the
-# gauge optimization (which is fine if (1) is sorted), (3) If it could calculate 
-# the correct average error map for when gs is not the full group (as then the 
-# average error map at the end is not the same as the average error map of the gateset).
-#
-def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plus',
-                  error_bounds=False,norm='diamond'):
+def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
+                  compilation=None,twirled=False,weights=None,d=None,
+                  gauge_optimize=True,error_bounds=False,norm='diamond'):
     """
     Computes RB average survival probablities, as predicted by the 'L' operator
     theory of arXiv:1702.01853. Within the function, the gs is gauge-optimized to
@@ -822,12 +912,53 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
         
     m_step : int, optional
         step size between sequence lengths
-      
-    d : int, optional
-        Dimension of the Hilbert space. Defaults to a single qubit.
         
     success_spamlabel : str, optional
         Specifies the SPAM label associated with surival
+               
+   compilation : dict, optional
+       A compilation table that has as keys the elements of a larger gateset, e.g., 
+       the Cliffords, and values as lists of gates from `gs`. If this is specified then
+       it is assumed that this gateset is the set from which the final inversion element
+       is applied, and if `twirled` is False, this is only used to calculate the final
+       error map associated with this inversion. A compilation table is necessary if 
+       `twirled` is True (see below).
+       
+   twirled : bool, optional
+        If True, the state preparation is followed by a single uniformly random group
+        element. How to implement this group element in terms of the elements in `gs`
+        is specified by the `compilation` dictionary, which is required if `twirled`
+        is True. If `gs` is the full group, there is no purpose in this twirl, and
+        hence this twirl option is not supported without a compilation table.
+          
+    weights : dict, optional
+        If not None, a dictionary of floats, whereby the keys are the gates in gs if
+        subset_sampling is None, the keys are the gates in subset_sampling if
+        subset_sampling is not None, and the values are the unnormalized probabilities 
+        to apply each gate at each stage of the RB protocol. If not None, the values 
+        in weights must all be positive or zero, and they must not all be zero (because, 
+        when divided by their sum, they must be a valid probability distribution). If None, the
+        weighting defaults to an equal weighting on all gates, as used in most RB
+        protocols.
+        
+    gauge_optimize : bool, optional
+        Default is True, and if True a gauge-optimization to the target gateset is 
+        implemented before calculating all quantities. If False, no gauge optimization
+        is performed. Whether or not a gauge optimization is performed does not affect
+        the rate of decay but it will generally affect the exact form of the decay. E.g.,
+        if a perfect gateset is given to the function -- but in the "wrong" gauge -- no
+        decay will be observed in the output P_m, but the P_m can be far from 1 (even
+        for perfect SPAM) for all m. The gauge optimization is optional, as it is
+        not guaranteed to always improve the accuracy of the reported P_m, although when gauge
+        optimization is performed this limits the possible deviations of the reported
+        P_m from the true P_m.
+      
+    d : int, optional
+        The Hilbert space dimension.  If None, then sqrt(gs.dim) is used.
+        
+    error_bounds : bool, optional
+        Sets whether or not to return error bounds for how far the true ASPs can deviate
+        from the values returned by this function.
         
     norm : str, optional
         The norm used in the error bound calculation. Default is consistent with
@@ -847,16 +978,33 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
 
         upper_bound: float
             Array containing upper bounds on the possible ASP values
-    """      
-    gs_go = _algs.gaugeopt_to_target(gs,gs_target)
-    L = L_matrix(gs_go,gs_target)
-    #dim = len(gs_target.gates.keys())
+    """
+    assert((compilation is None and twirled is True) is False), "twirled cannot be true is compilation is None"   
+    if d is None: d = int(round(_np.sqrt(gs.dim)))
+        
+    if gauge_optimize:
+        gs_go = _algs.gaugeopt_to_target(gs,gs_target)
+    else:
+        gs_go = gs.copy()
+    L = L_matrix(gs_go,gs_target,weights=weights)
     rho_index = gs.spamdefs[success_spamlabel][0]
     E_index = gs.spamdefs[success_spamlabel][1]
-    emaps = errormaps(gs_go,gs_target)
-    E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
-    identity_vec = vec(_np.identity(d**2,float))    
-    delta = gatedependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
+    identity_vec = vec(_np.identity(d**2,float))
+    
+    if compilation is not None:
+        gs_group = _cnst.build_alias_gateset(gs_go,compilation)
+        gs_target_group = _cnst.build_alias_gateset(gs_target,compilation)
+        delta = gatedependence_of_errormaps(gs_group,gs_target_group,norm=norm,d=d)
+        emaps = errormaps(gs_group,gs_target_group)
+        E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
+        
+        if twirled is True:
+            L_group = L_matrix(gs_group,gs_target_group)
+        
+    if compilation is None:
+        delta = gatedependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
+        emaps = errormaps(gs_go,gs_target)
+        E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
     
     i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
     m = _np.zeros(1+i_max,int)
@@ -868,7 +1016,10 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
     Literate =  _np.linalg.matrix_power(L,m_min)
     for i in range (0,1+i_max):
         m[i] = m_min + i*m_step
-        L_m_rdd = unvec(_np.dot(Literate,identity_vec))
+        if twirled:
+            L_m_rdd = unvec(_np.dot(L_group,_np.dot(Literate,identity_vec)))
+        else:
+            L_m_rdd = unvec(_np.dot(Literate,identity_vec))
         P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go.preps[rho_index]))
         Literate = _np.dot(Lstep,Literate)
         upper_bound[i] = P_m[i] + delta/2
@@ -882,8 +1033,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,d=2,success_spamlabel='plu
     else:
         return m, P_m
 
-# needs more testing    
-def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus', 
+def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='0', 
                               norm='1to1', d=2):                   
     """
     From a given actual and target gateset, computes the parameters
@@ -975,9 +1125,6 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='plus',
     q = average_gate_infidelity(error_gs.gates['GQ2'],_np.identity(d**2,float),d)
     q = r_to_p(q,d)
     
-    if p < 0.01:
-        _warnings.warn("First order theory parameters are not guaranteed \
-              to be reliable with a very large decay rate")
     Magesan_theory_params['A'] = pr_L_I
     Magesan_theory_params['B'] = pr_L_p - pr_L_I       
     Magesan_theory_params['A1'] = B_1
@@ -1019,7 +1166,6 @@ def Magesan_error_bound(m,delta,order='zeroth'):
 
     return sys_eb
 
-# needs more testing    
 def seb_upper(y,m,delta,order='zeroth'):
     """
     Finds an upper bound on the RB average surival probability (ASP) from the 
@@ -1052,7 +1198,6 @@ def seb_upper(y,m,delta,order='zeroth'):
      
     return upper
 
-# needs more testing    
 def seb_lower(y,m,delta,order='zeroth'):
     """
     Finds a lower bound on the surival probability from the analytic value. See
@@ -1130,31 +1275,6 @@ def norm1to1(operator, n_samples=10000, mxBasis="gm",return_list=False):
         return vals
     else:
         return max(vals)
-
-# needs more testing
-def group_twirl(M,group):
-    """
-    Returns the matrix group twirl of a map M:  
-    Twirl(M) = 1/|group| * Sum_{C in group} (C^-1 * M * C)
-    
-    Parameters
-    ----------
-    M : array or gate
-        The map to be twirled.
-
-    group : MatrixGroup
-        The group to twirl over (e.g., the Clifford group).
-    
-    Returns
-    -------
-    M_twirl : array
-        The twirl of M.
-    """
-    G = len(group)
-    M_twirl = 1.0/G * _np.sum(
-        _np.dot( _np.dot(group.get_matrix_inv(i),M),
-                 group.get_matrix(i)) for i in range(G))
-    return M_twirl
     
 # ----- Wallman and Flammia error bars tools ---- #
 # Not tested, as W&F error bars are not currently supported
