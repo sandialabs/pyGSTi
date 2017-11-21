@@ -91,6 +91,10 @@ figure.tbl {  /* figure that is a table */
   text-align: center;
 }
 
+figure.txtblk {  /* figure that is a text block */
+  text-align: left;
+}
+
 p.clear {
     clear: both;
 }

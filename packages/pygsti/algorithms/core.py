@@ -1069,7 +1069,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     else: gthrMem = mlim = None
     evTree, wrtBlkSize, _ = gs.bulk_evaltree_from_resources(
         gateStringsToUse, comm, mlim, distributeMethod,
-        ["bulk_fill_probs","bulk_fill_dprobs"], printer) 
+        ["bulk_fill_probs","bulk_fill_dprobs"], printer-1) 
     profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
 
     # permute (if needed) gate string list for efficient subtree division
@@ -2293,7 +2293,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     else:
         evTree, wrtBlkSize, _ = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
-            ["bulk_fill_probs","bulk_fill_dprobs"], printer)
+            ["bulk_fill_probs","bulk_fill_dprobs"], printer-1)
         
         #Fill cache dict if one was given
         if evaltree_cache is not None:

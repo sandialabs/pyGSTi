@@ -478,10 +478,10 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         lsgst_listOfStructs.append( gss )
 
     printer.log("--- Gate Sequence Creation ---", 1)
-    printer.log(" %d sequences created" % len(gss.allstrs))
+    printer.log(" %d sequences created" % len(gss.allstrs),2)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
-                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 1)
+                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 2)
     if len(missing_list) > 0:
         missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
                         for tup in missing_list]
