@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from pygsti.tools.basis import Basis
+from pygsti.baseobjs.basis import Basis
 
 import numpy as np
 from scipy import polyfit
@@ -176,7 +176,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        CM = pygsti.objects.profiler._get_mem_usage()
+        CM = pygsti.baseobjs.profiler._get_mem_usage()
 
         gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                                            probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
@@ -281,7 +281,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        CM = pygsti.objects.profiler._get_mem_usage()
+        CM = pygsti.baseobjs.profiler._get_mem_usage()
 
         gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                                           probClipInterval=(-1e2,1e2), verbosity=0)

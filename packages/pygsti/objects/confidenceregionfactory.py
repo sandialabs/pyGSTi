@@ -15,7 +15,7 @@ from .. import optimize as _opt
 from .. import tools as _tools
 
 from .gateset import P_RANK_TOL
-from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
 #Connection with Robin's notes:
@@ -461,7 +461,7 @@ class ConfidenceRegionFactory(object):
 
     def _optProjectionForGateCIs(self, method="L-BFGS-B", maxiter=10000,
                                  maxfev = 10000, tol=1e-6, verbosity=0):
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
         gateset = self.parent.gatesets[self.gateset_lbl]
         base_hessian = self.hessian
         level = 95 # or 50, or whatever - the scale factory doesn't matter for the optimization
@@ -501,7 +501,7 @@ class ConfidenceRegionFactory(object):
     
     
     def _optProjectionFromSplit(self, verbosity=0):
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
         gateset = self.parent.gatesets[self.gateset_lbl]
         base_hessian = self.hessian
         level = 95 # or 50, or whatever - the scale factory doesn't matter for the optimization
@@ -934,7 +934,7 @@ class ConfidenceRegionFactoryView(object):
         #  so df = sqrt( gradF.dag * U * 1/D * U.dag * gradF )
         #        = sqrt( gradF.dag * invRegionQuadcForm * gradF )
 
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
 
         printer.log("gradF = %s" % gradF)
 

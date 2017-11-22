@@ -14,15 +14,14 @@ from .matrixtools import *
 from .lindbladtools import *
 from .likelihoodfns import *
 from .chi2fns import *
+from .basistools import *
 from .gatetools import *
 from .slicetools import *
 from .compattools import *
-from .basis import *
-from .basisconstructors import *
-from .parameterized import *
-from .opttools import *
 from .legacytools import *
-from .dim import Dim
-from .opttools import *
-from .smartcache import *
 from .mpitools import parallel_apply, get_comm
+
+#Special case: opttool need to reside in baseobjs,
+# but they're still "tools"
+from ..baseobjs.opttools import * 
+

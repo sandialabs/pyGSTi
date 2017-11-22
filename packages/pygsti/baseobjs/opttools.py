@@ -6,11 +6,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from functools   import wraps
+
 from time        import time
 from contextlib  import contextmanager
 from collections import defaultdict
 from datetime    import datetime
+from functools   import wraps
 
 # note that this decorator ignores **kwargs
 def cache_by_hashed_args(obj):
@@ -29,6 +30,7 @@ def cache_by_hashed_args(obj):
             print('Warning: arguments for cached function could not be cached')
             return obj(*args, **kwargs)
     return _memoizer
+
 
 @contextmanager
 def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, preMessage=None, formatStr=None):

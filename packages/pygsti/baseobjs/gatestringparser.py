@@ -103,7 +103,7 @@ class GateStringParser(object):
     def __init__(self, lexer_object=None, lookup={}):
         self._lookup = lookup
         self._lexer = lex.lex(object=lexer_object if lexer_object else GateStringLexer())
-        self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='pygsti.io.parsetab_string')
+        self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='pygsti.baseobjs.parsetab_string')
 
     @property
     def lookup(self):

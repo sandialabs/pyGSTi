@@ -11,6 +11,8 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
+from .basistools import change_basis
+
 def array_eq(a, b, tol=1e-8):
     """Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol` """
     print(_np.linalg.norm(a-b))
@@ -325,7 +327,6 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
     from . import gatetools as _gt # (would create circular imports if at top)
-    from .basis import change_basis
 
     M_std = change_basis(M, mxBasis, "std")
     evals = _np.linalg.eigvals(M_std)

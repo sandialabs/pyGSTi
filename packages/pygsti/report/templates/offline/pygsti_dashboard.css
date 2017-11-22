@@ -91,6 +91,10 @@ figure.tbl {  /* figure that is a table */
   text-align: center;
 }
 
+figure.txtblk {  /* figure that is a text block */
+  text-align: left;
+}
+
 p.clear {
     clear: both;
 }
@@ -159,6 +163,12 @@ figure.tbl {
 }
 figure.tbl > figcaption:before {
   content: "Table " counter(table) ". ";
+}
+figure.txtblk {
+  counter-increment: textblock;
+}
+figure.txtblk > figcaption:before {
+  content: "Listing " counter(textblock) ". ";
 }
 .footnote {
   counter-increment: footnote;

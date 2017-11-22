@@ -18,10 +18,11 @@ from .. import tools        as _tools
 from .. import objects      as _objs
 
 from .workspace import WorkspacePlot
+from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
-
 import plotly.graph_objs as go
+
 
 #DEBUG
 #import time as _time  #DEBUG TIMER
@@ -141,7 +142,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     )
     
     fig = go.Figure(data=data, layout=layout)
-    return { 'plotlyfig': fig, 'colormap': colormap, 'plt_data': plt_data, 'pythonValue': plt_data }
+    return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
 
 
 
@@ -226,8 +227,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
                         prec, None, hoverLabels)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
-    fig['plotlyfig']['layout']['xaxis'].update(tickvals=xtics)
-    fig['plotlyfig']['layout']['yaxis'].update(tickvals=ytics)
+    fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
+    fig.plotlyfig['layout']['yaxis'].update(tickvals=ytics)
     return fig
 
 
@@ -388,8 +389,8 @@ def generate_boxplot(subMxs,
         fig = color_boxplot( subMxSums, colormap, colorbar, boxLabelSize,
                              prec, hoverLabelFn)
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
-        fig['plotlyfig']['layout']['xaxis'].update(tickvals=list(range(nXs)))
-        fig['plotlyfig']['layout']['yaxis'].update(tickvals=list(range(nYs)))
+        fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
+        fig.plotlyfig['layout']['yaxis'].update(tickvals=list(range(nYs)))
 
         xBoxes = nXs
         yBoxes = nYs
@@ -417,7 +418,7 @@ def generate_boxplot(subMxs,
         xBoxes = nXs*(nIXs+1) - 1
         yBoxes = nYs*(nIYs+1) - 1
 
-    pfig = fig['plotlyfig']
+    pfig = fig.plotlyfig
     if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
     if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
@@ -543,7 +544,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -567,7 +568,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                 L,germ = xvals[ix],yvals[iy]
                 rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -666,7 +667,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -690,7 +691,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 L,germ = xvals[ix],yvals[iy]
                 rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -751,8 +752,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         xaxis=xaxis,
         yaxis=yaxis,
     )
-    return { 'plotlyfig': go.Figure(data=[trace], layout=layout), 'colormap': colormap,
-             'pythonValue': {'x': xs, 'y': ys} }
+    return ReportFigure(go.Figure(data=[trace], layout=layout), colormap,
+                        {'x': xs, 'y': ys})
 
 
 def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
@@ -877,8 +878,8 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
         )
 
     pythonVal = {'histogram values': ys}
-    return { 'plotlyfig': go.Figure(data=[trace, line_trace], layout=layout), 'colormap': colormap,
-             'pythonValue': pythonVal }
+    return ReportFigure(go.Figure(data=[trace, line_trace], layout=layout),
+                        colormap, pythonVal)
 
 
 def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
@@ -1195,9 +1196,8 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         annotations = annotations
     )
 
-    return { 'plotlyfig': go.Figure(data=data, layout=layout),
-             'colormap': colormap, 'plt_data': flipped_mx,
-             'pythonValue': flipped_mx}
+    return ReportFigure(go.Figure(data=data, layout=layout),
+                        colormap, flipped_mx, plt_data=flipped_mx)
 
 
 
@@ -1330,9 +1330,9 @@ class BoxKeyPlot(WorkspacePlot):
             ]
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'special': 'keyplot', 'args': (prepStrs, effectStrs, xlabel, ylabel),
-                'pythonValue': "No data in box key plot!"}
+        return ReportFigure( go.Figure(data=data, layout=layout),
+                             None, "No data in box key plot!",
+                             special='keyplot', args=(prepStrs, effectStrs, xlabel, ylabel))
 
 
     
@@ -1648,10 +1648,10 @@ class ColorBoxPlot(WorkspacePlot):
             if fig is None:
                 fig = newfig
             else:
-                newfig['plotlyfig']['data'][0].update(visible=False)
-                fig['plotlyfig']['data'].append(newfig['plotlyfig']['data'][0])
+                newfig.plotlyfig['data'][0].update(visible=False)
+                fig.plotlyfig['data'].append(newfig.plotlyfig['data'][0])
 
-        nTraces = len(fig['plotlyfig']['data'])
+        nTraces = len(fig.plotlyfig['data'])
         assert(nTraces >= len(plottypes)) # not == b/c histogram adds line trace
 
         if len(plottypes) > 1:
@@ -1663,7 +1663,7 @@ class ColorBoxPlot(WorkspacePlot):
                     dict(args=['visible', visible],
                          label=nm,
                          method='restyle') )
-            fig['plotlyfig']['layout'].update(
+            fig.plotlyfig['layout'].update(
                 updatemenus=list([
                     dict(buttons=buttons,
                          direction = 'left',
@@ -1974,8 +1974,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
             key = tr['name'] if ("name" in tr) else "trace%d" % i
             pythonVal[key] = {'r': tr['r'], 't': tr['t']}
         
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'pythonValue': pythonVal }
+        return ReportFigure( go.Figure(data=data, layout=layout),
+                             None, pythonVal )
 
 
 
@@ -2168,9 +2168,9 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             bargap=0.02
         )
         
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'plt_y': evals, 'plt_yerr': errbars,
-                'pythonValue': evals, 'pythonErrorBar': errbars}
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, evals,plt_y=evals, plt_yerr=errbars,
+                            pythonErrorBar=errbars)
 
 
 
@@ -2248,8 +2248,8 @@ class GramMatrixBarPlot(WorkspacePlot):
         pythonVal = {}
         for tr in data:
             pythonVal[tr['name']] = tr['y']
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'pythonValue': pythonVal }
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, pythonVal)
 
 class FitComparisonBarPlot(WorkspacePlot):
     """ Bar plot showing the overall (aggregate) goodness of fit """
@@ -2385,8 +2385,8 @@ class FitComparisonBarPlot(WorkspacePlot):
             layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
                                         _np.log10(max(plotted_ys)*2.0)]
         
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'pythonValue': {'x': xs, 'y': ys} }
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, {'x': xs, 'y': ys})
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):
@@ -2451,10 +2451,10 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
         
         #Combine plotly figures into one
         combined_fig = nSigma_fig
-        logL_fig['plotlyfig']['data'][0].update(visible=False)
-        combined_fig['plotlyfig']['data'].append(logL_fig['plotlyfig']['data'][0])
-        annotations = [ nSigma_fig['plotlyfig']['layout']['annotations'],
-                        logL_fig['plotlyfig']['layout']['annotations'] ]
+        logL_fig.plotlyfig['data'][0].update(visible=False)
+        combined_fig.plotlyfig['data'].append(logL_fig.plotlyfig['data'][0])
+        annotations = [ nSigma_fig.plotlyfig['layout']['annotations'],
+                        logL_fig.plotlyfig['layout']['annotations'] ]
         
         buttons = []; nTraces = 2
         for i,nm in enumerate(['Nsigma','2DeltaLogL']):
@@ -2465,7 +2465,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
                            {'annotations': annotations[i]}],
                      label=nm,
                      method='update') ) #'restyle'
-        combined_fig['plotlyfig']['layout'].update(
+        combined_fig.plotlyfig['layout'].update(
             updatemenus=list([
                 dict(buttons=buttons,
                      direction = 'left',
@@ -2474,11 +2474,11 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
                      x = 0.0, xanchor = 'left',
                      y = -0.1, yanchor = 'top')
                 ]) )
-        m = combined_fig['plotlyfig']['layout']['margin']
-        w = combined_fig['plotlyfig']['layout']['width']
-        h = combined_fig['plotlyfig']['layout']['height']
+        m = combined_fig.plotlyfig['layout']['margin']
+        w = combined_fig.plotlyfig['layout']['width']
+        h = combined_fig.plotlyfig['layout']['height']
         exr = 0 if w > 240 else 240-w # extend to right
-        combined_fig['plotlyfig']['layout'].update(
+        combined_fig.plotlyfig['layout'].update(
             margin=go.Margin(l=m['l'],r=m['r']+exr,b=m['b']+40,t=m['t']),
             width=w+exr,
             height=h+40
@@ -2621,8 +2621,8 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         pythonVal = {'histogram values': vals}
         if display == 'pvalue':
             pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
-        return {'plotlyfig': go.Figure(data=data, layout=layout),
-                'pythonValue': pythonVal}
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, pythonVal)
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
@@ -2973,8 +2973,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
         
         #reverse order of data so z-ordering is nicer
-        return {'plotlyfig': go.Figure(data=list(reversed(data)), layout=layout),
-                'pythonValue': pythonVal }
+        return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
+                            None, pythonVal)
 
         #newplotgca.set_xlabel(xlabel, fontsize=15)
         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)

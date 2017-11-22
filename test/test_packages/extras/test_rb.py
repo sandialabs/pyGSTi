@@ -264,11 +264,11 @@ class RBTestCase(BaseTestCase):
         
         m1, P_m1 = rb.exact_RB_ASPs(gs_d_cliff,clifford_group,m_max=1000,m_min=1,m_step=1,
                    d=2,success_spamlabel='0',subset_sampling=None,group_to_gateset=None,
-                   fixed_length_each_m = False, compilation=None)
+                   compilation=None) # fixed_length_each_m = False, 
         self.assertAlmostEqual(np.amax(abs(P_m1 - rb.standard_fit_function(m1+1,0.5,0.5,1-depol_strength))),0.0)
         m2, P_m2 = rb.exact_RB_ASPs(gs_d,clifford_group,m_max=100,m_min=1,m_step=1,
                    d=2,success_spamlabel='0', subset_sampling=['Gi','Gx','Gy'],group_to_gateset=
-                   {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'},fixed_length_each_m = False,
+                   {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'}, #fixed_length_each_m = False,
                    compilation=clifford_to_primitive)
         self.assertAlmostEqual(P_m2[0],(0.5+0.5*((1.*(1-depol_strength)**1. + 
                                           2.*(1-depol_strength)**3.)/3.)*(1-depol_strength)))

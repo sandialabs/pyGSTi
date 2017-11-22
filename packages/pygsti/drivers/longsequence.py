@@ -20,6 +20,7 @@ from .. import objects as _objs
 from .. import io as _io
 from .. import tools as _tools
 from ..tools import compattools as _compat
+from ..baseobjs import DummyProfiler as _DummyProfiler
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -151,7 +152,7 @@ def do_model_test(modelGateFilenameOrSet,
 
     #Create profiler
     profile = advancedOptions.get('profile',1)
-    if profile == 0: profiler = _objs.DummyProfiler()
+    if profile == 0: profiler = _DummyProfiler()
     elif profile == 1: profiler = _objs.Profiler(comm,False)
     elif profile == 2: profiler = _objs.Profiler(comm,True)
     else: raise ValueError("Invalid value for 'profile' argument (%s)"%profile)
@@ -278,6 +279,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - missingDataAction = {'drop','raise'} (default = 'drop')
         - stringManipRules = list of (find,replace) tuples
         - germLengthLimits = dict of form {germ: maxlength}
+        - recordOutput = bool (default = True)
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -347,6 +349,11 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
     #    - ``'length as exponent'`` -- max. length is instead interpreted
     #      as the germ exponent (the number of germ repetitions).
 
+    printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if advancedOptions is None: advancedOptions = {}
+    if advancedOptions.get('recordOutput',True) and not printer.is_recording():
+        printer.start_recording()
+    
     #Get/load target gateset
     gs_target = _load_gateset(targetGateFilenameOrSet)
 
@@ -357,15 +364,15 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         germsListOrFilename)
     
     #Get/load dataset
-    ds = _load_dataset(dataFilenameOrSet, comm, verbosity)
+    ds = _load_dataset(dataFilenameOrSet, comm, printer)
     
     #Construct GateString lists
     lsgstLists = _get_lsgst_lists(ds, gs_target, prepStrs, effectStrs, germs,
-                                 maxLengths, advancedOptions, verbosity)
+                                  maxLengths, advancedOptions, printer)
     
     return do_long_sequence_gst_base(ds, gs_target, lsgstLists, gaugeOptParams,
                                      advancedOptions, comm, memLimit,
-                                     output_pkl, verbosity)
+                                     output_pkl, printer)
 
 
 def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
@@ -451,7 +458,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 
     profile = advancedOptions.get('profile',1)
 
-    if profile == 0: profiler = _objs.DummyProfiler()
+    if profile == 0: profiler = _DummyProfiler()
     elif profile == 1: profiler = _objs.Profiler(comm,False)
     elif profile == 2: profiler = _objs.Profiler(comm,True)
     else: raise ValueError("Invalid value for 'profile' argument (%s)"%profile)
@@ -466,6 +473,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         memLimit = advancedOptions['memoryLimitInBytes']
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
+    if advancedOptions.get('recordOutput',True) and not printer.is_recording():
+        printer.start_recording()
 
 
     #Get/load target gateset
@@ -804,6 +813,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                 raise ValueError("Invalid item in 'modes' argument: %s" % mode)
 
             #Get gauge optimization dictionary
+            assert(not printer.is_recording()); printer.start_recording()
             gaugeOptSuite_dict = gaugeopt_suite_to_dictionary(gaugeOptSuite, tgt,
                                                               advancedOptions, printer-1)
 
@@ -835,6 +845,12 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                         else:
                             printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+suffix),2)
                             ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, printer-3)
+                            
+            # Add gauge optimizations to end of any existing "stdout" meta info
+            if 'stdout' in ret.estimates[est_label].meta:
+                ret.estimates[est_label].meta['stdout'].extend(printer.stop_recording())
+            else:
+                ret.estimates[est_label].meta['stdout'] = printer.stop_recording()
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):
@@ -1302,7 +1318,13 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                         ret.estimates[estlbl+'.'+scale_typ].add_gaugeoptimized(
                             gaugeOptParams.copy(), go_gs_final, None, printer-1)
 
+
     profiler.add_time('%s: results initialization' % callerName,tRef)
+
+    #Add recorded info (even robust-related info) to the *base*
+    #   estimate label's "stdout" meta information
+    if printer.is_recording():
+        ret.estimates[estlbl].meta['stdout'] = printer.stop_recording()
 
     #Write results to a pickle file if desired
     if output_pkl and (comm is None or comm.Get_rank() == 0):

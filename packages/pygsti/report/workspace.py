@@ -21,6 +21,7 @@ import subprocess  as _subprocess
 
 from .. import objects as _objs
 from ..tools import compattools as _compat
+from ..baseobjs import CustomDigestError as _CustomDigestError
 
 from . import plotly_plot_ex as _plotly_ex
 from . import merge_helpers as _merge
@@ -68,7 +69,7 @@ def ws_custom_digest(md5, v):
     elif isinstance(v, SwitchValue):
         md5.update(v.base.tostring()) #don't recurse to parent switchboard
     else:
-        raise _objs.CustomDigestError()
+        raise _CustomDigestError()
 
 def randomID():
     """ Returns a random DOM ID """
@@ -170,7 +171,7 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        '''
+        ''' 
         if PY3:
             @_functools.wraps(cls.__init__)
             def factory_function(*args, **kwargs):
@@ -229,6 +230,7 @@ class Workspace(object):
         # "register" components
         from . import workspacetables as _wt
         from . import workspaceplots as _wp
+        from . import workspacetexts as _wtxt
         
         makefactory = lambda cls: self._makefactory(cls,autodisplay)
 
@@ -269,6 +271,7 @@ class Workspace(object):
         self.GaugeOptParamsTable = makefactory(_wt.GaugeOptParamsTable)
         self.MetadataTable = makefactory(_wt.MetadataTable)
         self.SoftwareEnvTable = makefactory(_wt.SoftwareEnvTable)
+        self.ProfilerTable = makefactory(_wt.ProfilerTable)
         self.ExampleTable = makefactory(_wt.ExampleTable)
 
         #Plots
@@ -284,6 +287,9 @@ class Workspace(object):
         self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
         self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
+
+        #Text blocks
+        self.StdoutText = makefactory(_wtxt.StdoutText)
 
         
     def init_notebook_mode(self, connected=False, autodisplay=False):
@@ -2440,7 +2446,7 @@ class WorkspacePlot(WorkspaceOutput):
                 else:
                     #use auto-sizing (fluid layout)
                     fig_dict = _plotly_ex.plot_ex(
-                        fig['plotlyfig'], show_link=False, resizable=resizable,
+                        fig.plotlyfig, show_link=False, resizable=resizable,
                         lock_aspect_ratio=True, master=True, # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID)
@@ -2498,11 +2504,11 @@ class WorkspacePlot(WorkspaceOutput):
                     _plotly_to_matplotlib(fig, filename)
     
                     W,H = maxW,maxH
-                    if 'mpl_fig_size' in fig: #added by plotly_to_matplotlib call above
-                        figW,figH = fig['mpl_fig_size'] #gives the "normal size" of the figure
+                    if 'mpl_fig_size' in fig.metadata: #added by plotly_to_matplotlib call above
+                        figW,figH = fig.metadata['mpl_fig_size'] #gives the "normal size" of the figure
                         W = min(W, figW)
                         W = min(H, figH)
-                        del fig['mpl_fig_size']
+                        del fig.metadata['mpl_fig_size']
     
                     includes.append("\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
                                     (W,H,filename))
@@ -2522,10 +2528,10 @@ class WorkspacePlot(WorkspaceOutput):
                 if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
                 
-                if 'pythonValue' in fig:
-                    data = {'value': fig['pythonValue'] }
-                    if "pythonErrorBar" in fig:
-                        data['errorbar'] = fig['pythonErrorBar']
+                if 'pythonValue' in fig.metadata:
+                    data = {'value': fig.pythonvalue }
+                    if "pythonErrorBar" in fig.metadata:
+                        data['errorbar'] = fig.metadata['pythonErrorBar']
                 else:
                     data = {'value': "Opaque Figure"}
 
@@ -2655,5 +2661,353 @@ class WorkspacePlot(WorkspaceOutput):
             #trigger init & create of plots
             content += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
                 plotID=plotID, initautosize=str(autosize in ("initial","continual")).lower())
+
+        return self._create_onready_handler(content)
+
+
+class WorkspaceText(WorkspaceOutput):
+    """
+    Encapsulates a block of text within a `Workspace` context.
+
+    A base class which provides the logic required to take a
+    single text-generating function and make it into a legitimate
+    `WorkspaceOutput` object for using within workspaces.
+    """
+    
+    def __init__(self, ws, fn, *args):
+        """
+        Create a new WorkspaceText object.  Usually not called directly.
+
+        Parameters
+        ----------
+        ws : Workspace
+            The workspace containing the new object.
+
+        fn : function
+            A text-creating function.
+
+        args : various
+            The arguments to `fn`.
+        """
+        super(WorkspaceText, self).__init__(ws)
+        self.textfn = fn
+        self.initargs = args
+        self.texts,self.switchboards,self.sbSwitchIndices,self.switchpos_map = \
+            self.ws.switchedCompute(self.textfn, *self.initargs)
+
+        
+    def render(self, typ):
+        """
+        Renders this text block into the specifed format, specifically for
+        embedding it within a larger document.
+
+        Parameters
+        ----------
+        typ : str
+            The format to render as.  Currently `"html"`, `"latex"`
+            and `"python"` are supported.
+
+        Returns
+        -------
+        dict
+            A dictionary of strings giving the different portions of the
+            embeddable output.  For `"html"`, keys are `"html"` and `"js"`.
+            For `"latex"`, there is a single key `"latex"`.
+        """
+
+        switched_item_mode = self.options.get('switched_item_mode','inline')
+        overrideIDs = self.options.get('switched_item_id_overrides',{})
+        output_dir = self.options.get('output_dir',None)
+
+        ID = self.ID
+        textID = "text_" + ID
+
+        if typ == "html":
+
+            divHTML = []
+            divIDs = []
+            divJS = []            
+            
+            for i, text in enumerate(self.texts):
+                textDivID = textID + "_%d" % i
+                if i in overrideIDs: textDivID = overrideIDs[i]
+                
+                if isinstance(text,NotApplicable):
+                    text_dict = text.render("html",textDivID)
+                else:
+                    text_dict = text.render("html",textDivID)
+
+                if switched_item_mode == 'separate files':
+                    # form entire text init JS as _render_html will put this in a separate file
+                    divJS.append( self._form_text_js(
+                        textDivID, text_dict['html'], None))
+                #else: divJS is unused
+                    
+                divHTML.append(text_dict['html'])
+                divIDs.append(textDivID)
+
+            if switched_item_mode == 'inline':
+                base = self._render_html(textID, divHTML, None, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices) #no JS yet...
+                js = self._form_text_js(textID, base['html'], base['js'])
+                  # creates JS for everything: plot creation, switchboard init, autosize
+                
+            elif switched_item_mode == 'separate files':
+                assert(output_dir), "Cannot render 'html' in separate files without a valid 'output_dir' render option"
+                base = self._render_html(textID, divHTML, divJS, divIDs, self.switchpos_map,
+                                         self.switchboards, self.sbSwitchIndices, None, 
+                                         self.options.get('link_to',None), True, output_dir)
+                js = self._form_text_js(textID, None, base['js']) #just switchboard init & autosize
+            else:
+                raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                 switched_item_mode)            
+
+            return { 'html': base['html'], 'js': js }
+
+            
+        elif typ == "latex":
+
+            leave_src = self.options.get('leave_includes_src',False)
+            render_includes = self.options.get('render_includes',True)            
+            W,H = self.options.get('page_size',(6.5,8.0))
+            printer = _objs.VerbosityPrinter(1) #TEMP - add verbosity arg?
+
+            #Note: in both cases output_dir needs to be the *relative* path
+            # between the current directory and the output directory if
+            # \includegraphics statements are to work.  If this isn't needed
+            # (e.g. if just the standalone files are needed) then output_dir
+            # can be an absolute path as well.
+
+            cwd = _os.getcwd()
+            latex_list = []
+            for i, text in enumerate(self.texts):
+                textDivID = textID + "_%d" % i
+                if i in overrideIDs: textDivID = overrideIDs[i]
+                if isinstance(text,NotApplicable): continue
+                
+                text_dict = text.render("latex")
+                
+                if switched_item_mode == 'inline':
+                    latex_list.append( text_dict['latex'] )
+                    
+                elif switched_item_mode == 'separate files':
+                    if render_includes or leave_src:
+                        d = {'toLatex': text_dict['latex'] }
+                        _merge.merge_latex_template(d, "standalone.tex",
+                                                    _os.path.join(output_dir,"%s.tex" % textDivID))
+
+                    if render_includes:
+                        render_dir = output_dir
+                        assert('latex_cmd' in self.options and self.options['latex_cmd']), \
+                            "Cannot render latex include files without a valid 'latex_cmd' render option"
+    
+                        try:
+                            _os.chdir( render_dir )
+                            latex_cmd = self.options['latex_cmd']
+                            latex_call = [ latex_cmd ] + self.options.get('latex_flags',[]) \
+                                         + ["%s.tex" % textDivID]
+                            stdout, stderr, returncode = _merge.process_call(latex_call)
+                            _merge.evaluate_call(latex_call, stdout, stderr, returncode, printer)
+                            if not _os.path.isfile("%s.pdf" % textDivID):
+                                raise Exception("File %s.pdf was not created by %s"
+                                                % (textDivID,latex_cmd))
+                            if not leave_src: _os.remove( "%s.tex" % textDivID )
+                            _os.remove( "%s.log" % textDivID )
+                            _os.remove( "%s.aux" % textDivID )
+                        except _subprocess.CalledProcessError as e:
+                            printer.error("%s returned code %d " % (latex_cmd,e.returncode) +
+                                          "trying to render standalone %s.tex. " % textDivID +
+                                          "Check %s.log to see details." % textDivID)
+                        finally:
+                            _os.chdir( cwd )
+
+                        latex_list.append( "\\includegraphics[width=%.2fin,height=%.2fin,keepaspectratio]{%s}" %
+                                           (W,H, _os.path.join(output_dir,"%s.pdf" % textDivID)) )
+                    elif leave_src:
+                        latex_list.append("\\input{%s}" % _os.path.join(output_dir,"%s.tex" % textDivID))
+                    else:
+                        latex_list.append("%% Didn't generated anything for textID=%s" % textDivID )
+                else:
+                    raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                     switched_item_mode)
+
+
+            return {'latex': "\n".join(latex_list) }
+
+
+        elif typ == "python":
+
+            if switched_item_mode == 'separate files':
+                assert(output_dir), "Cannot render texts as 'python' in separate" \
+                    + " files without a valid 'output_dir' render option"
+
+            texts_python = _collections.OrderedDict()
+            for i, text in enumerate(self.texts):
+                if isinstance(text,NotApplicable): continue
+                textDivID = textID + "_%d" % i
+                if i in overrideIDs: textDivID = overrideIDs[i]
+
+                text_dict = text.render("python")
+
+                if switched_item_mode == "inline":
+                    texts_python[textDivID] = text_dict['python']
+                elif switched_item_mode == "separate files":
+                    outputFilename = _os.path.join(output_dir, "%s.pkl" % textDivID)
+                    with open(outputFilename,'wb') as f:
+                        _pickle.dump(text_dict['python'], f)
+                    texts_python[textDivID] = "text_%s = pickle.load(open('%s','rb'))" \
+                                                         % (textDivID,outputFilename)
+                else:
+                    raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                     switched_item_mode)
+
+            return {'python': texts_python }
+                                     
+        else:
+            assert(len(self.texts) == 1), \
+                "Can only render %s format for a non-switched text block" % typ
+            return {typ: self.texts[0].render(typ)}
+        
+    def saveas(self, filename, index=None, verbosity=0):
+        """
+        Saves this workspace text block object to a file.
+
+        The type of file that is saved is determined automatically by the
+        extension of `filename`.  Recognized extensions are `pdf` (PDF),
+        `tex` (LaTeX), `pkl` (Python pickle) and `html` (HTML).  Since this
+        object may contain different instances of its data based on switch
+        positions, when their are multiple instances the user must specify
+        the `index` argument to disambiguate.
+
+        Parameters
+        ----------
+        filename : str
+            The destination filename.  Its extension determines what type
+            of file is saved.
+
+        index : int, optional
+            An absolute index into the list of different switched "versions"
+            of this object's data.  In most cases, the object being saved 
+            doesn't depend on any switch boards and has only a single "version",
+            in which caes this can be left as the default.
+
+        verbosity : int, optional
+            Controls the level of detail printed to stdout.
+
+        Returns
+        -------
+        None
+        """
+        N = len(self.texts)
+        
+        if filename.endswith(".html"):
+            if index is None and N==1: index = 0
+            else: raise ValueError("Must supply `index` argument for a" +
+                                   "non-trivially-switched WorkspaceText")
+
+            saved_switchposmap = self.switchpos_map
+            saved_switchboards = self.switchboards
+            saved_switchinds   = self.sbSwitchIndices
+
+            #Temporarily pretend we don't depend on any switchboards and
+            # by default display the user-specified index
+            self.switchboards = []
+            self.sbSwitchIndices = []
+            self.switchpos_map = { (): index }
+
+            qtys = {'title': _os.path.splitext(_os.path.basename(filename))[0],
+                    'singleItem': self}
+            _merge.merge_html_template(qtys, "standalone.html", filename,
+                                       verbosity=verbosity)
+
+            self.switchpos_map   = saved_switchposmap
+            self.switchboards    = saved_switchboards
+            self.sbSwitchIndices = saved_switchinds  
+
+        elif filename.endswith(".pkl"):
+            if index is None and N==1: index = 0
+            overrides = {i: "index%d" % i for i in range(N)}
+            self.set_render_options(switched_item_mode="inline",
+                                    switched_item_id_overrides=overrides) 
+            render_out = self.render("python")
+
+            if index is not None: #just pickle a single element
+                to_pickle = render_out['python']['index%d' % index]
+            else: #pickle dictionary of all indices
+                to_pickle = render_out['python']
+            
+            with open(filename,'wb') as f:
+                _pickle.dump(to_pickle, f)
+
+        else:
+            if index is None:
+                if N == 1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceText")
+                
+            output_dir = _os.path.dirname(filename)
+            filebase,ext = _os.path.splitext(_os.path.basename(filename))
+
+            tempDir = _os.path.join(output_dir,"%s_temp" % filebase)
+            _os.mkdir(tempDir)
+
+            self.set_render_options(switched_item_mode="separate files",
+                                    switched_item_id_overrides={index: filebase},
+                                    output_dir=tempDir)
+
+            if ext == ".tex":
+                self.set_render_options(render_includes=False,
+                                        leave_includes_src=True)
+            elif ext == ".pdf":
+                self.set_render_options(render_includes=True,
+                                        leave_includes_src=False)
+            else:
+                raise ValueError("Unknown file type for %s" % filename)
+                
+            self.render("latex") #renders everything in temp dir
+            _os.rename(_os.path.join(tempDir,"%s%s" % (filebase,ext)),
+                       _os.path.join(output_dir,"%s%s" % (filebase,ext)))
+            
+            #remove all other files
+            _shutil.rmtree(tempDir)
+                        
+
+    
+    def _form_text_js(self, textID, text_html, switchboard_init_js):
+
+        content = ""
+        if switchboard_init_js: content += switchboard_init_js 
+        
+        queue_math_render = bool(text_html and '$' in text_html
+                                 and self.options.get('render_math',True))
+
+        if text_html is not None:
+            init_text_js = (
+                'el = $("#{textid}");\n'
+                'if(el.hasClass("pygsti-wsoutput-group")) {{\n'
+                '  el.children("div.single_switched_value").each( function(i,el){{\n'
+                '    CollapsibleLists.applyTo( el.find("ul").first()[0] );\n'
+                '  }});\n'
+                '}} else if(el.hasClass("single_switched_value")){{\n'
+                '  CollapsibleLists.applyTo(el[0]);\n'
+                '}}\n'
+                'caption = el.closest("figure").children("figcaption:first");\n'
+                'caption.css("width", Math.round(el.width()*0.9) + "px");\n'
+            ).format(textid=textID)
+        else:
+            init_text_js = "" #no per-div init needed
+            
+        if queue_math_render:
+            # then there is math text that needs rendering,
+            # so queue this, *then* trigger plot creation
+            content += ('  plotman.enqueue(function() {{ \n'
+                        '    renderMathInElement(document.getElementById("{textID}"), {{ delimiters: [\n'
+                        '             {{left: "$$", right: "$$", display: true}},\n'
+                        '             {{left: "$", right: "$", display: false}},\n'
+                        '             ] }} );\n').format(textID=textID)
+            content += init_text_js
+            content += '  }}, "Rendering math in {textID}" );\n'.format(textID=textID) #end enqueue
+        else:
+            content += init_text_js
 
         return self._create_onready_handler(content)

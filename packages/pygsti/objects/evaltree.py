@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from ..tools import mpitools as _mpit
-from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 import numpy as _np
 #import time as _time #DEBUG TIMERS
@@ -382,7 +382,7 @@ class EvalTree(list):
         subTreeOwners = { iSubTree: subCommOwners[subTreeOwners[iSubTree]]
                           for iSubTree in subTreeOwners }
 
-        printer = VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.build_printer(verbosity, comm)
         printer.log("*** Distributing %d subtrees into %d sub-comms (%s processors) ***"% \
                         (nSubtrees, nSubtreeComms, nprocs))
 

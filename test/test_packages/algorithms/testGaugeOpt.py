@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from pygsti.tools.basis import Basis
+from pygsti.baseobjs.basis import Basis
 
 import numpy as np
 from scipy import polyfit

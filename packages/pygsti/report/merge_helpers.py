@@ -17,7 +17,7 @@ import subprocess  as _subprocess
 
 from ..tools import compattools as _compat
 from ..tools import timed_block as _timed_block
-from ..objects import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 def read_contents(filename):
     """
@@ -414,7 +414,7 @@ def render_as_html(qtys, render_options, link_to, verbosity):
         With the same keys as `qtys` and values which contain the objects
         rendered as strings.
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as HTML
     qtys_html = _collections.defaultdict(lambda x=0: "OMITTED")
@@ -465,7 +465,7 @@ def render_as_latex(qtys, render_options, verbosity):
         With the same keys as `qtys` and values which contain the objects
         rendered as strings.
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     
     #render quantities as Latex
     qtys_latex = _collections.defaultdict(lambda x=0: "OMITTED")
@@ -551,7 +551,7 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
     -------
     None
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
 
     assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
     outputDir = _os.path.dirname(outputFilename)
@@ -605,7 +605,7 @@ def merge_html_template_dir(qtys, templateDir, outputDir, auto_open=False,
     -------
     None
     """    
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
         
     #Create directories if needed; otherwise clear it
     figDir = makeEmptyDir(_os.path.join(outputDir, 'figures'))
@@ -727,7 +727,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
     None
     """    
 
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     templateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),
                                           "templates", templateFilename )
     output_dir = _os.path.dirname(outputFilename)

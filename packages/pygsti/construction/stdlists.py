@@ -12,7 +12,8 @@ import warnings as _warnings
 from ..tools import listtools as _lt
 from ..objects import LsGermsStructure as _LsGermsStructure
 from ..objects import GateSet as _GateSet
-from ..objects import VerbosityPrinter as _VerbosityPrinter
+from ..objects import GateString as _GateString
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from . import gatestringconstruction as _gsc
 from . import spamspecconstruction as _ssc
 
@@ -413,17 +414,22 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
     
     truncFn = _getTruncFunction(truncScheme)
 
+    empty_germ = _GateString( (), "{}" )
+    if includeLGST: germList = [empty_germ] + germList
+
     #running structure of all strings so far (LGST strings or empty)
     running_gss = _LsGermsStructure([],germList,prepStrs,
                                     effectStrs,gateLabelAliases,
                                     sequenceRules)
-    if includeLGST:
+    
+    if includeLGST and len(maxLengthList) == 0:
+        #Add *all* LGST sequences as unstructured if we don't add them below
         running_gss.add_unindexed(lgst_list)
     
     lsgst_listOfStructs = [ ] # list of gate string structures to return
     missing_list = []
 
-    for maxLen in maxLengthList:
+    for i,maxLen in enumerate(maxLengthList):
 
         if nest: #add to running_gss and copy at end
             gss = running_gss #don't copy (yet)
@@ -436,19 +442,27 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             #Special LGST case
             gss.add_unindexed(lgst_list)
         else:
+            if includeLGST and i == 0: #first maxlen, so add LGST seqs as empty germ
+                #Note: no FPR on LGST strings
+                missing_list.extend( gss.add_plaquette(empty_germ, maxLen, empty_germ,
+                                                       allPossiblePairs, dscheck) )
+                gss.add_unindexed(lgst_list) # only adds those not already present
+            
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
+                if germ == empty_germ: continue #handled specially above
                 if maxLen > germLengthLimits.get(germ,1e100): continue
                 germ_power = truncFn(germ,maxLen)
                 
                 if rndm is None:
                     if fidPairDict is not None:
-                        fiducialPairsThisIter = fidPairDict[germ]
+                        fiducialPairsThisIter = fidPairDict.get(
+                            germ,allPossiblePairs)
                     else:
                         fiducialPairsThisIter = allPossiblePairs
     
                 elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict[germ]
+                    pair_indx_tups = fidPairDict.get(germ,allPossiblePairs)
                     remainingPairs = [ (i,j)
                                        for i in range(len(prepStrs))
                                        for j in range(len(effectStrs))
@@ -478,10 +492,10 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         lsgst_listOfStructs.append( gss )
 
     printer.log("--- Gate Sequence Creation ---", 1)
-    printer.log(" %d sequences created" % len(gss.allstrs))
+    printer.log(" %d sequences created" % len(gss.allstrs),2)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
-                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 1)
+                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 2)
     if len(missing_list) > 0:
         missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
                         for tup in missing_list]

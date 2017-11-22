@@ -7,7 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from . import gatestring as _gs
-from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from .evaltree import EvalTree
 
 import time as _time #DEBUG TIMERS
@@ -217,7 +217,7 @@ class MapEvalTree(EvalTree):
         """
         #dbList = self.generate_gatestring_list()
         tm = _time.time()
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
 
         if (maxSubTreeSize is None and numSubTrees is None) or \
            (maxSubTreeSize is not None and numSubTrees is not None):

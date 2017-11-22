@@ -88,7 +88,7 @@ class SpamTable(WorkspaceTable):
 
         if includeHSVec:
             gateset = gatesets[-1] #only show HSVec for last gateset
-            basisNm    = _objs.basis_longname(gateset.basis.name)
+            basisNm    = _tools.basis_longname(gateset.basis.name)
             colHeadings.append( 'Hilbert-Schmidt vector (%s basis)' % basisNm )
             formatters.append( None )
             
@@ -294,7 +294,7 @@ class GatesTable(WorkspaceTable):
 
         colHeadings = ['Gate']
         for gateset,title in zip(gatesets,titles):
-            basisLongNm = _objs.basis_longname(gateset.basis.name)
+            basisLongNm = _tools.basis_longname(gateset.basis.name)
             pre = (title+' ' if title else '')
             colHeadings.append('%sSuperoperator (%s basis)' % (pre,basisLongNm))
         formatters = [None]*len(colHeadings)
@@ -435,7 +435,7 @@ class ChoiTable(WorkspaceTable):
         for disp in display:
             if disp == "matrix":
                 for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    basisLongNm = _tools.basis_longname(gateset.basis.name)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             elif disp == "eigenvalues":
@@ -448,7 +448,7 @@ class ChoiTable(WorkspaceTable):
                     colHeadings.append('%sEigenvalue Magnitudes' % pre)
             elif disp == "boxplot":
                 for gateset,title in zip(gatesets,titles):
-                    basisLongNm = _objs.basis_longname(gateset.basis.name)
+                    basisLongNm = _tools.basis_longname(gateset.basis.name)
                     pre = (title+' ' if title else '')
                     colHeadings.append('%sChoi matrix (%s basis)' % (pre,basisLongNm))
             else:
@@ -810,7 +810,7 @@ class ErrgenTable(WorkspaceTable):
         as their projections onto spaces of standard generators """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S","A"), display_as="boxes",
-                 genType="logTiG"):
+                 genType="logGTi"):
                  
         """
         Create a table listing the error generators obtained by
@@ -2053,7 +2053,7 @@ class MetadataTable(WorkspaceTable):
                              customHeader={'latex': latex_head} )
         
         for key in sorted(list(params_dict.keys())):
-            if key in ['L,germ tuple base string dict', 'profiler']: continue #skip these
+            if key in ['L,germ tuple base string dict', 'weights', 'profiler']: continue #skip these
             if key == 'gaugeOptParams':
                 if isinstance(params_dict[key],dict):
                     val = params_dict[key].copy()
@@ -2186,6 +2186,50 @@ class SoftwareEnvTable(WorkspaceTable):
     
         table.finish()
         return table
+
+
+class ProfilerTable(WorkspaceTable):
+    """ Table of profiler timing information """
+    def __init__(self, ws, profiler, sortBy="time"):
+        """
+        Create a table of profiler timing information.
+    
+        Parameters
+        ----------
+        profiler : Profiler
+            The profiler object to extract timings from.
+
+        sortBy : {"time", "name"}
+            What the timer values should be sorted by.
+        """
+        super(ProfilerTable,self).__init__(ws, self._create, profiler, sortBy)
+    
+    def _create(self, profiler, sortBy):
+    
+        colHeadings = ('Label','Time (sec)')
+        formatters = ('Bold','Bold')
+    
+        #custom latex header for maximum width imposed on 2nd col
+        latex_head =  "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
+        latex_head += "\\textbf{Label} & \\textbf{Time} (sec) \\\\ \hline\n"
+        table = _ReportTable(colHeadings, formatters,
+                             customHeader={'latex': latex_head} )
+
+        if profiler is not None:
+            if sortBy == "name":
+                timerNames = sorted(list(profiler.timers.keys()))
+            elif sortBy == "time":
+                timerNames = sorted(list(profiler.timers.keys()),
+                                    key=lambda x: -profiler.timers[x])
+            else:
+                raise ValueError("Invalid 'sortBy' argument: %s" % sortBy)
+        
+            for nm in timerNames:
+                table.addrow((nm, profiler.timers[nm]), (None,None))
+                
+        table.finish()
+        return table
+
 
 
 class ExampleTable(WorkspaceTable):

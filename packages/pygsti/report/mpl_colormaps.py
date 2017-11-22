@@ -165,8 +165,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
     Parameters
     ----------
-    pygsti_fig : dict
-        A dictionary representing a pyGSTi figure.
+    pygsti_fig : ReportFigure
+        A pyGSTi figure.
 
     save_to : str
         Output filename.  Extension determines type.  If None, then the 
@@ -184,11 +184,12 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         Matplotlib figure, unless save_to is not None, in which case 
         the figure is closed and None is returned.
     """
-    fig = pygsti_fig['plotlyfig']
+    fig = pygsti_fig.plotlyfig
     data_trace_list = fig['data']
 
-    if 'special' in pygsti_fig:
-        if pygsti_fig['special'] == "keyplot": return special_keyplot(pygsti_fig, save_to, fontsize)
+    if 'special' in pygsti_fig.metadata:
+        if pygsti_fig.metadata['special'] == "keyplot":
+            return special_keyplot(pygsti_fig, save_to, fontsize)
         else: raise ValueError("Invalid `special` label: %s" % special)
     
     #if axes is None: 
@@ -201,7 +202,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
     if mpl_fig is not None and w is not None and h is not None:
         mpl_size = w/100.0, h/100.0 #heusistic
         mpl_fig.set_size_inches(*mpl_size) # was 12,8 for "super" color plot
-        pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
+        pygsti_fig.metadata['mpl_fig_size'] = mpl_size #record for later use by rendering commands
     
     xaxis, yaxis = layout['xaxis'], layout['yaxis']
     #annotations = layout.get('annotations',[])
@@ -289,14 +290,14 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         
         if typ == "heatmap":
             #colorscale = traceDict.get('colorscale','unknown')
-            plt_data = pygsti_fig['plt_data'] #traceDict['z'] is *normalized* already - maybe would work here but not for box value labels
+            plt_data = pygsti_fig.metadata['plt_data'] #traceDict['z'] is *normalized* already - maybe would work here but not for box value labels
             show_colorscale = traceDict.get('showscale',True)
 
             mpl_size = (plt_data.shape[1]*0.5, plt_data.shape[0]*0.5)
             mpl_fig.set_size_inches( *mpl_size )
-            #pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
+            #pygsti_fig.metadata['mpl_fig_size'] = mpl_size #record for later use by rendering commands
             
-            colormap = pygsti_fig['colormap']
+            colormap = pygsti_fig.colormap
             assert(colormap is not None), 'Must separately specify a colormap...'
             norm, cmap = colormap.get_matplotlib_norm_and_cmap()
 
@@ -366,7 +367,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         elif typ == "scattergl": #currently used only for colored points...
             x = traceDict['x'] 
             y = traceDict['y'] 
-            colormap = pygsti_fig.get('colormap',None)
+            colormap = pygsti_fig.colormap
             if colormap:
                 norm, cmap = colormap.get_matplotlib_norm_and_cmap()
                 s = _plt.scatter(x, y, c=y, s=50, cmap=cmap, norm=norm)
@@ -382,8 +383,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             #always grey=pos, red=neg type of bar plot for now (since that's all pygsti uses)
             y = _np.asarray(traceDict['y'])
-            if 'plt_yerr' in pygsti_fig:
-                yerr = pygsti_fig['plt_yerr']
+            if 'plt_yerr' in pygsti_fig.metadata:
+                yerr = pygsti_fig.metadata['plt_yerr']
             else:
                 yerr = None
 
@@ -470,12 +471,12 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
 
     #OLD xlabel="$\\rho_i$"
     #OLD ylabel="$E_i$",
-    prepStrs, effectStrs, xlabel, ylabel = pygsti_fig['args']
+    prepStrs, effectStrs, xlabel, ylabel = pygsti_fig.metadata['args']
 
     fig, axes = _plt.subplots()
     mpl_size = (len(prepStrs)*0.5,len(effectStrs)*0.5)
     fig.set_size_inches(*mpl_size)
-    pygsti_fig['mpl_fig_size'] = mpl_size #record for later use by rendering commands
+    pygsti_fig.metadata['mpl_fig_size'] = mpl_size #record for later use by rendering commands
 
     if title is not None:
         axes.set_title( title, fontsize=(fontsize+4) )

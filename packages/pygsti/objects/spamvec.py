@@ -14,8 +14,8 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import compattools as _compat
-from ..tools import basis as _basis
-from .protectedarray import ProtectedArray as _ProtectedArray
+from ..baseobjs import Basis as _Basis
+from ..baseobjs import ProtectedArray as _ProtectedArray
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
@@ -1003,7 +1003,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
             be truncated to force a successful construction.
         """
         vector = SPAMVec.convert_to_vector(vec)
-        basis = _basis.Basis(basis, int(round(_np.sqrt(len(vector)))))
+        basis = _Basis(basis, int(round(_np.sqrt(len(vector)))))
 
         self.basis = basis
         self.basis_mxs = basis.get_composite_matrices()   #shape (len(vec), dmDim, dmDim)

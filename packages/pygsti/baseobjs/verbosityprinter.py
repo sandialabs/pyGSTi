@@ -158,6 +158,7 @@ class VerbosityPrinter(object):
         self.warnings         = warnings
         self.extra_indents    = 0 # Used for nested calls
         self.defaultVerbosity = 1
+        self.recorded_output = None
 
     def clone(self):
         '''
@@ -168,6 +169,7 @@ class VerbosityPrinter(object):
         p.defaultVerbosity = self.defaultVerbosity
         p.progressLevel    = self.progressLevel
         p.extra_indents    = self.extra_indents
+        p.recorded_output  = self.recorded_output
 
         p._delayQueue          = _dc(self._delayQueue) # deepcopy
         p._progressStack       = _dc(self._progressStack)
@@ -247,6 +249,12 @@ class VerbosityPrinter(object):
         elif len(self.filename) > 0:
             self._append_to(self.filename, message)
 
+    # Hidden function for recording output to memory
+    def _record(self, typ, level, message):
+        if self.recorded_output is not None:
+            global_level = level+self.extra_indents
+            self.recorded_output.append( (typ, global_level, message) )
+            
     # special function reserved for logging errors
     def error(self, message):
         '''
@@ -262,6 +270,8 @@ class VerbosityPrinter(object):
         None
         '''
         self._put('\nERROR: %s\n' % message, stderr=True)
+        self._record("ERROR", 0, '\nERROR: %s\n' % message)
+
 
     # special function reserved for logging warnings
     def warning(self, message):
@@ -279,6 +289,7 @@ class VerbosityPrinter(object):
         '''
         if self.warnings:
             self._put('\nWARNING: %s\n' % message, stderr=True)
+            self._record("WARNING", 0, '\nWARNING: %s\n' % message)
 
     def log(self, message, messageLevel=None, indentChar='  ', showStatustype=False, doIndent=True, indentOffset=0, end='\n', flush=True):
         '''
@@ -327,6 +338,7 @@ class VerbosityPrinter(object):
                 self._delayQueue.append(indentChar + 'INVALID LEVEL: ' + formattedMessage)
             else:
                 self._put(formattedMessage, flush=flush)
+                self._record("LOG", messageLevel, formattedMessage)
 
     def _progress_bar(self, iteration, total, barLength, numDecimals, fillChar, emptyChar, prefix, suffix, indent):
         progressBar = ''
@@ -436,6 +448,7 @@ class VerbosityPrinter(object):
                                              prefix, suffix, indent)
         elif self.verbosity >  self._progressStack[-1]:
             progress = self._verbose_iteration(iteration, total, prefix, suffix, verboseMessages, indent, end)
+            self._record("LOG", self._progressStack[-1], progress)
 
         self._put(progress) # send the progress logging to either file or stdout
 
@@ -453,12 +466,34 @@ class VerbosityPrinter(object):
                                                   numDecimals, fillChar, emptyChar,
                                                   prefix, suffix, indent)
                     self._put(progress) # send the progress logging to either file or stdout
+                    self._record("LOG", self.verbosity, progress)
 
                 # Show the statuses that were queued while the progressBar was active
                 for item in self._delayQueue:
                     print(item)
                 del self._delayQueue[:]
                 self.progressLevel -= 1
+
+    def start_recording(self):
+        """ 
+        Begins recording (in memory) a list of `(type, verbosityLevel, message)`
+        tuples that is returned by the next call to :method:`stop_recording`.
+        """
+        self.recorded_output = []
+
+    def is_recording(self):
+        """ Returns whether this VerbosityPrinter is already recording """
+        return bool(self.recorded_output is not None)
+
+    def stop_recording(self):
+        """ 
+        Stops a "recording" started by :method:`start_recording` and returns the
+        list of `(type, verbosityLevel, message)` tuples that have been recorded
+        since then.
+        """
+        recorded = self.recorded_output
+        self.recorded_output = None #always "stop" recording
+        return recorded
 
 
 ########################################################################################################################################

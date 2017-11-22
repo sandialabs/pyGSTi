@@ -291,3 +291,39 @@ fieldset {
     color: #000000;
     float: left;
 }
+
+
+ul.collapsibleList, .collapsibleList ul {
+  list-style: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+
+.collapsibleList li:before {
+  content: "\0A0 \0A0 \0A0 \0A0 \0A0";
+  padding-right: 5px;
+}
+
+.collapsibleList li {
+  padding-left: 1em;
+  text-indent: -1em;
+  cursor : auto;
+  font-size: 14px;
+}
+
+.collapsibleList li.collapsibleListOpen:before {
+  content: "\25BC \020";
+  padding-right: 5px;
+}
+.collapsibleList li.collapsibleListOpen{
+  cursor           : pointer;
+}
+
+.collapsibleList li.collapsibleListClosed:before {
+  content: "\25BA \020";
+  padding-right: 5px;
+}
+.collapsibleList li.collapsibleListClosed{
+  cursor           : pointer;
+}

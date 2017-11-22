@@ -13,9 +13,9 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
-from ..tools import basis as _basis
+from ..tools import basistools as _bt
 from . import gaugegroup as _gaugegroup
-from .protectedarray import ProtectedArray as _ProtectedArray
+from ..baseobjs import ProtectedArray as _ProtectedArray
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -187,8 +187,8 @@ def convert(gate, toType, basis):
         RANK_TOL = 1e-6        
         J = _jt.fast_jamiolkowski_iso_std(gate, basis) #Choi mx basis doesn't matter
         if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-            unitary_pre = gate # when 'gate' is unitary
-        else: unitary_pre = None
+            unitary_post = gate # when 'gate' is unitary
+        else: unitary_post = None
 
         nQubits = _np.log2(gate.dim)/2.0
         bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
@@ -201,14 +201,14 @@ def convert(gate, toType, basis):
         truncate=True
 
         if isinstance(gate, LindbladParameterizedGate) and \
-           _np.linalg.norm(gate.unitary_prefactor-unitary_pre) < 1e-6 \
+           _np.linalg.norm(gate.unitary_postfactor-unitary_post) < 1e-6 \
            and ham_basis==gate.ham_basis and nonham_basis==gate.other_basis \
            and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
            and basis==gate.matrix_basis:
             return gate #no conversion necessary
         else:
             return LindbladParameterizedGate(
-                gate, unitary_pre, ham_basis, nonham_basis, cptp,
+                gate, unitary_post, ham_basis, nonham_basis, cptp,
                 nonham_diagonal_only, truncate, basis)
         
 
@@ -2388,7 +2388,7 @@ class LindbladParameterizedGate(GateMatrix):
     form is referred to as the "projection basis".
     """
     
-    def __init__(self, gateMatrix, unitaryPrefactor=None,
+    def __init__(self, gateMatrix, unitaryPostfactor=None,
                  ham_basis="pp", nonham_basis="pp", cptp=True,
                  nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
         """
@@ -2400,11 +2400,11 @@ class LindbladParameterizedGate(GateMatrix):
             a square 2D numpy array that gives the raw gate matrix, assumed to
             be in the `mxBasis` basis, to parameterize.  The shape of this
             array sets the dimension of the gate. If None, then it is assumed
-            equal to `unitaryPrefactor` (which cannot also be None). The
-            quantity `inv(unitaryPrefactor) * gateMatrix` is parameterized via
+            equal to `unitaryPostfactor` (which cannot also be None). The
+            quantity `gateMatrix inv(unitaryPostfactor)` is parameterized via
             projection onto the Lindblad terms.
             
-        unitaryPrefactor : numpy array, optional
+        unitaryPostfactor : numpy array, optional
             a square 2D numpy array of the same size of `gateMatrix` (if
             not None).  This matrix specifies a part of the gate action 
             to remove before parameterization via Lindblad projections.
@@ -2444,10 +2444,10 @@ class LindbladParameterizedGate(GateMatrix):
             and Qutrit (qt) (or a custom basis object).
         """
         if gateMatrix is None:
-            assert(unitaryPrefactor is not None), "arguments cannot both be None"
-            gateMatrix = unitaryPrefactor
-        if unitaryPrefactor is None:
-            unitaryPrefactor = _np.identity(gateMatrix.shape[0],'d')
+            assert(unitaryPostfactor is not None), "arguments cannot both be None"
+            gateMatrix = unitaryPostfactor
+        if unitaryPostfactor is None:
+            unitaryPostfactor = _np.identity(gateMatrix.shape[0],'d')
 
         self.cptp = cptp
         self.nonham_diagonal_only = nonham_diagonal_only
@@ -2455,7 +2455,7 @@ class LindbladParameterizedGate(GateMatrix):
         d2 = gateMatrix.shape[0]
         d = int(round(_np.sqrt(d2)))
         assert(d*d == d2), "Gate dim must be a perfect square"
-        self.unitary_prefactor = unitaryPrefactor
+        self.unitary_postfactor = unitaryPostfactor
 
         self.ham_basis = ham_basis
         self.other_basis = nonham_basis
@@ -2463,18 +2463,18 @@ class LindbladParameterizedGate(GateMatrix):
 
         #For now, always use pauli-product basis (should be able to use
         # gm also, but one thing at a time).
-        errgen = _gt.error_generator(gateMatrix, unitaryPrefactor, mxBasis, "logTiG")
+        errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
         self._set_params_from_errgen(errgen, truncate)
           #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
           # and self.ham_basis_size and self.other_basis_size
 
-        assert(not _np.array_equal(gateMatrix,unitaryPrefactor) or
+        assert(not _np.array_equal(gateMatrix,unitaryPostfactor) or
                _np.allclose(self.paramvals,0.0,atol=1e-6))
 
         #Assume gate in in the pauli-product basis for now, just for
         # simplicity.  I think everything should work fine in any other
         # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _basis.transform_matrix(mxBasis, "std", d)
+        mxBasisToStd = _bt.transform_matrix(mxBasis, "std", d)
         self.leftTrans  = _np.linalg.inv(mxBasisToStd)
         self.rightTrans = mxBasisToStd
 
@@ -2484,7 +2484,7 @@ class LindbladParameterizedGate(GateMatrix):
             self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
         else: self.Lmx = None
 
-        GateMatrix.__init__(self, self.unitary_prefactor)
+        GateMatrix.__init__(self, self.unitary_postfactor)
         self._construct_matrix() # construct base from the parameters
 
         if not truncate:
@@ -2493,7 +2493,7 @@ class LindbladParameterizedGate(GateMatrix):
 
 
     def _set_params_from_errgen(self, errgen, truncate):
-        d2 = self.unitary_prefactor.shape[0]
+        d2 = self.unitary_postfactor.shape[0]
         
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.lindblad_errgen_projections(
@@ -2661,12 +2661,10 @@ class LindbladParameterizedGate(GateMatrix):
                 lnd_error_gen, self.rightTrans)) #basis chg
         self.err_gen = lnd_error_gen
         self.exp_err_gen = _spl.expm(lnd_error_gen)
-        matrix = _np.dot(self.unitary_prefactor, self.exp_err_gen)
-        #matrix = _gt.gate_from_error_generator(
-        #    lnd_error_gen, self.unitary_prefactor) #same as above
+        matrix = _np.dot(self.exp_err_gen, self.unitary_postfactor)
 
         #gen0_pp = hamGens_pp[0] #_np.dot(self.leftTrans, _np.dot(self.hamGens[0], self.rightTrans))
-        #print("DEBUG CONSTRUCTED BASE:\n", self.unitary_prefactor)
+        #print("DEBUG CONSTRUCTED BASE:\n", self.unitary_postfactor)
         #print("DEBUG CONSTRUCTED GEN:\n", lnd_error_gen)
         #print("DEBUG CONSTRUCTED EXP(GEN):\n", _spl.expm(lnd_error_gen))
         #print("DEBUG CONSTRUCTED EXP(GEN)*GEN0:\n", _np.dot(_spl.expm(lnd_error_gen), gen0_pp))
@@ -2794,7 +2792,7 @@ class LindbladParameterizedGate(GateMatrix):
                     term = 1/_np.math.factorial(i) * commutant
                     series += term #1/_np.math.factorial(i) * commutant
                     last_commutant = commutant; i += 1
-                dH = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen)
+                dH = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor)
                 dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
                 nHam = bsH-1
             else:
@@ -2824,7 +2822,7 @@ class LindbladParameterizedGate(GateMatrix):
                         term = 1/_np.math.factorial(i) * commutant
                         series += term #1/_np.math.factorial(i) * commutant
                         last_commutant = commutant; i += 1
-                    dO = _np.einsum('il,lka,kj->ija', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1]
+                    dO = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1]
                     dO = dO.reshape(d2**2,bsO-1)
                 
                 
@@ -2863,7 +2861,7 @@ class LindbladParameterizedGate(GateMatrix):
                         term = 1/_np.math.factorial(i) * commutant
                         series += term #1/_np.math.factorial(i) * commutant
                         last_commutant = commutant; i += 1
-                    dO = _np.einsum('il,lkab,kj->ijab', self.unitary_prefactor, series, self.exp_err_gen) # dim [d2,d2,bs-1,bs-1]
+                    dO = _np.einsum('ikab,kl,lj->ijab', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1,bs-1]
                     dO = dO.reshape(d2**2,(bsO-1)**2)
             else:
                 dO = _np.empty( (d2**2,0), 'd') #so concat works below
@@ -3017,7 +3015,7 @@ class LindbladParameterizedGate(GateMatrix):
             #Deriv wrt hamiltonian params
             if bsH > 0:
                 dexpL = _dexpX(self.err_gen, self._dHdp(), self.exp_err_gen,
-                               self.unitary_prefactor)
+                               self.unitary_postfactor)
                 dH = dexpL.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
             else:
                 dH = _np.empty( (d2**2,0), 'd') #so concat works below
@@ -3025,7 +3023,7 @@ class LindbladParameterizedGate(GateMatrix):
             #Deriv wrt other params
             if bsO > 0:
                 dexpL = _dexpX(self.err_gen, self._dOdp(), self.exp_err_gen,
-                               self.unitary_prefactor)
+                               self.unitary_postfactor)
 
                 #Reshape so index as [iFlattenedGate,iOtherParam]
                 # 2nd dim will be bsO-1 or (bsO-1)**2 depending on tensor rank
@@ -3102,15 +3100,15 @@ class LindbladParameterizedGate(GateMatrix):
                 term1 = series2
                 if tr == 3: #one deriv dimension "a"
                     term2 = _np.einsum("ija,jkq->ikaq",series,series)
-                    d2expL = _np.einsum("ik,klaq,lj", self.unitary_prefactor,
-                                        term1+term2, self.exp_err_gen)
+                    d2expL = _np.einsum("ikaq,kl,lj->ijaq", term1+term2,
+                                      self.exp_err_gen, self.unitary_postfactor)
                     dO = d2expL.reshape((d2**2,bsO-1,bsO-1))
                     #d2expL.shape = (d2**2,bsO-1,bsO-1); dO = d2expL
 
                 elif tr == 4: #two deriv dimension "ab"
                     term2 = _np.einsum("ijab,jkqr->ikabqr",series,series)
-                    d2expL = _np.einsum("ik,klabqr,lj", self.unitary_prefactor,
-                                        term1+term2, self.exp_err_gen)
+                    d2expL = _np.einsum("ikabqr,kl,lj->ijabqr", term1+term2,
+                                      self.exp_err_gen, self.unitary_postfactor)
                     dO = d2expL.reshape((d2**2, (bsO-1)**2, (bsO-1)**2 ))
                     #d2expL.shape = (d2**2, (bsO-1)**2, (bsO-1)**2); dO = d2expL
 
@@ -3145,7 +3143,7 @@ class LindbladParameterizedGate(GateMatrix):
             A copy of this gate.
         """
         #Construct new gate with dummy identity mx
-        newGate = LindbladParameterizedGate(None,self.unitary_prefactor,
+        newGate = LindbladParameterizedGate(None,self.unitary_postfactor,
                                             self.ham_basis, self.other_basis,
                                             self.cptp,self.nonham_diagonal_only,
                                             True, self.matrix_basis)
@@ -3177,8 +3175,8 @@ class LindbladParameterizedGate(GateMatrix):
             U = S.get_transform_matrix()
             Uinv = S.get_transform_matrix_inverse()
 
-            #just conjugate prefactor and Lindbladian exponent by U:
-            self.unitary_prefactor = _np.dot(Uinv,_np.dot(self.unitary_prefactor, U))
+            #just conjugate postfactor and Lindbladian exponent by U:
+            self.unitary_postfactor = _np.dot(Uinv,_np.dot(self.unitary_postfactor, U))
             self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_matrix()
@@ -3189,7 +3187,7 @@ class LindbladParameterizedGate(GateMatrix):
 
             #CHECK WITH OLD (passes) TODO move to unit tests?
             #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
-            #tGate = LindbladParameterizedGate(tMx,self.unitary_prefactor,
+            #tGate = LindbladParameterizedGate(tMx,self.unitary_postfactor,
             #                                self.ham_basis, self.other_basis,
             #                                self.cptp,self.nonham_diagonal_only,
             #                                True, self.matrix_basis)
@@ -3230,7 +3228,7 @@ class LindbladParameterizedGate(GateMatrix):
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
         mx = _np.dot(D,self.base)
-        tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
+        tGate = LindbladParameterizedGate(mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
                                           True, self.matrix_basis)
@@ -3270,7 +3268,7 @@ class LindbladParameterizedGate(GateMatrix):
         """
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
         mx = _np.dot(rotnMx,self.base)
-        tGate = LindbladParameterizedGate(mx,self.unitary_prefactor,
+        tGate = LindbladParameterizedGate(mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
                                           True, self.matrix_basis)
@@ -3301,7 +3299,7 @@ class LindbladParameterizedGate(GateMatrix):
         assert(self.nonham_diagonal_only == otherGate.nonham_diagonal_only)
 
         composed_mx = _np.dot(self, otherGate)
-        return LindbladParameterizedGate(composed_mx,self.unitary_prefactor,
+        return LindbladParameterizedGate(composed_mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
                                           True, self.matrix_basis)
@@ -3375,7 +3373,7 @@ def _d2expSeries(X, dX, d2X):
         i += 1        
     return series, series2
 
-def _dexpX(X,dX,expX=None,prefactor=None):
+def _dexpX(X,dX,expX=None,postfactor=None):
     """ 
     Computes the derivative of the exponential of X(t) using
     the Haddamard lemma series expansion.
@@ -3396,14 +3394,14 @@ def _dexpX(X,dX,expX=None,prefactor=None):
         a call to `scipy.linalg.expm`.  If None, then the value is
         computed internally.
 
-    prefactor : ndarray, optional
-        A 2-tensor of the same shape as X that pre-multiplies the
+    postfactor : ndarray, optional
+        A 2-tensor of the same shape as X that post-multiplies the
         result.
 
     Returns
     -------
     ndarray
-        The derivative of `prefactor*exp(X)` given as a tensor with the
+        The derivative of `exp(X)*postfactor` given as a tensor with the
         same shape and axes as `dX`.
     """
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
@@ -3414,12 +3412,12 @@ def _dexpX(X,dX,expX=None,prefactor=None):
     
     if tr == 3:
         dExpX = _np.einsum('ika,kj->ija', series, expX)
-        if prefactor is not None:
-            dExpX = _np.einsum('il,lja->ija', prefactor, dExpX)
+        if postfactor is not None:
+            dExpX = _np.einsum('ila,lj->ija', dExpX, postfactor)
     elif tr == 4:
         dExpX = _np.einsum('ikab,kj->ijab', series, expX)
-        if prefactor is not None:
-            dExpX = _np.einsum('il,ljab->ijab', prefactor, dExpX)
+        if postfactor is not None:
+            dExpX = _np.einsum('ilab,lj->ijab', dExpX, postfactor)
             
     return dExpX
 

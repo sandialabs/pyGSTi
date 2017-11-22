@@ -3,7 +3,7 @@ import unittest
 import pygsti
 import pickle
 import time
-from pygsti.tools import SmartCache, smart_cached
+from pygsti.baseobjs import SmartCache, smart_cached
 
 @smart_cached
 def fib(x):

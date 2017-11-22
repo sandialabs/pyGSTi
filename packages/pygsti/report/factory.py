@@ -12,7 +12,7 @@ import time as _time
 import warnings as _warnings
 import zipfile as _zipfile
 
-from ..objects import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..objects import DataComparator as _DataComparator
 from ..tools   import timed_block as _timed_block
 
@@ -118,7 +118,7 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
 #    return True
 
 def _get_viewable_crf(est, est_lbl, gs_lbl, verbosity=0):
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     
     if est.has_confidence_region_factory(gs_lbl, 'final'):
         crf = est.get_confidence_region_factory(gs_lbl,'final')
@@ -249,6 +249,8 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("mpc",(0,1))
     switchBd.add("mpc_modvi",(0,1))
     switchBd.add("clifford_compilation",(0,1))
+    switchBd.add("meta_stdout",(0,1))
+    switchBd.add("profiler",(0,1))
 
     switchBd.add("gsGIRep",(0,1))
     switchBd.add("gsGIRepEP",(0,1))
@@ -310,6 +312,9 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             if switchBd.clifford_compilation[d,i] == 'auto':
                 switchBd.clifford_compilation[d,i] = find_std_clifford_compilation(
                     est.gatesets['target'],printer)
+
+            switchBd.profiler[d,i] = est_modvi.parameters.get('profiler',None)
+            switchBd.meta_stdout[d,i] = est_modvi.meta.get('stdout',[('LOG',1,"No standard output recorded")])
 
             GIRepLbl = 'final iteration estimate' #replace with a gauge-opt label if it has a CI factory
             if confidenceLevel is not None:
@@ -387,7 +392,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
 def create_general_report(results, filename, title="auto",
                           confidenceLevel=None,                          
-                          linlogPercentile=5, errgen_type="logTiG",
+                          linlogPercentile=5, errgen_type="logGTi",
                           nmthreshold=50, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False, 
@@ -521,6 +526,13 @@ def create_standard_report(results, filename, title="auto",
             their non-robust counterpart when displayed in reports. (default
             is True).
 
+        - confidence_interval_brevity : int, optional
+            Roughly specifies how many figures will have confidence intervals
+            (when applicable). Defaults to '1'.  Smaller values mean more
+            tables will get confidence intervals (and reports will take longer
+            to generate).
+    
+
     verbosity : int, optional
        How much detail to send to stdout.
     
@@ -531,11 +543,11 @@ def create_standard_report(results, filename, title="auto",
         The workspace object used to create the report
     """
     tStart = _time.time()
-    printer = VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
 
     if advancedOptions is None: advancedOptions = {}
     linlogPercentile = advancedOptions.get('linlog percentile',5)
-    errgen_type = advancedOptions.get('error generator type', "logTiG")
+    errgen_type = advancedOptions.get('error generator type', "logGTi")
     nmthreshold = advancedOptions.get('nm threshold',DEFAULT_BAD_FIT_THRESHOLD)
     precision = advancedOptions.get('precision', None)
     cachefile = advancedOptions.get('cachefile',None)
@@ -543,6 +555,7 @@ def create_standard_report(results, filename, title="auto",
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
+    ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -652,41 +665,45 @@ def create_standard_report(results, filename, title="auto",
     gsFinal = switchBd.gsFinal
     gsGIRep = switchBd.gsGIRep
     gsEP = switchBd.gsGIRepEP
-    cri = switchBd.cri if (confidenceLevel is not None) else None
-    criGIRep = switchBd.criGIRep if (confidenceLevel is not None) else None
+    cri_base = switchBd.cri if (confidenceLevel is not None) else None
+    criGIRep_base = switchBd.criGIRep if (confidenceLevel is not None) else None
+    cri      = lambda l: cri_base if ci_brevity <= l else None
+    criGIRep = lambda l: criGIRep_base if ci_brevity <= l else None
 
     # Non-summary gate estimates
     # Germ
     addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], cri)
+           ['Target','Estimated'], cri(1) )
     addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
-    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+           ['Target','Estimated'], 'boxes', cri(1), includeHSVec=False)
+    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri(1))
     addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
-                                                     ['Target','Estimated'], "boxes", cri)
-    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("boxplot","barplot"))
-    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, None) #cri) #TEST
-    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep,
+                                                     ['Target','Estimated'], "boxes", cri(1))
+    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri(1), display=("boxplot","barplot"))
+    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri(0))
+    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep(1),
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
-    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep,
+    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
            virtual_gates=germs)
-    #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, 
+    #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
+    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1), 
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
-    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, None, #cri, #TEST
+    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
                                         display=('inf','trace','nuinf'), virtual_gates=germs)        
-    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep, 
+    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1), 
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
-    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, None, #criGIRep, #TEST
+    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
                                         display=('evdiamond','evnudiamond'), virtual_gates=germs)
-    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                          display=('inf','trace','diamond','evinf','evdiamond'))
-    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
+    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
     addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
+    addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
+    addqty(2,'profilerTable', ws.ProfilerTable, switchBd.profiler)
     addqty(2,'softwareEnvTable', ws.SoftwareEnvTable)
     addqty(A,'exampleTable', ws.ExampleTable)
     qtys['exampleTable'].set_render_options(click_to_display=True)
@@ -937,7 +954,7 @@ def create_report_notebook(results, filename, title="auto",
     -------
     None
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     templatePath = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                  "templates","report_notebook")
     assert(_os.path.splitext(filename)[1] == '.ipynb'), 'Output file extension must be .ipynb'
@@ -1109,7 +1126,7 @@ def find_std_clifford_compilation(gateset, verbosity):
     dict or None
         The clifford compilation dictionary (if one can be found).
     """
-    printer = VerbosityPrinter.build_printer(verbosity)
+    printer = _VerbosityPrinter.build_printer(verbosity)
     std_modules = ("std1Q_XY",
                    "std1Q_XYI",
                    "std1Q_XYZI",

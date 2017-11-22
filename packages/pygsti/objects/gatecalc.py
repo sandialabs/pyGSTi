@@ -10,7 +10,7 @@ import numpy as _np
 import numpy.linalg as _nla
 
 from ..tools import compattools as _compat
-from .profiler import DummyProfiler as _DummyProfiler
+from ..baseobjs import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
 
