@@ -526,6 +526,13 @@ def create_standard_report(results, filename, title="auto",
             their non-robust counterpart when displayed in reports. (default
             is True).
 
+        - confidence_interval_brevity : int, optional
+            Roughly specifies how many figures will have confidence intervals
+            (when applicable). Defaults to '1'.  Smaller values mean more
+            tables will get confidence intervals (and reports will take longer
+            to generate).
+    
+
     verbosity : int, optional
        How much detail to send to stdout.
     
@@ -548,6 +555,7 @@ def create_standard_report(results, filename, title="auto",
     resizable = advancedOptions.get('resizable',True)
     autosize = advancedOptions.get('autosize','initial')
     combine_robust = advancedOptions.get('combine_robust',True)
+    ci_brevity = advancedOptions.get('confidence_interval_brevity',1)
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
@@ -657,39 +665,41 @@ def create_standard_report(results, filename, title="auto",
     gsFinal = switchBd.gsFinal
     gsGIRep = switchBd.gsGIRep
     gsEP = switchBd.gsGIRepEP
-    cri = switchBd.cri if (confidenceLevel is not None) else None
-    criGIRep = switchBd.criGIRep if (confidenceLevel is not None) else None
+    cri_base = switchBd.cri if (confidenceLevel is not None) else None
+    criGIRep_base = switchBd.criGIRep if (confidenceLevel is not None) else None
+    cri      = lambda l: cri_base if ci_brevity <= l else None
+    criGIRep = lambda l: criGIRep_base if ci_brevity <= l else None
 
     # Non-summary gate estimates
     # Germ
     addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], cri)
+           ['Target','Estimated'], cri(1) )
     addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
-           ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
-    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+           ['Target','Estimated'], 'boxes', cri(1), includeHSVec=False)
+    addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri(1))
     addqty(A,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
     addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
-                                                     ['Target','Estimated'], "boxes", cri)
-    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri, display=("boxplot","barplot"))
-    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, None) #cri) #TEST
-    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep,
+                                                     ['Target','Estimated'], "boxes", cri(1))
+    addqty(4,'bestGatesetChoiEvalTable', ws.ChoiTable, gsFinal, None, cri(1), display=("boxplot","barplot"))
+    addqty(4,'bestGatesetDecompTable', ws.GateDecompTable, gsFinal, gsTgt, cri(0))
+    addqty(4,'bestGatesetEvalTable', ws.GateEigenvalueTable, gsGIRep, gsTgt, criGIRep(1),
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'))
-    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep,
+    addqty(3,'bestGermsEvalTable', ws.GateEigenvalueTable, gsGIRep, gsEP, criGIRep(1),
            display=('evals','target','absdiff-evals','infdiff-evals','log-evals','absdiff-log-evals'),
            virtual_gates=germs)
-    #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri, display=('rel','log-rel'))
-    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri)
-    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri, 
+    #addqty('bestGatesetRelEvalTable', ws.GateEigenvalueTable, gsFinal, gsTgt, cri(1), display=('rel','log-rel'))
+    addqty(4,'bestGatesetVsTargetTable', ws.GatesetVsTargetTable, gsFinal, gsTgt, cliffcomp, cri(1))
+    addqty(4,'bestGatesVsTargetTable_gv', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1), 
                                         display=('inf','agi','trace','diamond','nuinf','nuagi'))
-    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, None, #cri, #TEST
+    addqty(3,'bestGatesVsTargetTable_gvgerms', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(0),
                                         display=('inf','trace','nuinf'), virtual_gates=germs)        
-    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep, 
+    addqty(4,'bestGatesVsTargetTable_gi', ws.GatesVsTargetTable, gsGIRep, gsTgt, criGIRep(1), 
                                         display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
-    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, None, #criGIRep, #TEST
+    addqty(3,'bestGatesVsTargetTable_gigerms', ws.GatesVsTargetTable, gsGIRep, gsEP, criGIRep(0),
                                         display=('evdiamond','evnudiamond'), virtual_gates=germs)
-    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri,
+    addqty(A,'bestGatesVsTargetTable_sum', ws.GatesVsTargetTable, gsFinal, gsTgt, cri(1),
                                          display=('inf','trace','diamond','evinf','evdiamond'))
-    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri, ("errgen","H","S","A"),
+    addqty(4,'bestGatesetErrGenBoxTable', ws.ErrgenTable, gsFinal, gsTgt, cri(1), ("errgen","H","S","A"),
                                                            "boxes", errgen_type)
     addqty(2,'metadataTable', ws.MetadataTable, gsFinal, switchBd.params)
     addqty(2,'stdoutBlock', ws.StdoutText, switchBd.meta_stdout)
