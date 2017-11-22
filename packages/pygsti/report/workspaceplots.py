@@ -544,7 +544,7 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -667,7 +667,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:

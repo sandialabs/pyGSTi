@@ -450,17 +450,19 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
+                if germ == empty_germ: continue #handled specially above
                 if maxLen > germLengthLimits.get(germ,1e100): continue
                 germ_power = truncFn(germ,maxLen)
                 
                 if rndm is None:
                     if fidPairDict is not None:
-                        fiducialPairsThisIter = fidPairDict[germ]
+                        fiducialPairsThisIter = fidPairDict.get(
+                            germ,allPossiblePairs)
                     else:
                         fiducialPairsThisIter = allPossiblePairs
     
                 elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict[germ]
+                    pair_indx_tups = fidPairDict.get(germ,allPossiblePairs)
                     remainingPairs = [ (i,j)
                                        for i in range(len(prepStrs))
                                        for j in range(len(effectStrs))

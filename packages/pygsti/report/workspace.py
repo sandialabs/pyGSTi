@@ -2768,6 +2768,7 @@ class WorkspaceText(WorkspaceOutput):
         elif typ == "latex":
 
             leave_src = self.options.get('leave_includes_src',False)
+            render_includes = self.options.get('render_includes',True)            
             W,H = self.options.get('page_size',(6.5,8.0))
             printer = _objs.VerbosityPrinter(1) #TEMP - add verbosity arg?
 
@@ -2796,6 +2797,7 @@ class WorkspaceText(WorkspaceOutput):
                                                     _os.path.join(output_dir,"%s.tex" % textDivID))
 
                     if render_includes:
+                        render_dir = output_dir
                         assert('latex_cmd' in self.options and self.options['latex_cmd']), \
                             "Cannot render latex include files without a valid 'latex_cmd' render option"
     
@@ -2845,16 +2847,16 @@ class WorkspaceText(WorkspaceOutput):
                 textDivID = textID + "_%d" % i
                 if i in overrideIDs: textDivID = overrideIDs[i]
 
+                text_dict = text.render("python")
+
                 if switched_item_mode == "inline":
-                    text_dict = text.render("python", output_dir=None)
                     texts_python[textDivID] = text_dict['python']
                 elif switched_item_mode == "separate files":
                     outputFilename = _os.path.join(output_dir, "%s.pkl" % textDivID)
-                    text_dict = text.render("python", output_dir=output_dir)
-                    #( setting output_dir generates separate files for plots in text )
-                    text_dict['python'].to_pickle(outputFilename) # a DataFrame
-                    texts_python[textDivID] = "df_%s = pd.read_pickle('%s')" \
-                                                % (textDivID,outputFilename)
+                    with open(outputFilename,'wb') as f:
+                        _pickle.dump(text_dict['python'], f)
+                    texts_python[textDivID] = "text_%s = pickle.load(open('%s','rb'))" \
+                                                         % (textDivID,outputFilename)
                 else:
                     raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                      switched_item_mode)
