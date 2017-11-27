@@ -295,7 +295,8 @@ fieldset {
 
 ul.collapsibleList, .collapsibleList ul {
   list-style: none;
-  margin-left: 0;
+  margin: 2px;
+  /*margin-left: 0;*/
   padding-left: 0;
 }
 

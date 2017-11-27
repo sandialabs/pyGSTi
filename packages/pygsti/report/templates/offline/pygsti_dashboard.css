@@ -95,6 +95,10 @@ figure.txtblk {  /* figure that is a text block */
   text-align: left;
 }
 
+figure.txtblk div.single_switched_value { /* put border around text listings */
+    border: 1px solid;
+}
+
 p.clear {
     clear: both;
 }
