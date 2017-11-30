@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import pickle as _pickle
 import os  as _os
 import time as _time
+import collections as _collections
 import warnings as _warnings
 import zipfile as _zipfile
 import numpy as _np
@@ -202,8 +203,12 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     """
     Creates the "master switchboard" used by several of the reports
     """
-    
-    dataset_labels = list(results_dict.keys())
+
+    if isinstance(results_dict, _collections.OrderedDict):
+        dataset_labels = list(results_dict.keys())
+    else:
+        dataset_labels = sorted(list(results_dict.keys()))
+        
     est_labels = None
     gauge_opt_labels = None
     Ls = None        
