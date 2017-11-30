@@ -172,6 +172,10 @@ def do_model_test(modelGateFilenameOrSet,
     parameters['gateLabelAliases'] = advancedOptions.get('gateLabelAliases',None)
     parameters['truncScheme'] = advancedOptions.get('truncScheme', "whole germ powers")
     parameters['weights'] = None
+
+    #Set a different default for onBadFit: don't do anything
+    if 'onBadFit' not in advancedOptions:
+        advancedOptions['onBadFit'] = [] # empty list => 'do nothing'
         
     return _post_opt_processing('do_model_test', ds, gs_target, gs_model,
                                 lsgstLists, parameters, None, gs_lsgst_list,
