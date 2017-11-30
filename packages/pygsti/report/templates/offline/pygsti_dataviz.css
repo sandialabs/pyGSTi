@@ -243,7 +243,7 @@ figure > div.pygsti-wsoutput-group {
 }
 
 .switch_container label {
-    /* float: left; */
+    float: left;
     padding: 5px;
     font-size: 9pt;
 }
@@ -260,8 +260,12 @@ figure > div.pygsti-wsoutput-group {
     color: black;
 }
 
-.switch_container .ui-menu-item {
+.ui-selectmenu-menu .ui-menu-item {
     font-size: 8pt; /* combo-box options text (select text governed by "span" above) */
+}
+
+.ui-selectmenu-button.ui-button {
+    width: auto; /* make non-sidebar combo boxes adjust width to fit contents */
 }
 
 .switch_container .ui-slider {
@@ -276,6 +280,7 @@ figure > div.pygsti-wsoutput-group {
 fieldset {
     border: 0px none;
     text-align: left; /* for button groups */
+    padding: 3px 10px 3px 10px; /* reduce default vertical spacing */
 }
 
 /* Plotly hovertext size */
@@ -295,7 +300,8 @@ fieldset {
 
 ul.collapsibleList, .collapsibleList ul {
   list-style: none;
-  margin-left: 0;
+  margin: 2px;
+  /*margin-left: 0;*/
   padding-left: 0;
 }
 

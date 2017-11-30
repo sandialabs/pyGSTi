@@ -664,3 +664,94 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     for i,j,gstr in gsplaq:
         ret[i,j] = llrVals_and_strings_dict[gstr]
     return ret
+
+
+def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
+    """ 
+    Computes the number of standard deviations of model violation, comparing
+    the data in `dataset` with the `gateset` model at the "points" (sequences)
+    specified by `gss`.
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The data set.
+    
+    gateset : GateSet
+        The gate set (model).
+
+    gss : GateStringStructure
+        A gate string structure whose `.allstrs` member contains a list of
+        `GateStrings` specifiying the sequences used to compare the data and
+        model.  Its `.aliases` member optionally specifies gate label aliases
+        to be used when querying `dataset`.
+
+    objective : {"logl", "chi2"}
+        Which objective function is used to compute the model violation.
+
+    Np : int, optional
+        The number of free parameters in the model.  If None, then 
+        `gateset.num_nongauge_params()` is used.
+
+    returnAll : bool, optional
+        Returns additional information such as the raw and expected model
+        violation (see below).
+
+    Returns
+    -------
+    Nsig : float
+        The number of sigma of model violaition
+
+    rating : int
+        A 1-5 rating (e.g. "number of stars") used to indicate the rough
+        abililty of the model to fit the data (better fit = higher rating).
+
+    modelViolation : float
+        The raw value of the objective function.  Only returned when
+        `returnAll==True`.
+
+    expectedViolation : float
+        The expected value of the objective function.  Only returned when
+        `returnAll==True`.
+
+    Ns, Np : int
+        The number of dataset and model parameters, respectively. Only 
+        returned when `returnAll==True`.
+
+    """
+    gstrs = gss.allstrs
+    if objective == "chi2":
+        fitQty = _tools.chi2( dataset, gateset, gstrs,
+                              minProbClipForWeighting=1e-4,
+                              gateLabelAliases=gss.aliases )
+    elif objective == "logl":
+        logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
+        logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
+        fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+        if(logL_upperbound < logl):
+            raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+
+    if Np is None: Np = gateset.num_nongauge_params()
+    Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+    k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
+    Nsig = (fitQty-k)/_np.sqrt(2*k)
+    if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
+        #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+
+    if   Nsig <= 2: rating = 5
+    elif Nsig <= 20: rating = 4
+    elif Nsig <= 100: rating = 3
+    elif Nsig <= 500: rating = 2
+    else: rating = 1
+
+    #OLD:
+    #if (fitQty-k) < _np.sqrt(2*k):  rating = 5
+    #elif (fitQty-k) < 2*k:          rating = 4
+    #elif (fitQty-k) < 5*k:          rating = 3
+    #elif (fitQty-k) < 10*k:         rating = 2
+    #else:                           rating = 1
+
+    if returnAll:
+        return Nsig, rating, fitQty, k, Ns, Np
+    else:
+        return Nsig, rating

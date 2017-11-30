@@ -970,7 +970,7 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
 def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
                          xlabel=None, ylabel=None, boxLabels=False,
                          thickLineInterval=None, colorbar=None, colormap=None,
-                         prec=0, scale=1.0, EBmatrix=None, title=None):
+                         prec=0, scale=1.0, EBmatrix=None, title=None, grid="black"):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -1022,6 +1022,11 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     title : str, optional
         A title for the plot
 
+    grid : {"white","black",None}
+        What color grid lines, if any, to add to the plot.  Advanced usage
+        allows the addition of `:N` where `N` is an integer giving the line
+        width.
+
     Returns
     -------
     plotly.Figure
@@ -1072,32 +1077,51 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     nY = matrix.shape[0]
     
     gridlines = []
-    
-    # Vertical lines
-    for i in range(nX-1):
-        #add darker lines at multiples of thickLineInterval boxes
-        w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
-        
-        gridlines.append(     
-            {
-                'type': 'line',
-                'x0': i+0.5, 'y0': -0.5,
-                'x1': i+0.5, 'y1': nY-0.5,
-                'line': {'color': 'black', 'width': w},
-            } )
-        
-    #Horizontal lines
-    for i in range(nY-1):
-        #add darker lines at multiples of thickLineInterval boxes
-        w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
+    showframe = True #show black axes except with white grid lines (aesthetic)
 
-        gridlines.append(     
-            {
-                'type': 'line',
-                'x0': -0.5, 'y0': i+0.5,
-                'x1': nX-0.5, 'y1': i+0.5,
-                'line': {'color': 'black', 'width': w},
-            } )
+    if grid:
+        if ':' in grid:
+            gridlinecolor,w = grid.split(':')
+            gridlinewidth = int(w)
+        else:
+            gridlinecolor = grid #then 'grid' is the line color
+            gridlinewidth = None
+            
+        if gridlinecolor == "white":
+            showframe = False
+        
+        # Vertical lines
+        for i in range(nX-1):
+            if gridlinewidth:
+                w = gridlinewidth
+            else:
+                #add darker lines at multiples of thickLineInterval boxes
+                w = 3 if (thickLineInterval and
+                          (i+1) % thickLineInterval == 0) else 1
+            
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': i+0.5, 'y0': -0.5,
+                    'x1': i+0.5, 'y1': nY-0.5,
+                    'line': {'color': gridlinecolor, 'width': w},
+                } )
+            
+        #Horizontal lines
+        for i in range(nY-1):
+            if gridlinewidth:
+                w = gridlinewidth
+            else:
+                #add darker lines at multiples of thickLineInterval boxes
+                w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
+    
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': -0.5, 'y0': i+0.5,
+                    'x1': nX-0.5, 'y1': i+0.5,
+                    'line': {'color': gridlinecolor, 'width': w},
+                } )
 
 
     annotations = []
@@ -1119,7 +1143,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     if xlabel: tmargin += 30
     if ylabel: lmargin += 30
     max_xl = max([len(xl) for xl in xlabels])
-    if max_xl > 0: tmargin += max_xl*5
+    if max_xl > 0: tmargin += max_xl*7
     max_yl = max([len(yl) for yl in ylabels])
     if max_yl > 0: lmargin += max_yl*5
     if colorbar: rmargin = 100
@@ -1167,7 +1191,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
-            showline=True,
+            showline=showframe,
             showticklabels=True,
             mirror=True,
             ticks="",
@@ -1183,7 +1207,7 @@ def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
-            showline=True,
+            showline=showframe,
             showticklabels=True,
             mirror=True,
             ticks="",
@@ -1768,7 +1792,8 @@ class MatrixPlot(WorkspacePlot):
     """ Plot of a general matrix using colored boxes """
     def __init__(self, ws, matrix, m=-1.0, M=1.0,
                  xlabels=None, ylabels=None, xlabel=None, ylabel=None,
-                 boxLabels=False, colorbar=None, colormap=None, prec=0, scale=1.0):
+                 boxLabels=False, colorbar=None, colormap=None, prec=0,
+                 scale=1.0, grid="black"):
         """
         Creates a color box plot of a matrix using the given color map.
     
@@ -1814,21 +1839,26 @@ class MatrixPlot(WorkspacePlot):
     
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        grid : {"white","black",None}
+            What color grid lines, if any, to add to the plot.  Advanced usage
+            allows the addition of `:N` where `N` is an integer giving the line
+            width.
         """
         super(MatrixPlot,self).__init__(ws, self._create, matrix, m, M,
                                         xlabels, ylabels, xlabel, ylabel,
-                                        boxLabels, colorbar, colormap, prec, scale)
+                                        boxLabels, colorbar, colormap, prec, scale, grid)
           
     def _create(self, matrix, m, M,
                 xlabels, ylabels, xlabel, ylabel,
-                boxLabels, colorbar, colormap, prec, scale):
+                boxLabels, colorbar, colormap, prec, scale, grid):
 
         if colormap is None:
             colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
             
         return matrix_color_boxplot(
             matrix, xlabels, ylabels, xlabel, ylabel,
-            boxLabels, None, colorbar, colormap, prec, scale)
+            boxLabels, None, colorbar, colormap, prec, scale, grid=grid)
 
 
 
@@ -2200,6 +2230,9 @@ class GramMatrixBarPlot(WorkspacePlot):
             2-tuple of gate string lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         super(GramMatrixBarPlot,self).__init__(ws, self._create,
                                                dataset, target, maxlen, fixedLists, scale)
@@ -2252,12 +2285,13 @@ class GramMatrixBarPlot(WorkspacePlot):
                             None, pythonVal)
 
 class FitComparisonBarPlot(WorkspacePlot):
-    """ Bar plot showing the overall (aggregate) goodness of fit """
-    def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
+    """ Bar plot showing the overall (aggregate) goodness of fit
+        (along one dimension)"""
+    def __init__(self, ws, Xs, gssByX, gatesetByX, datasetByX,
                  objective="logl", Xlabel='L', NpByX=None, scale=1.0):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
-        for one or more gate set estimates to a data set.
+        for one or more gate set estimates to corresponding data sets.
 
         Parameters
         ----------
@@ -2271,8 +2305,9 @@ class FitComparisonBarPlot(WorkspacePlot):
         gatesetByX : list of GateSets
             `GateSet`s corresponding to each X value.
     
-        dataset : DataSet
-            The data set to compare each gate set against.
+        datasetByX : DataSet or list of DataSets
+            The data sets to compare each gate set against.  If a single
+            :class:`DataSet` is given, then it is used for all comparisons.
     
         objective : {"logl", "chi2"}, optional
             Whether to use log-likelihood or chi^2 values.
@@ -2284,11 +2319,15 @@ class FitComparisonBarPlot(WorkspacePlot):
         NpByX : list of ints, optional
             A list of parameter counts to use for each X.  If None, then
             the number of non-gauge parameters for each gate set is used.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         super(FitComparisonBarPlot,self).__init__(ws, self._create,
-                                                  Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale)
+                                                  Xs, gssByX, gatesetByX, datasetByX,
+                                                  objective, Xlabel, NpByX, scale)
         
-    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale):
+    def _create(self, Xs, gssByX, gatesetByX, datasetByX, objective, Xlabel, NpByX, scale):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts=[]
@@ -2296,38 +2335,20 @@ class FitComparisonBarPlot(WorkspacePlot):
         if NpByX is None:
             NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
 
-        # BEGIN code that is the same as FitComparisonTable creation code
-        for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            gstrs = gss.allstrs
-            
-            if objective == "chi2":
-                fitQty = _tools.chi2( dataset, gs, gstrs,
-                                    minProbClipForWeighting=1e-4,
-                                    gateLabelAliases=gss.aliases )
-            elif objective == "logl":
-                logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
-                logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gss.aliases)
-                fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
-                if(logL_upperbound < logl):
-                    raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+        if isinstance(datasetByX, _objs.DataSet):
+            datasetByX = [datasetByX]*len(gatesetByX)
 
-            Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
-            Nsig = (fitQty-k)/_np.sqrt(2*k)
-            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
-            #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
-    
-            if   (fitQty-k) < _np.sqrt(2*k):
-                rating = 5; color="darkgreen"
-            elif (fitQty-k) < 2*k:
-                rating = 4; color="lightgreen"
-            elif (fitQty-k) < 5*k:
-                rating = 3; color="yellow"
-            elif (fitQty-k) < 10*k:
-                rating = 2; color="orange"
+        for X,gs,gss,dataset,Np in zip(Xs,gatesetByX,gssByX,datasetByX,NpByX):
+            if gss is None or gs is None:
+                Nsig, rating = _np.nan, 5
             else:
-                rating = 1; color="red"
-            # END code that is the same as FitComparisonTable creation code
+                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective, Np)
+                
+            if   rating==5: color="darkgreen"
+            elif rating==4: color="lightgreen"
+            elif rating==3: color="yellow"
+            elif rating==2: color="orange"
+            else:           color="red"
             
             xtics.append(str(X))
             ys.append(Nsig)
@@ -2387,6 +2408,81 @@ class FitComparisonBarPlot(WorkspacePlot):
         
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, {'x': xs, 'y': ys})
+
+
+class FitComparisonBoxPlot(WorkspacePlot):
+    """ Box plot showing the overall (aggregate) goodness of fit
+        (along 2 dimensions)"""
+    def __init__(self, ws, Xs, Ys, gssByYthenX, gatesetByYthenX, datasetByYthenX,
+                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0):
+        """
+        Creates a box plot showing the overall (aggregate) goodness of fit
+        for one or more gate set estimates to their respective  data sets.
+
+        Parameters
+        ----------
+        Xs, Ys : list
+            List of X-values and Y-values (converted to strings).
+
+        gssByYthenX : list of lists of LsGermsStructure objects
+            Specifies the set (& structure) of the gate strings used at each Y
+            and X value, indexed as `gssByYthenX[iY][iX]`, where `iX` and `iY`
+            are X and Y indices, respectively.
+
+        gatesetByYthenX : list of lists of GateSets
+            `GateSet`s corresponding to each X and Y value.
+
+        datasetByYthenX : list of lists of DataSets
+            `DataSet`s corresponding to each X and Y value.
+    
+        objective : {"logl", "chi2"}, optional
+            Whether to use log-likelihood or chi^2 values.
+
+        Xlabel, Ylabel : str, optional
+            Labels for the 'X' and 'Y' variables which index the different gate
+            sets. These strings will be the x- and y-label of the resulting box
+            plot.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
+        super(FitComparisonBoxPlot,self).__init__(
+            ws, self._create, Xs, Ys, gssByYthenX, gatesetByYthenX,
+            datasetByYthenX, objective, Xlabel, Ylabel, scale)
+        
+    def _create(self, Xs, Ys, gssByYX, gatesetByYX, datasetByYX, objective,
+                    Xlabel, Ylabel, scale):
+
+        xs = list(range(len(Xs)))
+        ys = list(range(len(Ys)))
+        xlabels = list(map(str,Xs))
+        ylabels = list(map(str,Ys))
+
+        NsigMx = _np.empty( (len(Ys),len(Xs)), 'd')
+        cmap = _colormaps.PiecewiseLinearColormap(
+            [[0,(0,0.5,0)], [2,(0,0.5,0)],   #rating=5 darkgreen
+             [20,(0,1.0,0)],                 #rating=4 lightgreen
+             [100,(1.0,1.0,0)],              #rating=3 yellow
+             [500,(1.0,0.5,0)],              #rating=2 orange
+             [1000,(1.0,0,0)]])              #rating=1 red
+
+        for iY,Y in enumerate(Ys):
+            for iX,X in enumerate(Xs):
+                dataset = datasetByYX[iY][iX]
+                gs = gatesetByYX[iY][iX]
+                gss = gssByYX[iY][iX]
+                
+                if dataset is None or gss is None or gs is None:
+                    NsigMx[iY][iX] = _np.nan
+                    continue
+
+                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective)
+                NsigMx[iY][iX] = Nsig
+
+        return matrix_color_boxplot(
+            NsigMx, xlabels, ylabels, Xlabel, Ylabel,
+            boxLabels=True, colorbar=False, colormap=cmap,
+            prec='compact', scale=scale, grid="white")
 
 
 class DatasetComparisonSummaryPlot(WorkspacePlot):

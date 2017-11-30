@@ -284,6 +284,7 @@ class Workspace(object):
         self.ChoiEigenvalueBarPlot = makefactory(_wp.ChoiEigenvalueBarPlot)
         self.GramMatrixBarPlot = makefactory(_wp.GramMatrixBarPlot)
         self.FitComparisonBarPlot = makefactory(_wp.FitComparisonBarPlot)
+        self.FitComparisonBoxPlot = makefactory(_wp.FitComparisonBoxPlot)
         self.DatasetComparisonHistogramPlot = makefactory(_wp.DatasetComparisonHistogramPlot)
         self.DatasetComparisonSummaryPlot = makefactory(_wp.DatasetComparisonSummaryPlot)
         self.RandomizedBenchmarkingPlot = makefactory(_wp.RandomizedBenchmarkingPlot)
@@ -578,7 +579,7 @@ class Workspace(object):
 
         #Gate a list of lists, each list holding all of the relevant switch positions for each board
         switch_positions = []
-        for i,sb in enumerate(switchboards):
+        for isb,sb in enumerate(switchboards):
             info = switchBdInfo[isb]
             info['switch indices'] = list(info['switch indices']) # set -> list so definite order
             
@@ -736,6 +737,30 @@ class Switchboard(_collections.OrderedDict):
         """
         super(Switchboard,self).__setitem__(varname, SwitchValue(self, varname, dependencies))
 
+    def add_unswitched(self, varname, value):
+        """
+        Adds a new non-switched-value to this Switchboard.
+
+        This can be convenient for attaching related non-switched data to
+        a :class:`Switchboard`.
+
+        Parameters
+        ----------
+        varname : str
+            A name for the variable being added.  This name will be used to
+            access the new variable (as either a dictionary key or as an 
+            object member).
+
+        value : object
+            The un-switched value to associate with `varname`.
+        
+        Returns
+        -------
+        None
+        """
+        super(Switchboard,self).__setitem__(varname, value)
+
+        
     def __setitem__(self, key, val):
         raise KeyError("Use add(...) to add an item to this swichboard")
 

@@ -19,6 +19,7 @@ from .table import ReportTable as _ReportTable
 
 from .workspace import WorkspaceTable
 from . import workspaceplots as _wp
+from . import plothelpers as _ph
 
 class BlankTable(WorkspaceTable):
     """A completely blank placeholder table."""
@@ -619,46 +620,12 @@ class GatesVsTargetTable(WorkspaceTable):
         colHeadings = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         tooltips    = ['Gate'] if (virtual_gates is None) else ['Gate or Germ']
         for disp in display:
-            if disp == "inf":
-                colHeadings.append("Entanglement|Infidelity")
-                tooltips.append("1.0 - <psi| 1 x Lambda(psi) |psi>")
-            elif disp == "agi":
-                colHeadings.append("Avg. Gate|Infidelity")
-                tooltips.append("d/(d+1) (entanglement infidelity)")
-            elif disp == "trace":
-                colHeadings.append("1/2 Trace|Distance")
-                tooltips.append("0.5 | Chi(A) - Chi(B) |_tr")
-            elif disp == "diamond":
-                colHeadings.append( "1/2 Diamond-Dist")
-                tooltips.append("0.5 sup | (1 x (A-B))(rho) |_tr")
-            elif disp == "nuinf":
-                colHeadings.append("Non-unitary|Ent. Infidelity")
-                tooltips.append("(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]")
-            elif disp == "nuagi":
-                colHeadings.append("Non-unitary|Avg. Gate Infidelity")
-                tooltips.append("(d-1)/d [1 - sqrt( unitarity(A B^-1) )]")
-            elif disp == "evinf":
-                colHeadings.append("Eigenvalue|Ent. Infidelity")
-                tooltips.append("min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]")
-            elif disp == "evagi":
-                colHeadings.append("Eigenvalue|Avg. Gate Infidelity")
-                tooltips.append("min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]")
-            elif disp == "evnuinf":
-                colHeadings.append("Eigenvalue Non-U.|Ent. Infidelity")
-                tooltips.append("(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]")
-            elif disp == "evnuagi":
-                colHeadings.append("Eigenvalue Non-U.|Avg. Gate Infidelity")
-                tooltips.append("(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]")
-            elif disp == "evdiamond":
-                colHeadings.append("Eigenvalue|1/2 Diamond-Dist")
-                tooltips.append("(d^2-1)/d^2 max_i { |a_i - b_i| } where (a_i,b_i) are corresponding eigenvalues of A and B.")
-            elif disp == "evnudiamond":
-                colHeadings.append("Eigenvalue Non-U.|1/2 Diamond-Dist")
-                tooltips.append("(d^2-1)/d^2 max_i { | |a_i| - |b_i| | } where (a_i,b_i) are corresponding eigenvalues of A and B.")
-            elif disp == "frob":
-                colHeadings.append("Frobenius|Distance")
-                tooltips.append("sqrt( sum( (A_ij - B_ij)^2 ) )")
-            else: raise ValueError("Invalid display column name: %s" % disp)
+            try:
+                heading, tooltip = _reportables.info_of_gatefn_by_name(disp)
+            except ValueError:
+                raise ValueError("Invalid display column name: %s" % disp)
+            colHeadings.append(heading)
+            tooltips.append(tooltip)
 
         formatters  = (None,) + ('Conversion',) * (len(colHeadings)-1)
 
@@ -675,52 +642,12 @@ class GatesVsTargetTable(WorkspaceTable):
         for gl in iterOver:
             #Note: gl may be a gate label (a string) or a GateString
             row_data = [ str(gl) ]
-            b = bool(_tools.isstr(gl)) #whether this is a gate label or a string
 
             for disp in display:
-                if disp == "inf":
-                    fn = _reportables.Entanglement_infidelity if b else \
-                         _reportables.Gatestring_entanglement_infidelity
-                elif disp == "agi":
-                    fn = _reportables.Avg_gate_infidelity if b else \
-                         _reportables.Gatestring_avg_gate_infidelity
-                elif disp == "trace":
-                    fn = _reportables.Jt_diff if b else \
-                         _reportables.Gatestring_jt_diff
-                elif disp == "diamond":
-                    fn = _reportables.Half_diamond_norm if b else \
-                         _reportables.Gatestring_half_diamond_norm
-                elif disp == "nuinf":
-                    fn = _reportables.Nonunitary_entanglement_infidelity if b else \
-                         _reportables.Gatestring_nonunitary_entanglement_infidelity
-                elif disp == "nuagi":
-                    fn = _reportables.Nonunitary_avg_gate_infidelity if b else \
-                         _reportables.Gatestring_nonunitary_avg_gate_infidelity
-                elif disp == "evinf":
-                    fn = _reportables.Eigenvalue_entanglement_infidelity if b else \
-                         _reportables.Gatestring_eigenvalue_entanglement_infidelity
-                elif disp == "evagi":
-                    fn = _reportables.Eigenvalue_avg_gate_infidelity if b else \
-                         _reportables.Gatestring_eigenvalue_avg_gate_infidelity
-                elif disp == "evnuinf":
-                    fn = _reportables.Eigenvalue_nonunitary_entanglement_infidelity if b else \
-                         _reportables.Gatestring_eigenvalue_nonunitary_entanglement_infidelity
-                elif disp == "evnuagi":
-                    fn = _reportables.Eigenvalue_nonunitary_avg_gate_infidelity if b else \
-                         _reportables.Gatestring_eigenvalue_nonunitary_avg_gate_infidelity
-                elif disp == "evdiamond":
-                    fn = _reportables.Eigenvalue_diamondnorm if b else \
-                         _reportables.Gatestring_eigenvalue_diamondnorm
-                elif disp == "evnudiamond":
-                    fn = _reportables.Eigenvalue_nonunitary_diamondnorm if b else \
-                         _reportables.Gatestring_eigenvalue_nonunitary_diamondnorm
-                elif disp == "frob":
-                    fn = _reportables.Fro_diff if b else \
-                         _reportables.Gatestring_fro_diff
-
                 #import time as _time #DEBUG
-                #tStart = _time.time() #DEBUG
-                qty = _ev( fn(gateset, targetGateset, gl), confidenceRegionInfo)
+                #tStart = _time.time() #DEBUG                
+                qty = _reportables.evaluate_gatefn_by_name(
+                    disp, gateset, targetGateset, gl, confidenceRegionInfo)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append( qty )
@@ -1648,33 +1575,10 @@ class FitComparisonTable(WorkspaceTable):
         table = _ReportTable(colHeadings, None, colHeadingLabels=tooltips)
         
         for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            gstrs = gss.allstrs
-            
-            if objective == "chi2":
-                fitQty = _tools.chi2( dataset, gs, gstrs,
-                                    minProbClipForWeighting=1e-4,
-                                    gateLabelAliases=gss.aliases )
-            elif objective == "logl":
-                logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
-                logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gss.aliases)
-                fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
-                if(logL_upperbound < logl):
-                    raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
-
-            Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
-            Nsig = (fitQty-k)/_np.sqrt(2*k)
-            if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
-            #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
-    
-            if   (fitQty-k) < _np.sqrt(2*k): rating = 5
-            elif (fitQty-k) < 2*k: rating = 4
-            elif (fitQty-k) < 5*k: rating = 3
-            elif (fitQty-k) < 10*k: rating = 2
-            else: rating = 1
-            table.addrow(
-                        (str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
-                        (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
+            Nsig, rating, fitQty, k, Ns, Np = _ph.ratedNsigma(dataset, gs, gss,
+                                                              objective, Np, returnAll=True)
+            table.addrow((str(X),fitQty,k,fitQty-k,_np.sqrt(2*k),Nsig,Ns,Np,"<STAR>"*rating),
+                         (None,'Normal','Normal','Normal','Normal','Rounded','Normal','Normal','Conversion'))
     
         table.finish()
         return table
@@ -1761,106 +1665,164 @@ class GatestringTable(WorkspaceTable):
         table.finish()
         return table
         
-    
+
 class GatesSingleMetricTable(WorkspaceTable):
     """ Table that compares the gates of many GateSets which share the same gate
-        labels to a target GateSet using a single metric, so that the GateSet
-        titles can be used as the column headers (and gate labels as rows) """
-    def __init__(self, ws, gatesets, titles, targetGateset,
-                 metric="infidelity"):
+        labels to target GateSets using a single metric, so that the GateSet
+        titles can be used as the row and column headers."""
+    def __init__(self, ws, metric, gatesets, targetGatesets, titles,
+                 rowtitles=None, tableTitle=None, gateLabel=None,
+                 confidenceRegionInfo=None):
         """
         Create a table comparing the gates of various gate sets (`gatesets`) to
-        those of `targetGateset` using the metric named by `metric`.
-    
+        those of `targetGatesets` using the metric named by `metric`.
+
+        If `gatesets` and `targetGatesets` are 1D lists, then `rowtitles` and
+        `gateLabel` should be left as their default values so that the
+        gate labels are used as row headers.
+
+        If `gatesets` and `targetGatesets` are 2D (nested) lists, then
+        `rowtitles` should specify the row-titles corresponding to the outer list
+        elements and `gateLabel` should specify a single gate label that names
+        the gate being compared throughout the entire table.
+        
         Parameters
         ----------
-        gatesets : list of GateSets
-            The gate sets to compare with `targetGateset`
+        metric : str
+            The abbreviation for the metric to use.  Allowed values are:
+
+            - "inf" :     entanglement infidelity
+            - "agi" :     average gate infidelity
+            - "trace" :   1/2 trace distance
+            - "diamond" : 1/2 diamond norm distance
+            - "nuinf" :   non-unitary entanglement infidelity
+            - "nuagi" :   non-unitary entanglement infidelity
+            - "evinf" :     eigenvalue entanglement infidelity
+            - "evagi" :     eigenvalue average gate infidelity
+            - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+            - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+            - "evdiamond" : eigenvalue 1/2 diamond norm distance
+            - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+            - "frob" :    frobenius distance
+
+        gatesets : list
+            A list or nested list-of-lists of gate sets to compare with
+            corresponding elements of `targetGatesets`.
+
+        targetGatesets : list
+            A list or nested list-of-lists of gate sets to compare with
+            corresponding elements of `gatesets`.
 
         titles : list of strs
-            A list of titles used to describe each element of `gatesets`.
+            A list of column titles used to describe elements of the 
+            innermost list(s) in `gatesets`.
 
-        targetGateset : GateSet
-            The gate set to compare against.
-    
-        metric : {"infidelity","diamond","jtrace"}
-            Specifies which metric to compute and display.
+        rowtitles : list of strs, optional
+            A list of row titles used to describe elements of the 
+            outer list in `gatesets`.  If None, then the gate labels
+            are used.
+
+        tableTitle : str, optional
+            If not None, text to place in a top header cell which spans all the
+            columns of the table.
+
+        gateLabel : str, optional
+            If not None, the single gate label to use for all comparisons
+            computed in this table.  This should be set when (and only when)
+            `gatesets` and `targetGatesets` are 2D (nested) lists.
+
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
     
         Returns
         -------
         ReportTable
         """
         super(GatesSingleMetricTable,self).__init__(
-            ws, self._create, gatesets, titles, targetGateset, metric)
+            ws, self._create, metric, gatesets, targetGatesets, titles,
+            rowtitles, tableTitle, gateLabel, confidenceRegionInfo)
     
-    def _create(self, gatesets, titles, targetGateset, metric):
+    def _create(self, metric, gatesets, targetGatesets, titles,
+                rowtitles, tableTitle, gateLabel, confidenceRegionInfo):
     
-        gateLabels = list(targetGateset.gates.keys())  # use target's gate labels
-        basis = targetGateset.basis
+        #OLD
+        #basis = targetGateset.basis
+        #
+        ##Check that all gatesets are in the same basis as targetGateset
+        #for title,gateset in zip(titles,gatesets):
+        #    if basis.name != gateset.basis.name:
+        #        raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
+        #                         % (title, gateset.basis.name, basis.name))
+        #def mknice(x):
+        #    """Typeset known titles more nicely"""
+        #    if x == "H": return "$\mathcal{H}$"
+        #    if x == "S": return "$\mathcal{H}$"
+        #    if x in ("H + S","H+S"): return "$\mathcal{H} + \mathcal{S}$"
+        #    return x
+        #  >>> tuple( [ "%s(%s)" % (niceNm,title) for title in titles] )
 
-        #Check that all gatesets are in the same basis as targetGateset
-        for title,gateset in zip(titles,gatesets):
-            if basis.name != gateset.basis.name:
-                raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
-                                 % (title, gateset.basis.name, basis.name))
+        if rowtitles is None:
+            assert(gateLabel is None), "`gateLabel` must be None when `rowtitles` is"
+            colHeadings = ("Gate",) + tuple(titles)
+        else:
+            colHeadings = ("",) + tuple(titles)
 
-        #Do computation first
-        metricVals = [] #one element per row (gate label)
-        for gl in gateLabels:
-            cmpGate = targetGateset.gates[gl]
-            dct = {}
-            for title,gateset in zip(titles,gatesets):
-                gate = gateset.gates[gl]
-                if metric == "infidelity":
-                    dct[title] = 1-_tools.process_fidelity(gate, cmpGate, basis)
-                elif metric == "diamond":
-                    dct[title] = _tools.jtracedist(gate, cmpGate, basis)
-                elif metric == "jtrace":
-                    dct[title] = 0.5 * _tools.diamonddist(gate, cmpGate, basis)
-                else: raise ValueError("Invalid `metric` argument: %s" % metric)
-            metricVals.append(dct)
-
-            
-        if metric == "infidelity":
-            niceNm = "Process Infidelity"
-        elif metric == "diamond":
-            niceNm = "1/2 Diamond-Norm"
-        elif metric == "jtrace":
-            niceNm = "1/2 Trace Distance"
-        else: raise ValueError("Invalid `metric` argument: %s" % metric)
-
-        def mknice(x):
-            """Typeset known titles more nicely"""
-            if x == "H": return "$\mathcal{H}$"
-            if x == "S": return "$\mathcal{H}$"
-            if x in ("H + S","H+S"): return "$\mathcal{H} + \mathcal{S}$"
-            return x
-        
-        colHeadings = ("Gate",) + \
-                      tuple( [ "%s(%s)" % (niceNm,title) for title in titles] )
         nCols = len(colHeadings)
-        formatters = [None] + ['GatesetType']*(nCols-1)
+        formatters = [None]*nCols #[None] + ['GatesetType']*(nCols-1)
 
-        latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
-        latex_head += "\\multirow{2}{*}{Gate} & " + \
-                      "\\multicolumn{%d}{c|}{%s} \\\\ \cline{2-%d}\n" % (len(titles),niceNm,nCols)
-        latex_head += " & " + " & ".join([mknice(t) for t in titles]) + "\\\\ \hline\n"
+        #latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
+        #latex_head += "\\multirow{2}{*}{Gate} & " + \
+        #              "\\multicolumn{%d}{c|}{%s} \\\\ \cline{2-%d}\n" % (len(titles),niceNm,nCols)
+        #latex_head += " & " + " & ".join([mknice(t) for t in titles]) + "\\\\ \hline\n"
+        #
+        #html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
+        #html_head += '<tr><th rowspan="2"></th>' + \
+        #             '<th colspan="%d">%s</th></tr>\n' % (len(titles),niceNm)
+        #html_head += "<tr><th>" +  " </th><th> ".join([mknice(t) for t in titles]) + "</th></tr>\n"
+        #html_head += "</thead><tbody>"
 
-        html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
-        html_head += '<tr><th rowspan="2"></th>' + \
-                     '<th colspan="%d">%s</th></tr>\n' % (len(titles),niceNm)
-        html_head += "<tr><th>" +  " </th><th> ".join([mknice(t) for t in titles]) + "</th></tr>\n"
-        html_head += "</thead><tbody>"
-    
-        table = _ReportTable(colHeadings, formatters,
-                             customHeader={'latex': latex_head,
-                                           'html': html_head} )
+        if tableTitle:
+            latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
+            latex_head += "\\multicolumn{%d}{c|}{%s} \\\\ \cline{1-%d}\n" % (nCols,tableTitle,nCols)
+            latex_head += " & " + " & ".join(colHeadings) + "\\\\ \hline\n"
+        
+            html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
+            html_head += '<tr><th colspan="%d">%s</th></tr>\n' % (nCols,tableTitle)
+            html_head += "<tr><th>" +  " </th><th> ".join(colHeadings) + "</th></tr>\n"
+            html_head += "</thead><tbody>"
 
-        for gl,dct in zip(gateLabels,metricVals):
-            row_data = [gl] + [ dct[t] for t in titles ]
-            row_formatters = [None] + ['Normal']*len(titles)
-            table.addrow(row_data, row_formatters)
-    
+            table = _ReportTable(colHeadings, formatters,
+                                 customHeader={'latex': latex_head,
+                                               'html': html_head} )
+        else:
+            table = _ReportTable(colHeadings, formatters)
+
+        row_formatters = [None] + ['Normal']*len(titles)
+        
+        if rowtitles is None:
+            for gl in targetGatesets[0].gates: # use first target's gate labels
+                row_data = [gl]
+                for gs,gsTarget in zip(gatesets, targetGatesets):
+                    if gs is None or gsTarget is None:
+                        qty = _objs.reportableqty.ReportableQty(_np.nan)
+                    else:
+                        qty = _reportables.evaluate_gatefn_by_name(
+                            metric, gs, gsTarget, gl, confidenceRegionInfo)
+                    row_data.append( qty )
+                table.addrow(row_data, row_formatters)
+        else:
+            for rowtitle,gsList,tgsList in zip(rowtitles,gatesets,targetGatesets):
+                row_data = [rowtitle]
+                for gs,gsTarget in zip(gsList, tgsList):
+                    if gs is None or gsTarget is None:
+                        qty = _objs.reportableqty.ReportableQty(_np.nan)
+                    else:
+                        qty = _reportables.evaluate_gatefn_by_name(
+                            metric, gs, gsTarget, gateLabel, confidenceRegionInfo)
+                    row_data.append( qty )
+                table.addrow(row_data, row_formatters)
+            
         table.finish()
         return table
     

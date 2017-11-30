@@ -118,6 +118,20 @@ class Colormap(object):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         return _np.sqrt(0.299*R**2 + 0.587*G**2 + 0.114*B**2)
 
+    def normalize(self, value):
+        """ 
+        Normalize value as it would be prior to linearly interpolating
+        onto the [0,1] range of the color map.
+
+        In this case, no additional normalization is performed, so this 
+        function just returns `value`.
+        """
+        #Default behavior for derived classes: no "normalization" is done
+        # here because plotly automatically maps (linearly) the interval
+        # between a heatmap's zmin and zmax to [0,1].
+        return value
+
+
     def besttxtcolor(self, value):
         """ 
         Return the better text color, "black" or "white", given an
@@ -407,20 +421,7 @@ class DivergingColormap(Colormap):
 
         super(DivergingColormap, self).__init__(rgb_colors, hmin, hmax)
 
-        
-    def normalize(self, value):
-        """ 
-        Normalize value as it would be prior to linearly interpolating
-        onto the [0,1] range of the color map.
-
-        In this case, no additional normalization is performed, so this 
-        function just returns `value`.
-        """
-        #no normalization is done automatically by plotly,
-        # (using zmin and zmax values of heatmap)
-        return value
-
-
+        #*Normalize* scratch
         #vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
         #
         #is_scalar = False
@@ -451,7 +452,6 @@ class DivergingColormap(Colormap):
         #    result = float(result)
         #return result
 
-
         
 
 class SequentialColormap(Colormap):
@@ -480,18 +480,7 @@ class SequentialColormap(Colormap):
 
         super(SequentialColormap, self).__init__(rgb_colors, hmin,hmax)
 
-    def normalize(self, value):
-        """ 
-        Normalize value as it would be prior to linearly interpolating
-        onto the [0,1] range of the color map.
-
-        In this case, no additional normalization is performed, so this 
-        function just returns `value`.
-        """
-        #no normalization is done automatically by plotly,
-        # (using zmin and zmax values of heatmap)
-        return value
-
+        #*Normalize* scratch
         #is_scalar = False
         #if isinstance(value, float) or _compat.isint(value, int):
         #    is_scalar = True
@@ -513,3 +502,26 @@ class SequentialColormap(Colormap):
         
 
 
+class PiecewiseLinearColormap(Colormap):
+    """ A piecewise-linear color map """
+    
+    def __init__(self, rgb_colors):
+        """
+        Create a new PiecewiseLinearColormap
+        
+        Parameters
+        ----------
+        rgb_colors : list
+            A list of `[val, (R,G,B)]` elements where `val` is a floating point
+            number (pre-normalization) of the value corresponding to the color
+            given by `R`,`G`,and `B`: red, green, and blue floating point values
+            in [0,1].  The color will be interpolated between the different "point"
+            elements in this list.
+        """
+        hmin = min([v for v,rgb in rgb_colors])
+        hmax = max([v for v,rgb in rgb_colors])
+        def norm(x): #normalize color "point" values to [0,1] interval
+            return (x-hmin)/(hmax-hmin) if (hmax > hmin) else 0.0
+
+        norm_rgb_colors = [ [norm(val),rgb] for val,rgb in rgb_colors ]
+        super(PiecewiseLinearColormap, self).__init__(norm_rgb_colors,hmin,hmax)
