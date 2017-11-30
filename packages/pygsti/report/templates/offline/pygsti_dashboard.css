@@ -511,6 +511,10 @@ div.sidenav div.linkgroup a.active {
 }
 
 
+.sidenav .switch_container label {
+    float: none; /* usually floats left but this makes sidenav buttons jump up */
+}
+
 .sidenav .pygsti-wsoutput-group {
     width: 90%;	/* some padding around sidenav tables */
     padding-left: 10px;
@@ -545,7 +549,7 @@ div.sidenav div.linkgroup a.active {
     .sidenav a {font-size: 12px;}
 }
 
-.switch_container .ui-selectmenu-button.ui-button {
+.sidenav .switch_container .ui-selectmenu-button.ui-button {
     width: 150px; /* set to slightly less than sidenav width */
 }
 

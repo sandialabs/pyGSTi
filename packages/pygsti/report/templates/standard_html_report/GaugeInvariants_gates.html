@@ -22,6 +22,13 @@
 	  %(bestGatesVsTargetTable_gi)s
 	</figure>
 
+	<figure id="singleMetricTable_gi" class='tbl'>
+	  <figcaption><span class="captiontitle">Single metric comparison.</span> <span class="captiondetail">TODO: caption</span> </figcaption>
+	  %(metricSwitchboard_gi)s
+	  %(singleMetricTable_gi)s
+	</figure>
+
+
 	<figure id="bestGatesetEigenvalueTable" class='tbl'>
 	  <figcaption><span class="captiontitle">Eigenvalues of estimated gates.</span> <span class="captiondetail"> This table lists the spectrum of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, <em>and</em> it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.  To do these comparisons, each estimated eigenvalue needs to be matched up with a target eigenvalue, and pyGSTi does this independently for each metric by computing a minimum-weight matching based on that metric.  Hovering over a column header will pop up a mathematical description of the corresponding metric.</span></figcaption>
 	  %(bestGatesetEvalTable)s

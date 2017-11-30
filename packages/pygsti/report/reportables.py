@@ -983,3 +983,149 @@ def vec_as_stdmx_eigenvalues(vec, mxBasis):
     mx = _tools.vec_to_stdmx(vec, mxBasis)
     return _np.linalg.eigvals(mx)
 Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
+
+
+def info_of_gatefn_by_name(name):
+    """ 
+    Returns a nice human-readable name and tooltip for a given gate-function
+    abbreviation.
+
+    Parameters
+    ----------
+    name : str
+        An appreviation for a gate-function name.  Allowed values are:
+
+        - "inf" :     entanglement infidelity
+        - "agi" :     average gate infidelity
+        - "trace" :   1/2 trace distance
+        - "diamond" : 1/2 diamond norm distance
+        - "nuinf" :   non-unitary entanglement infidelity
+        - "nuagi" :   non-unitary entanglement infidelity
+        - "evinf" :     eigenvalue entanglement infidelity
+        - "evagi" :     eigenvalue average gate infidelity
+        - "evnuinf" :   eigenvalue non-unitary entanglement infidelity
+        - "evnuagi" :   eigenvalue non-unitary entanglement infidelity
+        - "evdiamond" : eigenvalue 1/2 diamond norm distance
+        - "evnudiamond" : eigenvalue non-unitary 1/2 diamond norm distance
+        - "frob" :    frobenius distance
+
+    Returns
+    -------
+    nicename : str
+    tooltip : str
+    """
+    if name == "inf":
+        niceName = "Entanglement|Infidelity"
+        tooltip = "1.0 - <psi| 1 x Lambda(psi) |psi>"
+    elif name == "agi":
+        niceName = "Avg. Gate|Infidelity"
+        tooltip = "d/(d+1) (entanglement infidelity)"
+    elif name == "trace":
+        niceName = "1/2 Trace|Distance"
+        tooltip = "0.5 | Chi(A) - Chi(B) |_tr"
+    elif name == "diamond":
+        niceName =  "1/2 Diamond-Dist"
+        tooltip = "0.5 sup | (1 x (A-B))(rho) |_tr"
+    elif name == "nuinf":
+        niceName = "Non-unitary|Ent. Infidelity"
+        tooltip = "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"
+    elif name == "nuagi":
+        niceName = "Non-unitary|Avg. Gate Infidelity"
+        tooltip = "(d-1)/d [1 - sqrt( unitarity(A B^-1) )]"
+    elif name == "evinf":
+        niceName = "Eigenvalue|Ent. Infidelity"
+        tooltip = "min_P 1 - (lambda P lambda^dag)/d^2  [P = permutation, lambda = eigenvalues]"
+    elif name == "evagi":
+        niceName = "Eigenvalue|Avg. Gate Infidelity"
+        tooltip = "min_P (d^2 - lambda P lambda^dag)/d(d+1)  [P = permutation, lambda = eigenvalues]"
+    elif name == "evnuinf":
+        niceName = "Eigenvalue Non-U.|Ent. Infidelity"
+        tooltip = "(d^2-1)/d^2 [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
+    elif name == "evnuagi":
+        niceName = "Eigenvalue Non-U.|Avg. Gate Infidelity"
+        tooltip = "(d-1)/d [1 - sqrt( eigenvalue_unitarity(A B^-1) )]"
+    elif name == "evdiamond":
+        niceName = "Eigenvalue|1/2 Diamond-Dist"
+        tooltip = "(d^2-1)/d^2 max_i { |a_i - b_i| } where (a_i,b_i) are corresponding eigenvalues of A and B."
+    elif name == "evnudiamond":
+        niceName = "Eigenvalue Non-U.|1/2 Diamond-Dist"
+        tooltip = "(d^2-1)/d^2 max_i { | |a_i| - |b_i| | } where (a_i,b_i) are corresponding eigenvalues of A and B."
+    elif name == "frob":
+        niceName = "Frobenius|Distance"
+        tooltip = "sqrt( sum( (A_ij - B_ij)^2 ) )"
+    else: raise ValueError("Invalid name: %s" % name)
+    return niceName, tooltip
+
+
+def evaluate_gatefn_by_name(name, gateset, targetGateset, gateLabelOrString,
+                            confidenceRegionInfo):
+    """ 
+    Evaluates that gate-function named by the abbreviation `name`.
+
+    Parameters
+    ----------
+    name : str
+        An appreviation for a gate-function name.  Allowed values are the
+        same as those of :func:`info_of_gatefn_by_name`.
+
+    gateset, targetGateSet : GateSet
+        The gatesets to compare.  Only the element or product given by 
+        `gateLabelOrString` is compared using the named gate-function.
+
+    gateLabelOrString : str or GateString or tuple
+        The gate label or sequence of labels to compare.  If a sequence
+        of labels is given, then the "virtual gate" computed by taking the
+        product of the specified gate matries is compared.
+
+    confidenceRegionInfo : ConfidenceRegion, optional
+        If not None, specifies a confidence-region  used to compute error
+        intervals.    
+
+    Returns
+    -------
+    ReportableQty
+    """
+    gl = gateLabelOrString
+    b = bool(_tools.isstr(gl)) #whether this is a gate label or a string
+    
+    if name == "inf":
+        fn = Entanglement_infidelity if b else \
+             Gatestring_entanglement_infidelity
+    elif name == "agi":
+        fn = Avg_gate_infidelity if b else \
+             Gatestring_avg_gate_infidelity
+    elif name == "trace":
+        fn = Jt_diff if b else \
+             Gatestring_jt_diff
+    elif name == "diamond":
+        fn = Half_diamond_norm if b else \
+             Gatestring_half_diamond_norm
+    elif name == "nuinf":
+        fn = Nonunitary_entanglement_infidelity if b else \
+             Gatestring_nonunitary_entanglement_infidelity
+    elif name == "nuagi":
+        fn = Nonunitary_avg_gate_infidelity if b else \
+             Gatestring_nonunitary_avg_gate_infidelity
+    elif name == "evinf":
+        fn = Eigenvalue_entanglement_infidelity if b else \
+             Gatestring_eigenvalue_entanglement_infidelity
+    elif name == "evagi":
+        fn = Eigenvalue_avg_gate_infidelity if b else \
+             Gatestring_eigenvalue_avg_gate_infidelity
+    elif name == "evnuinf":
+        fn = Eigenvalue_nonunitary_entanglement_infidelity if b else \
+             Gatestring_eigenvalue_nonunitary_entanglement_infidelity
+    elif name == "evnuagi":
+        fn = Eigenvalue_nonunitary_avg_gate_infidelity if b else \
+             Gatestring_eigenvalue_nonunitary_avg_gate_infidelity
+    elif name == "evdiamond":
+        fn = Eigenvalue_diamondnorm if b else \
+             Gatestring_eigenvalue_diamondnorm
+    elif name == "evnudiamond":
+        fn = Eigenvalue_nonunitary_diamondnorm if b else \
+             Gatestring_eigenvalue_nonunitary_diamondnorm
+    elif name == "frob":
+        fn = Fro_diff if b else \
+             Gatestring_fro_diff
+
+    return evaluate( fn(gateset, targetGateset, gl), confidenceRegionInfo)
