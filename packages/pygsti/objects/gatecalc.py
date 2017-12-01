@@ -26,7 +26,7 @@ class GateCalc(object):
     """
 
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel):
+                 remainderLabel, identityLabel, paramvec):
         """
         Construct a new GateCalc object.
 
@@ -61,6 +61,9 @@ class GateCalc(object):
 
         identityLabel : string
             The string used to designate the identity POVM vector.
+
+        paramvec : ndarray
+            The parameter vector of the GateSet.
         """
         self._remainderLabel = remainderLabel
         self._identityLabel = identityLabel
@@ -75,17 +78,19 @@ class GateCalc(object):
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
 
-        self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
-        self.num_e_params = [v.num_params() for v in list(self.effects.values())]
-        self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
-        self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
-        self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
-        self.tot_rho_params = sum(self.num_rho_params)
-        self.tot_e_params = sum(self.num_e_params)
-        self.tot_gate_params = sum(self.num_gate_params)
-        self.tot_spam_params = self.tot_rho_params + self.tot_e_params
-        self.tot_params = self.tot_spam_params + self.tot_gate_params
-
+        #OLD
+        # self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
+        # self.num_e_params = [v.num_params() for v in list(self.effects.values())]
+        # self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
+        # self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        # self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
+        # self.tot_rho_params = sum(self.num_rho_params)
+        # self.tot_e_params = sum(self.num_e_params)
+        # self.tot_gate_params = sum(self.num_gate_params)
+        # self.tot_spam_params = self.tot_rho_params + self.tot_e_params
+        # self.tot_params = self.tot_spam_params + self.tot_gate_params
+        self.paramvec = paramvec
+        self.Np = len(paramvec)
 
 
     def _is_remainder_spamlabel(self, label):
@@ -1197,7 +1202,7 @@ class GateCalc(object):
             the probabilities of each gate string.
         """
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
+        nDerivCols = self.Np
 
         vdp = _np.empty( (1,nGateStrings,nDerivCols), 'd' )
         vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
@@ -1270,7 +1275,7 @@ class GateCalc(object):
         spam_label_rows = \
             { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
+        nDerivCols = self.Np
         nSpamLabels = len(self.spamdefs)
 
         vdp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols), 'd' )
@@ -1373,13 +1378,13 @@ class GateCalc(object):
             containing the probabilities for each gate string.
         """
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
+        nDerivCols1 = self.Np if (wrtFilter1 is None) \
                            else len(wrtFilter1)
-        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
+        nDerivCols2 = self.Np if (wrtFilter2 is None) \
                            else len(wrtFilter2)
 
         vhp = _np.empty( (1,nGateStrings,nDerivCols1,nDerivCols2), 'd' )
-        vdp1 = _np.empty( (1,nGateStrings,self.tot_params), 'd' ) \
+        vdp1 = _np.empty( (1,nGateStrings,self.Np), 'd' ) \
             if returnDeriv else None
         vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
         vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
@@ -1462,14 +1467,14 @@ class GateCalc(object):
         spam_label_rows = \
             { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
         nGateStrings = evalTree.num_final_strings()
-        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
+        nDerivCols1 = self.Np if (wrtFilter1 is None) \
                            else len(wrtFilter1)
-        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
+        nDerivCols2 = self.Np if (wrtFilter2 is None) \
                            else len(wrtFilter2)
         nSpamLabels = len(self.spamdefs)
 
         vhp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols1,nDerivCols2),'d')
-        vdp1 = _np.empty( (nSpamLabels,nGateStrings,self.tot_params), 'd' ) \
+        vdp1 = _np.empty( (nSpamLabels,nGateStrings,self.Np), 'd' ) \
             if returnDeriv else None
         vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
         vp = _np.empty( (nSpamLabels,nGateStrings), 'd' ) if returnPr else None

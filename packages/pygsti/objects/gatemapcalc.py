@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import warnings as _warnings
 import numpy as _np
 import time as _time
+import itertools as _itertools
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
@@ -34,7 +35,7 @@ class GateMapCalc(GateCalc):
     """
 
     def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel):
+                 remainderLabel, identityLabel, paramvec):
         """
         Construct a new GateMapCalc object.
 
@@ -69,10 +70,13 @@ class GateMapCalc(GateCalc):
 
         identityLabel : string
             The string used to designate the identity POVM vector.
+
+        paramvec : ndarray
+            The parameter vector of the GateSet.
         """
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, povm_identity, spamdefs,
-            remainderLabel, identityLabel)
+            remainderLabel, identityLabel, paramvec)
 
 
     #Same as GateMatrixCalc, but not general enough to be in base class
@@ -111,6 +115,34 @@ class GateMapCalc(GateCalc):
             rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
+
+    def calc_to_vector(self):
+        """
+        Returns the elements of the parent GateSet vectorized as a 1D array.
+        Used for computing finite-difference derivatives.
+
+        Returns
+        -------
+        numpy array
+            The vectorized gateset parameters.
+        """
+        return self.paramvec
+
+
+    def calc_from_vector(self, v):
+        """
+        The inverse of to_vector.  Initializes the GateSet-like members of this
+        calculator based on `v`. Used for computing finite-difference derivatives.
+        """
+        #Note: this *will* initialize the parent GateSet's objects too,
+        # since only references to preps, effects, and gates are held
+        # by the calculator class.
+        for obj in _itertools.chain(self.preps.values(),
+                                    self.effects.values(),
+                                    self.gates.values()):
+            obj.from_vector( v[obj.gpindices] )
+
+
     def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
         """ non-remainder version of pr(...) overridden by derived clases """
         rho,E = self._rhoE_from_spamLabel(spamLabel)
@@ -135,26 +167,14 @@ class GateMapCalc(GateCalc):
         #Finite difference derivative
         eps = 1e-7 #hardcoded?
         p = self.pr(spamLabel, gatestring, clipTo)
-        dp = _np.empty( (1,self.tot_params), 'd' )
-        k = 0
+        dp = _np.empty( (1,self.Np), 'd' )
 
-        def fd_deriv(dct, kk):
-            """ Fill dp[0,kk:kk+nParams] with the concatenated finite-difference
-                derivatives of all the values of dct.  Returns kk+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    vec = orig_vec.copy(); vec[i] += eps
-                    dct[lbl].from_vector(vec)
-                    dp[0,kk] = (self.pr(spamLabel, gatestring, clipTo)-p)/eps
-                    kk += 1
-                dct[lbl].from_vector(orig_vec)
-            return kk
-        
-        k = fd_deriv(self.preps,k) #prep derivs
-        k = fd_deriv(self.effects,k) #effect derivs
-        k = fd_deriv(self.gates,k) #gate derivs
+        orig_vec = self.calc_to_vector()
+        for i in range(self.Np):
+            vec = orig_vec.copy(); vec[i] += eps
+            self.calc_from_vector(vec)
+            dp[0,i] = (self.pr(spamLabel, gatestring, clipTo)-p)/eps
+        self.calc_from_vector(orig_vec)
                 
         if returnPr:
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -171,26 +191,14 @@ class GateMapCalc(GateCalc):
             dp,p = self.dpr(spamLabel, gatestring, returnPr, clipTo)
         else:
             dp = self.dpr(spamLabel, gatestring, returnPr, clipTo)
-        hp = _np.empty( (1,self.tot_params, self.tot_params), 'd' )
-        k = 0
+        hp = _np.empty( (1,self.Np, self.Np), 'd' )
 
-        def fd_hessian(dct, kk):
-            """ Fill hp[0,kk:kk+nParams,:] with the concatenated finite-difference
-                hessians of all the values of dct.  Returns kk+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    vec = orig_vec.copy(); vec[i] += eps
-                    dct[lbl].from_vector(vec)
-                    hp[0,kk,:] = (self.dpr(spamLabel, gatestring, False, clipTo)-dp)/eps
-                    kk += 1
-                dct[lbl].from_vector(orig_vec)
-            return kk
-        
-        k = fd_hessian(self.preps,k) #prep derivs
-        k = fd_hessian(self.effects,k) #effect derivs
-        k = fd_hessian(self.gates,k) #gate derivs
+        orig_vec = self.calc_to_vector()
+        for i in range(self.Np):
+            vec = orig_vec.copy(); vec[i] += eps
+            self.calc_from_vector(vec)
+            hp[0,i,:] = (self.dpr(spamLabel, gatestring, False, clipTo)-dp)/eps
+        self.calc_from_vector(orig_vec)
                 
         if returnPr and clipTo is not None:
             p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -255,29 +263,16 @@ class GateMapCalc(GateCalc):
         #Get a map from global parameter indices to the desired
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-        
-        def fd_deriv(dct, ip):
-            """ Fill dpr_cache[:,iParamToFinal[ip->ip+nParams]] with the
-                concatenated finite-difference derivatives of all the values
-                of dct.  Returns ip+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    if ip in iParamToFinal:
-                        iFinal = iParamToFinal[ip]
-                        vec = orig_vec.copy(); vec[i] += eps
-                        dct[lbl].from_vector(vec)
-                        dpr_cache[:,iFinal] = ( self._compute_pr_cache(
-                            spamLabel,evalTree,subComm,rho_cache) - pCache)/eps
-                    ip += 1 #global parameter index
-                dct[lbl].from_vector(orig_vec)
-            return ip
 
-        iParam = 0
-        iParam = fd_deriv(self.preps,iParam) #prep derivs
-        iParam = fd_deriv(self.effects,iParam) #effect derivs
-        iParam = fd_deriv(self.gates,iParam) #gate derivs
+        orig_vec = self.calc_to_vector()
+        for i in range(self.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.calc_from_vector(vec)
+                dpr_cache[:,iFinal] = ( self._compute_pr_cache(
+                            spamLabel,evalTree,subComm,rho_cache) - pCache)/eps
+        self.calc_from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
@@ -314,29 +309,16 @@ class GateMapCalc(GateCalc):
         #Get a map from global parameter indices to the desired
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-        
-        def fd_hessian(dct, ip):
-            """ Fill hpr_cache[:,iParamToFinal[ip->ip+nParams],:] with the
-                concatenated finite-difference hessians of all the values
-                of dct.  Returns ip+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    if ip in iParamToFinal:
-                        iFinal = iParamToFinal[ip]
-                        vec = orig_vec.copy(); vec[i] += eps
-                        dct[lbl].from_vector(vec)
-                        hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
-                            spamLabel,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
-                    ip += 1 #global parameter index
-                dct[lbl].from_vector(orig_vec)
-            return ip
 
-        iParam = 0
-        iParam = fd_hessian(self.preps,iParam) #prep derivs
-        iParam = fd_hessian(self.effects,iParam) #effect derivs
-        iParam = fd_hessian(self.gates,iParam) #gate derivs
+        orig_vec = self.calc_to_vector()
+        for i in range(self.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.calc_from_vector(vec)
+                hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
+                    spamLabel,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
+        self.calc_from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
@@ -591,7 +573,7 @@ class GateMapCalc(GateCalc):
 
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice = _slct.list_to_slice(wrtFilter) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice = _slct.list_to_slice(wrtFilter) #for now, require the filter specify a slice
         else:
             wrtSlice = None
 
@@ -799,13 +781,13 @@ class GateMapCalc(GateCalc):
         """
         if wrtFilter1 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice
         else:
             wrtSlice1 = None
 
         if wrtFilter2 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice2 = _slct.list_to_slice(wrtFilter2) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice2 = _slct.list_to_slice(wrtFilter2) #for now, require the filter specify a slice
         else:
             wrtSlice2 = None
 

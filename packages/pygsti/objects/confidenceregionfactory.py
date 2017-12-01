@@ -672,9 +672,6 @@ class ConfidenceRegionFactoryView(object):
                            " cannot be interpreted as standard error bars." +
                            " Proceed with caution!")
 
-        #Store params and offsets of gateset for future use
-        self.gateset_offsets = gateset.get_vector_offsets()
-
         #Store list of profile-likelihood confidence intervals
         #  which == sqrt(diagonal els) of invRegionQuadcForm
         if self.invRegionQuadcForm is not None:
@@ -739,11 +736,17 @@ class ConfidenceRegionFactoryView(object):
         if label is None:
             return self.profLCI
         
-        elif label in self.gateset_offsets:
-            start,end = self.gateset_offsets[label]
-            return self.profLCI[start:end]
-        
-        elif label == self.gateset._remainderlabel:
+        elif label in self.gateset.gates:
+            return self.profLCI[self.gateset.gates[label].gpindices]
+
+        elif label in self.gateset.preps:
+            return self.profLCI[self.gateset.preps[label].gpindices]
+
+        elif label in self.gateset.effects:
+            return self.profLCI[self.gateset.effects[label].gpindices]
+
+        elif label == self.gateset._remainderlabel: #HERE!!!
+            assert(False) #TODO: fix/remove!!!
             ELbls = self.gateset.get_effect_labels(False)
             start,end = self.gateset_offsets[ELbls[0]]; n = end-start
             ret = self.profLCI[start:end]
@@ -823,37 +826,39 @@ class ConfidenceRegionFactoryView(object):
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
+        all_gpindices = []
         for dependency in fn_dependencies:
             gs = self.gateset.copy() #copy that will contain the "+eps" gate set
             
             if dependency == 'all':
-                gatesetObj = gs #the entire gateset
-                gpo = 0 # offset == 0 b/c *all* parameters
+                all_gpindices.extend( range(gs.num_params()) )
             else:
                 # copy objects because we add eps to them below
                 typ,lbl = dependency.split(":")
                 if typ == "gate":     gatesetObj = gs.gates[lbl]
                 elif typ == "prep":   gatesetObj = gs.preps[lbl]
                 elif typ == "effect": gatesetObj = gs.effects[lbl]
-                else: raise ValueError("Invalid dependency type: %s" % typ)                
-                gpo = self.gateset_offsets[lbl][0] # starting parameter offset
-
-            nDependencyParams = gatesetObj.num_params()
-            vec0 = gatesetObj.to_vector()
-
-            for i in range(nDependencyParams):
-                vec = vec0.copy(); vec[i] += eps;
-                gatesetObj.from_vector(vec) #incorporates +eps into  'gs'
-                  # because gatesetObj refs an element of gs or gs itself.
-
-                gs.basis = self.gateset.basis #we're still in the same basis (maybe needed by fnObj)
-                f = fnObj.evaluate_nearby( gs )
-                if isinstance(f0, dict): #special behavior for dict: process each item separately
-                    for ky in gradF:
-                        gradF[ky][gpo + i] = ( f[ky] - f0[ky] ) / eps
+                else: raise ValueError("Invalid dependency type: %s" % typ)
+                if isinstance(gatesetObj.gpindices, slice):
+                    all_gpindices.extend( _st.indices(gatesetObj.gpindices) )
                 else:
-                    assert( _np.linalg.norm(_np.imag(f-f0)) < 1e-12 or _np.iscomplexobj(gradF) ), "gradF seems to be the wrong type!"
-                    gradF[gpo + i] = _np.real_if_close( f - f0 ) / eps
+                    all_gpindices.extend( gatesetObj.gpindices )
+
+        vec0 = gs.to_vector()
+        all_gpindices = list(set(gpindices)).sort() #remove duplicates
+        
+        for igp in all_gpindices: #iterate over "global" GateSet-parameter indices
+            vec = vec0.copy(); vec[igp] += eps;
+            gs.from_vector(vec)
+            gs.basis = self.gateset.basis #we're still in the same basis (maybe needed by fnObj)
+            
+            f = fnObj.evaluate_nearby( gs )
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][igp] = ( f[ky] - f0[ky] ) / eps
+            else:
+                assert( _np.linalg.norm(_np.imag(f-f0)) < 1e-12 or _np.iscomplexobj(gradF) ), "gradF seems to be the wrong type!"
+                gradF[igp] = _np.real_if_close( f - f0 ) / eps
 
         return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 

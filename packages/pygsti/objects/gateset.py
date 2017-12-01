@@ -15,6 +15,7 @@ import time as _time
 
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
+from ..tools import slicetools as _st
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
@@ -112,6 +113,9 @@ class GateSet(object):
 
         self._calcClass = _GateMatrixCalc
         #self._calcClass = _GateMapCalc
+
+        self._paramvec = _np.zeros(0, 'd')
+        self._rebuild_paramvec()
 
         super(GateSet, self).__init__()
 
@@ -475,10 +479,7 @@ class GateSet(object):
         int
             the number of gateset parameters.
         """
-        L = sum([ rhoVec.num_params() for rhoVec in list(self.preps.values()) ])
-        L += sum([ EVec.num_params() for EVec in list(self.effects.values()) ])
-        L += sum([ gate.num_params() for gate in list(self.gates.values())])
-        return L
+        return len(self._paramvec)
 
 
     def num_elements(self, include_povm_identity=False):
@@ -534,6 +535,48 @@ class GateSet(object):
         gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
+    def _rebuild_paramvec(self):
+        v = self._paramvec
+        off = 0; shift = 0
+        #DEBUG!!!!
+        #for obj in _itertools.chain(self.preps.values(),
+        #                            self.effects.values(),
+        #                            self.gates.values()):
+        for lbl,obj in _itertools.chain(self.preps.items(),
+                                    self.effects.items(),
+                                    self.gates.items()):
+
+            if shift > 0 and obj.gpindices is not None:
+                if isinstance(obj.gpindices, slice):
+                    obj.gpindices = _st.shift(obj.gpindices, shift)
+                else:
+                    obj.gpindices += shift #works for integer arrays
+
+            if obj.gpindices is None:
+                #Assume all parameters of obj are new independent parameters
+                v = _np.insert(v, off, obj.to_vector())
+                obj.gpindices = slice(off, off+obj.num_params())
+                shift += obj.num_params()
+                off += obj.num_params()
+                #print("DB: %s: inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
+            else:
+                inds = _st.indices(obj.gpindices) if isinstance(
+                    obj.gpindices, slice) else obj.gpindices
+                M = max(inds) if inds else -1; L = len(v)
+                #print("DB: %s: existing indices = " % (lbl), obj.gpindices, " M=",M)
+                if M >= L:
+                    #Some indices specified by obj are absent, and must be created.
+                    v = _np.concatenate((v, _np.empty(M+1-L,'d')),axis=0) # [v.resize(M+1) doesn't work]
+                    w = obj.to_vector()
+                    for ii,i in enumerate(inds):
+                        if i >= L: v[i] = w[ii]
+                        assert(_np.isclose(v[i],w[ii]))
+                    shift += M+1-L
+                    #print("DB:    --> added %d new params" % (M+1-L))
+                off = M+1
+                    
+        self._paramvec = v
+
 
     def to_vector(self):
         """
@@ -544,64 +587,28 @@ class GateSet(object):
         numpy array
             The vectorized gateset parameters.
         """
-        v = _np.empty( self.num_params() )
-
-        objs_to_vectorize = \
-            list(self.preps.values()) + list(self.effects.values()) + list(self.gates.values())
-
-        off = 0
-        for obj in objs_to_vectorize:
-            np = obj.num_params()
-            v[off:off+np] = obj.to_vector(); off += np
-
-        return v
+        return self._paramvec
 
 
     def from_vector(self, v):
         """
-        The inverse of to_vector.  Loads values of gates and/or rho and E vecs from
-        from a vector v according to the optional parameters. Note that neither v
-        nor the optional parameters specify what number of gates and their labels,
-        and that this information must be contained in the gateset prior to calling
-        from_vector.  In practice, this just means you should call the from_vector method
-        of the gateset that was used to generate the vector v in the first place.
+        The inverse of to_vector.  Loads values of gates and rho and E vecs from
+        from the vector `v`.  Note that `v` does not specify the number of
+        gates, etc., and their labels: this information must be contained in
+        this `GateSet` prior to calling `from_vector`.  In practice, this just
+        means you should call the `from_vector` method using the same `GateSet`
+        that was used to generate the vector `v` in the first place.
         """
         assert( len(v) == self.num_params() )
 
-        objs_to_vectorize = \
-            list(self.preps.values()) + list(self.effects.values()) + list(self.gates.values())
-
-        off = 0
-        for obj in objs_to_vectorize:
-            np = obj.num_params()
-            obj.from_vector( v[off:off+np] ); off += np
+        for obj in _itertools.chain(self.preps.values(),
+                                    self.effects.values(),
+                                    self.gates.values()):
+            obj.from_vector( v[obj.gpindices] )
 
         self.reset_basis()
           # assume the vector we're loading isn't producing gates & vectors in
           # a known basis.
-
-
-    def get_vector_offsets(self):
-        """
-        Returns the offsets of individual components in the vectorized
-        gateset according to the optional parameters.
-
-        Returns
-        -------
-        dict
-            A dictionary whose keys are either SPAM vector or a gate label
-            and whose values are (start,next_start) tuples of integers
-            indicating the start and end+1 indices of the component.
-        """
-        off = 0
-        offsets = {}
-        for label,obj in _itertools.chain(iter(self.preps.items()),
-                                          iter(self.effects.items()),
-                                          iter(self.gates.items()) ):
-            np = obj.num_params()
-            offsets[label] = (off,off+np); off += np
-
-        return offsets
 
 
     def deriv_wrt_params(self):
@@ -623,16 +630,14 @@ class GateSet(object):
         """
         deriv = _np.zeros( (self.num_elements(), self.num_params()), 'd' )
 
-        objs_to_vectorize = \
-            list(self.preps.values()) + list(self.effects.values()) + list(self.gates.values())
-
-        eo = po = 0 # element & parameter offsets
-        for obj in objs_to_vectorize:
-            ne, np = obj.size, obj.num_params() #number of els & params
-            #print "DB: setting [%d:%d, %d:%d] = \n%s" % (eo,eo+ne,po,po+np,obj.deriv_wrt_params())
-            deriv[eo:eo+ne,po:po+np] = obj.deriv_wrt_params()
-            eo += ne; po += np
-
+        eo = 0 # element offset
+        for obj in _itertools.chain(self.preps.values(),
+                                    self.effects.values(),
+                                    self.gates.values()):
+            #Note: no overlaps possible b/c of independent *elements*
+            deriv[eo:eo+obj.size,obj.gpindices] = obj.deriv_wrt_params()
+            eo += obj.size
+              
         return deriv
     
 
@@ -856,15 +861,13 @@ class GateSet(object):
 
         if itemWeights is not None:
             metric_diag = _np.ones(self.num_params(), 'd')
-            offsets = self.get_vector_offsets()
             gateWeight = itemWeights.get('gates', 1.0)
             spamWeight = itemWeights.get('spam', 1.0)
-            for lbl in self.gates:
-                i,j = offsets[lbl]
-                metric_diag[i:j] = itemWeights.get(lbl, gateWeight)
-            for lbl in _itertools.chain(iter(self.preps),iter(self.effects)):
-                i,j = offsets[lbl]
-                metric_diag[i:j] = itemWeights.get(lbl, spamWeight)
+            for lbl,gate in self.gates.items():
+                metric_diag[gate.gpindices] = itemWeights.get(lbl, gateWeight)
+            for lbl,vec in _itertools.chain(iter(self.preps.items()),
+                                            iter(self.effects.items())):
+                metric_diag[vec.gpindices] = itemWeights.get(lbl, spamWeight)
             metric = _np.diag(metric_diag)
             #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
             gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T,metric))
@@ -945,7 +948,7 @@ class GateSet(object):
         return self._calcClass(self._dim, self.gates, self.preps,
                                self.effects, self.povm_identity,
                                self.spamdefs, self._remainderlabel,
-                               self._identitylabel)
+                               self._identitylabel, self._paramvec)
 
     def product(self, gatestring, bScale=False):
         """
@@ -2605,6 +2608,7 @@ class GateSet(object):
         newGateset._remainderlabel = self._remainderlabel
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
+        newGateset._paramvec = self._paramvec.copy()
         
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc

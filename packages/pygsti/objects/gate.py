@@ -310,12 +310,38 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
+#Note on initialization sequence of Gates within a GateSet:
+# 1) a GateSet is constructed (empty)
+# 2) a Gate is constructed - apart from a GateSet if it's locally parameterized,
+#    otherwise with explicit reference to an existing GateSet's labels/indices.
+#    All gates (GateSetMember objs in general) have a "gpindices" member which
+#    can either be initialized upon construction or set to None, which signals
+#    that the GateSet must initialize it.
+# 3) the Gate is assigned/added to a dict within the GateSet.  As a part of this
+#    process, the Gate's 'gpindices' member is set, if it isn't already, and the
+#    GateSet's "global" parameter vector (and number of params) is updated as
+#    needed to accomodate new parameters.
+#
+# Note: gpindices may be None (before initialization) or any valid index
+#  into a 1D numpy array (e.g. a slice or integer array).  It may NOT have
+#  any repeated elements.
+#
+# When a Gate is removed from the GateSet, parameters only used by it can be
+# removed from the GateSet, and the gpindices members of existing gates
+# adjusted as needed.
+#
+# When derivatives are taken wrt. a gateset parameter (1 col of a jacobian)
+# derivatives wrt each gate that includes that parameter in its gpindices
+# must be processed.
+
+
 class Gate(object):
     """ Base class for all gate representations """
     
     def __init__(self, dim):
         """ Initialize a new Gate """
         self.dim = dim
+        self.gpindices = None
         
     def get_dimension(self):
         """ Return the dimension of the gate. """
@@ -375,14 +401,12 @@ class Gate(object):
         """
         raise NotImplementedError("num_params not implemented!")
 
-
     def to_vector(self):
         """
         Get the gate parameters as an array of values.
         """
         raise NotImplementedError("to_vector not implemented!")
 
-    
     def from_vector(self, v):
         """
         Initialize the gate using a vector of parameters.
@@ -398,8 +422,7 @@ class Gate(object):
         None
         """
         raise NotImplementedError("from_vector not implemented!")
-
-
+    
     def copy(self):
         """
         Copy this gate.
@@ -411,11 +434,17 @@ class Gate(object):
         """
         raise NotImplementedError("copy not implemented!")
 
+    def copy_gpindices_to(self, gateObj):
+        """ Helper function for implementing copy in derived classes """
+        if isinstance(self.gpindices, slice):
+            gateObj.gpindices = self.gpindices #slices are immutable
+        elif gateObj.gpindices is not None:
+            gateObj.gpindices = self.gpindices.copy() #arrays are not
+        return gateObj
 
     #Pickle plumbing
     def __setstate__(self, state):
         self.__dict__.update(state)
-
 
 
 #class GateMap(Gate):
@@ -534,7 +563,7 @@ class GateMatrix(Gate):
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        Construct the Hessian of this gate with respect to it's parameters.
+        Construct the Hessian of this gate with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened gate matrix and whose 2nd and 3rd axes correspond to the
@@ -773,7 +802,7 @@ class StaticGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return StaticGate(self.base)
+        return self.copy_gpindices_to( StaticGate(self.base) )
 
 
     def transform(self, S):
@@ -1022,7 +1051,7 @@ class FullyParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return FullyParameterizedGate(self.base)
+        return self.copy_gpindices_to( FullyParameterizedGate(self.base) )
 
 
     def transform(self, S):
@@ -1284,7 +1313,7 @@ class TPParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return TPParameterizedGate(self.base)
+        return self.copy_gpindices_to( TPParameterizedGate(self.base) )
 
 
     def transform(self, S):
@@ -1431,7 +1460,7 @@ class LinearlyParameterizedElementTerm(object):
 
     def copy(self):
         """ Copy this term. """
-        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
+        return self.copy_gpindices_to( LinearlyParameterizedElementTerm(self.coeff, self.paramIndices) )
 
 
 class LinearlyParameterizedGate(GateMatrix):
@@ -1660,7 +1689,7 @@ class LinearlyParameterizedGate(GateMatrix):
             newGate.elementExpressions[tup] = [ term.copy() for term in termList ]
         newGate._construct_matrix()
 
-        return newGate
+        return self.copy_gpindices_to( newGate )
 
 
     def transform(self, S):
@@ -2253,7 +2282,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         newGate.options = self.options.copy()
         newGate._construct_matrix()
 
-        return newGate
+        return self.copy_gpindices_to( newGate )
 
 
     def transform(self, S):
@@ -3152,7 +3181,7 @@ class LindbladParameterizedGate(GateMatrix):
         newGate.paramvals = self.paramvals.copy()
         newGate._construct_matrix()
 
-        return newGate
+        return self.copy_gpindices_to( newGate )
 
 
     def transform(self, S):

@@ -124,6 +124,11 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
             super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
 
+        #rebuild GateSet's parameter vector (params may need to be added)
+        if self.parent is not None:
+            self.parent._rebuild_paramvec()
+        
+
     def copy(self, parent):
         """
         Returns a copy of this OrderedSPAMVecDict.
@@ -251,6 +256,11 @@ class OrderedGateDict(PrefixOrderedDict):
                                  self.default_param)
 
             super(OrderedGateDict,self).__setitem__(key, gateObj)
+
+        #rebuild GateSet's parameter vector (params may need to be added)
+        if self.parent is not None:
+            self.parent._rebuild_paramvec()
+
 
     def copy(self, parent):
         """

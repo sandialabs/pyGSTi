@@ -19,6 +19,7 @@ def length(s):
     -------
     int
     """
+    if not isinstance(s,slice): return len(s)
     if s.start is None or s.stop is None: 
         return 0
     if s.step is None: 
@@ -110,7 +111,7 @@ def list_to_slice(lst):
     -------
     slice
     """
-    if not lst: 
-        return slice(0,0)
+    if isinstance(lst, slice): return lst 
+    if not lst: return slice(0,0)
     assert lst == list(range(lst[0],lst[-1]+1))
     return slice(lst[0],lst[-1]+1)

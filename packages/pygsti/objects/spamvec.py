@@ -222,6 +222,7 @@ class SPAMVec(object):
         """ Initialize a new SPAM Vector """
         self.base = vec
         self.dim = len(vec)
+        self.gpindices = None
 
     def get_dimension(self):
         """ Return the dimension of the gate matrix. """
@@ -401,6 +402,13 @@ class SPAMVec(object):
 
         return vector
 
+    def copy_gpindices_to(self, vecObj):
+        """ Helper function for implementing copy in derived classes """
+        if isinstance(self.gpindices, slice):
+            vecObj.gpindices = self.gpindices #slices are immutable
+        elif vecObj.gpindices is not None:
+            vecObj.gpindices = self.gpindices.copy() #arrays are not
+        return vecObj
 
 
 
@@ -555,6 +563,19 @@ class StaticSPAMVec(SPAMVec):
         return _np.zeros((self.dim,0),'d')
 
 
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
+
     def copy(self):
         """
         Copy this SPAM vector.
@@ -564,7 +585,7 @@ class StaticSPAMVec(SPAMVec):
         StaticSPAMVec
             A copy of this SPAM operation.
         """
-        return StaticSPAMVec(self.base)
+        return self.copy_gpindices_to( StaticSPAMVec(self.base) )
 
 
     def __str__(self):
@@ -738,6 +759,18 @@ class FullyParameterizedSPAMVec(SPAMVec):
         """
         return _np.identity( self.dim, 'd' )
 
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
 
     def copy(self):
         """
@@ -748,7 +781,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         FullyParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return FullyParameterizedSPAMVec(self.base)
+        return self.copy_gpindices_to( FullyParameterizedSPAMVec(self.base) )
 
     def __str__(self):
         s = "Fully Parameterized spam vector with length %d\n" % len(self.base)
@@ -952,6 +985,19 @@ class TPParameterizedSPAMVec(SPAMVec):
         derivMx = derivMx[:,1:] #remove first col ( <=> first-el parameters )
         return derivMx
 
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
+
     def copy(self):
         """
         Copy this SPAM vector.
@@ -961,7 +1007,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         TPParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return TPParameterizedSPAMVec(self.base)
+        return self.copy_gpindices_to( TPParameterizedSPAMVec(self.base) )
 
     def __str__(self):
         s = "TP-Parameterized spam vector with length %d\n" % self.dim
@@ -1290,6 +1336,40 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         assert(_np.linalg.norm(_np.imag(dVdP)) < IMAG_TOL)
         return _np.real(dVdP)
 
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True
+
+    def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
+        """
+        Construct the Hessian of this SPAM vector with respect to its parameters.
+
+        This function returns a tensor whose first axis corresponds to the
+        flattened gate matrix and whose 2nd and 3rd axes correspond to the
+        parameters that are differentiated with respect to.
+
+        Parameters
+        ----------
+        wrtFilter1, wrtFilter2 : list
+            Lists of indices of the paramters to take first and second
+            derivatives with respect to.  If None, then derivatives are
+            taken with respect to all of the vectors's parameters.
+
+        Returns
+        -------
+        numpy array
+            Hessian with shape (dimension, num_params1, num_params2)
+        """
+        raise NotImplementedError("TODO: add hessian computation for CPTPParameterizedSPAMVec")
+    
     
     def copy(self):
         """
@@ -1302,7 +1382,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         """
         copyOfMe = CPTPParameterizedSPAMVec(self.base, self.basis.copy())
         copyOfMe.params = self.params.copy() #ensure params are exactly the same
-        return copyOfMe
+        return self.copy_gpindices_to( copyOfMe )
 
     def __str__(self):
         s = "CPTP-Parameterized spam vector with length %d\n" % self.dim
