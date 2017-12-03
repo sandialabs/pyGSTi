@@ -76,10 +76,17 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
-        self.parent = parent # dimension == parent.dim
+        
+        # Note: we *don't* want to be calling parent's "rebuild" function here,
+        # when we're creating a new list, as this behavior is only intented for
+        # explicit insertions.  Since calling the base class __init__ will
+        # call this class's __setitem__ we set parent to None for this step.
+        self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP" or "full"
         self.remainderLabel = remainderLabel
-        super(OrderedSPAMVecDict,self).__init__(prefix, items)
+        super(OrderedSPAMVecDict,self).__init__(prefix, items) #l
+        self.parent = parent # dimension == parent.dim
+        
 
     def _check_dim(self, vec):
         if self.parent is None: return
@@ -126,8 +133,16 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
             self.parent._rebuild_paramvec()
-        
+
+    def __delitem__(self, key):
+        """Implements `del self[key]`"""
+        super(OrderedSPAMVecDict,self).__delitem__(key)
+        if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))
+            self.parent._rebuild_paramvec()
+
 
     def copy(self, parent):
         """
@@ -203,10 +218,15 @@ class OrderedGateDict(PrefixOrderedDict):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
-        self.parent = parent # dimension == parent.dim
+
+        # Note: we *don't* want to be calling parent's "rebuild" function here,
+        # when we're creating a new list, as this behavior is only intented for
+        # explicit insertions.  Since calling the base class __init__ will
+        # call this class's __setitem__ we set parent to None for this step.
+        self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP" or "full" or "static"
         super(OrderedGateDict,self).__init__(prefix, items)
-
+        self.parent = parent # dimension == parent.dim
 
     def _check_dim(self, M):
         if isinstance(M, _gate.Gate):
@@ -259,6 +279,14 @@ class OrderedGateDict(PrefixOrderedDict):
 
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
+            self.parent._rebuild_paramvec()
+            
+    def __delitem__(self, key):
+        """Implements `del self[key]`"""
+        super(OrderedGateDict,self).__delitem__(key)
+        if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))
             self.parent._rebuild_paramvec()
 
 
@@ -276,10 +304,10 @@ class OrderedGateDict(PrefixOrderedDict):
         -------
         OrderedGateDict
         """
-
         return OrderedGateDict(parent, self.default_param, self._prefix,
                            [(lbl,val.copy()) for lbl,val in self.items()])
 
+    
     #def __pygsti_getstate__(self):
     #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
     #    # don't want this json-serializer to interfere with the '__reduce__'
@@ -329,6 +357,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         #** Note: if change __init__ signature, update __reduce__ below
         self.remainderLabel = remainderLabel
         super(OrderedSPAMLabelDict,self).__init__(items)
+        
 
     def __setitem__(self, key, val):
         if not _compat.isstr(key):

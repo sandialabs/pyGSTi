@@ -102,7 +102,7 @@ class TestGateSetMethods(GateSetTestCase):
         self.getset_helper(self.static_gateset)
 
     def getset_helper(self, gs):
-
+        
         v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
 
         gs['identity'] = v
@@ -128,14 +128,20 @@ class TestGateSetMethods(GateSetTestCase):
         Gi_test_matrix = np.random.random( (4,4) )
         Gi_test_matrix[0,:] = [1,0,0,0] # so TP mode works
         Gi_test = pygsti.objects.FullyParameterizedGate( Gi_test_matrix  )
+        print("POINT 1")
         gs["Gi"] = Gi_test_matrix #set gate matrix
+        print("POINT 2")
         gs["Gi"] = Gi_test #set gate object
         self.assertArraysAlmostEqual( gs['Gi'], Gi_test_matrix )
+
+        print("DEL")
+        del gs.preps['rho1']
 
         with self.assertRaises(KeyError):
             gs.preps['foobar'] = [1.0/np.sqrt(2),0,0,0] #bad key prefix
 
         with self.assertRaises(KeyError):
+            print("COPYING")
             gs2 = gs.copy()
             gs2['identity'] = None
             error = gs2.effects['remainder'] #no identity vector set

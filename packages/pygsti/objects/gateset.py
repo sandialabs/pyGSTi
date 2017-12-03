@@ -12,6 +12,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 import time as _time
+import bisect as _bisect
 
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
@@ -536,16 +537,53 @@ class GateSet(object):
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
     def _rebuild_paramvec(self):
-        v = self._paramvec
+        v = self._paramvec; Np = self.num_params()
         off = 0; shift = 0
-        #DEBUG!!!!
-        #for obj in _itertools.chain(self.preps.values(),
-        #                            self.effects.values(),
-        #                            self.gates.values()):
-        for lbl,obj in _itertools.chain(self.preps.items(),
-                                    self.effects.items(),
-                                    self.gates.items()):
 
+        #ellist = ", ".join(list(self.preps.keys()) +list(self.effects.keys()) +list(self.gates.keys()))
+        #print("DEBUG: rebuilding... %s" % ellist)
+
+        #Step 1: remove any unused indices from paramvec and shift accordingly
+        used_gpindices = set()
+        for obj in _itertools.chain(self.preps.values(),
+                                    self.effects.values(),
+                                    self.gates.values()):
+            if obj.gpindices is not None:
+                inds = _st.indices(obj.gpindices) if isinstance(
+                    obj.gpindices, slice) else obj.gpindices
+                used_gpindices.update(inds)
+        indices_to_remove = sorted(set(range(Np)) - used_gpindices)
+
+        if len(indices_to_remove) > 0:
+            #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
+            v = _np.delete(v, indices_to_remove)
+            get_shift = lambda j: _bisect.bisect(indices_to_remove, j)                
+            for lbl,obj in _itertools.chain(self.preps.items(),
+                                        self.effects.items(),
+                                        self.gates.items()):
+                if obj.gpindices is not None:
+                    if isinstance(obj.gpindices, slice):
+                        new_inds = _st.shift(obj.gpindices,
+                                             -get_shift(obj.gpindices.start))
+                    else:
+                        new_inds = []
+                        for i in obj.gpindices:
+                            new_inds.append(i - get_shift(i))
+                        new_inds = _np.array(new_inds,'i')
+                    obj.gpindices = new_inds
+                
+                
+        # Step 2: add parameters that don't exist yet
+        for obj in _itertools.chain(self.preps.values(),
+                                    self.effects.values(),
+                                    self.gates.values()):
+
+        #DEBUG: alternate loop that includes label for DEBUG print stmts below
+        #for lbl,obj in _itertools.chain(self.preps.items(),
+        #                            self.effects.items(),
+        #                            self.gates.items()):
+            
+            
             if shift > 0 and obj.gpindices is not None:
                 if isinstance(obj.gpindices, slice):
                     obj.gpindices = _st.shift(obj.gpindices, shift)
@@ -558,12 +596,12 @@ class GateSet(object):
                 obj.gpindices = slice(off, off+obj.num_params())
                 shift += obj.num_params()
                 off += obj.num_params()
-                #print("DB: %s: inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
+                #print("DEBUG: %s: inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = _st.indices(obj.gpindices) if isinstance(
                     obj.gpindices, slice) else obj.gpindices
                 M = max(inds) if inds else -1; L = len(v)
-                #print("DB: %s: existing indices = " % (lbl), obj.gpindices, " M=",M)
+                #print("DEBUG: %s: existing indices = " % (lbl), obj.gpindices, " M=",M)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     v = _np.concatenate((v, _np.empty(M+1-L,'d')),axis=0) # [v.resize(M+1) doesn't work]
@@ -572,10 +610,11 @@ class GateSet(object):
                         if i >= L: v[i] = w[ii]
                         assert(_np.isclose(v[i],w[ii]))
                     shift += M+1-L
-                    #print("DB:    --> added %d new params" % (M+1-L))
+                    #print("DEBUG:    --> added %d new params" % (M+1-L))
                 off = M+1
                     
         self._paramvec = v
+        #print("DEBUG: Done rebuild: %d params" % len(v))
 
 
     def to_vector(self):
@@ -2598,6 +2637,7 @@ class GateSet(object):
         GateSet
             a (deep) copy of this gateset.
         """
+        
         newGateset = GateSet()
         newGateset.preps = self.preps.copy(newGateset)
         newGateset.effects = self.effects.copy(newGateset)
@@ -2609,6 +2649,8 @@ class GateSet(object):
         newGateset._identitylabel = self._identitylabel
         newGateset._default_gauge_group = self._default_gauge_group
         newGateset._paramvec = self._paramvec.copy()
+
+        newGateset._rebuild_paramvec() # just to verify indices are were they're supposed to be...
         
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
