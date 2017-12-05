@@ -16,6 +16,7 @@ import warnings as _warnings
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
 from ..objects import gate as _gate
+from ..objects import spamvec as _spamvec
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..baseobjs import Basis as _Basis
@@ -927,15 +928,20 @@ def basis_build_gateset(stateSpaceLabels,
     _, _, blockDims = basis.dim
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     ret = _gateset.GateSet(default_param=defP)
-                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 #remainder_label="remainder", identity_label="identity")
+                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
         ret.preps[label] = basis_build_vector(rhoExpr, basis)
-    for label,EExpr in zip(effectLabels,effectExpressions):
-        ret.effects[label] = basis_build_vector(EExpr, basis)
 
-    ret.povm_identity = basis_build_identity_vec(basis)
+    remLbl = None
+    for label,EExpr in zip(effectLabels,effectExpressions):
+        if EExpr in ('remainder','R'):
+            remLbl=label; continue
+        ret.effects[label] = basis_build_vector(EExpr, basis)
+    if remLbl: # complement/remainder effect
+        otherVecs = [Evec for lbl,Evec in ret.effects.items() if lbl != remLbl]
+        ret.effects[remLbl] = _spamvec.ComplementSPAMVec(
+            basis_build_identity_vec(basis), otherVecs)
 
     #Note: since a GateSet's spamdefs are an *ordered* dictionary (for correspondence
     #  to row indices in some bulk_ operations), we need to set the spamdefs in a

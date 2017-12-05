@@ -25,8 +25,7 @@ class GateCalc(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel, paramvec):
+    def __init__(self, dim, gates, preps, effects, spamdefs, paramvec):
         """
         Construct a new GateCalc object.
 
@@ -41,39 +40,22 @@ class GateCalc(object):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        povm_identity : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamdefs
-            contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the
-            effect vectors in effects.
-
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
-            special case when eith both or just the effect label is set
-            to "remainder").
-
-        remainderLabel : string
-            A string that may appear in the values of spamdefs to designate
-            special behavior.
-
-        identityLabel : string
-            The string used to designate the identity POVM vector.
+            special case when both are set to "remainder").
 
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
-        self._remainderLabel = remainderLabel
-        self._identityLabel = identityLabel
         self.dim = dim
         self.gates = gates
         self.preps = preps
         self.effects = effects
-        self.povm_identity = povm_identity
         self.spamdefs = spamdefs
-        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in list(spamdefs.values()))
+        self.assumeSumToOne = bool( ("remainder","remainder") in list(spamdefs.values()))
           #Whether spamdefs contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
@@ -101,7 +83,7 @@ class GateCalc(object):
         sum exactly to 1.0.
         """
         if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
-        return bool(self.spamdefs[label] == (self._remainderLabel, self._remainderLabel))
+        return bool(self.spamdefs[label] == ("remainder","remainder"))
 
     def _get_remainder_row_index(self, spam_label_rows):
         """ 
@@ -116,26 +98,6 @@ class GateCalc(object):
                 assert(remainder_row_index is None) # ensure there is at most one dummy spam label
                 remainder_row_index = rowIndex
         return remainder_row_index
-
-
-    def _get_evec(self, elabel):
-        """
-        Get a POVM effect vector by label.
-
-        Parameters
-        ----------
-        elabel : string
-            the label of the POVM effect vector to return.
-
-        Returns
-        -------
-        numpy array
-            an effect vector of shape (dim, 1).
-        """
-        if elabel == self._remainderLabel:
-            return self.povm_identity - sum(self.effects.values())
-        else:
-            return self.effects[elabel]
 
         
     def product(self, gatestring, bScale=False):
@@ -1645,12 +1607,6 @@ class GateCalc(object):
                                               'effect', T, Ti)
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += wt * self.povm_identity.dim
-
         else:
             for gateLabel,gate in self.gates.items():
                 wt = itemWeights.get(gateLabel, gateWeight)
@@ -1666,13 +1622,6 @@ class GateCalc(object):
                 wt = itemWeights.get(lbl, spamWeight)
                 d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl],'effect')
                 nSummands += wt * Evec.dim
-
-            if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += wt * self.povm_identity.dim
 
         #Temporary: check that this function can be computed by
         # calling residuals - replace with this later.
@@ -1753,12 +1702,6 @@ class GateCalc(object):
 
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None:
-                wt = sqrt_itemWeights.get(self._identityLabel, spamWeight)
-                resids.append(
-                    wt * self.povm_identity.residuals(
-                    otherCalc.povm_identity, 'effect', T, Ti))
-                nSummands += wt * self.povm_identity.dim
         else:
             for gateLabel,gate in self.gates.items():
                 wt = sqrt_itemWeights.get(gateLabel, gateWeight)
@@ -1778,13 +1721,6 @@ class GateCalc(object):
                     wt * Evec.residuals(otherCalc.effects[lbl],'effect'))
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
-                wt = sqrt_itemWeights.get(self._identityLabel, spamWeight)
-                resids.append(
-                    wt * self.povm_identity.residuals(
-                    otherCalc.povm_identity, 'effect'))
-                nSummands += wt * self.povm_identity.dim
         resids = [r.flatten() for r in resids]
         resids = _np.concatenate(resids)
         return resids, nSummands
@@ -1831,11 +1767,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect', T, Ti)
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += self.povm_identity.dim
                 
         else:
             dists = [ gate.jtracedist(otherCalc.gates[lbl])
@@ -1852,11 +1783,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect')
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal
@@ -1905,11 +1831,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect', T, Ti)
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += self.povm_identity.dim
                 
         else:
             dists = [ gate.diamonddist(otherCalc.gates[lbl])
@@ -1926,11 +1847,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect')
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal

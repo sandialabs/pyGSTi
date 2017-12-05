@@ -14,6 +14,7 @@ from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
+from ..tools import slicetools as _slct
 from . import gaugegroup as _gaugegroup
 from ..baseobjs import ProtectedArray as _ProtectedArray
 
@@ -342,10 +343,36 @@ class Gate(object):
         """ Initialize a new Gate """
         self.dim = dim
         self.gpindices = None
+        self.dirty = False # True when there's any *possibility* that this
+                           # gate's parameters have been changed since the
+                           # last setting of dirty=False
         
     def get_dimension(self):
         """ Return the dimension of the gate. """
         return self.dim
+    
+    def get_gpindices(self, asarray=False):
+        """ 
+        Returns the indices of the "global" GateSet parameters that are used
+        by this SPAM vector.
+
+        Parameters
+        ----------
+        asarray : bool, optional
+            if True, then the returned value will always be a `numpy.ndarray`
+            of integers.  If False, then the raw `gpindices` member will be
+            returned, which can be either an array or a slice.
+
+        Returns
+        -------
+        numpy.ndarray or slice
+        """
+        if asarray:
+            if self.gpindices is None:
+                return _np.empty(0,'d')
+            elif isinstance(self.gpindices, slice):
+                return _slct.indices(self.gpindices)
+        return self.gpindices
 
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -592,12 +619,15 @@ class GateMatrix(Gate):
 
     #Access to underlying ndarray
     def __getitem__( self, key ):
+        self.dirty = True
         return self.base.__getitem__(key)
 
     def __getslice__(self, i,j):
+        self.dirty = True
         return self.__getitem__(slice(i,j)) #Called for A[:]
 
     def __setitem__(self, key, val):
+        self.dirty = True
         return self.base.__setitem__(key,val)
 
     def __getattr__(self, attr):
@@ -605,6 +635,7 @@ class GateMatrix(Gate):
         ret = getattr(self.__dict__['base'],attr)
         if(self.base.shape != (self.dim,self.dim)):
             raise ValueError("Cannot change shape of Gate")
+        self.dirty = True
         return ret
 
 
@@ -715,6 +746,7 @@ class StaticGate(GateMatrix):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
         self.base[:,:] = _np.array(mx)
+        self.dirty = True
 
 
     def num_params(self):
@@ -966,6 +998,7 @@ class FullyParameterizedGate(GateMatrix):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
         self.base[:,:] = _np.array(mx)
+        self.dirty = True
 
 
     def num_params(self):
@@ -1008,6 +1041,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[:,:] = v.reshape( (self.dim,self.dim) )
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1226,6 +1260,7 @@ class TPParameterizedGate(GateMatrix):
                              "invalid form for 1st row!" )
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
+        self.dirty = True
 
 
     def num_params(self):
@@ -1268,6 +1303,7 @@ class TPParameterizedGate(GateMatrix):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[1:,:] = v.reshape((self.dim-1,self.dim))
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1621,6 +1657,7 @@ class LinearlyParameterizedGate(GateMatrix):
         """
         self.parameterArray = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -2208,6 +2245,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -2791,6 +2829,7 @@ class LindbladParameterizedGate(GateMatrix):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def old_deriv_wrt_params(self, wrtFilter=None):
@@ -3209,6 +3248,7 @@ class LindbladParameterizedGate(GateMatrix):
             self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_matrix()
+            self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
             ## checked when truncate == False.  I'm not sure why this occurs,
@@ -3265,6 +3305,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
+        self.dirty = True
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -3304,6 +3345,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
+        self.dirty = True
 
 
     def compose(self, otherGate):

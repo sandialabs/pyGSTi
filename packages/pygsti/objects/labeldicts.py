@@ -40,34 +40,25 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
 class OrderedSPAMVecDict(PrefixOrderedDict):
     """ 
-    An ordered dictionary whose keys must begin with a given prefix,
-    and which supports a "virtual key" equal to a remainder label.  This special
-    remainder-label-key has a value constructed by subtracting all of the
-    dictionary's other values from the parent `GateSet`'s `povm_identity`
-    vector.
+    An ordered dictionary whose keys must begin with a given prefix.
 
     This class also ensure that every value is a :class:`SPAMVec`-derived object
     by converting any non-`SPAMVec` values into `SPAMVec`s upon assignment and
     raising an error if this is not possible.
     """
-    def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
+    def __init__(self, parent, default_param, prefix, items=[]):
         """
         Creates a new OrderedSPAMVecDict.
 
         Parameters
         ----------
         parent : GateSet
-            The parent gate set, needed to obtain the dimension and, more
-            importantly, the POVM identity vectory if `remainderLabel` is
-            given.
+            The parent gate set, needed to obtain the dimension and handle
+            updates to parameters.
         
         default_param : {"TP","full"}
             The default parameterization used when creating a `SPAMVec`-derived
             object from a key assignment.
-
-        remainderLabel : str
-            If not None, the remainder label that will act as a "virtual key"
-            as described above.
 
         prefix : str
             The required prefix of all keys (which must be strings).
@@ -83,7 +74,6 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP" or "full"
-        self.remainderLabel = remainderLabel
         super(OrderedSPAMVecDict,self).__init__(prefix, items) #l
         self.parent = parent # dimension == parent.dim
         
@@ -98,11 +88,9 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
                              % (len(vec),self.parent.dim))
 
     def __getitem__(self, key):
-        if key == self.remainderLabel:
-            if self.parent is None or self.parent.povm_identity is None:
-                raise KeyError("Cannot compute remainder vector because "
-                               + " identity vector is not set!")
-            return self.parent.povm_identity - sum(self.values())
+        if self.parent is not None:
+            #print("DEBUG: cleaning paramvec before getting ", key)
+            self.parent._clean_paramvec()
         return super(OrderedSPAMVecDict,self).__getitem__(key)
 
 
@@ -134,7 +122,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
-            self.parent._rebuild_paramvec()
+            self.parent._update_paramvec(self[key])
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""
@@ -159,8 +147,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         OrderedSPAMVecDict
         """
         return OrderedSPAMVecDict(parent, self.default_param,
-                           self.remainderLabel, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.items()])
+                           self._prefix, [(lbl,val.copy()) for lbl,val in self.items()])
 
     #def __pygsti_getstate__(self):
     #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
@@ -175,16 +162,14 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         # circular pickling of GateSets.  Must set parent separately.
         items = [(k,v) for k,v in self.items()]
         return (OrderedSPAMVecDict,
-                (None, self.default_param,
-                 self.remainderLabel, self._prefix, items), None)
+                (None, self.default_param, self._prefix, items), None)
     
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
         items = [(k,v) for k,v in self.items()]
         return (OrderedSPAMVecDict,
-                (None, self.default_param,
-                 self.remainderLabel, self._prefix, items), None)
+                (None, self.default_param, self._prefix, items), None)
 
 
 
@@ -250,7 +235,13 @@ class OrderedGateDict(PrefixOrderedDict):
                              "%d to gateset of dimension %d"
                              % (gate_dim,self.parent.dim))
 
+    def __getitem__(self, key):
+        if self.parent is not None:
+            #print("DEBUG: cleaning paramvec before getting ", key)
+            self.parent._clean_paramvec()
+        return super(OrderedGateDict,self).__getitem__(key)
 
+    
     def __setitem__(self, key, M):
         self._check_dim(M)
 
@@ -280,7 +271,7 @@ class OrderedGateDict(PrefixOrderedDict):
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
-            self.parent._rebuild_paramvec()
+            self.parent._update_paramvec(self[key])
             
     def __delitem__(self, key):
         """Implements `del self[key]`"""
@@ -340,10 +331,10 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
     allows a special "remainder label" which should downstream generate 
     probabilities equal to `1-(probabilities_of_all_other_outcomes)`.
     """
+
     def __init__(self, remainderLabel, items=[]):
         """
         Creates a new OrderedSPAMLabelDict.
-
         Parameters
         ----------
         remainderLabel : str
@@ -368,9 +359,8 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
         prepLabel, effectLabel = val
         if prepLabel == self.remainderLabel:
             if effectLabel != self.remainderLabel:
-                raise ValueError("POVM label must always ==" +
-                                 "%s when preparation " % self.remainderLabel +
-                                 "label does")
+                raise ValueError("POVM label must always == %s" % self.remainderLabel +
+                                 "when preparation label does")
 
             # This spam label generates probabilities which equal
             #  1 - sum(other spam label probs)
@@ -395,8 +385,7 @@ class OrderedSPAMLabelDict(_collections.OrderedDict):
 
     def copy(self):
         """ Return a copy of this OrderedSPAMLabelDict. """
-        return OrderedSPAMLabelDict(self.remainderLabel,
-                                    [(lbl,val) for lbl,val in self.items()])
+        return OrderedSPAMLabelDict(self.remainderLabel, [(lbl,val) for lbl,val in self.items()])
 
 
     #def __pygsti_getstate__(self):

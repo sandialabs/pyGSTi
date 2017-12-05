@@ -34,8 +34,7 @@ class GateMapCalc(GateCalc):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel, paramvec):
+    def __init__(self, dim, gates, preps, effects, spamdefs, paramvec):
         """
         Construct a new GateMapCalc object.
 
@@ -75,8 +74,7 @@ class GateMapCalc(GateCalc):
             The parameter vector of the GateSet.
         """
         super(GateMapCalc, self).__init__(
-            dim, gates, preps, effects, povm_identity, spamdefs,
-            remainderLabel, identityLabel, paramvec)
+            dim, gates, preps, effects, spamdefs, paramvec)
 
 
     #Same as GateMatrixCalc, but not general enough to be in base class
@@ -84,7 +82,7 @@ class GateMapCalc(GateCalc):
         if _compat.isstr(spamLabel):
             (rholabel,elabel) = self.spamdefs[spamLabel]
             rho = self.preps[rholabel]
-            E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+            E   = _np.conjugate(_np.transpose(self.effects[elabel]))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -237,7 +235,7 @@ class GateMapCalc(GateCalc):
     def _compute_dpr_cache(self, spamLabel, evalTree, wrtSlice, comm, scratch=None):
         #Compute finite difference derivatives, one parameter at a time.
 
-        param_indices = range(self.tot_params) if (wrtSlice is None) else _slct.indices(wrtSlice)
+        param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
         dim = self.dim
@@ -283,8 +281,8 @@ class GateMapCalc(GateCalc):
     def _compute_hpr_cache(self, spamLabel, evalTree, wrtSlice1, wrtSlice2, comm):
         #Compute finite difference hessians, one parameter at a time.
 
-        param_indices1 = range(self.tot_params) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
-        param_indices2 = range(self.tot_params) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
+        param_indices1 = range(self.Np) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
+        param_indices2 = range(self.Np) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
         nDerivCols1 = len(param_indices1) # *all*, not just locally computed ones
         nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
         
@@ -375,8 +373,8 @@ class GateMapCalc(GateCalc):
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
-        wrtLen1 = (self.tot_params+np1-1) // np1 # ceiling(num_params / np1)
-        wrtLen2 = (self.tot_params+np2-1) // np2 # ceiling(num_params / np2)
+        wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
+        wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
 
         mem = 0
         for fnName in subcalls:
@@ -620,7 +618,7 @@ class GateMapCalc(GateCalc):
             if wrtFilter is None:
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
+                    comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize = comm_blkSize if (blkSize is None) \
                         else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
@@ -638,16 +636,16 @@ class GateMapCalc(GateCalc):
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
-                nBlks = int(_np.ceil(self.tot_params / blkSize))
+                nBlks = int(_np.ceil(self.Np / blkSize))
                   # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.tot_params, nBlks)
+                blocks = _mpit.slice_up_range(self.Np, nBlks)
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
                     _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than derivative columns(%d)!" % self.tot_gate_params 
+                       +" than derivative columns(%d)!" % self.Np
                        +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
                 fillComm = blkComm #comm used by calc_and_fill
 
@@ -851,7 +849,7 @@ class GateMapCalc(GateCalc):
                 blkSize1 = wrtBlockSize1 #could be None
                 blkSize2 = wrtBlockSize2 #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
+                    comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize1 = comm_blkSize if (blkSize1 is None) \
                         else min(comm_blkSize, blkSize1) #override with smaller comm_blkSize
                     blkSize2 = comm_blkSize if (blkSize2 is None) \
@@ -872,11 +870,11 @@ class GateMapCalc(GateCalc):
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter1 is None and wrtFilter2 is None) #cannot specify both wrtFilter and blkSize
-                nBlks1 = int(_np.ceil(self.tot_params / blkSize1))
-                nBlks2 = int(_np.ceil(self.tot_params / blkSize2))
+                nBlks1 = int(_np.ceil(self.Np / blkSize1))
+                nBlks2 = int(_np.ceil(self.Np / blkSize2))
                   # num blocks required to achieve desired average size == blkSize1 or blkSize2
-                blocks1 = _mpit.slice_up_range(self.tot_params, nBlks1)
-                blocks2 = _mpit.slice_up_range(self.tot_params, nBlks2)
+                blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
+                blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
 
                 #distribute derivative computation across blocks
                 myBlk1Indices, blk1Owners, blk1Comm = \
@@ -887,7 +885,7 @@ class GateMapCalc(GateCalc):
 
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than hessian elements(%d)!" % (self.tot_gate_params**2)
+                       +" than hessian elements(%d)!" % (self.Np**2)
                        +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2))
                 fillComm = blk2Comm #comm used by calc_and_fill
 

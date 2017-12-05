@@ -82,7 +82,45 @@ class SPAMVecTestCase(BaseTestCase):
             #print(r, "->", evs)
         print("OK2")
 
+    def test_complement_spamvec(self):
+        gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0') } )
+        Ec = pygsti.obj.ComplementSPAMVec(
+            pygsti.construction.build_identity_vec([2],"pp"),
+            [gateset.effects['E0']])
+        print(Ec.gpindices)
+        gateset.effects['E1'] = Ec
 
+        v = gateset.to_vector()
+        gateset.from_vector(v)
+
+        print(Ec.num_params())
+        identity = np.array([[np.sqrt(2)], [0], [0], [0]],'d')
+        print("TEST1")
+        print(gateset.effects['E0'])
+        print(gateset.effects['E1'])
+        print(gateset.effects['E0'] + gateset.effects['E1'])
+        self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+
+        print("TEST2")
+        gateset.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
+        print(gateset.effects['E0'])
+        print(gateset.effects['E1'])
+        print(gateset.effects['E0'] + gateset.effects['E1'])
+        self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+
+        print("TEST3")
+        gateset.effects['E0'][0,0] = 1.0 #uses dirty processing
+        print(gateset.effects['E0'])
+        print(gateset.effects['E1'])
+        print(gateset.effects['E0'] + gateset.effects['E1'])
+        self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+
+        
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

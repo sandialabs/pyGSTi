@@ -26,26 +26,26 @@ class GateSetTestCase(BaseTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["0"],
+            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
             spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','remainder') } )
+                      '1': ('rho0','E1') } )
 
         self.tp_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["0"],
+            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
             spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','remainder') },
+                      '1': ('rho0','E1') },
             parameterization="TP")
 
         self.static_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["0"],
+            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
             spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','remainder') },
+                      '1': ('rho0','E1') },
             parameterization="static")
 
         self.mgateset = self.gateset.copy()
@@ -78,19 +78,29 @@ class TestGateSetMethods(GateSetTestCase):
 
         self.assertEqual(self.gateset.num_preps(), 1)
         self.assertEqual(self.gateset.num_effects(), 2)
-
+        
         for default_param in ("full","TP","static"):
+            print("Case: default_param = ",default_param)
             nGates = 3 if default_param in ("full","TP") else 0
             nSPVecs = 1 if default_param in ("full","TP") else 0
-            nEVecs = 1 if default_param in ("full","TP") else 0
+            nEVecs = 1 if default_param in ("full","TP") else 0 #independent evecs
             nParamsPerGate = 16 if default_param == "full" else 12
             nParamsPerSP = 4 if default_param == "full" else 3
             nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
             self.gateset.set_all_parameterizations(default_param)
+
+            for lbl,obj in self.gateset.preps.items():
+                print(lbl,':',obj.gpindices)
+            for lbl,obj in self.gateset.effects.items():
+                print(lbl,':',obj.gpindices)
+            for lbl,obj in self.gateset.gates.items():
+                print(lbl,':',obj.gpindices)
+            print("NPARAMS = ",self.gateset.num_params())
+
             self.assertEqual(self.gateset.num_params(), nParams)
 
         self.assertEqual(self.gateset.get_prep_labels(), ["rho0"])
-        self.assertEqual(self.gateset.get_effect_labels(), ["E0", "remainder"])
+        self.assertEqual(self.gateset.get_effect_labels(), ["E0", "E1"])
 
     def test_getset_full(self):
         self.getset_helper(self.gateset)
@@ -105,22 +115,22 @@ class TestGateSetMethods(GateSetTestCase):
         
         v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
 
-        gs['identity'] = v
-        w = gs['identity']
-        self.assertArraysAlmostEqual(w,v)
+        #gs['identity'] = v
+        #w = gs['identity']
+        #self.assertArraysAlmostEqual(w,v)
 
         gs['rho1'] = v
         w = gs['rho1']
         self.assertArraysAlmostEqual(w,v)
 
-        gs['E1'] = v
-        w = gs['E1']
+        gs['E2'] = v
+        w = gs['E2']
         self.assertArraysAlmostEqual(w,v)
 
-        gs.spamdefs["TEST"] = ("rho0","E1")
+        gs.spamdefs["TEST"] = ("rho0","E2")
         self.assertTrue("TEST" in gs.get_spam_labels())
         d = gs.get_reverse_spam_defs()
-        self.assertEqual( d[("rho0","E1")], "TEST" )
+        self.assertEqual( d[("rho0","E2")], "TEST" )
 
         Gi_matrix = np.identity(4, 'd')
         self.assertTrue( isinstance(gs['Gi'], pygsti.objects.Gate) )
@@ -143,7 +153,7 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(KeyError):
             print("COPYING")
             gs2 = gs.copy()
-            gs2['identity'] = None
+            #gs2['identity'] = None
             error = gs2.effects['remainder'] #no identity vector set
 
 
@@ -281,6 +291,9 @@ class TestGateSetMethods(GateSetTestCase):
 
         mdp = self.mgateset.dpr('0',gatestring)
         mdp4,mp4 = self.mgateset.dpr('0',gatestring,returnPr=True)
+        print("DEBUG: mdp",mdp)
+        print("DEBUG: mdp4",mdp4)
+        print("DEBUG: dp",dp)
         self.assertArraysAlmostEqual(mdp,mdp4)
         self.assertArraysAlmostEqual(dp,mdp)
 
