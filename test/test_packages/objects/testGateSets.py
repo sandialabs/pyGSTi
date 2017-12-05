@@ -10,7 +10,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.objects.gatemapcalc import GateMapCalc
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
-FD_HESS_PLACES = 3 # looser checking when computing finite difference hessians (currently in map calcs)
+FD_HESS_PLACES = 1 # looser checking when computing finite difference hessians (currently in map calcs)
 
 # This class is for unifying some gatesets that get used in this file and in testGateSets2.py
 class GateSetTestCase(BaseTestCase):
@@ -291,9 +291,6 @@ class TestGateSetMethods(GateSetTestCase):
 
         mdp = self.mgateset.dpr('0',gatestring)
         mdp4,mp4 = self.mgateset.dpr('0',gatestring,returnPr=True)
-        print("DEBUG: mdp",mdp)
-        print("DEBUG: mdp4",mdp4)
-        print("DEBUG: dp",dp)
         self.assertArraysAlmostEqual(mdp,mdp4)
         self.assertArraysAlmostEqual(dp,mdp)
 

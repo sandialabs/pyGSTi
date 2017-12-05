@@ -167,7 +167,7 @@ class GateMapCalc(GateCalc):
         p = self.pr(spamLabel, gatestring, clipTo)
         dp = _np.empty( (1,self.Np), 'd' )
 
-        orig_vec = self.calc_to_vector()
+        orig_vec = self.calc_to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.calc_from_vector(vec)
@@ -191,7 +191,7 @@ class GateMapCalc(GateCalc):
             dp = self.dpr(spamLabel, gatestring, returnPr, clipTo)
         hp = _np.empty( (1,self.Np, self.Np), 'd' )
 
-        orig_vec = self.calc_to_vector()
+        orig_vec = self.calc_to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
             self.calc_from_vector(vec)
@@ -262,7 +262,7 @@ class GateMapCalc(GateCalc):
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
-        orig_vec = self.calc_to_vector()
+        orig_vec = self.calc_to_vector().copy()
         for i in range(self.Np):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
@@ -308,7 +308,7 @@ class GateMapCalc(GateCalc):
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
-        orig_vec = self.calc_to_vector()
+        orig_vec = self.calc_to_vector().copy()
         for i in range(self.Np):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]

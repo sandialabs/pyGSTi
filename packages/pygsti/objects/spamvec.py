@@ -250,9 +250,9 @@ class SPAMVec(object):
         """
         if asarray:
             if self.gpindices is None:
-                return _np.empty(0,'d')
+                return _np.empty(0,'i')
             elif isinstance(self.gpindices, slice):
-                return _slct.indices(self.gpindices)
+                return _np.array(_slct.indices(self.gpindices),'i')
         return self.gpindices
         
 
