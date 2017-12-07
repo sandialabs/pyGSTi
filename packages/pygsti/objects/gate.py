@@ -343,6 +343,11 @@ class Gate(object):
         """ Initialize a new Gate """
         self.dim = dim
         self.gpindices = None
+        self.parent = None # parent GateSet used to determine how to process
+                           # a Gate's gpindices when inserted into a GateSet
+                           # Note that this is *not* pickled by virtue of all
+                           # the Gate classes implementing a __reduce__ which
+                           # sets parent==None via this constructor.
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False
@@ -450,7 +455,7 @@ class Gate(object):
         """
         raise NotImplementedError("from_vector not implemented!")
     
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -461,13 +466,21 @@ class Gate(object):
         """
         raise NotImplementedError("copy not implemented!")
 
-    def copy_gpindices_to(self, gateObj):
+    def _copy_gpindices(self, gateObj, parent):
         """ Helper function for implementing copy in derived classes """
+        gateObj.parent = parent
         if isinstance(self.gpindices, slice):
             gateObj.gpindices = self.gpindices #slices are immutable
         elif gateObj.gpindices is not None:
             gateObj.gpindices = self.gpindices.copy() #arrays are not
         return gateObj
+
+    def _reduce_dict(self):
+        """ Helper function that returns a dict suitable for __reduce__ call """
+        d = self.__dict__.copy()
+        d['parent'] = None
+        return d
+
 
     #Pickle plumbing
     def __setstate__(self, state):
@@ -825,7 +838,7 @@ class StaticGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -834,7 +847,7 @@ class StaticGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return self.copy_gpindices_to( StaticGate(self.base) )
+        return self._copy_gpindices( StaticGate(self.base), parent)
 
 
     def transform(self, S):
@@ -953,7 +966,11 @@ class StaticGate(GateMatrix):
         return s
 
     def __reduce__(self):
-        return (StaticGate, (_np.identity(self.dim,'d'),), self.__dict__)
+        return (StaticGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 
@@ -1076,7 +1093,7 @@ class FullyParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1085,7 +1102,7 @@ class FullyParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return self.copy_gpindices_to( FullyParameterizedGate(self.base) )
+        return self._copy_gpindices( FullyParameterizedGate(self.base), parent )
 
 
     def transform(self, S):
@@ -1204,8 +1221,10 @@ class FullyParameterizedGate(GateMatrix):
 
 
     def __reduce__(self):
-        return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)
+        return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
 
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
 
 class TPParameterizedGate(GateMatrix):
@@ -1340,7 +1359,7 @@ class TPParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1349,7 +1368,7 @@ class TPParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return self.copy_gpindices_to( TPParameterizedGate(self.base) )
+        return self._copy_gpindices( TPParameterizedGate(self.base), parent )
 
 
     def transform(self, S):
@@ -1470,7 +1489,10 @@ class TPParameterizedGate(GateMatrix):
 
     def __reduce__(self):
         """ Reduce for pickling as an element of an :class:`OrderedDict` """
-        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)
+        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
 
 
@@ -1494,9 +1516,9 @@ class LinearlyParameterizedElementTerm(object):
         self.coeff = coeff
         self.paramIndices = paramIndices
 
-    def copy(self):
+    def copy(self, parent=None):
         """ Copy this term. """
-        return self.copy_gpindices_to( LinearlyParameterizedElementTerm(self.coeff, self.paramIndices) )
+        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
 
 
 class LinearlyParameterizedGate(GateMatrix):
@@ -1707,7 +1729,7 @@ class LinearlyParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1726,7 +1748,7 @@ class LinearlyParameterizedGate(GateMatrix):
             newGate.elementExpressions[tup] = [ term.copy() for term in termList ]
         newGate._construct_matrix()
 
-        return self.copy_gpindices_to( newGate )
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -1918,7 +1940,11 @@ class LinearlyParameterizedGate(GateMatrix):
     def __reduce__(self):
         return (LinearlyParameterizedGate,
                 (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
-                self.__dict__)
+                self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 
@@ -2299,7 +2325,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -2320,7 +2346,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         newGate.options = self.options.copy()
         newGate._construct_matrix()
 
-        return self.copy_gpindices_to( newGate )
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -2443,7 +2469,11 @@ class EigenvalueParameterizedGate(GateMatrix):
 
     def __reduce__(self):
         return (EigenvalueParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self.__dict__)
+                (_np.identity(self.dim,'d'),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 class LindbladParameterizedGate(GateMatrix):
@@ -3201,7 +3231,7 @@ class LindbladParameterizedGate(GateMatrix):
                                  wrtFilter2, axis=2 )
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -3220,7 +3250,7 @@ class LindbladParameterizedGate(GateMatrix):
         newGate.paramvals = self.paramvals.copy()
         newGate._construct_matrix()
 
-        return self.copy_gpindices_to( newGate )
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -3384,7 +3414,11 @@ class LindbladParameterizedGate(GateMatrix):
 
     def __reduce__(self):
         return (LindbladParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self.__dict__)
+                (_np.identity(self.dim,'d'),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 

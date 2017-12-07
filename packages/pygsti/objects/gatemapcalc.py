@@ -49,26 +49,12 @@ class GateMapCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        povm_identity : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamdefs
-            contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the
-            effect vectors in effects.
-
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
-            special case when eith both or just the effect label is set
-            to "remainder").
-
-        remainderLabel : string
-            A string that may appear in the values of spamdefs to designate
-            special behavior.
-
-        identityLabel : string
-            The string used to designate the identity POVM vector.
+            special case when both are set to "remainder").
 
         paramvec : ndarray
             The parameter vector of the GateSet.
@@ -135,10 +121,12 @@ class GateMapCalc(GateCalc):
         #Note: this *will* initialize the parent GateSet's objects too,
         # since only references to preps, effects, and gates are held
         # by the calculator class.
+        self.paramvec = v.copy()
         for obj in _itertools.chain(self.preps.values(),
                                     self.effects.values(),
                                     self.gates.values()):
             obj.from_vector( v[obj.gpindices] )
+        
 
 
     def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):

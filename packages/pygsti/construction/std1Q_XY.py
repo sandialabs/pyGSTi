@@ -32,8 +32,8 @@ germs_lite = germs[0:4]
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gy'],
                                 [ "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                effectLabels=["E0"], effectExpressions=["0"],
-                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
+                                effectLabels=["E0","Ec"], effectExpressions=["0","C"],
+                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') },
                                 basis='pp')
 
 clifford_compilation = _OrderedDict()

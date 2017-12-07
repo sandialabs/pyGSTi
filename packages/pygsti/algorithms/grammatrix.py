@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from .. import construction as _construction
 from .core import gram_rank_and_evals as _gramRankAndEvals
+from ..objects import ComplementSPAMVec as _ComplementSPAMVec
 
 
 ########################################################
@@ -108,7 +109,9 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
         if targetGateset is not None:
             spamDict = targetGateset.get_reverse_spam_defs()
             rhoLabels = list(targetGateset.preps.keys())
-            eLabels = list(targetGateset.effects.keys()) # 'remainder' should *not* be an effectLabel here
+            eLabels = list([l for l,Evec in targetGateset.effects.items()
+                            if not isinstance(Evec,_ComplementSPAMVec) ])
+              # don't count complement effect vectors in eLabels
         else:
             firstSpamLabel = dataset.get_spam_labels()[0]
             spamDict = {('dummy_rho','dummy_E'): firstSpamLabel}

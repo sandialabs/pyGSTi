@@ -50,6 +50,9 @@ class GateSet(object):
     #Whether access to gates & spam vecs via GateSet indexing is allowed
     _strict = False
 
+    #Whether to perform extra parameter-vector integrity checks
+    _pcheck = False
+
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G"):
         """
@@ -412,6 +415,9 @@ class GateSet(object):
         self.preps.parent = self
         self.effects.parent = self
         self.gates.parent = self
+        for o in self.preps.values(): o.parent = self
+        for o in self.effects.values(): o.parent = self
+        for o in self.gates.values(): o.parent = self
 
 
     def num_params(self):
@@ -474,6 +480,21 @@ class GateSet(object):
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
+    def _check_paramvec(self, debug=False):
+        if debug: print("---- GateSet._check_paramvec ----")
+        TOL=1e-8
+        for lbl,obj in _itertools.chain(self.preps.items(),
+                                        self.effects.items(),
+                                        self.gates.items()):
+            if debug: print(lbl,":",obj.num_params(),obj.gpindices)
+            w = obj.to_vector()
+            msg = "None" if (obj.parent is None) else id(obj.parent)
+            assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl,msg)
+            if obj.gpindices is not None and len(w) > 0:
+                if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
+                    raise ValueError("%s is out of sync with paramvec!!!" % lbl)
+
+
     def _clean_paramvec(self):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
             have been modified without out knowing, leaving _paramvec out of 
@@ -490,10 +511,13 @@ class GateSet(object):
                 w = obj.to_vector()
                 if _np.linalg.norm(self._paramvec[obj.gpindices]-w) > TOL:
                     self._paramvec[obj.gpindices] = w; dirty = True
+                    
         if dirty:
             #re-update everything to ensure consistency
             #print("DEBUG: non-trivailly CLEANED paramvec due to dirty elements")
             self.from_vector(self._paramvec,False)
+            
+        if GateSet._pcheck: self._check_paramvec()
 
 
     def _update_paramvec(self, modified_obj=None):
@@ -514,7 +538,7 @@ class GateSet(object):
         
     
     def _rebuild_paramvec(self):
-        """ Resizes self._paramvec and updates gpindices of members as needed,
+        """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
         v = self._paramvec; Np = self.num_params()
@@ -522,12 +546,13 @@ class GateSet(object):
 
         #ellist = ", ".join(list(self.preps.keys()) +list(self.effects.keys()) +list(self.gates.keys()))
         #print("DEBUG: rebuilding... %s" % ellist)
-
+        
         #Step 1: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
-        for obj in _itertools.chain(self.preps.values(),
-                                    self.effects.values(),
-                                    self.gates.values()):
+        for lbl,obj in _itertools.chain(self.preps.items(),
+                                    self.effects.items(),
+                                    self.gates.items()):
+            assert(obj.parent is self), "Member's parent is not set correctly!"
             if obj.gpindices is not None:
                 used_gpindices.update( obj.get_gpindices(True) )
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
@@ -535,14 +560,14 @@ class GateSet(object):
         if len(indices_to_remove) > 0:
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
-            get_shift = lambda j: _bisect.bisect(indices_to_remove, j)                
+            get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
             for lbl,obj in _itertools.chain(self.preps.items(),
                                         self.effects.items(),
                                         self.gates.items()):
                 if obj.gpindices is not None:
                     if isinstance(obj.gpindices, slice):
                         new_inds = _slct.shift(obj.gpindices,
-                                             -get_shift(obj.gpindices.start))
+                                               -get_shift(obj.gpindices.start))
                     else:
                         new_inds = []
                         for i in obj.gpindices:
@@ -584,7 +609,7 @@ class GateSet(object):
                     w = obj.to_vector()
                     v = _np.concatenate((v, _np.empty(M+1-L,'d')),axis=0) # [v.resize(M+1) doesn't work]
                     shift += M+1-L
-                    for ii,i in enumerate(indices):
+                    for ii,i in enumerate(inds):
                         if i >= L: v[i] = w[ii]
                     #print("DEBUG:    --> added %d new params" % (M+1-L))                    
                 off = M+1
@@ -617,6 +642,7 @@ class GateSet(object):
         """
         assert( len(v) == self.num_params() )
 
+        self._paramvec = v.copy()
         for obj in _itertools.chain(self.preps.values(),
                                     self.effects.values(),
                                     self.gates.values()):
@@ -627,6 +653,7 @@ class GateSet(object):
             self.reset_basis()
             # assume the vector we're loading isn't producing gates & vectors in
             # a known basis.
+        if GateSet._pcheck: self._check_paramvec()
 
 
     def deriv_wrt_params(self):
@@ -668,6 +695,19 @@ class GateSet(object):
         """
 
         # ** See comments at the beginning of get_nongauge_projector for explanation **
+
+        bSkipEcs = True #Whether we should artificially skip complement-type
+         # effect vecs, which is historically what we've done, even though
+         # this seems somewhat wrong.  Not skipping them will alter the
+         # number of "gauge params" since a complement Evec has a *fixed*
+         # identity from the perspective of the GateSet params (which 
+         # *varied* in gauge optimization, even though it's not a SPAMVec
+         # param, creating a weird inconsistency...) SKIP
+        if bSkipEcs:
+            newSelf = self.copy()
+            Ec_lbls = [ lbl for lbl,E in self.effects.items() if isinstance(E, _sv.ComplementSPAMVec) ]
+            for lbl in Ec_lbls: del newSelf.effects[lbl]
+            self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
         
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
         dim = self._dim
@@ -690,10 +730,12 @@ class GateSet(object):
             gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
         for prepLabel in self.preps:
             gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
-        for effectLabel in self.effects:
+        for effectLabel,E in self.effects.items():
             gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
 
-        assert(gsDeriv.num_elements() == gsDeriv.num_params() == nElements)
+        if bSkipEcs: nElements = gsDeriv.num_elements() #SKIP - so nElements is updated w/out Ecs
+        #assert(gsDeriv.num_elements() == nElements == gsDeriv.num_params())
+        # Disabled b/c of SKIP hack
 
         dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
@@ -954,6 +996,8 @@ class GateSet(object):
 
         for gateObj in list(self.gates.values()):
             gateObj.transform(S)
+
+        self._clean_paramvec() #transform may leave dirty members
 
 
     def _calc(self):
@@ -2607,18 +2651,21 @@ class GateSet(object):
         GateSet
             a (deep) copy of this gateset.
         """
+        if GateSet._pcheck: self._check_paramvec()
         
         newGateset = GateSet()
         newGateset.preps = self.preps.copy(newGateset)
         newGateset.effects = self.effects.copy(newGateset)
         newGateset.gates = self.gates.copy(newGateset)
+        newGateset._paramvec = self._paramvec.copy()
+        #newGateset._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
+        
+        if GateSet._pcheck: newGateset._check_paramvec()
+        
         newGateset.spamdefs = self.spamdefs.copy()
         newGateset._dim = self._dim
         newGateset._default_gauge_group = self._default_gauge_group
-        newGateset._paramvec = self._paramvec.copy()
 
-        newGateset._rebuild_paramvec() # just to verify indices are were they're supposed to be...
-        
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
         newGateset._calcClass = self._calcClass
@@ -2626,6 +2673,7 @@ class GateSet(object):
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
         newGateset.basis = self.basis
+        if GateSet._pcheck: self._check_paramvec()
         
         return newGateset
 
@@ -2757,8 +2805,14 @@ class GateSet(object):
             for lbl in self.preps.keys():
                 newGateset.preps[lbl].depolarize(spam_noise)
             for lbl in self.effects.keys():
+                if isinstance(newGateset.effects[lbl], _sv.ComplementSPAMVec):
+                    #Don't depolarize complements since this will depol the
+                    # other effects via their shared params - cleanup will update
+                    # any complement vectors
+                    continue
                 newGateset.effects[lbl].depolarize(spam_noise)
 
+        newGateset._clean_paramvec() #depolarize may leave dirty members
         return newGateset
 
 
@@ -2821,6 +2875,8 @@ class GateSet(object):
 
         else: raise ValueError("Must specify either 'rotate' or 'max_rotate' "
                                + "-- neither was non-None")
+        
+        newGateset._clean_paramvec() #rotate may leave dirty members
         return newGateset
 
 

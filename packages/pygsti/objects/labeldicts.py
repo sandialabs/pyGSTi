@@ -75,7 +75,12 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP" or "full"
         super(OrderedSPAMVecDict,self).__init__(prefix, items) #l
+
+        #Set parent of this dict and it's elements, not that it's been initialized
         self.parent = parent # dimension == parent.dim
+        if self.parent is not None:
+            for el in self.values(): el.parent = self.parent
+            
         
 
     def _check_dim(self, vec):
@@ -88,9 +93,9 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
                              % (len(vec),self.parent.dim))
 
     def __getitem__(self, key):
-        if self.parent is not None:
-            #print("DEBUG: cleaning paramvec before getting ", key)
-            self.parent._clean_paramvec()
+        #if self.parent is not None:
+        #    #print("DEBUG: cleaning paramvec before getting ", key)
+        #    self.parent._clean_paramvec()
         return super(OrderedSPAMVecDict,self).__getitem__(key)
 
 
@@ -99,6 +104,8 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
 
         if isinstance(vec, _sv.SPAMVec):  #if we're given a SPAMVec object...
             #just replace or create vector
+            if self.parent is not None and vec.parent is not self.parent:
+                vec = vec.copy(self.parent); vec.gpindices=None
             super(OrderedSPAMVecDict,self).__setitem__(key, vec)
 
         elif key in self: #if a SPAMVec object already exists...
@@ -117,12 +124,13 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
             else:
                 raise ValueError("Invalid default_param: %s" % self.default_param)
 
+            if self.parent is not None: vecObj.parent=self.parent
             super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
 
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
-            self.parent._update_paramvec(self[key])
+            self.parent._update_paramvec( super(OrderedSPAMVecDict,self).__getitem__(key) )
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""
@@ -147,7 +155,7 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
         OrderedSPAMVecDict
         """
         return OrderedSPAMVecDict(parent, self.default_param,
-                           self._prefix, [(lbl,val.copy()) for lbl,val in self.items()])
+                           self._prefix, [(lbl,val.copy(parent)) for lbl,val in self.items()])
 
     #def __pygsti_getstate__(self):
     #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
@@ -160,14 +168,14 @@ class OrderedSPAMVecDict(PrefixOrderedDict):
     def __pygsti_reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
+        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
         return (OrderedSPAMVecDict,
                 (None, self.default_param, self._prefix, items), None)
     
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
+        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
         return (OrderedSPAMVecDict,
                 (None, self.default_param, self._prefix, items), None)
 
@@ -211,7 +219,12 @@ class OrderedGateDict(PrefixOrderedDict):
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP" or "full" or "static"
         super(OrderedGateDict,self).__init__(prefix, items)
+
+        #Set parent of this dict and it's elements, not that it's been initialized
         self.parent = parent # dimension == parent.dim
+        if self.parent is not None:
+            for el in self.values(): el.parent = self.parent
+
 
     def _check_dim(self, M):
         if isinstance(M, _gate.Gate):
@@ -236,17 +249,20 @@ class OrderedGateDict(PrefixOrderedDict):
                              % (gate_dim,self.parent.dim))
 
     def __getitem__(self, key):
-        if self.parent is not None:
-            #print("DEBUG: cleaning paramvec before getting ", key)
-            self.parent._clean_paramvec()
+        #if self.parent is not None:
+        #    #print("DEBUG: cleaning paramvec before getting ", key)
+        #    self.parent._clean_paramvec()
         return super(OrderedGateDict,self).__getitem__(key)
 
     
     def __setitem__(self, key, M):
         self._check_dim(M)
+        #if 'Gi' in self: print("__setitem__ with Gi = ",super(OrderedGateDict,self).__getitem__('Gi').gpindices)
 
         if isinstance(M, _gate.Gate):  #if we're given a Gate object...
             #just replace or create vector
+            if self.parent is not None and M.parent is not self.parent:
+                M = M.copy(self.parent); M.gpindices=None
             super(OrderedGateDict,self).__setitem__(key, M)
 
         elif key in self: #if a Gate object already exists...
@@ -266,12 +282,13 @@ class OrderedGateDict(PrefixOrderedDict):
                 raise ValueError("Invalid default_param: %s" %
                                  self.default_param)
 
+            if self.parent is not None: gateObj.parent=self.parent
             super(OrderedGateDict,self).__setitem__(key, gateObj)
 
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
-            self.parent._update_paramvec(self[key])
+            self.parent._update_paramvec( super(OrderedGateDict,self).__getitem__(key) )
             
     def __delitem__(self, key):
         """Implements `del self[key]`"""
@@ -296,7 +313,7 @@ class OrderedGateDict(PrefixOrderedDict):
         OrderedGateDict
         """
         return OrderedGateDict(parent, self.default_param, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.items()])
+                           [(lbl,val.copy(parent)) for lbl,val in self.items()])
 
     
     #def __pygsti_getstate__(self):
@@ -310,14 +327,14 @@ class OrderedGateDict(PrefixOrderedDict):
     def __pygsti_reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
+        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
         return (OrderedGateDict,
                 (None, self.default_param, self._prefix, items), None)
 
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
+        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
         return (OrderedGateDict,
                 (None, self.default_param, self._prefix, items), None)
 

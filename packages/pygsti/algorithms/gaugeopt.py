@@ -352,7 +352,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             start = 0
             d = gs_pre.dim
             N = gaugeGroupEl.num_params()
-            L = gs_pre.num_elements(include_povm_identity=True)
+            L = gs_pre.num_elements()
 
             #Compute "extra" (i.e. beyond the gateset-element) rows of jacobian
             if cptp_penalty_factor != 0: L += _cptp_penalty_size(gs_pre)
@@ -432,12 +432,6 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
                 start += d
                 
-            if gs_pre._povm_identity is not None:
-                # same as effects
-                wt   = itemWeights.get(gs_pre._identitylabel, spamWeight)
-                result = _np.dot(gs_pre._povm_identity.T, dS).T
-                my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
-                start += d
 
             # -- penalty terms
             # -------------------------
@@ -709,32 +703,6 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         spamPenaltyVecGradToFill[i,:] = v.real
         denMx = sgndm = dVdp = v = None #free mem
 
-
-    # remainder effectvec has derivative wrt gauge parameters that is
-    # minus the sum of the derivatives for each term except with
-    # sgn(EMx) replaced with sgn(EcMx).
-    if gs_post._remainderlabel in gs_post.get_effect_labels():
-        EcMx = _tools.vec_to_stdmx( gs_post.effects[gs_post._remainderlabel], gateBasis)
-        assert(_np.linalg.norm(EcMx - EcMx.T.conjugate()) < 1e-4), \
-            "EMx should be Hermitian!"
-
-        sgnEc = _tools.matrix_sign(EcMx)
-        assert(_np.linalg.norm(sgnEc - sgnEc.T.conjugate()) < 1e-4), \
-            "sgnEc should be Hermitian!"
-
-        #Initialize Ec derivative with derivative of povm_identity term
-        # within Ec (which transforms under gauge optimizations) - see below
-        pre_effectvec = gs_pre.povm_identity
-        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
-        vc =  _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
-        vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx)))
-        assert(_np.linalg.norm(vc.imag) < 1e-4)
-        
-        iC = len(gs_post.preps) + len(gs_post.effects) # index corresponding to |Ec|_Tr term
-        spamPenaltyVecGradToFill[iC,:] = vc.real
-    else:
-        EcMx = sgnEc = iC = None
-
         
     # d( sqrt(|EMx|_Tr) ) = (0.5 / sqrt(|EMx|_Tr)) * d( |EMx|_Tr )
     # but here, unlike in core.py, EMx = StdMx(S.T * E) = StdMx(E')
@@ -770,18 +738,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         spamPenaltyVecGradToFill[i,:] = v.real
-
-        if sgnEc is not None: #Add contribution of derivative of this effect within |Ec|_Tr
-            vc =  -1.0 * _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
-            vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx))) #add 0.5/|EcMx|_Tr factor
-            assert(_np.linalg.norm(vc.imag) < 1e-4)
-            spamPenaltyVecGradToFill[iC,:] += vc.real
-            vc = None
             
         denMx = sgndm = dVdp = v = None #free mem
 
     #return the number of leading-dim indicies we filled in
-    if sgnEc is not None:
-        return len(gs_post.preps) + len(gs_post.effects) + 1
-    else:
-        return len(gs_post.preps) + len(gs_post.effects)
+    return len(gs_post.preps) + len(gs_post.effects)

@@ -74,14 +74,14 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
             [2], [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
+            effectLabels=["E0","Ec"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
     else:
         outputGateset = _cnst.build_gateset( 
             [2], [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
             [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
+            effectLabels=["E0","Ec"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
 
     if auxRot != 0:
@@ -89,7 +89,7 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
             [2], [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
+            effectLabels=["E0","Ec"], effectExpressions=EExpressions, 
             spamdefs=spamLabelDict)
 
         outputGateset.gates[loose_axis_gate_label] = \

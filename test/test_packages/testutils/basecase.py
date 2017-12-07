@@ -29,6 +29,9 @@ class BaseTestCase(unittest.TestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
+        #enable extra paramter-vector integrity checking
+        pygsti.objects.GateSet._pcheck = True
+
         try:
             basestring #Only defined in Python 2
             self.versionsuffix = "" #Python 2

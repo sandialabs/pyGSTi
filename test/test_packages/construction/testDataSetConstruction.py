@@ -12,8 +12,8 @@ class DataSetConstructionTestCase(BaseTestCase):
         self.gateset = pc.build_gateset( [2], [('Q0',)],
                                          ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                          prepLabels = ['rho0'], prepExpressions=["0"],
-                                         effectLabels = ['E0'], effectExpressions=["0"],
-                                         spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') })
+                                         effectLabels = ['E0','Ec'], effectExpressions=["0","C"],
+                                         spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') })
         self.depolGateset = self.gateset.depolarize(gate_noise=0.1)
 
         def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList):

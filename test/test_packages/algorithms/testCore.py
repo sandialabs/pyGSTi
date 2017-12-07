@@ -60,10 +60,11 @@ class TestCoreMethods(AlgorithmsBase):
             gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
                                      svdTruncateTo=4, verbosity=0) #no spam dict
 
-        with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
-                                     spamDict=self.gateset.get_reverse_spam_defs(),
-                                     svdTruncateTo=4, verbosity=0) #no identity vector
+        #No need for identity vector anymore
+        #with self.assertRaises(ValueError):
+        #    gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
+        #                             spamDict=self.gateset.get_reverse_spam_defs(),
+        #                             svdTruncateTo=4, verbosity=0) #no identity vector
 
         with self.assertRaises(ValueError):
             bad_specs = pygsti.construction.build_spam_specs(
@@ -108,7 +109,14 @@ class TestCoreMethods(AlgorithmsBase):
         ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
                                                     nSamples=1000, sampleError='none')
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst = pygsti.gaugeopt_to_target(gs_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        print("DATAGEN:")
+        print(self.datagen_gateset)
+        print("\nLGST RAW:")
+        print(gs_lgst)
+        gs_lgst = pygsti.gaugeopt_to_target(gs_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, checkJac=False)
+        print("\nAfter gauge opt:")
+        print(gs_lgst)
+        print(gs_lgst.strdiff(self.datagen_gateset))
         self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0, places=4)
 
 
@@ -118,19 +126,30 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000,sampleError='binomial', seed=100)
 
+        assert(pygsti.obj.GateSet._pcheck)
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst._check_paramvec()
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
+        gs_lgst_go._check_paramvec()
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-
-        gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs,
+        gs_clgst._check_paramvec()
+        self.gateset._check_paramvec()
+        
+        _,gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs,
                                             self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
-                                            verbosity=0)
-        gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs,
+                                              verbosity=0)
+        gs_single_exlgst._check_paramvec()
+
+        _,gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs,
                                                self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                                verbosity=10)
+        gs_single_exlgst_verb._check_paramvec()
+        
+        self.assertAlmostEqual(gs_single_exlgst.frobeniusdist(gs_single_exlgst_verb),0)
 
         gs_exlgst = pygsti.do_iterative_exlgst(ds, gs_clgst, self.specs, self.elgstStrings,
                                                targetGateset=self.gateset, svdTruncateTo=4, verbosity=0)
+
         all_minErrs, all_gs_exlgst_tups = pygsti.do_iterative_exlgst(
             ds, gs_clgst, self.specs, [ [gs.tup for gs in gsList] for gsList in self.elgstStrings],
             targetGateset=self.gateset, svdTruncateTo=4, verbosity=0, returnAll=True, returnErrorVec=True)
@@ -270,6 +289,7 @@ class TestCoreMethods(AlgorithmsBase):
         # RUN BELOW LINES TO SEED SAVED GATESET FILES
         #gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, self.gateset, {'spam':1.0})
         #pygsti.io.write_gateset(gs_lsgst_go,compare_files + "/analysis.gateset", "Saved LSGST Analysis Gateset")
+        #print("DEBUG: analysis.gateset = "); print(gs_lgst_go)
 
 
     def test_MLGST(self):

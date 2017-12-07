@@ -191,9 +191,9 @@ Gx^4 0.2 100
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
                                                      [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"],
                                                      prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0'], effectExpressions=["0"],
+                                                     effectLabels=['E0','Ec'], effectExpressions=["0","complement"],
                                                      spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','remainder') })
+                                                               '1': ('rho0','Ec') })
 
         depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 
@@ -633,7 +633,7 @@ Gy 11001100
     def test_intermediate_measurements(self):
         gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
         E = gs.effects['E0']
-        Erem = gs.effects['remainder']
+        Erem = gs.effects['Ec']
         gs.gates['Gmz_0'] = np.dot(E,E.T)
         gs.gates['Gmz_1'] = np.dot(Erem,Erem.T)
         #print(gs['Gmz_0'] + gs['Gmz_1'])

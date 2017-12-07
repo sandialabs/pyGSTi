@@ -29,8 +29,8 @@ class GateTestCase(BaseTestCase):
         gs_target_lp = pc.build_gateset(
             [2], [('Q0',)],['Gi','Gx'], [ "D(Q0)","X(pi/2,Q0)" ],
             prepLabels = ["rho0"], prepExpressions=["0"],
-            effectLabels = ["E0"], effectExpressions=["0"], 
-            spamdefs={'up': ("rho0","E0"), 'dn': ("rho0","remainder") },
+            effectLabels = ["E0","Ec"], effectExpressions=["0","C"], 
+            spamdefs={'up': ("rho0","E0"), 'dn': ("rho0","Ec") },
             basis="pp", parameterization="linear" )
 
     
@@ -38,9 +38,9 @@ class GateTestCase(BaseTestCase):
             [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'], 
             [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
             prepLabels = ["rho0"], prepExpressions=["0"],
-            effectLabels = ["E0","E1","E2"], effectExpressions=["0","1","2"], 
+            effectLabels = ["E0","E1","E2","Ec"], effectExpressions=["0","1","2","C"], 
             spamdefs={'upup': ("rho0","E0"), 'updn': ("rho0","E1"),
-                      'dnup': ("rho0","E2"), 'dndn': ("rho0","remainder") },
+                      'dnup': ("rho0","E2"), 'dndn': ("rho0","Ec") },
             basis="pp", parameterization="linearTP" )
 
         gs_target_lp2.preps['rho0'] = pygsti.objects.TPParameterizedSPAMVec(gs_target_lp2.preps['rho0'])

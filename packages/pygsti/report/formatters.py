@@ -48,11 +48,11 @@ formatDict['Rho'] = {
 
 # 'E' (POVM) effect formatting
 formatDict['Effect'] = {
-    # If label == 'remainder', return E sub C
+    # If label == 'Ec', return E sub C
     # Otherwise, match regex and replace with subscript
-    'html'  : _Formatter(stringreturn=('remainder', 'E<sub>C</sub>'),
+    'html'  : _Formatter(stringreturn=('Ec', 'E<sub>C</sub>'),
                          regexreplace=('E([0-9]+)$', 'E<sub>%s</sub>')),
-    'latex' : _Formatter(stringreturn=('remainder', '$E_C$'),
+    'latex' : _Formatter(stringreturn=('Ec', '$E_C$'),
                          regexreplace=('E([0-9]+)$', '$E_{%s}$')), #OLD formatstring='$%s$'),
     'python' : _no_format}
 

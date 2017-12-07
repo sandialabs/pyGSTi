@@ -2039,6 +2039,7 @@ class MetadataTable(WorkspaceTable):
             if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
             elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
             elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
             else: paramTyp = "unknown"
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
     
@@ -2046,19 +2047,10 @@ class MetadataTable(WorkspaceTable):
             if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
             elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
             elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
             else: paramTyp = "unknown"
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-    
-        #Not displayed since the POVM identity is always fully parameterized,
-        # even through it doesn't contribute to the gate set parameters (a special case)
-        #if gateset.povm_identity is not None:
-        #    vec = gateset.povm_identity
-        #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-        #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-        #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
-        #    else: paramTyp = "unknown"
-        #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
-    
+        
         for gl,gate in gateset.gates.items():
             if isinstance(gate, _objs.StaticGate): paramTyp = "static"
             elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"

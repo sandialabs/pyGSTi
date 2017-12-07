@@ -745,18 +745,6 @@ class ConfidenceRegionFactoryView(object):
         elif label in self.gateset.effects:
             return self.profLCI[self.gateset.effects[label].gpindices]
 
-        elif label == self.gateset._remainderlabel: #HERE!!!
-            assert(False) #TODO: fix/remove!!!
-            ELbls = self.gateset.get_effect_labels(False)
-            start,end = self.gateset_offsets[ELbls[0]]; n = end-start
-            ret = self.profLCI[start:end]
-            for lbl in ELbls[1:]:
-                start,end = self.gateset_offsets[lbl]
-                assert(n == end-start),"Effects must have identical parameterizations" \
-                    + " to compute profile likelihood confidence intervals for remainder effect"
-                ret += self.profLCI[start:end]
-            return ret
-
         else:
             raise ValueError(("Invalid item label (%s) for computing" % label)
                              + "profile likelihood confidence intervals")
@@ -812,17 +800,7 @@ class ConfidenceRegionFactoryView(object):
             fn_dependencies = ['all'] #no need to do anything else
         if 'spam' in fn_dependencies:
             fn_dependencies = ["prep:%s"%l for l in self.gateset.get_prep_labels()] + \
-                              ["effect:%s"%l for l in self.gateset.get_effect_labels(False)]
-
-        # If fn depends on special "remainder" effect, replace this dependency
-        #  with dependency on all other effect vectors (since Ec = 1 - sum(other_Es) )
-        EcLbl = 'effect:%s' % self.gateset._remainderlabel
-        if EcLbl in fn_dependencies: 
-            del fn_dependencies[fn_dependencies.index(EcLbl)]
-            for l in self.gateset.get_effect_labels(False):
-                lbl = 'effect:%s' % l
-                if lbl not in fn_dependencies: fn_dependencies.append(lbl)
-
+                              ["effect:%s"%l for l in self.gateset.get_effect_labels()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
@@ -842,7 +820,7 @@ class ConfidenceRegionFactoryView(object):
                 all_gpindices.extend( gatesetObj.get_gpindices(True) )
 
         vec0 = gs.to_vector()
-        all_gpindices = list(set(gpindices)).sort() #remove duplicates
+        all_gpindices = sorted(list(set(all_gpindices))) #remove duplicates
         
         for igp in all_gpindices: #iterate over "global" GateSet-parameter indices
             vec = vec0.copy(); vec[igp] += eps;

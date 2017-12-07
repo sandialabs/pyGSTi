@@ -217,6 +217,8 @@ def write_gateset(gs,filename,title=None):
             output.write("\n")
 
         for (ELabel,EVec) in gs.effects.items():
+            if ELabel == "Ec" and isinstance(EVec, _objs.ComplementSPAMVec):
+                continue #leave Ec to be inferred from other Effect vecs
             output.write("%s\n" % ELabel)
             output.write("PauliVec\n")
             output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
@@ -228,8 +230,10 @@ def write_gateset(gs,filename,title=None):
             output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
             output.write("\n")
 
-        if gs.povm_identity is not None:
-            output.write("IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity ) + '\n')
+        for (ELabel,EVec) in gs.effects.items():
+            if isinstance(EVec, _objs.ComplementSPAMVec):
+                output.write("IDENTITYVEC " + " ".join( "%.8g" % el for el in EVec.identity ) + '\n')
+                break;
         else:
             output.write("IDENTITYVEC None\n")
 

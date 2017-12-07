@@ -54,26 +54,12 @@ class GateMatrixCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        povm_identity : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamdefs
-            contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the
-            effect vectors in effects.
-
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
-            special case when eith both or just the effect label is set
-            to "remainder").
-
-        remainderLabel : string
-            A string that may appear in the values of spamdefs to designate
-            special behavior.
-
-        identityLabel : string
-            The string used to designate the identity POVM vector.
+            special case both are set to "remainder").
 
         paramvec : ndarray
             The parameter vector of the GateSet.
@@ -84,8 +70,7 @@ class GateMatrixCalc(GateCalc):
         
     def _make_spamgate(self, spamlabel):
         prepLabel,effectLabel = self.spamdefs[spamlabel]
-        if prepLabel == self._remainderLabel:
-            return None
+        if prepLabel == "remainder":  return None
 
         rho,E = self.preps[prepLabel], self.effects[effectLabel]
         return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
@@ -2047,13 +2032,28 @@ class GateMatrixCalc(GateCalc):
                 #  derivatives wrt all spam parameters
                 dGs = _np.empty( (Gs.shape[0],0,self.dim,self.dim), 'd')
 
-                #OLD
-                ##Compute spam derivative columns and possibly probs
-                ## (computation that is *not* divided into blocks)
-                #self._fill_result_tuple( 
-                #    (prMxToFill, mxToFill), spam_label_rows, fslc,
-                #    slice(0,self.tot_spam_params), slice(None), calc_and_fill )
-                #profiler.mem_check("bulk_fill_dprobs: post fill spam")
+                def calc_and_fill_p(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+                    """ Compute and fill result quantities for given arguments """
+                    tm = _time.time()
+                    old_err = _np.seterr(over='ignore')
+                    rho,E = self._rhoE_from_spamLabel(spamLabel)
+                    
+                    if sumInto:
+                        prMxToFill[isp,fslc] += \
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
+                    else:
+                        prMxToFill[isp,fslc] = \
+                            self._probs_from_rhoE(rho, E, Gs, scaleVals)
+
+                    _np.seterr(**old_err)
+                    profiler.add_time("bulk_fill_dprobs: calc_and_fill_p", tm)
+
+                # Compute all probabilities all at once so they're not repeatedly
+                #  computed for each block of derivative columns
+                if prMxToFill is not None:
+                    self._fill_result_tuple((prMxToFill,),spam_label_rows,fslc,
+                                  slice(None), slice(None), calc_and_fill_p )
+                profiler.mem_check("bulk_fill_dprobs: post fill probs")
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
@@ -2353,7 +2353,7 @@ class GateMatrixCalc(GateCalc):
                     for iBlk2 in myBlk2Indices:
                         blk_wrtSlice2 = blocks2[iBlk2]
 
-                        if (gateSlice1 == gateSlice2):
+                        if blk_wrtSlice1 == blk_wrtSlice2:
                             dProdCache2 = dProdCache1 ; dGs2 = dGs1
                         else:
                             dProdCache2 =self._compute_dproduct_cache(
@@ -2368,7 +2368,7 @@ class GateMatrixCalc(GateCalc):
                         #Set filtering for calc_and_fill
                         # TODO: check ths works!!
                         wrtSlice1 = blocks1[iBlk1]
-                        wrtSlice22 = blocks2[iBlk2]
+                        wrtSlice2 = blocks2[iBlk2]
 
                         self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
                                                 spam_label_rows, fslc, blocks1[iBlk1], blocks2[iBlk2],

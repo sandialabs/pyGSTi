@@ -29,8 +29,8 @@ germs = _strc.gatestring_list( [('Gii',), ('Gxi',), ('Gyi',), ('Gxi', 'Gyi'),
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gii','Gxi','Gyi'],
                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                  prepLabels=["rho0"], prepExpressions=["0"],
-                                 effectLabels=["E0"], effectExpressions=["0"],
-                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
+                                 effectLabels=["E0","Ec"], effectExpressions=["0","C"],
+                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
 clifford_compilation = _OrderedDict()
 clifford_compilation['Gc1c0'] = ['Gyi', 'Gxi', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']   

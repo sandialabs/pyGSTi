@@ -186,7 +186,7 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     qutritGS['E0'] = E0final
     qutritGS['E1'] = E1final
     qutritGS['E2'] = E2final
-    qutritGS['identity'] = identity3final
+    #qutritGS['identity'] = identity3final Only used for complement effects
     qutritGS.spamdefs['0bright'] = ('rho0','E0')
     qutritGS.spamdefs['1bright'] = ('rho0','E1')
     qutritGS.spamdefs['2bright'] = ('rho0','E2')

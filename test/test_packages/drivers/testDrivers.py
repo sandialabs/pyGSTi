@@ -266,9 +266,9 @@ class TestDriversMethods(DriversTestCase):
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                       prepLabels=['rho0'], prepExpressions=["0"],
-                                                      effectLabels=['E0'], effectExpressions=["0"],
+                                                      effectLabels=['E0','Ec'], effectExpressions=["0","C"],
                                                       spamdefs={'0': ('rho0','E0'),
-                                                                '1': ('rho0','remainder') },
+                                                                '1': ('rho0','Ec') },
                                                       parameterization="linear")
 
         maxLens = self.maxLens
@@ -442,10 +442,27 @@ class TestDriversMethods(DriversTestCase):
 
 
     def test_bootstrap(self):
+
+        def dbsizes(gs, title): #additional gateset debugging
+            print(title)
+            for l,o in gs.gates.items(): print(l,":",o.num_params(),o.gpindices)
+            for l,o in gs.preps.items(): print(l,":",o.num_params(),o.gpindices)
+            for l,o in gs.effects.items(): print(l,":",o.num_params(),o.gpindices)
+            print("")
+            
+        dbsizes(std.gs_target,"Orig target")
+
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
-        tp_target = std.gs_target.copy(); tp_target.set_all_parameterizations("TP")
+        tp_target = std.gs_target.copy();
+        dbsizes(tp_target,"target copy")
+        tp_target.set_all_parameterizations("TP")
+        dbsizes(tp_target,"TP target")
+
+        print("LGST------------------")
         gs = pygsti.do_lgst(ds, specs, targetGateset=tp_target, svdTruncateTo=4, verbosity=0)
+
+        dbsizes(gs, "LGST result")
 
         bootds_p = pygsti.drivers.make_bootstrap_dataset(
             ds,'parametric', gs, seed=1234 )
@@ -464,10 +481,12 @@ class TestDriversMethods(DriversTestCase):
 
 
         maxLengths = [0] #just do LGST strings to make this fast...
-        bootgs_p = self.runSilent(pygsti.drivers.make_bootstrap_gatesets,
+        bootgs_p = pygsti.drivers.make_bootstrap_gatesets( # self.runSilent(
             2, ds, 'parametric', std.fiducials, std.fiducials,
             std.germs, maxLengths, inputGateSet=gs,
             returnData=False)
+
+        dbsizes(bootgs_p[0],"bootgs_p[0]")
 
         #again, but with a specified list
         custom_strs = pygsti.construction.make_lsgst_lists(
@@ -482,10 +501,10 @@ class TestDriversMethods(DriversTestCase):
             self.gateLabels, self.fiducials, self.fiducials, self.germs,
             default_maxLens, fidPairs=None, truncScheme="whole germ powers")
         ds_defaultMaxLens = pygsti.construction.generate_fake_data(
-            gs, gateStrings, nSamples=1000, sampleError='round')
+            gs, gateStrings, nSamples=10000, sampleError='round')
 
-        bootgs_p_defaultMaxLens = self.runSilent(
-            pygsti.drivers.make_bootstrap_gatesets,
+        bootgs_p_defaultMaxLens = \
+            pygsti.drivers.make_bootstrap_gatesets( #self.runSilent(
             2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
             std.germs, None, inputGateSet=gs,
             returnData=False) #test when maxLengths == None

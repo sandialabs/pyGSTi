@@ -739,10 +739,10 @@ def read_gateset(filename):
     gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
+    add_Ec = False
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['1'] = [ 'rho', 'E' ]
-        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
-        # OLD default behavior: remainder_spam_label = 'minus'
+        spam_labels['0'] = [ 'rho', 'E' ]
+        spam_labels['1'] = [ 'rho', 'Ec' ]
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 
     #Make SPAMs
@@ -760,9 +760,12 @@ def read_gateset(filename):
 
      #add vectors to gateset
     for rho_nm in rho_names: gs.preps[rho_nm] = spam_vecs[rho_nm]
-    for E_nm   in E_names:   gs.effects[E_nm] = spam_vecs[E_nm]
-
-    gs.povm_identity = identity_vec
+    for E_nm   in E_names:
+        if E_nm == "Ec" and "Ec" not in spam_vecs:
+            add_Ec=True; continue
+        gs.effects[E_nm] = spam_vecs[E_nm]
+    if add_Ec:
+        gs.effects['Ec'] = _objs.ComplementSPAMVec(identity_vec, gs.effects.values())
 
      #add spam labels to gateset
     for spam_label in spam_labels:

@@ -1123,7 +1123,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     
     dim = gatesetList[0].dim
     #Np = gatesetList[0].num_params() #wrong:? includes spam...
-    Np = sum([gate.num_params() for gate in gatesetList[0].gates.values()])
+    Np = gatesetList[0].num_params()
     #print("DB Np = %d, Ng = %d" % (Np,Ng))
     assert(all([(gs.dim == dim) for gs in gatesetList])), \
         "All gate sets must have the same dimension!"

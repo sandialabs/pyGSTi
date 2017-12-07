@@ -200,7 +200,7 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
                                    inputGateSet, startSeed+run,
                                    spamLabels)
             )
-
+        
     gatesetList = []
     print("Creating GateSets: ")
     for run in range(numGateSets):
@@ -407,7 +407,7 @@ def to_mean_gateset(gsList,target_gs):
     Returns
     -------
     GateSet
-    """
+    """        
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):

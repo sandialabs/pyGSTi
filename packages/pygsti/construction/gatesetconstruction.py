@@ -935,7 +935,7 @@ def basis_build_gateset(stateSpaceLabels,
 
     remLbl = None
     for label,EExpr in zip(effectLabels,effectExpressions):
-        if EExpr in ('remainder','R'):
+        if EExpr in ('complement','C'):
             remLbl=label; continue
         ret.effects[label] = basis_build_vector(EExpr, basis)
     if remLbl: # complement/remainder effect

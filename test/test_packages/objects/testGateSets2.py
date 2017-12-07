@@ -9,7 +9,7 @@ from .testGateSets import GateSetTestCase
 from pygsti.objects.gatemapcalc import GateMapCalc
 
 FD_JAC_PLACES = 5 # loose checking when computing finite difference derivatives (currently in map calcs)
-FD_HESS_PLACES = 3 # looser checking when computing finite difference hessians (currently in map calcs)
+FD_HESS_PLACES = 1 # looser checking when computing finite difference hessians (currently in map calcs)
 
 
 class TestGateSetMethods(GateSetTestCase):
@@ -24,6 +24,24 @@ class TestGateSetMethods(GateSetTestCase):
             effectLabels=["E0"], effectExpressions=["0"],
             spamdefs={'0': ('rho0','E0'),
                       '1': ('remainder','remainder') } )
+
+        self.tp_gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('remainder','remainder') },
+            parameterization="TP")
+
+        self.static_gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+            prepLabels=["rho0"], prepExpressions=["0"],
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('remainder','remainder') },
+            parameterization="static")
 
         self.mgateset = self.gateset.copy()
         self.mgateset._calcClass = GateMapCalc
@@ -64,22 +82,22 @@ class TestGateSetMethods(GateSetTestCase):
 
         v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
 
-        gs['identity'] = v
-        w = gs['identity']
-        self.assertArraysAlmostEqual(w,v)
+        #gs['identity'] = v
+        #w = gs['identity']
+        #self.assertArraysAlmostEqual(w,v)
 
         gs['rho1'] = v
         w = gs['rho1']
         self.assertArraysAlmostEqual(w,v)
 
-        gs['E1'] = v
-        w = gs['E1']
+        gs['E2'] = v
+        w = gs['E2']
         self.assertArraysAlmostEqual(w,v)
 
-        gs.spamdefs["TEST"] = ("rho0","E1")
+        gs.spamdefs["TEST"] = ("rho0","E2")
         self.assertTrue("TEST" in gs.get_spam_labels())
         d = gs.get_reverse_spam_defs()
-        self.assertEqual( d[("rho0","E1")], "TEST" )
+        self.assertEqual( d[("rho0","E2")], "TEST" )
 
         Gi_matrix = np.identity(4, 'd')
         self.assertTrue( isinstance(gs['Gi'], pygsti.objects.Gate) )
@@ -96,8 +114,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         with self.assertRaises(KeyError):
             gs2 = gs.copy()
-            gs2['identity'] = None
-            error = gs2.effects['remainder'] #no identity vector set
+            error = gs2.effects['Efoobar']
 
 
     def test_copy(self):

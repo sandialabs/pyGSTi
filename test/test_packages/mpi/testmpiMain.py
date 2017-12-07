@@ -456,8 +456,8 @@ def test_MPI_fills(comm):
 
 
     #Test Serial vs Parallel use of wrtFilter
-    some_wrtFilter = [0,1,2,3,10,11,12,13,14] #must be contiguous now - not arbitraray
-    some_wrtFilter2 = [0,1,2,11,12,13] #must be contiguous now - not arbitraray
+    some_wrtFilter = [0,1,2,3,4,5,6,7] #must be contiguous now - not arbitraray
+    some_wrtFilter2 = [6,7,8,9,10,11,12] #must be contiguous now - not arbitraray
     vhp_parallelF = np.empty( (nSpamLabels,nGateStrings,nDerivCols,len(some_wrtFilter)),'d')
     vhp_parallelF2 = np.empty( (nSpamLabels,nGateStrings,len(some_wrtFilter),len(some_wrtFilter2)),'d')
     vdp_parallelF = np.empty( (nSpamLabels,nGateStrings,len(some_wrtFilter)), 'd' )

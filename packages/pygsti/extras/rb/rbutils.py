@@ -11,6 +11,7 @@ import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 from ... import construction as _cnst
 from ... import algorithms as _algs
+from ... import objects as _objs
 from ... import tools as _tls
 from scipy.linalg import sqrtm
 import itertools as _ittls
@@ -528,13 +529,8 @@ def transform_to_RB_gauge(gs,gs_target,weights=None,mxBasis=None,eigenvector_wei
     l = RB_gauge(gs,gs_target,weights=weights,mxBasis=mxBasis,
                  eigenvector_weighting=eigenvector_weighting)
     gs_in_RB_gauge = gs.copy()
-    for gate in gs.gates.keys():
-        gs_in_RB_gauge.gates[gate] = _np.dot(l,_np.dot(gs.gates[gate],_np.linalg.inv(l)))
-    for rho in gs.preps.keys():
-        gs_in_RB_gauge.preps[rho] = _np.dot(l,gs.preps[rho])
-    for E in gs.effects.keys():
-        gs_in_RB_gauge.effects[E] = _np.dot(_np.transpose(_np.linalg.inv(l)),gs.effects[E])
-        
+    S = _objs.FullGaugeGroupElement( _np.linalg.inv(l) )
+    gs_in_RB_gauge.transform( S )         
     return gs_in_RB_gauge
 
 def L_matrix(gs,gs_target,weights=None):

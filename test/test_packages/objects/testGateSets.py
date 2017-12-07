@@ -26,7 +26,7 @@ class GateSetTestCase(BaseTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
+            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'),
                       '1': ('rho0','E1') } )
 
@@ -34,7 +34,7 @@ class GateSetTestCase(BaseTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
+            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'),
                       '1': ('rho0','E1') },
             parameterization="TP")
@@ -43,7 +43,7 @@ class GateSetTestCase(BaseTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","remainder"],
+            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
             spamdefs={'0': ('rho0','E0'),
                       '1': ('rho0','E1') },
             parameterization="static")
@@ -153,8 +153,7 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(KeyError):
             print("COPYING")
             gs2 = gs.copy()
-            #gs2['identity'] = None
-            error = gs2.effects['remainder'] #no identity vector set
+            error = gs2.effects['foobar']
 
 
     def test_copy(self):
@@ -591,6 +590,8 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
 
         self.assertArraysAlmostEqual(mbulk_hP,mbulk_hP_chk, places=FD_HESS_PLACES)
+        print("DB: hP0 = ",hP0)
+        print("DB: mhP0 = ",mbulk_hP[0,:,:])
         self.assertArraysAlmostEqual(mbulk_hP[0,:,:],hP0, places=FD_HESS_PLACES)
         self.assertArraysAlmostEqual(mbulk_hP[1,:,:],hP1, places=FD_HESS_PLACES)
         self.assertArraysAlmostEqual(mbulk_hP[2,:,:],hP2, places=FD_HESS_PLACES)

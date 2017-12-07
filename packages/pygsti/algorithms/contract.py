@@ -194,7 +194,6 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         #  print "WARNING: JMx given with evals = %s (sum = %s != 1)" % (evals,sum(evals))
         #  print "WARNING: JMx from: "; _tools.print_mx(new_gate)
 
-
         it = 0
         while min(evals) < -tol or abs( sum(evals) - 1.0 ) >= tol:
 
@@ -303,6 +302,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         gate_dim = gs.get_dimension()
         for rhoVec in list(gs.preps.values()):
             rhoVec[0,0] = 1.0 / gate_dim**0.25
+            gs._update_paramvec(rhoVec) #tell GateSet that rhoVec has been updated
 
     return distance, gs
 
@@ -316,10 +316,12 @@ def _contractToTP(gateset,verbosity):
     for gate in list(gs.gates.values()):
         gate[0,0] = 1.0
         for k in range(1,gate.shape[1]): gate[0,k] = 0.0
+        gs._update_paramvec(gate)
 
     gate_dim = gs.get_dimension()
     for rhoVec in list(gs.preps.values()):
         rhoVec[0,0] = 1.0 / gate_dim**0.25
+        gs._update_paramvec(rhoVec)
 
     distance = gs.frobeniusdist(gateset)
     printer.log(('Projected TP gateset was at distance: %g' % distance), 1)
@@ -371,6 +373,8 @@ def _contractToValidSPAM(gateset, verbosity=0):
             r = firstElTarget / vec[0,0]
             vec *= r  #multiply rhovec by factor
             for ELabel,EVec in gs.effects.items():
+                if isinstance(EVec, _objs.ComplementSPAMVec):
+                    continue #don't contract complement vectors
                 gs.effects[ELabel] = EVec / r
 
         mx = _tools.ppvec_to_stdmx(vec)
@@ -387,6 +391,8 @@ def _contractToValidSPAM(gateset, verbosity=0):
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
     for ELabel,EVec in gs.effects.items():
+        if isinstance(EVec, _objs.ComplementSPAMVec):
+            continue #don't contract complement vectors
         evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
         if(min(evals) < 0.0 or max(evals) > 1.0):
             if all([ev > 1.0 for ev in evals]):

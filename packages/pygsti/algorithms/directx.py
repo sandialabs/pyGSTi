@@ -103,7 +103,7 @@ def gateset_with_lgst_gatestring_estimates( gateStringsToEstimate, dataset, spec
                 gateLabels.append(targetGateLabel)
 
     return _core.do_lgst( dataset, specs, targetGateset, gateLabels, aliases,
-               spamDict, guessGatesetForGauge, svdTruncateTo, None, verbosity )
+               spamDict, guessGatesetForGauge, svdTruncateTo, verbosity )
 
 def direct_lgst_gateset( gateStringToEstimate, gateStringLabel, dataset,
                          specs, targetGateset, gateLabelAliases=None,

@@ -36,7 +36,7 @@ FLOATSIZE = 8 #TODO: better way?
 ###################################################################################
 
 def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliases={},
-           spamDict=None, guessGatesetForGauge=None, svdTruncateTo=0, identityVec=None, verbosity=0):
+           spamDict=None, guessGatesetForGauge=None, svdTruncateTo=0, verbosity=0):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
 
@@ -83,11 +83,6 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         a SVD to keep only the largest svdToTruncateTo singular values of
         the I_tildle LGST matrix.
         Defaults to 0 (no truncation)
-
-    identityVec : numpy array, optional
-        The vectorized identity density matrix in whatever basis is being
-        used.  Size should be [ dmDim^2, 1], e.g. numpy.array([[1.41],[0],[0],[0]]).
-        Defaults to that of the targetGateset.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -142,38 +137,22 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
             spamDict = targetGateset.get_reverse_spam_defs()
         else: raise ValueError("do_lgst cannot determine SPAM dictionary from supplied parameters")
 
+    Ec_lbl = None
     if targetGateset is not None:
         rhoLabelsToEstimate = list(targetGateset.preps.keys())
         eLabelsToEstimate = list(targetGateset.effects.keys())
-        remainderLabel = targetGateset._remainderlabel
+
+        for l in eLabelsToEstimate[:]:
+            if isinstance(targetGateset.effects[l], _objs.ComplementSPAMVec):
+                del eLabelsToEstimate[eLabelsToEstimate.index(l)]
+                assert(Ec_lbl is None), "Only one Complement spam vec can be handled by LGST"
+                Ec_lbl = l
     else:
-        remainderLabel = "remainder"  #TODO: allow user to specify remainderLabel as argument?
         rhoLabelsToEstimate = list(set([rl for (rl,el) in spamDict]))
         eLabelsToEstimate   = list(set([el for (rl,el) in spamDict]))
 
-        if remainderLabel in rhoLabelsToEstimate:
-            del rhoLabelsToEstimate[rhoLabelsToEstimate.index(remainderLabel)]
-        if remainderLabel in eLabelsToEstimate:
-            del eLabelsToEstimate[eLabelsToEstimate.index(remainderLabel)]
-
     if guessGatesetForGauge is None:
         guessGatesetForGauge = targetGateset # (which may also be None)
-
-    if identityVec is None and guessGatesetForGauge is not None:
-        identityVec = guessGatesetForGauge.povm_identity
-    if identityVec is None: #check again in case targetGateset.povm_identity == None
-        for (lr,el) in spamDict.keys():
-            if el == remainderLabel and lr != remainderLabel: #then identityVec is required b/c this spamlabel represents Evec = identityVec - sum(other_Evecs)
-                raise ValueError("do_lgst cannot determine the identity vector from supplied parameters")
-        #otherwise identityVec is not required, so OK if it's None
-
-
-    #OLD
-    #if guessGatesetForGauge is not None:  # apply svdTruncation necessary for gauge transformation if guessGatesetForGauge is given
-    #  truncNeeded = guessGatesetForGauge.get_dimension()
-    #  if svdTruncateTo > 0 and svdTruncateTo != truncNeeded:
-    #    raise ValueError("svdTruncateTo == %d is not equal to the gateset dimension (%d) used to guess the LGST gauge" % (svdTruncateTo,truncNeeded))
-    #  svdTruncateTo = truncNeeded
 
     #assert(len(effectSpecs) == len(prepSpecs)) #specify the same number of rho's and E's (for now)
     lgstGateset = _objs.GateSet()
@@ -226,7 +205,7 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)
         #print "DEBUG: %s = \n" % gateLabel,lgstGateset[ gateLabel ]
 
-    # Form EVecs
+    # Form EVecs (except for complement vec - wait until after guess gauge for that!)
     for effectLabel in eLabelsToEstimate:
         EVec = _np.zeros( (1,len(prepSpecs)) )  # shape (1,nRhoSpecs)
         for i,rhospec in enumerate(prepSpecs):
@@ -246,18 +225,6 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         rhoVec_p = _np.dot( Pjt, _np.dot(Ud, rhoVec) ) #truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
         lgstGateset.preps[prepLabel] = rhoVec_p
-
-
-    # Add identity vector to gateset (needed before adding spam labels)
-    #  Pad with zeros if needed (ROBIN - is this correct?)
-    if identityVec is not None:
-        Idim = identityVec.shape[0]
-        assert(Idim <= trunc)
-        if Idim < trunc:
-            padded_identityVec = _np.concatenate( (identityVec, _np.zeros( (trunc-Idim,1), 'd')) )
-        else:
-            padded_identityVec = identityVec
-        lgstGateset.povm_identity = padded_identityVec
 
     # Add SPAM label info to gateset
     #  Note: this must be done in a *deterministic* order, which it is
@@ -288,7 +255,8 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
                     % (guessTrunc,len(guess_s)), 2)
         for sval in guess_s: printer.log(sval,2)
         printer.log('',2)
-
+        lgstGateset._check_paramvec()
+        
         if guessTrunc < trunc:  # if the dimension of the gauge-guess gateset is smaller than the matrices being estimated, pad B with identity
             printer.log("LGST: Padding target B with sqrt of low singular values of I_tilde: \n", 2)
             printer.log(s[guessTrunc:trunc], 2)
@@ -302,12 +270,8 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         else:
             ggEl = _objs.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
             lgstGateset.transform(ggEl)
-
-        # RESET identity vector after lgstGateset.transform since this transforms gateset back to what we think is
-        #   close to the basis of guessGatesetForGauge.  The only reason we set it earlier is as a placeholder
-        #   so that lgstGateset.spamdefs = ... doesn't fail.
-        lgstGateset.povm_identity = padded_identityVec
-
+            
+        lgstGateset._check_paramvec()
         # Force lgstGateset to have gates, preps, & effects parameterized in the same way as those in
         # guessGatesetForGauge, but we only know how to do this when the dimensions of the target and
         # created gateset match.  If they don't, it doesn't make sense to increase the target gateset
@@ -340,13 +304,26 @@ def do_lgst(dataset, specs, targetGateset=None, gateLabels=None, gateLabelAliase
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         #lgstGateset.transform( S=_np.dot(invABMat_p, AMat_p), Si=BMat_p ) # lgstGateset had dim trunc, so after transform is has dim gsDim
 
-    #lgstGateset.log("Created by LGST", {'prepSpecs': prepSpecs, 'effectSpecs': effectSpecs })
+    #Finally, after "guess" gauge opt, add a complement effect vector when needed
+    lgstGateset._check_paramvec()
+    if Ec_lbl:
+        # Construct identity vector for complement effect vector
+        #  Pad with zeros if needed (ROBIN - is this correct?)
+        Ec_identity = targetGateset.effects[Ec_lbl].identity
+        Idim = Ec_identity.shape[0]
+        assert(Idim <= trunc)
+        if Idim < trunc:
+            padded_identityVec = _np.concatenate( (Ec_identity, _np.zeros( (trunc-Idim,1), 'd')) )
+        else:
+            padded_identityVec = Ec_identity
+        lgstGateset.effects[Ec_lbl] =  _objs.ComplementSPAMVec(
+            padded_identityVec, list(lgstGateset.effects.values()))
 
     printer.log("Resulting gate set:\n", 3)
     printer.log(lgstGateset,3)
-#    for line in str(lgstGateset).split('\n'):
- #       printer.log(line, 3)
-
+    #    for line in str(lgstGateset).split('\n'):
+    #       printer.log(line, 3)
+    lgstGateset._check_paramvec()
     return lgstGateset
 
 
@@ -610,7 +587,6 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, specs,
         estimates[i] = lgstEstimates.gates[ "Gestimator%d" % i ]
 
     maxGateStringLength = max([len(x) for x in gateStringsToUseInEstimation])
-
 
     #Step 2: create objective function for least squares optimization
     if printer.verbosity < 3:
@@ -1039,9 +1015,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
     vec_gs_len = gs.num_params()
-    nSpamParams = sum([ rhoVec.num_params() for rhoVec in gs.preps.values() ]) \
-        + sum([ EVec.num_params() for EVec in gs.effects.values() ])
-    nGateParams = vec_gs_len - nSpamParams
 
     KM = len(spamLabels)*len(gateStringsToUse) #shorthand for combined dimension
 
@@ -1303,14 +1276,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 off = 0
                 if cptp_penalty_factor > 0:
                     off += _cptp_penalty_jac_fill(
-                        jac[KM+off:,:], gs, cptp_penalty_factor,
-                        vec_gs_len, nGateParams, nSpamParams,
-                        gateBasis)
+                        jac[KM+off:,:], gs, cptp_penalty_factor, gateBasis)
                 if spam_penalty_factor > 0:
                     off += _spam_penalty_jac_fill(
-                        jac[KM+off:,:], gs, spam_penalty_factor,
-                        vec_gs_len, nGateParams, nSpamParams,
-                        gateBasis)
+                        jac[KM+off:,:], gs, spam_penalty_factor, gateBasis)
 
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 profiler.add_time("do_mc2gst: JACOBIAN",tm)
@@ -1343,12 +1312,10 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
                 off = 0
                 if cptp_penalty_factor != 0:                    
                     off += _cptp_penalty_jac_fill(jac[KM+off:,:], gs, cptp_penalty_factor,
-                                                  vec_gs_len, nGateParams, nSpamParams,
                                                   gateBasis)
 
                 if spam_penalty_factor != 0:
                     off += _spam_penalty_jac_fill(jac[KM+off:,:], gs, spam_penalty_factor,
-                                                  vec_gs_len, nGateParams, nSpamParams,
                                                   gateBasis)
                 
             #Zero-out insignificant entries in jacobian -- seemed to help some, but leaving this out, thinking less complicated == better
@@ -2258,9 +2225,6 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     spamLabels = gs.get_spam_labels() #fixes the ordering of the spam labels
     vec_gs_len = gs.num_params()
-    nSpamParams = sum([ rhoVec.num_params() for rhoVec in gs.preps.values() ]) \
-        + sum([ EVec.num_params() for EVec in gs.effects.values() ])
-    nGateParams = vec_gs_len - nSpamParams
 
     #Memory allocation
     ns = len(spamLabels); ng = len(gateStringsToUse)
@@ -2461,11 +2425,9 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             off = 0
             if cptp_penalty_factor != 0:
                 off += _cptp_penalty_jac_fill(jac[KM+off:,:], gs, cptp_penalty_factor,
-                                              vec_gs_len, nGateParams, nSpamParams,
                                               gateBasis)
             if spam_penalty_factor != 0:
                 off += _spam_penalty_jac_fill(jac[KM+off:,:], gs, spam_penalty_factor,
-                                              vec_gs_len, nGateParams, nSpamParams,
                                               gateBasis)
                 
             if forcefn_grad is not None:
@@ -2561,12 +2523,10 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             off = 0
             if cptp_penalty_factor != 0:
                 off += _cptp_penalty_jac_fill(jac[KM+off:,:], gs, cptp_penalty_factor,
-                                       vec_gs_len, nGateParams, nSpamParams,
                                        gateBasis)
 
             if spam_penalty_factor != 0:
                 off += _spam_penalty_jac_fill(jac[KM+off:,:], gs, spam_penalty_factor,
-                                       vec_gs_len, nGateParams, nSpamParams,
                                        gateBasis)
 
             if forcefn_grad is not None:
@@ -2934,10 +2894,7 @@ def _cptp_penalty_size(gs):
     return len(gs.gates)
 
 def _spam_penalty_size(gs):
-    ret = len(gs.preps) + len(gs.effects)
-    if gs._remainderlabel in gs.get_effect_labels():
-        ret += 1
-    return ret
+    return len(gs.preps) + len(gs.effects)
 
 def _cptp_penalty(gs,prefactor,gateBasis):
     """
@@ -2975,22 +2932,17 @@ def _spam_penalty(gs,prefactor,gateBasis):
             _tools.tracenorm(
                 _tools.vec_to_stdmx(gs.effects[elbl], gateBasis)
             ) for elbl in gs.get_effect_labels()], 'd')
-    ))
-      #Note: get_effect_labels will get remainder label as well
-      # (if present), whereas iter_effects() does not.
-        
+    ))        
 
 
 
-def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
-                           nGateParams, nSpamParams, gateBasis):
+def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, gateBasis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(gs.gates), nParams).
     """
     
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
-    k = nSpamParams # offset to beginning of current gate's params
     for i,(_,gate) in enumerate(gs.iter_gates()):
         nP = gate.num_params()
 
@@ -3025,7 +2977,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
         # dchi_std/dp := d(M(G))/dp = M(dG/dp), which we call "MdGdp_std" (the choi
         # mapping of dGdp in the std basis)
         MdGdp_std = _np.empty((nP,gs.dim,gs.dim), 'complex')
-        for p in range(gate.num_params()): #p indexes param
+        for p in range(nP): #p indexes param
             MdGdp_std[p] = _tools.fast_jamiolkowski_iso_std(dGdp[p], gateBasis) #now "M(dGdp_std)"
             assert(_np.linalg.norm(MdGdp_std[p] - MdGdp_std[p].T.conjugate()) < 1e-8) #check hermitian
 
@@ -3039,15 +2991,14 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, nParams,
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi))) #add 0.5/|chi|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         cpPenaltyVecGradToFill[i,:] = 0.0
-        cpPenaltyVecGradToFill[i,k:k+gate.num_params()] = v.real
+        cpPenaltyVecGradToFill[i,gate.gpindices] = v.real #indexing w/array OR
+                                         #slice works as expected in this case
         chi = sgnchi = dGdp = MdGdp_std = v = None #free mem
-        k += gate.num_params()
         
     return len(gs.gates) #the number of leading-dim indicies we filled in
 
 
-def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
-                           nGateParams, nSpamParams, gateBasis):
+def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, gateBasis):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(gs), nParams).
@@ -3065,7 +3016,6 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
 
     
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
-    k = nSpamParams # offset to beginning of current gate's params
     for i,(_,prepvec) in enumerate(gs.iter_preps()):
         nP = prepvec.num_params()
 
@@ -3092,27 +3042,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denMx))) #add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < 1e-4)
         spamPenaltyVecGradToFill[i,:] = 0.0
-        spamPenaltyVecGradToFill[i,k:k+prepvec.num_params()] = v.real
+        spamPenaltyVecGradToFill[i,prepvec.gpindices] = v.real # slice or array index works!
         denMx = sgndm = dVdp = v = None #free mem
-        k += prepvec.num_params()
-
-        
-    # remainder effectvec has derivative that is obtained by
-    # changing sgn(EMx) => -sgn(EcMx) when computing derivatives.
-    # for each of the normal effect matrices.
-    if gs._remainderlabel in gs.get_effect_labels():
-        EcMx = _tools.vec_to_stdmx( gs.effects[gs._remainderlabel], gateBasis)
-        assert(_np.linalg.norm(EcMx - EcMx.T.conjugate()) < 1e-4), \
-            "EMx should be Hermitian!"
-
-        sgnEc = _tools.matrix_sign(EcMx)
-        assert(_np.linalg.norm(sgnEc - sgnEc.T.conjugate()) < 1e-4), \
-            "sgnEc should be Hermitian!"
-        
-        iC = len(gs.preps) + len(gs.effects) # index corresponding to |Ec|_Tr term
-        spamPenaltyVecGradToFill[iC,:] = 0.0
-    else:
-        EcMx = sgnEc = iC = None
 
 
     #Compute derivatives for effect terms
@@ -3143,23 +3074,12 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, nParams,
         assert(_np.linalg.norm(v.imag) < 1e-4)
 
         spamPenaltyVecGradToFill[i,:] = 0.0
-        spamPenaltyVecGradToFill[i,k:k+effectvec.num_params()] = v.real
-
-        if sgnEc is not None: #Add contribution of derivative of |Ec|_Tr wrt this effect's parameters
-            vc =  _np.einsum("ij,aij,ab->b",-sgnEc,dEMxdV,dVdp)
-            vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx))) #add 0.5/|EMx|_Tr factor
-            assert(_np.linalg.norm(vc.imag) < 1e-4)
-            spamPenaltyVecGradToFill[iC,k:k+effectvec.num_params()] = vc.real
-            vc = None
+        spamPenaltyVecGradToFill[i,effectvec.gpindices] = v.real
         
         sgnE = dVdp = v = None #free mem
-        k += effectvec.num_params()
 
     #return the number of leading-dim indicies we filled in
-    if sgnEc is not None:
-        return len(gs.preps) + len(gs.effects) + 1
-    else:
-        return len(gs.preps) + len(gs.effects)
+    return len(gs.preps) + len(gs.effects)
 
 
 def find_closest_unitary_gatemx(gateMx):

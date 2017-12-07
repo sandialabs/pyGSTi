@@ -224,6 +224,11 @@ class SPAMVec(object):
         self.base = vec
         self.dim = len(vec)
         self.gpindices = None
+        self.parent = None # parent GateSet used to determine how to process
+                           # a SPAMVec's gpindices when inserted into a GateSet
+                           # Note that this is *not* pickled by virtue of all
+                           # the SPAMVec classes implementing a __reduce__ which
+                           # sets parent==None via this constructor.
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False
@@ -434,13 +439,22 @@ class SPAMVec(object):
 
         return vector
 
-    def copy_gpindices_to(self, vecObj):
+    def _copy_gpindices(self, vecObj, parent):
         """ Helper function for implementing copy in derived classes """
+        vecObj.parent = parent
         if isinstance(self.gpindices, slice):
             vecObj.gpindices = self.gpindices #slices are immutable
         elif vecObj.gpindices is not None:
             vecObj.gpindices = self.gpindices.copy() #arrays are not
         return vecObj
+
+    def _reduce_dict(self):
+        """ Helper function that returns a dict suitable for __reduce__ call """
+        chk = bool(self.parent is not None)
+        d = self.__dict__.copy()
+        d['parent'] = None
+        if chk: assert(self.parent is not None)
+        return d
 
 
 
@@ -613,7 +627,7 @@ class StaticSPAMVec(SPAMVec):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this SPAM vector.
 
@@ -622,7 +636,7 @@ class StaticSPAMVec(SPAMVec):
         StaticSPAMVec
             A copy of this SPAM operation.
         """
-        return self.copy_gpindices_to( StaticSPAMVec(self.base) )
+        return self._copy_gpindices( StaticSPAMVec(self.base), parent )
 
 
     def __str__(self):
@@ -632,7 +646,11 @@ class StaticSPAMVec(SPAMVec):
         return s
 
     def __reduce__(self):
-        return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
+        return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict() )
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 
@@ -816,7 +834,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this SPAM vector.
 
@@ -825,7 +843,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         FullyParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return self.copy_gpindices_to( FullyParameterizedSPAMVec(self.base) )
+        return self._copy_gpindices( FullyParameterizedSPAMVec(self.base), parent )
 
     def __str__(self):
         s = "Fully Parameterized spam vector with length %d\n" % len(self.base)
@@ -833,7 +851,11 @@ class FullyParameterizedSPAMVec(SPAMVec):
         return s
 
     def __reduce__(self):
-        return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self.__dict__)
+        return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+    
 
 
 
@@ -1048,7 +1070,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this SPAM vector.
 
@@ -1057,7 +1079,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         TPParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return self.copy_gpindices_to( TPParameterizedSPAMVec(self.base) )
+        return self._copy_gpindices( TPParameterizedSPAMVec(self.base), parent )
 
     def __str__(self):
         s = "TP-Parameterized spam vector with length %d\n" % self.dim
@@ -1065,7 +1087,11 @@ class TPParameterizedSPAMVec(SPAMVec):
         return s
 
     def __reduce__(self):
-        return (TPParameterizedSPAMVec, (self.base.copy(),), self.__dict__)
+        return (TPParameterizedSPAMVec, (self.base.copy(),), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
 
 class ComplementSPAMVec(SPAMVec):
@@ -1093,7 +1119,7 @@ class ComplementSPAMVec(SPAMVec):
             "complement" SPAM vector.
         """
         self.identity = SPAMVec.convert_to_vector(identity)
-        self.other_vecs = [ ovec.copy() for ovec in other_spamvecs ]        
+        self.other_vecs = [ ovec.copy(ovec.parent) for ovec in other_spamvecs ]        
 
         gpindices = _np.array( sorted( set().union(
             *[v.get_gpindices(True) for v in self.other_vecs] )), 'i')
@@ -1106,16 +1132,20 @@ class ComplementSPAMVec(SPAMVec):
         # parameter vector for this ComplementSPAMVector
         gtol_map = { gi: li for li,gi in enumerate(gpindices) }
 
+        parent = self.other_vecs[0].parent if len(self.other_vecs) else None
         for v in self.other_vecs:
+            assert(v.parent is parent),"All other vectors must be members of the *same* GateSet (or None)!"
             ginds = v.get_gpindices(True)
-            linds = [ gtol_map[gi] for gi in ginds]
-            if linds == list(range(linds[0],linds[-1]+1)):
-                v.gpindices = slice(linds[0],linds[-1]+1)
-            else:
-                v.gpindices = _np.array(linds, 'i')
+            if len(ginds) > 0:
+                linds = [ gtol_map[gi] for gi in ginds]
+                if linds == list(range(linds[0],linds[-1]+1)):
+                    v.gpindices = slice(linds[0],linds[-1]+1)
+                else:
+                    v.gpindices = _np.array(linds, 'i')
             
 
         SPAMVec.__init__(self, self.identity)
+        self.parent = parent
         self.gpindices = gpindices #must be after SPAMVec init
         self._construct_vector()
 
@@ -1228,6 +1258,10 @@ class ComplementSPAMVec(SPAMVec):
         int
            the number of independent parameters.
         """
+        assert(self.gpindices is not None), \
+            ("This ComplementSPAMVec is not properly initialized,"
+             " for vectorization, probably because it was copied"
+             " apart from a GateSet")
         if isinstance(self.gpindices,slice):
             return _slct.length(self.gpindices)
         else:
@@ -1307,7 +1341,7 @@ class ComplementSPAMVec(SPAMVec):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this SPAM vector.
 
@@ -1316,7 +1350,8 @@ class ComplementSPAMVec(SPAMVec):
         FullyParameterizedSPAMVec
             A copy of this SPAM operation.
         """
-        return self.copy_gpindices_to( ComplementSPAMVec(self.identity, self.other_vecs) )
+        other_vecs = [ v.copy(parent) for v in self.other_vecs ] #transfers vecs to new parent
+        return self._copy_gpindices( ComplementSPAMVec(self.identity, other_vecs), parent )
 
     def __str__(self):
         s = "Complement spam vector with length %d\n" % len(self.base)
@@ -1324,7 +1359,10 @@ class ComplementSPAMVec(SPAMVec):
         return s
 
     def __reduce__(self):
-        return (ComplementSPAMVec, (_np.empty((self.dim,1),'d'),[]), self.__dict__)
+        return (ComplementSPAMVec, (_np.empty((self.dim,1),'d'),[]), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
 
 
@@ -1688,7 +1726,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         raise NotImplementedError("TODO: add hessian computation for CPTPParameterizedSPAMVec")
     
     
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this SPAM vector.
 
@@ -1699,7 +1737,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         """
         copyOfMe = CPTPParameterizedSPAMVec(self.base, self.basis.copy())
         copyOfMe.params = self.params.copy() #ensure params are exactly the same
-        return self.copy_gpindices_to( copyOfMe )
+        return self._copy_gpindices( copyOfMe, parent )
 
     def __str__(self):
         s = "CPTP-Parameterized spam vector with length %d\n" % self.dim
@@ -1707,4 +1745,8 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         return s
 
     def __reduce__(self):
-        return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self.__dict__)
+        return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self._reduce_dict())
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+

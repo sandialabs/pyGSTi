@@ -458,7 +458,6 @@ def get_povm_map(gateset):
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    # Note: get_effect_labels includes remainder label
     povmVectors = [gateset.effects[lbl] for lbl in gateset.get_effect_labels()]
     d = len(povmVectors)
     assert( d**2 == len(povmVectors[0]) ), "Can only compute POVM metrics when num of effects == H space dimension"

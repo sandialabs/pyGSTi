@@ -115,6 +115,7 @@ class SPAMVecTestCase(BaseTestCase):
 
         print("TEST3")
         gateset.effects['E0'][0,0] = 1.0 #uses dirty processing
+        gateset._update_paramvec(gateset.effects['E0'])
         print(gateset.effects['E0'])
         print(gateset.effects['E1'])
         print(gateset.effects['E0'] + gateset.effects['E1'])

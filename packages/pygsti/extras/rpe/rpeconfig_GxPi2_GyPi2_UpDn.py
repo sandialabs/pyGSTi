@@ -19,9 +19,9 @@ rpeconfig_GxPi2_GyPi2_UpDn_dict['loose_axis_target'] = [0,0,1,0]
 rpeconfig_GxPi2_GyPi2_UpDn_dict['auxiliary_axis_gate_label'] = 'Gz'
 rpeconfig_GxPi2_GyPi2_UpDn_dict['auxiliary_axis_label'] = 'Z'
 rpeconfig_GxPi2_GyPi2_UpDn_dict['rhoExpressions'] = ["0"]
-rpeconfig_GxPi2_GyPi2_UpDn_dict['EExpressions'] = ["1"]
+rpeconfig_GxPi2_GyPi2_UpDn_dict['EExpressions'] = ["1","C"]
 #rpeconfig_GxPi2_GyPi2_UpDn_dict['spamLabelDict'] = {'plus': (0,0), 'minus': (0,-1) }
-rpeconfig_GxPi2_GyPi2_UpDn_dict['spamLabelDict'] = {'plus': ('rho0','E0'), 'minus': ('rho0','remainder') }
+rpeconfig_GxPi2_GyPi2_UpDn_dict['spamLabelDict'] = {'plus': ('rho0','E0'), 'minus': ('rho0','Ec') }
 rpeconfig_GxPi2_GyPi2_UpDn_dict['alpha'] = _np.pi/2
 rpeconfig_GxPi2_GyPi2_UpDn_dict['epsilon'] = _np.pi/2
 rpeconfig_GxPi2_GyPi2_UpDn_dict['theta'] = 0 #This should always be 0.
@@ -67,34 +67,3 @@ rpeconfig_GxPi2_GyPi2_UpDn_dict['theta_sin_meas_tuple'] = ('Gy',)
 rpeconfig_GxPi2_GyPi2_UpDn_dict['theta_sin_meas_str'] = 'Gy'
 
 rpeconfig_GxPi2_GyPi2_UpDn = _rpeconfig(rpeconfig_GxPi2_GyPi2_UpDn_dict)
-
-
-
-#rpeconfig_GxPi2_GyPi2_UpDn_dict['make_rpe_gs_func'] = lambda alphaTrue, epsilonTrue, Zrot, withId=True :\    
-#    if withId:
-#        outputGateset = _setc.build_gateset( 
-#            [2], [('Q0',)],['Gi','Gy','Gx'], 
-#            [ "I(Q0)", "Y(%s,Q0)" % epsilonTrue, "X(%s,Q0)" % alphaTrue],
-#            rhoExpressions=["0"], EExpressions=["1"], 
-#            spamLabelDict={'plus': (0,0), 'minus': (0,-1) } )
-#    else:
-#        outputGateset = _setc.build_gateset( 
-#            [2], [('Q0',)],['Gy','Gx'], 
-#            [ "Y(%s,Q0)" % epsilonTrue, "X(%s,Q0)" % alphaTrue],
-#            rhoExpressions=["0"], EExpressions=["1"], 
-#            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
-#
-#    if Zrot != 0:
-#        gatesetAux1 = _setc.build_gateset( 
-#            [2], [('Q0',)],['Gi','Gz','Gx'], 
-#            [ "I(Q0)", "Z(%s,Q0)" % Zrot, "X(pi/2,Q0)"],
-#            rhoExpressions=["0"], EExpressions=["1"], 
-#            spamLabelDict={'plus': (0,0), 'minus': (0,-1) })
-#
-#        outputGateset.set_gate('Gy',_objs.FullyParameterizedGate(
-#                _np.dot( _np.dot(_np.linalg.inv(gatesetAux1['Gz']),
-#                               outputGateset['Gy']),gatesetAux1['Gz'])) )
-#    
-#    
-#    
-#    SPAMdepol, gateDepol=None,
