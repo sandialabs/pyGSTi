@@ -9,21 +9,36 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from ..tools import slicetools as _slct
 
-class GateSetMember(object):
-    """ Base class for all GateSet member objects (possibly nested) """
-    
-    def __init__(self, dim):
-        """ Initialize a new GatesetObject """
+class GateSetChild(object):
+    """
+    Base class for all objects contained in a GateSet that
+    hold a `parent` refernce to their parent GateSet.
+    """
+    def __init__(self, parent=None):
+        self.parent = parent # parent GateSet used to determine how to process
+                             # a Gate's gpindices when inserted into a GateSet
+                             # Note that this is *not* pickled by virtue of all
+                             # the Gate classes implementing a __reduce__ which
+                             # sets parent==None via this constructor.
+
+        
+
+class GateSetMember(GateSetChild):
+    """ 
+    Base class for all GateSet member objects which possess a definite
+    dimension and number of parmeters, can be vectorized into/onto a portion of
+    their paren GateSet's parameter vector.  They therefore contain a
+    `gpindices` reference to the global GateSet indices "owned" by this member.
+    Note that GateSetMembers may contain other GateSetMembers (may be nested).
+    """
+    def __init__(self, dim, gpindices=None, parent=None):
+        """ Initialize a new GateSetMember """
         self.dim = dim
-        self.gpindices = None
-        self.parent = None # parent GateSet used to determine how to process
-                           # a Gate's gpindices when inserted into a GateSet
-                           # Note that this is *not* pickled by virtue of all
-                           # the Gate classes implementing a __reduce__ which
-                           # sets parent==None via this constructor.
+        self.gpindices = gpindices
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False
+        super(GateSetMember,self).__init__(parent)
         
     def get_dimension(self):
         """ Return the dimension of this object. """

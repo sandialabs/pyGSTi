@@ -47,7 +47,7 @@ class PrefixOrderedDict(_collections.OrderedDict):
 
     
 
-class OrderedMemberDict(PrefixOrderedDict):
+class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
     """ 
     An ordered dictionary whose keys must begin with a given prefix.
 
@@ -88,14 +88,16 @@ class OrderedMemberDict(PrefixOrderedDict):
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP", "full", or "static"
         self.typ = typ
-        super(OrderedMemberDict,self).__init__(prefix, items)
+        
+        PrefixOrderedDict.__init__(self, prefix, items)
+        _gm.GateSetChild.__init__(self, parent) # set's self.parent
 
-        #Set parent of this dict and it's elements, not that it's been initialized
-        self.parent = parent # dimension == parent.dim
+        #Set parent our elements, now that the list has been initialized
+        # (done for un-pickling b/c reduce => __init__ is called to construct
+        #  unpickled object)
         if self.parent is not None:
             for el in self.values(): el.parent = self.parent
             
-        
 
     def _check_dim(self, obj):
         if self.typ == "spamvec":
@@ -201,8 +203,6 @@ class OrderedMemberDict(PrefixOrderedDict):
                 (None, self.default_param, self._prefix, self.typ, list(self.items())), None)
 
     def __pygsti_reduce__(self):
-        #Call constructor to create object, but with parent == None to avoid
-        # circular pickling of GateSets.  Must set parent separately.
         return self.__reduce__()
 
 
