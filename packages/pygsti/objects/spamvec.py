@@ -17,6 +17,7 @@ from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
+from . import gatesetmember as _gatesetmember
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
@@ -212,7 +213,7 @@ def check_deriv_wrt_params(spamvec, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
-class SPAMVec(object):
+class SPAMVec(_gatesetmember.GateSetMember):
     """
     Excapulates a parameterization of a state preparation OR POVM effect
     vector. This class is the  common base class for all specific
@@ -222,44 +223,8 @@ class SPAMVec(object):
     def __init__(self, vec):
         """ Initialize a new SPAM Vector """
         self.base = vec
-        self.dim = len(vec)
-        self.gpindices = None
-        self.parent = None # parent GateSet used to determine how to process
-                           # a SPAMVec's gpindices when inserted into a GateSet
-                           # Note that this is *not* pickled by virtue of all
-                           # the SPAMVec classes implementing a __reduce__ which
-                           # sets parent==None via this constructor.
-        self.dirty = False # True when there's any *possibility* that this
-                           # gate's parameters have been changed since the
-                           # last setting of dirty=False
-                           
-    def get_dimension(self):
-        """ Return the dimension of the gate matrix. """
-        return self.dim
-
-    def get_gpindices(self, asarray=False):
-        """ 
-        Returns the indices of the "global" GateSet parameters that are used
-        by this SPAM vector.
-
-        Parameters
-        ----------
-        asarray : bool, optional
-            if True, then the returned value will always be a `numpy.ndarray`
-            of integers.  If False, then the raw `gpindices` member will be
-            returned, which can be either an array or a slice.
-
-        Returns
-        -------
-        numpy.ndarray or slice
-        """
-        if asarray:
-            if self.gpindices is None:
-                return _np.empty(0,'i')
-            elif isinstance(self.gpindices, slice):
-                return _np.array(_slct.indices(self.gpindices),'i')
-        return self.gpindices
-        
+        super(SPAMVec, self).__init__( len(vec) )
+                                   
 
     def transform(self, S, typ):
         """
@@ -439,23 +404,6 @@ class SPAMVec(object):
 
         return vector
 
-    def _copy_gpindices(self, vecObj, parent):
-        """ Helper function for implementing copy in derived classes """
-        vecObj.parent = parent
-        if isinstance(self.gpindices, slice):
-            vecObj.gpindices = self.gpindices #slices are immutable
-        elif vecObj.gpindices is not None:
-            vecObj.gpindices = self.gpindices.copy() #arrays are not
-        return vecObj
-
-    def _reduce_dict(self):
-        """ Helper function that returns a dict suitable for __reduce__ call """
-        chk = bool(self.parent is not None)
-        d = self.__dict__.copy()
-        d['parent'] = None
-        if chk: assert(self.parent is not None)
-        return d
-
 
 
 class StaticSPAMVec(SPAMVec):
@@ -477,7 +425,7 @@ class StaticSPAMVec(SPAMVec):
         SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
-    def set_vector(self, vec):
+    def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw
         SPAM vector becomes vec.  Will raise ValueError if this operation
@@ -675,7 +623,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
-    def set_vector(self, vec):
+    def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw
         SPAM vector becomes vec.  Will raise ValueError if this operation
@@ -722,10 +670,10 @@ class FullyParameterizedSPAMVec(SPAMVec):
         """
         if typ == 'prep':
             Si  = S.get_transform_matrix_inverse()
-            self.set_vector(_np.dot(Si, self))
+            self.set_value(_np.dot(Si, self))
         elif typ == 'effect':
             Smx = S.get_transform_matrix()
-            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+            self.set_value(_np.dot(_np.transpose(Smx),self)) 
               #Evec^T --> ( Evec^T * S )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
@@ -758,7 +706,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_vector(_np.dot(D,self)) 
+        self.set_value(_np.dot(D,self)) 
 
 
     def num_params(self):
@@ -905,7 +853,7 @@ class TPParameterizedSPAMVec(SPAMVec):
                                 indicesToProtect=(0,0)))
 
 
-    def set_vector(self, vec):
+    def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw
         SPAM vector becomes vec.  Will raise ValueError if this operation
@@ -956,10 +904,10 @@ class TPParameterizedSPAMVec(SPAMVec):
         """
         if typ == 'prep':
             Si  = S.get_transform_matrix_inverse()
-            self.set_vector(_np.dot(Si, self))
+            self.set_value(_np.dot(Si, self))
         elif typ == 'effect':
             Smx = S.get_transform_matrix()
-            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+            self.set_value(_np.dot(_np.transpose(Smx),self)) 
               #Evec^T --> ( Evec^T * S )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
@@ -992,7 +940,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_vector(_np.dot(D,self)) 
+        self.set_value(_np.dot(D,self)) 
 
 
     def num_params(self):
@@ -1154,7 +1102,7 @@ class ComplementSPAMVec(SPAMVec):
         self.base = self.identity - sum(self.other_vecs)
         self.base.flags.writeable = False
 
-    def set_vector(self, vec):
+    def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw
         SPAM vector becomes vec.  Will raise ValueError if this operation
@@ -1496,7 +1444,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         self.base.flags.writeable = False
 
 
-    def set_vector(self, vec):
+    def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw
         SPAM vector becomes vec.  Will raise ValueError if this operation
@@ -1543,10 +1491,10 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         """
         if typ == 'prep':
             Si  = S.get_transform_matrix_inverse()
-            self.set_vector(_np.dot(Si, self))
+            self.set_value(_np.dot(Si, self))
         elif typ == 'effect':
             Smx = S.get_transform_matrix()
-            self.set_vector(_np.dot(_np.transpose(Smx),self)) 
+            self.set_value(_np.dot(_np.transpose(Smx),self)) 
               #Evec^T --> ( Evec^T * S )^T
         else:
             raise ValueError("Invalid typ argument: %s" % typ)
@@ -1579,7 +1527,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_vector(_np.dot(D,self)) 
+        self.set_value(_np.dot(D,self)) 
 
 
     def num_params(self):

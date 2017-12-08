@@ -86,14 +86,14 @@ class GateSet(object):
         self.reset_basis()
 
         #SPAM vectors
-        self.preps = _ld.OrderedSPAMVecDict(self, default_param, prep_prefix)
-        self.effects = _ld.OrderedSPAMVecDict(self, default_e_param, effect_prefix)
+        self.preps = _ld.OrderedMemberDict(self, default_param, prep_prefix, "spamvec")
+        self.effects = _ld.OrderedMemberDict(self, default_e_param, effect_prefix, "spamvec")
 
         #SPAM labels: key = label, value = (prepLabel, effectLabel)
         self.spamdefs = _ld.OrderedSPAMLabelDict('remainder')
 
         #Gates
-        self.gates = _ld.OrderedGateDict(self, default_param, gate_prefix)
+        self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
 
         self._default_gauge_group = None
         self._calcClass = _GateMatrixCalc

@@ -16,6 +16,7 @@ from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
 from ..tools import slicetools as _slct
 from . import gaugegroup as _gaugegroup
+from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
@@ -51,7 +52,7 @@ def optimize_gate(gateToOptimize, targetGate):
     if isinstance(gateToOptimize, FullyParameterizedGate):
         if(targetGate.dim != gateToOptimize.dim): #special case: gates can have different overall dimension
             gateToOptimize.dim = targetGate.dim   #  this is a HACK to allow model selection code to work correctly
-        gateToOptimize.set_matrix(targetGate)     #just copy entire overall matrix since fully parameterized
+        gateToOptimize.set_value(targetGate)     #just copy entire overall matrix since fully parameterized
         return
 
     assert(targetGate.dim == gateToOptimize.dim) #gates must have the same overall dimension
@@ -336,49 +337,13 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
 # must be processed.
 
 
-class Gate(object):
+class Gate(_gatesetmember.GateSetMember):
     """ Base class for all gate representations """
     
     def __init__(self, dim):
         """ Initialize a new Gate """
-        self.dim = dim
-        self.gpindices = None
-        self.parent = None # parent GateSet used to determine how to process
-                           # a Gate's gpindices when inserted into a GateSet
-                           # Note that this is *not* pickled by virtue of all
-                           # the Gate classes implementing a __reduce__ which
-                           # sets parent==None via this constructor.
-        self.dirty = False # True when there's any *possibility* that this
-                           # gate's parameters have been changed since the
-                           # last setting of dirty=False
+        super(Gate, self).__init__(dim)
         
-    def get_dimension(self):
-        """ Return the dimension of the gate. """
-        return self.dim
-    
-    def get_gpindices(self, asarray=False):
-        """ 
-        Returns the indices of the "global" GateSet parameters that are used
-        by this SPAM vector.
-
-        Parameters
-        ----------
-        asarray : bool, optional
-            if True, then the returned value will always be a `numpy.ndarray`
-            of integers.  If False, then the raw `gpindices` member will be
-            returned, which can be either an array or a slice.
-
-        Returns
-        -------
-        numpy.ndarray or slice
-        """
-        if asarray:
-            if self.gpindices is None:
-                return _np.empty(0,'i')
-            elif isinstance(self.gpindices, slice):
-                return _np.array(_slct.indices(self.gpindices),'i')
-        return self.gpindices
-
     def acton(self, state):
         """ Act this gate map on an input state """
         raise NotImplementedError("acton(...) not implemented!")
@@ -426,60 +391,6 @@ class Gate(object):
         using `transform` and `inv_transform`.
         """
         raise NotImplementedError("diamonddist(...) not implemented!")
-
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-        """
-        raise NotImplementedError("num_params not implemented!")
-
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-        """
-        raise NotImplementedError("to_vector not implemented!")
-
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError("from_vector not implemented!")
-    
-    def copy(self, parent=None):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        raise NotImplementedError("copy not implemented!")
-
-    def _copy_gpindices(self, gateObj, parent):
-        """ Helper function for implementing copy in derived classes """
-        gateObj.parent = parent
-        if isinstance(self.gpindices, slice):
-            gateObj.gpindices = self.gpindices #slices are immutable
-        elif gateObj.gpindices is not None:
-            gateObj.gpindices = self.gpindices.copy() #arrays are not
-        return gateObj
-
-    def _reduce_dict(self):
-        """ Helper function that returns a dict suitable for __reduce__ call """
-        d = self.__dict__.copy()
-        d['parent'] = None
-        return d
 
 
     #Pickle plumbing
@@ -739,7 +650,7 @@ class StaticGate(GateMatrix):
         GateMatrix.__init__(self, GateMatrix.convert_to_matrix(M))
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -870,7 +781,7 @@ class StaticGate(GateMatrix):
             (and it's inverse) used in the above similarity transform.
         """
         raise ValueError("Cannot transform a StaticGate - it has no parameters!")
-        #self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
+        #self.set_value(_np.dot(Si,_np.dot(self.base, S)))
 
     def depolarize(self, amount):
         """
@@ -995,7 +906,7 @@ class FullyParameterizedGate(GateMatrix):
         M2 = GateMatrix.convert_to_matrix(M)
         GateMatrix.__init__(self,M2)
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -1125,7 +1036,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def depolarize(self, amount):
@@ -1158,7 +1069,7 @@ class FullyParameterizedGate(GateMatrix):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_matrix(_np.dot(D,self))
+        self.set_value(_np.dot(D,self))
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -1190,7 +1101,7 @@ class FullyParameterizedGate(GateMatrix):
         None
         """
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_matrix(_np.dot(rotnMx,self))
+        self.set_value(_np.dot(rotnMx,self))
 
 
     def __str__(self):
@@ -1255,7 +1166,7 @@ class TPParameterizedGate(GateMatrix):
                        indicesToProtect=(0, slice(None,None,None))))
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -1392,7 +1303,7 @@ class TPParameterizedGate(GateMatrix):
         """
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def depolarize(self, amount):
@@ -1425,7 +1336,7 @@ class TPParameterizedGate(GateMatrix):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_matrix(_np.dot(D,self))
+        self.set_value(_np.dot(D,self))
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -1457,7 +1368,7 @@ class TPParameterizedGate(GateMatrix):
         None
         """
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_matrix(_np.dot(rotnMx,self))
+        self.set_value(_np.dot(rotnMx,self))
 
 
     def compose(self, otherGate):
@@ -1616,7 +1527,7 @@ class LinearlyParameterizedGate(GateMatrix):
         self.base.flags.writeable = False
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -2208,7 +2119,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -2796,7 +2707,7 @@ class LindbladParameterizedGate(GateMatrix):
         #    assert(False)
         
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
