@@ -817,7 +817,7 @@ class ConfidenceRegionFactoryView(object):
                 elif typ == "prep":   gatesetObj = gs.preps[lbl]
                 elif typ == "effect": gatesetObj = gs.effects[lbl]
                 else: raise ValueError("Invalid dependency type: %s" % typ)
-                all_gpindices.extend( gatesetObj.get_gpindices(True) )
+                all_gpindices.extend( gatesetObj.gpindices_as_array() )
 
         vec0 = gs.to_vector()
         all_gpindices = sorted(list(set(all_gpindices))) #remove duplicates

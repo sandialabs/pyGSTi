@@ -34,7 +34,7 @@ class GateSetMember(GateSetChild):
     def __init__(self, dim, gpindices=None, parent=None):
         """ Initialize a new GateSetMember """
         self.dim = dim
-        self.gpindices = gpindices
+        self._gpindices = gpindices
         self.dirty = False # True when there's any *possibility* that this
                            # gate's parameters have been changed since the
                            # last setting of dirty=False
@@ -43,29 +43,42 @@ class GateSetMember(GateSetChild):
     def get_dimension(self):
         """ Return the dimension of this object. """
         return self.dim
-    
-    def get_gpindices(self, asarray=False):
-        """ 
-        Returns the indices of the parent's parameters that are used
-        by this object.
 
-        Parameters
-        ----------
-        asarray : bool, optional
-            if True, then the returned value will always be a `numpy.ndarray`
-            of integers.  If False, then the raw `gpindices` member will be
-            returned, which can be either an array or a slice.
+    @property
+    def gpindices(self):
+        """ 
+        Gets the gateset parameter indices of this object.
+        """
+        return self._gpindices
+
+    @gpindices.setter
+    def gpindices(self, value):
+        self._gpindices = value
+        self._post_set_gpindices()
+
+    def _post_set_gpindices(self):
+        """ 
+        Called after self.gpindices is set, so that if this member contains
+        *other* (nested) members, it can (re)set the indices of those members.
+        """
+        pass
+    
+    def gpindices_as_array(self, asarray=False):
+        """ 
+        Returns gpindices as a `numpy.ndarray` of integers (gpindices itself
+        can be None, a slice, or an integer array).  If gpindices is None, an
+        empty array is returned.
 
         Returns
         -------
-        numpy.ndarray or slice
+        numpy.ndarray
         """
-        if asarray:
-            if self.gpindices is None:
-                return _np.empty(0,'i')
-            elif isinstance(self.gpindices, slice):
-                return _np.array(_slct.indices(self.gpindices),'i')
-        return self.gpindices
+        if self.gpindices is None:
+            return _np.empty(0,'i')
+        elif isinstance(self.gpindices, slice):
+            return _np.array(_slct.indices(self.gpindices),'i')
+        else:
+            return self.gpindices #it's already an array
 
     
     def num_params(self):

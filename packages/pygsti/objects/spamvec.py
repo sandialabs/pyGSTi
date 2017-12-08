@@ -1049,7 +1049,7 @@ class ComplementSPAMVec(SPAMVec):
         self.other_vecs = [ ovec.copy(ovec.parent) for ovec in other_spamvecs ]        
 
         gpindices = _np.array( sorted( set().union(
-            *[v.get_gpindices(True) for v in self.other_vecs] )), 'i')
+            *[v.gpindices_as_array() for v in self.other_vecs] )), 'i')
           # Note: we *could* check if the sorted indices are contiguous
           # and make gpindices a slice in that case, but it would just make
           # the below code more complex.
@@ -1062,7 +1062,7 @@ class ComplementSPAMVec(SPAMVec):
         parent = self.other_vecs[0].parent if len(self.other_vecs) else None
         for v in self.other_vecs:
             assert(v.parent is parent),"All other vectors must be members of the *same* GateSet (or None)!"
-            ginds = v.get_gpindices(True)
+            ginds = v.gpindices_as_array()
             if len(ginds) > 0:
                 linds = [ gtol_map[gi] for gi in ginds]
                 if linds == list(range(linds[0],linds[-1]+1)):

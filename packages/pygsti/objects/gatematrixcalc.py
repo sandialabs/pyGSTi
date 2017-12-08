@@ -150,7 +150,7 @@ class GateMatrixCalc(GateCalc):
             obj_wrtFilter = [] # values = object-local param indices
             relevant_gpindices = [] # indices into original wrtFilter'd indices
 
-            gpindices = obj.get_gpindices(True)
+            gpindices = obj.gpindices_as_array()
 
             for ii,i in enumerate(wrtFilter):
                 if i in gpindices:
