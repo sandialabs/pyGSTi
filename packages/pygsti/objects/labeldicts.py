@@ -197,14 +197,15 @@ class OrderedMemberDict(PrefixOrderedDict):
     def __pygsti_reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
+        items = [(k,v) for k,v in self.items()] #store items with parent=None # .copy(None)
         return (OrderedMemberDict,
                 (None, self.default_param, self._prefix, self.typ, items), None)
     
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v.copy(None)) for k,v in self.items()] #store items with parent=None
+        items = [(k,v) for k,v in self.items()] #store items with parent=None # .copy(None)
+        print("MemberDict reduce called: ", [v.parent for k,v in items])
         return (OrderedMemberDict,
                 (None, self.default_param, self._prefix, self.typ, items), None)
 

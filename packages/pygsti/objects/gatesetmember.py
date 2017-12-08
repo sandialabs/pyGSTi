@@ -101,9 +101,16 @@ class GateSetMember(object):
             gateObj.gpindices = self.gpindices.copy() #arrays are not
         return gateObj
 
-    def _reduce_dict(self):
-        """ Helper function that returns a dict suitable for __reduce__ call """
+    #def _reduce_dict(self):
+    #    """ Helper function that returns a dict suitable for __reduce__ call """
+    #    d = self.__dict__.copy()
+    #    d['parent'] = None
+    #    return d
+
+    def __getstate__(self):
+        """ Don't pickle parent """
         d = self.__dict__.copy()
         d['parent'] = None
         return d
+
 

@@ -52,7 +52,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
     if isinstance(vecToOptimize, FullyParameterizedSPAMVec):
         if(targetVec.dim != vecToOptimize.dim): #special case: gates can have different overall dimension
             vecToOptimize.dim = targetVec.dim   #  this is a HACK to allow model selection code to work correctly
-        vecToOptimize.set_vector(targetVec)     #just copy entire overall matrix since fully parameterized
+        vecToOptimize.set_value(targetVec)     #just copy entire overall matrix since fully parameterized
         return
 
     assert(targetVec.dim == vecToOptimize.dim) #vectors must have the same overall dimension
@@ -593,11 +593,11 @@ class StaticSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict() )
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict() )
+    #
+    #def __pygsti_reduce__(self):
+    #    return self.__reduce__()
 
 
 
@@ -798,11 +798,11 @@ class FullyParameterizedSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict())
+    #
+    #def __pygsti_reduce__(self):
+    #    return self.__reduce__()
     
 
 
@@ -1034,11 +1034,11 @@ class TPParameterizedSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (TPParameterizedSPAMVec, (self.base.copy(),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    return (TPParameterizedSPAMVec, (self.base.copy(),), self._reduce_dict())
+    #
+    #def __pygsti_reduce__(self):
+    #    return self.__reduce__()
 
 
 
@@ -1306,11 +1306,11 @@ class ComplementSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (ComplementSPAMVec, (_np.empty((self.dim,1),'d'),[]), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    return (ComplementSPAMVec, (_np.empty((self.dim,1),'d'),[]), self._reduce_dict())
+    #
+    #def __pygsti_reduce__(self):
+    #    return self.__reduce__()
 
 
 
@@ -1692,9 +1692,9 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self._reduce_dict())
+    #
+    #def __pygsti_reduce__(self):
+    #    return self.__reduce__()
 

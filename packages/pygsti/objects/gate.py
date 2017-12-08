@@ -876,11 +876,11 @@ class StaticGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (StaticGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+#    def __reduce__(self):
+#        return (StaticGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
+#
+#    def __pygsti_reduce__(self):
+#        return self.__reduce__()
 
 
 
@@ -1130,12 +1130,13 @@ class FullyParameterizedGate(GateMatrix):
         assert( isinstance(otherGate, FullyParameterizedGate) )
         return FullyParameterizedGate( _np.dot( self.base, otherGate.base) )
 
-
-    def __reduce__(self):
-        return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+    #def __reduce__(self):
+    #    print("Fullgate __reduce__")
+    #    return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
+    #
+    #def __pygsti_reduce__(self):
+    #    print("Fullgate __pygsti_reduce__")
+    #    return self.__reduce__()
 
 
 class TPParameterizedGate(GateMatrix):
@@ -1398,12 +1399,12 @@ class TPParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        """ Reduce for pickling as an element of an :class:`OrderedDict` """
-        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+#    def __reduce__(self):
+#        """ Reduce for pickling as an element of an :class:`OrderedDict` """
+#        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
+#
+#    def __pygsti_reduce__(self):
+#        return self.__reduce__()
 
 
 
@@ -1848,13 +1849,13 @@ class LinearlyParameterizedGate(GateMatrix):
             s += "Gate[%d,%d] = %s\n" % (i,j,tStr)
         return s
 
-    def __reduce__(self):
-        return (LinearlyParameterizedGate,
-                (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
-                self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+#    def __reduce__(self):
+#        return (LinearlyParameterizedGate,
+#                (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
+#                self._reduce_dict())
+#
+#    def __pygsti_reduce__(self):
+#        return self.__reduce__()
 
 
 
@@ -2378,12 +2379,12 @@ class EigenvalueParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
 
-    def __reduce__(self):
-        return (EigenvalueParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+#    def __reduce__(self):
+#        return (EigenvalueParameterizedGate, 
+#                (_np.identity(self.dim,'d'),), self._reduce_dict())
+#
+#    def __pygsti_reduce__(self):
+#        return self.__reduce__()
 
 
 
@@ -3323,12 +3324,12 @@ class LindbladParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
 
-    def __reduce__(self):
-        return (LindbladParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self._reduce_dict())
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+#    def __reduce__(self):
+#        return (LindbladParameterizedGate, 
+#                (_np.identity(self.dim,'d'),), self._reduce_dict())
+#
+#    def __pygsti_reduce__(self):
+#        return self.__reduce__()
 
 
 
