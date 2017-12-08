@@ -876,15 +876,6 @@ class StaticGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-#    def __reduce__(self):
-#        return (StaticGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-#
-#    def __pygsti_reduce__(self):
-#        return self.__reduce__()
-
-
-
-
 
 
 class FullyParameterizedGate(GateMatrix):
@@ -1129,15 +1120,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         assert( isinstance(otherGate, FullyParameterizedGate) )
         return FullyParameterizedGate( _np.dot( self.base, otherGate.base) )
-
-    #def __reduce__(self):
-    #    print("Fullgate __reduce__")
-    #    return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-    #
-    #def __pygsti_reduce__(self):
-    #    print("Fullgate __pygsti_reduce__")
-    #    return self.__reduce__()
-
+    
 
 class TPParameterizedGate(GateMatrix):
     """
@@ -1398,14 +1381,6 @@ class TPParameterizedGate(GateMatrix):
         s = "TP Parameterized gate with shape %s\n" % str(self.base.shape)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
-
-#    def __reduce__(self):
-#        """ Reduce for pickling as an element of an :class:`OrderedDict` """
-#        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self._reduce_dict())
-#
-#    def __pygsti_reduce__(self):
-#        return self.__reduce__()
-
 
 
 class LinearlyParameterizedElementTerm(object):
@@ -1848,16 +1823,6 @@ class LinearlyParameterizedGate(GateMatrix):
                                 for term in terms] )
             s += "Gate[%d,%d] = %s\n" % (i,j,tStr)
         return s
-
-#    def __reduce__(self):
-#        return (LinearlyParameterizedGate,
-#                (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
-#                self._reduce_dict())
-#
-#    def __pygsti_reduce__(self):
-#        return self.__reduce__()
-
-
 
 
 #Or CommutantParameterizedGate(Gate): ?
@@ -2378,13 +2343,6 @@ class EigenvalueParameterizedGate(GateMatrix):
             (str(self.base.shape), self.num_params())
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
-
-#    def __reduce__(self):
-#        return (EigenvalueParameterizedGate, 
-#                (_np.identity(self.dim,'d'),), self._reduce_dict())
-#
-#    def __pygsti_reduce__(self):
-#        return self.__reduce__()
 
 
 
@@ -3324,14 +3282,6 @@ class LindbladParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
 
-#    def __reduce__(self):
-#        return (LindbladParameterizedGate, 
-#                (_np.identity(self.dim,'d'),), self._reduce_dict())
-#
-#    def __pygsti_reduce__(self):
-#        return self.__reduce__()
-
-
 
 
 def _dexpSeries(X, dX):
@@ -3438,55 +3388,3 @@ def _dexpX(X,dX,expX=None,postfactor=None):
             
     return dExpX
 
-
-
-#SCRATCH: TO REMOVE
-
-
-
-#    def __getattr__(self, attr):
-#        print "GATE ATTR",attr
-#        ret = getattr(self.__dict__['base'],attr) #use __dict__ so no chance for recursive __getattr__
-#        if(self.base.shape != (self.dim,self.dim)):
-#           raise ValueError("Cannot change shape of Gate")
-#        if isinstance(ret, _ProtectedArray):
-#            print "PA RET"
-#            if ret.base is self.base:
-#                print "SAME MEM.  Writeable = ",ret.flags.writeable
-#                print " Dict = ",ret.__dict__
-#                if ret.flags.writeable == True and ret.indicesToProtect is None:
-#                    print "SETTING READ-ONLY"
-#                    ret.flags.writeable = False
-#        #if getattr(ret,'base',None) is not self.base: #if doesn't share memory with parent
-#        #    if hasattr(ret,'flags'):
-#        #        print "ALLOWING WRITE"
-#        #        ret.flags.writeable = True           # don't preserve read-only
-#        return ret
-
-
-
-    #def __reduce__(self):
-    #    """ Pickle plumbing. """
-    #    createFn, args, state = _np.ndarray.__reduce__(self)
-    #    new_state = state + (self.__dict__,)
-    #    return (createFn, args, new_state)
-    #
-    #def __setstate__(self, state):
-    #    """ Pickle plumbing. """
-    #    _np.ndarray.__setstate__(self,state[0:-1])
-    #    self.__dict__.update(state[-1])
-
-
-#    def __lt__(self,x):
-#
-#
-#    def __gt__(self,x):
-#
-#
-#    def __hash__(self):
-#
-#
-#    def __copy__(self):
-#
-#
-#    def __deepcopy__(self):

@@ -593,13 +593,6 @@ class StaticSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    #def __reduce__(self):
-    #    return (StaticSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict() )
-    #
-    #def __pygsti_reduce__(self):
-    #    return self.__reduce__()
-
-
 
 
 
@@ -796,14 +789,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
     def __str__(self):
         s = "Fully Parameterized spam vector with length %d\n" % len(self.base)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
-        return s
-
-    #def __reduce__(self):
-    #    return (FullyParameterizedSPAMVec, (_np.empty((self.dim,1),'d'),), self._reduce_dict())
-    #
-    #def __pygsti_reduce__(self):
-    #    return self.__reduce__()
-    
+        return s    
 
 
 
@@ -1033,13 +1019,6 @@ class TPParameterizedSPAMVec(SPAMVec):
         s = "TP-Parameterized spam vector with length %d\n" % self.dim
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
-
-    #def __reduce__(self):
-    #    return (TPParameterizedSPAMVec, (self.base.copy(),), self._reduce_dict())
-    #
-    #def __pygsti_reduce__(self):
-    #    return self.__reduce__()
-
 
 
 class ComplementSPAMVec(SPAMVec):
@@ -1305,13 +1284,6 @@ class ComplementSPAMVec(SPAMVec):
         s = "Complement spam vector with length %d\n" % len(self.base)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
-
-    #def __reduce__(self):
-    #    return (ComplementSPAMVec, (_np.empty((self.dim,1),'d'),[]), self._reduce_dict())
-    #
-    #def __pygsti_reduce__(self):
-    #    return self.__reduce__()
-
 
 
 class CPTPParameterizedSPAMVec(SPAMVec):
@@ -1691,10 +1663,4 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         s = "CPTP-Parameterized spam vector with length %d\n" % self.dim
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
-
-    #def __reduce__(self):
-    #    return (CPTPParameterizedSPAMVec, (self.base.copy(),self.basis.copy()), self._reduce_dict())
-    #
-    #def __pygsti_reduce__(self):
-    #    return self.__reduce__()
 
