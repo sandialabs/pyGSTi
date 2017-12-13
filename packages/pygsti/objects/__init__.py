@@ -30,6 +30,9 @@ from .spamvec import TPParameterizedSPAMVec
 from .spamvec import CPTPParameterizedSPAMVec
 from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
+from .povm import POVM
+from .instrument import Instrument
+from .instrument import TPInstrument
 
 from .gateset import GateSet
 from .gatestring import GateString

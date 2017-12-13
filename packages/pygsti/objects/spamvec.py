@@ -1026,8 +1026,10 @@ class ComplementSPAMVec(SPAMVec):
     Encapsulates a SPAM vector that is parameterized by 
     `I - sum(other_spam_vecs)` where `I` is a (static) identity element 
     and `other_param_vecs` is a list of other spam vectors in the same parent
-    :class:`GateSet`.  Usually used to specify the final effect vector in a POVM
-    such that the enitre set sums to the identity.
+    :class:`POVM`.  This only *partially* implements the SPAMVec interface 
+    (some methods such as `to_vector` and `from_vector` will thunk down to base
+    class versions which raise `NotImplementedError`), as instances are meant to
+    be contained within a :class:`POVM` which takes care of vectorization.
     """
 
     def __init__(self, identity, other_spamvecs):
@@ -1045,37 +1047,18 @@ class ComplementSPAMVec(SPAMVec):
             subtracted from `identity` to compute the final value of this 
             "complement" SPAM vector.
         """
-        self.identity = SPAMVec.convert_to_vector(identity)
-        self.other_vecs = [ ovec.copy(ovec.parent) for ovec in other_spamvecs ]        
-
-        gpindices = _np.array( sorted( set().union(
-            *[v.gpindices_as_array() for v in self.other_vecs] )), 'i')
-          # Note: we *could* check if the sorted indices are contiguous
-          # and make gpindices a slice in that case, but it would just make
-          # the below code more complex.
-
-        # shift gpindices of our local copies of the other vecs so
-        # they can be initialized (via from_vector) from the local
-        # parameter vector for this ComplementSPAMVector
-        gtol_map = { gi: li for li,gi in enumerate(gpindices) }
-
-        parent = self.other_vecs[0].parent if len(self.other_vecs) else None
-        for v in self.other_vecs:
-            assert(v.parent is parent),"All other vectors must be members of the *same* GateSet (or None)!"
-            ginds = v.gpindices_as_array()
-            if len(ginds) > 0:
-                linds = [ gtol_map[gi] for gi in ginds]
-                if linds == list(range(linds[0],linds[-1]+1)):
-                    v.gpindices = slice(linds[0],linds[-1]+1)
-                else:
-                    v.gpindices = _np.array(linds, 'i')
+        self.identity = FullyParameterizedSPAMVec(
+            SPAMVec.convert_to_vector(identity) ) #so easy to transform
+                                         # or depolarize by parent POVM
+        
+        self.other_vecs = other_spamvecs
+          #Note: we assume that our parent will do the following:
+          # 1) set our gpindices to indicate how many parameters we have
+          # 2) set the gpindices of the elements of other_spamvecs so
+          #    that they index into our local parameter vector.
             
-
-        SPAMVec.__init__(self, self.identity)
-        self.parent = parent
-        self.gpindices = gpindices #must be after SPAMVec init
-        self._construct_vector()
-
+        SPAMVec.__init__(self, self.identity) # dummy
+        self._construct_vector() #reset's self.base
         
     def _construct_vector(self):
         self.base = self.identity - sum(self.other_vecs)
@@ -1100,136 +1083,6 @@ class ComplementSPAMVec(SPAMVec):
                           "directly, as its elements depend on *other* SPAM "
                           "vectors"))
 
-    def transform(self, S, typ):
-        """
-        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
-        effect SPAM vectors, respectively (depending on the value of `typ`). 
-
-        Note that this is equivalent to state preparation vectors getting 
-        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
-        being mapped as `E^T -> E^T * S`.
-
-        Generally, the transform function updates the *parameters* of 
-        the SPAM vector such that the resulting vector is altered as 
-        described above.  If such an update cannot be done (because
-        the gate parameters do not allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        S : GaugeGroupElement
-            A gauge group element which specifies the "S" matrix 
-            (and it's inverse) used in the above similarity transform.
-            
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-        """
-        # transform 'identity' element
-        if typ == 'prep':
-            Si  = S.get_transform_matrix_inverse()
-            self.identity = _np.dot(Si, self.identity) 
-        elif typ == 'effect':
-            Smx = S.get_transform_matrix()
-            self.identity = _np.dot(_np.transpose(Smx),self.identity)
-        else:
-            raise ValueError("Invalid typ argument: %s" % typ)
-
-        # transform other SPAM vectors
-        for v in self.other_vecs: v.transform(S,typ)
-        self._construct_vector()
-        self.dirty = True
-
-
-    def depolarize(self, amount):
-        """
-        Depolarize this SPAM vector by the given `amount`.
-
-        Generally, the depolarize function updates the *parameters* of 
-        the SPAMVec such that the resulting vector is depolarized.  If
-        such an update cannot be done (because the gate parameters do not
-        allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        amount : float or tuple
-            The amount to depolarize by.  If a tuple, it must have length
-            equal to one less than the dimension of the gate. All but the
-            first element of the spam vector (often corresponding to the 
-            identity element) are multiplied by `amount` (if a float) or
-            the corresponding `amount[i]` (if a tuple).
-
-        Returns
-        -------
-        None
-        """
-        # depolarize 'identity' element
-        if isinstance(amount,float) or _compat.isint(amount):
-            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
-        else:
-            assert(len(amount) == self.dim-1)
-            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.identity = _np.dot(D,self.identity)
-
-        # transform other SPAM vectors
-        for v in self.other_vecs: v.depolarize(amount)
-        self._construct_vector()
-        self.dirty = True
-
-
-
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this SPAM vector.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        assert(self.gpindices is not None), \
-            ("This ComplementSPAMVec is not properly initialized,"
-             " for vectorization, probably because it was copied"
-             " apart from a GateSet")
-        if isinstance(self.gpindices,slice):
-            return _slct.length(self.gpindices)
-        else:
-            return len(self.gpindices)
-
-
-    def to_vector(self):
-        """
-        Get the SPAM vector parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The parameters as a 1D array with length num_params().
-        """
-        v = _np.empty(self.num_params(), 'd')
-        for ovec in self.other_vecs:
-            v[ovec.gpindices] = ovec.to_vector()
-        return v
-
-
-    def from_vector(self, v):
-        """
-        Initialize the SPAM vector using a 1D array of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        for ovec in self.other_vecs:
-            ovec.from_vector(v[ovec.gpindices])
-        self._construct_vector()
-        self.dirty = True
-
-
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
@@ -1242,7 +1095,8 @@ class ComplementSPAMVec(SPAMVec):
             Array of derivatives, shape == (dimension, num_params)
         """
         if len(self.other_vecs) == 0: return _np.zeros((self.dim,0), 'd')
-        neg_deriv = _np.zeros( (self.dim, self.num_params()), 'd')
+        Np = len(self.gpindices_as_array())
+        neg_deriv = _np.zeros( (self.dim, Np), 'd')
         for ovec in self.other_vecs:
             neg_deriv[:,ovec.gpindices] += ovec.deriv_wrt_params()
         derivMx = -neg_deriv
@@ -1251,9 +1105,6 @@ class ComplementSPAMVec(SPAMVec):
             return derivMx
         else:
             return _np.take( derivMx, wrtFilter, axis=1 )
-
-        
-
     
     def has_nonzero_hessian(self):
         """ 
@@ -1274,11 +1125,11 @@ class ComplementSPAMVec(SPAMVec):
 
         Returns
         -------
-        FullyParameterizedSPAMVec
+        ComplementSPAMVec
             A copy of this SPAM operation.
         """
-        other_vecs = [ v.copy(parent) for v in self.other_vecs ] #transfers vecs to new parent
-        return self._copy_gpindices( ComplementSPAMVec(self.identity, other_vecs), parent )
+        # don't copy other vecs - leave this to parent
+        return self._copy_gpindices( ComplementSPAMVec(self.identity, []), parent ) 
 
     def __str__(self):
         s = "Complement spam vector with length %d\n" % len(self.base)

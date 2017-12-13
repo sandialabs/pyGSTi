@@ -36,6 +36,9 @@ def shift(s, offset):
     s : slice
       The slice to operate upon.
 
+    offset : int
+      The amount to shift the start and stop members of `s`.
+
     Returns
     -------
     slice
@@ -115,3 +118,34 @@ def list_to_slice(lst):
     if not lst: return slice(0,0)
     assert lst == list(range(lst[0],lst[-1]+1))
     return slice(lst[0],lst[-1]+1)
+
+
+def divide(slc, maxLen):
+    """
+    Divides a slice into sub-slices based on a maximum length (for each
+    sub-slice).
+
+    For example:
+    `divide(slice(0,10,2), 2) == [slice(0,4,2), slice(4,8,2), slice(8,10,2)]`
+
+    Parameters
+    ----------
+    slc : slice
+        The slice to divide
+
+    maxLen : int
+        The maximum length (i.e. number of indices) allowed in a sub-slice.
+
+    Returns
+    -------
+    list of slices
+    """
+    sub_slices = []
+    sub_start = slc.start
+    step = 1 if (slc.step is None) else slc.step
+    while sub_start < slc.stop:
+        # Note: len(range(start,stop,step)) == stop-start+(step-1) // step
+        sub_slices.append( slice(sub_start, min(sub_start+maxLen*step,slc.stop),
+                                 slc.step) )
+        sub_start += maxLen*step
+    return sub_slices

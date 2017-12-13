@@ -42,18 +42,34 @@ class EvalTree(list):
         # as useful intermediates.
         self.num_final_strs = 0
 
+        # Number of "final" or "requested" elements, which separately
+        # counts each spamTuple of each of the final gate strings.
+        self.num_final_elements = 0
+        
         # The list of "child" sub-trees (if this tree is spilt)
         self.subTrees = []
 
         # a dict to hold various MPI distribution info
-        self.distribution = {} 
+        self.distribution = {}
+
+        # a list of spamTuple-lists, one for each final gate string
+        self.compiled_gatestring_spamTuples = None
+
+        # a dictionary of final-gate-string index lists keyed by 
+        # each distinct spamTuple
+        self.spamtuple_indices = None
                 
         # ********* Only non-None for sub-trees ******************
         
-          # The mapping between this tree's final indices and its parent's
+          # The mapping between this tree's final gate string indices and its parent's
         self.myFinalToParentFinalMap = None
-          # The parent's index of each of this tree's indices
+
+          # The mapping between this tree's final element indices and its parent's
+        self.myFinalElsToParentFinalElsMap = None
+        
+          # The parent's index of each of this tree's *final* indices          
         self.parentIndexMap = None
+        
           # A dictionary whose keys are the "original" (as-given to initialize)
           # indices and whose values are the new "permuted" indices.  So if you
           # want to know where in a tree the ith-element of gatestring_list (as
@@ -62,7 +78,7 @@ class EvalTree(list):
         
         super(EvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, gatestring_list, numSubTreeComms=1):
+    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
@@ -99,12 +115,17 @@ class EvalTree(list):
         newTree.init_indices = self.init_indices[:]
         newTree.eval_order = self.eval_order[:]
         newTree.num_final_strs = self.num_final_strs
+        newTree.num_final_els = self.num_final_els
         newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
+        newTree.myFinalElsToParentFinalElsMap = self.myFinalElsToParentFinalElsMap.copy() \
+                            if (self.myFinalElsToParentFinalElsMap is not None) else None
         newTree.parentIndexMap = self.parentIndexMap[:] \
             if (self.parentIndexMap is not None) else None
         newTree.subTrees = [ st.copy() for st in self.subTrees ]
         newTree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
+        newTree.compiled_gatestring_spamTuples = self.compiled_gatestring_spamTuples[:]
+        newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
 
     def get_init_labels(self):
@@ -193,15 +214,53 @@ class EvalTree(list):
             return self.myFinalToParentFinalMap
         else:
             return slice(0,self.num_final_strings())
-        
+
+
+    def final_element_indices(self, parent_tree):
+        """
+        Return a slice or index array that identifies the segment of
+        `parent_tree`'s final "element" values that correspond to this tree's
+        final values, *including* spam indices.
+
+        Note that if `parent_tree` is not None, this tree must be a
+        sub-tree of it (which means `parent_tree` is split).
+
+        Parameters
+        ----------
+        parent_tree : EvalTree
+            This tree's parent tree.  If the parent tree is None
+            or isn't split (which sometimes means that this 
+            "sub-tree" is the same as the parent tree - see 
+            `get_sub_trees`), then an index for the entire set of
+            final values is returned, which is appropriate in this
+            case.
+
+        Returns
+        -------
+        slice
+        """
+        if (self.myFinalElsToParentFinalElsMap is not None) and \
+                parent_tree.is_split():
+            return self.myFinalElsToParentFinalElsMap
+        else:
+            return slice(0,self.num_final_elements())
+
 
     def num_final_strings(self):
         """
         Returns the integer number of "final" gate strings, equal
-          to the length of the gatestring_list passed to initialize.
+          to the number of keys in the `compiled_gatestring_list`
+          passed to :method:`initialize`.
         """
         return self.num_final_strs
 
+    def num_final_elements(self):
+        """
+        Returns the integer number of "final" elements, equal
+          to the number of (gatestring, spamTuple) pairs contained in
+          the `compiled_gatestring_list` passed to :method:`initialize`.
+        """
+        return self.num_final_els
 
     def generate_gatestring_list(self, permute=True):
         """
@@ -488,6 +547,9 @@ class EvalTree(list):
         self.eval_order = [ parentIndexPerm[iCur] for iCur in self.eval_order ]
         self[:] = [ permute_parent_element(parentIndexPerm, self[iCur])
                     for iCur in parentIndexRevPerm ]
+        self.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[iCur]
+                                                for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
+        self._compute_spamtuple_indices()
         assert(self.myFinalToParentFinalMap is None)
         assert(self.parentIndexMap is None)
 
@@ -538,6 +600,56 @@ class EvalTree(list):
             return self.subTrees
         else:
             return [self] #return self as the only "subTree" when not split
+
+    def _compute_spamtuple_indices(self):
+        """ 
+        Computes a dictionary whose keys are the distinct spamTuples
+        found in `self.compiled_gatestring_spamTuples` and whose values are
+        (finalIndices, finalTreeSlice) tuples where:
+
+        finalIndices = the "element" indices in any final filled quantities
+                       which combines both spam and gate-sequence indices.
+                       If this tree is a subtree, then these final indices
+                       refer to the *parent's* final elements.
+        treeIndices = indices into the tree's final gatestring list giving
+                      all of the (raw) gate sequences which need to be computed
+                      for the current spamTuple (this list has the SAME length
+                      as finalIndices).
+        """
+        spamtuple_indices = _collections.OrderedDict(); el_off = 0
+        for i,spamTuples in enumerate(  # i == final gate string index
+                self.compiled_gatestring_spamTuples):
+            for j,spamTuple in enumerate(spamTuples,start=el_off): # j == final element index
+                if spamTuple not in spamtuple_indices:
+                    spamtuple_indices[spamTuple] = ([],[])
+                f = self.myFinalElsToParentFinalElsMap[j] \
+                    if self.myFinalElsToParentFinalElsMap else j #parent's final
+                spamtuple_indices[spamTuple][0].append(f)
+                spamtuple_indices[spamTuple][1].append(i)
+            el_off += len(spamTuples)
+
+        #convert lists to integer arrays or slices
+        def list_to_slicer(lst):
+            if len(lst) == 0: return slice(0,0)
+            start=lst[0]
+            if len(lst) == 1: return slice(start,start+1)
+            step=lst[1]-lst[0]; stop = start + step*len(lst)
+            for i,expected in zip(lst,range(start,stop,step)):
+                if i != expected: #doesn't match slice
+                    return _np.array(lst,'i')
+                
+            #matched range(start,stop,step)!
+            if (start,stop,step) == \
+               (0,len(self.compiled_gatestring_spamTuples),1):
+                return slice(None,None) #entire range
+            else:
+                return slice(start,stop,step) 
+
+        self.spamtuple_indices = _collections.OrderedDict(
+            [ (spamTuple, (list_to_slicer(fInds), list_to_slicer(gInds)))
+              for spamTuple,(fInds,gInds) in spamtuple_indices.items() ] )
+
+        
 
         
     def print_analysis(self):

@@ -448,7 +448,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
 
             #At this point, each proc has filled the portions (columns) of jacMx that
             # it's responsible for, and so now we gather them together.
-            _mpit.gather_slices(derivSlices, derivOwners, jacMx, 1, comm)
+            _mpit.gather_slices(derivSlices, derivOwners, jacMx,[], 1, comm)
             #Note jacMx is completely filled (on all procs)
 
             if checkJac and (comm is None or comm.Get_rank() == 0):

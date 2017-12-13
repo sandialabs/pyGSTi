@@ -3388,3 +3388,155 @@ def _dexpX(X,dX,expX=None,postfactor=None):
             
     return dExpX
 
+
+
+class TPInstrumentGate(GateMatrix):
+    """
+    A partial implementation of :class:`Gate` which encapsulates an element of a
+    :class:`TPInstrument`.  Instances rely on their parent being a 
+    `TPInstrument`.
+    """
+
+    def __init__(self, param_gates, index):
+        """
+        Initialize a TPInstrumentGate object.
+
+        Parameters
+        ----------
+        param_gates : list of Gate objects
+            A list of the underlying gate objects which constitute a simple
+            parameterization of a :class:`TPInstrument`.  Namely, this is
+            the list of [MT,D1,D2,...Dn] gates which parameterize *all* of the
+            `TPInstrument`'s elements.
+
+        index : int
+            The index indicating which element of the `TPInstrument` the
+            constructed object is.  Must be in the range 
+            `[0,len(param_gates)-1]`.
+        """
+        self.param_gates = param_gates
+        self.index = index
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d'))
+        self._construct_matrix()
+
+        #Set our own parent and gpindices based on param_gates
+        # (this breaks the usual paradigm of having the parent object set these,
+        #  but the exception is justified b/c the parent has set these members
+        #  of the underlying 'param_gates' gates)
+        self.dependents = [0,index+1] if index < len(param_gates)-1 \
+                          else list(range(len(param_gates)))
+          #indices into self.param_gates of the gates this gate depends on
+        self.set_gpindices(_np.concatenate( [ param_gates[i].gpindices_as_array()
+                                              for i in self.dependents ], axis=0),
+                           param_gates[0].parent) #use parent of first param gate
+                                                  # (they should all be the same)
+
+
+    def _construct_matrix(self):
+        """
+        Mi = Di + MT for i = 1...(n-1)
+           = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
+        """
+        nEls = len(self.param_gates)
+        if self.index < nEls-1:
+            self.base = _np.asarray( self.param_gates[self.index+1]
+                                     + self.param_gates[0] )
+        else:
+            assert(self.index == nEls-1), \
+                "Invalid index %d > %d" % (self.index,nEls-1)
+            self.base = _np.asarray( -sum(self.param_gates)
+                                     -(nEls-3)*self.param_gates[0] )
+        
+        assert(self.base.shape == (self.dim,self.dim))
+        self.base.flags.writeable = False
+
+        
+
+    def set_value(self, M):
+        """
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        M : array_like or Gate
+            An array of shape (dim, dim) or Gate representing the gate action.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a TPInstrumentGate directly!")
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        Np = len(self.gpindices_as_array())
+        derivMx = _np.zeros((self.dim**2,Np),'d')
+        Nels = len(self.param_gates)
+
+        off = 0
+        if self.index < Nels-1: # matrix = Di + MT = param_gates[index+1] + param_gates[0]
+            for i in [self.index+1, 0]:
+                Np = self.param_gates[i].num_params()
+                derivMx[:,off:off+Np] = self.param_gates[i].deriv_wrt_params()
+                off += Np
+
+        else: # matrix = -(nEls-1)*MT-sum(Di)
+            Np = self.param_gates[0].num_params()
+            derivMx[:,off:off+Np] = -(nEls-1)*self.param_gates[0].deriv_wrt_params()
+            off += Np
+
+            for i in range(1,nEls):
+                Np = self.param_gates[i].num_params()
+                derivMx[:,off:off+Np] = -self.param_gates[i].deriv_wrt_params()
+                off += Np
+        
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
+
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        assert(parent is None),"TPInstrumentGate set's it's own parent, so `parent` arg of copy must be None"
+        return self._copy_gpindices( TPInstrumentGate(self.param_gates,self.index), parent)
+
+    def __str__(self):
+        s = "TPInstrumentGate with shape %s\n" % str(self.base.shape)
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
+

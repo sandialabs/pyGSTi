@@ -15,11 +15,21 @@ class GateSetChild(object):
     hold a `parent` refernce to their parent GateSet.
     """
     def __init__(self, parent=None):
-        self.parent = parent # parent GateSet used to determine how to process
-                             # a Gate's gpindices when inserted into a GateSet
-                             # Note that this is *not* pickled by virtue of all
-                             # the Gate classes implementing a __reduce__ which
-                             # sets parent==None via this constructor.
+        self._parent = parent # parent GateSet used to determine how to process
+                              # a Gate's gpindices when inserted into a GateSet
+                              # Note that this is *not* pickled by virtue of all
+                              # the Gate classes implementing a __reduce__ which
+                              # sets parent==None via this constructor.
+
+    @property
+    def parent(self):
+        """ Gets the parent of this object."""
+        return self._parent
+
+    @parent.setter
+    def parent(self, value):
+        """ Sets the parent of this object."""
+        self._parent = value
 
         
 
@@ -53,16 +63,39 @@ class GateSetMember(GateSetChild):
 
     @gpindices.setter
     def gpindices(self, value):
-        self._gpindices = value
-        self._post_set_gpindices()
+        raise ValueError(("Use set_gpindices(...) to set the gpindices member"
+                          " of a GateSetMember object"))
 
-    def _post_set_gpindices(self):
+    @property
+    def parent(self):
         """ 
-        Called after self.gpindices is set, so that if this member contains
-        *other* (nested) members, it can (re)set the indices of those members.
+        Gets the parent of this object.
         """
-        pass
-    
+        return self._parent
+
+    @parent.setter
+    def parent(self, value):
+        raise ValueError(("Use set_gpindices(...) to set the parent"
+                          " of a GateSetMember object"))
+
+
+    def set_gpindices(self, gpindices, parent):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+        parent : GateSet or GateSetMember
+
+        Returns
+        -------
+        None
+        """
+        self._parent = parent
+        self._gpindices = gpindices
+             
     def gpindices_as_array(self, asarray=False):
         """ 
         Returns gpindices as a `numpy.ndarray` of integers (gpindices itself
@@ -73,12 +106,12 @@ class GateSetMember(GateSetChild):
         -------
         numpy.ndarray
         """
-        if self.gpindices is None:
+        if self._gpindices is None:
             return _np.empty(0,'i')
-        elif isinstance(self.gpindices, slice):
-            return _np.array(_slct.indices(self.gpindices),'i')
+        elif isinstance(self._gpindices, slice):
+            return _np.array(_slct.indices(self._gpindices),'i')
         else:
-            return self.gpindices #it's already an array
+            return self._gpindices #it's already an array
 
     
     def num_params(self):
@@ -122,11 +155,12 @@ class GateSetMember(GateSetChild):
 
     def _copy_gpindices(self, gateObj, parent):
         """ Helper function for implementing copy in derived classes """
-        gateObj.parent = parent
+        gpindices_copy = None
         if isinstance(self.gpindices, slice):
-            gateObj.gpindices = self.gpindices #slices are immutable
+            gpindices_copy = self.gpindices #slices are immutable
         elif gateObj.gpindices is not None:
-            gateObj.gpindices = self.gpindices.copy() #arrays are not
+            gpindices_copy = self.gpindices.copy() #arrays are not
+        gateObj.set_gpindices(gpindices_copy, parent)
         return gateObj
 
     def __getstate__(self):
@@ -136,3 +170,23 @@ class GateSetMember(GateSetChild):
         return d
 
 
+def _compose_gpindices(parent_gpindices, child_gpindices):
+    """ 
+    Maps `child_gpindices`, which index `parent_gpindices` into a new slice
+    or array of indices that is the subset of parent indices.
+
+    Essentially:
+    `return parent_gpindices[child_gpindices]`
+    """
+    if parent_gpindices is None or child_gpindices is None: return None
+    if isinstance(parent_gpindices, slice):
+        start,stop = parent_gpindices.start, parent_gpindices.stop
+        assert(parent_gpindices.step is None),"No support for nontrivial step size yet"
+        
+        if isinstance(child_gpindices, slice):
+            return _slct.shfit( child_gpindices, start )
+        else: # child_gpindices is an index array
+            return child_gpindices + start # numpy "shift"
+        
+    else: #parent_gpindices is an index array, so index with child_gpindices
+        return parent_gpindices[child_gpindices]

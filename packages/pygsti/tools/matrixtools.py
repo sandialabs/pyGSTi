@@ -615,4 +615,97 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights, matched_pairs
     else:
         return min_weights
-           
+
+                
+def _fas(a, inds, rhs, add=False):
+    """ 
+    Fancy Assignment, equivalent to `a[*inds] = rhs` but with
+    the elements of inds (allowed to be integers, slices, or 
+    integer arrays) always specifing a generalize-slice along
+    the given dimension.  This avoids some weird numpy indexing
+    rules that make using square brackets a pain.
+    """
+    inds = tuple([slice(None) if (i is None) else i for i in inds])
+    
+    #Mixes of ints and tuples are fine, and a single
+    # index-list index is fine too.  The case we need to
+    # deal with is indexing a multi-dimensional array with
+    # one or more index-lists
+    if all([isinstance(i,(int,slice)) for i in inds]) or len(inds) == 1:
+        if add:
+            a[inds] += rhs #all integers or slices behave nicely
+        else:
+            a[inds] = rhs #all integers or slices behave nicely
+    else:
+        #convert each dimension's index to a list, take a product of
+        # these lists, and flatten the right hand side to get the
+        # proper assignment:
+        b = []
+        for ii,i in enumerate(inds):
+            if isinstance(i,int): b.append([i])
+            elif isinstance(i,slice):
+                b.append( list(range(*i.indices(a.shape[ii]))) )
+            else:
+                b.append( list(i) )
+
+        indx_tups = list(_itertools.product(*b))
+        if len(indx_tups) > 0: # b/c a[()] just returns the entire array!
+            inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
+            if add:
+                a[inds] += rhs.flatten()
+            else:
+                a[inds] = rhs.flatten()
+                
+    return a
+
+def _findx_shape(a, inds):
+    """ Returns the shape of a fancy-indexed array (`a[*inds].shape`) """
+    shape = []
+    for ii,N in enumerate(a.shape):
+        indx = inds[ii] if ii<len(inds) else None
+        if indx is None: shape.append(N)
+        elif isinstance(indx,slice):
+            shape.append( len(range(*indx.indices(N))) )
+        else: #assume indx is an index list or array
+            shape.append( len(indx) )
+    return shape
+
+
+def _findx(a, inds, always_copy=False):
+    """ 
+    Fancy Indexing, equivalent to `a[*inds].copy()` but with
+    the elements of inds (allowed to be integers, slices, or 
+    integer arrays) always specifing a generalize-slice along
+    the given dimension.  This avoids some weird numpy indexing
+    rules that make using square brackets a pain.
+    """
+    inds = tuple([slice(None) if (i is None) else i for i in inds])
+    
+    #Mixes of ints and tuples are fine, and a single
+    # index-list index is fine too.  The case we need to
+    # deal with is indexing a multi-dimensional array with
+    # one or more index-lists
+    if all([isinstance(i,(int,slice)) for i in inds]) or len(inds) == 1:
+        return a[inds].copy() if always_copy else a[inds] #all integers or slices behave nicely
+    
+    else:        
+        #Need to copy to a new array
+        b = []; squeeze = []
+        for ii,i in enumerate(inds):
+            if isinstance(i,int):
+                b.append([i]); squeeze.append(ii) #squeeze ii-th dimension at end
+            elif isinstance(i,slice):
+                b.append( list(range(*i.indices(a.shape[ii]))) )
+            else:
+                b.append( list(i) )
+
+        a_inds_shape = [len(x) for x in b]
+        indx_tups = list(_itertools.product(*b))
+        if len(indx_tups) > 0: # b/c a[()] just returns the entire array!
+            inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
+            a_inds = a[inds].copy() # a 1D array of flattened "fancy" a[inds]
+            a_inds.shape = a_inds_shape #reshape
+        else:
+            a_inds = _np.zeros( a_inds_shape, a.dtype ) #has zero elements
+            asssert(a_inds.size == 0)
+        return a_inds

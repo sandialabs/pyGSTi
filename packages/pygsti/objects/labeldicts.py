@@ -72,7 +72,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         prefix : str
             The required prefix of all keys (which must be strings).
 
-        typ : {"gate","spamvec"}
+        typ : {"gate","spamvec","povm","instrument"}
             The type of objects that this dictionary holds.  This is 
             needed for automatic object creation and for validation. 
 
@@ -96,33 +96,34 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         # (done for un-pickling b/c reduce => __init__ is called to construct
         #  unpickled object)
         if self.parent is not None:
-            for el in self.values(): el.parent = self.parent
+            for el in self.values(): el.set_gpindices(el.gpindices, self.parent)
+              #sets parent and retains any existing indices in elements
             
 
     def _check_dim(self, obj):
-        if self.typ == "spamvec":
+        if isinstance(obj, _gm.GateSetMember):
+            dim = obj.dim
+        elif self.typ == "spamvec":
             dim = len(obj)
-        if self.typ == "gate":
-            if isinstance(obj, _gate.Gate):
-                dim = obj.dim
-            else:
-                try:
-                    d1 = len(obj)
-                    d2 = len(obj[0]) #pylint: disable=unused-variable
-                except:
-                    raise ValueError("%s doesn't look like a 2D array/list" % obj)
-                if any([len(row) != d1 for row in obj]):
-                    raise ValueError("%s is not a *square* 2D array" % obj)
-                dim = d1
+        elif self.typ == "gate":
+            try:
+                d1 = len(obj)
+                d2 = len(obj[0]) #pylint: disable=unused-variable
+            except:
+                raise ValueError("%s doesn't look like a 2D array/list" % obj)
+            if any([len(row) != d1 for row in obj]):
+                raise ValueError("%s is not a *square* 2D array" % obj)
+            dim = d1
+        else:
+            raise ValueError("Cannot obtain dimension!")
 
-        if self.typ in ('gate','spamvec'):
-            if self.parent is None: return
-            if self.parent.dim is None:
-                self.parent._dim = dim
-            elif self.parent.dim != dim:
-                raise ValueError("Cannot add object with dimension" +
-                                 "%d to gateset of dimension %d"
-                                 % (dim,self.parent.dim))
+        if self.parent is None: return
+        if self.parent.dim is None:
+            self.parent._dim = dim
+        elif self.parent.dim != dim:
+            raise ValueError("Cannot add object with dimension" +
+                             "%d to gateset of dimension %d"
+                             % (dim,self.parent.dim))
 
     def __getitem__(self, key):
         #if self.parent is not None:
@@ -136,7 +137,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
         if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
             if self.parent is not None and value.parent is not self.parent:
-                value = value.copy(self.parent); value.gpindices=None
+                value = value.copy()
+                value.set_gpindices(None, self.parent) # indices don't apply to us
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...
@@ -162,7 +164,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if obj is None:
                 raise ValueError("Cannot set a value of type: ",type(value))
 
-            if self.parent is not None: obj.parent=self.parent
+            if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict,self).__setitem__(key, obj)
 
         #rebuild GateSet's parameter vector (params may need to be added)

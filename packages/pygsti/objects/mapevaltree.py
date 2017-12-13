@@ -28,7 +28,7 @@ class MapEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, gatestring_list, numSubTreeComms=1):
+    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
@@ -61,8 +61,11 @@ class MapEvalTree(EvalTree):
         if numSubTreeComms is not None:
             self.distribution['numSubtreeComms'] = numSubTreeComms
 
-        if len(gatestring_list ) > 0 and isinstance(gatestring_list[0],_gs.GateString):
-            gatestring_list = [gs.tup for gs in gatestring_list]
+        gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
+        self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
+        self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
+        self._compute_spamtuple_indices()
+        
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -118,7 +121,8 @@ class MapEvalTree(EvalTree):
         # order.
                         
         self.myFinalToParentFinalMap = None #this tree has no "children",
-        self.parentIndexMap = None          # i.e. has not been created by a 'split'
+        self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
+        self.parentIndexMap = None
         self.original_index_lookup = None
         self.subTrees = [] #no subtrees yet
         assert(self.generate_gatestring_list() == gatestring_list)
@@ -414,6 +418,22 @@ class MapEvalTree(EvalTree):
                 subTree[ik] = (iStart,remainder)
 
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
+            subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
+                                                       for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
+
+            final_el_startstops = []; i=0
+            for spamTuples in parentTree.compiled_gatestring_spamTuples:
+                final_el_startsops.append( (i,i+len(spamTuples)) )
+                i += len(spamTuples)
+            subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
+                [ _np.arange(*final_el_startstops[k])
+                  for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
+            
+            subtree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree._compute_spamtuple_indices()
+            #Note: myFinalToParentFinalMap maps only between *final* elements
+            #   (which are what is held in compiled_gatestring_spamTuples)
+
             return subTree
     
         self._finish_split(subTreeSetList, permute_parent_element, create_subtree)
