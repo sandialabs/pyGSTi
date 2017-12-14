@@ -230,7 +230,7 @@ def one_sparse_fixed_frequency_test(mode,confidence=0.95):
     """
     """
 
-    if mode**2 > one_sparse_fixed_frequency_threshold(confidence=confidence):
+    if mode**2 > fourier_thresholds.one_sparse_fixed_frequency_threshold(confidence=confidence):
         return True
     else:
         return False
@@ -238,7 +238,7 @@ def one_sparse_fixed_frequency_test(mode,confidence=0.95):
 def one_sparse_test(modes,confidence=0.95):
     """
     """
-    threshold = one_sparse_threshold(len(modes),confidence=confidence)
+    threshold = fourier_thresholds.one_sparse_threshold(len(modes),confidence=confidence)
     max_power = _np.amax(modes**2)
     if max_power > threshold:
         out = True
@@ -256,7 +256,7 @@ def one_to_k_sparse_test(modes,null_hypothesis,k=1,confidence=0.95,N=None,repeat
     power = _np.flip(_np.sort(modes**2),axis=0)   
     test_statistic = _np.cumsum(power)
     if thresholds is None:
-        aux_out = one_to_k_sparse_threshold(null_hypothesis,k=k,confidence=confidence,
+        aux_out = fourier_thresholds.one_to_k_sparse_threshold(null_hypothesis,k=k,confidence=confidence,
                                         N=N,repeats=repeats,method=method,return_aux=True)
         threshold = aux_out['threshold']
     else:
@@ -296,11 +296,11 @@ def DCT_filter(x,confidence=0.99,null_hypothesis=None,method='chi2',max_keep_mod
         if null_hypothesis is None:
             null_hypothesis = x_mean*_np.ones(len(x),float)
             
-        y = DCT(x,null_hypothesis=null_hypothesis)
+        y = fourier_utils.DCT(x,null_hypothesis=null_hypothesis)
         if method=='chi2':
-            threshold = one_sparse_threshold(len(x),confidence)
+            threshold = fourier_thresholds.one_sparse_threshold(len(x),confidence)
         else:
-            threshold = one_to_k_sparse_threshold(null_hypothesis, 
+            threshold = fourier_thresholds.one_to_k_sparse_threshold(null_hypothesis, 
                                                   k=1,confidence=confidence,method=method)            
         #y[y**2 < threshold] = 0
         
@@ -318,7 +318,7 @@ def DCT_filter(x,confidence=0.99,null_hypothesis=None,method='chi2',max_keep_mod
         power[power < 0] = 0.
         y = _np.sign(y)*_np.sqrt(power)
         
-        filtered_x = IDCT(y,null_hypothesis)
+        filtered_x = fourier_utils.IDCT(y,null_hypothesis)
  
         if return_aux:
             out_aux = {}

@@ -23,13 +23,14 @@ def DCT_multicount_data(x,number_of_counts):
     any statistical justification.
 
     """
-    normalized_x = x/number_of_counts
-    
-    if _np.mean(normalized_x) == 0 or _np.mean(normalized_x) == 1:
-        return _np.zeros(len(x))
 
-    y = _np.mean(normalized_x)
-    return _dct((normalized_x - y )/_np.sqrt(y * (1 - y)),norm='ortho')
+    
+    if _np.mean(x) == 0 or _np.mean(x) == number_of_counts:
+        return _np.zeros(len(x))
+    
+    mean_number_of_ones = _np.mean(x)
+    estimated_coin_bias = mean_number_of_ones / number_of_counts
+    return _dct((x - mean_number_of_ones)/_np.sqrt(number_of_counts*estimated_coin_bias*(1-estimated_coin_bias)),norm='ortho')
 
 def DCT(x,null_hypothesis=None):
     """
