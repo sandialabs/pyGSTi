@@ -17,6 +17,20 @@ from scipy import convolve
 # ---------- Spectrum and Fourier transform tools -------- #
 # -------------------------------------------------------- #
 
+def DCT_multicount_data(x,number_of_counts):
+    """
+    This function is a horrible hack, and the normalization doesn't have 
+    any statistical justification.
+
+    """
+    normalized_x = x/number_of_counts
+    
+    if _np.mean(normalized_x) == 0 or _np.mean(normalized_x) == 1:
+        return _np.zeros(len(x))
+
+    y = _np.mean(normalized_x)
+    return _dct((normalized_x - y )/_np.sqrt(y * (1 - y)),norm='ortho')
+
 def DCT(x,null_hypothesis=None):
     """
     Returns the Type-II orthogonal discrete cosine transform of y where 
