@@ -64,6 +64,7 @@ class MapEvalTree(EvalTree):
         gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
         self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
         self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
+        self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
         self._compute_spamtuple_indices()
         
 
@@ -100,7 +101,7 @@ class MapEvalTree(EvalTree):
             for i in range(k-1,-1,-1): #from k-1 -> 0
                 ic, candidate = sorted_strs[i]
                 Lc = len(candidate)
-                if L > Lc > 0 and gateString[0:Lc] == candidate:
+                if L >= Lc > 0 and gateString[0:Lc] == candidate: # ">=" allows for duplicates 
                     iStart = ic
                     remaining = gateString[Lc:]
                     break
@@ -420,7 +421,8 @@ class MapEvalTree(EvalTree):
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
             subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-
+            subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+            
             final_el_startstops = []; i=0
             for spamTuples in parentTree.compiled_gatestring_spamTuples:
                 final_el_startsops.append( (i,i+len(spamTuples)) )

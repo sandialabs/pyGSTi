@@ -166,7 +166,7 @@ class GateSetMember(GateSetChild):
     def __getstate__(self):
         """ Don't pickle parent """
         d = self.__dict__.copy()
-        d['parent'] = None
+        d['_parent'] = None
         return d
 
 
@@ -184,7 +184,7 @@ def _compose_gpindices(parent_gpindices, child_gpindices):
         assert(parent_gpindices.step is None),"No support for nontrivial step size yet"
         
         if isinstance(child_gpindices, slice):
-            return _slct.shfit( child_gpindices, start )
+            return _slct.shift( child_gpindices, start )
         else: # child_gpindices is an index array
             return child_gpindices + start # numpy "shift"
         

@@ -46,16 +46,16 @@ def get_max_gram_basis(gateLabels, dataset, maxLength=0):
         maxLength = max( [len(s) for s in datasetStrings] )
     possibleStrings = _construction.gen_all_gatestrings(gateLabels, (minLength+1)//2, maxLength//2)
 
-    def _have_all_data(strings,datasetStrs):
+    def _have_all_data(strings):
         for a in strings:
             for b in strings:
-                if tuple(list(a) + list(b)) not in datasetStrs:
+                if tuple(list(a) + list(b)) not in dataset:
                     return False
         return True
 
     max_string_set = [ ]
     for p in possibleStrings:
-        if _have_all_data(max_string_set + [p], datasetStrings):
+        if _have_all_data(max_string_set + [p]):
             max_string_set.append(p)
 
     return max_string_set

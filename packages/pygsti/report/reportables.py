@@ -386,37 +386,37 @@ Gatestring_eigenvalue_nonunitary_diamondnorm = _gsf.gatesetfn_factory(gatestring
 # init args == (gatesetA, gatesetB, gatestring)
 
 
-def povm_entanglement_infidelity(gatesetA, gatesetB):
+def povm_entanglement_infidelity(gatesetA, gatesetB, povmlbl):
     """ 
     POVM entanglement infidelity between `gatesetA` and `gatesetB`, equal to 
     `1 - entanglement_fidelity(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
     """
-    return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB)
+    return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB, povmlbl)
 POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
 
-def povm_jt_diff(gatesetA, gatesetB):
+def povm_jt_diff(gatesetA, gatesetB, povmlbl):
     """ 
     POVM Jamiolkowski trace distance between `gatesetA` and `gatesetB`, equal to
     `Jamiolkowski_trace_distance(POVM_MAP)` where `POVM_MAP` is the extension
     of the POVM from the classical space of k-outcomes to the space of
     (diagonal) k by k density matrices.
     """
-    return _tools.povm_jtracedist(gatesetA, gatesetB)
+    return _tools.povm_jtracedist(gatesetA, gatesetB, povmlbl)
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
 
 try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
 
-    def povm_half_diamond_norm(gatesetA, gatesetB):
+    def povm_half_diamond_norm(gatesetA, gatesetB, povmlbl):
         """ 
         Half the POVM diamond distance between `gatesetA` and `gatesetB`, equal
         to `half_diamond_dist(POVM_MAP)` where `POVM_MAP` is the extension
         of the POVM from the classical space of k-outcomes to the space of
         (diagonal) k by k density matrices.
         """
-        return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB)
+        return 0.5 * _tools.povm_diamonddist(gatesetA, gatesetB, povmlbl)
     POVM_half_diamond_norm = _gsf.povmfn_factory(povm_half_diamond_norm)
 except ImportError:
     povm_half_diamond_norm = None

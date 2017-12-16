@@ -65,6 +65,7 @@ class MatrixEvalTree(EvalTree):
         gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
         self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
         self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
+        self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
         self._compute_spamtuple_indices()
 
         #Evaluation dictionary:
@@ -124,8 +125,8 @@ class MatrixEvalTree(EvalTree):
             if L == 0:
                 iEmptyStr = evalDict.get( (), None)
                 assert(iEmptyStr is not None) # duplicate () final strs require
-                if k != iEmptyStr:
-                    assert(self[k] is None)       # the empty string to be included in the tree too!
+                if k != iEmptyStr:            # the empty string to be included in the tree too!
+                    assert(self[k] is None)       
                     self[k] = (iEmptyStr, iEmptyStr) # compute the duplicate () using by
                     self.eval_order.append(k)        #  multiplying by the empty string.
 
@@ -586,6 +587,7 @@ class MatrixEvalTree(EvalTree):
             subTree.parentIndexMap = parentIndices #parent index of *each* subtree index
             subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
+            subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
             
             final_el_startstops = []; i=0
             for spamTuples in parentTree.compiled_gatestring_spamTuples:

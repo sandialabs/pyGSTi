@@ -490,11 +490,11 @@ class Estimate(object):
         ds = self.get_effective_dataset()
         
         if obj == "chi2":
-            fitQty = _tools.chi2( ds, gs, gss.allstrs,
+            fitQty = _tools.chi2( gs, ds, gss.allstrs,
                                   minProbClipForWeighting=mpc,
                                   gateLabelAliases=gss.aliases)
         elif obj == "logl":
-            logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
             

@@ -1463,36 +1463,33 @@ class ColorBoxPlot(WorkspacePlot):
         addl_hover_info_fns = _collections.OrderedDict()
 
         # Begin "Additional sub-matrix" functions for adding more info to hover text
-        def _list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
-            mxs = mxs_with_leading_spam_dim
-            list_mx = _np.empty( (mxs.shape[1],mxs.shape[2]), dtype=_np.object)
-            for i in range(mxs.shape[1]):
-                for j in range(mxs.shape[2]):
-                    list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else (fmt % x) for x in mxs[:,i,j]])
+        def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
+            list_mx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
+            for i,j,_,elIndices,_ in plaq.iter_compiled():
+                list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else
+                                          (fmt%x) for x in elements[elIndices]])
             return list_mx
 
         def _addl_mx_fn_sl(plaq,x,y):
-            spamlabels = gateset.get_spam_labels()
             slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
-            slmx[:,:] = ", ".join(spamlabels)
+            for i,j,gstr,elIndices,outcomes in plaq.iter_compiled():
+                slmx[i,j] = ", ".join(list(map(str,outcomes)))
             return slmx
 
         def _addl_mx_fn_p(plaq,x,y):
-            spamlabels = gateset.get_spam_labels()
-            probMxs = _ph.probability_matrices( plaq, gateset, spamlabels,
+            probs = _ph.probability_matrices( plaq, gateset,
                                             probs_precomp_dict)
-            return _list_spam_dimension(probMxs, "%.5g")
+            return _separate_outcomes_matrix(plaq, probs, "%.5g")
 
         def _addl_mx_fn_f(plaq,x,y):
-            spamlabels = gateset.get_spam_labels()
-            plaq_ds = plaq.expand_aliases(dataset)
-            freqMxs = _ph.frequency_matrices( plaq_ds, dataset, spamlabels)
-            return _list_spam_dimension(freqMxs, "%.5g")
+            plaq_ds = plaq.expand_aliases(dataset, gatestring_compiler=gateset)
+            freqs = _ph.frequency_matrices( plaq_ds, dataset)
+            return _separate_outcomes_matrix(plaq, freqs, "%.5g")
 
         def _addl_mx_fn_cnt(plaq,x,y):
-            plaq_ds = plaq.expand_aliases(dataset)
-            cntMxs = _ph.total_count_matrix(plaq_ds, dataset)
-            return cntMxs
+            plaq_ds = plaq.expand_aliases(dataset, gatestring_compiler=gateset)
+            cnts = _ph.total_count_matrix(plaq_ds, dataset)
+            return _separate_outcomes_matrix(plaq, cnts, "%d")
 
             # Could do this to get counts for all spam labels
             #spamlabels = gateset.get_spam_labels()
@@ -1617,14 +1614,14 @@ class ColorBoxPlot(WorkspacePlot):
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,_mx_fn)
+                subMxs = _ph._computeSubMxs(gss,gateset,_mx_fn)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl,addl_mx_fn in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl] #ever useful?
                 else:
-                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn)
+                    addl_subMxs = _ph._computeSubMxs(gss,gateset,addl_mx_fn)
                 addl_hover_info[lbl] = addl_subMxs
 
                 

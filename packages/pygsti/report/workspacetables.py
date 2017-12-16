@@ -682,8 +682,8 @@ class SpamVsTargetTable(WorkspaceTable):
     
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
-        prepLabels   = gateset.get_prep_labels()
-        #effectLabels = gateset.get_effect_labels()
+        prepLabels = list(gateset.preps.keys())
+        povmLabels = list(gateset.povms.keys())
     
         colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist")
         formatters   = (None,'Conversion','Conversion','Conversion')
@@ -706,27 +706,20 @@ class SpamVsTargetTable(WorkspaceTable):
             table.addrow(rowData, formatters)
 
 
-        #OLD - when per-effect metrics were displayed
-        #formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        #effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
-        #                                                'effect'), confidenceRegionInfo)
-        #                    for l in effectLabels]
-        #effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
-        #                                                'effect'), confidenceRegionInfo)
-        #                    for l in effectLabels]
-        #for rowData in zip(effectLabels, confidenceRegionInfo, effectInfidelities,
-        #                   effectTraceDists):
-        #    table.addrow(rowData, formatters)
+        formatters = [ 'Normal' ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        povmInfidelities = [_ev(_reportables.POVM_entanglement_infidelity(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
+        povmTraceDists   = [_ev(_reportables.POVM_jt_fiff(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
+        povmDiamondDists = [_ev(_reportables.POVM_half_diamond_norm(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
 
-        formatters = [ None ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        povmInfidelity = _ev(_reportables.POVM_entanglement_infidelity(
-            gateset, targetGateset), confidenceRegionInfo)                 
-        povmTraceDist = _ev(_reportables.POVM_jt_diff(
-            gateset, targetGateset), confidenceRegionInfo) 
-        povmDiamondDist = _ev(_reportables.POVM_half_diamond_norm(
-            gateset, targetGateset), confidenceRegionInfo)
-        table.addrow(['POVM', povmInfidelity, povmTraceDist, povmDiamondDist],
-                     formatters)
+        for rowData in zip(povmLabels, povmInfidelities, povmTraceDists,
+                           povmDiamondDists):
+            table.addrow(rowData, formatters)
     
         table.finish()
         return table

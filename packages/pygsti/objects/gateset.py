@@ -291,12 +291,12 @@ class GateSet(object):
         """
         Construct the SPAM gate associated with
         a given spam label.
-
+    
         Parameters
         ----------
         spamLabel : str
            the spam label to construct a "spam gate" for.
-
+    
         Returns
         -------
         numpy array
@@ -1006,60 +1006,202 @@ class GateSet(object):
         return self._calcClass(self._dim, compiled_gates, self.preps,
                                compiled_effects, self._paramvec)
 
-    def compile_gatestring(self, gatestring,running_raw_dict=None):
+    def split_gatestring(gatestring, erroron=('prep','povm')):
+        """
+        Splits a gate string into prepLabel + gatesOnlyString + povmLabel
+        components.  If `gatestring` does not contain a prep label or a
+        povm label a default label is returned if one exists.
+        
+        Parameters
+        ----------
+        gatestring : GateString
+            A gate string, possibly beginning with a state preparation
+            label and ending with a povm label.
+
+        erroron : tuple of {'prep','povm'}
+            A ValueError is raised if a preparation or povm label cannot be
+            resolved when 'prep' or 'povm' is included in 'erroron'.  Otherwise
+            `None` is returned in place of unresolvable labels.
+
+        Returns
+        -------
+        prepLabel : str or None
+        gatesOnlyString : GateString
+        povmLabel : str or None
+        """
+        if len(gatestring) > 0 and gatestring[0] in self.preps:
+            prep_lbl = gatestring[0]
+            gatestring = gatestring[1:]
+        elif len(self.preps) == 1:
+            prep_lbl = list(self.preps.keys())[0]
+        else:
+            if 'prep' in erroron:
+                raise ValueError("Cannot resolve state prep in %s" % gatestring)
+            else: prep_lbl = None
+            
+        if len(gatestring) > 0 and gatestring[-1] in self.povms:
+            povm_lbl = gatestring[-1]
+            gatestring = gatestring[:-1]
+        elif len(self.povms) == 1:
+            povm_lbl = list(self.povms.keys())[0]
+        else:
+            if 'povm' in erroron:
+                raise ValueError("Cannot resolve POVM in %s" % gatestring)
+            else: povm_lbl = None
+            
+        return prep_lbl, gatestring, povm_lbl
+
+    
+    def compile_gatestrings(self, gatestrings):
         """ 
         Returns an OrderedDict with:
             keys = raw gate sequences (containing just "compiled" gates)
             values = lists of (preplbl, effectlbl) tuples.
         """
-        gstr = gatestring
+        # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
+        # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
+        # compile all gsplaq strs -> elementIndices[(i,j)], 
 
-        #SPAM
-        if len(gstr) > 0 and gstr[0] in self.preps:
-            prep_lbl = gstr[0]
-            gstr = gstr[1:]
-        elif len(self.preps) == 1:
-            prep_lbl = list(self.preps.keys())[0]
-        else:
-            raise ValueError("Cannot compile %s: cannot resolve state prep")
-            
-        if len(gstr) > 0 and gstr[-1] in self.povms:
-            povm_lbl = gstr[-1]
-            gstr = gstr[:-1]
-        elif len(self.povms) == 1:
-            povm_lbl = list(self.povms.keys())[0]
-        else:
-            raise ValueError("Cannot compile %s: cannot resolve POVM")
+        #Indexed by raw gate string
+        raw_spamTuples_dict = _collections.OrderedDict()  # final
+        raw_gateOutcomes_dict = _collections.OrderedDict()
+        raw_offsets = _collections.OrderedDict()
 
-        spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
-                     for ebl in self.povms[povm_lbl]]
+        #Indexed by parent index (an integer)
+        elIndicesByParent = _collections.OrderedDict() # final
+        outcomesByParent = _collections.OrderedDict()  # final
 
-        #Gates
-        raw_strs = _collections.OrderedDict() if (running_raw_dict is None) \
-                   else running_raw_dict
-        
-        def add_raw(s,start):
+        # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
+        spamTupleToOutcome = _collections.OrderedDict()
+        for prep_lbl in self.preps:
+            for povm_lbl in self.povms:
+                for elbl in self.povms[povm_lbl]:
+                    spamToOutcomeTuple[ (prep_lbl, povm_lbl + "_" + elbl) ] = (elbl,)
+
+        def resolveSPAM(gatestring):
+            """ Determines spam tuples that correspond to gatestring
+                and strips any spam-related pieces off """
+            prep_lbl, gatestring, povm_lbl = \
+                self.split_gatestring(gatestring)
+            spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
+                         for elbl in self.povms[povm_lbl]]
+            return gatestring, spamtups
+                    
+        def process(action,s,spamtuples,iParent=None,gate_outcomes=(),start=0):
+            """ 
+            Implements recursive processing of a string. Separately
+            implements two different behaviors:
+              "add" : add entries to raw_spamTuples_dict and raw_gateOutcomes_dict
+              "index" : adds entries to elIndicesByParent and outcomesByParent
+                        assuming that raw_spamTuples_dict and raw_gateOutcomes_dict
+                        are already build (and won't be modified anymore).
+            """
             for i,gate_label in enumerate(s[start:],start=start):
                 if gate_label in self.instruments:
+                    #we've found an instrument - recurse!
                     for inst_el_lbl in self.instruments[gate_label]:
                         compiled_el_lbl = gate_label + "_" + inst_el_lbl
-                        add_raw( s[0:i] + (compiled_el_lbl,) + s[i+1:], i+1)
+                        process(action, s[0:i] + (compiled_el_lbl,) + s[i+1:],
+                                spamtuples, iParent, gate_outcomes + (inst_el_lbl,), i+1)
                     break
             else: #no instruments -- add "raw" gate string s
-                if s in raw_strs:
-                    raw_strs[s] = _lt.remove_duplicates(raw_strs[s] + spamtups)
+                if s in raw_spamTuples_dict:
+                    assert(gate_outcomes == raw_gateOutcomes_dict[s])
+                    if action == "add":
+                        raw_spamTuples_dict[s] = _lt.remove_duplicates(raw_spamTuples_dict[s] + spamtuples)
+                        # Note: there should only be duplicates if there are duplicates in
+                        # original `gatestring_list` - check this?
+                    elif action == "index":  # fill *ByParent dicts
+                        assert(iParent is not None)
+                        offset = raw_offsets[s]
+                        all_spamtuples = raw_spamTuples_dict[s]
+                        final_outcomes = [ spamToOutcomeTuple[x] for x in spamtuples ]
+                        my_spamTuple_indices = [ off+all_spamtuples.index(x) for x in spamtuples ]
+                        my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
+                        for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
+                            if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
+                                elIndicesByParent[iParent].append(i)
+                                outcomesByParent[iParent].append(tup)
+                            else: assert(tup in outcomesByParent) # double-check - could REMOVE for speed in future
                 else:
-                    raw_strs[s] = spamtups
+                    assert(action == "add") # s should have been added in "add" process!
+                    raw_spamTuples_dict[s] = spamTuples
+                    raw_gateOutcomes_dict[s] = gate_outcomes
 
-        add_raw(gstr,0) #recursively populates raw_strs
-        return raw_strs
+        #Begin actual processing work:
+
+        # Step1: recursively populate raw_spamTuples_dict and
+        #        raw_gateOutcomes_dict
+        for gstr in gatestrings:
+            gstr, spamtuples = resolveSPAM(gstr)
+            process("add",gstr,spamtuples)  
+
+        # Step2: fill raw_offsets dictionary
+        off = 0 
+        for raw_str, spamtuples in raw_spamTuples_dict.items():
+            raw_offsets[raw_str] = off; off += len(spamtuples)
+        nTotElements = off
+
+        # Step3: 2nd round... recursively gather per-parent indices
+        for k,gstr in enumerate(gatestrings):
+            gstr, spamtuples = resolveSPAM(gstr)
+            process("index",gstr,spamtuples,k)
+
+        #Step4: change lists -> index arrays for user convenience
+        elIndicesByParent = _collections.OrderedDict(
+            [k,_np.array(v,'i') for k,v in elIndicesByParent.items()] )
+
+        #DEBUG: SANITY CHECK
+        if len(gatestrings) > 1:
+            for k,gstr in enumerate(gatestrings):
+                _,outcomes_k,nTot_k = self.compile_gatestring(gstr)
+                assert(nTot_k == len(elIndicesByParent[k]))
+                assert(outcomes_k[0] == outcomesByParent[k])
+            
+        return (raw_spamTuples_dict, elIndicesByParent,
+                outcomesByParent, nTotElements)
+    
+
+    def compile_gatestring(self, gatestring):
+        """ 
+        Returns an OrderedDict with:
+            keys = raw gate sequences (containing just "compiled" gates)
+            values = lists of (preplbl, effectlbl) tuples.
+        """
+        raw_dict,_,outcomes,nEls = compile_gatestrings([gatestring])
+        assert(len(outcomes[0]) == nEls)
+        return raw_dict,outcomes[0]
 
 
-    def compile_gatestrings(self, gatestring_list):
-        ret = _collections.OrderedDict()
-        for gstr in gatestring_list:
-            self.compile_gatestring(gstr, ret)
-        return ret
+    #OLD
+    #def compile_gatestrings(self, gatestring_list, return_lookup=False):
+    #    ret = _collections.OrderedDict()
+    #    for i,gstr in enumerate(gatestring_list):
+    #        self.compile_gatestring(gstr, ret, i if return_lookup else None)
+    #        
+    #    if return_lookup:
+    #        # return a dict of final-element index-arrays, indexed by
+    #        # `gatestring_list` index.  Spamtuples have been marked with
+    #        # parent indices, so we need to remove these markers as we
+    #        # process the final dictionary.
+    #        lookup = _collections.OrderedDict(
+    #            [ i:[] for i in range(len(gatestring_list))] )
+    #
+    #        iEl = 0
+    #        for raw_str, spamTuples in ret.items():
+    #            unmarked_spamTuples = []
+    #            for iParent,rhoLbl,ELbl in spamTuples:
+    #                lookup[iParent].append(iEl); iEl += 1
+    #                unmarked_spamTuples.append( (rhoLbl,ELbl) )
+    #            ret[raw_str][:] = unmarked_spamTuples # [:] is essential so doesn't assign new odict item
+    #
+    #        #convert lists -> integer arrays (for user convenience)
+    #        lookup = _collections.OrderedDict( 
+    #            [ (i,_np.array(v,'i')) for i,v in lookup.items()])
+    #        
+    #        return ret, lookup
+    #    else:
+    #        return ret
 
 
     def product(self, gatestring, bScale=False):
@@ -1471,7 +1613,7 @@ class GateSet(object):
                 if ng not in evt_cache:
                     evt_cache[ng] = self.bulk_evaltree(
                         gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
-                cacheSize = max([len(s) for s in evt_cache[ng].get_sub_trees()])
+                cacheSize = max([len(s) for s in evt_cache[ng][0].get_sub_trees()])
             else:
                 #heuristic (but fast)
                 cacheSize = int( 1.3 * len(gatestring_list) / ng )
@@ -1604,7 +1746,8 @@ class GateSet(object):
 
         # Retrieve final EvalTree (already computed from estimates above)
         assert (ng in evt_cache), "Tree Caching Error"
-        evt = evt_cache[ng]; evt.distribution['numSubtreeComms'] = Ng
+        evt,lookup,outcome_lookup = evt_cache[ng]
+        evt.distribution['numSubtreeComms'] = Ng
 
         paramBlkSize1 = num_params / np1
         paramBlkSize2 = num_params / np2   #the *average* param block size
@@ -1645,7 +1788,7 @@ class GateSet(object):
                 assert(abs(blkSizeTest-paramBlkSize2) < 1e-3) 
                   #all procs should have *same* paramBlkSize2
 
-        return evt, paramBlkSize1, paramBlkSize2
+        return evt, paramBlkSize1, paramBlkSize2, lookup, outcome_lookup
 
 
 
@@ -1685,8 +1828,17 @@ class GateSet(object):
         """
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
+
+        compiled_gate_labels = list(self.gates.keys())
+        for inst_lbl,inst in self.instruments.items():
+            compiled_gate_labels.extend(list(inst.compile_gates(inst_lbl).keys()))
+
+        compiled_gatestrings, lookup, outcome_lookup, nEls = \
+                            self.compile_gatestrings(gatestring_list)
+            
         evalTree = self._calc().construct_evaltree()
-        evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
+        evalTree.initialize([""] + compiled_gate_labels,
+                            compiled_gatestrings, numSubtreeComms)
 
         printer.log("bulk_evaltree: created initial tree (%d strs) in %.0fs" %
                     (len(gatestring_list),_time.time()-tm)); tm = _time.time()
@@ -1706,7 +1858,9 @@ class GateSet(object):
         if maxTreeSize is not None or minSubtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 
                         % (len(evalTree.get_sub_trees()),_time.time()-tm))
-        return evalTree
+
+        assert(evalTree.num_final_elements() == nEls)
+        return evalTree, lookup, outcome_lookup
 
 
     def bulk_product(self, evalTree, bScale=False, comm=None):
@@ -2224,8 +2378,7 @@ class GateSet(object):
                                         wrtBlockSize1, wrtBlockSize2)
 
 
-    def bulk_fill_probs(self, mxToFill, spam_label_rows,
-                       evalTree, clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         """
         Identical to bulk_probs(...) except results are
         placed into rows of a pre-allocated array instead
@@ -2269,12 +2422,11 @@ class GateSet(object):
         -------
         None
         """
-        return self._calc().bulk_fill_probs(mxToFill, spam_label_rows,
+        return self._calc().bulk_fill_probs(mxToFill, 
                                             evalTree, clipTo, check, comm)
 
 
-    def bulk_fill_dprobs(self, mxToFill, spam_label_rows,
-                         evalTree, prMxToFill=None,clipTo=None,
+    def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
                          check=False,comm=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
 
@@ -2346,14 +2498,14 @@ class GateSet(object):
         -------
         None
         """
-        return self._calc().bulk_fill_dprobs(mxToFill, spam_label_rows,
+        return self._calc().bulk_fill_dprobs(mxToFill,
                                              evalTree, prMxToFill, clipTo,
                                              check, comm, None, wrtBlockSize,
                                              profiler, gatherMemLimit)
 
 
-    def bulk_fill_hprobs(self, mxToFill, spam_label_rows,
-                         evalTree=None, prMxToFill=None, derivMxToFill=None,
+    def bulk_fill_hprobs(self, mxToFill, evalTree=None,
+                         prMxToFill=None, derivMxToFill=None,
                          clipTo=None, check=False, comm=None, 
                          wrtBlockSize1=None, wrtBlockSize2=None,
                          gatherMemLimit=None):
@@ -2431,13 +2583,13 @@ class GateSet(object):
         -------
         None
         """
-        return self._calc().bulk_fill_hprobs(mxToFill, spam_label_rows,
+        return self._calc().bulk_fill_hprobs(mxToFill,
                                      evalTree, prMxToFill, derivMxToFill, None,
                                      clipTo, check, comm, None, None,
                                      wrtBlockSize1,wrtBlockSize2,gatherMemLimit)
 
 
-    def bulk_hprobs_by_block(self, spam_label_rows, evalTree, wrtSlicesList,
+    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
                               bReturnDProbs12=False, comm=None):
         """
         Constructs a generator that computes the 2nd derivatives of the
@@ -2506,7 +2658,7 @@ class GateSet(object):
           - `dprobs12 == dp[:,:,rowSlice,None] * dp[:,:,None,colSlice]`
         """
         return self._calc().bulk_hprobs_by_block(
-            spam_label_rows, evalTree, wrtSlicesList,
+             evalTree, wrtSlicesList,
             bReturnDProbs12, comm)
             
 
@@ -3057,7 +3209,6 @@ class GateSet(object):
                               self.instruments._prefix)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how increase is being done?
-        new_gateset.spamdefs.update( self.spamdefs )
 
         addedDim = newDimension-curDim
         vec_zeroPad = _np.zeros( (addedDim,1), 'd')
@@ -3122,7 +3273,6 @@ class GateSet(object):
                               self.gates._prefix)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
-        new_gateset.spamdefs.update( self.spamdefs )
 
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl,rhoVec in self.preps.items():

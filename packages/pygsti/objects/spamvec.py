@@ -819,7 +819,18 @@ class TPParameterizedSPAMVec(SPAMVec):
     # alpha = 1/sqrt(d) to obtain a trace-1 matrix, i.e., finding alpha
     # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 =>
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
+    def __setstate__(self, state):
+        print("SETSTATE!!!")
+        print(state)
+        self.__dict__.update(state)
+    def __getstate__(self):
+        print("GETSTATE!!!")
+        d = self.__dict__.copy()
+        d['_parent'] = None
+        print(d)
+        return d
 
+    
     def __init__(self, vec):
         """
         Initialize a TPParameterizedSPAMVec object.
@@ -830,6 +841,7 @@ class TPParameterizedSPAMVec(SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
+        print("DB: INIT TP spamvec")
         vector = SPAMVec.convert_to_vector(vec)
         firstEl =  len(vector)**-0.25
         if not _np.isclose(vector[0,0], firstEl):

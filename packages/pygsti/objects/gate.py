@@ -3426,8 +3426,9 @@ class TPInstrumentGate(GateMatrix):
         self.dependents = [0,index+1] if index < len(param_gates)-1 \
                           else list(range(len(param_gates)))
           #indices into self.param_gates of the gates this gate depends on
-        self.set_gpindices(_np.concatenate( [ param_gates[i].gpindices_as_array()
-                                              for i in self.dependents ], axis=0),
+        self.set_gpindices(_slct.list_to_slice(
+            _np.concatenate( [ param_gates[i].gpindices_as_array()
+                               for i in self.dependents ], axis=0),True,False),
                            param_gates[0].parent) #use parent of first param gate
                                                   # (they should all be the same)
 

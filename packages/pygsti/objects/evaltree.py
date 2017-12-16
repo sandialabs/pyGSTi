@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from ..tools import mpitools as _mpit
+from ..tools import slicetools as _slct
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 import numpy as _np
@@ -54,6 +55,7 @@ class EvalTree(list):
 
         # a list of spamTuple-lists, one for each final gate string
         self.compiled_gatestring_spamTuples = None
+        self.finalStringToElsMap = None
 
         # a dictionary of final-gate-string index lists keyed by 
         # each distinct spamTuple
@@ -125,6 +127,7 @@ class EvalTree(list):
         newTree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
         newTree.compiled_gatestring_spamTuples = self.compiled_gatestring_spamTuples[:]
+        newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
 
@@ -549,6 +552,7 @@ class EvalTree(list):
                     for iCur in parentIndexRevPerm ]
         self.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[iCur]
                                                 for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
+        self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
         self._compute_spamtuple_indices()
         assert(self.myFinalToParentFinalMap is None)
         assert(self.parentIndexMap is None)
@@ -628,26 +632,26 @@ class EvalTree(list):
                 spamtuple_indices[spamTuple][1].append(i)
             el_off += len(spamTuples)
 
-        #convert lists to integer arrays or slices
-        def list_to_slicer(lst):
-            if len(lst) == 0: return slice(0,0)
-            start=lst[0]
-            if len(lst) == 1: return slice(start,start+1)
-            step=lst[1]-lst[0]; stop = start + step*len(lst)
-            for i,expected in zip(lst,range(start,stop,step)):
-                if i != expected: #doesn't match slice
-                    return _np.array(lst,'i')
-                
-            #matched range(start,stop,step)!
-            if (start,stop,step) == \
-               (0,len(self.compiled_gatestring_spamTuples),1):
-                return slice(None,None) #entire range
+        def to_slice(x):
+            s = _slct.list_to_slice(x,array_ok=True,contiguous=False)
+            if isinstance(s, slice) and (s.start,s.stop,s.step) == \
+               (0,len(self.compiled_gatestring_spamTuples),None):
+                return slice(None,None) #check for entire range
             else:
-                return slice(start,stop,step) 
+                return s
 
         self.spamtuple_indices = _collections.OrderedDict(
-            [ (spamTuple, (list_to_slicer(fInds), list_to_slicer(gInds)))
+            [ (spamTuple, (to_slice(fInds), to_slice(gInds)))
               for spamTuple,(fInds,gInds) in spamtuple_indices.items() ] )
+
+    def _compute_finalStringToEls(self):
+        #Create a mapping from each final gate string (index) to
+        # a slice of final element indices
+        self.finalStringToElsMap = []; i=0
+        for k,spamTuples in enumerate(self.compiled_gatestring_spamTuples):
+            self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
+            i += len(spamTuples)
+
 
         
 

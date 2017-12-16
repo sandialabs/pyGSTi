@@ -68,13 +68,14 @@ class GateMatrixCalc(GateCalc):
         super(GateMatrixCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
-        
-    def _make_spamgate(self, spamlabel):
-        prepLabel,effectLabel = self.spamdefs[spamlabel]
-        if prepLabel == "remainder":  return None
 
-        rho,E = self.preps[prepLabel], self.effects[effectLabel]
-        return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
+    #OLD
+    #def _make_spamgate(self, spamlabel):
+    #    prepLabel,effectLabel = self.spamdefs[spamlabel]
+    #    if prepLabel == "remainder":  return None
+    #
+    #    rho,E = self.preps[prepLabel], self.effects[effectLabel]
+    #    return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
 
 
     def product(self, gatestring, bScale=False):
@@ -1036,7 +1037,7 @@ class GateMatrixCalc(GateCalc):
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
-        nspam = len(self.spamdefs)
+        nspam = int(round(_np.sqrt(self.dim))) #an estimate - could compute?
         wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
 
@@ -2457,7 +2458,7 @@ class GateMatrixCalc(GateCalc):
           - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
         assert(not evalTree.is_split())
-        nGateStrings = evalTree.num_final_strings()
+        nElements = evalTree.num_final_elements()
 
         #Fill product cache info (not distributed)
         prodCache, scaleCache = self._compute_product_cache(evalTree, comm)
@@ -2521,12 +2522,12 @@ class GateMatrixCalc(GateCalc):
             hGs = evalTree.final_view(hProdCache, axis=0)
                 
             if bReturnDProbs12:
-                dprobs1 = _np.zeros( (len(spam_label_rows),nGateStrings,_slct.length(wrtSlice1)), 'd' )
-                dprobs2 = _np.zeros( (len(spam_label_rows),nGateStrings,_slct.length(wrtSlice2)), 'd' )
+                dprobs1 = _np.zeros( (nElements,_slct.length(wrtSlice1)), 'd' )
+                dprobs2 = _np.zeros( (nElements,_slct.length(wrtSlice2)), 'd' )
             else:
                 dprobs1 = dprobs2 = None            
-            hprobs = _np.zeros( (len(spam_label_rows),nGateStrings,
-                                 _slct.length(wrtSlice1),_slct.length(wrtSlice2)), 'd' )
+            hprobs = _np.zeros( (nElements, _slct.length(wrtSlice1),
+                                 _slct.length(wrtSlice2)), 'd' )
 
             prMxToFill = None
             deriv1MxToFill = dprobs1
@@ -2538,7 +2539,7 @@ class GateMatrixCalc(GateCalc):
                                     slice(None), slice(None), calc_and_fill)
             hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
             if bReturnDProbs12:
-                dprobs12 = dprobs1[:,:,:,None] * dprobs2[:,:,None,:] # (K,M,N,1) * (K,M,1,N') = (K,M,N,N')
+                dprobs12 = dprobs1[:,:,None] * dprobs2[:,None,:] # (KM,N,1) * (KM,1,N') = (KM,N,N')
                 yield wrtSlice1, wrtSlice2, hprobs, dprobs12
             else:
                 yield wrtSlice1, wrtSlice2, hprobs

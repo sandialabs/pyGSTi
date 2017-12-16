@@ -88,7 +88,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
         self.default_param = default_param  # "TP", "full", or "static"
         self.typ = typ
-        
+
+        print("DB: ORDERED MEMBER DICT INIT: ", [l+str(type(x)) for l,x in items])
         PrefixOrderedDict.__init__(self, prefix, items)
         _gm.GateSetChild.__init__(self, parent) # set's self.parent
 
@@ -102,6 +103,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
     def _check_dim(self, obj):
         if isinstance(obj, _gm.GateSetMember):
+            print("DB type = ",type(obj))
             dim = obj.dim
         elif self.typ == "spamvec":
             dim = len(obj)
@@ -201,6 +203,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
+        print("DB: ORDERED MEMBER DICT REDUCE")
         return (OrderedMemberDict,
                 (None, self.default_param, self._prefix, self.typ, list(self.items())), None)
 

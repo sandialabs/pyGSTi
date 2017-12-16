@@ -229,13 +229,13 @@ class ConfidenceRegionFactory(object):
                                           comm=comm, memLimit=memLimit, verbosity=vb,
                                           gateLabelAliases=aliases)
 
-            nonMarkRadiusSq = max( 2*(_tools.logl_max(dataset)
+            nonMarkRadiusSq = max( 2*(_tools.logl_max(gateset, dataset)
                                       - _tools.logl(gateset, dataset,
                                                     gateLabelAliases=aliases)) \
                                    - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS )
 
         elif obj == 'chi2':
-            chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
+            chi2, hessian = _tools.chi2(gateset, dataset, gatestring_list,
                                 False, True, minProbClipForWeighting,
                                 probClipInterval, memLimit=memLimit,
                                 gateLabelAliases=aliases)
@@ -529,7 +529,7 @@ class ConfidenceRegionFactory(object):
         crfv = sub_crf.view(level)
         spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
                                          for sl in _itertools.chain(iter(gateset.preps),
-                                                                    iter(gateset.effects))] )
+                                                                    iter(gateset.povms))] )
         spam_intrinsic_err = _np.sqrt( _np.mean(spamCIs**2) )
     
         ratio = gate_intrinsic_err / spam_intrinsic_err
@@ -547,7 +547,7 @@ class ConfidenceRegionFactory(object):
                                              for gl in gateset.gates] )
             spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
                                              for sl in _itertools.chain(iter(gateset.preps),
-                                                                        iter(gateset.effects))] )
+                                                                        iter(gateset.povms))] )
             gate_err = _np.sqrt( _np.mean(gateCIs**2) )
             spam_err = _np.sqrt( _np.mean(spamCIs**2) )
             printer.log('Resulting intrinsic errors: %g (gates), %g (spam)' %
@@ -742,8 +742,8 @@ class ConfidenceRegionFactoryView(object):
         elif label in self.gateset.preps:
             return self.profLCI[self.gateset.preps[label].gpindices]
 
-        elif label in self.gateset.effects:
-            return self.profLCI[self.gateset.effects[label].gpindices]
+        elif label in self.gateset.povms:
+            return self.profLCI[self.gateset.povms[label].gpindices]
 
         else:
             raise ValueError(("Invalid item label (%s) for computing" % label)
@@ -799,8 +799,8 @@ class ConfidenceRegionFactoryView(object):
         if 'all' in fn_dependencies:
             fn_dependencies = ['all'] #no need to do anything else
         if 'spam' in fn_dependencies:
-            fn_dependencies = ["prep:%s"%l for l in self.gateset.get_prep_labels()] + \
-                              ["effect:%s"%l for l in self.gateset.get_effect_labels()]
+            fn_dependencies = ["prep:%s"%l for l in self.gateset.preps.keys()] + \
+                              ["povm:%s"%l for l in self.gateset.povms.keys()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
@@ -815,7 +815,8 @@ class ConfidenceRegionFactoryView(object):
                 typ,lbl = dependency.split(":")
                 if typ == "gate":     gatesetObj = gs.gates[lbl]
                 elif typ == "prep":   gatesetObj = gs.preps[lbl]
-                elif typ == "effect": gatesetObj = gs.effects[lbl]
+                elif typ == "povm":   gatesetObj = gs.povms[lbl]
+                elif typ == "instrument": gatesetObj = gs.instruments[lbl]
                 else: raise ValueError("Invalid dependency type: %s" % typ)
                 all_gpindices.extend( gatesetObj.gpindices_as_array() )
 

@@ -44,7 +44,12 @@ class GatestringPlaquette(object):
         self.elements = elements
         self.aliases = aliases
 
-    def expand_aliases(self, dsFilter=None):
+        #After compiling:
+        self._elementIndicesByStr = None
+        self._outcomesByStr = None
+        self.num_compiled_elements = None
+
+    def expand_aliases(self, dsFilter=None, gatestring_compiler=None):
         """
         Returns a new GatestringPlaquette with any aliases
         expanded (within the gate strings).  Optionally keeps only
@@ -54,6 +59,10 @@ class GatestringPlaquette(object):
         ----------
         dsFilter : DataSet, optional
             If not None, keep only strings that are in this data set.
+
+        gatestring_compiler : GateSet, optional
+            Whether to call `compile_gatestrings(gatestring_compiler)`
+            on the new GatestringPlaquette.
 
         Returns
         -------
@@ -68,9 +77,37 @@ class GatestringPlaquette(object):
             if dsFilter is None or s2 in dsFilter:
                 new_elements.append((i,j,s2))
             
-        return GatestringPlaquette(self.base, self.rows, self.cols,
+        ret = GatestringPlaquette(self.base, self.rows, self.cols,
                                    new_elements, None)
-        
+        if gatestring_compiler is not None:
+            ret.compile_gatestrings(gatestring_compiler)
+        return ret
+
+    def get_all_strs(self):
+        """Return a list of all the gate strings contained in this plaquette"""
+        return [s for i,j,s in self.elements]
+
+    def compile_gatestrings(self, gateset):
+        """
+        Compiles this plaquette so that the `num_compiled_elements` property and
+        the `iter_compiled()` method may be used.
+
+        Parameters
+        ----------
+        gateset : GateSet
+            The gate set used to perform the compiling.
+        """
+        all_strs = self.get_all_strs()
+        _, self._elementIndicesByStr, self._outcomesByStr, nEls = \
+            gateset.compile_gatestrings(all_strs)
+        self.num_compiled_elements = nEls
+
+    def iter_compiled(self):
+        assert(self.num_compiled_elements is not None), \
+            "Plaquette must be compiled first!"
+        for k,(i,j,s) in enumerate(self.elements):
+            yield i,j,s,self._elementIndicesByStr[k],self._outcomesByStr[k]
+            
     def __iter__(self):
         for i,j,s in self.elements:
             yield i,j,s
@@ -175,8 +212,23 @@ class GatestringStructure(object):
                 if p is not None and p.base is not None:
                     baseStrs.add(p.base)
         return list(baseStrs)
-        
 
+    def compile_plaquettes(self, gateset):
+        """
+        Compiles all the plaquettes in this structure so that their
+        `num_compiled_elements` property and the `iter_compiled()` methods
+        may be used.
+
+        Parameters
+        ----------
+        gateset : GateSet
+            The gate set used to perform the compiling.
+        """
+        for x in self.xvals():
+            for y in self.yvals():
+                p = self.get_plaquette(x,y)
+                if p is not None:
+                    p.compile_gatestrings(gateset) 
 
     
 

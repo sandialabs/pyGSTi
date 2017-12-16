@@ -300,7 +300,7 @@ def povmfn_factory(fn):
             """
             self.args = args
             self.kwargs = kwargs
-            dps = ["effect:%s"%l for l in gateset.get_effect_labels()]
+            dps = ["povm:%s"%l for l in gateset.povms]
             GateSetFunction.__init__(self, gateset, dps)
             
         def evaluate(self, gateset):

@@ -1196,13 +1196,13 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
             
             # Get by-sequence goodness of fit
             if objective == "chi2":
-                fitQty = _tools.chi2_terms(ds, gs_lsgst_list[-1], rawLists[-1],
+                fitQty = _tools.chi2_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
                                            advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                            False, False, memLimit,
                                            advancedOptions.get('gateLabelAliases',None))
             else:
-                maxLogL = _tools.logl_max_terms(ds, rawLists[-1],
+                maxLogL = _tools.logl_max_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                                 gateLabelAliases=advancedOptions.get(
                                                     'gateLabelAliases',None))
                 
@@ -1212,6 +1212,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                          advancedOptions.get('radius',1e-4),
                                          gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
                 fitQty = 2*(maxLogL - logL)
+            assert(False) # TODO: sum over indices as per lookup[i] now...
             fitQty = _np.sum(fitQty, axis=0) # sum over spam labels to get just "by-sequence"
 
             expected = (len(ds.get_spam_labels())-1) # == "k"

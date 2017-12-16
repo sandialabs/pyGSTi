@@ -765,15 +765,16 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
     Returns
     -------
     numpy array
-        An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
+        An array of shape (num_compiled_gate_strings, gate_dim^2, num_gateset_params)
     """
-    evalTree = gateset.bulk_evaltree(gatestrings)
+    evalTree,_,_ = gateset.bulk_evaltree(gatestrings)
     dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True, comm=comm)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
 
-    ret = _np.empty((len(gatestrings), fd, dProds.shape[1]), 'complex')
-    for i in range(len(gatestrings)):
+    nCompiledStrs = evalTree.num_final_strings()
+    ret = _np.empty(nCompiledStrs, fd, dProds.shape[1]), 'complex')
+    for i in range(nCompiledStrs):
 
         # flattened_gate_dim x flattened_gate_dim
         twirler = _SuperOpForPerfectTwirl(prods[i], eps)
@@ -782,6 +783,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
         ret[i] = _np.dot(twirler, dProds[i*fd:(i+1)*fd])
 
     if check:
+        raise NotImplementedError("Need to update check to handle compiled gatestrings")
         for i, gatestring in enumerate(gatestrings):
             chk_ret = twirled_deriv(gateset, gatestring, eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
@@ -790,7 +792,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
                                % (_nla.norm(ret[i]), _nla.norm(chk_ret),
                                   _nla.norm(ret[i] - chk_ret)))
 
-    return ret # nGateStrings x flattened_gate_dim x vec_gateset_dim
+    return ret # nCompiledGateStrings x flattened_gate_dim x vec_gateset_dim
 
 
 
@@ -834,20 +836,25 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
 
     nGerms = len(germsToTest)
     germToPowL = [germ*L for germ in germsToTest]
+    compiledGerms = gateset.compile_gatestrings(germsToTest)
 
     gate_dim = gateset.get_dimension()
-    evt = gateset.bulk_evaltree(germToPowL)
+    evt,_,_ = gateset.bulk_evaltree(germToPowL)
+    nCompiledGerms = evt.num_final_strings()
+    assert(nCompiledGerms == len(compiledGerms))
 
     # shape (nGerms*flattened_gate_dim, vec_gateset_dim)
     dprods = gateset.bulk_dproduct(evt, flat=True)
 
-    # shape (nGerms, flattened_gate_dim, vec_gateset_dim
-    dprods = _np.reshape(dprods, (nGerms, gate_dim**2, dprods.shape[1]))
-
-    germLengths = _np.array([len(germ) for germ in germsToTest], 'd')
+    # shape (nCompiledGerms, flattened_gate_dim, vec_gateset_dim
+    dprods = _np.reshape(dprods, (nCompiledGerms, gate_dim**2, dprods.shape[1]))
+    
+    germLengths = _np.array([len(germ) for germ in compiledGerms], 'd')
 
     normalizedDeriv = dprods / (L * germLengths[:, None, None])
 
+    #TODO: weights needs to be converted to compiledWeights
+    assert(len(weights) == nCompiledGerms) #may be an issue with needing to "compile" weights
     sortedEigenvals = sq_sing_vals_from_deriv(normalizedDeriv, weights)
 
     nGaugeParams = gateset.num_gauge_params()

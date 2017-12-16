@@ -510,18 +510,31 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     pass #added in special case above to match normalization in frobeniusdist
         
                 elif spamMetric == "fidelity":
-                    for spamlabel in gs.get_spam_labels():
-                        wt = itemWeights.get(spamlabel, spamWeight)
-                        ret += wt * (1.0 - _tools.process_fidelity(
-                                targetGateset.get_spamgate(spamlabel),
-                                gs.get_spamgate(spamlabel)))**2
+                    for preplabel,prep in gs.preps.items():
+                        wt = itemWeights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx2 = _tools.vec_to_stdmx(
+                            targetGateset.preps[preplabel], mxBasis)
+                        ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
+
+                    for povmlabel,povm in gs.povms.items():
+                        wt = itemWeights.get(povmlabel, spamWeight)
+                        ret += wt * (1.0 - _tools.povm_fidelity(
+                            gs, targetGateset, povmlabel))**2
+
         
                 elif spamMetric == "tracedist":
-                    for spamlabel in gs.get_spam_labels():
-                        wt = itemWeights.get(spamlabel, spamWeight)
-                        ret += wt * _tools.jtracedist(
-                            targetGateset.get_spamgate(spamlabel),
-                            gs.get_spamgate(spamlabel))
+                    for preplabel,prep in gs.preps.items():
+                        wt = itemWeights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx2 = _tools.vec_to_stdmx(
+                            targetGateset.preps[preplabel], mxBasis)
+                        ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+
+                    for povmlabel,povm in gs.povms.items():
+                        wt = itemWeights.get(povmlabel, spamWeight)
+                        ret += wt * (1.0 - _tools.povm_jtracedist(
+                            gs, targetGateset, povmlabel))**2
         
                 else: raise ValueError("Invalid spamMetric: %s" % spamMetric)
     
