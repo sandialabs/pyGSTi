@@ -55,7 +55,7 @@ class EvalTree(list):
 
         # a list of spamTuple-lists, one for each final gate string
         self.compiled_gatestring_spamTuples = None
-        self.finalStringToElsMap = None
+        #self.finalStringToElsMap = None
 
         # a dictionary of final-gate-string index lists keyed by 
         # each distinct spamTuple
@@ -77,9 +77,10 @@ class EvalTree(list):
           # want to know where in a tree the ith-element of gatestring_list (as
           # passed to initialize(...) is, it's at index original_index_lookup[i]
         self.original_index_lookup = None
-        
+
         super(EvalTree, self).__init__(items)
 
+        
     def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
         """
           Initialize an evaluation tree using a set of gate strings.
@@ -127,7 +128,7 @@ class EvalTree(list):
         newTree.original_index_lookup = self.original_index_lookup[:] \
             if (self.original_index_lookup is not None) else None
         newTree.compiled_gatestring_spamTuples = self.compiled_gatestring_spamTuples[:]
-        newTree.finalStringToElsMap = self.finalStringToElsMap[:]
+        #newTree.finalStringToElsMap = self.finalStringToElsMap[:]
         newTree.spamtuple_indices = self.spamtuple_indices.copy()
         return newTree
 
@@ -451,7 +452,7 @@ class EvalTree(list):
         return mySubtreeIndices, subTreeOwners, mySubComm
 
 
-    def split(self, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
+    def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
           maximum size of any tree (useful for limiting memory consumption
@@ -460,6 +461,15 @@ class EvalTree(list):
 
         Parameters
         ----------
+        elIndicesDict : dict
+            A dictionary whose keys are integer original-gatestring indices
+            and whose values are slices or index arrays of final-element-
+            indices (typically this dict is returned by calling
+            :method:`GateSet.compile_gatestrings`).  Since splitting a 
+            tree often involves permutation of the raw string ordering
+            and thereby the element ordering, an updated version of this
+            dictionary, with all permutations performed, is returned.
+
         maxSubTreeSize : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
@@ -474,12 +484,13 @@ class EvalTree(list):
 
         Returns
         -------
-        None
+        OrderedDict
+            A updated version of elIndicesDict
         """
         raise NotImplementedError("split(...) not implemented!")
 
 
-    def _finish_split(self, subTreeSetList, permute_parent_element, create_subtree):
+    def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree):
         # Create subtrees from index sets
         need_to_compute = _np.zeros( len(self), 'bool' ) #flags so we don't duplicate computation of needed quantities
         need_to_compute[0:self.num_final_strings()] = True #  b/c multiple subtrees need them as intermediates
@@ -550,11 +561,35 @@ class EvalTree(list):
         self.eval_order = [ parentIndexPerm[iCur] for iCur in self.eval_order ]
         self[:] = [ permute_parent_element(parentIndexPerm, self[iCur])
                     for iCur in parentIndexRevPerm ]
+
+
+        # Setting compiled_gatestring_spamTuples, (re)sets the element ordering,
+        # so before doint this compute the old_to_new mapping and update
+        # elIndicesDict.
+        old_finalStringToElsMap = []; i=0
+        for k,spamTuples in enumerate(self.compiled_gatestring_spamTuples):
+            old_finalStringToElsMap.append( list(range(i,i+len(spamTuples))) )
+            i += len(spamTuples)
+
+        permute_newToOld = []
+        for iOldStr in parentIndexRevPerm[0:self.num_final_strings()]:
+            permute_newToOld.extend( old_finalStringToElsMap[iOldStr] )
+        permute_oldToNew = { iOld:iNew for iNew,iOld in enumerate(permute_newToOld) }
+
+        updated_elIndices = _collections.OrderedDict()
+        for ky,indices in elIndicesDict.items():
+            updated_elIndices[ky] = _slct.list_to_slice(
+                [ permute_oldToNew[x] for x in
+                  (_slct.indices(indices) if isinstance(indices,slice) else indices)] )
+
+        # Now update compiled_gatestring_spamTuples
         self.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[iCur]
                                                 for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
-        self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
-        self._compute_spamtuple_indices()
+        self.spamtuple_indices = _compute_spamtuple_indices(self.compiled_gatestring_spamTuples)
+
+        #Assert this tree (self) is *not* split
         assert(self.myFinalToParentFinalMap is None)
+        assert(self.myFinalElsToParentFinalElsMap is None)
         assert(self.parentIndexMap is None)
 
         #Permute subtree indices (i.e. lists of subtree indices)
@@ -586,7 +621,7 @@ class EvalTree(list):
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
         #assert(dbList == dbList2)
-        return
+        return updated_elIndices
 
 
     def is_split(self):
@@ -605,55 +640,14 @@ class EvalTree(list):
         else:
             return [self] #return self as the only "subTree" when not split
 
-    def _compute_spamtuple_indices(self):
-        """ 
-        Computes a dictionary whose keys are the distinct spamTuples
-        found in `self.compiled_gatestring_spamTuples` and whose values are
-        (finalIndices, finalTreeSlice) tuples where:
-
-        finalIndices = the "element" indices in any final filled quantities
-                       which combines both spam and gate-sequence indices.
-                       If this tree is a subtree, then these final indices
-                       refer to the *parent's* final elements.
-        treeIndices = indices into the tree's final gatestring list giving
-                      all of the (raw) gate sequences which need to be computed
-                      for the current spamTuple (this list has the SAME length
-                      as finalIndices).
-        """
-        spamtuple_indices = _collections.OrderedDict(); el_off = 0
-        for i,spamTuples in enumerate(  # i == final gate string index
-                self.compiled_gatestring_spamTuples):
-            for j,spamTuple in enumerate(spamTuples,start=el_off): # j == final element index
-                if spamTuple not in spamtuple_indices:
-                    spamtuple_indices[spamTuple] = ([],[])
-                f = self.myFinalElsToParentFinalElsMap[j] \
-                    if self.myFinalElsToParentFinalElsMap else j #parent's final
-                spamtuple_indices[spamTuple][0].append(f)
-                spamtuple_indices[spamTuple][1].append(i)
-            el_off += len(spamTuples)
-
-        def to_slice(x):
-            s = _slct.list_to_slice(x,array_ok=True,contiguous=False)
-            if isinstance(s, slice) and (s.start,s.stop,s.step) == \
-               (0,len(self.compiled_gatestring_spamTuples),None):
-                return slice(None,None) #check for entire range
-            else:
-                return s
-
-        self.spamtuple_indices = _collections.OrderedDict(
-            [ (spamTuple, (to_slice(fInds), to_slice(gInds)))
-              for spamTuple,(fInds,gInds) in spamtuple_indices.items() ] )
-
-    def _compute_finalStringToEls(self):
-        #Create a mapping from each final gate string (index) to
-        # a slice of final element indices
-        self.finalStringToElsMap = []; i=0
-        for k,spamTuples in enumerate(self.compiled_gatestring_spamTuples):
-            self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
-            i += len(spamTuples)
-
-
-        
+    #NOT NEEDED?
+    #def _compute_finalStringToEls(self):
+    #    #Create a mapping from each final gate string (index) to
+    #    # a slice of final element indices
+    #    self.finalStringToElsMap = []; i=0
+    #    for k,spamTuples in enumerate(self.compiled_gatestring_spamTuples):
+    #        self.finalStringToElsMap.append( slice(i,i+len(spamTuples)) )
+    #        i += len(spamTuples)
 
         
     def print_analysis(self):
@@ -702,3 +696,44 @@ class EvalTree(list):
             for i,t in enumerate(self.subTrees):
                 print(">> sub-tree %d: " % i)
                 t.print_analysis()
+
+                
+def _compute_spamtuple_indices(compiled_gatestring_spamTuples,
+                               subtreeFinalElsToParentFinalElsMap=None):
+    """ 
+    Returns a dictionary whose keys are the distinct spamTuples
+    found in `compiled_gatestring_spamTuples` and whose values are
+    (finalIndices, finalTreeSlice) tuples where:
+
+    finalIndices = the "element" indices in any final filled quantities
+                   which combines both spam and gate-sequence indices.
+                   If this tree is a subtree, then these final indices
+                   refer to the *parent's* final elements.
+    treeIndices = indices into the tree's final gatestring list giving
+                  all of the (raw) gate sequences which need to be computed
+                  for the current spamTuple (this list has the SAME length
+                  as finalIndices).
+    """
+    spamtuple_indices = _collections.OrderedDict(); el_off = 0
+    for i,spamTuples in enumerate(  # i == final gate string index
+            compiled_gatestring_spamTuples):
+        for j,spamTuple in enumerate(spamTuples,start=el_off): # j == final element index
+            if spamTuple not in spamtuple_indices:
+                spamtuple_indices[spamTuple] = ([],[])
+            f = subtreeFinalElsToParentFinalElsMap[j] \
+                if subtreeFinalElsToParentFinalElsMap else j #parent's final
+            spamtuple_indices[spamTuple][0].append(f)
+            spamtuple_indices[spamTuple][1].append(i)
+        el_off += len(spamTuples)
+
+    def to_slice(x):
+        s = _slct.list_to_slice(x,array_ok=True,contiguous=False)
+        if isinstance(s, slice) and (s.start,s.stop,s.step) == \
+           (0,len(compiled_gatestring_spamTuples),None):
+            return slice(None,None) #check for entire range
+        else:
+            return s
+
+    return _collections.OrderedDict(
+        [ (spamTuple, (to_slice(fInds), to_slice(gInds)))
+          for spamTuple,(fInds,gInds) in spamtuple_indices.items() ] )

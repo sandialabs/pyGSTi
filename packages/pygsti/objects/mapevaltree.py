@@ -64,9 +64,8 @@ class MapEvalTree(EvalTree):
         gatestring_list = [tuple(gs) for gs in compiled_gatestring_list.keys()]
         self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
         self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
-        self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
-        self._compute_spamtuple_indices()
-        
+        #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+        self.spamtuple_indices = _compute_spamtuple_indices(self.compiled_gatestring_spamTuples)
 
         #Evaluation tree:
         # A list of tuples, where each element contains
@@ -195,7 +194,7 @@ class MapEvalTree(EvalTree):
         return ops
 
 
-    def split(self, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
+    def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
           maximum size of any tree (useful for limiting memory consumption
@@ -204,6 +203,15 @@ class MapEvalTree(EvalTree):
 
         Parameters
         ----------
+        elIndicesDict : dict
+            A dictionary whose keys are integer original-gatestring indices
+            and whose values are slices or index arrays of final-element-
+            indices (typically this dict is returned by calling
+            :method:`GateSet.compile_gatestrings`).  Since splitting a 
+            tree often involves permutation of the raw string ordering
+            and thereby the element ordering, an updated version of this
+            dictionary, with all permutations performed, is returned.
+
         maxSubTreeSize : int, optional
             The maximum size (i.e. list length) of each sub-tree.  If the
             original tree is smaller than this size, no splitting will occur.
@@ -218,7 +226,8 @@ class MapEvalTree(EvalTree):
 
         Returns
         -------
-        None
+        OrderedDict
+            A updated version of elIndicesDict
         """
         #dbList = self.generate_gatestring_list()
         tm = _time.time()
@@ -421,7 +430,7 @@ class MapEvalTree(EvalTree):
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
             subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
-            subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
+            #subTree._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
             
             final_el_startstops = []; i=0
             for spamTuples in parentTree.compiled_gatestring_spamTuples:
@@ -432,16 +441,18 @@ class MapEvalTree(EvalTree):
                   for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
             
             subtree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
-            subTree._compute_spamtuple_indices()
+            subtree.spamtuple_indices = _compute_spamtuple_indices(subtree.compiled_gatestring_spamTuples,
+                                                                   subtree.myFinalElsToParentFinalElsMap)
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in compiled_gatestring_spamTuples)
 
             return subTree
     
-        self._finish_split(subTreeSetList, permute_parent_element, create_subtree)
+        updated_elIndices = self._finish_split(elIndices, subTreeSetList,
+                                               permute_parent_element, create_subtree)
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
-        return
+        return updated_elIndices
 
     def copy(self):
         """ Create a copy of this evaluation tree. """

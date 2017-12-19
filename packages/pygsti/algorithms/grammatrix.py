@@ -61,8 +61,7 @@ def get_max_gram_basis(gateLabels, dataset, maxLength=0):
     return max_string_set
 
 
-def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
-                            targetGateset=None, spamDict=None,
+def max_gram_rank_and_evals(dataset, targetGateset, maxBasisStringLength=10,
                             fixedLists=None):
     """
     Compute the rank and singular values of a maximal Gram matrix,that is, the
@@ -74,18 +73,13 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
     dataset : DataSet
       the dataset to use when constructing the Gram matrix
 
+    targetGateset : GateSet
+      A gateset used to make sense of gate strings and for the construction of
+      a theoretical gram matrix and spectrum.
+
     maxBasisStringLength : int, optional
       the maximum string length considered for Gram matrix basis
       elements.  Defaults to 10.
-
-    targetGateset : GateSet, optional
-      A gateset used to specify the SPAM labels used to connect
-      the dataset values to rhoVec and EVec indices.
-
-    spamDict : dictionary, optional
-      Dictionary mapping (rhoVec_index,EVec_index) integer tuples to string spam labels.
-      Defaults to the spam dictionary of targetGateset
-      e.g. spamDict[(0,0)] == "plus"
 
     fixedLists : (prepStrs, effectStrs), optional
       2-tuple of gate string lists, specifying the preparation and
@@ -102,22 +96,7 @@ def max_gram_rank_and_evals(dataset, maxBasisStringLength=10,
     if fixedLists is not None:
         maxRhoStrs, maxEStrs = fixedLists
     else:
-        maxStringSet = get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength)
-        maxRhoStrs = maxEStrs = maxStringSet
+        maxRhoStrs = maxEStrs = get_max_gram_basis(dataset.get_gate_labels(),
+                                                   dataset, maxBasisStringLength)
 
-    if spamDict is None:
-        if targetGateset is not None:
-            spamDict = targetGateset.get_reverse_spam_defs()
-            rhoLabels = list(targetGateset.preps.keys())
-            eLabels = list([l for l,Evec in targetGateset.effects.items()
-                            if not isinstance(Evec,_ComplementSPAMVec) ])
-              # don't count complement effect vectors in eLabels
-        else:
-            firstSpamLabel = dataset.get_spam_labels()[0]
-            spamDict = {('dummy_rho','dummy_E'): firstSpamLabel}
-            rhoLabels = ['dummy_rho']; eLabels = ['dummy_E']
-            # Note: it doesn't actually matter what strings we use here
-
-    specs = _construction.build_spam_specs(prepStrs=maxRhoStrs, effectStrs=maxEStrs,
-                                           prep_labels=rhoLabels, effect_labels=eLabels)
-    return _gramRankAndEvals(dataset, specs, targetGateset, spamDict)
+    return _gramRankAndEvals(dataset, maxRhoStrs, maxEStrs, targetGateset)

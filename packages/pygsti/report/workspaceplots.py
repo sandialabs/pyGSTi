@@ -2236,7 +2236,7 @@ class GramMatrixBarPlot(WorkspacePlot):
         
     def _create(self, dataset, maxlen, target, fixedLists, scale):
 
-        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists=fixedLists)
+        _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists)
         svals = _np.sort(_np.abs(svals)).reshape(-1,1)
         target_svals = _np.sort(_np.abs(target_svals)).reshape(-1,1)
         

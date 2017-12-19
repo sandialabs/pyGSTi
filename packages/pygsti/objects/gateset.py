@@ -1844,16 +1844,16 @@ class GateSet(object):
                     (len(gatestring_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            evalTree.split(maxTreeSize, None, printer) # won't split if unnecessary
+            lookup = evalTree.split(lookup, maxTreeSize, None, printer) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
-                evalTree.split(None, minSubtrees, printer)
+                lookup = evalTree.split(lookup, None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
-                    evalTree.split(maxTreeSize, None) # fall back to split for max size
+                    lookup = evalTree.split(lookup, maxTreeSize, None) # fall back to split for max size
         
         if maxTreeSize is not None or minSubtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 

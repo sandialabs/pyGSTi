@@ -41,7 +41,9 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     if gateStrings is None:
         gateStrings = list(dataset.keys())
 
-    evTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gateStrings)
+    evTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'],verbosity)
 
     #Memory allocation
     nEls = evTree.num_final_elements()
@@ -50,7 +52,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (3*nEls) # in bytes
+    persistentMem = 8*(3*nEls) # in bytes
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
@@ -60,18 +62,6 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     N      = _np.empty( nEls , 'd')
     f      = _np.empty( nEls , 'd')
     probs  = _np.empty( nEls , 'd')
-
-    #  Estimate & check intermediate memory
-    #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem = 8*ng*gd**2 # ~ bulk_product
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
-
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
 
     dsGateStrings = _lt.find_replace_tuple_list(
             gateStrings, gateLabelAliases)
