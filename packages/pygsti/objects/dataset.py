@@ -1,19 +1,25 @@
 """ Defines the DataSet class and supporting classes and functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
-#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
-#    This Software is released under the GPL license detailed
-#    in the file "license.txt" in the top-level pyGSTi directory
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
+#    This Software is released under the GPL license detailed    
+#    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
 
-import numpy    as _np
-import pickle   as _pickle
+import numpy as _np
+import numbers as _numbers 
+#import scipy.special as _sps
+#import scipy.fftpack as _fft
+#from scipy.integrate import quad as _quad
+#from scipy.interpolate import interp1d as _interp1d
+import pickle as _pickle
 import warnings as _warnings
-import uuid     as _uuid
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
+
 from . import gatestring as _gs
+#from . import dataset as _ds
 
 
 class DataSet_KeyValIterator(object):
@@ -21,299 +27,411 @@ class DataSet_KeyValIterator(object):
     def __init__(self, dataset):
         self.dataset = dataset
         self.gsIter = dataset.gsIndex.__iter__()
-        self.countIter = dataset.counts.__iter__()
+        oliData = self.dataset.oliData
+        timeData = self.dataset.timeData
+        repData = self.dataset.repData
+      
+        if repData is None:
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
+                             for gsi in self.dataset.gsIndex.values() )
+        else:
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
+                             for gsi in self.dataset.gsIndex.values() )
+        #Note: gsi above will be an index for a non-static dataset and
+        #  a slice for a static dataset.
 
     def __iter__(self):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        gs = next(self.gsIter); tk = self.dataset._total_key(gs)
-        return gs, DataSetRow(self.dataset, next(self.countIter), tk)
+        return next(self.gsIter), DataSetRow(self.dataset, *(next(self.tupIter)) )
 
     next = __next__
-
+  
 
 class DataSet_ValIterator(object):
     """ Iterator class for DataSetRow values of a DataSet """
     def __init__(self, dataset):
         self.dataset = dataset
-        self.countIter = dataset.counts.__iter__()
-        self.gsIter = dataset.gsIndex.__iter__()
+        oliData = self.dataset.oliData
+        timeData = self.dataset.timeData
+        repData = self.dataset.repData
+    
+        if repData is None:
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], None)
+                             for gsi in self.dataset.gsIndex.values() )
+        else:
+            self.tupIter = ( (oliData[ gsi ], timeData[ gsi ], repData[ gsi ])
+                             for gsi in self.dataset.gsIndex.values() )
+        #Note: gsi above will be an index for a non-static dataset and
+        #  a slice for a static dataset.
 
     def __iter__(self):
         return self
 
     def __next__(self): # Python 3: def __next__(self)
-        tk = self.dataset._total_key( next(self.gsIter) )
-        return DataSetRow(self.dataset, next(self.countIter), tk)
+        return DataSetRow(self.dataset, *(next(self.tupIter)) )
 
     next = __next__
 
+
 class DataSetRow(object):
+    """ 
+    Encapsulates DataSet time series data for a single gate string.  Outwardly
+    looks similar to a list with `(outcome_label, time_index, repetition_count)`
+    tuples as the values.
     """
-    Encapsulates DataSet count data for a single gate string.  Outwardly
-      looks similar to a dictionary with spam labels as keys and counts as
-      values.
-    """
-    def __init__(self, dataset, rowData, totalKey):
+    def __init__(self, dataset, rowSliData, rowTimeData, rowRepData):
         self.dataset = dataset
-        self.rowData = rowData
-        self.totalKey = totalKey
+        self.oli = rowOliData
+        self.time = rowTimeData
+        self.reps = rowRepData
+
+    @property
+    def outcomes(self):
+        """ 
+        Returns this row's sequence of outcome labels, one per "bin" of repetition
+        counts (returned by :method:`get_counts`).
+        """
+        return [self.dataset.ol[i] for i in self.oli]
+
+    @outcomes.setter
+    def outcomes(self, value):
+        raise ValueError("outcomes property is read-only")
+
+    def get_expanded_ol(self):
+        """ 
+        Returns this row's sequence of outcome labels, with repetition counts
+        expanded, so there's one element in the returned list for *each* count.
+        """
+        if self.reps is not None:
+            ol = []
+            for oli, _, nreps in zip(self.oli,self.time,self.reps):
+                ol.extend( [self.dataset.ol[oli]]*nreps )
+            return ol
+        else: return self.get_ol()
+
+    def get_expanded_oli(self):
+        """ 
+        Returns this row's sequence of outcome label indices, with repetition counts
+        expanded, so there's one element in the returned list for *each* count.
+        """
+        if self.reps is not None:
+            inds = []
+            for oli, _, nreps in zip(self.oli,self.time,self.reps):
+                inds.extend( [oli]*nreps )
+            return _np.array(inds, dtype=self.dataset.oliType)
+        else: return self.oli.copy()
+
+    def get_expanded_times(self):
+        """ 
+        Returns this row's sequence of time stamps, with repetition counts
+        expanded, so there's one element in the returned list for *each* count.
+        """
+        if self.reps is not None:
+            times = []
+            for _, time, nreps in zip(self.oli,self.time,self.reps):
+                times.extend( [time]*nreps )
+            return _np.array(times, dtype=self.dataset.timeType)
+        else: return self.time.copy()
 
     def __iter__(self):
-        return self.dataset.slIndex.__iter__() #iterator over spam labels
+        if self.reps is not None:      
+            return ( (self.dataset.ol[i],t,n) for (i,t,n) in zip(self.oli,self.time,self.reps) )
+        else:
+            return ( (self.dataset.ol[i],t,1) for (i,t) in zip(self.oli,self.time) )
 
-    def __contains__(self, spamlabel):
-        return spamlabel in self.dataset.slIndex
-
-    def keys(self):
-        """ Returns spam labels (strings) for which data counts are available."""
-        return list(self.dataset.slIndex.keys())
-
-    def has_key(self, spamlabel):
-        """ Checks whether data counts for spamlabel (a string) is available."""
-        return spamlabel in self.dataset.slIndex
-
-    def iteritems(self):
-        """ Iterates over (spam label, count) pairs. """
-        return DataSetRow_KeyValIterator(self.dataset, self.rowData)
-
-    def values(self):
-        """ Returns spamlabel counts as a numpy array."""
-        return self.rowData
-
+    def __getitem__(self,indexOrOutcomeLabel):
+        if isinstance(indexOrOutcomeLabel, _numbers.Integral):
+            i = indexOrOutcomeLabel
+            if self.reps is not None:
+                return ( self.dataset.ol[ self.oli[i] ], self.time[i], self.reps[i] )
+            else:
+                return ( self.dataset.ol[ self.oli[i] ], self.time[i], 1 )
+        else:
+            return self.counts[indexOrOutcomeLabel]
+            
+    def __setitem__(self,indexOrOutcomeLabel,val):
+        if isinstance(indexOrOutcomeLabel, _numbers.Integral):
+            index = indexOrOutcomeLabel; tup = val
+            assert(len(tup) in (2,3) ), "Must set to a (<outcomeLabel>,<time>[,<repetitions>]) value"
+            self.oli[index] = self.dataset.olIndex[ tup[0] ]
+            self.time[index] = tup[1]
+      
+            if self.reps is not None:
+                self.reps[index] = tup[2] if len(tup) == 3 else 1
+            else:
+                assert(len(tup) == 2 or tup[2] == 1),"Repetitions must == 1 (not tracking reps)"
+        else:
+            outcomeLbl = indexOrOutcomeLabel; count = val
+            assert( all([t == self.time[0] for t in self.time]) ), \
+                "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
+            assert(self.reps is not None), \
+                "Cannot set outcome counts directly on a DataSet without repetition data"
+                    
+            for i,outcomeIndx in enumerate(self.oli):
+                if outcomeIndx == self.dataset.olIndex[ outcomeLbl ]:
+                    self.reps[i] = count; break
+            else: # need to add a new label
+                raise NotImplementedError("Cannot create new outcome labels by assignment")
+                    
+    @property
+    def counts(self):
+        """ 
+        Returns this row's sequence of "repetition counts", that is, the number of
+        repetitions of each outcome label in the list returned by :method:`get_ol`, or
+        equivalently, each outcome label index in this rows `.oli` member.
+        """    
+        cntDict = _OrderedDict()
+        if self.reps is None:
+            for ol,i in self.dataset.olIndex.items():
+                cntDict[ol] = float(_np.count_nonzero( _np.equal(self.oli,i) ))
+        else:
+            for ol,i in self.dataset.olIndex.items():        
+                cntDict[ol] = float( sum(self.reps[
+                    _np.nonzero(_np.equal(self.oli,i))[0]]))
+        return cntDict
+    
     def total(self):
-        """ Returns the total counts."""
-        if self.totalKey is not None:
-            return self.dataset.totals[self.totalKey]
-        return float(sum(self.rowData))
+        """ Returns the total number of counts contained in this row."""
+        if self.reps is None:
+            return float(len(self.oli))
+        else:
+            return sum(self.reps)
 
-    def fraction(self,spamlabel):
-        """ Returns the fraction of total counts for spamlabel."""
-        return self[spamlabel] / self.total()
+    def fraction(self,outcomelabel):
+        """ Returns the fraction of total counts for `outcomelabel`."""
+        d = self.get_counts()
+        total = sum(d.values())
+        return d[outcomelabel]/total
 
-    def __getitem__(self,spamlabel):
-        return self.rowData[ self.dataset.slIndex[spamlabel] ]
-
-    def __setitem__(self,spamlabel,count):
-        if self.totalKey is not None:
-            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
-            self.dataset.totals[self.totalKey] += count - old_count
-        self.rowData[ self.dataset.slIndex[spamlabel] ] = count
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
-        for spamlabel in self.dataset.slIndex.keys():
-            old_count = self.rowData[ self.dataset.slIndex[spamlabel] ]
-            if self.totalKey is not None:
-                self.dataset.totals[self.totalKey] += factor*old_count - old_count
-            self.rowData[ self.dataset.slIndex[spamlabel] ] = factor*old_count
+        if self.reps is None:
+            raise ValueError(("Cannot scale a DataSet without repetition "
+                              "counts. Call DataSet.build_repetition_counts()"
+                              " and try this again."))
+        for i,cnt in enumerate(self.reps):
+            self.reps[i] = cnt*factor
 
     def as_dict(self):
-        """ Returns the (spamlabel,count) pairs as a dictionary."""
-        return dict( list(zip(list(self.dataset.slIndex.keys()),self.rowData)) )
+        """ Returns the (outcomeLabel,count) pairs as a dictionary."""
+        return dict( self.counts )
 
     def __str__(self):
-        return str(self.as_dict())
+        s  = "Outcome Label Indices = " + str(self.oli) + "\n"
+        s += "Time stamps = " + str(self.time) + "\n"
+        if self.reps is not None:
+            s += "Repetitions = " + str(self.reps) + "\n"
+        else:
+            s += "( no repetitions )\n"
+        return s
 
+    def __len__(self):
+        return len(self.oli)
 
-class DataSetRow_KeyValIterator(object):
-    """ Iterates over spamLabel,count pairs of a DataSetRow """
-    def __init__(self, dataset, rowData):
-        self.spamLabelIter = dataset.slIndex.__iter__()
-        self.rowDataIter = rowData.__iter__()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return next(self.spamLabelIter), next(self.rowDataIter)
-
-    next = __next__
+  
 
 
 class DataSet(object):
     """
-    The DataSet class associates gate strings with counts for each spam label,
-    and can be thought of as a table with gate strings labeling the rows and
-    spam labels labeling the columns.  It is designed to behave similarly to a
-    dictionary of dictionaries, so that counts are accessed by:
-    count = dataset[gateString][spamLabel]
+    The DataSet class associates gate strings with counts or time series of
+    counts for each outcome label, and can be thought of as a table with gate
+    strings labeling the rows and outcome labels and/or time labeling the
+    columns.  It is designed to behave similarly to a dictionary of
+    dictionaries, so that counts are accessed by:
+
+    `count = dataset[gateString][outcomeLabel]`
+
+    in the time-independent case, and in the time-dependent case, for *integer*
+    time index `i >= 0`,
+
+    `outcomeLabel = dataset[gateString][i].outcome`
+    `count = dataset[gateString][i].count`
+    `time = dataset[gateString][i].time`
     """
 
-    def __init__(self, counts=None, gateStrings=None, gateStringIndices=None,
-                 spamLabels=None, spamLabelIndices=None,  bStatic=False, fileToLoadFrom=None,
-                 collisionAction="aggregate", comment=None, measurementGates=None):
-        """
-        Initialize a DataSet.
-
+    def __init__(self, oliData=None, timeData=None, repData=None,
+                 gateStrings=None, gateStringIndices=None,
+                 outcomeLabels=None, outcomeLabelIndices=None,
+                 bStatic=False, fileToLoadFrom=None, collisionAction="aggregate",
+                 comment=None):
+        """ 
+        Initialize a DataSet ("Time-dependent DataSet").
+        TODO: docstring
+        
         Parameters
         ----------
-        counts : 2D numpy array (static case) or list of 1D numpy arrays (non-static case)
-            Specifies spam label counts.  In static case, rows of counts correspond to gate
-            strings and columns to spam labels.  In non-static case, different arrays
-            correspond to gate strings and each array contains counts for the spam labels.
-
+        timeseries : 2D numpy array (static case) or list of 1D numpy arrays (non-static case)
+            Specifies spam label indices.  In static case, rows of indices correspond to gate
+            strings and columns to time steps.  In non-static case, different arrays
+            correspond to gate strings and each array contains index data for all the time steps.
+        
         gateStrings : list of (tuples or GateStrings)
             Each element is a tuple of gate labels or a GateString object.  Indices for these strings
-            are assumed to ascend from 0.  These indices must correspond to rows/elements of counts (above).
-            Only specify this argument OR gateStringIndices, not both.
-
+            are assumed to ascend from 0.  These indices must correspond to the time series of spam-label
+            indices (above).   Only specify this argument OR gateStringIndices, not both.
+        
         gateStringIndices : ordered dictionary
             An OrderedDict with keys equal to gate strings (tuples of gate labels) and values equal to
             integer indices associating a row/element of counts with the gate string.  Only
             specify this argument OR gateStrings, not both.
-
-        spamLabels : list of strings
+        
+        outcomeLabels : list of strings
             Specifies the set of spam labels for the DataSet.  Indices for the spam labels
             are assumed to ascend from 0, starting with the first element of this list.  These
-            indices will index columns of the counts array/list.  Only specify this argument
-            OR spamLabelIndices, not both.
-
-        spamLabelIndices : ordered dictionary
-            An OrderedDict with keys equal to spam labels (strings) and value  equal to
-            integer indices associating a spam label with a column of counts.  Only
-            specify this argument OR spamLabels, not both.
-
+            indices will associate each elememtn of `timeseries` with a spam label.  Only
+            specify this argument OR outcomeLabelIndices, not both.
+        
+        outcomeLabelIndices : ordered dictionary
+            An OrderedDict with keys equal to spam labels (strings) and value equal to 
+            integer indices associating a spam label with given index.  Only 
+            specify this argument OR outcomeLabels, not both.
+        
         bStatic : bool
             When True, create a read-only, i.e. "static" DataSet which cannot be modified. In
-              this case you must specify the counts, gate strings, and spam labels.
-            When False, create a DataSet that can have counts added to it.  In this case,
+              this case you must specify the timeseries data, gate strings, and spam labels.
+            When False, create a DataSet that can have time series data added to it.  In this case,
               you only need to specify the spam labels.
-
+          
         fileToLoadFrom : string or file object
             Specify this argument and no others to create a static DataSet by loading
             from a file (just like using the load(...) function).
-
-        collisionAction : {"aggregate","keepseparate"}
-            Specifies how duplicate gate sequences should be handled.  "aggregate"
-            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-            sequence data with by appending a final "#<number>" gate label to the
-            duplicated gate sequence, which can then be accessed via the
-            `get_row` and `set_row` functions.
-
-        comment : string, optional
-            A user-specified comment string that gets carried around with the 
-            data.  A common use for this field is to attach to the data details
-            regarding its collection.
-
-        measurementGates : dict, optional
-            If not None, a dictrionary whose keys are user-defined "measurement
-            labels" and whose values are lists of gate labels.  The gate labels 
-            in each list define the set of gates which describe the the operation
-            that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
-
-
+        
         Returns
         -------
         DataSet
            a new data set object.
         """
+        # uuid for efficient hashing (set when done adding data or loading from file)
         self.uuid = None
+        
         #Optionally load from a file
         if fileToLoadFrom is not None:
-            assert(counts is None and gateStrings is None and gateStringIndices is None and spamLabels is None and spamLabelIndices is None)
+            assert(oliData is None and timeData is None and repData is None \
+                   and gateStrings is None and gateStringIndices is None \
+                   and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
-
-        # self.gsIndex  :  Ordered dictionary where keys = GateString objects, values = integer indices into counts
+        
+        # self.gsIndex  :  Ordered dictionary where keys = GateString objects,
+        #   values = slices into oli, time, & rep arrays (static case) or
+        #            integer list indices (non-static case)
         if gateStringIndices is not None:
             self.gsIndex = gateStringIndices
-        elif gateStrings is not None:
-            dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
-                           for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
-            self.gsIndex = _OrderedDict( dictData )
-
         elif not bStatic:
-            self.gsIndex = _OrderedDict()
-        else: raise ValueError("Must specify either gateStrings or gateStringIndices when creating a static DataSet")
-
-        # self.slIndex  :  Ordered dictionary where keys = spam labels (strings), values = integer indices into counts
-        if spamLabelIndices is not None:
-            self.slIndex = spamLabelIndices
-        elif spamLabels is not None:
-            self.slIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(spamLabels) ] )
-        else: raise ValueError("Must specify either spamLabels or spamLabelIndices when creating a DataSet")
-
-        if self.gsIndex:  assert( min(self.gsIndex.values()) >= 0)
-        if self.slIndex:  assert( min(self.slIndex.values()) >= 0)
-
-        # self.counts  :  when bStatic == True a single 2D numpy array.  Rows = gate strings, Cols = spam labels
-        #                 when bStatic == False a list of 1D numpy arrays. Each array has length = num of spam labels
-        if counts is not None:
-            self.counts = counts
-
+            if gateStrings is not None:
+                dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
+                             for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
+                self.gsIndex = _OrderedDict( dictData )
+            else:
+                self.gsIndex = _OrderedDict()
+        else: raise ValueError("Must specify gateStringIndices when creating a static DataSet")
+        
+        # self.olIndex  :  Ordered dictionary where
+        #                  keys = outcome labels (strings or tuples),
+        #                  values = integer indices mapping oliData (integers) onto
+        #                           the outcome labels.
+        if outcomeLabelIndices is not None:
+            self.olIndex = outcomeLabelIndices
+        elif outcomeLabels is not None:
+            self.olIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(outcomeLabels) ] )
+        else: raise ValueError("Must specify either outcomeLabels or outcomeLabelIndices when creating a DataSet")
+        
+        # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
+        #            labels (strings or tuples) -- just the reverse of self.olIndex
+        self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
+        
+        # sanity checks that indices are >= 0
+        if not bStatic: #otherwise values() below are slices
+            if self.gsIndex:  assert( min(self.gsIndex.values()) >= 0)
+            if self.olIndex:  assert( min(self.olIndex.values()) >= 0)
+        
+        # self.oliData : when bStatic == True a 1D numpy array containing concatenated outcome label indices.
+        #                when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
+        
+        # self.timeData : when bStatic == True a 1D numpy array containing concatenated time stamps.
+        #                 when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
+        
+        # self.repData : when bStatic == True a 1D numpy array containing concatenated repetition counts.
+        #                when bStatic == False a list of 1D numpy arrays, one array per gate sequence.
+        #   (can be None, in which case no repetitions are assumed)
+        
+        if oliData is not None:
+        
+            # check that sizes/lengths all match
+            assert(len(timeData) == len(oliData)), "timeData must be same size as oliData"
+            if repData is not None:
+                assert(len(repData) == len(oliData)), "repData must be same size as oliData"
+            
+            self.oliData = oliData
+            self.timeData = timeData
+            self.repData = repData
+            
             if len(self.gsIndex) > 0:
-                maxIndex = max(self.gsIndex.values())
+                maxOlIndex = max(self.olIndex.values())
                 if bStatic:
-                    assert( self.counts.shape[0] > maxIndex and self.counts.shape[1] == len(self.slIndex) )
+                    assert( _np.amax(self.oliData) <= maxOlIndex )
+                    # self.oliData.shape[0] > maxIndex doesn't make sense since gsIndex holds slices
                 else:
-                    assert( len(self.counts) > maxIndex and all( [ len(el) == len(self.slIndex) for el in self.counts ] ) )
-            #else gsIndex has length 0 so there are no gate strings in this dataset (even though counts can contain data)
-
+                    maxIndex = max(self.gsIndex.values())
+                    assert( len(self.oliData) > maxIndex )
+                    if len(self.oliData) > 0:
+                        assert( all( [ max(oliSeries) <= maxOlIndex for oliSeries in self.oliData ] ) )
+            #else gsIndex has length 0 so there are no gate strings in this dataset (even though oliData can contain data)
+        
         elif not bStatic:
+            assert( timeData is None ), "timeData must be None when oliData is"
+            assert( repData is None ), "repData must be None when oliData is"
             assert( len(self.gsIndex) == 0)
-            self.counts = []
-
+            self.oliData = []
+            self.timeData = []
+            self.repData = None
+        
         else:
-            raise ValueError("data counts must be specified when creating a static DataSet")
-
+            raise ValueError("Series data must be specified when creating a static DataSet")
+        
         # self.bStatic
         self.bStatic = bStatic
-
+        
         # collision action
         assert(collisionAction in ('aggregate','keepseparate'))
         self.collisionAction = collisionAction
-
+        
         # comment
         self.comment = comment
-
-        # measurement gates & labels
-        if measurementGates is not None:
-            self.measurementGates = measurementGates.copy()
-            self.measurementLabels = {}
-            for mlbl,gateLbls in measurementGates.items():
-                self.measurementLabels.update( {g: mlbl for g in gateLbls} )
-            self.totals = {}
-        else:
-            self.measurementGates = None
-            self.measurementLabels = None
-            self.totals = None
-
+        
+        # self.ffdata : fourier filtering data
+        self.ffdata = {}
+        
+        #data types
+        self.oliType = _np.uint8
+        self.timeType = _np.float64
+        self.repType = _np.uint16
+  
+  
     def __iter__(self):
         return self.gsIndex.__iter__() #iterator over gate strings
-
+  
     def __len__(self):
         return len(self.gsIndex)
-
-    def __getitem__(self, gatestring):
-        return self.get_row(gatestring)
-
-    def __setitem__(self, gatestring, countDict):
-        return self.set_row(gatestring, countDict)
-
+  
     def __contains__(self, gatestring):
         return gatestring in self.gsIndex
-
+  
     def __hash__(self):
         if self.uuid is not None:
             return hash(self.uuid)
         else:
             raise TypeError('Use digest hash')
-
-    def _total_key(self, gatestring):
-        """ 
-        Returns gatestring "aliased" according to self.measurementLabels
-        so that all strings corresponding to the same sequence up to 
-        different intermediate measurement outcomes will have the same key.
-        """
-        if self.measurementLabels is not None:
-            return tuple([self.measurementLabels.get(lbl,lbl)
-                          for lbl in gatestring])
-        else: return None
-        
-
+  
+    def __getitem__(self, gatestring):
+        return self.get_row(gatestring)
+  
+    def __setitem__(self, gatestring, outcomeDictOrSeries):
+        return self.set_row(gatestring, outcomeDictOrSeries)
+    
     def get_row(self, gatestring, occurrence=0):
         """
         Get a row of data from this DataSet.  This gives the same
@@ -335,11 +453,14 @@ class DataSet(object):
         """
         if occurrence > 0: 
             gatestring = gatestring + _gs.GateString(("#%d" % occurrence,))
-        return DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
-                          self._total_key(gatestring))
 
+        #Note: gsIndex value is either an int (non-static) or a slice (static)
+        repData = self.repData[ self.gsIndex[gatestring] ] \
+                  if (self.repData is not None) else None
+        return DataSetRow(self, self.oliData[ self.gsIndex[gatestring] ],
+                          self.timeData[ self.gsIndex[gatestring] ], repData)
 
-    def set_row(self, gatestring, countDict, occurrence=0):
+    def set_row(self, gatestring, outcomeDictOrSeries, occurrence=0):
         """
         Set the counts for a row of this DataSet.  This gives the same
         functionality as [ ] indexing except you can specify the
@@ -359,14 +480,15 @@ class DataSet(object):
         """
         if occurrence > 0: 
             gatestring = _gs.GateString(gatestring) + _gs.GateString(("#%d" % occurrence,))
-        if gatestring in self:
-            row = DataSetRow(self, self.counts[ self.gsIndex[gatestring] ],
-                             self._total_key(gatestring))
-            for spamLabel,cnt in countDict.items():
-                row[spamLabel] = cnt
-        else:
-            self.add_count_dict(gatestring, countDict)
-        
+            
+        if isinstance(outcomeDictOrSeries, dict): # a dict of counts
+            self.add_count_dict(gatestring, outcomeDictOrSeries)
+            
+        else: # a tuple of lists
+            assert(len(outcomeDictOrSeries) >= 2), \
+                "Must minimally set with (outcome-label-list, time-stamp-list)"
+            self.add_series_data(gatestring, *outcomeDictOrSeries)
+            
 
     def keys(self, stripOccurrenceTags=False):
         """
@@ -392,18 +514,18 @@ class DataSet(object):
                      for gs in self.gsIndex.keys() ]
         else:
             return list(self.gsIndex.keys())
+
         
-
     def has_key(self, gatestring):
-        """
+        """ 
         Test whether data set contains a given gate string.
-
+    
         Parameters
         ----------
         gatestring : tuple or GateString
-            A tuple of gate labels or a GateString instance
+            A tuple of gate labels or a GateString instance 
             which specifies the the gate string to check for.
-
+    
         Returns
         -------
         bool
@@ -411,166 +533,236 @@ class DataSet(object):
         """
         return gatestring in self.gsIndex
 
-    def iteritems(self):
-        """
-        Iterator over (gateString, countData) pairs,
-          where gateString is a tuple of gate labels
-          and countData is a DataSetRow instance,
-          which behaves similarly to a dictionary
-          with spam labels as keys and counts as
-          values.
+
+    def items(self):
+        """ 
+        Iterator over (gateString, timeSeries) pairs,
+        where gateString is a tuple of gate labels
+        and timeSeries is a DataSetRow instance, 
+        which behaves similarly to a list of
+        spam labels whose index corresponds to 
+        the time step.
         """
         return DataSet_KeyValIterator(self)
-
-    def itervalues(self):
-        """
+    
+    def values(self):
+        """ 
         Iterator over DataSetRow instances corresponding
-          to the count data for each gate string.
+        to the time series data for each gate string.
         """
         return DataSet_ValIterator(self)
+    
 
-    def get_spam_labels(self):
-        """
-        Get the spam labels of this DataSet.
-
+    def get_outcome_labels(self):
+        """ 
+        Get a list of *all* the outcome labels contained in this DataSet.
+        
         Returns
         -------
-        list of strings
-          A list where each element is a spam label.
+        list of strings or tuples
+        A list where each element is an outcome label (which can 
+        be a string or a tuple of strings).
         """
-        return list(self.slIndex.keys())
+        return self.olIndex.keys()
 
-    def get_gate_labels(self):
-        """
+
+    def get_gate_labels(self, prefix='G'):
+        """ 
         Get a list of all the distinct gate labels used
-          in the gate strings of this dataset.
-
+        in the gate strings of this dataset.
+        
+        Parameters
+        ----------
+        prefix : str
+            Filter the gate string labels so that only elements beginning with
+            this prefix are returned.  `None` performs no filtering.
+        
         Returns
         -------
         list of strings
-          A list where each element is a gate label.
+            A list where each element is a gate label.
         """
-        gateLabels = [ ]
+        gateLabels = [ ] 
         for gateLabelString in self:
             for gateLabel in gateLabelString:
-                if gateLabel not in gateLabels: gateLabels.append(gateLabel)
+                if not prefix or gateLabel.startswith(prefix):
+                    if gateLabel not in gateLabels: gateLabels.append(gateLabel)
         return gateLabels
 
-    def add_count_dict(self, gateString, countDict):
+    
+    def get_degrees_of_freedom(self, gateStringList=None):
+        """ 
+        Returns the number of independent degrees of freedom in the data for
+        the gate strings in `gateStringList`.
+
+        Parameters
+        ----------
+        gateStringList : list of GateStrings
+            The list of gate strings to count degrees of freedom for.  If `None`
+            then all of the `DataSet`'s strings are used.
+        
+        Returns
+        -------
+        int
+        """
+        if gateStringList is None:
+            gateStringList = list(self.keys())
+            
+        nDOF = 0
+        for gstr in gateStringList:
+            cur_t = self[gstr].time[0]
+            cur_outcomes = set() # holds *distinct* outcomes at current time
+            for ol,t,rep in self[gstr]:
+                if t == cur_t: cur_outcomes.add(ol)
+                else:
+                    #assume final outcome at each time is constrained
+                    nDOF += len(cur_outcomes)-1
+                    cur_t = t
+        return nDOF
+
+
+    def _keepseparate_update_gatestr(self, gateString):
+        if not isinstance(gateString, _gs.GateString):
+            gateString = _gs.GateString(gateString) #make sure we have a GateString
+
+        # if "keepseparate" mode, add tag onto end of gateString
+        if gateString in self.gsIndex and self.collisionAction == "keepseparate":
+            i=0; tagged_gateString = gateString
+            while tagged_gateString in self.gsIndex:
+                i+=1; tagged_gateString = gateString + _gs.GateString(("#%d" % i,))
+            #add data for a new (duplicate) gatestring
+            gateString = tagged_gateString
+            
+        return gateString
+
+    def build_repetition_counts(self):
+        """
+        Build internal repetition counts if they don't exist already.
+
+        This method is usually unnecessary, as repetition counts are 
+        almost always build as soon as they are needed.
+        """
+        if self.repData is not None: return
+        if self.bStatic:
+            raise ValueError("Cannot build repetition counts in a static DataSet object")
+        self.repData = []
+        for oliAr in self.oliData:
+            self.repData.append( _np.ones(len(oliAr), self.repType) )
+
+    
+    def add_count_dict(self, gateString, countDict, overwriteExisting=True):
         """
         Add a single gate string's counts to this DataSet
 
         Parameters
         ----------
         gateString : tuple or GateString
-          A tuple of gate labels specifying the gate string or a GateString object
+            A tuple of gate labels specifying the gate string or a GateString object
 
         countDict : dict
-          A dictionary with keys = spam labels and values = counts
+            A dictionary with keys = outcome labels and values = counts
+
+        overwriteExisting : bool, optional
+            If `True`, overwrite any existing data for the `gateString`.  If
+            `False`, add this count data with the next non-negative integer
+            timestamp.
 
         Returns
         -------
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        countList = [ _np.nan ] * len(self.slIndex)
-        for (spamLabel,count) in countDict.items():
-            if spamLabel not in self.get_spam_labels():
-                raise ValueError("Error adding data to Dataset: invalid spam label %s" % spamLabel)
-            countList[ self.slIndex[spamLabel] ] = count
-        if _np.nan in countList:
-            raise ValueError("Error adding data to Dataset: not all spam labels were specified")
-        self.add_count_list(gateString, countList)
+
+        outcomeLabelList = []; countList = []
+        for outcomeLabel,count in countDict.items():
+            outcomeLabelList.append(outcomeLabel)
+            countList.append(count)
+
+        # if "keepseparate" mode, add tag onto end of gateString
+        gateString = self._keepseparate_update_gatestr(gateString)
+            
+        if not overwriteExisting and gateString in self:
+            iNext = int(max(self[gateString].times)) + 1 \
+                    if (len(self[gateString].times) > 0) else 0
+            timeStampList = [iNext]*len(countList)
+        else:
+            timeStampList = [0]*len(countList)
+
+        self.add_series_data(gateString, outcomeLabelList, timeStampList,
+                             countList, overwriteExisting)
 
 
-    def add_count_list(self, gateString, countList):
-        """
-        Add a single gate string's counts to this DataSet.
-
+    def add_series_data(self, gateString, outcomeLabelList, timeStampList, repCountList=None,
+                        overwriteExisting=True):
+        """ 
+        Add a single gate string's counts to this DataSet
+        
         Parameters
         ----------
         gateString : tuple or GateString
-          A tuple of gate labels specifying the gate string or a GateString object
+            A tuple of gate labels specifying the gate string or a GateString object
 
-        countsList : list
-          A list/tuple of counts in the same order as the DataSet's spam labels
+        outcomeLabelList : list
+            A list of outcome labels (strings or tuples).  An element's index
+            links it to a particular time step (i.e. the i-th element of the
+            list specifies the outcome of the i-th measurement in the series).
+
+        TODO: docstring
 
         Returns
         -------
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        if not isinstance(gateString, _gs.GateString):
-            gateString = _gs.GateString(gateString) #make sure we have a GateString
 
-        if round(sum(countList)) == 0 and self.measurementLabels is None:
-            _warnings.warn("Adding zero counts to DataSet for gate string %s" % str(gateString))
+        # if "keepseparate" mode, add tag onto end of gateString
+        gateString = self._keepseparate_update_gatestr(gateString)
 
-        assert( len(countList) == len(self.slIndex))
-        countArray = _np.array(countList, 'd')
-
+        #Add any new outcome labels
+        added = False
+        for ol in outcomeLabelList:
+            if ol not in self.olIndex:
+                iNext = max(self.olIndex.values())+1 if len(self.olIndex) > 0 else 0
+                self.olIndex[iNext] = ol; added=True
+        if added: #rebuild self.ol because olIndex has changed
+            self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
+            
+        oliArray = _np.array([ self.olIndex[ol] for ol in outcomeLabelList ] , self.oliType)
+        timeArray = _np.array(timeStampList, self.timeType)
+        assert(oliArray.shape == timeArray.shape), \
+            "Outcome-label and time stamp lists must have the same length!"
+        
+        if repCountList is None:
+            if self.repData is None: repArray = None
+            else: repArray = _np.ones(len(oliArray), self.repType)
+        else:
+            if self.repData is None:
+                #rep count data was given, but we're not currently holding repdata,
+                # so we need to build this up for all existings sequences:
+                self.build_repetition_counts()
+            repArray = _np.array(repCountList, self.repType)
+            
         if gateString in self.gsIndex:
-            if self.collisionAction == "aggregate":
-                gateStringIndx = self.gsIndex[gateString]
-                self.counts[ gateStringIndx ] += countArray
-            elif self.collisionAction == "keepseparate":
-                #find next available gatestring:
-                i=0; tagged_gateString = gateString
-                while tagged_gateString in self.gsIndex:
-                    i+=1; tagged_gateString = gateString + _gs.GateString(("#%d" % i,))
-                #add data for a new (duplicate) gatestring
-                gateStringIndx = len(self.counts) #index of to-be-added gate string
-                self.counts.append( countArray )
-                self.gsIndex[ tagged_gateString ] = gateStringIndx
-                
+            gateStringIndx = self.gsIndex[gateString]
+            if overwriteExisting:
+                self.oliData[ gateStringIndx ] = oliArray #OVERWRITE existing time series
+                self.timeData[ gateStringIndx ] = timeArray #OVERWRITE existing time series
+                if repArray is not None: self.repData[ gateStringIndx ] = repArray
+            else:
+                self.oliData[ gateStringIndx ] = _np.concatenate((self.oliData[gateStringIndx],oliArray))
+                self.timeData[ gateStringIndx ] = _np.concatenate((self.timeData[gateStringIndx],timeArray))
+                if repArray is not None:
+                    self.repData[ gateStringIndx ] = _np.concatenate((self.repData[gateStringIndx],repArray))
+      
         else:
             #add data for a new gatestring
-            gateStringIndx = len(self.counts) #index of to-be-added gate string
-            self.counts.append( countArray )
+            assert( len(self.oliData) == len(self.timeData) ), "OLI and TIME data are out of sync!!"
+            gateStringIndx = len(self.oliData) #index of to-be-added gate string
+            self.oliData.append( oliArray )
+            self.timeData.append( timeArray )
+            if repArray is not None: self.repData.append( repArray )
             self.gsIndex[ gateString ] = gateStringIndx
 
-        #In all cases, the total just gets incremented by all the counts
-        totalKey = self._total_key(gateString)
-        if totalKey is not None:
-            if totalKey not in self.totals: self.totals[totalKey] = 0
-            self.totals[totalKey] += countArray.sum()
-
-    def add_counts_1q(self, gateString, nZeros, nOnes):
-        """
-        Single-qubit version of addCountsDict, for convenience when
-          the DataSet contains two spam labels, '0' and '1'.
-
-        Parameters
-        ----------
-        gateString : tuple or GateString
-          A tuple of gate labels specifying the gate string or a GateString object,
-            e.g. ('I','x')
-
-        nZeros : int
-          The number of counts for the '0' spam label.
-
-        nOnes : int
-          The number of counts for the '1' spam label.
-
-        Returns
-        -------
-        None
-        """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        if not isinstance(gateString, _gs.GateString):
-            gateString = _gs.GateString(gateString) #make sure we have a GateString
-
-        if gateString in self.gsIndex and self.collisionAction == "aggregate":
-            current_dsRow = self[ gateString ]
-            oldP = current_dsRow['1'] / float( current_dsRow['1'] + current_dsRow['0'] )
-            newP = nOnes / float(nOnes + nZeros)
-            if abs(oldP-newP) > 0.1:
-                print('Warning! When attempting to combine data for the gate string '+ \
-                    str(gateString) +', I encountered a discrepency of '+ str(abs(oldP-newP)*100.0) + \
-                    ' percent! To resolve this issue, I am not going to ignore the latter data.')
-                return
-
-        self.add_count_dict(gateString, {'0':nZeros, '1':nOnes} )
 
     def add_counts_from_dataset(self, otherDataSet):
         """
@@ -585,11 +777,27 @@ class DataSet(object):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        assert(self.get_spam_labels() == otherDataSet.get_spam_labels())
-        for (gateLabelString,dsRow) in otherDataSet.iteritems():
-            self.add_count_list(gateLabelString, list(dsRow.values()) )
+        return self.add_series_from_dataset(otherDataSet)
 
+      
+    def add_series_from_dataset(self, otherDataSet):
+        """ 
+        Append another DataSet's series data to this DataSet
+    
+        Parameters
+        ----------
+        otherDataSet : DataSet
+            The dataset to take time series data from.
+    
+        Returns
+        -------
+        None
+        """
+        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
+        for gateString,dsRow in otherDataSet.iteritems():
+            self.add_series_data(gateString, dsRow.get_ol(), dsRow.time, dsRow.reps, False)
+
+      
     def __str__(self):
         s = ""
         for gateString in self: # tuple-type gate label strings are keys
@@ -598,55 +806,58 @@ class DataSet(object):
         return s + "\n"
 
     def truncate(self, listOfGateStringsToKeep, bThrowErrorIfStringIsMissing=True):
-        """
-        Create a truncated dataset comprised of a subset of the counts in this dataset.
-
+        """ 
+        Create a truncated dataset comprised of a subset of the gate strings
+        in this dataset.
+    
         Parameters
         ----------
         listOfGateStringsToKeep : list of (tuples or GateStrings)
             A list of the gate strings for the new returned dataset.  If a
-            gate string is given in this list that isn't in the original
+            gate string is given in this list that isn't in the original 
             data set, bThrowErrorIfStringIsMissing determines the behavior.
-
+    
         bThrowErrorIfStringIsMissing : bool, optional
             When true, a ValueError exception is raised when a strin)g
             if verbosity > 0:
             in listOfGateStringsToKeep is not in the data set.
-
+            
         Returns
         -------
         DataSet
             The truncated data set.
         """
-        if self.bStatic:
+        if self.bStatic: 
             gateStringIndices = []
             gateStrings = []
             for gs in listOfGateStringsToKeep:
                 gateString = gs if isinstance(gs, _gs.GateString) else _gs.GateString(gs)
-
+                
                 if gateString not in self.gsIndex:
                     if bThrowErrorIfStringIsMissing:
                         raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
                     else: continue
-
+      
                 #only keep track of gate strings if they could be different from listOfGateStringsToKeep
-                if not bThrowErrorIfStringIsMissing: gateStrings.append( gateString )
+                if not bThrowErrorIfStringIsMissing: gateStrings.append( gateString )  
                 gateStringIndices.append( self.gsIndex[gateString] )
-
+    
             if bThrowErrorIfStringIsMissing: gateStrings = listOfGateStringsToKeep
-            trunc_gsIndex = _OrderedDict( list(zip(gateStrings, gateStringIndices)) )
-            trunc_dataset = DataSet(self.counts, gateStringIndices=trunc_gsIndex, spamLabelIndices=self.slIndex, bStatic=True) #don't copy counts, just reference
-            #trunc_dataset = StaticDataSet(self.counts.take(gateStringIndices,axis=0), gateStrings=gateStrings, spamLabelIndices=self.slIndex)
-
+            trunc_gsIndex = _OrderedDict( zip(gateStrings, gateStringIndices) )
+            trunc_dataset = DataSet(self.oliData, self.timeData, self.repData,
+                                    gateStringIndices=trunc_gsIndex,
+                                    outcomeLabelIndices=self.olIndex, bStatic=True) #don't copy counts, just reference
         else:
-            trunc_dataset = DataSet(spamLabels=self.get_spam_labels())
+            trunc_dataset = DataSet(outcomeLabels=self.get_outcome_labels())
             for gateString in _lt.remove_duplicates(listOfGateStringsToKeep):
                 if gateString in self.gsIndex:
                     gateStringIndx = self.gsIndex[gateString]
-                    trunc_dataset.add_count_list( gateString, self.counts[ gateStringIndx ].copy() ) #Copy operation so trucated dataset can be modified
+                    repData = self.repData[ gateStringIndx ].copy() if (self.repData is not None) else None
+                    trunc_dataset.add_series_data( gateString, [ self.ol[i] for i in self.oliData[ gateStringIndx ] ],
+                                                   self.timeData[ gateStringIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
                 elif bThrowErrorIfStringIsMissing:
                     raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
-
+    
         return trunc_dataset
 
     def process_gate_strings(self, processor_fn):
@@ -673,208 +884,440 @@ class DataSet(object):
             assert(isinstance(new_gstr, _gs.GateString)), "`processor_fn` must return a GateString!"
             new_gsIndex[ new_gstr  ] = indx
         self.gsIndex = new_gsIndex
-        
+
 
     def copy(self):
         """ Make a copy of this DataSet. """
-        if self.bStatic:
+        if self.bStatic: 
             return self # doesn't need to be copied since data can't change
         else:
-            copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction,
-                               measurementGates = self.measurementGates)
+            copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
+                               collisionAction=self.collisionAction)
             copyOfMe.gsIndex = self.gsIndex.copy()
-            copyOfMe.counts = [ el.copy() for el in self.counts ]
-            if self.totals is not None:
-                copyOfMe.totals = self.totals.copy()
+            copyOfMe.oliData = [ el.copy() for el in self.oliData ]
+            copyOfMe.timeData = [ el.copy() for el in self.timeData ]
+            if self.repData is not None:
+                copyOfMe.repData = [ el.copy() for el in self.repData ]
+            else: copyOfMe.repData = None
+            
+            copyOfMe.oliType  =self.oliType
+            copyOfMe.timeType = self.timeType
+            copyOfMe.repType  = self.repType
             return copyOfMe
 
 
     def copy_nonstatic(self):
         """ Make a non-static copy of this DataSet. """
-        if self.bStatic:
-            copyOfMe = DataSet(spamLabels=self.get_spam_labels(),
-                               collisionAction=self.collisionAction,
-                               measurementGates = self.measurementGates)
-            copyOfMe.gsIndex = self.gsIndex.copy()
-            copyOfMe.counts = [ el.copy() for el in self.counts ]
-            if self.totals is not None:
-                copyOfMe.totals = self.totals.copy()                
+        if self.bStatic: 
+            copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
+                               collisionAction=self.collisionAction)
+            copyOfMe.gsIndex = _OrderedDict([ (gstr,i) for i,gstr in enumerate(self.gsIndex.keys()) ])
+            copyOfMe.oliData = [] 
+            copyOfMe.timeData = []
+            copyOfMe.repData = None if (self.repData is None) else []
+            for slc in self.gsIndex.values():
+                copyOfMe.oliData.append( self.oliData[slc].copy() )
+                copyOfMe.timeData.append( self.timeData[slc].copy() )
+                if self.repData is not None:
+                    copyOfMe.repData.append( self.repData[slc].copy() )
+      
+            copyOfMe.oliType  =self.oliType
+            copyOfMe.timeType = self.timeType
+            copyOfMe.repType  = self.repType
             return copyOfMe
         else:
             return self.copy()
 
 
-    def done_adding_data(self):
-        """
-        Promotes a non-static DataSet to a static (read-only) DataSet.  This
-         method should be called after all data has been added.
-        """
-        if self.bStatic: return
-        #Convert normal dataset to static mode.
-        #  gsIndex and slIndex stay the same ; counts is transformed to a 2D numpy array
-        if len(self.counts) > 0:
-            newCounts = _np.concatenate( [el.reshape(1,-1) for el in self.counts], axis=0 )
+  def done_adding_data(self):
+    """ 
+    Promotes a non-static DataSet to a static (read-only) DataSet.  This
+     method should be called after all data has been added.
+    """     
+    if self.bStatic: return
+    #Convert normal dataset to static mode.
+    #  olIndex stays the same
+    #  gsIndex changes to hold slices into 1D arrays
+    #  oliData, timeData, & repData change from being lists of arrays to
+    #    single 1D arrays.
+    
+    if len(self.oliData) > 0:
+      new_gsIndex = _OrderedDict()
+      curIndx = 0
+      to_concat_oli = []
+      to_concat_time = []
+      to_concat_rep = []
+      for gatestring, indx in self.gsIndex.items():
+        seriesLen = len(self.oliData[indx])
+
+        to_concat_oli.append( self.oliData[indx] )   #just build up lists of
+        to_concat_time.append( self.timeData[indx] ) # reference, not copies
+        assert(seriesLen == len(self.timeData[indx])), "TIME & OLI out of sync!"
+        
+        if self.repData is not None:
+          to_concat_rep.append( self.repData[indx] )
+          assert(seriesLen == len(self.repData[indx])), "REP & OLI out of sync!"
+          
+        new_gsIndex[gatestring] = slice(curIndx, curIndx+seriesLen)
+        curIndx += seriesLen
+
+      self.gsIndex = new_gsIndex
+      self.oliData = _np.concatenate( to_concat_oli )
+      self.timeData = _np.concatenate( to_concat_time )
+      if self.repData is not None:
+        self.repData = _np.concatenate( to_concat_rep )
+        
+    else:
+      #leave gsIndex alone (should be empty anyway?)
+      self.oliData = _np.empty( (0,), self.oliType)
+      self.timeData = _np.empty( (0,), self.timeType)
+      if self.repData is not None:
+        self.repData = _np.empty( (0,), self.repType)
+      
+    self.bStatic = True
+    self.uuid = _uuid.uuid4()
+
+  #OLD VERSION - TODO: UPDATE WITH NEW (BETTER) -- EGN COMMENTING OUT FOR NOW (TODO: REMOVE?)
+  #def compute_fourier_filtering(self, n_sigma=3, slope_compensation=False, resample_factor=5, verbosity=0):
+  #  """ Compute and store significant fourier coefficients -- EXPERIMENTAL TODO DOCSTRING"""
+  #  if not self.bStatic: 
+  #    raise ValueError("DataSet object must be *static* to compute fourier filters")
+  #
+  #  #Computes the order statistic
+  #
+  #  # Compute the log factorial function for numbers up to 2**15
+  #  # we could go higher, but this is already a lot of data
+  #  log_factorial = _np.append([0.0],_np.cumsum(list(map(_np.log, _np.arange(2**15)+1))))
+  #  
+  #  def order(x,sigma, n,r):
+  #      # Compute the distribution of the r^th smallest of n draws of a 
+  #      # mean-zero normal distribution with variance sigma^2
+  #      
+  #      a = (1./2 - n) * _np.log(2) 
+  #      b = -x**2 / (2 * sigma**2)
+  #      c = (n-r)*_np.log(1-_sps.erf(x/(_np.sqrt(2)*sigma)))
+  #      d = (r-1)*_np.log(1+_sps.erf(x/(_np.sqrt(2)*sigma)))
+  #  
+  #      e = log_factorial[n]
+  #      f = log_factorial[n-r]
+  #      g = log_factorial[r-1]
+  #  
+  #      h = _np.log(_np.pi*sigma**2)/2.
+  #  
+  #      return _np.exp(a + b + c + d + e - f - g - h)
+  #
+  #  def order_mean_var(sigma, n, r, mean_in = None):
+  #      # Compute the mean variance of the order statistic
+  #      order_mean = _quad(lambda x: x * order(x,sigma, n, r), -6*sigma, 6*sigma)[0]
+  #      return order_mean, _quad(lambda x: x**2 * order(x, sigma, n, r), -6*sigma, 6*sigma)[0] - order_mean**2
+  #
+  #  def fourier_filter(tdata, ydata, n_sigma=3., keep=None, return_aux=False, verbose=False, 
+  #                     truncate=True, slope_compensation=False, resampleFactor=5):
+  #      """
+  #      Process a list of binary data to produce an estimate of the time-dependent 
+  #      probability underlying the data.  Fourier components are kept if their 
+  #      magnitude is more than sigma from the expected value.
+  #      """
+  #
+  #      #first turn the data into an equally spaced sequence of data values
+  #      try:
+  #        f = _interp1d(tdata, ydata, kind='cubic', assume_sorted=False)
+  #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
+  #        f = _interp1d(tdata, ydata, kind='linear', assume_sorted=False)
+  #      ts = _np.linspace(tdata[0],tdata[-1], len(tdata)*resampleFactor)
+  #      #delta = _np.mean([ tdata[i]-tdata[i-1] for i in range(1,len(tdata)) ])
+  #      data  = _np.array([f(t) for t in ts],'d')
+  #
+  #      # Estimate the stationary probability from the data and compute the expected
+  #      # variance for the fourier coefficients
+  #      p_mean = _np.mean(data)
+  #      p_sigma = _np.sqrt(len(data) * (p_mean - p_mean**2) / 2.)
+  #
+  #      min_p_sigma = 1e-6 # hack for now to keep p_sigma from equaling zero.
+  #      p_sigma = max(p_sigma, min_p_sigma)
+  #      
+  #      # Compensate for slope
+  #      if slope_compensation:
+  #          slope = 2 * (_np.mean(data[int(len(data)/2.):]) - _np.mean(data[0:int(len(data)/2.)]))
+  #          data = data - slope * _np.linspace(-.5,.5,len(data))
+  #          
+  #      # DFT the data
+  #      fft_data = _fft.rfft(data)
+  #      filtered_fft = _np.array(fft_data.copy())
+  #      
+  #      if keep is None:
+  #          # Determine the threshold by computing the distribution of the extremal 
+  #          # order statistic.  The threshold is taken to be the mean
+  #          order_mean, order_var = order_mean_var(p_sigma, len(data), 1)
+  #          order_sig = _np.sqrt(order_var)
+  #          threshold = abs(order_mean) + n_sigma * order_sig
+  #      else:
+  #          # Determine the threshold to be consistent with keeping "keep" fourier modes
+  #          threshold = list(sorted(abs(fft_data), reverse=True))[keep]
+  #  
+  #      n_kept = sum(abs(filtered_fft) >= threshold)
+  #      if verbose:
+  #          print("Threshold:" + str(threshold))
+  #          print("Keeping {} Fourier modes".format(n_kept))
+  #  
+  #      filtered_fft[ abs(filtered_fft) < threshold ] = 0
+  #      filtered_data = _np.array(_fft.irfft(filtered_fft))
+  #      filtered_tdata = ts #from interpolation
+  #  
+  #      if slope_compensation:
+  #          filtered_data += slope * _np.linspace(-.5,.5,len(data))
+  #     
+  #      if truncate:
+  #          filtered_data = _np.maximum(_np.minimum(filtered_data,1-1.e-6),1.e-6)
+  #      
+  #      if return_aux:
+  #          return filtered_data, filtered_tdata, fft_data, threshold, n_kept
+  #      else:
+  #          return filtered_data, filtered_tdata
+  #
+  #  # For each spam label, get 1's and 0's string to be "fourier filtered" 
+  #  # into a time-dependent probability function.
+  #  self.ffdata = {}
+  #  for gateStr in self.gsIndex.keys():
+  #    dsRow = self[gateStr]
+  #    ff_data_dict = {}
+  #    for outcomeLabel,spamIndx in self.olIndex.items():
+  #      ydata = _np.where(dsRow.get_expanded_oli() == spamIndx, 1, 0 )
+  #      tdata = dsRow.get_expanded_times()
+  #
+  #      # Filter modes less than n_sigma sigma from expected maximum.
+  #      filtered, filtered_ts, fft_data, threshold, n_kept = fourier_filter(
+  #        tdata, ydata, n_sigma=n_sigma, return_aux=True,
+  #        slope_compensation=slope_compensation, resampleFactor=resample_factor,
+  #        verbose=(verbosity > 0))
+  #      ff_data_dict[outcomeLabel] = (filtered, filtered_ts, fft_data, threshold, n_kept)
+  #
+  #    self.ffdata[gateStr] = ff_data_dict
+  #
+  #
+  #def create_dataset_at_time(self, timeval):
+  #  """ 
+  #  Creates a DataSet at time `timeval` via fourier-filtering this data.
+  #
+  #  Parameters
+  #  ----------
+  #  timeval : float or int
+  #      The time-stamp value at which to create a DataSet.
+  #
+  #  Returns
+  #  -------
+  #  DataSet
+  #  """
+  #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
+  #  for gateStr,i in self.gsIndex.items():
+  #    ff_data_dict = self.ffdata[gateStr]
+  #    nTimeSteps = self[gateStr].total()
+  #    avgKept = _np.average( [ff_data_dict[sl][4] for sl in self.olIndex ] )
+  #    N = int(round(float(nTimeSteps)/avgKept)) # ~ clicks per fourier mode
+  #
+  #    count_dict = {}
+  #    for sl in self.olIndex:
+  #      (filtered, ts, fft_data, threshold, n_kept) = ff_data_dict[sl]
+  #      try:
+  #        f = _interp1d(ts, filtered, kind='cubic')
+  #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
+  #        f = _interp1d(ts, filtered, kind='linear')
+  #      p = f(timeval)
+  #      count_dict[sl] = N*p
+  #
+  #    ds.add_count_dict(gateStr, count_dict)
+  #  ds.done_adding_data()
+  #  return ds
+  #
+  #
+  #def create_dataset_from_time_range(self, startTime, endTime):
+  #  """ 
+  #  Creates a DataSet by aggregating the counts within the
+  #  [`startTime`,`endTime`) interval.
+  #
+  #  Parameters
+  #  ----------
+  #  startTime, endTime : float or int
+  #      The time-stamps to use for the beginning (inclusive) and end
+  #      (exclusive) of the time interval.
+  #
+  #  Returns
+  #  -------
+  #  DataSet
+  #  """
+  #  tot = 0
+  #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
+  #  for gateStr,dsRow in self.iteritems():
+  #
+  #    if dsRow.reps is None:
+  #      reps = _np.ones(dsRow.oli.shape, self.repType)
+  #    else: reps = dsRow.reps
+  #
+  #    count_dict = {i: 0 for i in self.olIndex.values()}
+  #    for spamIndx, t, rep in zip(dsRow.oli, dsRow.time, reps):
+  #      if startTime <= t < endTime:
+  #        count_dict[spamIndx] += rep
+  #        tot += rep
+  #
+  #    ds.add_count_dict(gateStr,
+  #                      {self.sl[i]: cnt for i,cnt in count_dict.items()})
+  #
+  #  if tot == 0:
+  #    _warnings.warn("No counts in the requested time range: empty DataSet created")
+  #  ds.done_adding_data()                                                                                                           
+  #  return ds         
+
+
+  def __getstate__(self):
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
+                 'gsIndexVals': list(self.gsIndex.values()),
+                 'olIndex': self.olIndex,
+                 'sl': self.sl,
+                 'bStatic': self.bStatic,
+                 'oliData': self.oliData,
+                 'timeData': self.timeData,
+                 'repData': self.repData,
+                 'oliType': self.oliType,
+                 'timeType': self.timeType,
+                 'repType': self.repType,
+                 'collisionAction': self.collisionAction,
+                 'uuid' : self.uuid }
+    return toPickle
+
+  def __setstate__(self, state_dict):
+    gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
+    self.olIndex = state_dict['olIndex']
+    self.sl = state_dict['sl']
+    self.bStatic = state_dict['bStatic']
+    self.oliData  = state_dict['oliData']
+    self.timeData = state_dict['timeData']
+    self.repData  = state_dict['repData']
+    self.oliType  = state_dict['oliType']
+    self.timeType = state_dict['timeType']
+    self.repType  = state_dict['repType']
+    self.collisionAction, = state_dict['collisionAction']
+    self.uuid = state_dict['uuid']
+
+
+
+  def save(self, fileOrFilename):
+    """ 
+    Save this DataSet to a file.
+
+    Parameters
+    ----------
+    fileOrFilename : string or file object
+        If a string,  interpreted as a filename.  If this filename ends 
+        in ".gz", the file will be gzip compressed.
+
+    Returns
+    -------
+    None
+    """
+
+    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
+                 'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
+                 'olIndex': self.olIndex,
+                 'sl': self.sl,
+                 'bStatic': self.bStatic,
+                 'oliType': self.oliType,
+                 'timeType': self.timeType,
+                 'repType': self.repType,
+                 'useReps': bool(self.repData is not None),
+                 'collisionAction': self.collisionAction,
+                 'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
+    if not self.bStatic: toPickle['nRows'] = len(self.oliData)
+    
+    bOpen = (type(fileOrFilename) == str)
+    if bOpen:
+        if fileOrFilename.endswith(".gz"):
+            import gzip as _gzip
+            f = _gzip.open(fileOrFilename,"wb")
         else:
-            newCounts = _np.empty( (0,len(self.slIndex)), 'd')
-        self.counts, self.bStatic = newCounts, True
-        self.uuid = _uuid.uuid4()
+            f = open(fileOrFilename,"wb")
+    else: 
+        f = fileOrFilename
 
+    _pickle.dump(toPickle,f)
+    if self.bStatic:  
+      _np.save(f, self.oliData)
+      _np.save(f, self.timeData)
+      if self.repData is not None:
+        _np.save(f, self.repData)
+    else: 
+      for row in self.oliData: _np.save(f, row)
+      for row in self.timeData: _np.save(f, row)
+      if self.repData is not None:
+        for row in self.repData: _np.save(f, row)
+    if bOpen: f.close()
 
-    def __getstate__(self):
-        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in self.gsIndex.keys()], #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))),
-                     'gsIndexVals': list(self.gsIndex.values()),
-                     'slIndex': self.slIndex,
-                     'bStatic': self.bStatic,
-                     'counts': self.counts,
-                     'collisionAction': self.collisionAction,
-                     'measurementGates': self.measurementGates,
-                     'measurementLabels': self.measurementLabels,
-                     'totals': self.totals,
-                     'uuid' : self.uuid}
-        return toPickle
+  def load(self, fileOrFilename):
+    """
+    Load DataSet from a file, clearing any data is contained previously.
 
-    def __setstate__(self, state_dict):
-        gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-        self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
-        self.slIndex = state_dict['slIndex']
-        self.counts = state_dict['counts']
-        self.bStatic = state_dict['bStatic']
-        self.collisionAction = state_dict.get('collisionAction',"aggregate") #backwards compatibility
-        self.measurementGates = state_dict.get('measurementGates',None)
-        self.measurementLabels = state_dict.get('measurementLabels',None)
-        self.totals = state_dict.get('totals',None)
-        self.uuid = state_dict.get('uuid', _uuid.uuid4() if self.bStatic else None)
+    Parameters
+    ----------
+    fileOrFilename string or file object.
+        If a string,  interpreted as a filename.  If this filename ends 
+        in ".gz", the file will be gzip uncompressed as it is read.
 
-    def save(self, fileOrFilename):
-        """
-        Save this DataSet to a file.
-
-        Parameters
-        ----------
-        fileOrFilename : string or file object
-            If a string,  interpreted as a filename.  If this filename ends
-            in ".gz", the file will be gzip compressed.
-
-        Returns
-        -------
-        None
-        """
-
-        toPickle = { 'gsIndexKeys': [_gs.CompressedGateString(key) for key in (self.gsIndex.keys() if self.gsIndex else [])],  #list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
-                     'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
-                     'slIndex': self.slIndex,
-                     'bStatic': self.bStatic,
-                     'collisionAction': self.collisionAction,
-                     'comment': self.comment,
-                     'measurementGates': self.measurementGates,
-                     'measurementLabels': self.measurementLabels,
-                     'totals': self.totals,
-                     'uuid' : self.uuid} 
-                     #Don't pickle counts numpy data b/c it's inefficient
-        if not self.bStatic: toPickle['nRows'] = len(self.counts)
-
-        # Compatability for unicode-literal filenames
-        bOpen = not (hasattr(fileOrFilename, 'write'))
-        if bOpen:
-            if fileOrFilename.endswith(".gz"):
-                import gzip as _gzip
-                f = _gzip.open(fileOrFilename,"wb")
-            else:
-                f = open(fileOrFilename,"wb")
+    Returns
+    -------
+    None
+    """
+    bOpen = (type(fileOrFilename) == str)
+    if bOpen:
+        if fileOrFilename.endswith(".gz"):
+            import gzip as _gzip
+            f = _gzip.open(fileOrFilename,"rb")
         else:
-            f = fileOrFilename
+            f = open(fileOrFilename,"rb")
+    else: 
+        f = fileOrFilename
 
-        _pickle.dump(toPickle,f)
-        if self.bStatic:
-            _np.save(f, self.counts)
-        else:
-            for rowArray in self.counts:
-                _np.save(f, rowArray)
-        if bOpen: f.close()
+    state_dict = _pickle.load(f)
+    def expand(x): #to be backward compatible
+      """ Expand a compressed gate string """
+      if isinstance(x,_gs.CompressedGateString): return x.expand()
+      else: 
+        _warnings.warn("Deprecated dataset format.  Please re-save " +
+                       "this dataset soon to avoid future incompatibility.")
+        return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
+    gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
 
-    def load(self, fileOrFilename):
-        """
-        Load DataSet from a file, clearing any data is contained previously.
+    #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+    self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
+    self.olIndex = state_dict['olIndex']
+    self.sl      = state_dict['sl']
+    self.bStatic = state_dict['bStatic']
+    self.oliType = state_dict['oliType']
+    self.timeType= state_dict['timeType']
+    self.repType = state_dict['repType']
+    self.collisionAction, = state_dict['collisionAction']
+    self.uuid    = state_dict['uuid']
 
-        Parameters
-        ----------
-        fileOrFilename string or file object.
-            If a string,  interpreted as a filename.  If this filename ends
-            in ".gz", the file will be gzip uncompressed as it is read.
+    useReps = state_dict['useReps']
 
-        Returns
-        -------
-        None
-        """
-        # Compatability for unicode-literal filenames
-        bOpen = not (hasattr(fileOrFilename, 'write'))
-        if bOpen:
-            if fileOrFilename.endswith(".gz"):
-                import gzip as _gzip
-                f = _gzip.open(fileOrFilename,"rb")
-            else:
-                f = open(fileOrFilename,"rb")
-            self.file_origin = fileOrFilename
-        else:
-            f = fileOrFilename
+    if self.bStatic:
+      self.oliData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+      self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+      if useReps:
+        self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+    else:
+      self.oliData = []
+      for _ in range(state_dict['nRows']):
+        self.oliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
-        state_dict = _pickle.load(f)
-        def expand(x):
-            """Backard-compatible expansion of a CompressedGateString"""
-            if isinstance(x,_gs.CompressedGateString): return x.expand()
-            else:
-                _warnings.warn("Deprecated dataset format.  Please re-save " +
-                               "this dataset soon to avoid future incompatibility.")
-                return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
-        gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+      self.timeData = []
+      for _ in range(state_dict['nRows']):
+        self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
-        #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-        self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
-        self.slIndex = state_dict['slIndex']
-        self.bStatic = state_dict['bStatic']
-        self.collisionAction = state_dict.get("collisionAction","aggregate") #backward compatibility
-        self.comment = state_dict.get("comment",None) #backward compatibility
-        self.measurementGates = state_dict.get('measurementGates',None)
-        self.measurementLabels = state_dict.get('measurementLabels',None)
-        self.totals = state_dict.get('totals',None)
+      if useReps:
+        self.repData = []
+        for _ in range(state_dict['nRows']):
+          self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+      else:
+        self.repData = None
 
-        if self.bStatic:
-            self.counts = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-        else:
-            self.counts = []
-            for i in range(state_dict['nRows']): #pylint: disable=unused-variable
-                self.counts.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-        if bOpen: f.close()
-        if 'uuid' in state_dict:
-            self.uuid= state_dict['uuid']
-        # Otherwise uuid is already set
-
-
-#def upgrade_old_dataset(oldDataset):
-#    """ Deprecated: Returns a DataSet based on an old-version dataset object """
-#    if len(oldDataset.keys()) > 0:
-#      spamLabels = oldDataset[ oldDataset.keys()[0] ].n.keys()
-#      newDataset = DataSet(spamLabels=spamLabels)
-#      for gs,datum in oldDataset.iteritems():
-#        newDataset.add_count_dict( gs, datum.n )
-#    else:
-#      newDataset = DataSet(spamLabels=[]) #if it's an empty dataset, no spam labels
-#    newDataset.done_adding_data()
-#    return newDataset
-#
-#def upgrade_old_data_set_pickle(filename):
-#    """ Deprecated: Upgrades an old-version dataset object pickle file."""
-#    import sys as _sys
-#    import OldDataSet as _OldDataSet
-#    import cPickle as _pickle
-#
-#    currentDataSetModule = _sys.modules['DataSet']
-#    _sys.modules['DataSet'] = _OldDataSet  #replace DataSet module with old one so unpickling can work
-#    try:     oldDataset = _pickle.load( open(filename,"rb") )
-#    finally: _sys.modules['DataSet'] = currentDataSetModule
-#
-#    newDataset = upgrade_old_dataset(oldDataset)
-#
-#    _pickle.dump( newDataset, open(filename + ".upd","wb") )
-#    print "Successfully updated ==> %s" % (filename + ".upd")
+    if bOpen: f.close()
