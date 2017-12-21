@@ -494,7 +494,7 @@ def _constructTargetAB(prepStrs, effectStrs, targetGateset):
             gateLabelString = rhostr + estr # LEXICOGRAPHICAL VS MATRIX ORDER
             probs = targetGateset.probs( gateLabelString )
             AB[eoff:eoff+povmLen,j] = \
-                [ probs[ol] for ol in targetGateset.povms[povmLbl] ]
+                [ probs[(ol,)] for ol in targetGateset.povms[povmLbl] ]
                 # outcomes (keys of probs) should just be povm effect labels
                 # since no instruments are allowed in fiducial strings.
         eoff += povmLen

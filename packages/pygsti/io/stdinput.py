@@ -262,16 +262,16 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
-            spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
+            else: colLabels = [ '1 count', 'count total' ] #  outcomeLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            outcomeLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
-                                comment="\n".join(preamble_comments),
-                                measurementGates=measurementGates)
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels,collisionAction=collisionAction,
+                                comment="\n".join(preamble_comments))
+                                #OLD: measurementGates=measurementGates)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -303,55 +303,59 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
+        outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
+
+        def str_to_outcome(x): #always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+        
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
-                spamLabel = colLabel[:-len(' count')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                countCols.append( (spamLabel,i) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                countCols.append( (outcomeLabel,i) )
 
             elif colLabel.endswith(' frequency'):
                 if 'count total' not in colLabels:
                     raise ValueError("Frequency columns specified without count total")
                 else: iTotal = colLabels.index( 'count total' )
-                spamLabel = colLabel[:-len(' frequency')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                freqCols.append( (spamLabel,i,iTotal) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                freqCols.append( (outcomeLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if '1' in spamLabels and '0' not in spamLabels:
-                spamLabels.append('0')
-                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
-            elif '0' in spamLabels and '1' not in spamLabels:
-                spamLabels.append('1')
+            if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+                outcomeLabels.append( ('0',) )
+                impliedCountTotCol1Q = ('0',), colLabels.index( 'count total' )
+            elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+                outcomeLabels.append( ('1',) )
                 impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
-        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-        return spamLabels, fillInfo
+        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)        
+        return outcomeLabels, fillInfo
 
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
         countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
-        for spamLabel,iCol in countCols:
+        for outcomeLabel,iCol in countCols:
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
-            countDict[spamLabel] = colValues[iCol]
+            countDict[outcomeLabel] = colValues[iCol]
 
-        for spamLabel,iCol,iTotCol in freqCols:
+        for outcomeLabel,iCol,iTotCol in freqCols:
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
-            countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
+            countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
         if impliedCountTotCol1Q[1] >= 0:
-            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
-            if impliedSpamLabel == '0':
-                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedOutcomeLabel == ('0',):
+                countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
             else:
-                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
+                countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -407,19 +411,19 @@ class StdInputParser(object):
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
             else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
-            dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
+            dsOutcomeLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         datasets = _OrderedDict()
-        for dsLabel,spamLabels in dsSpamLabels.items():
-            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels,
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
+            datasets[dsLabel] = _objs.DataSet(outcomeLabels=outcomeLabels,
                                               collisionAction=collisionAction)
 
         dsCountDicts = _OrderedDict()
-        for dsLabel in dsSpamLabels: dsCountDicts[dsLabel] = {}
+        for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
 
         nLines = 0
         with open(filename, 'r') as datafile:
@@ -451,72 +455,72 @@ class StdInputParser(object):
         return mds
 
 
-    #Note: spam labels must not contain spaces since we use spaces to separate
-    # the spam label from the dataset label
+    #Note: outcome labels must not contain spaces since we use spaces to separate
+    # the outcome label from the dataset label
     def _extractLabelsFromMultiDataColLabels(self, colLabels):
-        dsSpamLabels = _OrderedDict()
+        dsOutcomeLabels = _OrderedDict()
         countCols = []; freqCols = []; impliedCounts1Q = []
         for i,colLabel in enumerate(colLabels):
             wordsInColLabel = colLabel.split() #split on whitespace into words
             if len(wordsInColLabel) < 3: continue #allow other columns we don't recognize
 
             if wordsInColLabel[-1] == 'count':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                countCols.append( (dsLabel,spamLabel,i) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                countCols.append( (dsLabel,outcomeLabel,i) )
 
             elif wordsInColLabel[-1] == 'frequency':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:
                     raise ValueError("Frequency columns specified without" +
                                      "count total for dataset '%s'" % dsLabel)
                 else: iTotal = colLabels.index( '%s count total' % dsLabel )
 
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                freqCols.append( (dsLabel,spamLabel,i,iTotal) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                freqCols.append( (dsLabel,outcomeLabel,i,iTotal) )
 
-        for dsLabel,spamLabels in dsSpamLabels.items():
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if '1' in spamLabels and '0' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('0')
+                if '1' in outcomeLabels and '0' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, '0', iTotal) )
-                if '0' in spamLabels and '1' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('1')
+                if '0' in outcomeLabels and '1' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('1')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, '1', iTotal) )
 
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
-        return dsSpamLabels, fillInfo
+        return dsOutcomeLabels, fillInfo
 
 
     def _fillMultiDataCountDicts(self, countDicts, fillInfo, colValues):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
-        for dsLabel,spamLabel,iCol in countCols:
+        for dsLabel,outcomeLabel,iCol in countCols:
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
-        for dsLabel,spamLabel,iCol,iTotCol in freqCols:
+        for dsLabel,outcomeLabel,iCol,iTotCol in freqCols:
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
-            if spamLabel == '0':
+        for dsLabel,outcomeLabel,iTotCol in impliedCounts1Q:
+            if outcomeLabel == '0':
                 countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
-            elif spamLabel == '1':
+            elif outcomeLabel == '1':
                 countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
 
         #TODO - add standard count completion for 2Qubit case?
@@ -561,14 +565,14 @@ class StdInputParser(object):
         finally:
             _os.chdir(orig_cwd)
 
-        spamLabelAbbrevs = _OrderedDict()
+        outcomeLabelAbbrevs = _OrderedDict()
         for key,val in preamble_directives.items():
             if key == "Lookup": continue 
-            spamLabelAbbrevs[key] = val
-        spamLabels = spamLabelAbbrevs.values()
+            outcomeLabelAbbrevs[key] = val
+        outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.TDDataSet(spamLabels=spamLabels)
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
         nLines = sum(1 for line in open(filename,'r'))
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
@@ -590,7 +594,7 @@ class StdInputParser(object):
             except ValueError as e:
                 raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-            seriesList = [ spamLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
+            seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
             timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
             dataset.add_series_data(gateString, seriesList, timesList)
                 

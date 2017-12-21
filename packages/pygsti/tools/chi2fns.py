@@ -267,7 +267,7 @@ def chi2(gateset, dataset, gateStrings=None,
 #        #return sum( [ chi2fn_2outcome( dsRow.total(),
 #        #                     gateset.pr('plus', gatestring),
 #        #                     dsRow.fraction('plus'),
-#        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.iteritems() ] )
+#        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.items() ] )
 #    else:
 #        return sum( [ gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq,
 #                                       minProbClipForWeighting) for gatestring in gateStrings] )

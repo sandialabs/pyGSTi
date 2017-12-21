@@ -7,7 +7,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-import numbers as _numbers 
+import numbers as _numbers
+import uuid as _uuid
 #import scipy.special as _sps
 #import scipy.fftpack as _fft
 #from scipy.integrate import quad as _quad
@@ -81,7 +82,7 @@ class DataSetRow(object):
     looks similar to a list with `(outcome_label, time_index, repetition_count)`
     tuples as the values.
     """
-    def __init__(self, dataset, rowSliData, rowTimeData, rowRepData):
+    def __init__(self, dataset, rowOliData, rowTimeData, rowRepData):
         self.dataset = dataset
         self.oli = rowOliData
         self.time = rowTimeData
@@ -109,7 +110,7 @@ class DataSetRow(object):
             for oli, _, nreps in zip(self.oli,self.time,self.reps):
                 ol.extend( [self.dataset.ol[oli]]*nreps )
             return ol
-        else: return self.get_ol()
+        else: return self.outcomes
 
     def get_expanded_oli(self):
         """ 
@@ -141,6 +142,10 @@ class DataSetRow(object):
         else:
             return ( (self.dataset.ol[i],t,1) for (i,t) in zip(self.oli,self.time) )
 
+    def has_key(self, outcomeLabel):
+        """ Checks whether data counts for `outcomelabel` are available."""
+        return outcomeLabel in self.counts
+        
     def __getitem__(self,indexOrOutcomeLabel):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
             i = indexOrOutcomeLabel
@@ -179,7 +184,7 @@ class DataSetRow(object):
     def counts(self):
         """ 
         Returns this row's sequence of "repetition counts", that is, the number of
-        repetitions of each outcome label in the list returned by :method:`get_ol`, or
+        repetitions of each outcome label in the `outcomes` list, or
         equivalently, each outcome label index in this rows `.oli` member.
         """    
         cntDict = _OrderedDict()
@@ -191,6 +196,17 @@ class DataSetRow(object):
                 cntDict[ol] = float( sum(self.reps[
                     _np.nonzero(_np.equal(self.oli,i))[0]]))
         return cntDict
+
+    @property
+    def fractions(self):
+        """ 
+        Returns this row's sequence of "repetition counts", that is, the number of
+        repetitions of each outcome label in the `outcomes` list, or
+        equivalently, each outcome label index in this rows `.oli` member.
+        """
+        cnts = self.counts
+        total = sum(cnts.values())
+        return _OrderedDict( [(k,cnt/total) for k,cnt in cnts.items()] )
     
     def total(self):
         """ Returns the total number of counts contained in this row."""
@@ -201,7 +217,7 @@ class DataSetRow(object):
 
     def fraction(self,outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
-        d = self.get_counts()
+        d = self.counts
         total = sum(d.values())
         return d[outcomelabel]/total
 
@@ -258,15 +274,26 @@ class DataSet(object):
                  bStatic=False, fileToLoadFrom=None, collisionAction="aggregate",
                  comment=None):
         """ 
-        Initialize a DataSet ("Time-dependent DataSet").
-        TODO: docstring
+        Initialize a DataSet.
         
         Parameters
         ----------
-        timeseries : 2D numpy array (static case) or list of 1D numpy arrays (non-static case)
-            Specifies spam label indices.  In static case, rows of indices correspond to gate
-            strings and columns to time steps.  In non-static case, different arrays
-            correspond to gate strings and each array contains index data for all the time steps.
+        oliData : list or numpy.ndarray
+            When `bStatic == True`, a 1D numpy array containing outcome label
+            indices (integers), concatenated for all sequences.  Otherwise, a
+            list of 1D numpy arrays, one array per gate sequence.  In either
+            case, this quantity is indexed by the values of `gateStringIndices`
+            or the index of `gateStrings`.
+
+        timeData : list or numpy.ndarray
+            Same format at `oliData` except stores floating-point timestamp
+            values.
+
+        repData : list or numpy.ndarray
+            Same format at `oliData` except stores integer repetition counts
+            for each "data bin" (i.e. (outcome,time) pair).  If all repetitions
+            equal 1 ("single-shot" timestampted data), then `repData` can be
+            `None` (no repetitions).
         
         gateStrings : list of (tuples or GateStrings)
             Each element is a tuple of gate labels or a GateString object.  Indices for these strings
@@ -298,6 +325,19 @@ class DataSet(object):
         fileToLoadFrom : string or file object
             Specify this argument and no others to create a static DataSet by loading
             from a file (just like using the load(...) function).
+
+        collisionAction : {"aggregate","keepseparate"}
+            Specifies how duplicate gate sequences should be handled.  "aggregate"
+            adds duplicate-sequence counts to the same gatestring's data at the
+            next integer timestamp.  "keepseparate" tags duplicate-sequences by
+            appending a final "#<number>" gate label to the duplicated gate
+            sequence, which can then be accessed via the `get_row` and `set_row`
+            functions.
+
+        comment : string, optional
+            A user-specified comment string that gets carried around with the 
+            data.  A common use for this field is to attach to the data details
+            regarding its collection.
         
         Returns
         -------
@@ -337,7 +377,8 @@ class DataSet(object):
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
             self.olIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(outcomeLabels) ] )
-        else: raise ValueError("Must specify either outcomeLabels or outcomeLabelIndices when creating a DataSet")
+        else:
+            self.olIndex = _OrderedDict() #OK, as outcome labels are added as they appear
         
         # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
         #            labels (strings or tuples) -- just the reverse of self.olIndex
@@ -384,7 +425,7 @@ class DataSet(object):
         elif not bStatic:
             assert( timeData is None ), "timeData must be None when oliData is"
             assert( repData is None ), "repData must be None when oliData is"
-            assert( len(self.gsIndex) == 0)
+            assert( len(self.gsIndex) == 0), "gate strings specified without data!"
             self.oliData = []
             self.timeData = []
             self.repData = None
@@ -405,7 +446,7 @@ class DataSet(object):
         # self.ffdata : fourier filtering data
         self.ffdata = {}
         
-        #data types
+        #data types - should stay in sync with MultiDataSet
         self.oliType = _np.uint8
         self.timeType = _np.float64
         self.repType = _np.uint16
@@ -560,10 +601,10 @@ class DataSet(object):
         Returns
         -------
         list of strings or tuples
-        A list where each element is an outcome label (which can 
-        be a string or a tuple of strings).
+          A list where each element is an outcome label (which can 
+          be a string or a tuple of strings).
         """
-        return self.olIndex.keys()
+        return list(self.olIndex.keys())
 
 
     def get_gate_labels(self, prefix='G'):
@@ -723,7 +764,7 @@ class DataSet(object):
         for ol in outcomeLabelList:
             if ol not in self.olIndex:
                 iNext = max(self.olIndex.values())+1 if len(self.olIndex) > 0 else 0
-                self.olIndex[iNext] = ol; added=True
+                self.olIndex[ol] = iNext; added=True
         if added: #rebuild self.ol because olIndex has changed
             self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
             
@@ -794,12 +835,13 @@ class DataSet(object):
         None
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        for gateString,dsRow in otherDataSet.iteritems():
-            self.add_series_data(gateString, dsRow.get_ol(), dsRow.time, dsRow.reps, False)
+        for gateString,dsRow in otherDataSet.items():
+            self.add_series_data(gateString, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
       
     def __str__(self):
         s = ""
+        print("Dataset outcomes: ",self.olIndex)
         for gateString in self: # tuple-type gate label strings are keys
             s += "%s  :  %s\n" % (gateString, self[gateString])
             #s += "%d  :  %s\n" % (len(gateString), self[gateString]) #Uncomment to print string lengths instead of strings themselves
@@ -1172,7 +1214,7 @@ class DataSet(object):
         toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
                      'gsIndexVals': list(self.gsIndex.values()),
                      'olIndex': self.olIndex,
-                     'sl': self.sl,
+                     'ol': self.ol,
                      'bStatic': self.bStatic,
                      'oliData': self.oliData,
                      'timeData': self.timeData,
@@ -1188,7 +1230,7 @@ class DataSet(object):
         gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
         self.olIndex = state_dict['olIndex']
-        self.sl = state_dict['sl']
+        self.ol = state_dict['ol']
         self.bStatic = state_dict['bStatic']
         self.oliData  = state_dict['oliData']
         self.timeData = state_dict['timeData']
@@ -1196,7 +1238,7 @@ class DataSet(object):
         self.oliType  = state_dict['oliType']
         self.timeType = state_dict['timeType']
         self.repType  = state_dict['repType']
-        self.collisionAction, = state_dict['collisionAction']
+        self.collisionAction = state_dict['collisionAction']
         self.uuid = state_dict['uuid']
 
 
@@ -1219,7 +1261,7 @@ class DataSet(object):
         toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
-                     'sl': self.sl,
+                     'ol': self.ol,
                      'bStatic': self.bStatic,
                      'oliType': self.oliType,
                      'timeType': self.timeType,
@@ -1289,12 +1331,12 @@ class DataSet(object):
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
         self.olIndex = state_dict['olIndex']
-        self.sl      = state_dict['sl']
+        self.ol      = state_dict['ol']
         self.bStatic = state_dict['bStatic']
         self.oliType = state_dict['oliType']
         self.timeType= state_dict['timeType']
         self.repType = state_dict['repType']
-        self.collisionAction, = state_dict['collisionAction']
+        self.collisionAction = state_dict['collisionAction']
         self.uuid    = state_dict['uuid']
         
         useReps = state_dict['useReps']

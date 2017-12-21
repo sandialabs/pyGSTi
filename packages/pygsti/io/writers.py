@@ -56,7 +56,7 @@ def write_empty_dataset(filename, gatestring_list,
             output.write(gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "") + '\n')
 
 
-def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
+def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -72,8 +72,8 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
         The list of gate strings to include in the written dataset.
         If None, all gate strings are output.
 
-    spamLabelOrder : list, optional
-        A list of the SPAM labels in dataset which specifies
+    outcomeLabelOrder : list, optional
+        A list of the outcome labels in dataset which specifies
         the column order in the output file.
     """
     if gatestring_list is not None:
@@ -82,12 +82,16 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
     else:
         gatestring_list = list(dataset.keys())
 
-    spamLabels = dataset.get_spam_labels()
-    if spamLabelOrder is not None:
-        assert(len(spamLabelOrder) == len(spamLabels))
-        assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
-        assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
-        spamLabels = spamLabelOrder
+    def outcome_to_str(x):
+        if _tools.isstr(x): return x
+        else: return ":".join([str(i) for i in x])
+
+    outcomeLabels = dataset.get_outcome_labels()
+    if outcomeLabelOrder is not None:
+        assert(len(outcomeLabelOrder) == len(outcomeLabels))
+        assert(all( [ol in outcomeLabels for ol in outcomeLabelOrder] ))
+        assert(all( [ol in outcomeLabelOrder for ol in outcomeLabels] ))
+        outcomeLabels = outcomeLabelOrder
 
     headerString = ""
     if hasattr(dataset,'comment') and dataset.comment is not None:
@@ -96,16 +100,21 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ])
+    headerString += '## Columns = ' + ", ".join( [ "%s count" % outcome_to_str(ol)
+                                                   for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
             dataRow = dataset[gateString.tup]
-            output.write(gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] ) + '\n')
+            counts = dataRow.counts
 
-def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOrder=None):
+            #output '--' for outcome labels that aren't present in this row
+            output.write(gateString.str + "  " + "  ".join( [("%g" % counts.get(ol,'--'))
+                                                            for ol in outcomeLabels] ) + '\n')
+
+def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabelOrder=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -121,7 +130,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
         The list of gate strings to include in the written dataset.
         If None, all gate strings are output.
 
-    spamLabelOrder : list, optional
+    outcomeLabelOrder : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
@@ -132,12 +141,12 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
     else:
         gatestring_list = list(multidataset.gsIndex.keys()) #TODO: make access function for gatestrings?
 
-    spamLabels = multidataset.get_spam_labels()
-    if spamLabelOrder is not None:
-        assert(len(spamLabelOrder) == len(spamLabels))
-        assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
-        assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
-        spamLabels = spamLabelOrder
+    outcomeLabels = multidataset.get_outcome_labels()
+    if outcomeLabelOrder is not None:
+        assert(len(outcomeLabelOrder) == len(outcomeLabels))
+        assert(all( [ol in outcomeLabels for ol in outcomeLabelOrder] ))
+        assert(all( [ol in outcomeLabelOrder for ol in outcomeLabels] ))
+        outcomeLabels = outcomeLabelOrder
 
     dsLabels = list(multidataset.keys())
 
@@ -150,15 +159,15 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
                 headerString += "# " + commentLine + '\n'
     headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
                                                    for dsl in dsLabels
-                                                   for sl in spamLabels ])
+                                                   for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
             gs = gateString.tup #gatestring tuple
-            output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs][sl])
-                                                            for dsl in dsLabels for sl in spamLabels] ) + '\n')
+            output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs].counts.get(ol,'--'))
+                                                            for dsl in dsLabels for ol in outcomeLabels] ) + '\n')
 
 def write_gatestring_list(filename, gatestring_list, header=None):
     """

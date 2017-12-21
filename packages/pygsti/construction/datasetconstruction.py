@@ -96,15 +96,13 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     if isinstance(gatesetOrDataset, _ds.DataSet):
         dsGen = gatesetOrDataset #dataset
         gsGen = None
-        dataset = _ds.DataSet( spamLabels=dsGen.get_spam_labels(),
-                               collisionAction=collisionAction,
-                               measurementGates=measurementGates)
+        dataset = _ds.DataSet( collisionAction=collisionAction )
+        # OLD measurementGates=measurementGates)
     else:
         gsGen = gatesetOrDataset #dataset
         dsGen = None
-        dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels(),
-                               collisionAction=collisionAction,
-                               measurementGates=measurementGates)
+        dataset = _ds.DataSet( collisionAction=collisionAction )
+        #OLD measurementGates=measurementGates)
 
     if sampleError in ("binomial","multinomial"):
         if randState is None:
@@ -124,19 +122,19 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
                 if sampleError in ("binomial","multinomial"):
                     #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for sl in ps: 
-                        if ps[sl] < 0:
-                            if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                            ps[sl] = 0.0
-                        elif ps[sl] > 1: 
-                            if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
-                            ps[sl] = 1.0
+                    for ol in ps: 
+                        if ps[ol] < 0:
+                            if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                            ps[ol] = 0.0
+                        elif ps[ol] > 1: 
+                            if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                            ps[ol] = 1.0
             else:
-                ps = { sl: dsGen[trans_s].fraction(sl) 
-                       for sl in dsGen.get_spam_labels() }
+                counts = dsGen[trans_s].counts
+                ps = { ol:frac for ol,frac in dsGen[trans_s].fractions.items()}
                 
-            for sl in sorted(list(ps.keys())):
-                all_ps[(s,sl)] = ps[sl] #add to all_ps
+            for ol in sorted(list(ps.keys())):
+                all_ps[(s,ol)] = ps[ol] #add to all_ps
 
         if gsGen and sampleError in ("binomial","multinomial"):
             #Check that sum ~= 1 (and nudge if needed) since binomial and
