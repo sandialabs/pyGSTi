@@ -56,7 +56,7 @@ class GateCalc(object):
         self.gates = gates
         self.preps = preps
         self.effects = effects
-        self.assumeSumToOne = False #OLD: bool( ("remainder","remainder") in list(spamdefs.values()))
+        #OLD self.assumeSumToOne = False #OLD: bool( ("remainder","remainder") in list(spamdefs.values()))
           #Whether spamdefs contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
@@ -75,7 +75,7 @@ class GateCalc(object):
         self.paramvec = paramvec
         self.Np = len(paramvec)
 
-
+#OLD
 #    def _is_remainder_spamlabel(self, label):
 #        """
 #        Returns whether or not the given SPAM label is the
@@ -86,6 +86,7 @@ class GateCalc(object):
 #        if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
 #        return bool(self.spamdefs[label] == ("remainder","remainder"))
 
+#OLD
 #    def _get_remainder_row_index(self, spam_label_rows):
 #        """ 
 #        Returns the index within the spam_label_rows dictionary
@@ -390,25 +391,12 @@ class GateCalc(object):
         """
         probs = { }
         raw_dict, outcomeLbls = compiled_gatestring
-        if not self.assumeSumToOne:
-            iOut = 0 #outcome index
-            for raw_gatestring, spamTuples in raw_dict.items():
-                for spamTuple in spamTuples:
-                    probs[outcomeLbls[iOut]] = self._pr_nr(
-                        spamTuple, raw_gatestring, clipTo, False)
-                    iOut += 1
-            #TODO: remainder label
-        else:
-            raise NotImplementedError()
-            #s = 0; lastLabel = None
-            #for spamLabel in self.spamdefs:
-            #    if self._is_remainder_spamlabel(spamLabel):
-            #        assert(lastLabel is None) # ensure there is at most one "remainder" spam label
-            #        lastLabel = spamLabel; continue
-            #    probs[spamLabel] = self.pr(spamLabel, gatestring, clipTo)
-            #    s += probs[spamLabel]
-            #if lastLabel is not None:
-            #    probs[lastLabel] = 1.0 - s  #last spam label is computed so sum == 1
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                probs[outcomeLbls[iOut]] = self.pr(
+                    spamTuple, raw_gatestring, clipTo, False)
+                iOut += 1
         return probs
 
 
@@ -438,29 +426,12 @@ class GateCalc(object):
         """
         dprobs = { }
         raw_dict, outcomeLbls = compiled_gatestring
-        if not self.assumeSumToOne:
-            iOut = 0 #outcome index
-            for raw_gatestring, spamTuples in raw_dict.items():
-                for spamTuple in spamTuples:
-                    dprobs[outcomeLbls[iOut]] = self._dpr_nr(
-                        spamTuple, raw_gatestring, returnPr, clipTo)
-                    iOut += 1
-            #TODO: remainder label
-        else:
-            raise NotImplementedError()
-            #ds = None; s=0; lastLabel = None
-            #for spamLabel in self.spamdefs:
-            #    if self._is_remainder_spamlabel(spamLabel):
-            #        assert(lastLabel is None) # ensure there is at most one dummy spam label
-            #        lastLabel = spamLabel; continue
-            #    dprobs[spamLabel] = self.dpr(spamLabel, gatestring, returnPr,clipTo)
-            #    if returnPr:
-            #        ds = dprobs[spamLabel][0] if ds is None else ds + dprobs[spamLabel][0]
-            #        s += dprobs[spamLabel][1]
-            #    else:
-            #        ds = dprobs[spamLabel] if ds is None else ds + dprobs[spamLabel]
-            #if lastLabel is not None:
-            #    dprobs[lastLabel] = (-ds,1.0-s) if returnPr else -ds
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                dprobs[outcomeLbls[iOut]] = self.dpr(
+                    spamTuple, raw_gatestring, returnPr, clipTo)
+                iOut += 1
         return dprobs
 
 
@@ -495,44 +466,12 @@ class GateCalc(object):
         """
         hprobs = { }
         raw_dict, outcomeLbls = compiled_gatestring
-        if not self.assumeSumToOne:
-            iOut = 0 #outcome index
-            for raw_gatestring, spamTuples in raw_dict.items():
-                for spamTuple in spamTuples:
-                    hprobs[outcomeLbls[iOut]] = self._hpr_nr(
-                        spamTuple, raw_gatestring, returnPr,returnDeriv,clipTo)
-                    iOut += 1
-            #TODO: remainder label
-        else:
-            raise NotImplementedError()
-            #hs = None; ds=None; s=0; lastLabel = None
-            #for spamLabel in self.spamdefs:
-            #    if self._is_remainder_spamlabel(spamLabel):
-            #        assert(lastLabel is None) # ensure there is at most one dummy spam label
-            #        lastLabel = spamLabel; continue
-            #    hprobs[spamLabel] = self.hpr(spamLabel, gatestring, returnPr,
-            #                                 returnDeriv,clipTo)
-            #    if returnPr:
-            #        if returnDeriv:
-            #            hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-            #            ds = hprobs[spamLabel][1] if ds is None else ds + hprobs[spamLabel][1]
-            #            s += hprobs[spamLabel][2]
-            #        else:
-            #            hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-            #            s += hprobs[spamLabel][1]
-            #    else:
-            #        if returnDeriv:
-            #            hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-            #            ds = hprobs[spamLabel][1] if ds is None else ds + hprobs[spamLabel][1]
-            #        else:
-            #            hs = hprobs[spamLabel] if hs is None else hs + hprobs[spamLabel]
-            #
-            #if lastLabel is not None:
-            #    if returnPr:
-            #        hprobs[lastLabel] = (-hs,-ds,1.0-s) if returnDeriv else (-hs,1.0-s)
-            #    else:
-            #        hprobs[lastLabel] = (-hs,-ds) if returnDeriv else -hs
-
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                hprobs[outcomeLbls[iOut]] = self.hpr(
+                    spamTuple, raw_gatestring, returnPr,returnDeriv,clipTo)
+                iOut += 1
         return hprobs
 
     def construct_evaltree(self):
@@ -768,54 +707,8 @@ class GateCalc(object):
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
             #          all of the raw gate sequences which need to be computed
-            #          for the current spamTuple (this list has the SAME length as fInds).
-            
-            #TODO: remainder label?
-            #if self._is_remainder_spamlabel(spamLabel):
-            #    remainder_index = rowIndex; continue
+            #          for the current spamTuple (this list has the SAME length as fInds).            
             calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False)
-
-        #compute remainder label
-        #if remainder_index is not None:
-        #    # nps[k] == num of param slices in result_tup[k] index (assume
-        #    #           the first two dims are spamLabel and a gatestring indx.
-        #    nps = { k: (el.ndim-2) 
-        #            for k,el in enumerate(result_tup) if el is not None }
-        #        
-        #    def mkindx(iSpam,k): 
-        #        """ Constructs multi-index appropriate for result_tup[k]
-        #            (Note that pslc1,pslc2 alwsys act on *final* dimension2)   """
-        #        if nps[k] > 1: addl = [slice(None)]*(nps[k]-2)+[pslc1,pslc2]
-        #        elif nps[k] == 1: addl = [pslc1]
-        #        else: addl = []
-        #        return [ iSpam,fslc ] + addl
-        #
-        #    non_none_result_indices = [ i for i in range(len(result_tup)) \
-        #                                   if result_tup[i] is not None ]
-        #
-        #    for i in non_none_result_indices: #zero out for ensuing sum
-        #        result_tup[i][mkindx(remainder_index,i)] = 0
-        #
-        #    for spamLabel in self.spamdefs: #loop over ALL spam labels
-        #        if self._is_remainder_spamlabel(spamLabel): 
-        #            continue # ...except remainder label
-        #
-        #        rowIndex = spam_label_rows.get(spamLabel,None)
-        #        if rowIndex is not None:
-        #            for i in non_none_result_indices:                        
-        #                result_tup[i][mkindx(remainder_index,i)] += \
-        #                    result_tup[i][mkindx(rowIndex,i)]
-        #        else:
-        #            calc_and_fill_fn(spamLabel,remainder_index,fslc,
-        #                             pslc1,pslc2,sumInto=True)
-        #
-        #    #At this point, result_tup[i][remainder_index,fslc,...] contains the 
-        #    # sum of the results from all other spam labels.
-        #    for i in non_none_result_indices:
-        #        mi = mkindx(remainder_index,i)
-        #        result_tup[i][mi] *= -1.0
-        #        if nps[i] == 0: # special case: when there are no param slices,
-        #            result_tup[i][mi] += 1.0 # result == 1.0-sum (not just -sum)
                     
         return
 
