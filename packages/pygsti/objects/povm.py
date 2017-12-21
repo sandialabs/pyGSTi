@@ -141,7 +141,13 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (POVM, (None, None, "NA", list(self.items())), self.__dict__ )
+        non_complement_effects = [ (lbl,effect) for lbl,effect in self.items()
+                                   if lbl != self.complement_label ]
+        if self.complement_label is not None:
+            identity = self[self.complement_label].identity
+        else: identity = None
+
+        return (POVM, (non_complement_effects, identity, self.complement_label), {} )
 
     def compile_effects(self, prefix=""):
         """
@@ -207,19 +213,6 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
 
 
     def from_vector(self, v):
-        """
-        Initialize the POVM using a vector of its parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params().
-
-        Returns
-        -------
-        None
-        """
         for lbl,effect in self.items():
             if lbl == self.complement_label: continue
             effect.from_vector( v[effect.gpindices] )

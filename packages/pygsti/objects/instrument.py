@@ -367,7 +367,12 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (TPInstrument, (None, list(self.items())), self.__dict__)
+        #Don't pickle TPInstrumentGates b/c they'll each pickle the same
+        # param_gates and I don't this will unpickle correctly.  Instead, just
+        # strip the numpy array from each element and call __init__ again when
+        # unpickling:
+        gate_matrices = [ (lbl,_np.asarray(val)) for lbl,val in self.items()]
+        return (TPInstrument, (gate_matrices,[]), {})
 
 
     def compile_gates(self, prefix=""):
@@ -460,6 +465,9 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         """
         for gate in self.param_gates:
             gate.from_vector( v[gate.gpindices] )
+        for instGate in self.values():
+            instGate._construct_matrix()
+            
 
     def transform(self, S):
         """

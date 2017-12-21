@@ -207,8 +207,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     #Form POVMs
     for povmLabel in povmLabelsToEstimate:
         povm_effects = []
-        for effectLabel in targetGateset.povms[povmLabel]
-            EVec = _np.zeros( (1,nRhoSpecs)) )
+        for effectLabel in targetGateset.povms[povmLabel]:
+            EVec = _np.zeros( (1,nRhoSpecs) )
             for i,rhostr in enumerate(prepStrs):
                 gateString = rhostr + (povmLbl,)
                 dsRow = dataset[ gateString ]
@@ -221,7 +221,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
 
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
-        rhoVec = _np.zeros(nESpecs,1)); eoff = 0
+        rhoVec = _np.zeros((nESpecs,1)); eoff = 0
         for i,(estr,povmLbl,povmLen) in enumerate((effectStrs,povmLbls,povmLens)):
             gateString = (prepLabel,) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
             dsRow = dataset[ gateString ]
@@ -297,10 +297,10 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                     _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.preps[prepLabel])
                     lgstGateset.preps[ prepLabel ] = new_vec
     
-            for povmLabel in povmToEstimate:
-                if povmLabel,povm in guessGatesetForGauge.povms.items:
+            for povmLabel in povmLabelsToEstimate:
+                if povmLabel in guessGatesetForGauge.povms:
                     new_effects = []; EcLbl = None
-                    for effectLabel,EVec in povm.items():
+                    for effectLabel,EVec in guessGatesetForGauge.povms[povmLabel].items():
                         if isinstance(EVec, _objs.ComplementSPAMVec):
                             EcLbl = effectLabel; continue
                         new_vec = EVec.copy()

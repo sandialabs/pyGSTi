@@ -6,9 +6,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import numpy as _np
+
 from . import gatestring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..tools import slicetools as _slct
 from .evaltree import EvalTree
+from .evaltree import _compute_spamtuple_indices
 
 import time as _time #DEBUG TIMERS
 
@@ -434,21 +438,21 @@ class MapEvalTree(EvalTree):
             
             final_el_startstops = []; i=0
             for spamTuples in parentTree.compiled_gatestring_spamTuples:
-                final_el_startsops.append( (i,i+len(spamTuples)) )
+                final_el_startstops.append( (i,i+len(spamTuples)) )
                 i += len(spamTuples)
             subTree.myFinalElsToParentFinalElsMap = _np.concatenate(
                 [ _np.arange(*final_el_startstops[k])
                   for k in _slct.indices(subTree.myFinalToParentFinalMap) ] )
             
-            subtree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
-            subtree.spamtuple_indices = _compute_spamtuple_indices(subtree.compiled_gatestring_spamTuples,
-                                                                   subtree.myFinalElsToParentFinalElsMap)
+            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree.spamtuple_indices = _compute_spamtuple_indices(subTree.compiled_gatestring_spamTuples,
+                                                                   subTree.myFinalElsToParentFinalElsMap)
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in compiled_gatestring_spamTuples)
 
             return subTree
     
-        updated_elIndices = self._finish_split(elIndices, subTreeSetList,
+        updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
                                                permute_parent_element, create_subtree)
         printer.log("EvalTree.split done second pass in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()

@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import warnings as _warnings
+
 # from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
@@ -226,7 +228,7 @@ def write_gateset(gs,filename,title=None):
             output.write("\n")
 
         for povmLabel,povm in gs.povms.items():
-            if isintance(povm, _objs.POVM):
+            if isinstance(povm, _objs.POVM):
                 povmType = "TP-POVM" if povm.complement_label else "POVM"
             else:
                 _warnings.warn(
@@ -239,6 +241,7 @@ def write_gateset(gs,filename,title=None):
                 
             for ELabel,EVec in povm.items():
                 if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
                 elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
                 elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
                 else:

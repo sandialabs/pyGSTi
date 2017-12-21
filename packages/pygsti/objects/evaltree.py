@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import collections as _collections
+
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -45,7 +47,7 @@ class EvalTree(list):
 
         # Number of "final" or "requested" elements, which separately
         # counts each spamTuple of each of the final gate strings.
-        self.num_final_elements = 0
+        self.num_final_els = 0
         
         # The list of "child" sub-trees (if this tree is spilt)
         self.subTrees = []
@@ -495,6 +497,10 @@ class EvalTree(list):
         need_to_compute = _np.zeros( len(self), 'bool' ) #flags so we don't duplicate computation of needed quantities
         need_to_compute[0:self.num_final_strings()] = True #  b/c multiple subtrees need them as intermediates
 
+        #print("DEBUG Tree split: ")
+        #print("  subTreeSetList = ",subTreeSetList)
+        #print("  elIndices = ",elIndicesDict)
+
           #First, reorder the parent tree's elements so that the final
           # elements of the subtrees map to contiguous slices of the
           # parent tree's final elements.
@@ -541,6 +547,8 @@ class EvalTree(list):
             #if bDebug: print("FINAL SUBTREE: %s (nFinal=%d)" % (str(subTreeIndices),subTreeNumFinal))
                     
         #Permute parent tree indices according to parentIndexPerm
+        # parentIndexRevPerm maps: newIndex -> currentIndex, so looking at it as a list
+        #  gives the new (permuted) elements
         assert(len(parentIndexRevPerm) == self.num_final_strings())
         parentIndexRevPerm.extend( list(range(self.num_final_strings(), len(self))) ) 
           #don't permute non-final indices (no need)
@@ -553,8 +561,9 @@ class EvalTree(list):
         assert( self.original_index_lookup is None )
         self.original_index_lookup = { icur: inew for inew,icur in enumerate(parentIndexRevPerm) }
 
-        #if bDebug: print("PERM REV MAP = ", parentIndexRevPerm)
-        #if bDebug: print("PERM MAP = ", parentIndexPerm)
+        #print("DEBUG: PERM REV MAP = ", parentIndexRevPerm,
+        #      "(first %d are 'final')" % self.num_final_strings())
+        #print("DEBUG: PERM MAP = ", parentIndexPerm)
 
         #Permute parent indices
         self.init_indices = [ parentIndexPerm[iCur] for iCur in self.init_indices ]
@@ -575,6 +584,10 @@ class EvalTree(list):
         for iOldStr in parentIndexRevPerm[0:self.num_final_strings()]:
             permute_newToOld.extend( old_finalStringToElsMap[iOldStr] )
         permute_oldToNew = { iOld:iNew for iNew,iOld in enumerate(permute_newToOld) }
+
+        #print("DEBUG: old_finalStrToEls = ",old_finalStringToElsMap)
+        #print("DEBUG: permute_newToOld = ",permute_newToOld)
+        #print("DEBUG: permute_oldToNew = ",permute_oldToNew)
 
         updated_elIndices = _collections.OrderedDict()
         for ky,indices in elIndicesDict.items():
@@ -621,6 +634,8 @@ class EvalTree(list):
         #if bDebug: print("DBLIST = ",dbList)
         #if bDebug: print("DBLIST2 = ",dbList2)
         #assert(dbList == dbList2)
+        #print("DEBUG: updated elIndices = ",updated_elIndices)
+        
         return updated_elIndices
 
 
@@ -721,13 +736,13 @@ def _compute_spamtuple_indices(compiled_gatestring_spamTuples,
             if spamTuple not in spamtuple_indices:
                 spamtuple_indices[spamTuple] = ([],[])
             f = subtreeFinalElsToParentFinalElsMap[j] \
-                if subtreeFinalElsToParentFinalElsMap else j #parent's final
+                if (subtreeFinalElsToParentFinalElsMap is not None) else j #parent's final
             spamtuple_indices[spamTuple][0].append(f)
             spamtuple_indices[spamTuple][1].append(i)
         el_off += len(spamTuples)
 
     def to_slice(x):
-        s = _slct.list_to_slice(x,array_ok=True,contiguous=False)
+        s = _slct.list_to_slice(x,array_ok=True,require_contiguous=False)
         if isinstance(s, slice) and (s.start,s.stop,s.step) == \
            (0,len(compiled_gatestring_spamTuples),None):
             return slice(None,None) #check for entire range

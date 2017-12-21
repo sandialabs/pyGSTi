@@ -190,3 +190,32 @@ def _compose_gpindices(parent_gpindices, child_gpindices):
         
     else: #parent_gpindices is an index array, so index with child_gpindices
         return parent_gpindices[child_gpindices]
+
+
+def _decompose_gpindices(parent_gpindices, sibling_gpindices):
+    """ 
+    Maps `sibling_gpindices`, which index the same space as `parent_gpindices`,
+    into a new slice or array of indices that gives the indices into
+    `parent_gpindices` which result in `sibling_gpindices` (this requires that
+    `sibling_indices` lies within `parent_gpindices`.
+
+    Essentially:
+    `sibling_gpindices = parent_gpindices[returned_gpindices]`
+    """
+    if parent_gpindices is None or sibling_gpindices is None: return None
+    if isinstance(parent_gpindices, slice):
+        start,stop = parent_gpindices.start, parent_gpindices.stop
+        assert(parent_gpindices.step is None),"No support for nontrivial step size yet"
+        
+        if isinstance(sibling_gpindices, slice):
+            assert(start <= sibling_gpindices.start and sibling_gpindices.stop <= stop), \
+                "Sibling indices must be a sub-slice of parent indices!"
+            return _slct.shift( sibling_gpindices, -start )
+        else: # child_gpindices is an index array
+            return sibling_gpindices - start # numpy "shift"
+        
+    else: #parent_gpindices is an index array
+        sibInds = _slct.indices(sibling_gpindices) \
+                  if isinstance(sibling_gpindices, slice) else sibling_gpindices
+        parent_lookup = { j: i for i,j in enumerate(parent_gpindices) }
+        return _np.array( [ parent_lookup[j] for j in sibInds ], 'i')

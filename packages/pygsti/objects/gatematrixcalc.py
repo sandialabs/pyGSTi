@@ -382,13 +382,15 @@ class GateMatrixCalc(GateCalc):
         #  prod = G1 * G2 * .... * GN , a matrix
         #  dprod/d(gateLabel)_ij   = sum_{L s.t. GL == gatelabel} [ G1 ... G(L-1) dG(L)/dij G(L+1) ... GN ] , a matrix for each given (i,j)
         #  d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij = sum_{M s.t. GM == gatelabel1} sum_{L s.t. GL == gatelabel2, M < L}
-        #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M} (if L == M ignore)
+        #                                                 [ G1 ... G(M-1) dG(M)/dkl G(M+1) ... G(L-1) dG(L)/dij G(L+1) ... GN ] + {similar with L < M}
+        #                                                 + sum{M==L} [ G1 ... G(M-1) d2G(M)/(dkl*dij) G(M+1) ... GN ]
         #                                                 a matrix for each given (i,j,k,l)
         #  vec( d2prod/d(gateLabel1)_kl*d(gateLabel2)_ij ) = sum{...} [ G1 ...  G(M-1) dG(M)/dkl G(M+1) ... G(L-1) tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
         #                                                  = sum{...} [ unvec( G1 ...  G(M-1) tensor (G(M+1) ... G(L-1))^T vec( dG(M)/dkl ) )
         #                                                                tensor (G(L+1) ... GN)^T vec( dG(L)/dij ) ]
         #                                                  + sum{ L < M} [ G1 ...  G(L-1) tensor
         #                                                       ( unvec( G(L+1) ... G(M-1) tensor (G(M+1) ... GN)^T vec( dG(M)/dkl ) ) )^T vec( dG(L)/dij ) ]
+        #                                                  + sum{ L == M} [ G1 ...  G(M-1) tensor (G(M+1) ... GN)^T vec( d2G(M)/dkl*dji )
         #
         #  Note: ignoring L == M terms assumes that d^2 G/(dij)^2 == 0, which is true IF each gate matrix element is at most
         #        *linear* in each of the gate parameters.  If this is not the case, need Gate objects to have a 2nd-deriv method in addition of deriv_wrt_params
@@ -426,8 +428,15 @@ class GateMatrixCalc(GateCalc):
             dgate_dgateLabel2 = {
                 gateLabel: gate.deriv_wrt_params( gate_wrtFilters2[gateLabel] )
                 for gateLabel,gate in self.gates.items() }
-            
 
+        #Finally, cache any nonzero gate hessians (memory?)
+        hgate_dgateLabels = {}
+        for gateLabel,gate in self.gates.items():
+            if gate.has_nonzero_hessian():
+                hgate_dgateLabels[gateLabel] = gate.hessian_wrt_params(
+                    gate_wrtFilters1[gateLabel], gate_wrtFilters2[gateLabel])
+
+                
         # Allocate memory for the final result
         num_deriv_cols1 = self.Np if (wrtFilter1 is None) else len(wrtFilter1)
         num_deriv_cols2 = self.Np if (wrtFilter2 is None) else len(wrtFilter2)
@@ -467,7 +476,7 @@ class GateMatrixCalc(GateCalc):
                       # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
                 elif l < m:
                     x0 = _np.kron(_np.transpose(prods[(l+1,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
-                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols2,dim**2)
+                    x  = _np.dot( _np.transpose(dgate_dgateLabel1[gateLabel1]), x0); xv = x.view() # (nDerivCols1,dim**2)
                     xv.shape = (nDerivCols1, dim, dim) # (reshape without copying - throws error if copy is needed)
                     xv = _np.swapaxes(xv,1,2) # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
                     y = _np.dot( _np.kron(prods[(0,l-1)], xv), dgate_dgateLabel2[gateLabel2] )
@@ -476,7 +485,13 @@ class GateMatrixCalc(GateCalc):
                     flattened_d2prod[:,inds1,inds2] += _np.swapaxes(y,0,1)
                       # above: dim = (dim2, nDerivCols1, nDerivCols2); swapaxes takes (kl,vec_prod_indx,ij) => (vec_prod_indx,kl,ij)
 
-               #else l==m, in which case there's no contribution since we assume all gate elements are at most linear in the parameters
+                else: # l==m, which we *used* to assume gave no contribution since we assume all gate elements are at most linear in the parameters
+                    assert(gateLabel1 == gateLabel2)
+                    if gateLabel1 in hgate_dgateLabels: #indicates a non-zero hessian
+                        x0 = _np.kron(_np.transpose(prods[(0,m-1)]),prods[(m+1,N-1)]) # (dim**2, dim**2)
+                        x  = _np.dot( _np.transpose(hgate_dgateLabels[gateLabel1], axes=(1,2,0)), x0); xv = x.view() # (nDerivCols1,nDerivCols2,dim**2)
+                        xv = _np.transpose(xv, axes=(2,0,1)) # (dim2, nDerivCols1, nDerivCols2)
+                        flattened_d2prod[:,inds1,inds2] += xv
 
         if flat:
             return flattened_d2prod # axes = (vectorized_gate_el_index, gateset_parameter1, gateset_parameter2)
@@ -944,6 +959,8 @@ class GateMatrixCalc(GateCalc):
         hProdCache = _np.zeros( (cacheSize,) + hessn_shape )
 
         #First element of cache are given by evalTree's initial single- or zero-gate labels
+        wrtIndices1 = _slct.indices(wrtSlice1) if (wrtSlice1 is not None) else None
+        wrtIndices2 = _slct.indices(wrtSlice2) if (wrtSlice2 is not None) else None
         for i,gateLabel in zip(evalTree.get_init_indices(), evalTree.get_init_labels()):
             if gateLabel == "": #special case of empty label == no gate
                 hProdCache[i] = _np.zeros( hessn_shape )
@@ -953,8 +970,8 @@ class GateMatrixCalc(GateCalc):
                 hProdCache[i] = _np.zeros( hessn_shape )
             else:
                 hgate = self.hgate(gateLabel,
-                                   wrtFilter1=_slct.indices(wrtSlice1),
-                                   wrtFilter2=_slct.indices(wrtSlice2))
+                                   wrtFilter1=wrtIndices1,
+                                   wrtFilter2=wrtIndices2)
                 hProdCache[i] = hgate / _np.exp(scaleCache[i])            
 
         #evaluate gate strings using tree (skip over the zero and single-gate-strings)
@@ -1456,7 +1473,7 @@ class GateMatrixCalc(GateCalc):
 
 
     def _rhoE_from_spamTuple(self, spamTuple):
-        if len(spamTuple) == 3:
+        if len(spamTuple) == 2:
             rholabel,elabel = spamTuple
             rho = self.preps[rholabel]
             E   = _np.conjugate(_np.transpose(self.effects[elabel]))
@@ -1726,7 +1743,7 @@ class GateMatrixCalc(GateCalc):
             gatestring_list = master_gatestring_list[gInds]
 
             if prMxToFill is not None:
-                check_vp = _np.array( [ self._pr_nr(spamTuple, gateString, clipTo) for gateString in gatestring_list ] )
+                check_vp = _np.array( [ self._pr_nr(spamTuple, gateString, clipTo, False) for gateString in gatestring_list ] )
                 if _nla.norm(prMxToFill[fInds] - check_vp) > 1e-6:
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[fInds]),
@@ -1748,9 +1765,21 @@ class GateMatrixCalc(GateCalc):
 
             if hprMxToFill is not None:
                 check_vhp = _np.concatenate(
-                    [ self.hpr(spamTuple, gateString, False,False,clipTo)
+                    [ self._hpr_nr(spamTuple, gateString, False,False,clipTo)
                       for gateString in gatestring_list ], axis=0 )
-                if _nla.norm(hprMxToFill[fInds] - check_vhp) > 1e-6:
+                if _nla.norm(hprMxToFill[fInds][0] - check_vhp[0]) > 1e-6:
+                    #HERE
+                    print("Final inds = ",fInds)
+                    print("Shape = ",check_vhp.shape, hprMxToFill[fInds].shape)
+                    for i in range(2):
+                        for j in range(71):
+                            for k in range(71):
+                                if abs(check_vhp[i,j,k] - hprMxToFill[fInds][i,j,k]) > 1e-6:
+                                    a,b = check_vhp[i,j,k], hprMxToFill[fInds][i,j,k]
+                                    print("Diff %d,%d,%d: %g-%g=%g" % (i,j,k,a,b,a-b))
+                    
+                    print("Filled:\n",hprMxToFill[fInds][0,0:5,10:20])
+                    print("Check:\n",check_vhp[0,0:5,10:20])
                     _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
                              (_nla.norm(hprMxToFill[fInds]),
                               _nla.norm(check_vhp),

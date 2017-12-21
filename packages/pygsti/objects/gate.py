@@ -2461,7 +2461,7 @@ class LindbladParameterizedGate(GateMatrix):
 
     def _set_params_from_errgen(self, errgen, truncate):
         d2 = self.unitary_postfactor.shape[0]
-        
+
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.lindblad_errgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
@@ -3497,10 +3497,10 @@ class TPInstrumentGate(GateMatrix):
 
         else: # matrix = -(nEls-1)*MT-sum(Di)
             Np = self.param_gates[0].num_params()
-            derivMx[:,off:off+Np] = -(nEls-1)*self.param_gates[0].deriv_wrt_params()
+            derivMx[:,off:off+Np] = -(Nels-1)*self.param_gates[0].deriv_wrt_params()
             off += Np
 
-            for i in range(1,nEls):
+            for i in range(1,Nels):
                 Np = self.param_gates[i].num_params()
                 derivMx[:,off:off+Np] = -self.param_gates[i].deriv_wrt_params()
                 off += Np
@@ -3522,6 +3522,36 @@ class TPInstrumentGate(GateMatrix):
         bool
         """
         return False
+
+
+
+    def from_vector(self, v):
+        """
+        Initialize this partially-implemented gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of parameters.
+
+        Returns
+        -------
+        None
+        """
+        #Rely on the Instrument ordering of it's elements: if we're being called
+        # to init from v then this is within the context of a TPInstrument's gates
+        # having been compiled and now being initialized from a vector (within a
+        # calculator).  We rely on the Instrument elements having their
+        # from_vector() methods called in self.index order.
+        
+        if self.index < len(self.param_gates)-1: #final element doesn't need to init any param gates
+            for i in self.dependents: #re-init all my dependents (may be redundant)
+                if i == 0 and self.index > 0: continue # 0th param-gate already init by index==0 element
+                pgate_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, param_gates[i].gpindices)
+                param_gates[i].from_vector( v[pgate_local_inds] )
+                
+        self._construct_matrix()
 
 
     def copy(self, parent=None):

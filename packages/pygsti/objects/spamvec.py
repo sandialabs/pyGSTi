@@ -820,14 +820,11 @@ class TPParameterizedSPAMVec(SPAMVec):
     # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 =>
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
     def __setstate__(self, state):
-        print("SETSTATE!!!")
-        print(state)
         self.__dict__.update(state)
+        
     def __getstate__(self):
-        print("GETSTATE!!!")
         d = self.__dict__.copy()
         d['_parent'] = None
-        print(d)
         return d
 
     
@@ -841,7 +838,6 @@ class TPParameterizedSPAMVec(SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        print("DB: INIT TP spamvec")
         vector = SPAMVec.convert_to_vector(vec)
         firstEl =  len(vector)**-0.25
         if not _np.isclose(vector[0,0], firstEl):
@@ -1110,7 +1106,12 @@ class ComplementSPAMVec(SPAMVec):
         Np = len(self.gpindices_as_array())
         neg_deriv = _np.zeros( (self.dim, Np), 'd')
         for ovec in self.other_vecs:
-            neg_deriv[:,ovec.gpindices] += ovec.deriv_wrt_params()
+            local_inds = _gatesetmember._decompose_gpindices(
+                self.gpindices, ovec.gpindices)
+              #Note: other_vecs are not copies but other *sibling* effect vecs
+              # so their gpindices index the same space as this complement vec's
+              # does - so we need to "_decompose_gpindices"
+            neg_deriv[:,local_inds] += ovec.deriv_wrt_params()
         derivMx = -neg_deriv
         
         if wrtFilter is None:
@@ -1129,6 +1130,24 @@ class ComplementSPAMVec(SPAMVec):
         bool
         """
         return False
+
+    def from_vector(self, v):
+        """
+        Initialize this partially-implemented spam-vec using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of parameters.
+
+        Returns
+        -------
+        None
+        """
+        #Rely on prior .from_vector initialization of self.other_vecs, so
+        # we just construct our vector based on them.
+        #Note: this is needed for finite-differencing in map-based calculator
+        self._construct_vector()
 
 
     def copy(self, parent=None):

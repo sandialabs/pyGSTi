@@ -1006,7 +1006,7 @@ class GateSet(object):
         return self._calcClass(self._dim, compiled_gates, self.preps,
                                compiled_effects, self._paramvec)
 
-    def split_gatestring(gatestring, erroron=('prep','povm')):
+    def split_gatestring(self, gatestring, erroron=('prep','povm')):
         """
         Splits a gate string into prepLabel + gatesOnlyString + povmLabel
         components.  If `gatestring` does not contain a prep label or a
@@ -1076,7 +1076,7 @@ class GateSet(object):
         for prep_lbl in self.preps:
             for povm_lbl in self.povms:
                 for elbl in self.povms[povm_lbl]:
-                    spamToOutcomeTuple[ (prep_lbl, povm_lbl + "_" + elbl) ] = (elbl,)
+                    spamTupleToOutcome[ (prep_lbl, povm_lbl + "_" + elbl) ] = (elbl,)
 
         def resolveSPAM(gatestring):
             """ Determines spam tuples that correspond to gatestring
@@ -1115,8 +1115,8 @@ class GateSet(object):
                         assert(iParent is not None)
                         offset = raw_offsets[s]
                         all_spamtuples = raw_spamTuples_dict[s]
-                        final_outcomes = [ spamToOutcomeTuple[x] for x in spamtuples ]
-                        my_spamTuple_indices = [ off+all_spamtuples.index(x) for x in spamtuples ]
+                        final_outcomes = [ spamTupleToOutcome[x] for x in spamtuples ]
+                        my_spamTuple_indices = [ offset+all_spamtuples.index(x) for x in spamtuples ]
                         my_outcome_tuples =  [ gate_outcomes + x for x in final_outcomes ]
                         for i,tup in zip(my_spamTuple_indices,my_outcome_tuples):
                             if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
@@ -1125,7 +1125,7 @@ class GateSet(object):
                             else: assert(tup in outcomesByParent) # double-check - could REMOVE for speed in future
                 else:
                     assert(action == "add") # s should have been added in "add" process!
-                    raw_spamTuples_dict[s] = spamTuples
+                    raw_spamTuples_dict[s] = spamtuples
                     raw_gateOutcomes_dict[s] = gate_outcomes
 
         #Begin actual processing work:
@@ -1145,19 +1145,33 @@ class GateSet(object):
         # Step3: 2nd round... recursively gather per-parent indices
         for k,gstr in enumerate(gatestrings):
             gstr, spamtuples = resolveSPAM(gstr)
+            elIndicesByParent[k] = []
+            outcomesByParent[k] = []
             process("index",gstr,spamtuples,k)
+            elIndicesByParent[k] = _slct.list_to_slice(elIndicesByParent[k], array_ok=True)
 
-        #Step4: change lists -> index arrays for user convenience
+        #Step4: change lists/slices -> index arrays for user convenience
         elIndicesByParent = _collections.OrderedDict(
-            [k,_np.array(v,'i') for k,v in elIndicesByParent.items()] )
+            [ (k, (v if isinstance(v,slice) else _np.array(v,'i')) )
+              for k,v in elIndicesByParent.items()] )
 
+        
         #DEBUG: SANITY CHECK
         if len(gatestrings) > 1:
             for k,gstr in enumerate(gatestrings):
-                _,outcomes_k,nTot_k = self.compile_gatestring(gstr)
-                assert(nTot_k == len(elIndicesByParent[k]))
-                assert(outcomes_k[0] == outcomesByParent[k])
-            
+                _,outcomes_k = self.compile_gatestring(gstr)
+                nIndices = _slct.length(elIndicesByParent[k]) if isinstance(elIndicesByParent[k], slice) \
+                              else len(elIndicesByParent[k])
+                assert(len(outcomes_k) == nIndices)
+                assert(outcomes_k == outcomesByParent[k])
+
+        #print("GateSet.compile debug:")
+        #print("input = ",gatestrings)
+        #print("raw_dict = ", raw_spamTuples_dict)
+        #print("elIndices = ", elIndicesByParent)
+        #print("outcomes = ", outcomesByParent)
+        #print("total els = ",nTotElements)
+        
         return (raw_spamTuples_dict, elIndicesByParent,
                 outcomesByParent, nTotElements)
     
@@ -1168,7 +1182,7 @@ class GateSet(object):
             keys = raw gate sequences (containing just "compiled" gates)
             values = lists of (preplbl, effectlbl) tuples.
         """
-        raw_dict,_,outcomes,nEls = compile_gatestrings([gatestring])
+        raw_dict,_,outcomes,nEls = self.compile_gatestrings([gatestring])
         assert(len(outcomes[0]) == nEls)
         return raw_dict,outcomes[0]
 
@@ -2055,184 +2069,187 @@ class GateSet(object):
         else: return ret
 
 
-    def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False, comm=None):
+#Deprecated: use bulk_probs, bulk_dprobs, and bulk_hprobs
+#    def bulk_pr(self, spamLabel, evalTree, clipTo=None, check=False, comm=None):
+#        """
+#        Compute the probabilities of the gate sequences given by evalTree,
+#        where initialization & measurement operations are always the same
+#        and are together specified by spamLabel.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        evalTree : EvalTree
+#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           to compute the bulk operation on.
+#
+#        clipTo : 2-tuple, optional
+#           (min,max) to clip return value if not None.
+#
+#        check : boolean, optional
+#          If True, perform extra checks within code to verify correctness,
+#          generating warnings when checks fail.  Used for testing, and runs
+#          much slower when True.
+#
+#        comm : mpi4py.MPI.Comm, optional
+#           When not None, an MPI communicator for distributing the computation
+#           across multiple processors.  Distribution is performed over
+#           subtrees of evalTree (if it is split).
+#
+#
+#        Returns
+#        -------
+#        numpy array
+#          An array of length equal to the number of gate strings containing
+#          the (float) probabilities.
+#        """
+#        return self._calc().bulk_pr(spamLabel, evalTree, clipTo, check, comm)
+#
+#
+#    def bulk_dpr(self, spamLabel, evalTree,
+#                 returnPr=False,clipTo=None,check=False,
+#                 comm=None,wrtBlockSize=None):
+#
+#        """
+#        Compute the derivatives of the probabilities generated by a each gate
+#        sequence given by evalTree, where initialization
+#        & measurement operations are always the same and are
+#        together specified by spamLabel.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        evalTree : EvalTree
+#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           to compute the bulk operation on.
+#
+#        returnPr : bool, optional
+#          when set to True, additionally return the probabilities.
+#
+#        clipTo : 2-tuple, optional
+#           (min,max) to clip returned probability to if not None.
+#           Only relevant when returnPr == True.
+#
+#        check : boolean, optional
+#          If True, perform extra checks within code to verify correctness,
+#          generating warnings when checks fail.  Used for testing, and runs
+#          much slower when True.
+#
+#        comm : mpi4py.MPI.Comm, optional
+#           When not None, an MPI communicator for distributing the computation
+#           across multiple processors.  Distribution is first performed over
+#           subtrees of evalTree (if it is split), and then over blocks (subsets)
+#           of the parameters being differentiated with respect to (see
+#           wrtBlockSize).
+#
+#        wrtBlockSize : int or float, optional
+#          The maximum average number of derivative columns to compute *products*
+#          for simultaneously.  None means compute all columns at once.
+#          The minimum of wrtBlockSize and the size that makes maximal
+#          use of available processors is used as the final block size. Use
+#          this argument to reduce amount of intermediate memory required.
+#
+#
+#        Returns
+#        -------
+#        dprobs : numpy array
+#            An array of shape S x M, where
+#
+#            - S == the number of gate strings
+#            - M == the length of the vectorized gateset
+#
+#            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
+#            the j-th gateset parameter.
+#
+#        probs : numpy array
+#            Only returned when returnPr == True. An array of shape S containing
+#            the probabilities of each gate string.
+#        """
+#        return self._calc().bulk_dpr(spamLabel, evalTree, returnPr,clipTo,
+#                                     check, comm, None, wrtBlockSize)
+#
+#
+#    def bulk_hpr(self, spamLabel, evalTree,
+#                 returnPr=False,returnDeriv=False,
+#                 clipTo=None,check=False,comm=None,
+#                 wrtBlockSize1=None, wrtBlockSize2=None):
+#
+#        """
+#        Compute the 2nd derivatives of the probabilities generated by a each gate
+#        sequence given by evalTree, where initialization & measurement
+#        operations are always the same and are together specified by spamLabel.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#          the label specifying the state prep and measure operations
+#
+#        evalTree : EvalTree
+#          given by a prior call to bulk_evaltree.  Specifies the gate strings
+#          to compute the bulk operation on.
+#
+#        returnPr : bool, optional
+#          when set to True, additionally return the probabilities.
+#
+#        returnDeriv : bool, optional
+#          when set to True, additionally return the probability derivatives.
+#
+#        clipTo : 2-tuple, optional
+#          (min,max) to clip returned probability to if not None.
+#          Only relevant when returnPr == True.
+#
+#        check : boolean, optional
+#          If True, perform extra checks within code to verify correctness,
+#          generating warnings when checks fail.  Used for testing, and runs
+#          much slower when True.
+#
+#        comm : mpi4py.MPI.Comm, optional
+#           When not None, an MPI communicator for distributing the computation
+#           across multiple processors.
+#
+#        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+#          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+#          *products* for simultaneously.  None means compute all requested
+#          rows or columns at once.  The  minimum of wrtBlockSize and the size
+#          that makes maximal use of available processors is used as the final
+#          block size.  These arguments must be None if the corresponding
+#          wrtFilter is not None.  Set this to non-None to reduce amount of
+#          intermediate memory required.
+#
+#
+#        Returns
+#        -------
+#        hessians : numpy array
+#            a S x M x M array, where
+#
+#            - S == the number of gate strings
+#            - M == the length of the vectorized gateset
+#
+#            and hessians[i,j,k] is the derivative of the i-th probability
+#            w.r.t. the k-th then the j-th gateset parameter.
+#
+#        derivs : numpy array
+#            only returned if returnDeriv == True. A S x M array where
+#            derivs[i,j] holds the derivative of the i-th probability
+#            w.r.t. the j-th gateset parameter.
+#
+#        probabilities : numpy array
+#            only returned if returnPr == True.  A length-S array
+#            containing the probabilities for each gate string.
+#        """
+#        return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
+#                                    clipTo, check, comm, None, None,
+#                                     wrtBlockSize1, wrtBlockSize2)
+
+
+    def bulk_probs(self, gatestring_list,
+                   clipTo=None, check=False, comm=None):
         """
-        Compute the probabilities of the gate sequences given by evalTree,
-        where initialization & measurement operations are always the same
-        and are together specified by spamLabel.
-
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
-
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip return value if not None.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
-
-
-        Returns
-        -------
-        numpy array
-          An array of length equal to the number of gate strings containing
-          the (float) probabilities.
-        """
-        return self._calc().bulk_pr(spamLabel, evalTree, clipTo, check, comm)
-
-
-    def bulk_dpr(self, spamLabel, evalTree,
-                 returnPr=False,clipTo=None,check=False,
-                 comm=None,wrtBlockSize=None):
-
-        """
-        Compute the derivatives of the probabilities generated by a each gate
-        sequence given by evalTree, where initialization
-        & measurement operations are always the same and are
-        together specified by spamLabel.
-
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
-
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrtBlockSize).
-
-        wrtBlockSize : int or float, optional
-          The maximum average number of derivative columns to compute *products*
-          for simultaneously.  None means compute all columns at once.
-          The minimum of wrtBlockSize and the size that makes maximal
-          use of available processors is used as the final block size. Use
-          this argument to reduce amount of intermediate memory required.
-
-
-        Returns
-        -------
-        dprobs : numpy array
-            An array of shape S x M, where
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
-            the j-th gateset parameter.
-
-        probs : numpy array
-            Only returned when returnPr == True. An array of shape S containing
-            the probabilities of each gate string.
-        """
-        return self._calc().bulk_dpr(spamLabel, evalTree, returnPr,clipTo,
-                                     check, comm, None, wrtBlockSize)
-
-
-    def bulk_hpr(self, spamLabel, evalTree,
-                 returnPr=False,returnDeriv=False,
-                 clipTo=None,check=False,comm=None,
-                 wrtBlockSize1=None, wrtBlockSize2=None):
-
-        """
-        Compute the 2nd derivatives of the probabilities generated by a each gate
-        sequence given by evalTree, where initialization & measurement
-        operations are always the same and are together specified by spamLabel.
-
-        Parameters
-        ----------
-        spamLabel : string
-          the label specifying the state prep and measure operations
-
-        evalTree : EvalTree
-          given by a prior call to bulk_evaltree.  Specifies the gate strings
-          to compute the bulk operation on.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
-
-        returnDeriv : bool, optional
-          when set to True, additionally return the probability derivatives.
-
-        clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when returnPr == True.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.
-
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
-
-
-        Returns
-        -------
-        hessians : numpy array
-            a S x M x M array, where
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and hessians[i,j,k] is the derivative of the i-th probability
-            w.r.t. the k-th then the j-th gateset parameter.
-
-        derivs : numpy array
-            only returned if returnDeriv == True. A S x M array where
-            derivs[i,j] holds the derivative of the i-th probability
-            w.r.t. the j-th gateset parameter.
-
-        probabilities : numpy array
-            only returned if returnPr == True.  A length-S array
-            containing the probabilities for each gate string.
-        """
-        return self._calc().bulk_hpr(spamLabel, evalTree, returnPr,returnDeriv,
-                                    clipTo, check, comm, None, None,
-                                     wrtBlockSize1, wrtBlockSize2)
-
-
-    def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
-        """
+        TODO: fix doc strings for all bulk_* functions
         Construct a dictionary containing the bulk-probabilities
         for every spam label (each possible initialization &
         measurement pair) for each gate sequence given by
@@ -2240,9 +2257,8 @@ class GateSet(object):
 
         Parameters
         ----------
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+        gatestring_list : list of (tuples or GateStrings)
+          Each element specifies a gate string to compute quantities for.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -2265,10 +2281,12 @@ class GateSet(object):
             probs[SL] = bulk_pr(SL,evalTree,clipTo,check)
             for each spam label (string) SL.
         """
-        return self._calc().bulk_probs(evalTree, clipTo, check, comm)
+        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
+                                       outcomes, clipTo, check, comm)
 
 
-    def bulk_dprobs(self, evalTree, returnPr=False,clipTo=None,
+    def bulk_dprobs(self, gatestring_list, returnPr=False,clipTo=None,
                     check=False,comm=None,wrtBlockSize=None):
 
         """
@@ -2279,9 +2297,8 @@ class GateSet(object):
 
         Parameters
         ----------
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+        gatestring_list : list of (tuples or GateStrings)
+          Each element specifies a gate string to compute quantities for.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -2317,11 +2334,13 @@ class GateSet(object):
             ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
             for each spam label (string) SL.
         """
-        return self._calc().bulk_dprobs(evalTree, returnPr,clipTo,
+        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
+                                        outcomes, returnPr,clipTo,
                                         check, comm, None, wrtBlockSize)
 
 
-    def bulk_hprobs(self, evalTree, returnPr=False,returnDeriv=False,
+    def bulk_hprobs(self, gatestring_list, returnPr=False,returnDeriv=False,
                     clipTo=None, check=False, comm=None,
                     wrtBlockSize1=None, wrtBlockSize2=None):
 
@@ -2333,9 +2352,8 @@ class GateSet(object):
 
         Parameters
         ----------
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+        gatestring_list : list of (tuples or GateStrings)
+          Each element specifies a gate string to compute quantities for.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -2373,7 +2391,9 @@ class GateSet(object):
             ``hprobs[SL] = bulk_hpr(SL,evalTree,returnPr,returnDeriv,clipTo,check)``
             for each spam label (string) SL.
         """
-        return self._calc().bulk_hprobs(evalTree, returnPr, returnDeriv,
+        evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
+        return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
+                                        outcomes, returnPr, returnDeriv,
                                         clipTo, check, comm, None, None,
                                         wrtBlockSize1, wrtBlockSize2)
 

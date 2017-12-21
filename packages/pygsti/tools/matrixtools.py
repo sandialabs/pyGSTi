@@ -10,6 +10,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
+import itertools as _itertools
 
 from .basistools import change_basis
 

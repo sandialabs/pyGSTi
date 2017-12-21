@@ -8,8 +8,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.linalg as _nla
+import collections as _collections
 
 from ..tools import compattools as _compat
+from ..tools import slicetools as _slct
 from ..baseobjs import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -393,7 +395,7 @@ class GateCalc(object):
             for raw_gatestring, spamTuples in raw_dict.items():
                 for spamTuple in spamTuples:
                     probs[outcomeLbls[iOut]] = self._pr_nr(
-                        spamTuple, raw_gatestring, clipTo)
+                        spamTuple, raw_gatestring, clipTo, False)
                     iOut += 1
             #TODO: remainder label
         else:
@@ -1079,7 +1081,8 @@ class GateCalc(object):
     #    return vp[0]
 
 
-    def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
+    def bulk_probs(self, gatestrings, evalTree, elIndices, outcomes,
+                   clipTo=None, check=False, comm=None):
         """
         Construct a dictionary containing the bulk-probabilities
         for every spam label (each possible initialization &
@@ -1088,9 +1091,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -1115,12 +1127,12 @@ class GateCalc(object):
         vp = _np.empty(evalTree.num_final_elements(),'d')
         self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
 
-        ret = _collections.OrderedDict(); st = 0
-        for gstr, spamtuples in zip(evalTree.generate_gatestring_list(),
-                                    evalTree.compiled_gatestring_spamTuples):
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
             ret[gstr] = _collections.OrderedDict(
-                [(spamtuple,vp[i]) for i,spamtuple in enumerate(spamtuples,start=st)] )
-            st += len(spamtuples)
+                [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
 
@@ -1203,7 +1215,7 @@ class GateCalc(object):
 #        return (vdp[0], vp[0]) if returnPr else vdp[0]
 
 
-    def bulk_dprobs(self, evalTree,
+    def bulk_dprobs(self, gatestrings, evalTree, elIndices, outcomes,
                     returnPr=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter=None, wrtBlockSize=None):
@@ -1216,9 +1228,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1272,16 +1293,16 @@ class GateCalc(object):
                               vp, clipTo, check, comm,
                               wrtFilter, wrtBlockSize)
 
-        ret = _collections.OrderedDict(); st = 0
-        for gstr, spamtuples in zip(evalTree.generate_gatestring_list(),
-                                    evalTree.compiled_gatestring_spamTuples):
-            if returnPr:            
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
+            if returnPr:
                 ret[gstr] = _collections.OrderedDict(
-                    [(spamtuple,(vdp[i],vp[i])) for i,spamtuple in enumerate(spamtuples,start=st)] )
+                    [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
                 ret[gstr] = _collections.OrderedDict(
-                    [(spamtuple,vdp[i]) for i,spamtuple in enumerate(spamtuples,start=st)] )
-            st += len(spamtuples)
+                    [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
         return ret
 
 
@@ -1390,7 +1411,7 @@ class GateCalc(object):
 #            return (vhp[0], vp[0]) if returnPr else vhp[0]
 
 
-    def bulk_hprobs(self, evalTree,
+    def bulk_hprobs(self, gatestrings, evalTree, elIndices, outcomes,
                     returnPr=False,returnDeriv=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter1=None, wrtFilter2=None,
@@ -1404,9 +1425,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1464,34 +1494,28 @@ class GateCalc(object):
         vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
         vp = _np.empty( nElements, 'd' ) if returnPr else None
 
-        self.bulk_fill_hprobs(vhp, spam_label_rows, evalTree,
+        self.bulk_fill_hprobs(vhp, evalTree,
                               vp, vdp1, vdp2, clipTo, check, comm,
                               wrtFilter1,wrtFilter1,wrtBlockSize1,wrtBlockSize2)
 
-        ret = _collections.OrderedDict(); st = 0
-        for gstr, spamtuples in zip(evalTree.generate_gatestring_list(),
-                                    evalTree.compiled_gatestring_spamTuples):
-            d = _collections.OrderedDict()
-            for i,spamtuple in enumerate(spamtuples,start=st):
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
+            outcomeQtys = _collections.OrderedDict()
+            for ei, outLbl in zip(elInds, outcomes[i]):
                 if returnDeriv:
                     if vdp2 is None:
-                        if returnPr:
-                            d[spamtuple] = (vhp[i],vdp1[i],vp[i])
-                        else:
-                            d[spamtuple] = (vhp[i],vdp1[i])
+                        if returnPr: t = (vhp[ei],vdp1[ei],vp[ei])
+                        else:        t = (vhp[ei],vdp1[ei])
                     else:
-                        if returnPr:
-                            d[spamtuple] = (vhp[i],vdp1[i],vdp2[i],vp[i])
-                        else:
-                            d[spamtuple] = (vhp[i],vdp1[i],vdp2[i])
+                        if returnPr: t = (vhp[ei],vdp1[ei],vdp2[ei],vp[ei])
+                        else:        t = (vhp[ei],vdp1[ei],vdp2[ei])
                 else:
-                    if returnPr:
-                        d[spamtuple] = (vhp[i],vp[i])
-                    else:
-                        d[spamtuple] = vhp[i]
-                        
-            ret[gstr] = d
-            st += len(spamtuples)
+                    if returnPr: t = (vhp[ei],vp[ei])
+                    else:        t = vhp[ei]
+                outcomeQtys[outLbl] = t
+            ret[gstr] = outcomeQtys
             
         return ret
 

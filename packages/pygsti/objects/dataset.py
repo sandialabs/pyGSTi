@@ -929,395 +929,395 @@ class DataSet(object):
             return self.copy()
 
 
-  def done_adding_data(self):
-    """ 
-    Promotes a non-static DataSet to a static (read-only) DataSet.  This
-     method should be called after all data has been added.
-    """     
-    if self.bStatic: return
-    #Convert normal dataset to static mode.
-    #  olIndex stays the same
-    #  gsIndex changes to hold slices into 1D arrays
-    #  oliData, timeData, & repData change from being lists of arrays to
-    #    single 1D arrays.
-    
-    if len(self.oliData) > 0:
-      new_gsIndex = _OrderedDict()
-      curIndx = 0
-      to_concat_oli = []
-      to_concat_time = []
-      to_concat_rep = []
-      for gatestring, indx in self.gsIndex.items():
-        seriesLen = len(self.oliData[indx])
-
-        to_concat_oli.append( self.oliData[indx] )   #just build up lists of
-        to_concat_time.append( self.timeData[indx] ) # reference, not copies
-        assert(seriesLen == len(self.timeData[indx])), "TIME & OLI out of sync!"
+    def done_adding_data(self):
+        """ 
+        Promotes a non-static DataSet to a static (read-only) DataSet.  This
+         method should be called after all data has been added.
+        """     
+        if self.bStatic: return
+        #Convert normal dataset to static mode.
+        #  olIndex stays the same
+        #  gsIndex changes to hold slices into 1D arrays
+        #  oliData, timeData, & repData change from being lists of arrays to
+        #    single 1D arrays.
         
-        if self.repData is not None:
-          to_concat_rep.append( self.repData[indx] )
-          assert(seriesLen == len(self.repData[indx])), "REP & OLI out of sync!"
+        if len(self.oliData) > 0:
+            new_gsIndex = _OrderedDict()
+            curIndx = 0
+            to_concat_oli = []
+            to_concat_time = []
+            to_concat_rep = []
+            for gatestring, indx in self.gsIndex.items():
+                seriesLen = len(self.oliData[indx])
+            
+                to_concat_oli.append( self.oliData[indx] )   #just build up lists of
+                to_concat_time.append( self.timeData[indx] ) # reference, not copies
+                assert(seriesLen == len(self.timeData[indx])), "TIME & OLI out of sync!"
+                
+                if self.repData is not None:
+                    to_concat_rep.append( self.repData[indx] )
+                    assert(seriesLen == len(self.repData[indx])), "REP & OLI out of sync!"
+                  
+                new_gsIndex[gatestring] = slice(curIndx, curIndx+seriesLen)
+                curIndx += seriesLen
+        
+            self.gsIndex = new_gsIndex
+            self.oliData = _np.concatenate( to_concat_oli )
+            self.timeData = _np.concatenate( to_concat_time )
+            if self.repData is not None:
+                self.repData = _np.concatenate( to_concat_rep )
+            
+        else:
+            #leave gsIndex alone (should be empty anyway?)
+            self.oliData = _np.empty( (0,), self.oliType)
+            self.timeData = _np.empty( (0,), self.timeType)
+            if self.repData is not None:
+                self.repData = _np.empty( (0,), self.repType)
           
-        new_gsIndex[gatestring] = slice(curIndx, curIndx+seriesLen)
-        curIndx += seriesLen
+        self.bStatic = True
+        self.uuid = _uuid.uuid4()
 
-      self.gsIndex = new_gsIndex
-      self.oliData = _np.concatenate( to_concat_oli )
-      self.timeData = _np.concatenate( to_concat_time )
-      if self.repData is not None:
-        self.repData = _np.concatenate( to_concat_rep )
-        
-    else:
-      #leave gsIndex alone (should be empty anyway?)
-      self.oliData = _np.empty( (0,), self.oliType)
-      self.timeData = _np.empty( (0,), self.timeType)
-      if self.repData is not None:
-        self.repData = _np.empty( (0,), self.repType)
-      
-    self.bStatic = True
-    self.uuid = _uuid.uuid4()
-
-  #OLD VERSION - TODO: UPDATE WITH NEW (BETTER) -- EGN COMMENTING OUT FOR NOW (TODO: REMOVE?)
-  #def compute_fourier_filtering(self, n_sigma=3, slope_compensation=False, resample_factor=5, verbosity=0):
-  #  """ Compute and store significant fourier coefficients -- EXPERIMENTAL TODO DOCSTRING"""
-  #  if not self.bStatic: 
-  #    raise ValueError("DataSet object must be *static* to compute fourier filters")
-  #
-  #  #Computes the order statistic
-  #
-  #  # Compute the log factorial function for numbers up to 2**15
-  #  # we could go higher, but this is already a lot of data
-  #  log_factorial = _np.append([0.0],_np.cumsum(list(map(_np.log, _np.arange(2**15)+1))))
-  #  
-  #  def order(x,sigma, n,r):
-  #      # Compute the distribution of the r^th smallest of n draws of a 
-  #      # mean-zero normal distribution with variance sigma^2
-  #      
-  #      a = (1./2 - n) * _np.log(2) 
-  #      b = -x**2 / (2 * sigma**2)
-  #      c = (n-r)*_np.log(1-_sps.erf(x/(_np.sqrt(2)*sigma)))
-  #      d = (r-1)*_np.log(1+_sps.erf(x/(_np.sqrt(2)*sigma)))
-  #  
-  #      e = log_factorial[n]
-  #      f = log_factorial[n-r]
-  #      g = log_factorial[r-1]
-  #  
-  #      h = _np.log(_np.pi*sigma**2)/2.
-  #  
-  #      return _np.exp(a + b + c + d + e - f - g - h)
-  #
-  #  def order_mean_var(sigma, n, r, mean_in = None):
-  #      # Compute the mean variance of the order statistic
-  #      order_mean = _quad(lambda x: x * order(x,sigma, n, r), -6*sigma, 6*sigma)[0]
-  #      return order_mean, _quad(lambda x: x**2 * order(x, sigma, n, r), -6*sigma, 6*sigma)[0] - order_mean**2
-  #
-  #  def fourier_filter(tdata, ydata, n_sigma=3., keep=None, return_aux=False, verbose=False, 
-  #                     truncate=True, slope_compensation=False, resampleFactor=5):
-  #      """
-  #      Process a list of binary data to produce an estimate of the time-dependent 
-  #      probability underlying the data.  Fourier components are kept if their 
-  #      magnitude is more than sigma from the expected value.
-  #      """
-  #
-  #      #first turn the data into an equally spaced sequence of data values
-  #      try:
-  #        f = _interp1d(tdata, ydata, kind='cubic', assume_sorted=False)
-  #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
-  #        f = _interp1d(tdata, ydata, kind='linear', assume_sorted=False)
-  #      ts = _np.linspace(tdata[0],tdata[-1], len(tdata)*resampleFactor)
-  #      #delta = _np.mean([ tdata[i]-tdata[i-1] for i in range(1,len(tdata)) ])
-  #      data  = _np.array([f(t) for t in ts],'d')
-  #
-  #      # Estimate the stationary probability from the data and compute the expected
-  #      # variance for the fourier coefficients
-  #      p_mean = _np.mean(data)
-  #      p_sigma = _np.sqrt(len(data) * (p_mean - p_mean**2) / 2.)
-  #
-  #      min_p_sigma = 1e-6 # hack for now to keep p_sigma from equaling zero.
-  #      p_sigma = max(p_sigma, min_p_sigma)
-  #      
-  #      # Compensate for slope
-  #      if slope_compensation:
-  #          slope = 2 * (_np.mean(data[int(len(data)/2.):]) - _np.mean(data[0:int(len(data)/2.)]))
-  #          data = data - slope * _np.linspace(-.5,.5,len(data))
-  #          
-  #      # DFT the data
-  #      fft_data = _fft.rfft(data)
-  #      filtered_fft = _np.array(fft_data.copy())
-  #      
-  #      if keep is None:
-  #          # Determine the threshold by computing the distribution of the extremal 
-  #          # order statistic.  The threshold is taken to be the mean
-  #          order_mean, order_var = order_mean_var(p_sigma, len(data), 1)
-  #          order_sig = _np.sqrt(order_var)
-  #          threshold = abs(order_mean) + n_sigma * order_sig
-  #      else:
-  #          # Determine the threshold to be consistent with keeping "keep" fourier modes
-  #          threshold = list(sorted(abs(fft_data), reverse=True))[keep]
-  #  
-  #      n_kept = sum(abs(filtered_fft) >= threshold)
-  #      if verbose:
-  #          print("Threshold:" + str(threshold))
-  #          print("Keeping {} Fourier modes".format(n_kept))
-  #  
-  #      filtered_fft[ abs(filtered_fft) < threshold ] = 0
-  #      filtered_data = _np.array(_fft.irfft(filtered_fft))
-  #      filtered_tdata = ts #from interpolation
-  #  
-  #      if slope_compensation:
-  #          filtered_data += slope * _np.linspace(-.5,.5,len(data))
-  #     
-  #      if truncate:
-  #          filtered_data = _np.maximum(_np.minimum(filtered_data,1-1.e-6),1.e-6)
-  #      
-  #      if return_aux:
-  #          return filtered_data, filtered_tdata, fft_data, threshold, n_kept
-  #      else:
-  #          return filtered_data, filtered_tdata
-  #
-  #  # For each spam label, get 1's and 0's string to be "fourier filtered" 
-  #  # into a time-dependent probability function.
-  #  self.ffdata = {}
-  #  for gateStr in self.gsIndex.keys():
-  #    dsRow = self[gateStr]
-  #    ff_data_dict = {}
-  #    for outcomeLabel,spamIndx in self.olIndex.items():
-  #      ydata = _np.where(dsRow.get_expanded_oli() == spamIndx, 1, 0 )
-  #      tdata = dsRow.get_expanded_times()
-  #
-  #      # Filter modes less than n_sigma sigma from expected maximum.
-  #      filtered, filtered_ts, fft_data, threshold, n_kept = fourier_filter(
-  #        tdata, ydata, n_sigma=n_sigma, return_aux=True,
-  #        slope_compensation=slope_compensation, resampleFactor=resample_factor,
-  #        verbose=(verbosity > 0))
-  #      ff_data_dict[outcomeLabel] = (filtered, filtered_ts, fft_data, threshold, n_kept)
-  #
-  #    self.ffdata[gateStr] = ff_data_dict
-  #
-  #
-  #def create_dataset_at_time(self, timeval):
-  #  """ 
-  #  Creates a DataSet at time `timeval` via fourier-filtering this data.
-  #
-  #  Parameters
-  #  ----------
-  #  timeval : float or int
-  #      The time-stamp value at which to create a DataSet.
-  #
-  #  Returns
-  #  -------
-  #  DataSet
-  #  """
-  #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
-  #  for gateStr,i in self.gsIndex.items():
-  #    ff_data_dict = self.ffdata[gateStr]
-  #    nTimeSteps = self[gateStr].total()
-  #    avgKept = _np.average( [ff_data_dict[sl][4] for sl in self.olIndex ] )
-  #    N = int(round(float(nTimeSteps)/avgKept)) # ~ clicks per fourier mode
-  #
-  #    count_dict = {}
-  #    for sl in self.olIndex:
-  #      (filtered, ts, fft_data, threshold, n_kept) = ff_data_dict[sl]
-  #      try:
-  #        f = _interp1d(ts, filtered, kind='cubic')
-  #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
-  #        f = _interp1d(ts, filtered, kind='linear')
-  #      p = f(timeval)
-  #      count_dict[sl] = N*p
-  #
-  #    ds.add_count_dict(gateStr, count_dict)
-  #  ds.done_adding_data()
-  #  return ds
-  #
-  #
-  #def create_dataset_from_time_range(self, startTime, endTime):
-  #  """ 
-  #  Creates a DataSet by aggregating the counts within the
-  #  [`startTime`,`endTime`) interval.
-  #
-  #  Parameters
-  #  ----------
-  #  startTime, endTime : float or int
-  #      The time-stamps to use for the beginning (inclusive) and end
-  #      (exclusive) of the time interval.
-  #
-  #  Returns
-  #  -------
-  #  DataSet
-  #  """
-  #  tot = 0
-  #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
-  #  for gateStr,dsRow in self.iteritems():
-  #
-  #    if dsRow.reps is None:
-  #      reps = _np.ones(dsRow.oli.shape, self.repType)
-  #    else: reps = dsRow.reps
-  #
-  #    count_dict = {i: 0 for i in self.olIndex.values()}
-  #    for spamIndx, t, rep in zip(dsRow.oli, dsRow.time, reps):
-  #      if startTime <= t < endTime:
-  #        count_dict[spamIndx] += rep
-  #        tot += rep
-  #
-  #    ds.add_count_dict(gateStr,
-  #                      {self.sl[i]: cnt for i,cnt in count_dict.items()})
-  #
-  #  if tot == 0:
-  #    _warnings.warn("No counts in the requested time range: empty DataSet created")
-  #  ds.done_adding_data()                                                                                                           
-  #  return ds         
+    #OLD VERSION - TODO: UPDATE WITH NEW (BETTER) -- EGN COMMENTING OUT FOR NOW (TODO: REMOVE?)
+    #def compute_fourier_filtering(self, n_sigma=3, slope_compensation=False, resample_factor=5, verbosity=0):
+    #  """ Compute and store significant fourier coefficients -- EXPERIMENTAL TODO DOCSTRING"""
+    #  if not self.bStatic: 
+    #    raise ValueError("DataSet object must be *static* to compute fourier filters")
+    #
+    #  #Computes the order statistic
+    #
+    #  # Compute the log factorial function for numbers up to 2**15
+    #  # we could go higher, but this is already a lot of data
+    #  log_factorial = _np.append([0.0],_np.cumsum(list(map(_np.log, _np.arange(2**15)+1))))
+    #  
+    #  def order(x,sigma, n,r):
+    #      # Compute the distribution of the r^th smallest of n draws of a 
+    #      # mean-zero normal distribution with variance sigma^2
+    #      
+    #      a = (1./2 - n) * _np.log(2) 
+    #      b = -x**2 / (2 * sigma**2)
+    #      c = (n-r)*_np.log(1-_sps.erf(x/(_np.sqrt(2)*sigma)))
+    #      d = (r-1)*_np.log(1+_sps.erf(x/(_np.sqrt(2)*sigma)))
+    #  
+    #      e = log_factorial[n]
+    #      f = log_factorial[n-r]
+    #      g = log_factorial[r-1]
+    #  
+    #      h = _np.log(_np.pi*sigma**2)/2.
+    #  
+    #      return _np.exp(a + b + c + d + e - f - g - h)
+    #
+    #  def order_mean_var(sigma, n, r, mean_in = None):
+    #      # Compute the mean variance of the order statistic
+    #      order_mean = _quad(lambda x: x * order(x,sigma, n, r), -6*sigma, 6*sigma)[0]
+    #      return order_mean, _quad(lambda x: x**2 * order(x, sigma, n, r), -6*sigma, 6*sigma)[0] - order_mean**2
+    #
+    #  def fourier_filter(tdata, ydata, n_sigma=3., keep=None, return_aux=False, verbose=False, 
+    #                     truncate=True, slope_compensation=False, resampleFactor=5):
+    #      """
+    #      Process a list of binary data to produce an estimate of the time-dependent 
+    #      probability underlying the data.  Fourier components are kept if their 
+    #      magnitude is more than sigma from the expected value.
+    #      """
+    #
+    #      #first turn the data into an equally spaced sequence of data values
+    #      try:
+    #        f = _interp1d(tdata, ydata, kind='cubic', assume_sorted=False)
+    #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
+    #        f = _interp1d(tdata, ydata, kind='linear', assume_sorted=False)
+    #      ts = _np.linspace(tdata[0],tdata[-1], len(tdata)*resampleFactor)
+    #      #delta = _np.mean([ tdata[i]-tdata[i-1] for i in range(1,len(tdata)) ])
+    #      data  = _np.array([f(t) for t in ts],'d')
+    #
+    #      # Estimate the stationary probability from the data and compute the expected
+    #      # variance for the fourier coefficients
+    #      p_mean = _np.mean(data)
+    #      p_sigma = _np.sqrt(len(data) * (p_mean - p_mean**2) / 2.)
+    #
+    #      min_p_sigma = 1e-6 # hack for now to keep p_sigma from equaling zero.
+    #      p_sigma = max(p_sigma, min_p_sigma)
+    #      
+    #      # Compensate for slope
+    #      if slope_compensation:
+    #          slope = 2 * (_np.mean(data[int(len(data)/2.):]) - _np.mean(data[0:int(len(data)/2.)]))
+    #          data = data - slope * _np.linspace(-.5,.5,len(data))
+    #          
+    #      # DFT the data
+    #      fft_data = _fft.rfft(data)
+    #      filtered_fft = _np.array(fft_data.copy())
+    #      
+    #      if keep is None:
+    #          # Determine the threshold by computing the distribution of the extremal 
+    #          # order statistic.  The threshold is taken to be the mean
+    #          order_mean, order_var = order_mean_var(p_sigma, len(data), 1)
+    #          order_sig = _np.sqrt(order_var)
+    #          threshold = abs(order_mean) + n_sigma * order_sig
+    #      else:
+    #          # Determine the threshold to be consistent with keeping "keep" fourier modes
+    #          threshold = list(sorted(abs(fft_data), reverse=True))[keep]
+    #  
+    #      n_kept = sum(abs(filtered_fft) >= threshold)
+    #      if verbose:
+    #          print("Threshold:" + str(threshold))
+    #          print("Keeping {} Fourier modes".format(n_kept))
+    #  
+    #      filtered_fft[ abs(filtered_fft) < threshold ] = 0
+    #      filtered_data = _np.array(_fft.irfft(filtered_fft))
+    #      filtered_tdata = ts #from interpolation
+    #  
+    #      if slope_compensation:
+    #          filtered_data += slope * _np.linspace(-.5,.5,len(data))
+    #     
+    #      if truncate:
+    #          filtered_data = _np.maximum(_np.minimum(filtered_data,1-1.e-6),1.e-6)
+    #      
+    #      if return_aux:
+    #          return filtered_data, filtered_tdata, fft_data, threshold, n_kept
+    #      else:
+    #          return filtered_data, filtered_tdata
+    #
+    #  # For each spam label, get 1's and 0's string to be "fourier filtered" 
+    #  # into a time-dependent probability function.
+    #  self.ffdata = {}
+    #  for gateStr in self.gsIndex.keys():
+    #    dsRow = self[gateStr]
+    #    ff_data_dict = {}
+    #    for outcomeLabel,spamIndx in self.olIndex.items():
+    #      ydata = _np.where(dsRow.get_expanded_oli() == spamIndx, 1, 0 )
+    #      tdata = dsRow.get_expanded_times()
+    #
+    #      # Filter modes less than n_sigma sigma from expected maximum.
+    #      filtered, filtered_ts, fft_data, threshold, n_kept = fourier_filter(
+    #        tdata, ydata, n_sigma=n_sigma, return_aux=True,
+    #        slope_compensation=slope_compensation, resampleFactor=resample_factor,
+    #        verbose=(verbosity > 0))
+    #      ff_data_dict[outcomeLabel] = (filtered, filtered_ts, fft_data, threshold, n_kept)
+    #
+    #    self.ffdata[gateStr] = ff_data_dict
+    #
+    #
+    #def create_dataset_at_time(self, timeval):
+    #  """ 
+    #  Creates a DataSet at time `timeval` via fourier-filtering this data.
+    #
+    #  Parameters
+    #  ----------
+    #  timeval : float or int
+    #      The time-stamp value at which to create a DataSet.
+    #
+    #  Returns
+    #  -------
+    #  DataSet
+    #  """
+    #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
+    #  for gateStr,i in self.gsIndex.items():
+    #    ff_data_dict = self.ffdata[gateStr]
+    #    nTimeSteps = self[gateStr].total()
+    #    avgKept = _np.average( [ff_data_dict[sl][4] for sl in self.olIndex ] )
+    #    N = int(round(float(nTimeSteps)/avgKept)) # ~ clicks per fourier mode
+    #
+    #    count_dict = {}
+    #    for sl in self.olIndex:
+    #      (filtered, ts, fft_data, threshold, n_kept) = ff_data_dict[sl]
+    #      try:
+    #        f = _interp1d(ts, filtered, kind='cubic')
+    #      except _np.linalg.linalg.LinAlgError: #cubic can fail for few data points
+    #        f = _interp1d(ts, filtered, kind='linear')
+    #      p = f(timeval)
+    #      count_dict[sl] = N*p
+    #
+    #    ds.add_count_dict(gateStr, count_dict)
+    #  ds.done_adding_data()
+    #  return ds
+    #
+    #
+    #def create_dataset_from_time_range(self, startTime, endTime):
+    #  """ 
+    #  Creates a DataSet by aggregating the counts within the
+    #  [`startTime`,`endTime`) interval.
+    #
+    #  Parameters
+    #  ----------
+    #  startTime, endTime : float or int
+    #      The time-stamps to use for the beginning (inclusive) and end
+    #      (exclusive) of the time interval.
+    #
+    #  Returns
+    #  -------
+    #  DataSet
+    #  """
+    #  tot = 0
+    #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
+    #  for gateStr,dsRow in self.iteritems():
+    #
+    #    if dsRow.reps is None:
+    #      reps = _np.ones(dsRow.oli.shape, self.repType)
+    #    else: reps = dsRow.reps
+    #
+    #    count_dict = {i: 0 for i in self.olIndex.values()}
+    #    for spamIndx, t, rep in zip(dsRow.oli, dsRow.time, reps):
+    #      if startTime <= t < endTime:
+    #        count_dict[spamIndx] += rep
+    #        tot += rep
+    #
+    #    ds.add_count_dict(gateStr,
+    #                      {self.sl[i]: cnt for i,cnt in count_dict.items()})
+    #
+    #  if tot == 0:
+    #    _warnings.warn("No counts in the requested time range: empty DataSet created")
+    #  ds.done_adding_data()                                                                                                           
+    #  return ds         
 
 
-  def __getstate__(self):
-    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
-                 'gsIndexVals': list(self.gsIndex.values()),
-                 'olIndex': self.olIndex,
-                 'sl': self.sl,
-                 'bStatic': self.bStatic,
-                 'oliData': self.oliData,
-                 'timeData': self.timeData,
-                 'repData': self.repData,
-                 'oliType': self.oliType,
-                 'timeType': self.timeType,
-                 'repType': self.repType,
-                 'collisionAction': self.collisionAction,
-                 'uuid' : self.uuid }
-    return toPickle
+    def __getstate__(self):
+        toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
+                     'gsIndexVals': list(self.gsIndex.values()),
+                     'olIndex': self.olIndex,
+                     'sl': self.sl,
+                     'bStatic': self.bStatic,
+                     'oliData': self.oliData,
+                     'timeData': self.timeData,
+                     'repData': self.repData,
+                     'oliType': self.oliType,
+                     'timeType': self.timeType,
+                     'repType': self.repType,
+                     'collisionAction': self.collisionAction,
+                     'uuid' : self.uuid }
+        return toPickle
 
-  def __setstate__(self, state_dict):
-    gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-    self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
-    self.olIndex = state_dict['olIndex']
-    self.sl = state_dict['sl']
-    self.bStatic = state_dict['bStatic']
-    self.oliData  = state_dict['oliData']
-    self.timeData = state_dict['timeData']
-    self.repData  = state_dict['repData']
-    self.oliType  = state_dict['oliType']
-    self.timeType = state_dict['timeType']
-    self.repType  = state_dict['repType']
-    self.collisionAction, = state_dict['collisionAction']
-    self.uuid = state_dict['uuid']
+    def __setstate__(self, state_dict):
+        gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+        self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
+        self.olIndex = state_dict['olIndex']
+        self.sl = state_dict['sl']
+        self.bStatic = state_dict['bStatic']
+        self.oliData  = state_dict['oliData']
+        self.timeData = state_dict['timeData']
+        self.repData  = state_dict['repData']
+        self.oliType  = state_dict['oliType']
+        self.timeType = state_dict['timeType']
+        self.repType  = state_dict['repType']
+        self.collisionAction, = state_dict['collisionAction']
+        self.uuid = state_dict['uuid']
 
 
 
-  def save(self, fileOrFilename):
-    """ 
-    Save this DataSet to a file.
-
-    Parameters
-    ----------
-    fileOrFilename : string or file object
-        If a string,  interpreted as a filename.  If this filename ends 
-        in ".gz", the file will be gzip compressed.
-
-    Returns
-    -------
-    None
-    """
-
-    toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
-                 'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
-                 'olIndex': self.olIndex,
-                 'sl': self.sl,
-                 'bStatic': self.bStatic,
-                 'oliType': self.oliType,
-                 'timeType': self.timeType,
-                 'repType': self.repType,
-                 'useReps': bool(self.repData is not None),
-                 'collisionAction': self.collisionAction,
-                 'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
-    if not self.bStatic: toPickle['nRows'] = len(self.oliData)
+    def save(self, fileOrFilename):
+        """ 
+        Save this DataSet to a file.
     
-    bOpen = (type(fileOrFilename) == str)
-    if bOpen:
-        if fileOrFilename.endswith(".gz"):
-            import gzip as _gzip
-            f = _gzip.open(fileOrFilename,"wb")
+        Parameters
+        ----------
+        fileOrFilename : string or file object
+            If a string,  interpreted as a filename.  If this filename ends 
+            in ".gz", the file will be gzip compressed.
+    
+        Returns
+        -------
+        None
+        """
+    
+        toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
+                     'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
+                     'olIndex': self.olIndex,
+                     'sl': self.sl,
+                     'bStatic': self.bStatic,
+                     'oliType': self.oliType,
+                     'timeType': self.timeType,
+                     'repType': self.repType,
+                     'useReps': bool(self.repData is not None),
+                     'collisionAction': self.collisionAction,
+                     'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
+        if not self.bStatic: toPickle['nRows'] = len(self.oliData)
+        
+        bOpen = (type(fileOrFilename) == str)
+        if bOpen:
+            if fileOrFilename.endswith(".gz"):
+                import gzip as _gzip
+                f = _gzip.open(fileOrFilename,"wb")
+            else:
+                f = open(fileOrFilename,"wb")
+        else: 
+            f = fileOrFilename
+    
+        _pickle.dump(toPickle,f)
+        if self.bStatic:  
+            _np.save(f, self.oliData)
+            _np.save(f, self.timeData)
+            if self.repData is not None:
+                _np.save(f, self.repData)
+        else: 
+            for row in self.oliData: _np.save(f, row)
+            for row in self.timeData: _np.save(f, row)
+            if self.repData is not None:
+                for row in self.repData: _np.save(f, row)
+        if bOpen: f.close()
+
+    def load(self, fileOrFilename):
+        """
+        Load DataSet from a file, clearing any data is contained previously.
+        
+        Parameters
+        ----------
+        fileOrFilename string or file object.
+            If a string,  interpreted as a filename.  If this filename ends 
+            in ".gz", the file will be gzip uncompressed as it is read.
+        
+        Returns
+        -------
+        None
+        """
+        bOpen = (type(fileOrFilename) == str)
+        if bOpen:
+            if fileOrFilename.endswith(".gz"):
+                import gzip as _gzip
+                f = _gzip.open(fileOrFilename,"rb")
+            else:
+                f = open(fileOrFilename,"rb")
+        else: 
+            f = fileOrFilename
+        
+        state_dict = _pickle.load(f)
+        def expand(x): #to be backward compatible
+            """ Expand a compressed gate string """
+            if isinstance(x,_gs.CompressedGateString): return x.expand()
+            else: 
+                _warnings.warn("Deprecated dataset format.  Please re-save " +
+                               "this dataset soon to avoid future incompatibility.")
+                return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
+        gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
+        
+        #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
+        self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
+        self.olIndex = state_dict['olIndex']
+        self.sl      = state_dict['sl']
+        self.bStatic = state_dict['bStatic']
+        self.oliType = state_dict['oliType']
+        self.timeType= state_dict['timeType']
+        self.repType = state_dict['repType']
+        self.collisionAction, = state_dict['collisionAction']
+        self.uuid    = state_dict['uuid']
+        
+        useReps = state_dict['useReps']
+        
+        if self.bStatic:
+            self.oliData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+            self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
+            if useReps:
+                self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
         else:
-            f = open(fileOrFilename,"wb")
-    else: 
-        f = fileOrFilename
-
-    _pickle.dump(toPickle,f)
-    if self.bStatic:  
-      _np.save(f, self.oliData)
-      _np.save(f, self.timeData)
-      if self.repData is not None:
-        _np.save(f, self.repData)
-    else: 
-      for row in self.oliData: _np.save(f, row)
-      for row in self.timeData: _np.save(f, row)
-      if self.repData is not None:
-        for row in self.repData: _np.save(f, row)
-    if bOpen: f.close()
-
-  def load(self, fileOrFilename):
-    """
-    Load DataSet from a file, clearing any data is contained previously.
-
-    Parameters
-    ----------
-    fileOrFilename string or file object.
-        If a string,  interpreted as a filename.  If this filename ends 
-        in ".gz", the file will be gzip uncompressed as it is read.
-
-    Returns
-    -------
-    None
-    """
-    bOpen = (type(fileOrFilename) == str)
-    if bOpen:
-        if fileOrFilename.endswith(".gz"):
-            import gzip as _gzip
-            f = _gzip.open(fileOrFilename,"rb")
-        else:
-            f = open(fileOrFilename,"rb")
-    else: 
-        f = fileOrFilename
-
-    state_dict = _pickle.load(f)
-    def expand(x): #to be backward compatible
-      """ Expand a compressed gate string """
-      if isinstance(x,_gs.CompressedGateString): return x.expand()
-      else: 
-        _warnings.warn("Deprecated dataset format.  Please re-save " +
-                       "this dataset soon to avoid future incompatibility.")
-        return _gs.GateString(_gs.CompressedGateString.expand_gate_label_tuple(x))
-    gsIndexKeys = [ expand(cgs) for cgs in state_dict['gsIndexKeys'] ]
-
-    #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-    self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
-    self.olIndex = state_dict['olIndex']
-    self.sl      = state_dict['sl']
-    self.bStatic = state_dict['bStatic']
-    self.oliType = state_dict['oliType']
-    self.timeType= state_dict['timeType']
-    self.repType = state_dict['repType']
-    self.collisionAction, = state_dict['collisionAction']
-    self.uuid    = state_dict['uuid']
-
-    useReps = state_dict['useReps']
-
-    if self.bStatic:
-      self.oliData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-      self.timeData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-      if useReps:
-        self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
-    else:
-      self.oliData = []
-      for _ in range(state_dict['nRows']):
-        self.oliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-
-      self.timeData = []
-      for _ in range(state_dict['nRows']):
-        self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-
-      if useReps:
-        self.repData = []
-        for _ in range(state_dict['nRows']):
-          self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
-      else:
-        self.repData = None
-
-    if bOpen: f.close()
+            self.oliData = []
+            for _ in range(state_dict['nRows']):
+                self.oliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+        
+            self.timeData = []
+            for _ in range(state_dict['nRows']):
+                self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+        
+            if useReps:
+                self.repData = []
+                for _ in range(state_dict['nRows']):
+                    self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
+            else:
+                self.repData = None
+        
+        if bOpen: f.close()

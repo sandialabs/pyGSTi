@@ -652,7 +652,7 @@ def read_gateset(filename):
             qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
 
         elif cur_format == "LiouvilleMx":
-            qty = _evalRowList( cur_rows, bComplex=False ) )
+            qty = _evalRowList( cur_rows, bComplex=False )
 
         assert(qty is not None), "Invalid format: %s" % cur_format
 
@@ -677,21 +677,22 @@ def read_gateset(filename):
             gs.gates[cur_label] = _objs.TPParameterizedGate(qty)
         elif cur_typ == "CPTP-GATE":
             #Similar to gate.convert(...) method
-            J = _jt.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
+            J = _tools.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
             RANK_TOL = 1e-6
             if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
-                unitary_post = gate # when 'gate' is unitary
+                unitary_post = qty # when 'gate' is unitary
             else: unitary_post = None
 
-            nQubits = _np.log2(gate.dim)/2.0
+            nQubits = _np.log2(qty.shape[0])/2.0
             bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
 
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
             ham_basis = proj_basis
             nonham_basis = proj_basis
             nonham_diagonal_only = False; cptp = True; truncate=True
-            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis, nonham_basis, cptp,
-                nonham_diagonal_only, truncate, basis)
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
+                                                                  nonham_basis, cptp, nonham_diagonal_only,
+                                                                  truncate, basis)
 
         elif cur_typ in ("IGATE",):
             #just add numpy array `qty` to matrices list
@@ -789,22 +790,24 @@ def read_gateset(filename):
 
             elif state == "look for label":
                 parts = line.split(':')
-                assert(parts == 2), "Invalid '<type>: <label>' line: %s" % line
-                cur_typ = parts[0].strip()
-                cur_label = parts[1].strip()
+                assert(len(parts) == 2), "Invalid '<type>: <label>' line: %s" % line
+                typ = parts[0].strip()
+                label = parts[1].strip()
 
-                if typ == "BASIS":
+                if typ in ("BASIS","GAUGEGROUP"):
                     pass #handled above
                 
                 elif typ in ("POVM","TP-POVM","Instrument","TP-Instrument"):
                     # if this is a group type, just record this and continue looking
                     #  for the next labeled object
-                    cur_group = cur_label
-                    cur_group_typ = cur_typ
+                    cur_group = label
+                    cur_group_typ = typ
                 else:
                     #All other "types" should be objects with formatted data
-                    # associated with them: cur_label and cur_typ now hold the
-                    # current object label and type - now read it in.
+                    # associated with them: set cur_label and cur_typ to hold 
+                    # the object label and type - next read it in.
+                    cur_label = label
+                    cur_typ = typ
                     state = "expect format" # the default next action
                     
             elif state == "expect format":
@@ -832,6 +835,8 @@ def read_gateset(filename):
 
         #Set basis (only needed if we didn't set it above)
         gs.basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        gs.basis = basis # already created a Basis obj above
 
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.

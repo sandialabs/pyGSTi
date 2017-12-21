@@ -26,26 +26,20 @@ class GateSetTestCase(BaseTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','E1') } )
+            effectLabels=["0","1"], effectExpressions=["0","complement"])
 
         self.tp_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','E1') },
+            effectLabels=["0","1"], effectExpressions=["0","complement"],
             parameterization="TP")
 
         self.static_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","E1"], effectExpressions=["0","complement"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','E1') },
+            effectLabels=["0","1"], effectExpressions=["0","complement"],
             parameterization="static")
 
         self.mgateset = self.gateset.copy()
@@ -62,9 +56,9 @@ class TestGateSetMethods(GateSetTestCase):
         preps = pickle.loads(p)
         self.assertEqual(list(preps.keys()), list(self.gateset.preps.keys()))
 
-        p = pickle.dumps(self.gateset.effects)
-        effects = pickle.loads(p)
-        self.assertEqual(list(effects.keys()), list(self.gateset.effects.keys()))
+        p = pickle.dumps(self.gateset.povms)
+        povms = pickle.loads(p)
+        self.assertEqual(list(povms.keys()), list(self.gateset.povms.keys()))
 
         p = pickle.dumps(self.gateset.gates)
         gates = pickle.loads(p)
@@ -76,8 +70,8 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_counting(self):
 
-        self.assertEqual(self.gateset.num_preps(), 1)
-        self.assertEqual(self.gateset.num_effects(), 2)
+        self.assertEqual( len(self.gateset.preps), 1)
+        self.assertEqual( len(self.gateset.povms['Mdefault']), 2)
         
         for default_param in ("full","TP","static"):
             print("Case: default_param = ",default_param)
@@ -91,7 +85,7 @@ class TestGateSetMethods(GateSetTestCase):
 
             for lbl,obj in self.gateset.preps.items():
                 print(lbl,':',obj.gpindices)
-            for lbl,obj in self.gateset.effects.items():
+            for lbl,obj in self.gateset.povms.items():
                 print(lbl,':',obj.gpindices)
             for lbl,obj in self.gateset.gates.items():
                 print(lbl,':',obj.gpindices)
@@ -99,8 +93,8 @@ class TestGateSetMethods(GateSetTestCase):
 
             self.assertEqual(self.gateset.num_params(), nParams)
 
-        self.assertEqual(self.gateset.get_prep_labels(), ["rho0"])
-        self.assertEqual(self.gateset.get_effect_labels(), ["E0", "E1"])
+        self.assertEqual(list(self.gateset.preps.keys()), ["rho0"])
+        self.assertEqual(list(self.gateset.povms.keys()), ["Mdefault"])
 
     def test_getset_full(self):
         self.getset_helper(self.gateset)
@@ -123,14 +117,10 @@ class TestGateSetMethods(GateSetTestCase):
         w = gs['rho1']
         self.assertArraysAlmostEqual(w,v)
 
-        gs['E2'] = v
-        w = gs['E2']
-        self.assertArraysAlmostEqual(w,v)
-
-        gs.spamdefs["TEST"] = ("rho0","E2")
-        self.assertTrue("TEST" in gs.get_spam_labels())
-        d = gs.get_reverse_spam_defs()
-        self.assertEqual( d[("rho0","E2")], "TEST" )
+        # Can't just assign to POVM...
+        #gs['Mdefault']['2'] = v
+        #w = gs['Mdefault']['2']
+        #self.assertArraysAlmostEqual(w,v)
 
         Gi_matrix = np.identity(4, 'd')
         self.assertTrue( isinstance(gs['Gi'], pygsti.objects.Gate) )
@@ -153,7 +143,7 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(KeyError):
             print("COPYING")
             gs2 = gs.copy()
-            error = gs2.effects['foobar']
+            error = gs2.povms['foobar']
 
 
     def test_copy(self):
@@ -188,8 +178,9 @@ class TestGateSetMethods(GateSetTestCase):
             self.assertArraysAlmostEqual(cp[gateLabel], np.dot(Tinv, np.dot(self.gateset[gateLabel], T)))
         for prepLabel in cp.preps:
             self.assertArraysAlmostEqual(cp[prepLabel], np.dot(Tinv, self.gateset[prepLabel]))
-        for effectLabel in cp.effects:
-            self.assertArraysAlmostEqual(cp[effectLabel],  np.dot(np.transpose(T), self.gateset[effectLabel]))
+        for povmLabel in cp.povms:
+            for effectLabel,eVec in cp.povms[povmLabel].items():
+                self.assertArraysAlmostEqual(eVec,  np.dot(np.transpose(T), self.gateset.povms[povmLabel][effectLabel]))
 
 
     def test_simple_multiplicationA(self):
@@ -230,7 +221,7 @@ class TestGateSetMethods(GateSetTestCase):
     def test_bulk_multiplication(self):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
-        evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
 
         p1 = np.dot( self.gateset['Gy'], self.gateset['Gx'] )
         p2 = np.dot( self.gateset['Gy'], np.dot( self.gateset['Gy'], self.gateset['Gx'] ))
@@ -238,10 +229,10 @@ class TestGateSetMethods(GateSetTestCase):
         bulk_prods = self.gateset.bulk_product(evt)
         bulk_prods_scaled, scaleVals = self.gateset.bulk_product(evt, bScale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
-        self.assertArraysAlmostEqual(bulk_prods[0],p1)
-        self.assertArraysAlmostEqual(bulk_prods[1],p2)
-        self.assertArraysAlmostEqual(bulk_prods2[0],p1)
-        self.assertArraysAlmostEqual(bulk_prods2[1],p2)
+        self.assertArraysAlmostEqual(bulk_prods[ 0 ],p1)
+        self.assertArraysAlmostEqual(bulk_prods[ 1 ],p2)
+        self.assertArraysAlmostEqual(bulk_prods2[ 0 ],p1)
+        self.assertArraysAlmostEqual(bulk_prods2[ 1 ],p2)
 
         #Artificially reset the "smallness" threshold for scaling to be
         # sure to engate the scaling machinery
@@ -259,145 +250,155 @@ class TestGateSetMethods(GateSetTestCase):
 
     def test_simple_probabilityA(self):
         gatestring = ('Gx','Gy')
-        p1 = np.dot( np.transpose(self.gateset.effects['E0']),
+        p0a = np.dot( np.transpose(self.gateset.povms['Mdefault']['0']),
                      np.dot( self.gateset['Gy'],
                              np.dot(self.gateset['Gx'],
                                     self.gateset.preps['rho0'])))
-        p2 = self.gateset.pr('0',gatestring)
-        p3 = self.gateset.pr('0',gatestring,bUseScaling=False)
-        self.assertArraysAlmostEqual(p1,p2)
-        self.assertArraysAlmostEqual(p1,p3)
-
-        p2 = self.gateset.pr('1',gatestring)
-        p3 = self.gateset.pr('1',gatestring,bUseScaling=False)
-        self.assertArraysAlmostEqual(1.0-p1,p2)
-        self.assertArraysAlmostEqual(1.0-p1,p3)
-
-        dp = self.gateset.dpr('0',gatestring)
-        dp4,p4 = self.gateset.dpr('0',gatestring,returnPr=True)
-        self.assertArraysAlmostEqual(dp,dp4)
+        probs = self.gateset.probs(gatestring)
+        p0b,p1b = probs[('0',)], probs[('1',)]
+        self.assertArraysAlmostEqual(p0a,p0b)
+        self.assertArraysAlmostEqual(1.0-p0a,p1b)
+        
+        dprobs = self.gateset.dprobs(gatestring)
+        dprobs2 = self.gateset.dprobs(gatestring,returnPr=True)
+        self.assertArraysAlmostEqual(dprobs[('0',)],dprobs2[('0',)][0])
+        self.assertArraysAlmostEqual(dprobs[('1',)],dprobs2[('1',)][0])
 
         #Compare with map-based computation
-        mp2 = self.mgateset.pr('0',gatestring)
-        mp3 = self.mgateset.pr('0',gatestring,bUseScaling=False)
-        self.assertArraysAlmostEqual(p1,mp2)
-        self.assertArraysAlmostEqual(p1,mp3)
-
-        mp2 = self.mgateset.pr('1',gatestring)
-        mp3 = self.mgateset.pr('1',gatestring,bUseScaling=False)
-        self.assertArraysAlmostEqual(1.0-p1,mp2)
-        self.assertArraysAlmostEqual(1.0-p1,mp3)
-
-        mdp = self.mgateset.dpr('0',gatestring)
-        mdp4,mp4 = self.mgateset.dpr('0',gatestring,returnPr=True)
-        self.assertArraysAlmostEqual(mdp,mdp4)
-        self.assertArraysAlmostEqual(dp,mdp)
+        mprobs = self.mgateset.probs(gatestring)
+        mp0b,mp1b = mprobs[('0',)], mprobs[('1',)]
+        self.assertArraysAlmostEqual(p0b,mp0b)
+        self.assertArraysAlmostEqual(p1b,mp1b)
+        
+        mdprobs = self.mgateset.dprobs(gatestring)
+        mdprobs2 = self.mgateset.dprobs(gatestring,returnPr=True)
+        self.assertArraysAlmostEqual(dprobs[('0',)],mdprobs[('0',)])
+        self.assertArraysAlmostEqual(dprobs[('1',)],mdprobs[('1',)])
+        self.assertArraysAlmostEqual(dprobs[('0',)],mdprobs2[('0',)][0])
+        self.assertArraysAlmostEqual(dprobs[('1',)],mdprobs2[('1',)][0])
 
 
     def test_simple_probabilityB(self):
         gatestring = ('Gx','Gy','Gy')
-        p1 = np.dot( np.transpose(self.gateset.effects['E0']),
+        p1 = np.dot( np.transpose(self.gateset.povms['Mdefault']['0']),
                      np.dot( self.gateset['Gy'],
                              np.dot( self.gateset['Gy'],
                                      np.dot(self.gateset['Gx'],
                                             self.gateset.preps['rho0']))))
-        p2 = self.gateset.pr('0',gatestring)
+        p2 = self.gateset.probs(gatestring)[('0',)]
         self.assertSingleElemArrayAlmostEqual(p1, p2)
         gateset_with_nan = self.gateset.copy()
         gateset_with_nan['rho0'][:] = np.nan
-        self.assertWarns(gateset_with_nan.pr,'0',gatestring)
+        self.assertWarns(gateset_with_nan.probs,gatestring)
 
     def test_bulk_probabilities(self):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
-        evt = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
-        mevt = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [gatestring1,gatestring2] )
+        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring1,gatestring2] )
 
-        p1 = np.dot( np.transpose(self.gateset.effects['E0']),
+        p1 = np.dot( np.transpose(self.gateset.povms['Mdefault']['0']),
                      np.dot( self.gateset['Gy'],
                              np.dot(self.gateset['Gx'],
                                     self.gateset.preps['rho0'])))
 
-        p2 = np.dot( np.transpose(self.gateset.effects['E0']),
+        p2 = np.dot( np.transpose(self.gateset.povms['Mdefault']['0']),
                      np.dot( self.gateset['Gy'],
                              np.dot( self.gateset['Gy'],
                                      np.dot(self.gateset['Gx'],
                                             self.gateset.preps['rho0']))))
 
-        #check == true could raise a warning if a mismatch is detected
-        bulk_pr = self.assertNoWarnings(self.gateset.bulk_pr,'0',evt,check=True)
-        bulk_pr_m = self.assertNoWarnings(self.gateset.bulk_pr,'1',evt,check=True)
-        mbulk_pr = self.assertNoWarnings(self.mgateset.bulk_pr,'0',mevt,check=True)
-        mbulk_pr_m = self.assertNoWarnings(self.mgateset.bulk_pr,'1',mevt,check=True)
-        self.assertSingleElemArrayAlmostEqual(p1, bulk_pr[0])
-        self.assertSingleElemArrayAlmostEqual(p2, bulk_pr[1])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_pr_m[0])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_pr_m[1])
-        self.assertSingleElemArrayAlmostEqual(p1, mbulk_pr[0])
-        self.assertSingleElemArrayAlmostEqual(p2, mbulk_pr[1])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_pr_m[0])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_pr_m[1])
+        #bulk_pr removed
+        ##check == true could raise a warning if a mismatch is detected
+        #bulk_pr = self.assertNoWarnings(self.gateset.bulk_pr,'0',evt,check=True)
+        #bulk_pr_m = self.assertNoWarnings(self.gateset.bulk_pr,'1',evt,check=True)
+        #mbulk_pr = self.assertNoWarnings(self.mgateset.bulk_pr,'0',mevt,check=True)
+        #mbulk_pr_m = self.assertNoWarnings(self.mgateset.bulk_pr,'1',mevt,check=True)
+        #self.assertSingleElemArrayAlmostEqual(p1, bulk_pr[0])
+        #self.assertSingleElemArrayAlmostEqual(p2, bulk_pr[1])
+        #self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_pr_m[0])
+        #self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_pr_m[1])
+        #self.assertSingleElemArrayAlmostEqual(p1, mbulk_pr[0])
+        #self.assertSingleElemArrayAlmostEqual(p2, mbulk_pr[1])
+        #self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_pr_m[0])
+        #self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_pr_m[1])
 
+        #non-bulk probabilities (again?)
         probs1 = self.gateset.probs(gatestring1)
         probs2 = self.gateset.probs(gatestring2)
         mprobs1 = self.mgateset.probs(gatestring1)
         mprobs2 = self.mgateset.probs(gatestring2)
-        self.assertSingleElemArrayAlmostEqual(p1, probs1['0'])
-        self.assertSingleElemArrayAlmostEqual(p2, probs2['0'])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, probs1['1'])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, probs2['1'])
-        self.assertSingleElemArrayAlmostEqual(p1, mprobs1['0'])
-        self.assertSingleElemArrayAlmostEqual(p2, mprobs2['0'])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mprobs1['1'])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mprobs2['1'])
+        self.assertSingleElemArrayAlmostEqual(p1, probs1[('0',)])
+        self.assertSingleElemArrayAlmostEqual(p2, probs2[('0',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, probs1[('1',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, probs2[('1',)])
+        self.assertSingleElemArrayAlmostEqual(p1, mprobs1[('0',)])
+        self.assertSingleElemArrayAlmostEqual(p2, mprobs2[('0',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mprobs1[('1',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mprobs2[('1',)])
+
+        #bulk_probs
+        bulk_probs = self.assertNoWarnings(self.gateset.bulk_probs,[gatestring1,gatestring2],check=True)
+        mbulk_probs = self.assertNoWarnings(self.mgateset.bulk_probs,[gatestring1,gatestring2],check=True)
+        self.assertSingleElemArrayAlmostEqual(p1, bulk_probs[gatestring1][('0',)])
+        self.assertSingleElemArrayAlmostEqual(p2, bulk_probs[gatestring2][('0',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_probs[gatestring1][('1',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_probs[gatestring2][('1',)])
+        self.assertSingleElemArrayAlmostEqual(p1, mbulk_probs[gatestring1][('0',)])
+        self.assertSingleElemArrayAlmostEqual(p2, mbulk_probs[gatestring2][('0',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_probs[gatestring1][('1',)])
+        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_probs[gatestring2][('1',)])
 
 
-        bulk_probs = self.assertNoWarnings(self.gateset.bulk_probs,evt,check=True)
-        mbulk_probs = self.assertNoWarnings(self.mgateset.bulk_probs,mevt,check=True)
-        self.assertSingleElemArrayAlmostEqual(p1, bulk_probs['0'][0])
-        self.assertSingleElemArrayAlmostEqual(p2, bulk_probs['0'][1])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, bulk_probs['1'][0])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, bulk_probs['1'][1])
-        self.assertSingleElemArrayAlmostEqual(p1, mbulk_probs['0'][0])
-        self.assertSingleElemArrayAlmostEqual(p2, mbulk_probs['0'][1])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p1, mbulk_probs['1'][0])
-        self.assertSingleElemArrayAlmostEqual(1.0 - p2, mbulk_probs['1'][1])
-
+        def elIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(lookup[iGateStr]) if isinstance(lookup[iGateStr],slice) \
+                   else lookup[iGateStr] #an index array
+            return inds[ outcome_lookup[iGateStr].index( outcome ) ]
+        def melIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(mlookup[iGateStr]) if isinstance(mlookup[iGateStr],slice) \
+                   else mlookup[iGateStr] #an index array
+            return inds[ moutcome_lookup[iGateStr].index( outcome ) ]
+        
+        nElements = evt.num_final_elements()
+        probs_to_fill = np.empty( nElements, 'd')
+        mprobs_to_fill = np.empty( nElements, 'd')
+        self.assertNoWarnings(self.gateset.bulk_fill_probs, probs_to_fill, evt, check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_probs, mprobs_to_fill, mevt, check=True)
+        self.assertSingleElemArrayAlmostEqual(p1, probs_to_fill[ elIndx(0, ('0',)) ])
+        self.assertSingleElemArrayAlmostEqual(p2, probs_to_fill[ elIndx(1, ('0',))])
+        self.assertSingleElemArrayAlmostEqual(1-p1, probs_to_fill[ elIndx(0, ('1',))])
+        self.assertSingleElemArrayAlmostEqual(1-p2, probs_to_fill[ elIndx(1, ('1',))])
+        self.assertSingleElemArrayAlmostEqual(p1, mprobs_to_fill[ melIndx(0, ('0',))])
+        self.assertSingleElemArrayAlmostEqual(p2, mprobs_to_fill[ melIndx(1, ('0',))])
+        self.assertSingleElemArrayAlmostEqual(1-p1, mprobs_to_fill[ melIndx(0, ('1',))])
+        self.assertSingleElemArrayAlmostEqual(1-p2, mprobs_to_fill[ melIndx(1, ('1',))])
 
         #test with split eval tree
-        evt_split = evt.copy(); evt_split.split(numSubTrees=2)
-        mevt_split = mevt.copy(); mevt_split.split(numSubTrees=2)
-        bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_probs,
-                                     evt_split, check=True)
-        mbulk_probs_splt = self.assertNoWarnings(self.mgateset.bulk_probs,
-                                     mevt_split, check=True)
+        evt_split = evt.copy(); lookup_splt = evt_split.split(lookup,numSubTrees=2)
+        mevt_split = mevt.copy(); mlookup_splt = mevt_split.split(mlookup,numSubTrees=2)
+        probs_to_fill_splt = np.empty( nElements, 'd')
+        mprobs_to_fill_splt = np.empty( nElements, 'd')
+
+        bulk_probs_splt = self.assertNoWarnings(self.gateset.bulk_fill_probs,
+                                                probs_to_fill_splt, evt_split, check=True)
+        mbulk_probs_splt = self.assertNoWarnings(self.mgateset.bulk_fill_probs,
+                                                 mprobs_to_fill_splt, mevt_split, check=True)
 
         evt_split.print_analysis()
         mevt_split.print_analysis()
-        self.assertArraysAlmostEqual(bulk_probs['0'],
-                   evt_split.permute_computation_to_original(bulk_probs_splt['0']))
-        self.assertArraysAlmostEqual(bulk_probs['1'], 
-                   evt_split.permute_computation_to_original(bulk_probs_splt['1']))
-        self.assertArraysAlmostEqual(bulk_probs['0'],
-                   mevt_split.permute_computation_to_original(mbulk_probs_splt['0']))
-        self.assertArraysAlmostEqual(bulk_probs['1'], 
-                   mevt_split.permute_computation_to_original(mbulk_probs_splt['1']))
 
+        #Note: Outcome labels stay in same order across tree splits (i.e.
+        #   evalTree.split() doesn't need to update outcome_lookup)
+        for i,gstr in enumerate([gatestring1,gatestring2]): #original gate strings
+            self.assertArraysAlmostEqual(probs_to_fill[ lookup[i] ],
+                                         probs_to_fill_splt[ lookup_splt[i] ])
+            self.assertArraysAlmostEqual(mprobs_to_fill[ mlookup[i] ],
+                                         mprobs_to_fill_splt[ mlookup_splt[i] ])
 
-        nGateStrings = 2; nSpamLabels = 2
-        probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        mprobs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        spam_label_rows = { '0': 0, '1': 1 }
-        self.assertNoWarnings(self.gateset.bulk_fill_probs, probs_to_fill, spam_label_rows, evt, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_probs, mprobs_to_fill, spam_label_rows, mevt, check=True)
-        self.assertSingleElemArrayAlmostEqual(p1, probs_to_fill[0,0])
-        self.assertSingleElemArrayAlmostEqual(p2, probs_to_fill[0,1])
-        self.assertSingleElemArrayAlmostEqual(1-p1, probs_to_fill[1,0])
-        self.assertSingleElemArrayAlmostEqual(1-p2, probs_to_fill[1,1])
-        self.assertSingleElemArrayAlmostEqual(p1, mprobs_to_fill[0,0])
-        self.assertSingleElemArrayAlmostEqual(p2, mprobs_to_fill[0,1])
-        self.assertSingleElemArrayAlmostEqual(1-p1, mprobs_to_fill[1,0])
-        self.assertSingleElemArrayAlmostEqual(1-p2, mprobs_to_fill[1,1])
+            #Also check map vs matrix fills:
+            assert(outcome_lookup[i] == moutcome_lookup[i]) # should stay in same ordering... I think
+            self.assertArraysAlmostEqual(probs_to_fill[ lookup[i] ],
+                                         mprobs_to_fill[ mlookup[i] ], places=FD_JAC_PLACES)
 
         prods = self.gateset.bulk_product(evt) #TODO: test output?
 
@@ -407,56 +408,57 @@ class TestGateSetMethods(GateSetTestCase):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
 
-        evt = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
-        mevt = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
+        gatestringList = [gatestring0,gatestring1,gatestring2]
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestringList )
+        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestringList )
         
-        dP0 = self.gateset.dpr('0', gatestring0)
-        dP1 = self.gateset.dpr('0', gatestring1)
-        dP2 = self.gateset.dpr('0', gatestring2)
-        dP0m = self.gateset.dpr('1', gatestring0)
-        dP1m = self.gateset.dpr('1', gatestring1)
-        dP2m = self.gateset.dpr('1', gatestring2)
+        dP0 = self.gateset.dprobs(gatestring0)[('0',)]
+        dP1 = self.gateset.dprobs(gatestring1)[('0',)]
+        dP2 = self.gateset.dprobs(gatestring2)[('0',)]
+        dP0m = self.gateset.dprobs(gatestring0)[('1',)]
+        dP1m = self.gateset.dprobs(gatestring1)[('1',)]
+        dP2m = self.gateset.dprobs(gatestring2)[('1',)]
 
-
-        bulk_dP = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
-        bulk_dP_m = self.gateset.bulk_dpr('1', evt, returnPr=False, check=True)
-        bulk_dP_chk, bulk_P = self.gateset.bulk_dpr('0', evt, returnPr=True, check=False)
-        bulk_dP_m_chk, bulk_Pm = self.gateset.bulk_dpr('1', evt, returnPr=True, check=False)
-        
-        mbulk_dP = self.mgateset.bulk_dpr('0', mevt, returnPr=False, check=True)
-        mbulk_dP_m = self.mgateset.bulk_dpr('1', mevt, returnPr=False, check=True)
-        mbulk_dP_chk, mbulk_P = self.mgateset.bulk_dpr('0', mevt, returnPr=True, check=False)
-        mbulk_dP_m_chk, mbulk_Pm = self.mgateset.bulk_dpr('1', mevt, returnPr=True, check=False)
-
-        self.assertArraysAlmostEqual(bulk_dP,bulk_dP_chk)
-        self.assertArraysAlmostEqual(bulk_dP[0,:],dP0)
-        self.assertArraysAlmostEqual(bulk_dP[1,:],dP1)
-        self.assertArraysAlmostEqual(bulk_dP[2,:],dP2)
-        self.assertArraysAlmostEqual(bulk_dP_m,bulk_dP_m_chk) 
-        self.assertArraysAlmostEqual(bulk_dP_m[0,:],dP0m) 
-        self.assertArraysAlmostEqual(bulk_dP_m[1,:],dP1m)
-        self.assertArraysAlmostEqual(bulk_dP_m[2,:],dP2m)
-
-        self.assertArraysAlmostEqual(mbulk_dP,mbulk_dP_chk, places=FD_JAC_PLACES) #relax tolerance for 
-        self.assertArraysAlmostEqual(mbulk_dP[0,:],dP0, places=FD_JAC_PLACES)     # finite diff derivs...
-        self.assertArraysAlmostEqual(mbulk_dP[1,:],dP1, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dP[2,:],dP2, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dP_m,mbulk_dP_m_chk, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dP_m[0,:],dP0m, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dP_m[1,:],dP1m, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dP_m[2,:],dP2m, places=FD_JAC_PLACES)
-
-
-        #Artificially reset the "smallness" threshold for scaling
-        # to be sure to engate the scaling machinery
-        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
-        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
-        bulk_dPb = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
-        pygsti.objects.gatematrixcalc.PSMALL = PORIG
-        bulk_dPc = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
-        pygsti.objects.gatematrixcalc.DSMALL = DORIG
-        self.assertArraysAlmostEqual(bulk_dPb,bulk_dP_chk)
-        self.assertArraysAlmostEqual(bulk_dPc,bulk_dP_chk)
+        #Removed bulk_dpr
+        #bulk_dP = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
+        #bulk_dP_m = self.gateset.bulk_dpr('1', evt, returnPr=False, check=True)
+        #bulk_dP_chk, bulk_P = self.gateset.bulk_dpr('0', evt, returnPr=True, check=False)
+        #bulk_dP_m_chk, bulk_Pm = self.gateset.bulk_dpr('1', evt, returnPr=True, check=False)
+        #
+        #mbulk_dP = self.mgateset.bulk_dpr('0', mevt, returnPr=False, check=True)
+        #mbulk_dP_m = self.mgateset.bulk_dpr('1', mevt, returnPr=False, check=True)
+        #mbulk_dP_chk, mbulk_P = self.mgateset.bulk_dpr('0', mevt, returnPr=True, check=False)
+        #mbulk_dP_m_chk, mbulk_Pm = self.mgateset.bulk_dpr('1', mevt, returnPr=True, check=False)
+        #
+        #self.assertArraysAlmostEqual(bulk_dP,bulk_dP_chk)
+        #self.assertArraysAlmostEqual(bulk_dP[0,:],dP0)
+        #self.assertArraysAlmostEqual(bulk_dP[1,:],dP1)
+        #self.assertArraysAlmostEqual(bulk_dP[2,:],dP2)
+        #self.assertArraysAlmostEqual(bulk_dP_m,bulk_dP_m_chk) 
+        #self.assertArraysAlmostEqual(bulk_dP_m[0,:],dP0m) 
+        #self.assertArraysAlmostEqual(bulk_dP_m[1,:],dP1m)
+        #self.assertArraysAlmostEqual(bulk_dP_m[2,:],dP2m)
+        #
+        #self.assertArraysAlmostEqual(mbulk_dP,mbulk_dP_chk, places=FD_JAC_PLACES) #relax tolerance for 
+        #self.assertArraysAlmostEqual(mbulk_dP[0,:],dP0, places=FD_JAC_PLACES)     # finite diff derivs...
+        #self.assertArraysAlmostEqual(mbulk_dP[1,:],dP1, places=FD_JAC_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_dP[2,:],dP2, places=FD_JAC_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_dP_m,mbulk_dP_m_chk, places=FD_JAC_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_dP_m[0,:],dP0m, places=FD_JAC_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_dP_m[1,:],dP1m, places=FD_JAC_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_dP_m[2,:],dP2m, places=FD_JAC_PLACES)
+        #
+        #
+        ##Artificially reset the "smallness" threshold for scaling
+        ## to be sure to engate the scaling machinery
+        #PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        #DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
+        #bulk_dPb = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
+        #pygsti.objects.gatematrixcalc.PSMALL = PORIG
+        #bulk_dPc = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
+        #pygsti.objects.gatematrixcalc.DSMALL = DORIG
+        #self.assertArraysAlmostEqual(bulk_dPb,bulk_dP_chk)
+        #self.assertArraysAlmostEqual(bulk_dPc,bulk_dP_chk)
 
 
         dProbs0 = self.gateset.dprobs(gatestring0)
@@ -466,83 +468,112 @@ class TestGateSetMethods(GateSetTestCase):
         mdProbs0 = self.mgateset.dprobs(gatestring0)
         mdProbs1 = self.mgateset.dprobs(gatestring1)
         mdProbs2 = self.mgateset.dprobs(gatestring2)
-        
-        bulk_dProbs = self.assertNoWarnings(self.gateset.bulk_dprobs,
-                                            evt, returnPr=False, check=True)
-        bulk_dProbs_chk = self.assertNoWarnings(self.gateset.bulk_dprobs,
-                                                evt, returnPr=True, check=True)
-        mbulk_dProbs = self.assertNoWarnings(self.mgateset.bulk_dprobs,
-                                            mevt, returnPr=False, check=True)
-        mbulk_dProbs_chk = self.assertNoWarnings(self.mgateset.bulk_dprobs,
-                                                mevt, returnPr=True, check=True)
-
-        self.assertArraysAlmostEqual(bulk_dProbs['0'],bulk_dProbs_chk['0'][0])
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][0,:],dP0)
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][1,:],dP1)
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][2,:],dP2)
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][0,:],dProbs0['0'])
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][1,:],dProbs1['0'])
-        self.assertArraysAlmostEqual(bulk_dProbs['0'][2,:],dProbs2['0'])
-
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'],mbulk_dProbs_chk['0'][0], places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][0,:],dP0, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][1,:],dP1, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][2,:],dP2, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][0,:],mdProbs0['0'], places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][1,:],mdProbs1['0'], places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mbulk_dProbs['0'][2,:],mdProbs2['0'], places=FD_JAC_PLACES)
-        
-        self.assertArraysAlmostEqual(dProbs0['0'], mdProbs0['0'], places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(dProbs1['0'], mdProbs1['0'], places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(dProbs2['0'], mdProbs2['0'], places=FD_JAC_PLACES)
-
-
-        #test with split eval tree
-        evt_split = evt.copy(); evt_split.split(numSubTrees=2)
-        mevt_split = mevt.copy(); mevt_split.split(numSubTrees=2)
-        bulk_dProbs_splt = self.assertNoWarnings(self.gateset.bulk_dprobs,
-                                     evt_split, returnPr=False, check=True)
-        mbulk_dProbs_splt = self.assertNoWarnings(self.mgateset.bulk_dprobs,
-                                                 mevt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_dProbs['0'], 
-                 evt_split.permute_computation_to_original(bulk_dProbs_splt['0']))
-        self.assertArraysAlmostEqual(bulk_dProbs['1'], 
-                 evt_split.permute_computation_to_original(bulk_dProbs_splt['1']))
-        self.assertArraysAlmostEqual(bulk_dProbs['0'],
-                   mevt_split.permute_computation_to_original(mbulk_dProbs_splt['0']), places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(bulk_dProbs['1'], 
-                   mevt_split.permute_computation_to_original(mbulk_dProbs_splt['1']), places=FD_JAC_PLACES)
-
 
         dProbs0b = self.gateset.dprobs(gatestring0, returnPr=True)
         mdProbs0b = self.mgateset.dprobs(gatestring0, returnPr=True)
 
-        nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.num_params()
-        probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        dprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        mprobs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        mdprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        mdprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
+
+        self.assertArraysAlmostEqual(dProbs0[('0',)], dP0)
+        self.assertArraysAlmostEqual(dProbs1[('0',)], dP1)
+        self.assertArraysAlmostEqual(dProbs2[('0',)], dP2)
+        self.assertArraysAlmostEqual(mdProbs0[('0',)], dP0, places=FD_JAC_PLACES)
+        self.assertArraysAlmostEqual(mdProbs1[('0',)], dP1, places=FD_JAC_PLACES)
+        self.assertArraysAlmostEqual(mdProbs2[('0',)], dP2, places=FD_JAC_PLACES)
+
+
+        bulk_dProbs = self.assertNoWarnings(self.gateset.bulk_dprobs,
+                                            gatestringList, returnPr=False, check=True)
+        bulk_dProbs_chk = self.assertNoWarnings(self.gateset.bulk_dprobs,
+                                                gatestringList, returnPr=True, check=True)
+        mbulk_dProbs = self.assertNoWarnings(self.mgateset.bulk_dprobs,
+                                             gatestringList, returnPr=False, check=True)
+        mbulk_dProbs_chk = self.assertNoWarnings(self.mgateset.bulk_dprobs,
+                                                 gatestringList, returnPr=True, check=True)
+
+        for gstr in gatestringList:
+            for outLbl in bulk_dProbs[gstr]:
+                self.assertArraysAlmostEqual(bulk_dProbs[gstr][outLbl],
+                                             bulk_dProbs_chk[gstr][outLbl][0]) #[0] b/c _chk also contains probs
+                self.assertArraysAlmostEqual(mbulk_dProbs[gstr][outLbl],
+                                             mbulk_dProbs_chk[gstr][outLbl][0]) #[0] b/c _chk also contains probs
+                self.assertArraysAlmostEqual(bulk_dProbs[gstr][outLbl],
+                                             mbulk_dProbs[gstr][outLbl], places=FD_JAC_PLACES) # map vs. matrix
+
+                
+        self.assertArraysAlmostEqual(bulk_dProbs[gatestring0][('0',)],dP0)
+        self.assertArraysAlmostEqual(bulk_dProbs[gatestring1][('0',)],dP1)
+        self.assertArraysAlmostEqual(bulk_dProbs[gatestring2][('0',)],dP2)
+
+        self.assertArraysAlmostEqual(mbulk_dProbs[gatestring0][('0',)],mdProbs0[('0',)])
+        self.assertArraysAlmostEqual(mbulk_dProbs[gatestring1][('0',)],mdProbs1[('0',)])
+        self.assertArraysAlmostEqual(mbulk_dProbs[gatestring2][('0',)],mdProbs2[('0',)])
+
+
+
+        
+        nElements = evt.num_final_elements(); nParams = self.gateset.num_params()
+        probs_to_fill = np.empty( nElements, 'd')
+        dprobs_to_fill = np.empty( (nElements,nParams), 'd')
+        dprobs_to_fillB = np.empty( (nElements,nParams), 'd')
+        mprobs_to_fill = np.empty( nElements, 'd')
+        mdprobs_to_fill = np.empty( (nElements,nParams), 'd')
+        mdprobs_to_fillB = np.empty( (nElements,nParams), 'd')
         spam_label_rows = { '0': 0, '1': 1 }
-        self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fill, spam_label_rows, evt,
+        self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fill, evt,
                               prMxToFill=probs_to_fill,check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_dprobs, mdprobs_to_fill, spam_label_rows, mevt,
+        self.assertNoWarnings(self.mgateset.bulk_fill_dprobs, mdprobs_to_fill, mevt,
                               prMxToFill=mprobs_to_fill,check=True)
 
-        self.assertArraysAlmostEqual(dprobs_to_fill[0,0,:],dP0)
-        self.assertArraysAlmostEqual(dprobs_to_fill[0,1,:],dP1)
-        self.assertArraysAlmostEqual(dprobs_to_fill[0,2,:],dP2)
-        self.assertArraysAlmostEqual(mdprobs_to_fill[0,0,:],dP0, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mdprobs_to_fill[0,1,:],dP1, places=FD_JAC_PLACES)
-        self.assertArraysAlmostEqual(mdprobs_to_fill[0,2,:],dP2, places=FD_JAC_PLACES)
+        def elIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(lookup[iGateStr]) if isinstance(lookup[iGateStr],slice) \
+                   else lookup[iGateStr] #an index array
+            return inds[ outcome_lookup[iGateStr].index( outcome ) ]
+        def melIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(mlookup[iGateStr]) if isinstance(mlookup[iGateStr],slice) \
+                   else mlookup[iGateStr] #an index array
+            return inds[ moutcome_lookup[iGateStr].index( outcome ) ]
+
+        self.assertArraysAlmostEqual(dprobs_to_fill[elIndx(0,('0',)),:],dP0)
+        self.assertArraysAlmostEqual(dprobs_to_fill[elIndx(1,('0',)),:],dP1)
+        self.assertArraysAlmostEqual(dprobs_to_fill[elIndx(2,('0',)),:],dP2)
+        self.assertArraysAlmostEqual(mdprobs_to_fill[melIndx(0,('0',)),:],dP0, places=FD_JAC_PLACES)
+        self.assertArraysAlmostEqual(mdprobs_to_fill[melIndx(1,('0',)),:],dP1, places=FD_JAC_PLACES)
+        self.assertArraysAlmostEqual(mdprobs_to_fill[melIndx(2,('0',)),:],dP2, places=FD_JAC_PLACES)
 
 
         #without probs
-        self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fillB, spam_label_rows, evt, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_dprobs, mdprobs_to_fillB, spam_label_rows, mevt, check=True)
+        self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fillB, evt, check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_dprobs, mdprobs_to_fillB, mevt, check=True)
         self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
-        self.assertArraysAlmostEqual(mdprobs_to_fill,mdprobs_to_fillB, places=FD_JAC_PLACES)        
+        self.assertArraysAlmostEqual(mdprobs_to_fill,mdprobs_to_fillB, places=FD_JAC_PLACES)
+
+
+        #test with split eval tree
+        evt_split = evt.copy(); lookup_splt = evt_split.split(lookup,numSubTrees=2)
+        mevt_split = mevt.copy(); mlookup_splt = mevt_split.split(mlookup,numSubTrees=2)
+        dprobs_to_fill_splt = np.empty( (nElements,nParams), 'd')
+        mdprobs_to_fill_splt = np.empty( (nElements,nParams), 'd')
+        self.assertNoWarnings(self.gateset.bulk_fill_dprobs, dprobs_to_fill_splt, evt_split,
+                              prMxToFill=None,check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_dprobs, mdprobs_to_fill_splt, mevt_split,
+                              prMxToFill=None,check=True)
+
+        
+        #Note: Outcome labels stay in same order across tree splits (i.e.
+        #   evalTree.split() doesn't need to update outcome_lookup)
+        for i,gstr in enumerate(gatestringList): #original gate strings
+            print("Gatestring %d: comparing " % i,lookup[i]," to ", lookup_splt[i])
+            self.assertArraysAlmostEqual(dprobs_to_fill[ lookup[i] ],
+                                         dprobs_to_fill_splt[ lookup_splt[i] ])
+            print("Gatestring %d: comparing " % i,mlookup[i]," to ", mlookup_splt[i])
+            self.assertArraysAlmostEqual(mdprobs_to_fill[ mlookup[i] ],
+                                         mdprobs_to_fill_splt[ mlookup_splt[i] ])
+
+            #Also check map vs matrix fills:
+            assert(outcome_lookup[i] == moutcome_lookup[i]) # should stay in same ordering... I think
+            self.assertArraysAlmostEqual(dprobs_to_fill[ lookup[i] ],
+                                         mdprobs_to_fill[ mlookup[i] ], places=FD_JAC_PLACES)
+
 
         dProds = self.gateset.bulk_dproduct(evt) #TODO: test output?
         with self.assertRaises(NotImplementedError):
@@ -555,64 +586,66 @@ class TestGateSetMethods(GateSetTestCase):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
 
-        evt = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
-        mevt = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
+        gatestringList = [gatestring0,gatestring1,gatestring2]
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
+        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( [gatestring0,gatestring1,gatestring2] )
 
-        hP0 = self.gateset.hpr('0', gatestring0)
-        hP1 = self.gateset.hpr('0', gatestring1)
-        hP2 = self.gateset.hpr('0', gatestring2)
-        hP0m = self.gateset.hpr('1', gatestring0)
-        hP1m = self.gateset.hpr('1', gatestring1)
-        hP2m = self.gateset.hpr('1', gatestring2)
+        hP0 = self.gateset.hprobs(gatestring0)[('0',)]
+        hP1 = self.gateset.hprobs(gatestring1)[('0',)]
+        hP2 = self.gateset.hprobs(gatestring2)[('0',)]
+        hP0m = self.gateset.hprobs(gatestring0)[('1',)]
+        hP1m = self.gateset.hprobs(gatestring1)[('1',)]
+        hP2m = self.gateset.hprobs(gatestring2)[('1',)]
 
-        hP0b,P0 = self.gateset.hpr('0', gatestring0, returnPr=True)
-        hP0b,dP0 = self.gateset.hpr('0', gatestring0, returnDeriv=True)
-        hP0mb,P0m = self.gateset.hpr('1', gatestring0, returnPr=True)
-        hP0mb,dP0m = self.gateset.hpr('1', gatestring0, returnDeriv=True)
+        hP0b,P0 = self.gateset.hprobs(gatestring0, returnPr=True)[('0',)]
+        hP0b,dP0 = self.gateset.hprobs(gatestring0, returnDeriv=True)[('0',)]
+        hP0mb,P0m = self.gateset.hprobs(gatestring0, returnPr=True)[('1',)]
+        hP0mb,dP0m = self.gateset.hprobs(gatestring0, returnDeriv=True)[('1',)]
 
-        bulk_hP = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
-        bulk_hP_m = self.gateset.bulk_hpr('1', evt, returnPr=False, returnDeriv=False, check=True)
-        bulk_hP_chk, bulk_dP, bulk_P = self.gateset.bulk_hpr('0', evt, returnPr=True, returnDeriv=True, check=False)
-        bulk_hP_m_chk, bulk_dP_m, bulk_P_m = self.gateset.bulk_hpr('1', evt, returnPr=True, returnDeriv=True, check=False)
-
-        mbulk_hP = self.mgateset.bulk_hpr('0', mevt, returnPr=False, returnDeriv=False, check=True)
-        mbulk_hP_m = self.mgateset.bulk_hpr('1', mevt, returnPr=False, returnDeriv=False, check=True)
-        mbulk_hP_chk, mbulk_dP, mbulk_P = self.mgateset.bulk_hpr('0', mevt, returnPr=True, returnDeriv=True, check=False)
-        mbulk_hP_m_chk, mbulk_dP_m, mbulk_P_m = self.mgateset.bulk_hpr('1', mevt, returnPr=True, returnDeriv=True, check=False)
-
-        self.assertArraysAlmostEqual(bulk_hP,bulk_hP_chk)
-        self.assertArraysAlmostEqual(bulk_hP[0,:,:],hP0)
-        self.assertArraysAlmostEqual(bulk_hP[1,:,:],hP1)
-        self.assertArraysAlmostEqual(bulk_hP[2,:,:],hP2)
-        self.assertArraysAlmostEqual(bulk_hP_m,bulk_hP_m_chk)
-        self.assertArraysAlmostEqual(bulk_hP_m[0,:,:],hP0m)
-        self.assertArraysAlmostEqual(bulk_hP_m[1,:,:],hP1m)
-        self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
-
-        self.assertArraysAlmostEqual(mbulk_hP,mbulk_hP_chk, places=FD_HESS_PLACES)
-        print("DB: hP0 = ",hP0)
-        print("DB: mhP0 = ",mbulk_hP[0,:,:])
-        self.assertArraysAlmostEqual(mbulk_hP[0,:,:],hP0, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP[1,:,:],hP1, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP[2,:,:],hP2, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP_m,mbulk_hP_m_chk, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP_m[0,:,:],hP0m, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP_m[1,:,:],hP1m, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hP_m[2,:,:],hP2m, places=FD_HESS_PLACES)
-
-
-        #Artificially reset the "smallness" threshold for scaling
-        # to be sure to engate the scaling machinery
-        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
-        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
-        HORIG = pygsti.objects.gatematrixcalc.HSMALL; pygsti.objects.gatematrixcalc.HSMALL = 10
-        bulk_hPb = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
-        pygsti.objects.gatematrixcalc.PSMALL = PORIG
-        bulk_hPc = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
-        pygsti.objects.gatematrixcalc.DSMALL = DORIG
-        pygsti.objects.gatematrixcalc.HSMALL = HORIG
-        self.assertArraysAlmostEqual(bulk_hPb,bulk_hP_chk)
-        self.assertArraysAlmostEqual(bulk_hPc,bulk_hP_chk)
+        #Removed bulk_hpr
+        #bulk_hP = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
+        #bulk_hP_m = self.gateset.bulk_hpr('1', evt, returnPr=False, returnDeriv=False, check=True)
+        #bulk_hP_chk, bulk_dP, bulk_P = self.gateset.bulk_hpr('0', evt, returnPr=True, returnDeriv=True, check=False)
+        #bulk_hP_m_chk, bulk_dP_m, bulk_P_m = self.gateset.bulk_hpr('1', evt, returnPr=True, returnDeriv=True, check=False)
+        #
+        #mbulk_hP = self.mgateset.bulk_hpr('0', mevt, returnPr=False, returnDeriv=False, check=True)
+        #mbulk_hP_m = self.mgateset.bulk_hpr('1', mevt, returnPr=False, returnDeriv=False, check=True)
+        #mbulk_hP_chk, mbulk_dP, mbulk_P = self.mgateset.bulk_hpr('0', mevt, returnPr=True, returnDeriv=True, check=False)
+        #mbulk_hP_m_chk, mbulk_dP_m, mbulk_P_m = self.mgateset.bulk_hpr('1', mevt, returnPr=True, returnDeriv=True, check=False)
+        #
+        #self.assertArraysAlmostEqual(bulk_hP,bulk_hP_chk)
+        #self.assertArraysAlmostEqual(bulk_hP[0,:,:],hP0)
+        #self.assertArraysAlmostEqual(bulk_hP[1,:,:],hP1)
+        #self.assertArraysAlmostEqual(bulk_hP[2,:,:],hP2)
+        #self.assertArraysAlmostEqual(bulk_hP_m,bulk_hP_m_chk)
+        #self.assertArraysAlmostEqual(bulk_hP_m[0,:,:],hP0m)
+        #self.assertArraysAlmostEqual(bulk_hP_m[1,:,:],hP1m)
+        #self.assertArraysAlmostEqual(bulk_hP_m[2,:,:],hP2m)
+        #
+        #self.assertArraysAlmostEqual(mbulk_hP,mbulk_hP_chk, places=FD_HESS_PLACES)
+        #print("DB: hP0 = ",hP0)
+        #print("DB: mhP0 = ",mbulk_hP[0,:,:])
+        #self.assertArraysAlmostEqual(mbulk_hP[0,:,:],hP0, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP[1,:,:],hP1, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP[2,:,:],hP2, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP_m,mbulk_hP_m_chk, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP_m[0,:,:],hP0m, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP_m[1,:,:],hP1m, places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mbulk_hP_m[2,:,:],hP2m, places=FD_HESS_PLACES)
+        #
+        #
+        ##Artificially reset the "smallness" threshold for scaling
+        ## to be sure to engate the scaling machinery
+        #PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        #DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
+        #HORIG = pygsti.objects.gatematrixcalc.HSMALL; pygsti.objects.gatematrixcalc.HSMALL = 10
+        #bulk_hPb = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
+        #pygsti.objects.gatematrixcalc.PSMALL = PORIG
+        #bulk_hPc = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
+        #pygsti.objects.gatematrixcalc.DSMALL = DORIG
+        #pygsti.objects.gatematrixcalc.HSMALL = HORIG
+        #self.assertArraysAlmostEqual(bulk_hPb,bulk_hP_chk)
+        #self.assertArraysAlmostEqual(bulk_hPc,bulk_hP_chk)
 
 
         hProbs0 = self.gateset.hprobs(gatestring0)
@@ -622,92 +655,93 @@ class TestGateSetMethods(GateSetTestCase):
         mhProbs1 = self.mgateset.hprobs(gatestring1)
         mhProbs2 = self.mgateset.hprobs(gatestring2)
 
+        self.assertArraysAlmostEqual(hProbs0[('0',)], hP0)
+        self.assertArraysAlmostEqual(hProbs1[('0',)], hP1)
+        self.assertArraysAlmostEqual(hProbs2[('0',)], hP2)
+        self.assertArraysAlmostEqual(mhProbs0[('0',)], hP0, places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mhProbs1[('0',)], hP1, places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mhProbs2[('0',)], hP2, places=FD_HESS_PLACES)
+
+
         bulk_hProbs = self.assertNoWarnings(self.gateset.bulk_hprobs,
-                                            evt, returnPr=False, check=True)
+                                            gatestringList, returnPr=False, check=True)
         bulk_hProbs_chk = self.assertNoWarnings(self.gateset.bulk_hprobs,
-                                                evt, returnPr=True, check=True)
+                                                gatestringList, returnPr=True, check=True)
         mbulk_hProbs = self.assertNoWarnings(self.mgateset.bulk_hprobs,
-                                            mevt, returnPr=False, check=True)
+                                            gatestringList, returnPr=False, check=True)
         mbulk_hProbs_chk = self.assertNoWarnings(self.mgateset.bulk_hprobs,
-                                                mevt, returnPr=True, check=True)
+                                                gatestringList, returnPr=True, check=True)
 
-        self.assertArraysAlmostEqual(bulk_hProbs['0'],bulk_hProbs_chk['0'][0])
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][0,:,:],hP0)
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][1,:,:],hP1)
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][2,:,:],hP2)
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][0,:,:],hProbs0['0'])
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][1,:,:],hProbs1['0'])
-        self.assertArraysAlmostEqual(bulk_hProbs['0'][2,:,:],hProbs2['0'])
+        for gstr in gatestringList:
+            for outLbl in bulk_hProbs[gstr]:
+                self.assertArraysAlmostEqual(bulk_hProbs[gstr][outLbl],
+                                             bulk_hProbs_chk[gstr][outLbl][0]) #[0] b/c _chk also contains probs
+                self.assertArraysAlmostEqual(mbulk_hProbs[gstr][outLbl],
+                                             mbulk_hProbs_chk[gstr][outLbl][0]) #[0] b/c _chk also contains probs
+                self.assertArraysAlmostEqual(bulk_hProbs[gstr][outLbl],
+                                             mbulk_hProbs[gstr][outLbl], places=FD_HESS_PLACES) # map vs. matrix
 
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'],mbulk_hProbs_chk['0'][0], places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][0,:,:],hP0, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][1,:,:],hP1, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][2,:,:],hP2, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][0,:,:],mhProbs0['0'], places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][1,:,:],mhProbs1['0'], places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mbulk_hProbs['0'][2,:,:],mhProbs2['0'], places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(bulk_hProbs[gatestring0][('0',)],hP0)
+        self.assertArraysAlmostEqual(bulk_hProbs[gatestring1][('0',)],hP1)
+        self.assertArraysAlmostEqual(bulk_hProbs[gatestring2][('0',)],hP2)
 
-        #test with split eval tree
-        evt_split = evt.copy(); evt_split.split(maxSubTreeSize=4)
-        mevt_split = mevt.copy(); mevt_split.split(numSubTrees=2)
-        bulk_hProbs_splt = self.assertNoWarnings(self.gateset.bulk_hprobs,
-                                     evt_split, returnPr=False, check=True)
-        mbulk_hProbs_splt = self.assertNoWarnings(self.mgateset.bulk_hprobs,
-                                                  mevt_split, returnPr=False, check=True)
-        self.assertArraysAlmostEqual(bulk_hProbs['0'], 
-                 evt_split.permute_computation_to_original(bulk_hProbs_splt['0']))
-        self.assertArraysAlmostEqual(bulk_hProbs['1'], 
-                 evt_split.permute_computation_to_original(bulk_hProbs_splt['1']))
-        self.assertArraysAlmostEqual(bulk_hProbs['0'], 
-                 mevt_split.permute_computation_to_original(mbulk_hProbs_splt['0']), places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(bulk_hProbs['1'], 
-                 mevt_split.permute_computation_to_original(mbulk_hProbs_splt['1']), places=FD_HESS_PLACES)
-
+        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring0][('0',)],mhProbs0[('0',)], places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring1][('0',)],mhProbs1[('0',)], places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mbulk_hProbs[gatestring2][('0',)],mhProbs2[('0',)], places=FD_HESS_PLACES)
 
         #Vary keyword args
         hProbs0b = self.gateset.hprobs(gatestring0,returnPr=True)
         hProbs0c = self.gateset.hprobs(gatestring0,returnDeriv=True)
         hProbs0d = self.gateset.hprobs(gatestring0,returnDeriv=True,returnPr=True)
-        bulk_hProbs_B = self.gateset.bulk_hprobs(evt, returnPr=True, returnDeriv=True)
-        bulk_hProbs_C = self.gateset.bulk_hprobs(evt, returnDeriv=True)
+        bulk_hProbs_B = self.gateset.bulk_hprobs(gatestringList, returnPr=True, returnDeriv=True)
+        bulk_hProbs_C = self.gateset.bulk_hprobs(gatestringList, returnDeriv=True)
 
         mhProbs0b = self.mgateset.hprobs(gatestring0,returnPr=True)
         mhProbs0c = self.mgateset.hprobs(gatestring0,returnDeriv=True)
         mhProbs0d = self.mgateset.hprobs(gatestring0,returnDeriv=True,returnPr=True)
-        mbulk_hProbs_B = self.mgateset.bulk_hprobs(mevt, returnPr=True, returnDeriv=True)
-        mbulk_hProbs_C = self.mgateset.bulk_hprobs(mevt, returnDeriv=True)
+        mbulk_hProbs_B = self.mgateset.bulk_hprobs(gatestringList, returnPr=True, returnDeriv=True)
+        mbulk_hProbs_C = self.mgateset.bulk_hprobs(gatestringList, returnDeriv=True)
 
         
-        nGateStrings = 3; nSpamLabels = 2; nParams = self.gateset.num_params()
-        probs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        probs_to_fillB = np.empty( (nSpamLabels,nGateStrings), 'd')
-        dprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        dprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        hprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
-        hprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
-        mprobs_to_fill = np.empty( (nSpamLabels,nGateStrings), 'd')
-        mprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings), 'd')
-        mdprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        mdprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams), 'd')
-        mhprobs_to_fill = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
-        mhprobs_to_fillB = np.empty( (nSpamLabels,nGateStrings,nParams,nParams), 'd')
+        nElements = evt.num_final_elements(); nParams = self.gateset.num_params()
+        probs_to_fill = np.empty( nElements, 'd')
+        probs_to_fillB = np.empty( nElements, 'd')
+        dprobs_to_fill = np.empty( (nElements,nParams), 'd')
+        dprobs_to_fillB = np.empty( (nElements,nParams), 'd')
+        hprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
+        hprobs_to_fillB = np.empty( (nElements,nParams,nParams), 'd')
+        mprobs_to_fill = np.empty( nElements, 'd')
+        mprobs_to_fillB = np.empty( nElements, 'd')
+        mdprobs_to_fill = np.empty( (nElements,nParams), 'd')
+        mdprobs_to_fillB = np.empty( (nElements,nParams), 'd')
+        mhprobs_to_fill = np.empty( (nElements,nParams,nParams), 'd')
+        mhprobs_to_fillB = np.empty( (nElements,nParams,nParams), 'd')
         spam_label_rows = { '0': 0, '1': 1 }
-        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fill, spam_label_rows, evt,
+        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fill, evt,
                               prMxToFill=probs_to_fill, derivMxToFill=dprobs_to_fill, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fill, spam_label_rows, mevt,
+        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fill, mevt,
                               prMxToFill=mprobs_to_fill, derivMxToFill=mdprobs_to_fill, check=True)
+
+        def elIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(lookup[iGateStr]) if isinstance(lookup[iGateStr],slice) \
+                   else lookup[iGateStr] #an index array
+            return inds[ outcome_lookup[iGateStr].index( outcome ) ]
+        def melIndx(iGateStr, outcome):
+            inds = pygsti.tools.indices(mlookup[iGateStr]) if isinstance(mlookup[iGateStr],slice) \
+                   else mlookup[iGateStr] #an index array
+            return inds[ moutcome_lookup[iGateStr].index( outcome ) ]
                 
-        self.assertArraysAlmostEqual(hprobs_to_fill[0,0,:,:],hP0)
-        self.assertArraysAlmostEqual(hprobs_to_fill[0,1,:,:],hP1)
-        self.assertArraysAlmostEqual(hprobs_to_fill[0,2,:,:],hP2)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[0,0,:,:],hP0, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[0,1,:,:],hP1, places=FD_HESS_PLACES)
-        self.assertArraysAlmostEqual(mhprobs_to_fill[0,2,:,:],hP2, places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(0,('0',)),:,:],hP0)
+        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(1,('0',)),:,:],hP1)
+        self.assertArraysAlmostEqual(hprobs_to_fill[elIndx(2,('0',)),:,:],hP2)
+        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(0,('0',)),:,:],hP0, places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(1,('0',)),:,:],hP1, places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(mhprobs_to_fill[melIndx(2,('0',)),:,:],hP2, places=FD_HESS_PLACES)
 
         #without derivative
-        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
+        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, evt,
                               prMxToFill=probs_to_fillB, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, spam_label_rows, mevt,
+        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt,
                               prMxToFill=mprobs_to_fillB, check=True)
 
         self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
@@ -717,9 +751,9 @@ class TestGateSetMethods(GateSetTestCase):
 
 
         #without probs
-        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt,
+        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, evt,
                               derivMxToFill=dprobs_to_fillB, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, spam_label_rows, mevt,
+        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt,
                               derivMxToFill=mdprobs_to_fillB, check=True)
                 
         self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
@@ -728,11 +762,35 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(mdprobs_to_fill,mdprobs_to_fillB, places=FD_HESS_PLACES)
 
         #without either
-        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, spam_label_rows, evt, check=True)
-        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, spam_label_rows, mevt, check=True)
+        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fillB, evt, check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt, check=True)
         self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
         self.assertArraysAlmostEqual(mhprobs_to_fill,mhprobs_to_fillB, places=FD_HESS_PLACES)
 
+
+        #test with split eval tree
+        evt_split = evt.copy(); lookup_splt = evt_split.split(lookup,maxSubTreeSize=4)
+        mevt_split = mevt.copy(); mlookup_splt = mevt_split.split(mlookup,numSubTrees=2)
+        hprobs_to_fill_splt = np.empty( (nElements,nParams,nParams), 'd')
+        mhprobs_to_fill_splt = np.empty( (nElements,nParams,nParams), 'd')
+        self.assertNoWarnings(self.gateset.bulk_fill_hprobs, hprobs_to_fill_splt, evt_split, check=True)
+        self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fill_splt, mevt_split, check=True)
+
+        #Note: Outcome labels stay in same order across tree splits (i.e.
+        #   evalTree.split() doesn't need to update outcome_lookup)
+        for i,gstr in enumerate(gatestringList): #original gate strings
+            self.assertArraysAlmostEqual(hprobs_to_fill[ lookup[i] ],
+                                         hprobs_to_fill_splt[ lookup_splt[i] ])
+            self.assertArraysAlmostEqual(mhprobs_to_fill[ mlookup[i] ],
+                                         mhprobs_to_fill_splt[ mlookup_splt[i] ], places=FD_HESS_PLACES)
+
+            #Also check map vs matrix fills:
+            assert(outcome_lookup[i] == moutcome_lookup[i]) # should stay in same ordering... I think
+            self.assertArraysAlmostEqual(hprobs_to_fill[ lookup[i] ],
+                                         mhprobs_to_fill[ mlookup[i] ], places=FD_HESS_PLACES)
+
+        
+        #products
         N = self.gateset.get_dimension()**2 #number of elements in a gate matrix
 
         hProds = self.gateset.bulk_hproduct(evt)
@@ -768,12 +826,12 @@ class TestGateSetMethods(GateSetTestCase):
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
         for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
-            spam_label_rows, evt, slicesList, True):
+            evt, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
-        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        all_d12cols = np.concatenate( d12cols, axis=3 )
-        dprobs12 = dprobs_to_fill[:,:,:,None] * dprobs_to_fill[:,:,None,:]
+        all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=2 )
+        dprobs12 = dprobs_to_fill[:,:,None] * dprobs_to_fill[:,None,:]
 
         #NOTE: Currently bulk_hprobs_by_block isn't implemented in map calculator - but it could
         # (and probably should) be later on, at which point the commented code here and
@@ -783,12 +841,12 @@ class TestGateSetMethods(GateSetTestCase):
         #md12cols = []
         #mslicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
         #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.bulk_hprobs_by_block(
-        #    spam_label_rows, mevt, mslicesList, True):
+        #    mevt, mslicesList, True):
         #    mhcols.append(hprobs_col)
         #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=3 )
-        #mdprobs12 = mdprobs_to_fill[:,:,:,None] * mdprobs_to_fill[:,:,None,:]
+        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        #mall_d12cols = np.concatenate( md12cols, axis=2 )
+        #mdprobs12 = mdprobs_to_fill[:,:,None] * mdprobs_to_fill[:,None,:]
 
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill)
         self.assertArraysAlmostEqual(all_d12cols,dprobs12)
@@ -803,11 +861,11 @@ class TestGateSetMethods(GateSetTestCase):
         d12cols = []
         slicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
         for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
-            spam_label_rows, evt, slicesList, True):
+            evt, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
-        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        all_d12cols = np.concatenate( d12cols, axis=3 )
+        all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=2 )
 
         #mhcols = []
         #md12cols = []
@@ -816,13 +874,13 @@ class TestGateSetMethods(GateSetTestCase):
         #    spam_label_rows, mevt, mslicesList, True):
         #    mhcols.append(hprobs_col)
         #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=3 )
+        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        #mall_d12cols = np.concatenate( md12cols, axis=2 )
 
-        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,:,1:10])
-        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,:,1:10])
-        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,:,:,1:10], places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,:,:,1:10], places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,1:10])
+        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,:,1:10], places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,:,1:10], places=FD_HESS_PLACES)
         #
         #self.assertArraysAlmostEqual(mall_hcols,all_hcols, places=FD_HESS_PLACES)
         #self.assertArraysAlmostEqual(mall_d12cols,all_d12cols, places=FD_HESS_PLACES)
@@ -832,26 +890,26 @@ class TestGateSetMethods(GateSetTestCase):
         d12cols = []
         slicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
         for s1,s2, hprobs_col, dprobs12_col in self.gateset.bulk_hprobs_by_block(
-            spam_label_rows, evt, slicesList, True):
+            evt, slicesList, True):
             hcols.append(hprobs_col)
             d12cols.append(dprobs12_col)
-        all_hcols = np.concatenate( hcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        all_d12cols = np.concatenate( d12cols, axis=3 )
+        all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        all_d12cols = np.concatenate( d12cols, axis=2 )
 
         #mhcols = []
         #md12cols = []
         #mslicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
         #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.bulk_hprobs_by_block(
-        #    spam_label_rows, mevt, mslicesList, True):
+        #    mevt, mslicesList, True):
         #    mhcols.append(hprobs_col)
         #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=3 )  #axes = (spam, gatestring, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=3 )
+        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+gatestring, derivParam1, derivParam2)
+        #mall_d12cols = np.concatenate( md12cols, axis=2 )
 
-        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,2:12,1:10])
-        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,2:12,1:10])
-        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,:,2:12,1:10], places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,:,2:12,1:10], places=FD_HESS_PLACES)
+        self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,2:12,1:10])
+        self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,2:12,1:10])
+        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,2:12,1:10], places=FD_HESS_PLACES)
+        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,2:12,1:10], places=FD_HESS_PLACES)
         #
         #self.assertArraysAlmostEqual(mall_hcols,all_hcols, places=FD_HESS_PLACES)
         #self.assertArraysAlmostEqual(mall_d12cols,all_d12cols, places=FD_HESS_PLACES)
@@ -865,13 +923,13 @@ class TestGateSetMethods(GateSetTestCase):
         blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
         for s1,s2, hprobs_blk, dprobs12_blk in self.gateset.bulk_hprobs_by_block(
-            spam_label_rows, evt, slicesList, True):
-            hprobs_by_block[:,:,s1,s2] = hprobs_blk
-            dprobs12_by_block[:,:,s1,s2] = dprobs12_blk
+            evt, slicesList, True):
+            hprobs_by_block[:,s1,s2] = hprobs_blk
+            dprobs12_by_block[:,s1,s2] = dprobs12_blk
         #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.bulk_hprobs_by_block(
-        #    spam_label_rows, mevt, slicesList, True):
-        #    mhprobs_by_block[:,:,s1,s2] = hprobs_blk
-        #    mdprobs12_by_block[:,:,s1,s2] = dprobs12_blk
+        #    mevt, slicesList, True):
+        #    mhprobs_by_block[:,s1,s2] = hprobs_blk
+        #    mdprobs12_by_block[:,s1,s2] = dprobs12_blk
 
         self.assertArraysAlmostEqual(hprobs_by_block,hprobs_to_fill)
         self.assertArraysAlmostEqual(dprobs12_by_block,dprobs12)
@@ -881,7 +939,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         #print("****DEBUG HESSIAN BY COL****")
         #print("shape = ",all_hcols.shape)
-        #to_check = hprobs_to_fill[:,:,2:12,1:10]
+        #to_check = hprobs_to_fill[:,2:12,1:10]
         #for si in range(all_hcols.shape[0]):
         #    for stri in range(all_hcols.shape[1]):
         #        diff = np.linalg.norm(all_hcols[si,stri]-to_check[si,stri])
@@ -909,17 +967,17 @@ class TestGateSetMethods(GateSetTestCase):
                        ('Gx','Gy','Gy'),
                        ('Gy','Gy','Gy'),
                        ('Gy','Gx','Gx') ]
-        evtA = self.gateset.bulk_evaltree( gatestrings )
+        evtA,lookupA,outcome_lookupA = self.gateset.bulk_evaltree( gatestrings )
 
-        evtB = self.gateset.bulk_evaltree( gatestrings )
-        evtB.split(maxSubTreeSize=4)
+        evtB,lookupB,outcome_lookupB = self.gateset.bulk_evaltree( gatestrings )
+        lookupB = evtB.split(lookupB, maxSubTreeSize=4)
 
-        evtC = self.gateset.bulk_evaltree( gatestrings )
-        evtC.split(numSubTrees=3)
+        evtC,lookupC,outcome_lookupC = self.gateset.bulk_evaltree( gatestrings )
+        lookupC = evtC.split(lookupC, numSubTrees=3)
 
         with self.assertRaises(ValueError):
-            evtBad = self.gateset.bulk_evaltree( gatestrings )
-            evtBad.split(numSubTrees=3, maxSubTreeSize=4) #can't specify both
+            evtBad,lkup,_ = self.gateset.bulk_evaltree( gatestrings )
+            evtBad.split(lkup, numSubTrees=3, maxSubTreeSize=4) #can't specify both
 
         self.assertFalse(evtA.is_split())
         self.assertTrue(evtB.is_split())
@@ -933,15 +991,18 @@ class TestGateSetMethods(GateSetTestCase):
         #print "Lenghts = ",len(evtA.get_sub_trees()),len(evtB.get_sub_trees()),len(evtC.get_sub_trees())
         #print "SubTree sizes = ",[len(subTree) for subTree in evtC.get_sub_trees()]
 
-        bulk_prA = self.gateset.bulk_pr('0',evtA)
-        bulk_prB = self.gateset.bulk_pr('0',evtB)
-        bulk_prC = self.gateset.bulk_pr('0',evtC)
+        bulk_probsA = np.empty( evtA.num_final_elements(), 'd')
+        bulk_probsB = np.empty( evtB.num_final_elements(), 'd')
+        bulk_probsC = np.empty( evtC.num_final_elements(), 'd')
+        self.gateset.bulk_fill_probs(bulk_probsA, evtA)
+        self.gateset.bulk_fill_probs(bulk_probsB, evtB)
+        self.gateset.bulk_fill_probs(bulk_probsC, evtC)
 
-        self.assertArraysAlmostEqual(bulk_prA,
-             evtB.permute_computation_to_original(bulk_prB) )
-        self.assertArraysAlmostEqual(bulk_prA,
-             evtC.permute_computation_to_original(bulk_prC) )
-
+        for i,gstr in enumerate(gatestrings):
+            self.assertArraysAlmostEqual(bulk_probsA[ lookupA[i] ],
+                                         bulk_probsB[ lookupB[i] ])
+            self.assertArraysAlmostEqual(bulk_probsA[ lookupA[i] ],
+                                         bulk_probsC[ lookupC[i] ])
 
 
     def test_failures(self):

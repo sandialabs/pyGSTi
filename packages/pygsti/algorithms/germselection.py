@@ -773,7 +773,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
     fd = gate_dim**2 # flattened gate dimension
 
     nCompiledStrs = evalTree.num_final_strings()
-    ret = _np.empty(nCompiledStrs, fd, dProds.shape[1]), 'complex')
+    ret = _np.empty( (nCompiledStrs, fd, dProds.shape[1]), 'complex')
     for i in range(nCompiledStrs):
 
         # flattened_gate_dim x flattened_gate_dim
