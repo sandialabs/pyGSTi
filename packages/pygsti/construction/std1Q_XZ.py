@@ -42,12 +42,7 @@ germs = _strc.gatestring_list( [('Gx',), ('Gz',), ('Gz','Gx','Gx'), ('Gz','Gz','
 
 #Construct a target gateset:  X(pi/2), Z(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gz'],
-                                [ "X(pi/2,Q0)", "Z(pi/2,Q0)"],
-                                prepLabels=["rho0"], prepExpressions=["0"],
-                                effectLabels=["E0","Ec"], effectExpressions=["0","C"],
-                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') },
-                                basis='pp')
-
+                                [ "X(pi/2,Q0)", "Z(pi/2,Q0)"])
 
 global_fidPairs =  [
     (0, 1), (1, 2), (4, 3), (4, 4)]
