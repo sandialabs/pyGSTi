@@ -210,41 +210,103 @@ def write_gateset(gs,filename,title=None):
             output.write("# %s" % title + '\n')
         output.write('\n')
 
-        for (prepLabel,rhoVec) in gs.preps.items():
-            output.write("%s\n" % prepLabel)
-            output.write("PauliVec\n")
+        for prepLabel,rhoVec in gs.preps.items():
+            if isinstance(rhoVec, _objs.FullyParameterizedSPAMVec): typ = "PREP"
+            elif isinstance(rhoVec, _objs.TPParameterizedSPAMVec): typ = "TP-PREP"
+            elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
+            else:
+                _warnings.warn(
+                    ("Non-standard prep of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "fully parameterized spam vector").format(typ=str(type(rhoVec))))
+                typ = "PREP"
+            output.write("%s: %s\n" % (typ,prepLabel))
+            output.write("LiouvilleVec\n")
             output.write(" ".join( "%.8g" % el for el in rhoVec ) + '\n')
             output.write("\n")
 
-        for (ELabel,EVec) in gs.effects.items():
-            if ELabel == "Ec" and isinstance(EVec, _objs.ComplementSPAMVec):
-                continue #leave Ec to be inferred from other Effect vecs
-            output.write("%s\n" % ELabel)
-            output.write("PauliVec\n")
-            output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
-            output.write("\n")
+        for povmLabel,povm in gs.povms.items():
+            if isintance(povm, _objs.POVM):
+                povmType = "TP-POVM" if povm.complement_label else "POVM"
+            else:
+                _warnings.warn(
+                    ("Non-standard POVM of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "standard POVM").format(typ=str(type(povm))))
+                typ = "POVM"
+                
+            output.write("%s: %s\n\n" % (povmType,povmLabel))
+                
+            for ELabel,EVec in povm.items():
+                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                else:
+                    _warnings.warn(
+                        ("Non-standard effect of type {typ} cannot be described by"
+                         "text format gate set files.  It will be read in as a"
+                         "fully parameterized spam vector").format(typ=str(type(EVec))))
+                    typ = "EFFECT"
+                output.write("%s: %s\n" % (typ,ELabel))
+                output.write("LiouvilleVec\n")
+                output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
+                output.write("\n")
 
-        for (label,gate) in gs.gates.items():
-            output.write(label + '\n')
-            output.write("PauliMx\n")
+            output.write("END POVM\n\n")
+
+        for label,gate in gs.gates.items():
+            if isinstance(gate, _objs.FullyParameterizedGate): typ = "GATE"
+            elif isinstance(gate, _objs.TPParameterizedGate): typ = "TP-GATE"
+            elif isinstance(gate, _objs.LindbladParameterizedGate): typ = "CPTP-GATE"
+            else:
+                _warnings.warn(
+                    ("Non-standard gate of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "fully parameterized gate").format(typ=str(type(gate))))
+                typ = "GATE"
+            output.write(typ + ": " + label + '\n')
+            output.write("LiouvilleMx\n")
             output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
             output.write("\n")
 
-        for (ELabel,EVec) in gs.effects.items():
-            if isinstance(EVec, _objs.ComplementSPAMVec):
-                output.write("IDENTITYVEC " + " ".join( "%.8g" % el for el in EVec.identity ) + '\n')
-                break;
-        else:
-            output.write("IDENTITYVEC None\n")
+        for instLabel,inst in gs.instruments.items():
+            if isinstance(inst, _objs.Instrument): typ = "Instrument" 
+            elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
+            else:
+                _warnings.warn(
+                    ("Non-standard Instrument of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "standard Instrument").format(typ=str(type(inst))))
+                typ = "Instrument"
+            output.write(typ + ": " + instLabel + '\n\n')
 
-        for sl,(prepLabel,ELabel) in gs.spamdefs.items():
-            output.write("SPAMLABEL %s = %s %s\n" % (sl, prepLabel, ELabel))
+            for label,gate in inst.items():
+                if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
+                elif isinstance(gate, _objs.TPInstrumentGate): typ = "IGATE" #ok
+                else:
+                    _warnings.warn(
+                        ("Non-standard gate of type {typ} cannot be described by"
+                         "text format gate set files.  It will be read in as a"
+                         "fully parameterized gate").format(typ=str(type(gate))))
+                    typ = "IGATE"
+                output.write(typ + ": " + label + '\n')
+                output.write("LiouvilleMx\n")
+                output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
+                output.write("\n")
+            output.write("END Instrument\n\n")
 
         dims = gs.basis.dim.blockDims
         if dims is None:
-            output.write("BASIS %s\n" % gs.basis.name)
+            output.write("BASIS: %s\n" % gs.basis.name)
         else:
             if type(dims) != int:
                 dimStr = ",".join(map(str,dims))
             else: dimStr = str(dims)
-            output.write("BASIS %s %s\n" % (gs.basis.name, dimStr))
+            output.write("BASIS: %s %s\n" % (gs.basis.name, dimStr))
+
+        if isinstance(gs.default_gauge_group, _objs.FullGaugeGroup):
+            output.write("GAUGEGROUP: Full\n")
+        elif isinstance(gs.default_gauge_group, _objs.TPGaugeGroup):
+            output.write("GAUGEGROUP: TP\n")
+        elif isinstance(gs.default_gauge_group, _objs.UnitaryGaugeGroup):
+            output.write("GAUGEGROUP: Unitary\n")

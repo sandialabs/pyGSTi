@@ -621,102 +621,195 @@ def read_gateset(filename):
     -------
     GateSet
     """
+    basis = 'pp' #default basis to load as
+    
+    def add_current():
+        """ Adds the current object, described by lots of cur_* variables """
 
-    def _add_current_label():
+        qty = None
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                stdmx = _tools.state_to_stdmx(ar[0,:])
+                qty = _tools.stdmx_to_vec(stdmx, basis)
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                qty = _tools.stdmx_to_vec(ar, basis)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
-        elif cur_format == "PauliVec":
-            spam_vecs[cur_label] = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleVec":
+            qty = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
 
         elif cur_format == "UnitaryMx":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate(ar))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate(ar))
-            else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
-            else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
 
-        elif cur_format == "PauliMx":
-            gs.gates[cur_label] = _objs.FullyParameterizedGate( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleMx":
+            qty = _evalRowList( cur_rows, bComplex=False ) )
+
+        assert(qty is not None), "Invalid format: %s" % cur_format
+
+        if cur_typ == "PREP":
+            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(qty)
+        elif cur_typ == "TP-PREP":
+            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(qty)
+        elif cur_typ == "STATIC-PREP":
+            gs.preps[cur_label] = _objs.StaticSPAMVec(qty)
+
+        elif cur_typ in ("EFFECT","TP-EFFECT","STATIC-EFFECT"):
+            if cur_typ == "EFFECT": qty = _objs.FullyParameterizedSPAMVec(qty)
+            elif cur_typ == "TP-EFFECT": qty = _objs.TPParameterizedSPAMVec(qty)
+            elif cur_typ == "STATIC-EFFECT": qty = _objs.StaticSPAMVec(qty)
+            if "effects" in cur_group_info:
+                cur_group_info['effects'].append( (cur_label,qty) )
+            else:  cur_group_info['effects'] = [ (cur_label,qty) ]            
+                
+        elif cur_typ == "GATE":
+            gs.gates[cur_label] = _objs.FullyParameterizedGate(qty)
+        elif cur_typ == "TP-GATE":
+            gs.gates[cur_label] = _objs.TPParameterizedGate(qty)
+        elif cur_typ == "CPTP-GATE":
+            #Similar to gate.convert(...) method
+            J = _jt.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
+            RANK_TOL = 1e-6
+            if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+                unitary_post = gate # when 'gate' is unitary
+            else: unitary_post = None
+
+            nQubits = _np.log2(gate.dim)/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            ham_basis = proj_basis
+            nonham_basis = proj_basis
+            nonham_diagonal_only = False; cptp = True; truncate=True
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis, nonham_basis, cptp,
+                nonham_diagonal_only, truncate, basis)
+
+        elif cur_typ in ("IGATE",):
+            #just add numpy array `qty` to matrices list
+            if "matrices" in cur_group_info:
+                cur_group_info['matrices'].append( (cur_label,qty) )
+            else:  cur_group_info['matrices'] = [ (cur_label,qty) ]
+        else:
+            raise ValueError("Unknown type: %s!" % cur_typ)
+
+
+    def add_current_group():
+        """ 
+        Adds the current "group" - either a POVM or Instrument - which contains
+        multiple objects.
+        """
+        if cur_group_typ == "POVM":
+            gs.povms[cur_group] = _objs.POVM( cur_group_info['effects'] )
+        elif cur_group_typ == "TP-POVM":
+            assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
+            identity = sum( [ v for k,v in cur_group_info['effects']] )
+            all_but_last_effect = cur_group_info['effects'][:-1]
+            comp_lbl = cur_group_info['effects'][-1][0] #label of last effect => complement
+            gs.povms[cur_group] = _objs.POVM( all_but_last_effect, identity, comp_lbl )
+        elif cur_group_typ == "Instrument":
+            gs.instruments[cur_group] = _objs.Instrument( cur_group_info['matrices'] )
+        elif cur_group_typ == "TP-Instrument":
+            gs.instruments[cur_group] = _objs.TPInstrument( cur_group_info['matrices'] )
+        else:
+            raise ValueError("Unknown group type: %s!" % cur_group_typ)
 
 
     gs = _objs.GateSet()
-    spam_vecs = _OrderedDict(); spam_labels = _OrderedDict(); remainder_spam_label = ""
+    spam_vecs = _OrderedDict();
+    spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
     basis_dims = None
+    gaugegroup_name = None
 
-    state = "look for label"
-    cur_label = ""; cur_format = ""; cur_rows = []
+    #First try to find basis:
     with open(filename) as inputfile:
         for line in inputfile:
             line = line.strip()
 
-            if len(line) == 0:
+            if line.startswith("BASIS:"):
+                parts = line[len("BASIS:"):].split()
+                basis_abbrev = parts[0]
+                if len(parts) > 1:
+                    basis_dims = list(map(int, "".join(parts[1:]).split(",")))
+                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                elif gs.get_dimension() is not None:
+                    basis_dims = int(round(_np.sqrt(gs.get_dimension())))
+                elif len(spam_vecs) > 0:
+                    basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
+                else:
+                    raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
+            elif line.startswith("GAUGEGROUP:"):
+                gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
+                if gaugegroup_name not in ("Full","TP","Unitary"):
+                    _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
+                                    "group will be set to None") % gaugegroup_name)
+
+    if basis_dims is not None:
+        # then specfy a dimensionful basis at the outset
+        basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        # otherwise we'll try to infer one at the end (and add_current routine
+        # uses basis in a way that can infer a dimension)
+        basis = basis_abbrev
+
+    state = "look for label"
+    cur_label = ""; cur_typ = ""
+    cur_group = ""; cur_group_typ = ""
+    cur_format = ""; cur_rows = []; cur_group_info = {}
+    with open(filename) as inputfile:
+        for line in inputfile:
+            line = line.strip()
+
+            if len(line) == 0 or line.startswith("END"):
+                #Blank lines or "END..." statements trigger the end of objects
                 state = "look for label"
                 if len(cur_label) > 0:
-                    _add_current_label()
+                    add_current()
                     cur_label = ""; cur_rows = []
-                continue
 
-            if line[0] == "#":
-                continue
+                #END... ends the current group
+                if line.startswith("END"):
+                    if len(cur_group) > 0:
+                        add_current_group()
+                        cur_group = ""; cur_group_info = {}
 
-            if state == "look for label":
-                if line.startswith("SPAMLABEL "):
-                    eqParts = line[len("SPAMLABEL "):].split('=')
-                    if len(eqParts) != 2: raise ValueError("Invalid spam label line: ", line)
-                    if eqParts[1].strip() == "remainder":
-                        remainder_spam_label = eqParts[0].strip()
-                    else:
-                        spam_labels[ eqParts[0].strip() ] = [ s.strip() for s in eqParts[1].split() ]
+            elif line[0] == "#":
+                pass # skip comments
 
-                elif line.startswith("IDENTITYVEC "):  #Vectorized form of identity density matrix in whatever basis is used
-                    if line != "IDENTITYVEC None":  #special case for designating no identity vector, so default is not used
-                        identity_vec  = _np.transpose( _evalRowList( [ line[len("IDENTITYVEC "):].split() ], bComplex=False ) )
+            elif state == "look for label":
+                parts = line.split(':')
+                assert(parts == 2), "Invalid '<type>: <label>' line: %s" % line
+                cur_typ = parts[0].strip()
+                cur_label = parts[1].strip()
 
-                elif line.startswith("BASIS "): # Line of form "BASIS <abbrev> [<dims>]", where optional <dims> is comma-separated integers
-                    parts = line[len("BASIS "):].split()
-                    basis_abbrev = parts[0]
-                    if len(parts) > 1:
-                        basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                        if len(basis_dims) == 1: basis_dims = basis_dims[0]
-                    elif gs.get_dimension() is not None:
-                        basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-                    elif len(spam_vecs) > 0:
-                        basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-                    else:
-                        raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
+                if typ == "BASIS":
+                    pass #handled above
+                
+                elif typ in ("POVM","TP-POVM","Instrument","TP-Instrument"):
+                    # if this is a group type, just record this and continue looking
+                    #  for the next labeled object
+                    cur_group = cur_label
+                    cur_group_typ = cur_typ
                 else:
-                    cur_label = line
-                    state = "expect format"
-
+                    #All other "types" should be objects with formatted data
+                    # associated with them: cur_label and cur_typ now hold the
+                    # current object label and type - now read it in.
+                    state = "expect format" # the default next action
+                    
             elif state == "expect format":
                 cur_format = line
-                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "PauliVec", "PauliMx"]:
+                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "LiouvilleVec", "LiouvilleMx"]:
                     raise ValueError("Expected object format for label %s and got line: %s -- must specify a valid object format" % (cur_label,line))
                 state = "read object"
 
@@ -724,7 +817,9 @@ def read_gateset(filename):
                 cur_rows.append( line.split() )
 
     if len(cur_label) > 0:
-        _add_current_label()
+        add_current()
+    if len(cur_group) > 0:
+        add_current_group()
 
     #Try to infer basis dimension if none is given
     if basis_dims is None:
@@ -735,48 +830,18 @@ def read_gateset(filename):
         else:
             raise ValueError("Cannot infer basis dimension!")
 
-    #Set basis
-    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
-
-    #Default SPAMLABEL directive if none are give and rho and E vectors are:
-    add_Ec = False
-    if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['0'] = [ 'rho', 'E' ]
-        spam_labels['1'] = [ 'rho', 'Ec' ]
-    if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
-
-    #Make SPAMs
-     #get unique rho and E names
-    rho_names = list(_OrderedDict.fromkeys( [ rho for (rho,E) in list(spam_labels.values()) ] ) ) #if this fails, may be due to malformatted
-    E_names   = list(_OrderedDict.fromkeys( [ E   for (rho,E) in list(spam_labels.values()) ] ) ) #  SPAMLABEL line (not 2 items to right of = sign)
-    if "remainder" in rho_names:
-        del rho_names[ rho_names.index("remainder") ]
-    if "remainder" in E_names:
-        del E_names[ E_names.index("remainder") ]
-
-    #Order E_names and rho_names using spam_vecs ordering
-    #rho_names = sorted(rho_names, key=spam_vecs.keys().index)
-    #E_names = sorted(E_names, key=spam_vecs.keys().index)
-
-     #add vectors to gateset
-    for rho_nm in rho_names: gs.preps[rho_nm] = spam_vecs[rho_nm]
-    for E_nm   in E_names:
-        if E_nm == "Ec" and "Ec" not in spam_vecs:
-            add_Ec=True; continue
-        gs.effects[E_nm] = spam_vecs[E_nm]
-    if add_Ec:
-        gs.effects['Ec'] = _objs.ComplementSPAMVec(identity_vec, gs.effects.values())
-
-     #add spam labels to gateset
-    for spam_label in spam_labels:
-        (rho_nm,E_nm) = spam_labels[spam_label]
-        gs.spamdefs[spam_label] = (rho_nm , E_nm)
-
-    if len(remainder_spam_label) > 0:
-        gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
+        #Set basis (only needed if we didn't set it above)
+        gs.basis = _objs.Basis(basis_abbrev, basis_dims)
 
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
-    gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
-
+    if gaugegroup_name == "Full":
+        gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
+    elif gaugegroup_name == "TP":
+        gs.default_gauge_group = _objs.TPGaugeGroup(gs.dim)
+    elif gaugegroup_name == "Unitary":
+        gs.default_gauge_group = _objs.UnitaryGaugeGroup(gs.dim, gs.basis)
+    else:
+        gs.default_gauge_group = None
+        
     return gs

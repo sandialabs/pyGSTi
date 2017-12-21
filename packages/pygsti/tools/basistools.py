@@ -337,10 +337,30 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
 #    else:
 #        return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
 
+def state_to_stdmx(state_vec):
+    """
+    Convert a state vector into a density matrix.
+
+    Parameters
+    ----------
+    state_vec : list or tuple
+       State vector in the standard (sigma-z) basis.
+
+    Returns
+    -------
+    numpy.ndarray
+        A density matrix of shape (d,d), corresponding to the pure state
+        given by the length-`d` array, `state_vec`.
+    """
+    st_vec = state_vec.view(); st.shape = (len(st),1) #column vector
+    dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) 
+    return dm_mx #density matrix in standard (sigma-z) basis
+
 
 def state_to_pauli_density_vec(state_vec):
     """
-    Convert a single qubit state vector into a density matrix.
+    Convert a single qubit state vector into a Liouville vector
+    in the Pauli basis.
 
     Parameters
     ----------
@@ -354,9 +374,8 @@ def state_to_pauli_density_vec(state_vec):
         as a 4x1 column vector in the Pauli basis.
     """
     assert( len(state_vec) == 2 )
-    st_vec = _np.array( [ [state_vec[0]], [state_vec[1]] ] )
-    dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) #density matrix in sigmaz basis
-    return stdmx_to_ppvec(dm_mx)
+    return stdmx_to_ppvec(state_to_stdmx(state_vec))
+
 
 def vec_to_stdmx(v, basis, keep_complex=False):
     """
