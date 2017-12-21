@@ -215,9 +215,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                 EVec[0,i] = dsRow.fraction(effectLabel) #outcome labels should just be effect labels (no instruments!)
             EVec_p = _np.dot( _np.dot(EVec, Vd), Pj ) #truncate Evec => Evec', shape (1,trunc)
             povm_effects.append( (effectLabel, _np.transpose(EVec_p)) )
-        lgstGateset.povms[povmLabel] = _povm.POVM( povm_effects )
-          #TODO: How to add complement?
-          # (complement vec - wait until after guess gauge for that!) ??
+        lgstGateset.povms[povmLabel] = _povm.POVM( povm_effects ) 
+          # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
@@ -237,8 +236,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     ##    here because spamDict is an OrderedDict (cf. get_reverse_spam_defs())
     #for (prepLabel, ELabel) in spamDict.keys():
     #    lgstGateset.spamdefs[spamDict[(prepLabel,ELabel)]] = (prepLabel, ELabel)
-
-#HERE
 
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the gateset
@@ -299,28 +296,38 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     
             for povmLabel in povmLabelsToEstimate:
                 if povmLabel in guessGatesetForGauge.povms:
-                    new_effects = []; EcLbl = None
-                    for effectLabel,EVec in guessGatesetForGauge.povms[povmLabel].items():
-                        if isinstance(EVec, _objs.ComplementSPAMVec):
-                            EcLbl = effectLabel; continue
-                        new_vec = EVec.copy()
-                        _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
-                        new_effects.append( (effectLabel,new_vec) )
-
-                    lgstGateset._check_paramvec()
-                    if EcLbl:
+                    povm = guessGatesetForGauge.povms[povmLabel]
+                    new_effects = []
+                    
+                    if isinstance(povm, _objs.TPPOVM): #preserve *identity* of guess
+                        for effectLabel,EVec in povm.items():
+                            if effectLabel == povm.complement_label: continue
+                            new_vec = EVec.copy()
+                            _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
+                            new_effects.append( (effectLabel,new_vec) )
+                        
                         # Construct identity vector for complement effect vector
                         #  Pad with zeros if needed (ROBIN - is this correct?)
-                        Ec_identity = povm[EcLbl].identity
-                        Idim = Ec_identity.shape[0]
+                        identity = povm[povm.complement_label].identity
+                        Idim = identity.shape[0]
                         assert(Idim <= trunc)
                         if Idim < trunc:
-                            padded_identityVec = _np.concatenate( (Ec_identity, _np.zeros( (trunc-Idim,1), 'd')) )
+                            padded_identityVec = _np.concatenate( (identity, _np.zeros( (trunc-Idim,1), 'd')) )
                         else:
-                            padded_identityVec = Ec_identity
-                    else:
-                        padded_identityVec = None
-                    lgstGateset.povms[povmLabel] = _povm.POVM( new_effects, padded_identityVec, Eclbl)
+                            padded_identityVec = identity
+                        comp_effect = padded_identity - sum([v for k,v in new_effects])
+                        new_effects.append( (povm.complement_label, comp_effect) ) #add complement
+                        lgstGateset.povms[povmLabel] = _povm.TPPOVM( new_effects )
+                        
+                    else: #just create an unconstrained POVM
+                        for effectLabel,EVec in povm.items():
+                            new_vec = EVec.copy()
+                            _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
+                            new_effects.append( (effectLabel,new_vec) )                            
+                        lgstGateset.povms[povmLabel] = _povm.POVM( new_effects )
+
+                    lgstGateset._check_paramvec()
+
 
 
             #Also convey default gauge group & calc class from guessGatesetForGauge

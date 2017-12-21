@@ -12,6 +12,7 @@ import warnings as _warnings
 #from . import labeldicts as _ld
 from . import gatesetmember as _gm
 from . import spamvec as _sv
+from ..tools import matrixtools as _mt
 
 
 #Thoughts:
@@ -55,85 +56,110 @@ from . import spamvec as _sv
 
 #
 
-def convert(povm, typ, basis):
-    converted_effects = [ (lbl,_sv.convert(vec, typ, basis))
-                          for lbl,vec in povm.items()
-                          if lbl != povm.complement_label ]
-    if povm.complement_label:
-        identity = povm[povm.complement_label].identity
+def convert(povm, toType, basis):
+    """
+    Convert POVM to a new type of parameterization, potentially
+    creating a new object.  Raises ValueError for invalid conversions.
+
+    Parameters
+    ----------
+    povm : BasePOVM
+        POVM to convert
+
+    toType : {"full","TP","static"}
+        The type of parameterizaton to convert to.
+
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis for `povm`.  Allowed values are Matrix-unit (std),
+        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+        (or a custom basis object).
+
+    Returns
+    -------
+    POVM
+       The converted POVM vector, usually a distinct
+       object from the object passed as input.
+    """
+    if toType in ("full","static"):
+        converted_effects = [ (lbl,_sv.convert(vec, toType, basis))
+                              for lbl,vec in povm.items() ]
+        return POVM(converted_effects)
+
+    elif toType == "TP":
+        if isinstance(povm, TPPOVM):
+            return povm # no conversion necessary
+        else:
+            converted_effects = [ (lbl,_sv.convert(vec, "full", basis))
+                                  for lbl,vec in povm.items() ]
+            return TPPOVM(converted_effects)
     else:
-        identity = None
-
-    return POVM(converted_effects, identity, povm.complement_label)
+        raise ValueError("Invalid toType argument: %s" % toType)
 
 
 
-class POVM(_gm.GateSetMember, _collections.OrderedDict):
+class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
     """ 
     Meant to correspond to a  positive operator-valued measure,
     in theory, this class generalizes that notion slightly to
     include a collection of effect vectors that may or may not
     have all of the properties associated by a mathematical POVM.
     """
-    def __init__(self, effects, identity_for_complement=None, complement_label="c", items=[]):
+    def __init__(self, effects, preserve_sum=False):
         """
-        Creates a new POVM object.
+        Creates a new BasePOVM object.
 
         Parameters
         ----------
-        effects : dict of SPAMVecs
-            A dict (or list of key,value pairs) of the effect vectors (possibly
-            without the final "complement" member; see below).
+        effects : dict of SPAMVecs or array-like
+            A dict (or list of key,value pairs) of the effect vectors.
 
-        identity_for_complement : SPAMVec, optional
-            If not none, a final effect vector is added that is
-            constrained to be `identity_for_complement` minus the
-            sum of the vectors in `effect_vectors`.
-
-        complement_label : str, optional
-            The key within the POVM of the "complement" effect vector,
-            if one is added.
+        preserve_sum : bool, optional
+            If true, the sum of `effects` is taken to be a constraint
+            and so the final effect vector is made into a 
+            :class:`ComplementSPAMVec`.
         """
-        if len(items)>0:
-            assert(effects is None), "`items` was given when effects != None"
-            
         dim = None
         self.Np = 0
-        self.complement_label = None
-        #Note: when un-pickling using items arg, Np and complement_label will
-        # remain the above values, but *will* be set when state dict is copied
-        # in (so unpickling works as desired)
         
-        if effects is not None:
-            if isinstance(effects,dict):
-                items = [(k,v) for k,v in effects.items()] #gives definite ordering of effects
-            elif isinstance(effects,list):
-                items = effects # assume effects is already an ordered (key,value) list
-            else:
-                raise ValueError("Invalid `effects` arg of type %s" % type(effects))
+        if isinstance(effects,dict):
+            items = [(k,v) for k,v in effects.items()] #gives definite ordering of effects
+        elif isinstance(effects,list):
+            items = effects # assume effects is already an ordered (key,value) list
+        else:
+            raise ValueError("Invalid `effects` arg of type %s" % type(effects))
 
-            #Copy each effect vector and set it's parent and gpindices.
-            # Assume each given effect vector's parameters are independent.
-            copied_items = []
-            for k,v in items:
-                effect = v.copy() if isinstance(v,_sv.SPAMVec) else \
-                         _sv.FullyParameterizedSPAMVec(v)
-                    
-                if dim is None: dim = effect.dim
-                assert(dim == effect.dim),"All effect vectors must have the same dimension"
+        if preserve_sum:
+            assert(len(items) > 1), "Cannot create a TP-POVM with < 2 effects!"
+            self.complement_label = items[-1][0]
+            comp_val = _np.array(items[-1][1]) # current value of complement vec
+        else:
+            self.complement_label = None
 
-                N = effect.num_params()
-                effect.set_gpindices(slice(self.Np,self.Np+N),self); self.Np += N
-                copied_items.append( (k,effect) )
-            items = copied_items
+        #Copy each effect vector and set it's parent and gpindices.
+        # Assume each given effect vector's parameters are independent.
+        copied_items = []
+        for k,v in items:
+            if k == self.complement_label: continue
+            effect = v.copy() if isinstance(v,_sv.SPAMVec) else \
+                     _sv.FullyParameterizedSPAMVec(v)
+                
+            if dim is None: dim = effect.dim
+            assert(dim == effect.dim),"All effect vectors must have the same dimension"
 
-            #Add a complement effect if desired
-            if identity_for_complement is not None:
-                self.complement_label = complement_label
-                complement_effect = _sv.ComplementSPAMVec(
-                    identity_for_complement, [v for k,v in items])
-                complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
-                items.append( (complement_label, complement_effect) )
+            N = effect.num_params()
+            effect.set_gpindices(slice(self.Np,self.Np+N),self); self.Np += N
+            copied_items.append( (k,effect) )
+        items = copied_items
+
+        #Add a complement effect if desired
+        if self.complement_label is not None:  # len(items) > 0 by assert
+            non_comp_effects = [v for k,v in items]
+            identity_for_complement = _np.array(sum(non_comp_effects) +
+                                                comp_val, 'd')
+            complement_effect = _sv.ComplementSPAMVec(
+                identity_for_complement, non_comp_effects)
+            complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
+            items.append( (self.complement_label, complement_effect) )
 
         _collections.OrderedDict.__init__(self, items)
         _gm.GateSetMember.__init__(self, dim)
@@ -141,13 +167,19 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        non_complement_effects = [ (lbl,effect) for lbl,effect in self.items()
-                                   if lbl != self.complement_label ]
+        effects = [ (lbl,effect) for lbl,effect in self.items()
+                    if lbl != self.complement_label ]
+        
         if self.complement_label is not None:
-            identity = self[self.complement_label].identity
-        else: identity = None
-
-        return (POVM, (non_complement_effects, identity, self.complement_label), {} )
+            #add complement effect as a std numpy array - it will get
+            # re-created correctly by __init__ w/preserve_sum == True
+            effects.append( (self.complement_label,
+                             _np.array(self[self.complement_label])) )
+            preserve_sum = True
+        else:
+            preserve_sum = False
+            
+        return (BasePOVM, (effects, preserve_sum), {} )
 
     def compile_effects(self, prefix=""):
         """
@@ -237,7 +269,14 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
             effect.transform(S,'effect')
 
         if self.complement_label:
-            self[self.complement_label].identity.transform(S,'effect')
+            #Other effects being transformed transforms the complement,
+            # so just check that the transform preserves the identity.
+            TOL = 1e-6
+            identityVec = _np.array(self[self.complement_label].identity)
+            SmxT = _np.transpose(S.get_transform_matrix())
+            assert(_np.linalg.norm(identityVec-_np.dot(SmxT,identityVec))<TOL),\
+                ("Cannot transform complement effect in a way that doesn't"
+                 " preservee the identity!")
             self[self.complement_label]._construct_vector()
             
         self.dirty = True
@@ -269,7 +308,8 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
             effect.depolarize(amount)
 
         if self.complement_label:
-            self[self.complement_label].identity.depolarize(amount)
+            # depolarization of other effects "depolarizes" the complement
+            #self[self.complement_label].depolarize(amount) # I don't think this is desired - still want probs to sum to 1!
             self[self.complement_label]._construct_vector()
         self.dirty = True
 
@@ -293,15 +333,103 @@ class POVM(_gm.GateSetMember, _collections.OrderedDict):
 
         Returns
         -------
-        POVM
+        BasePOVM
             A copy of this POVM
         """
         effects = [ (k,v.copy()) for k,v in self.items() if k != self.complement_label]
-        identity = self[self.complement_label].identity if self.complement_label else None
-        return self._copy_gpindices( POVM(effects, identity, self.complement_label), parent)
+        if self.complement_label is not None: #don't copy ComplementSPAMVec
+            effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
+        return self._copy_gpindices(
+            BasePOVM(effects, bool(self.complement_label is not None)), parent)
 
     def __str__(self):
         s = "POVM with effect vectors:\n"
         for lbl,effect in self.items():
             s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
         return s
+
+
+class POVM(BasePOVM):
+    """ 
+    An unconstrained POVM that just holds a set of effect vectors,
+    parameterized individually however you want.
+    """
+    def __init__(self, effects):
+        """
+        Creates a new POVM object.
+
+        Parameters
+        ----------
+        effects : dict of SPAMVecs or array-like
+            A dict (or list of key,value pairs) of the effect vectors.
+        """
+        super(POVM,self).__init__(effects, preserve_sum=False)
+
+
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        assert(self.complement_label is None)
+        effects = [ (lbl,effect) for lbl,effect in self.items()]
+        return (POVM, (effects,), {} )
+
+    def copy(self, parent=None):
+        """
+        Copy this POVM.
+
+        Returns
+        -------
+        POVM
+            A copy of this POVM
+        """
+        effects = [ (k,v.copy()) for k,v in self.items() ]
+        return self._copy_gpindices(POVM(effects), parent)
+
+
+
+class TPPOVM(BasePOVM):
+    """ 
+    An POVM whose sum-of-effects is constrained to what, by definition,
+    we call the "identity".
+    """
+    def __init__(self, effects):
+        """
+        Creates a new POVM object.
+
+        Parameters
+        ----------
+        effects : dict of SPAMVecs or array-like
+            A dict (or list of key,value pairs) of the effect vectors.  The 
+            final effect vector will be stripped of any existing
+            parameterization and turned into a ComplementSPAMVec which has
+            no additional parameters and is always equal to 
+            `identity - sum(other_effects`, where `identity` is the sum of
+            `effects` when this __init__ call is made.
+        """
+        super(TPPOVM,self).__init__(effects, preserve_sum=True)
+
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        assert(self.complement_label is not None)
+        effects = [ (lbl,effect) for lbl,effect in self.items()
+                    if lbl != self.complement_label ]
+
+        #add complement effect as a std numpy array - it will get
+        # re-created correctly by __init__ w/preserve_sum == True
+        effects.append( (self.complement_label,
+                         _np.array(self[self.complement_label])) )
+            
+        return (TPPOVM, (effects,), {} )
+    
+    def copy(self, parent=None):
+        """
+        Copy this POVM.
+
+        Returns
+        -------
+        TPPOVM
+            A copy of this POVM
+        """
+        assert(self.complement_label is not None)
+        effects = [ (k,v.copy()) for k,v in self.items() if k != self.complement_label]
+        effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
+        return self._copy_gpindices(TPPOVM(effects), parent)

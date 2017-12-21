@@ -712,10 +712,7 @@ def read_gateset(filename):
             gs.povms[cur_group] = _objs.POVM( cur_group_info['effects'] )
         elif cur_group_typ == "TP-POVM":
             assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
-            identity = sum( [ v for k,v in cur_group_info['effects']] )
-            all_but_last_effect = cur_group_info['effects'][:-1]
-            comp_lbl = cur_group_info['effects'][-1][0] #label of last effect => complement
-            gs.povms[cur_group] = _objs.POVM( all_but_last_effect, identity, comp_lbl )
+            gs.povms[cur_group] = _objs.TPPOVM( cur_group_info['effects'] )
         elif cur_group_typ == "Instrument":
             gs.instruments[cur_group] = _objs.Instrument( cur_group_info['matrices'] )
         elif cur_group_typ == "TP-Instrument":

@@ -31,6 +31,7 @@ from .spamvec import CPTPParameterizedSPAMVec
 from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
 from .povm import POVM
+from .povm import TPPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 

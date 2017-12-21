@@ -928,7 +928,9 @@ def basis_build_gateset(stateSpaceLabels,
             remLbl=label; continue
         effects.append( (label,basis_build_vector(EExpr, basis)) )
     if remLbl: # include complement/remainder effect
-        ret.povms[povmLbl] = _povm.POVM(effects, basis_build_identity_vec(basis), remLbl)
+        effects.append( (remLbl, basis_build_identity_vec(basis)
+                         - sum([v for k,v in effects])) )
+        ret.povms[povmLbl] = _povm.TPPOVM(effects)
     else:
         ret.povms[povmLbl] = _povm.POVM(effects)
 

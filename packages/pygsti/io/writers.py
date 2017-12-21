@@ -228,8 +228,8 @@ def write_gateset(gs,filename,title=None):
             output.write("\n")
 
         for povmLabel,povm in gs.povms.items():
-            if isinstance(povm, _objs.POVM):
-                povmType = "TP-POVM" if povm.complement_label else "POVM"
+            if isinstance(povm, _objs.POVM): povmType = "POVM"
+            elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"

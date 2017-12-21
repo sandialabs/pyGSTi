@@ -27,7 +27,7 @@ class GateSetTestCase(BaseTestCase):
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
             effectLabels=["0","1"], effectExpressions=["0","complement"])
-
+        
         self.tp_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
@@ -77,7 +77,9 @@ class TestGateSetMethods(GateSetTestCase):
             print("Case: default_param = ",default_param)
             nGates = 3 if default_param in ("full","TP") else 0
             nSPVecs = 1 if default_param in ("full","TP") else 0
-            nEVecs = 1 if default_param in ("full","TP") else 0 #independent evecs
+            if default_param == "full": nEVecs = 2
+            elif default_param == "TP": nEVecs = 1 #complement doesn't add params
+            else: nEVecs = 0
             nParamsPerGate = 16 if default_param == "full" else 12
             nParamsPerSP = 4 if default_param == "full" else 3
             nParams =  nGates * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
@@ -168,6 +170,7 @@ class TestGateSetMethods(GateSetTestCase):
         Tinv = np.linalg.inv(T)
         elT = pygsti.objects.FullGaugeGroupElement(T)
         cp = self.gateset.copy()
+        cp.set_all_parameterizations('full') # so POVM can be transformed...
         cp.transform(elT)
 
         self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T), 0 )
@@ -254,6 +257,7 @@ class TestGateSetMethods(GateSetTestCase):
                      np.dot( self.gateset['Gy'],
                              np.dot(self.gateset['Gx'],
                                     self.gateset.preps['rho0'])))
+
         probs = self.gateset.probs(gatestring)
         p0b,p1b = probs[('0',)], probs[('1',)]
         self.assertArraysAlmostEqual(p0a,p0b)

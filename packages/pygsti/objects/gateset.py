@@ -376,7 +376,7 @@ class GateSet(object):
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
         #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
-        etyp = "static" if typ == "static" else "full"
+        povmtyp = rtyp
         ityp = "TP" if typ in ("TP","CPTP","H+S","S") else typ
 
         basis = self.basis
@@ -391,7 +391,7 @@ class GateSet(object):
             self.preps[lbl] = _sv.convert(vec, rtyp, basis)
 
         for lbl,povm in self.povms.items():
-            self.povms[lbl] = _povm.convert(povm, etyp, basis)
+            self.povms[lbl] = _povm.convert(povm, povmtyp, basis)
         
         if typ == 'full': 
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
@@ -3064,8 +3064,10 @@ class GateSet(object):
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
             for lbl in self.preps:
                 newGateset.preps[lbl].depolarize(spam_noise)
-            for label in self.povms:
-                newGateset.povms[label].depolarize(spam_noise)
+
+            # Just depolarize the preps - leave POVMs alone
+            #for label in self.povms:
+            #    newGateset.povms[label].depolarize(spam_noise)
 
         newGateset._clean_paramvec() #depolarize may leave dirty members
         return newGateset
@@ -3241,11 +3243,13 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [_sv.FullyParameterizedSPAMVec(_np.concatenate( (EVec, vec_zeroPad) ))
-                       for lbl,EVec in povm.items() if lbl != povm.complement_label ]
-            identity = _np.concatenate(povm[povm.complement_label].identity,vec_zeroPad) \
-                       if povm.complement_label else None
-            new_gateset.povms[lbl] = _povm.POVM(effects, identity, povm.complement_label)
+            effects = [ _np.concatenate( (EVec, vec_zeroPad) )
+                        for lbl,EVec in povm.items() ]
+
+            if isinstance(povm, _povm.TPPOVM):
+                new_gateset.povms[lbl] = _povm.TPPOVM(effects)
+            else:
+                new_gateset.povms[lbl] = _povm.POVM(effects) #everything else
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for gateLabel,gate in self.gates.items():
@@ -3302,11 +3306,12 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [_sv.FullyParameterizedSPAMVec(EVec[0:newDimension,:])
-                       for lbl,EVec in povm.items() if lbl != povm.complement_label ]
-            identity = povm[povm.complement_label].identity[0:newDimension,:] \
-                       if povm.complement_label else None
-            new_gateset.povms[lbl] = _povm.POVM(effects, identity, povm.complement_label)
+            effects = [ EVec[0:newDimension,:] for lbl,EVec in povm.items()]
+
+            if isinstance(povm, _povm.TPPOVM):
+                new_gateset.povms[lbl] = _povm.TPPOVM(effects)
+            else:
+                new_gateset.povms[lbl] = _povm.POVM(effects) #everything else
 
             
         #Decrease dimension of gates by truncation
