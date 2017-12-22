@@ -289,14 +289,14 @@ def make_meas_mxs(gs, prepMeasList):
     """
 
     dimE = gs.get_dimension()
-    # numE = len(gs.effects)
     numFid = len(prepMeasList)
     outputMatList = []
-    for E in list(gs.effects.values()):
-        outputMat = _np.zeros([dimE, numFid], float)
-        for i,measFid in enumerate(prepMeasList):
-            outputMat[:, i] = _np.dot(E.T, gs.product(measFid))[0,:]
-        outputMatList.append(outputMat)
+    for povm in gs.povms.values():
+        for E in povm.values():
+            outputMat = _np.zeros([dimE, numFid], float)
+            for i,measFid in enumerate(prepMeasList):
+                outputMat[:, i] = _np.dot(E.T, gs.product(measFid))[0,:]
+            outputMatList.append(outputMat)
     return outputMatList
 
 

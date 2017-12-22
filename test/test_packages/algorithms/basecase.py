@@ -18,10 +18,10 @@ class AlgorithmsBase(BaseTestCase):
 
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
+        #OLD self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.gateLabels = list(self.gateset.gates.keys()) # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
+        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.fiducials, self.fiducials, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
 
@@ -32,11 +32,11 @@ class AlgorithmsBase(BaseTestCase):
             self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
         ## RUN BELOW LINES to create analysis dataset
-        #expList = pygsti.construction.make_lsgst_experiment_list(
-        #    self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
-        #ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
-        #   nSamples=10000, sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
+        expList = pygsti.construction.make_lsgst_experiment_list(
+            self.gateLabels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
+        ds = pygsti.construction.generate_fake_data(self.datagen_gateset, expList,
+           nSamples=10000, sampleError='binomial', seed=100)
+        ds.save(compare_files + "/analysis.dataset%s" % self.versionsuffix)
 
         self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
 

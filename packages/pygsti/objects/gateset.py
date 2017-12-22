@@ -35,12 +35,6 @@ from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
 
-# Tolerace for matrix_rank when finding rank of a *normalized* projection
-# matrix.  This is a legitimate tolerace since a normalized projection matrix
-# should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
-# well.
-P_RANK_TOL = 1e-7
-
 class GateSet(object):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -452,7 +446,7 @@ class GateSet(object):
             the number of gateset elements.
         """
         rhoSize = [ rho.size for rho in self.preps.values() ]
-        povmSize = [ povm.num_elements() for povm in self.povm.values() ]
+        povmSize = [ povm.num_elements() for povm in self.povms.values() ]
         gateSize = [ gate.size for gate in self.gates.values() ]
         instSize = [ i.num_elements() for i in self.instruments.values() ]
         return sum(rhoSize) + sum(povmSize) + sum(gateSize) + sum(instSize)
@@ -481,8 +475,18 @@ class GateSet(object):
         int
             the number of gauge gateset parameters.
         """
-        dPG = self._buildup_dPG()
+        dPG = self._calc()._buildup_dPG()
         gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
+        
+        #OLD DEBUG
+        #print("Svals of dPG:")
+        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(dPG, compute_uv=False))] ))
+        #print("----")
+        #print("DB: gaugeDirs = ",gaugeDirs.shape, ", nP =",self.num_params())
+        #print("DIRS = \n",gaugeDirs[0:self.num_params(),0:3])
+        #print("Svals = ")
+        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(gaugeDirs[0:self.num_params(),:], compute_uv=False))] ))
+        
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
@@ -642,106 +646,25 @@ class GateSet(object):
         if GateSet._pcheck: self._check_paramvec()
 
 
-    #Not needed - and would need to add deriv_wrt_params for POVMs and instruments
-    #def deriv_wrt_params(self):
-    #    """
-    #    Construct a matrix whose columns are the vectorized derivatives of all
-    #    the gateset's raw matrix and vector *elements* (placed in a vector)
-    #    with respect to each single gateset parameter.
-    #
-    #    Thus, each column has length equal to the number of elements in the
-    #    gateset, and there are num_params() columns.  In the case of a "fully
-    #    parameterized gateset" (i.e. all gate matrices and SPAM vectors are
-    #    fully parameterized) then the resulting matrix will be the (square)
-    #    identity matrix.
-    #
-    #    Returns
-    #    -------
-    #    numpy array
-    #        2D array of derivatives.
-    #    """
-    #    deriv = _np.zeros( (self.num_elements(), self.num_params()), 'd' )
-    #
-    #    eo = 0 # element offset
-    #    for _,obj in self.iter_objs():
-    #        #Note: no overlaps possible b/c of independent *elements*
-    #        deriv[eo:eo+obj.size,obj.gpindices] = obj.deriv_wrt_params()
-    #        eo += obj.size
-    #          
-    #    return deriv
-    
-#TODO: use gate calc?
-    def _buildup_dPG(self):
-        """ 
-        Helper function for building gauge/non-gauge projectors and 
-          for computing the number of gauge/non-gauge elements.
-        Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
-        whose nullspace gives the gauge directions in parameter space.
+    def deriv_wrt_params(self):
         """
-
-        # ** See comments at the beginning of get_nongauge_projector for explanation **
-
-        bSkipEcs = True #Whether we should artificially skip complement-type
-         # effect vecs, which is historically what we've done, even though
-         # this seems somewhat wrong.  Not skipping them will alter the
-         # number of "gauge params" since a complement Evec has a *fixed*
-         # identity from the perspective of the GateSet params (which 
-         # *varied* in gauge optimization, even though it's not a SPAMVec
-         # param, creating a weird inconsistency...) SKIP
-        if bSkipEcs:
-            newSelf = self.copy()
-            Ec_lbls = [ lbl for lbl,E in self.effects.items() if isinstance(E, _sv.ComplementSPAMVec) ]
-            for lbl in Ec_lbls: del newSelf.effects[lbl]
-            self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
-        
-        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
-        dim = self._dim
-        nParams = self.num_params()
-        nElements = self.num_elements()
-
-        #This was considered as optional behavior, but better to just delete qtys from GateSet
-        ##whether elements of the raw gateset matrices/SPAM vectors that are not
-        ## parameterized at all should be ignored.   By ignoring changes to such
-        ## elements, they are treated as not being a part of the "gateset"
-        #bIgnoreUnparameterizedEls = True
-
-        #Note: gateset object (gsDeriv) must have all elements of gate
-        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
-        # order to match deriv_wrt_params call, which gives derivatives wrt
-        # *all* elements of a gate set.
-        gsDeriv = GateSet("full", self.preps._prefix, self.effects._prefix,
-                          self.gates._prefix)
-        for gateLabel in self.gates:
-            gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
-        for prepLabel in self.preps:
-            gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
-        for effectLabel,E in self.effects.items():
-            gsDeriv.effects[effectLabel] = _np.zeros((dim,1),'d')
-
-        if bSkipEcs: nElements = gsDeriv.num_elements() #SKIP - so nElements is updated w/out Ecs
-        #assert(gsDeriv.num_elements() == nElements == gsDeriv.num_params())
-        # Disabled b/c of SKIP hack
-
-        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
-        for i in range(dim):      # always range over all rows: this is the
-            for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _bt.mut(i,j,dim)
-                for lbl,rhoVec in self.preps.items():
-                    gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
-                for lbl,EVec in self.effects.items():
-                    gsDeriv.effects[lbl] =  -_np.dot(EVec.T, unitMx).T
-                for lbl,gate in self.gates.items():
-                    gsDeriv.gates[lbl] = _np.dot(unitMx,gate) - \
-                                         _np.dot(gate,unitMx)
-
-                #Note: vectorize all the parameters in this full-
-                # parameterization object, which gives a vector of length
-                # equal to the number of gateset *elements*.
-                dPG[:,nParams + i*dim+j] = gsDeriv.to_vector()
-
-        dPG[:, 0:nParams] = self.deriv_wrt_params()
-        return dPG
-
+        Construct a matrix whose columns are the vectorized derivatives of all
+        the gateset's raw matrix and vector *elements* (placed in a vector)
+        with respect to each single gateset parameter.
+    
+        Thus, each column has length equal to the number of elements in the
+        gateset, and there are num_params() columns.  In the case of a "fully
+        parameterized gateset" (i.e. all gate matrices and SPAM vectors are
+        fully parameterized) then the resulting matrix will be the (square)
+        identity matrix.
+    
+        Returns
+        -------
+        numpy array
+            2D array of derivatives.
+        """
+        return self._calc().deriv_wrt_params()
+    
 
     def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
         """
@@ -776,190 +699,7 @@ class GateSet(object):
            parameter-space, and has rank equal to the number of non-gauge
            degrees of freedom.
         """
-
-        # We want to divide the GateSet-space H (a Hilbert space, 56-dimensional in the 1Q, 3-gate, 2-vec case)
-        # into the direct sum of gauge and non-gauge spaces, and find projectors onto each
-        # sub-space (the non-gauge space in particular).
-        #
-        # Within the GateSet H-space lies a gauge-manifold of maximum chi2 (16-dimensional in 1Q case),
-        #  where the gauge-invariant chi2 function is constant.  At a single point (GateSet) P on this manifold,
-        #  chosen by (somewhat arbitrarily) fixing the gauge, we can talk about the tangent space
-        #  at that point.  This tangent space is spanned by some basis (~16 elements for the 1Q case),
-        #  which associate with the infinitesimal gauge transform ?generators? on the full space.
-        #  The subspace of H spanned by the derivatives w.r.t gauge transformations at P (a GateSet) spans
-        #  the gauge space, and the complement of this (in H) is the non-gauge space.
-        #
-        #  An element of the gauge group can be written gg = exp(-K), where K is a n x n matrix.  If K is
-        #   hermitian then gg is unitary, but this need not be the case.  A gauge transform acts on a
-        #   gatset via Gateset => gg^-1 G gg, i.e. G => exp(K) G exp(-K).  We care about the action of
-        #   infinitesimal gauge tranformations (b/c the *derivative* vectors span the tangent space),
-        #   which act as:
-        #    G => (I+K) G (I-K) = G + [K,G] + ignored(K^2), where [K,G] := KG-GK
-        #
-        # To produce a projector onto the gauge-space, we compute the *column* vectors
-        #  dG_ij = [K_ij,G], where K_ij is the i,j-th matrix unit (56x1 in the 1Q case, 16 such column vectors)
-        #  and then form a projector in the standard way.
-        #  (to project onto |v1>, |v2>, etc., form P = sum_i |v_i><v_i|)
-        #
-        #Typically nGateParams < len(dG_ij) and linear system is overconstrained
-        #   and no solution is expected.  If no solution exists, simply ignore
-        #
-        # So we form P = sum_ij dG_ij * transpose(dG_ij) (56x56 in 1Q case)
-        #              = dG * transpose(dG)              where dG_ij form the *columns* of dG (56x16 in 1Q case)
-        # But dG_ij are not orthonormal, so really we need a slight modification,
-        #  otherwise P'P' != P' as must be the case for a projector:
-        #
-        # P' = dG * (transpose(dG) * dG)^-1 * transpose(dG) (see wikipedia on projectors)
-        #
-        #    or equivalently (I think)
-        #
-        # P' = pseudo-inv(P)*P
-        #
-        #  since the pseudo-inv is defined by P*pseudo-inv(P) = I and so P'P' == P'
-        #  and P' is our gauge-projector!
-
-        # Note: In the general case of parameterized gates (i.e. non-fully parameterized gates), there are fewer
-        #   gate parameters than the size of dG_ij ( < 56 in 1Q case).  In this general case, we want to know
-        #   what (if any) change in gate parameters produces the change dG_ij of the gate matrix elements.
-        #   That is, we solve dG_ij = derivWRTParams * dParams_ij for dParams_ij, where derivWRTParams is
-        #   the derivative of the gate matrix elements with respect to the gate parameters (derivWRTParams
-        #   is 56x(nGateParams) and dParams_ij is (nGateParams)x1 in the 1Q case) -- then substitute dG_ij
-        #   with dParams_ij above to arrive at a (nGateParams)x(nGateParams) projector (compatible with
-        #   hessian computed by gateset).
-        #
-        #   Actually, we want to know if what changes gate parameters
-        #   produce changes in the span of all the dG_ij, so really we want the intersection of the space
-        #   defined by the columns of derivWRTParams (the "gate-parameter range" space) and the dG_ij vectors.
-        #
-        #   This intersection is determined by nullspace( derivWRTParams | dG ), where the pipe denotes
-        #     concatenating the matrices together.  Then, if x is a basis vector of the nullspace
-        #     x[0:nGateParams] is the basis vector for the intersection space within the gate parameter space,
-        #     that is, the analogue of dParams_ij in the single-dG_ij introduction above.
-        #
-        #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
-        #   above to get the general case projector.
-
-        nParams = self.num_params()
-        dPG = self._buildup_dPG()
-
-        #print("DB: shapes = ",dP.shape,dG.shape)
-        #OLD: M = _np.concatenate( (dP,dG), axis=1 )
-        #OLD: nullsp = _mt.nullspace(dPG) #columns are nullspace basis vectors
-        nullsp = _mt.nullspace_qr(dPG) #columns are nullspace basis vectors
-        gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
-                                     # of subspace intersection in gate-parameter space
-        #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
-        #  (below) is (nParams)x(nParams) as desired.
-
-        #DEBUG
-        #nElements = self.num_elements()
-        #for iRow in range(nElements):
-        #    pNorm = _np.linalg.norm(dP[iRow])
-        #    if pNorm < 1e-6:
-        #        print "Row %d of dP is zero" % iRow
-        #
-        #print "------------------------------"
-        #print "nParams = ",nParams
-        #print "nElements = ",nElements
-        #print " shape(M) = ",M.shape
-        #print " shape(dG) = ",dG.shape
-        #print " shape(dP) = ",dP.shape
-        #print " shape(gen_dG) = ",gen_dG.shape
-        #print " shape(nullsp) = ",nullsp.shape
-        #print " rank(dG) = ",_np.linalg.matrix_rank(dG)
-        #print " rank(dP) = ",_np.linalg.matrix_rank(dP)
-        #print "------------------------------"
-        #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
-
-        if nonGaugeMixMx is not None:
-            msg = "You've set both nonGaugeMixMx and itemWeights, both of which"\
-                + " set the gauge metric... You probably don't want to do this."
-            assert(itemWeights is None), msg
-
-            # BEGIN GAUGE MIX ----------------------------------------
-            # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
-            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are the non-gauge directions *orthogonal* to the gauge directions
-
-            #for each column of gen_dG, which is a gauge direction in gateset parameter space,
-            # we add some amount of non-gauge direction, given by coefficients of the
-            # numNonGaugeParams non-gauge directions.
-            gen_dG = gen_dG + _np.dot( nonGaugeDirections, nonGaugeMixMx) #add non-gauge direction components in
-             # dims: (nParams,nGaugeParams) + (nParams,nNonGaugeParams) * (nNonGaugeParams,nGaugeParams)
-             # nonGaugeMixMx is a (nNonGaugeParams,nGaugeParams) matrix whose i-th column specifies the
-             #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
-             #  direction to project out (i.e. what were the pure gauge directions).
-
-            #DEBUG
-            #print "gen_dG shape = ",gen_dG.shape
-            #print "NGD shape = ",nonGaugeDirections.shape
-            #print "NGD rank = ",_np.linalg.matrix_rank(nonGaugeDirections, P_RANK_TOL)
-            #END GAUGE MIX ----------------------------------------
-
-        # Build final non-gauge projector by getting a mx of column vectors 
-        # orthogonal to the cols fo gen_dG:
-        #     gen_dG^T * gen_ndG = 0 => nullspace(gen_dG^T)
-        # or for a general metric W:
-        #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
-        # (This is instead of construction as I - gaugeSpaceProjector)
-
-        if itemWeights is not None:
-            metric_diag = _np.ones(self.num_params(), 'd')
-            gateWeight = itemWeights.get('gates', 1.0)
-            spamWeight = itemWeights.get('spam', 1.0)
-            for lbl,gate in self.gates.items():
-                metric_diag[gate.gpindices] = itemWeights.get(lbl, gateWeight)
-            for lbl,vec in _itertools.chain(iter(self.preps.items()),
-                                            iter(self.effects.items())):
-                metric_diag[vec.gpindices] = itemWeights.get(lbl, spamWeight)
-            metric = _np.diag(metric_diag)
-            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
-            gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T,metric))
-        else:
-            #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
-            gen_ndG = _mt.nullspace_qr(gen_dG.T) #cols are non-gauge directions
-            #print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
-                
-
-        # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
-        #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below
-        P = _np.dot(gen_ndG, _np.transpose(gen_ndG)) # almost a projector, but cols of dG are not orthonormal
-        Pp = _np.dot( _np.linalg.pinv(P, rcond=1e-7), P ) # make P into a true projector (onto gauge space)
-
-        # ALT WAY: use inverse of dG^T*dG to normalize projector (see wikipedia on projectors, dG => A)
-        #  This *should* give the same thing as above, but numerical differences indicate the pinv method
-        #  is prefereable (so long as rcond=1e-7 is ok in general...)
-        #  Check: P'*P' = (dG (dGT dG)^1 dGT)(dG (dGT dG)^-1 dGT) = (dG (dGT dG)^1 dGT) = P'
-        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_ndG), gen_ndG))
-        #Pp_alt = _np.dot(gen_ndG, _np.dot(invGG, _np.transpose(gen_ndG))) # a true projector (onto gauge space)
-        #print "Pp - Pp_alt norm diff = ", _np.linalg.norm(Pp_alt - Pp)
-
-        #OLD: ret = _np.identity(nParams,'d') - Pp 
-        # Check ranks to make sure everything is consistent.  If either of these assertions fail,
-        #  then pinv's rcond or some other numerical tolerances probably need adjustment.
-        #print "Rank P = ",_np.linalg.matrix_rank(P)
-        #print "Rank Pp = ",_np.linalg.matrix_rank(Pp, P_RANK_TOL)
-        #print "Rank 1-Pp = ",_np.linalg.matrix_rank(_np.identity(nParams,'d') - Pp, P_RANK_TOL)
-        #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
-        #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
-        
-        try:
-            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector
-            
-            # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
-            #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
-            #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
-            #  but different from numpy's default tolerance would be appropriate here.
-
-            assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
-            #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
-        except(_np.linalg.linalg.LinAlgError):
-            _warnings.warn("Linear algebra error (probably a non-convergent" +
-                           "SVD) ignored during matric rank checks in " +
-                           "GateSet.get_nongauge_projector(...) ")
-            
-        return Pp 
-        #OLD: return ret
+        return self._calc().get_nongauge_projector(itemWeights, nonGaugeMixMx)
 
 
     def transform(self, S):
@@ -3243,7 +2983,7 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [ _np.concatenate( (EVec, vec_zeroPad) )
+            effects = [ (lbl,_np.concatenate( (EVec, vec_zeroPad) ))
                         for lbl,EVec in povm.items() ]
 
             if isinstance(povm, _povm.TPPOVM):
@@ -3293,8 +3033,8 @@ class GateSet(object):
         curDim = self.get_dimension()
         assert(newDimension < curDim)
 
-        new_gateset = GateSet("full", self.preps._prefix, self.effects._prefix,
-                              self.gates._prefix)
+        new_gateset = GateSet("full", self.preps._prefix, self.effects_prefix,
+                              self.gates._prefix, self.povms._prefix, self.instruments._prefix)
         new_gateset._dim = newDimension
         new_gateset.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -3306,7 +3046,7 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [ EVec[0:newDimension,:] for lbl,EVec in povm.items()]
+            effects = [ (lbl,EVec[0:newDimension,:]) for lbl,EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_gateset.povms[lbl] = _povm.TPPOVM(effects)

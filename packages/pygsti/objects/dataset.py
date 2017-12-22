@@ -22,6 +22,9 @@ from ..tools import listtools as _lt
 from . import gatestring as _gs
 #from . import dataset as _ds
 
+Oindex_type = _np.uint8
+Time_type = _np.float64
+Repcount_type = _np.uint16
 
 class DataSet_KeyValIterator(object):
     """ Iterator class for gate_string,DataSetRow pairs of a DataSet """
@@ -180,22 +183,34 @@ class DataSetRow(object):
             else: # need to add a new label
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
                     
-    @property
-    def counts(self):
+    def _get_counts(self, all_outcomes=False):
         """ 
         Returns this row's sequence of "repetition counts", that is, the number of
         repetitions of each outcome label in the `outcomes` list, or
         equivalently, each outcome label index in this rows `.oli` member.
-        """    
+        """
+        #Note: when all_outcomes == False we don't add outcome labels that
+        # aren't present for any of this row's elements (i.e. the #summed
+        # is zero)
         cntDict = _OrderedDict()
         if self.reps is None:
             for ol,i in self.dataset.olIndex.items():
-                cntDict[ol] = float(_np.count_nonzero( _np.equal(self.oli,i) ))
+                cnt = float(_np.count_nonzero( _np.equal(self.oli,i) ))
+                if all_outcomes or cnt > 0: cntDict[ol] = cnt
         else:
-            for ol,i in self.dataset.olIndex.items():        
-                cntDict[ol] = float( sum(self.reps[
-                    _np.nonzero(_np.equal(self.oli,i))[0]]))
+            for ol,i in self.dataset.olIndex.items():
+                inds = _np.nonzero(_np.equal(self.oli,i))[0]
+                if all_outcomes or len(inds) > 0:
+                    cntDict[ol] = float( sum(self.reps[inds]))
         return cntDict
+
+    @property
+    def counts(self):
+        return self._get_counts()
+
+    @property
+    def allcounts(self):
+        return self._get_counts(all_outcomes=True)
 
     @property
     def fractions(self):
@@ -207,7 +222,8 @@ class DataSetRow(object):
         cnts = self.counts
         total = sum(cnts.values())
         return _OrderedDict( [(k,cnt/total) for k,cnt in cnts.items()] )
-    
+
+    #TODO: make into a property?
     def total(self):
         """ Returns the total number of counts contained in this row."""
         if self.reps is None:
@@ -215,12 +231,12 @@ class DataSetRow(object):
         else:
             return sum(self.reps)
 
+    #TODO: remove in favor of fractions property?
     def fraction(self,outcomelabel):
         """ Returns the fraction of total counts for `outcomelabel`."""
         d = self.counts
         total = sum(d.values())
         return d[outcomelabel]/total
-
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
@@ -376,7 +392,7 @@ class DataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            self.olIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(outcomeLabels) ] )
+            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(outcomeLabels) ] )
         else:
             self.olIndex = _OrderedDict() #OK, as outcome labels are added as they appear
         
@@ -447,9 +463,9 @@ class DataSet(object):
         self.ffdata = {}
         
         #data types - should stay in sync with MultiDataSet
-        self.oliType = _np.uint8
-        self.timeType = _np.float64
-        self.repType = _np.uint16
+        self.oliType  = Oindex_type
+        self.timeType = Time_type
+        self.repType  = Repcount_type
   
   
     def __iter__(self):

@@ -679,7 +679,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
         k,kmax = 0,len(mySliceTupList)
         for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
-            spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
+            evalSubTree, mySliceTupList, True, blkComm):
             rank = comm.Get_rank() if (comm is not None) else 0
 
             if verbosity > 3 or (verbosity == 3 and rank == 0):
@@ -751,34 +751,32 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
     -------
     float
     """
-    maxLogLTerms = logl_max_terms(gateset, dataset, gatestring_list, countVecMx,
-                                  totalCntVec, poissonPicture,
-                                  gateLabelAliases)
+    maxLogLTerms = logl_max_terms(gateset, dataset, gatestring_list,
+                                  poissonPicture, gateLabelAliases)
     
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
     maxLogL = _np.sum(maxLogLTerms) # sum over *all* dimensions
 
     if check:
-        raise NotImplementedError("Need to update to use compiled gate strings")
-        #L = 0
-        #for gateString in gatestring_list:
-        #    dsRow = dataset[gateString]
-        #    N = dsRow.total() #sum of counts for all outcomes (all spam labels)
-        #    for n in list(dsRow.values()):
-        #        f = n / N
-        #        if f < TOL and n == 0: continue # 0 * log(0) == 0
-        #        if poissonPicture:
-        #            L += n * _np.log(f) - N * f
-        #        else:
-        #            L += n * _np.log(f)
-        #if not _np.isclose(maxLogL,L):
-        #    _warnings.warn("Log-likelihood upper bound mismatch: %g != %g (diff=%g)" % \
-        #                       (maxLogL, L, maxLogL-L))
+        L = 0
+        for gateString in gatestring_list:
+            dsRow = dataset[gateString]
+            N = dsRow.total() #sum of counts for all outcomes (all spam labels)
+            for n in dsRow.counts.values():
+                f = n / N
+                if f < TOL and n == 0: continue # 0 * log(0) == 0
+                if poissonPicture:
+                    L += n * _np.log(f) - N * f
+                else:
+                    L += n * _np.log(f)
+        if not _np.isclose(maxLogL,L):
+            _warnings.warn("Log-likelihood upper bound mismatch: %g != %g (diff=%g)" % \
+                               (maxLogL, L, maxLogL-L))
 
     return maxLogL
 
 @smart_cached
-def logl_max_terms(gateset, dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
+def logl_max_terms(gateset, dataset, gatestring_list=None,
                    poissonPicture=True, gateLabelAliases=None):
     """
     The vector of maximum log-likelihood contributions for each gate string
@@ -953,8 +951,9 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
         b = gateset.basis
-        ret += sum([ prep_penalty(r,b) for r in list(gateset.preps.values()) ])
-        ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
+        ret += sum([ prep_penalty(r,b) for r in gateset.preps.values() ])
+        ret += sum([ effect_penalty(e,b) for povm in gateset.povms.values()
+                     for e in povm.values() ])
     return ret
 
 @smart_cached

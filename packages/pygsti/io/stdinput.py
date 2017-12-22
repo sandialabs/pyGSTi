@@ -750,7 +750,7 @@ def read_gateset(filename):
                 elif len(spam_vecs) > 0:
                     basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
                 else:
-                    raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
+                    basis_dims = None
             elif line.startswith("GAUGEGROUP:"):
                 gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
                 if gaugegroup_name not in ("Full","TP","Unitary"):
@@ -832,6 +832,7 @@ def read_gateset(filename):
         elif len(spam_vecs) > 0:
             basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
         else:
+            #OLD raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
             raise ValueError("Cannot infer basis dimension!")
 
         #Set basis (only needed if we didn't set it above)

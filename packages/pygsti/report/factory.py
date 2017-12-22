@@ -1287,7 +1287,7 @@ def find_std_clifford_compilation(gateset, verbosity):
         mod = importlib.import_module("pygsti.construction." + module_name)
         if set(mod.gs_target.gates.keys()) == set(gateset.gates.keys()) and \
            set(mod.gs_target.preps.keys()) == set(gateset.preps.keys()) and \
-           set(mod.gs_target.effects.keys()) == set(gateset.effects.keys()):
+           set(mod.gs_target.povms.keys()) == set(gateset.povms.keys()):
             if mod.gs_target.frobeniusdist(gateset) < 1e-6:
                 if hasattr(mod,"clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)

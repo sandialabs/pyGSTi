@@ -522,14 +522,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
           #Note: use *default* gauge-opt params when optimizing
 
-        # Also reset the POVM identity to that of the target.  Essentially,
-        # we declare that this basis (gauge) has the same identity as the
-        # target (typically the first basis element).
-        for lbl,Evec in gs_start.effects.items():
-            if isinstance(Evec, _objs.ComplementSPAMVec):
-                Evec.identity = gs_target.effects[lbl].identity.copy()
-                Evec._construct_vector() #rebuild after setting identity TODO: make identity a *property* of Evec
-                gs_start._update_paramvec(Evec) #TODO: better way to tell GateSet?
+        #OLD  -- this should be unnecessary since identity shouldn't be changed for TP gatesets...
+        ## Also reset the POVM identity to that of the target.  Essentially,
+        ## we declare that this basis (gauge) has the same identity as the
+        ## target (typically the first basis element).
+        #for lbl,Evec in gs_start.effects.items():
+        #    if isinstance(Evec, _objs.ComplementSPAMVec):
+        #        Evec.identity = gs_target.effects[lbl].identity.copy()
+        #        Evec._construct_vector() #rebuild after setting identity TODO: make identity a *property* of Evec
+        #        gs_start._update_paramvec(Evec) #TODO: better way to tell GateSet?
 
     elif startingPt == "target":
         gs_start = gs_target.copy()

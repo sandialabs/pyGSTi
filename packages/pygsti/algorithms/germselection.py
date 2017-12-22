@@ -610,8 +610,8 @@ def removeSPAMVectors(gateset):
     reducedGateset = gateset.copy()
     for prepLabel in list(reducedGateset.preps.keys()):
         del reducedGateset.preps[prepLabel]
-    for effectLabel in list(reducedGateset.effects.keys()):
-        del reducedGateset.effects[effectLabel]
+    for povmLabel in list(reducedGateset.povms.keys()):
+        del reducedGateset.povms[povmLabel]
     return reducedGateset
 
 

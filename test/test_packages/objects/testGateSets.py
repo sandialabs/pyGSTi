@@ -24,22 +24,16 @@ class GateSetTestCase(BaseTestCase):
 
         self.gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["0","1"], effectExpressions=["0","complement"])
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         
         self.tp_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["0","1"], effectExpressions=["0","complement"],
             parameterization="TP")
 
         self.static_gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["0","1"], effectExpressions=["0","complement"],
             parameterization="static")
 
         self.mgateset = self.gateset.copy()

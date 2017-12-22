@@ -372,10 +372,11 @@ def _contractToValidSPAM(gateset, verbosity=0):
         if abs(firstElTarget - vec[0,0]) > TOL:
             r = firstElTarget / vec[0,0]
             vec *= r  #multiply rhovec by factor
-            for ELabel,EVec in gs.effects.items():
-                if isinstance(EVec, _objs.ComplementSPAMVec):
-                    continue #don't contract complement vectors
-                gs.effects[ELabel] = EVec / r
+            for povmLbl in list(gs.povms.keys()):
+                scaled_effects = []
+                for ELabel,EVec in gs.povms[povmLbl].items():
+                    scaled_effects.append( (ELabel, EVec / r) )
+                gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
         mx = _tools.ppvec_to_stdmx(vec)
 
@@ -390,22 +391,25 @@ def _contractToValidSPAM(gateset, verbosity=0):
         gs.preps[prepLabel] = vec
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
-    for ELabel,EVec in gs.effects.items():
-        if isinstance(EVec, _objs.ComplementSPAMVec):
-            continue #don't contract complement vectors
-        evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
-        if(min(evals) < 0.0 or max(evals) > 1.0):
-            if all([ev > 1.0 for ev in evals]):
-                evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
-            if all([ev < 0.0 for ev in evals]):
-                evals[ evals.argmax() ] = 1.0 #at least one eigenvalue must be != 0.0
-            for (k,ev) in enumerate(evals):
-                if ev < 0.0: evals[k] = 0.0
-                if ev > 1.0: evals[k] = 1.0
-            mx = _np.dot(evecs, _np.dot( _np.diag(evals), _np.linalg.inv(evecs) ) )
-            vec = _tools.stdmx_to_ppvec(mx)
-            diff += _np.linalg.norm( gateset.effects[ELabel] - vec )
-            gs.effects[ELabel] = vec
+    for povmLbl in list(gs.povms.keys()):
+        scaled_effects = []
+        for ELabel,EVec in gs.povms[povmLbl].items():
+            #if isinstance(EVec, _objs.ComplementSPAMVec):
+            #    continue #don't contract complement vectors
+            evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
+            if(min(evals) < 0.0 or max(evals) > 1.0):
+                if all([ev > 1.0 for ev in evals]):
+                    evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
+                if all([ev < 0.0 for ev in evals]):
+                    evals[ evals.argmax() ] = 1.0 #at least one eigenvalue must be != 0.0
+                for (k,ev) in enumerate(evals):
+                    if ev < 0.0: evals[k] = 0.0
+                    if ev > 1.0: evals[k] = 1.0
+                mx = _np.dot(evecs, _np.dot( _np.diag(evals), _np.linalg.inv(evecs) ) )
+                vec = _tools.stdmx_to_ppvec(mx)
+                diff += _np.linalg.norm( gateset.povms[povmLbl][ELabel] - vec )
+                scaled_effects.append( (ELabel, vec) )
+        gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
     #gs.log("Contract to valid SPAM")
     #printer.log('', 2)
@@ -414,8 +418,10 @@ def _contractToValidSPAM(gateset, verbosity=0):
     for (prepLabel,rhoVec) in gateset.preps.items():
         printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec)),
                                    str(_np.transpose(gs.preps[prepLabel]))), 2)
-    for (ELabel,EVec) in gateset.effects.items():
-        printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
-                                    str(_np.transpose(gs.effects[ELabel]))), 2)
+    for povmLbl in gateset.povms.items():
+        printer.log("  %s (POVM)" % povmLbl, 2)
+        for ELabel,EVec in povm.items():
+            printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
+                                              str(_np.transpose(gs.povms[povmLbl][ELabel]))), 2)
 
     return gs #return contracted gateset

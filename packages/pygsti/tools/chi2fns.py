@@ -229,7 +229,7 @@ def chi2(gateset, dataset, gateStrings=None,
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    chi2 = _np.sum( N * ((probs - f)**2/cprobs), axis=(0,1) ) # Note (0,1) are all axes in this case
+    chi2 = _np.sum( N * ((probs - f)**2/cprobs), axis=0) # Note 0 is only axis in this case
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
 
     if returnGradient:

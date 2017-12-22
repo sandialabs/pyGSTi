@@ -437,7 +437,7 @@ def fidelity_upper_bound(gateMx):
     #print "DEBUG:  evecs = \n",closestU_evecs
 
 
-def get_povm_map(gateset):
+def get_povm_map(gateset, povmlbl):
     """
     Constructs a gate-like quantity for the POVM within `gateset`.
 
@@ -453,12 +453,15 @@ def get_povm_map(gateset):
         The gateset supplying the POVM effect vectors and the basis those
         vectors are in.
 
+    povmlbl : str
+        The POVM label
+
     Returns
     -------
     numpy.ndarray
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
-    povmVectors = [gateset.effects[lbl] for lbl in gateset.get_effect_labels()]
+    povmVectors = list(gateset.povms[povmlbl].values())
     d = len(povmVectors)
     assert( d**2 == len(povmVectors[0]) ), "Can only compute POVM metrics when num of effects == H space dimension"
     povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
@@ -473,7 +476,7 @@ def get_povm_map(gateset):
     return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
 
 
-def povm_fidelity(gateset, targetGateset):
+def povm_fidelity(gateset, targetGateset, povmlbl):
     """
     Computes the process (entanglement) fidelity between POVM maps.
 
@@ -482,16 +485,19 @@ def povm_fidelity(gateset, targetGateset):
     gateset, targetGateset : GateSet
         Gate sets containing the two POVMs to compare.
 
+    povmlbl : str
+        The POVM label
+
     Returns
     -------
     float
     """
-    povm_mx = get_povm_map(gateset)
-    target_povm_mx = get_povm_map(targetGateset)
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
     return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
 
 
-def povm_jtracedist(gateset, targetGateset):
+def povm_jtracedist(gateset, targetGateset, povmlbl):
     """
     Computes the Jamiolkowski trace distance between POVM maps using :func:`jtracedist`.
 
@@ -500,16 +506,19 @@ def povm_jtracedist(gateset, targetGateset):
     gateset, targetGateset : GateSet
         Gate sets containing the two POVMs to compare.
 
+    povmlbl : str
+        The POVM label
+
     Returns
     -------
     float
     """
-    povm_mx = get_povm_map(gateset)
-    target_povm_mx = get_povm_map(targetGateset)
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
     return jtracedist(povm_mx, target_povm_mx, targetGateset.basis)
 
 
-def povm_diamonddist(gateset, targetGateset):
+def povm_diamonddist(gateset, targetGateset, povmlbl):
     """
     Computes the diamond distance between POVM maps using :func:`diamonddist`.
 
@@ -518,12 +527,15 @@ def povm_diamonddist(gateset, targetGateset):
     gateset, targetGateset : GateSet
         Gate sets containing the two POVMs to compare.
 
+    povmlbl : str
+        The POVM label
+
     Returns
     -------
     float
     """
-    povm_mx = get_povm_map(gateset)
-    target_povm_mx = get_povm_map(targetGateset)
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
     return diamonddist(povm_mx, target_povm_mx, targetGateset.basis)
 
 

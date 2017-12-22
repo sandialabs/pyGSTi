@@ -14,7 +14,7 @@ import collections as _collections
 from .. import optimize as _opt
 from .. import tools as _tools
 
-from .gateset import P_RANK_TOL
+from .gatecalc import P_RANK_TOL
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
@@ -218,8 +218,11 @@ class ConfidenceRegionFactory(object):
 
         nGateStrings = len(gatestring_list)
         nModelParams = gateset.num_nongauge_params()
-        nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
+        nDataParams  = dataset.get_degrees_of_freedom(gatestring_list)
           #number of independent parameters in dataset (max. model # of params)
+
+        #OLD nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
+
         
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
 

@@ -245,7 +245,7 @@ class MapEvalTree(EvalTree):
 
         #Don't split at all if it's unnecessary
         if maxSubTreeSize is None or len(self) < maxSubTreeSize:
-            if numSubTrees is None or numSubTrees == 1: return
+            if numSubTrees is None or numSubTrees == 1: return elIndicesDict
 
         self.subTrees = []
         evalOrder = self.get_evaluation_order()

@@ -63,7 +63,13 @@ class GateMapCalc(GateCalc):
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
+        
+    def copy(self):
+        """ Return a copy of this GateMatrixCalc """
+        return GateMatrixCalc(self.dim, self.gates, self.preps,
+                              self.effects, self.paramvec)
 
+        
     #Same as GateMatrixCalc, but not general enough to be in base class
     def _rhoE_from_spamTuple(self, spamTuple):
         if len(spamTuple) == 2:
@@ -99,35 +105,6 @@ class GateMapCalc(GateCalc):
         for lbl in gatestring:
             rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
-
-
-    def calc_to_vector(self):
-        """
-        Returns the elements of the parent GateSet vectorized as a 1D array.
-        Used for computing finite-difference derivatives.
-
-        Returns
-        -------
-        numpy array
-            The vectorized gateset parameters.
-        """
-        return self.paramvec
-
-
-    def calc_from_vector(self, v):
-        """
-        The inverse of to_vector.  Initializes the GateSet-like members of this
-        calculator based on `v`. Used for computing finite-difference derivatives.
-        """
-        #Note: this *will* initialize the parent GateSet's objects too,
-        # since only references to preps, effects, and gates are held
-        # by the calculator class.
-        self.paramvec = v.copy()
-        for obj in _itertools.chain(self.preps.values(),
-                                    self.effects.values(),
-                                    self.gates.values()):
-            obj.from_vector( v[obj.gpindices] )
-        
 
 
     def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
@@ -211,12 +188,12 @@ class GateMapCalc(GateCalc):
         p = self.pr(spamTuple, gatestring, clipTo)
         dp = _np.empty( (1,self.Np), 'd' )
 
-        orig_vec = self.calc_to_vector().copy()
+        orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.calc_from_vector(vec)
+            self.from_vector(vec)
             dp[0,i] = (self.pr(spamTuple, gatestring, clipTo)-p)/eps
-        self.calc_from_vector(orig_vec)
+        self.from_vector(orig_vec)
                 
         if returnPr:
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -273,12 +250,12 @@ class GateMapCalc(GateCalc):
             dp = self.dpr(spamTuple, gatestring, returnPr, clipTo)
         hp = _np.empty( (1,self.Np, self.Np), 'd' )
 
-        orig_vec = self.calc_to_vector().copy()
+        orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             vec = orig_vec.copy(); vec[i] += eps
-            self.calc_from_vector(vec)
+            self.from_vector(vec)
             hp[0,i,:] = (self.dpr(spamTuple, gatestring, False, clipTo)-dp)/eps
-        self.calc_from_vector(orig_vec)
+        self.from_vector(orig_vec)
                 
         if returnPr and clipTo is not None:
             p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -344,15 +321,15 @@ class GateMapCalc(GateCalc):
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
-        orig_vec = self.calc_to_vector().copy()
+        orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.calc_from_vector(vec)
+                self.from_vector(vec)
                 dpr_cache[:,iFinal] = ( self._compute_pr_cache(
                             spamTuple,evalTree,subComm,rho_cache) - pCache)/eps
-        self.calc_from_vector(orig_vec)
+        self.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
@@ -390,15 +367,15 @@ class GateMapCalc(GateCalc):
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
-        orig_vec = self.calc_to_vector().copy()
+        orig_vec = self.to_vector().copy()
         for i in range(self.Np):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
-                self.calc_from_vector(vec)
+                self.from_vector(vec)
                 hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
                     spamTuple,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
-        self.calc_from_vector(orig_vec)
+        self.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:

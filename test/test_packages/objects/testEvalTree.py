@@ -46,8 +46,11 @@ class EvalTreeTestCase(BaseTestCase):
         pygsti.tools.remove_duplicates_in_place(strs)
         #print("\n".join(map(str,strs)))
 
+        compiled_gatestrings, lookup, outcome_lookup, nEls = \
+                    gs_target.compile_gatestrings(strs)
+
         t = TreeClass()
-        t.initialize([""] + gateLabels, strs)
+        t.initialize([""] + gateLabels, compiled_gatestrings)
 
         #normal order
         #print("\n".join([ "%d: %s -> %s" % (k,str(iStart),str(rem)) for k,(iStart,rem) in enumerate(t)]))
@@ -75,7 +78,7 @@ class EvalTreeTestCase(BaseTestCase):
 
         #Split using numSubTrees
         gsl1 = t.generate_gatestring_list()
-        t.split(numSubTrees=5)
+        lookup2 = t.split(lookup, numSubTrees=5)
         gsl2 = t.generate_gatestring_list()
         self.assertEqual(gsl1,gsl2)
 
@@ -99,10 +102,10 @@ class EvalTreeTestCase(BaseTestCase):
         maxSize = 25
         print("Splitting with max subtree size = ",maxSize)
         t2 = TreeClass()
-        t2.initialize([""] +gateLabels, strs)
+        t2.initialize([""] + gateLabels, compiled_gatestrings)
 
         gsl1 = t.generate_gatestring_list()
-        t2.split(maxSubTreeSize=maxSize)
+        lookup2 = t2.split(lookup, maxSubTreeSize=maxSize)
         gsl2 = t.generate_gatestring_list()
         self.assertEqual(gsl1,gsl2)
 

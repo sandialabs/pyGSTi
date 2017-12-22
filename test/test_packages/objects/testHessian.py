@@ -31,16 +31,15 @@ class TestHessianMethods(BaseTestCase):
     def test_parameter_counting(self):
         #XY Gateset: SPAM=True
         n = stdxy.gs_target.num_params()
-        self.assertEqual(n,40) # 2*16 + 2*4 = 40
+        self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
         n = stdxy.gs_target.num_nongauge_params()
-        self.assertEqual(n,24) # full 16 gauge params: SPAM gate + 2 others
+        self.assertEqual(n,28) # full 16 gauge params
 
         #XY Gateset: SPAM=False
         tst = stdxy.gs_target.copy()
         del tst.preps['rho0']
-        del tst.effects['E0']
-        del tst.effects['Ec']
+        del tst.povms['Mdefault']
         n = tst.num_params()
         self.assertEqual(n,32) # 2*16 = 32
 
@@ -50,16 +49,15 @@ class TestHessianMethods(BaseTestCase):
 
         #XYI Gateset: SPAM=True
         n = stdxyi.gs_target.num_params()
-        self.assertEqual(n,56) # 3*16 + 2*4 = 56
+        self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
         n = stdxyi.gs_target.num_nongauge_params()
-        self.assertEqual(n,40) # full 16 gauge params: SPAM gate + 3 others
+        self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
         #XYI Gateset: SPAM=False
         tst = stdxyi.gs_target.copy()
         del tst.preps['rho0']
-        del tst.effects['E0']
-        del tst.effects['Ec']
+        del tst.povms['Mdefault']
         n = tst.num_params()
         self.assertEqual(n,48) # 3*16 = 48
 
@@ -70,25 +68,25 @@ class TestHessianMethods(BaseTestCase):
         tst = stdxyi.gs_target.copy()
         tst.preps['rho0'] = pygsti.obj.TPParameterizedSPAMVec(tst.preps['rho0'])
         n = tst.num_params()
-        self.assertEqual(n,55) # 3*16 + 4 + 3 = 55
+        self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
         n = tst.num_nongauge_params()
-        self.assertEqual(n,40) # 15 gauge params (minus one b/c can't change rho?)
+        self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Gateset: G0=SP0=False
         tst.gates['Gi'] = pygsti.obj.TPParameterizedGate(tst.gates['Gi'])
         tst.gates['Gx'] = pygsti.obj.TPParameterizedGate(tst.gates['Gx'])
         tst.gates['Gy'] = pygsti.obj.TPParameterizedGate(tst.gates['Gy'])
         n = tst.num_params()
-        self.assertEqual(n,43) # 3*12 + 4 + 3 = 43
+        self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
         n = tst.num_nongauge_params()
-        self.assertEqual(n,31) # full 12 gauge params of single 4x3 gate
+        self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
 
     def test_hessian_projection(self):
 
-        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
+        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.gateset, self.ds,
                                                   returnGradient=True,
                                                   returnHessian=True)
 
@@ -98,29 +96,32 @@ class TestHessianMethods(BaseTestCase):
 
         print(self.gateset.num_params())
         print(proj_non_gauge.shape)
-        self.assertEqual( projectedHessian.shape, (56,56) )
-        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 40)
-        self.assertEqual( np.linalg.matrix_rank(projectedHessian), 40)
+        self.assertEqual( projectedHessian.shape, (60,60) )
+        #print("Evals = ")
+        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(np.linalg.eigvals(projectedHessian))] ))
+        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 44)
+        self.assertEqual( np.linalg.matrix_rank(projectedHessian), 44)
 
         eigvals = np.sort(abs(np.linalg.eigvals(projectedHessian)))
 
         print("eigvals = ",eigvals)
 
-        eigvals_chk = np.array(
-            [   2.59352077e-10,   2.59352077e-10,   3.78885892e-10,   7.27506197e-10,
-                7.62462502e-10,   9.83842714e-10,   9.83842714e-10,   1.17263555e-09,
-                2.83219391e-09,   2.83219391e-09,   2.97488312e-09,   4.61929083e-09,
-                4.84864504e-09,   4.93832822e-09,   4.93832822e-09,   6.39844507e-09,
-                9.35979966e+05,   9.52361602e+05,   9.77974040e+05,   1.41519813e+06,
-                1.51574020e+06,   1.87774785e+06,   1.98346268e+06,   2.06128119e+06,
-                2.18954392e+06,   2.29948741e+06,   2.31641923e+06,   2.40102295e+06,
-                2.63963219e+06,   2.73841173e+06,   2.77565391e+06,   2.90350745e+06,
-                3.20177980e+06,   3.79554864e+06,   3.86317667e+06,   4.63300796e+06,
-                8.83130301e+06,   9.39349271e+06,   1.03183948e+07,   1.10912493e+07,
-                1.17644699e+07,   1.31292219e+07,   1.36218310e+07,   1.54361752e+07,
-                1.81156689e+07,   1.89371894e+07,   2.14058326e+07,   2.22636003e+07,
-                2.38680158e+07,   2.86251667e+07,   3.00315433e+07,   3.14217998e+07,
-                4.48952805e+07,   8.96184739e+07,   1.29642295e+08,   5.69792206e+08])
+        eigvals_chk =  np.array(
+            [  1.06310603e-10,   2.65635664e-10,   6.50301005e-10,   7.97927477e-10,
+               7.97927477e-10,   1.00960481e-09,   1.20668922e-09,   1.60395671e-09,
+               1.60395671e-09,   2.10414039e-09,   2.40422523e-09,   2.66328705e-09,
+               2.66328705e-09,   3.78157418e-09,   4.97929640e-09,   1.69073771e-08,
+               9.22542920e+05,   1.05940963e+06,   1.16240250e+06,   1.39506940e+06,
+               1.83925308e+06,   2.11037916e+06,   2.39385711e+06,   2.47432236e+06,
+               2.63561759e+06,   2.68157105e+06,   2.81568070e+06,   2.86569765e+06,
+               2.94543146e+06,   2.95039566e+06,   3.08684833e+06,   3.28869042e+06,
+               3.66558726e+06,   3.76232707e+06,   3.82389736e+06,   3.86638791e+06,
+               3.88874028e+06,   4.73808468e+06,   4.96550964e+06,   6.53177028e+06,
+               1.01544928e+07,   1.11525472e+07,   1.25572253e+07,   1.30411488e+07,
+               1.36881398e+07,   1.49309288e+07,   1.57790471e+07,   1.81263731e+07,
+               2.08276405e+07,   2.18675949e+07,   2.46968548e+07,   2.64099665e+07,
+               2.72117335e+07,   3.35172152e+07,   3.45138716e+07,   3.68918207e+07,
+               5.09742531e+07,   9.43260992e+07,   1.36044734e+08,   6.30355637e+08])
             
             #OLD
             #[  2.53636344e-10,   3.87263955e-10,   4.49523968e-10,
@@ -190,7 +191,7 @@ class TestHessianMethods(BaseTestCase):
             try: 
                 ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals("Gx")
                 ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals("rho0")
-                ar_of_intervals_E0 = ci_cur.get_profile_likelihood_confidence_intervals("E0")
+                ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals("Mdefault")
                 ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
             except NotImplementedError: 
                 pass #linear response CI doesn't support profile likelihood intervals
@@ -244,7 +245,7 @@ class TestHessianMethods(BaseTestCase):
 
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
-                FnObj = FnClass(self.gateset, 'E0', 'effect')
+                FnObj = FnClass(self.gateset, 'Mdefault:0', 'effect')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
@@ -254,15 +255,19 @@ class TestHessianMethods(BaseTestCase):
                                             FnObj, returnFnVal=True, verbosity=4)
     
     
-            def fnOfSpam_float(rhoVecs, EVecs):
-                return float( np.dot( rhoVecs[0].T, EVecs[0] ) )
-            def fnOfSpam_0D(rhoVecs, EVecs):
-                return np.array( float( np.dot( rhoVecs[0].T, EVecs[0] ) ) )
-            def fnOfSpam_1D(rhoVecs, EVecs):
-                return np.array( [ np.dot( rhoVecs[0].T, EVecs[0] ), 0] )
-            def fnOfSpam_2D(rhoVecs, EVecs):
-                return np.array( [[ np.dot( rhoVecs[0].T, EVecs[0] ), 0],[0,0]] )
-            def fnOfSpam_3D(rhoVecs, EVecs):
+            def fnOfSpam_float(rhoVecs, povms):
+                lbls = list(povms[0].keys())
+                return float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) )
+            def fnOfSpam_0D(rhoVecs, povms):
+                lbls = list(povms[0].keys())
+                return np.array( float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) ) )
+            def fnOfSpam_1D(rhoVecs, povms):
+                lbls = list(povms[0].keys())
+                return np.array( [ np.dot( rhoVecs[0].T, povms[0][lbls[0]] ), 0] )
+            def fnOfSpam_2D(rhoVecs, povms):
+                lbls = list(povms[0].keys())
+                return np.array( [[ np.dot( rhoVecs[0].T, povms[0][lbls[0]] ), 0],[0,0]] )
+            def fnOfSpam_3D(rhoVecs, povms):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 
             for fnOfSpam in (fnOfSpam_float, fnOfSpam_0D, fnOfSpam_1D, fnOfSpam_2D, fnOfSpam_3D):
@@ -330,12 +335,12 @@ class TestHessianMethods(BaseTestCase):
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.ds, self.gateset,
+        chi2, chi2Hessian = pygsti.chi2(self.gateset, self.ds, 
                                         returnHessian=True)
         
         gs_mapcalc = self.gateset.copy()
         gs_mapcalc._calcClass = GateMapCalc
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.ds, self.gateset,
+        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.gateset, self.ds, 
                                         returnHessian=True)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)

@@ -33,11 +33,7 @@ class TestGateSetMethods(GateSetTestCase):
 
         gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0","Ec"], effectExpressions=["0","C"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('rho0','Ec') } )
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
         mgateset = self.gateset.copy()
         mgateset._calcClass = GateMapCalc

@@ -73,8 +73,8 @@ class SpamTable(WorkspaceTable):
         if isinstance(gatesets, _objs.GateSet):
             gatesets = [gatesets]
 
-        rhoLabels = list(gatesets[0].get_prep_labels()) #use labels of 1st gateset
-        ELabels = list(gatesets[0].get_effect_labels()) #use labels of 1st gateset
+        rhoLabels = list(gatesets[0].preps.keys()) #use labels of 1st gateset
+        povmLabels = list(gatesets[0].povms.keys()) #use labels of 1st gateset
             
         if titles is None:
             titles = ['']*len(gatesets)
@@ -144,44 +144,47 @@ class SpamTable(WorkspaceTable):
             table.addrow(rowData, rowFormatters)
 
 
-        for lbl in ELabels:
-            rowData = [lbl]; rowFormatters = ['Effect']
-
-            for gateset in gatesets:
-                EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
-                          #confidenceRegionInfo) #don't put CIs on matrices for now
-                if display_as == "numbers":
-                    rowData.append( EMx )
+        for povmlbl in povmLabels:
+            for lbl in gatesets[0].povms[povmlbl].keys():
+                povmAndELbl = povmlbl + ":" + lbl # format for GateSetFunction objs
+                rowData = [lbl] if (len(povmLabels) == 1) else [povmAndELbl] #show POVM name if there's more than one of them
+                rowFormatters = ['Effect']
+    
+                for gateset in gatesets:
+                    EMx = _ev(_reportables.Vec_as_stdmx(gateset, povmAndELbl, "effect"))
+                              #confidenceRegionInfo) #don't put CIs on matrices for now
+                    if display_as == "numbers":
+                        rowData.append( EMx )
+                        rowFormatters.append('Brackets')
+                    elif display_as == "boxes":
+                        EMx_real = EMx.hermitian_to_real()
+                        v = EMx_real.get_value()
+                        fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                                 boxLabels=True, prec='compacthp',
+                                                 mxBasis=None) #no basis labels 
+                        rowData.append( fig )
+                        rowFormatters.append('Figure')
+                    else:
+                        raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+    
+                for gateset in gatesets:
+                    cri = confidenceRegionInfo if confidenceRegionInfo and \
+                          (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
+                    evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, povmAndELbl, "effect"),
+                                cri)
+                    rowData.append( evals )
                     rowFormatters.append('Brackets')
-                elif display_as == "boxes":
-                    EMx_real = EMx.hermitian_to_real()
-                    v = EMx_real.get_value()
-                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
-                                             boxLabels=True, prec='compacthp',
-                                             mxBasis=None) #no basis labels 
-                    rowData.append( fig )
-                    rowFormatters.append('Figure')
-                else:
-                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
-
-            for gateset in gatesets:
-                cri = confidenceRegionInfo if confidenceRegionInfo and \
-                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
-                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
-                            cri)
-                rowData.append( evals )
-                rowFormatters.append('Brackets')
-    
-            if includeHSVec:
-                rowData.append( gatesets[-1].effects[lbl] )
-                rowFormatters.append('Normal')
-    
-                if confidenceRegionInfo is not None:
-                    intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-                    rowData.append( intervalVec ); rowFormatters.append('Normal')
-    
-            #Note: no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow(rowData, rowFormatters)
+        
+                if includeHSVec:
+                    rowData.append( gatesets[-1].povms[povmlbl][lbl] )
+                    rowFormatters.append('Normal')
+        
+                    if confidenceRegionInfo is not None:
+                        intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                        rowData.append( intervalVec ); rowFormatters.append('Normal')
+        
+                #Note: no dependence on confidence region (yet) when HS vector is not shown...
+                table.addrow(rowData, rowFormatters)
     
         table.finish()
         return table
@@ -2035,14 +2038,20 @@ class MetadataTable(WorkspaceTable):
             elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
             else: paramTyp = "unknown"
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-    
-        for lbl,vec in gateset.effects.items():
-            if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-            elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-            elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
-            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+
+        for povmlbl, povm in gateset.povms.items():
+            if isinstance(povm, _objs.POVM): paramTyp = "unconstrained"
+            elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
             else: paramTyp = "unknown"
-            table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
+            table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+            for lbl,vec in povm.items():
+                if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+                elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+                elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                else: paramTyp = "unknown"
+                table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
         
         for gl,gate in gateset.gates.items():
             if isinstance(gate, _objs.StaticGate): paramTyp = "static"

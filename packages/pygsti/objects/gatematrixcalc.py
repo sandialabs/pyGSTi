@@ -68,7 +68,11 @@ class GateMatrixCalc(GateCalc):
         super(GateMatrixCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
-
+    def copy(self):
+        """ Return a copy of this GateMatrixCalc """
+        return GateMatrixCalc(self.dim, self.gates, self.preps,
+                              self.effects, self.paramvec)
+        
     #OLD
     #def _make_spamgate(self, spamlabel):
     #    prepLabel,effectLabel = self.spamdefs[spamlabel]

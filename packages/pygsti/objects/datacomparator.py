@@ -78,10 +78,10 @@ class DataComparator():
             
         if isinstance(dataset_list_or_multidataset,list):
             dsList = dataset_list_or_multidataset    
-            slIndex = dsList[0].slIndex
-            slIndexListBool = [ds.slIndex==(slIndex) for ds in dsList]
-            if not _np.all(slIndexListBool):
-                raise ValueError('SPAM labels and order must be the same across datasets.')
+            olIndex = dsList[0].olIndex
+            olIndexListBool = [ds.olIndex==(olIndex) for ds in dsList]
+            if not _np.all(olIndexListBool):
+                raise ValueError('Outcomes labels and order must be the same across datasets.')
             if gatestrings == 'all':
                 gatestringList = dsList[0].keys()
                 gatestringsListBool = [ds.keys()==gatestringList for ds in dsList]
@@ -110,10 +110,11 @@ class DataComparator():
             
         llrVals_and_strings = []
         pVals_and_strings = []
-        dof = (len(dsList) - 1) * (len(dsList[0].slIndex) - 1)
+        dof = (len(dsList) - 1) * (len(dsList[0].olIndex) - 1)
+        
         for gatestring in gatestrings:
             datalineList = [ds[gatestring] for ds in dsList]
-            nListList = _np.array([dataline.values() for dataline in datalineList])
+            nListList = _np.array([list(dataline.allcounts.values()) for dataline in datalineList])
             llrVals_and_strings.append([gatestring,loglikelihoodRatioTest(nListList)])
             temp_pvalue = pval(llrVals_and_strings[-1][1],dof) 
             pVals_and_strings.append([gatestring, temp_pvalue])
@@ -214,6 +215,6 @@ class DataComparator():
             print('Rescaling counts for string '+str(gatestring)+' by '+str(self.alpha_dict[gatestring]))
             print('|target score - new score| = '+str(loglikelihoodRatioTestObj(self.alpha_dict[gatestring],nListList,target_score)))
             for ds in dsList:
-                for outcome in ds.slIndex.keys():
+                for outcome in ds.olIndex.keys():
                     ds[gatestring][outcome] = self.alpha_dict[gatestring] * ds[gatestring][outcome]
         self.rectified_datasets = dsList

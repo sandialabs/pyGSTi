@@ -210,25 +210,6 @@ gs_target = _setc.build_gateset(
        "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "Z(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)"],
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
-specs16x10 = _spamc.build_spam_specs(
-    prepStrs=prepStrs,
-    effectStrs=effectStrs,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs16 = _spamc.build_spam_specs(
-    fiducials16,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs36 = _spamc.build_spam_specs(
-    fiducials36,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs = specs16x10 #use smallest specs set as "default"
-
-
 global_fidPairs =  [
     (0, 1), (3, 9), (4, 1), (4, 4), (6, 0), (6, 1), (6, 4), (7, 1), 
     (7, 10), (8, 7), (8, 8), (9, 1), (9, 5), (9, 8), (9, 10), 

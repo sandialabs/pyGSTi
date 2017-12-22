@@ -137,23 +137,6 @@ gs_target = _setc.build_gateset(
     effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
 
-specs16x10 = _spamc.build_spam_specs(
-    prepStrs=prepStrs,
-    effectStrs=effectStrs,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs16 = _spamc.build_spam_specs(
-    fiducials16,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs36 = _spamc.build_spam_specs(
-    fiducials36,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs = specs16x10 #use smallest specs set as "default"
 
 clifford_compilation = _OrderedDict()
 clifford_compilation['Gc0c0'] = ['Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']   

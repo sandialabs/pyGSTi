@@ -180,7 +180,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             self.parent._rebuild_paramvec()
 
 
-    def copy(self, parent):
+    def copy(self, parent=None):
         """
         Returns a copy of this OrderedMemberDict.
 

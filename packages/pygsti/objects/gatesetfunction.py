@@ -32,11 +32,11 @@ class GateSetFunction(object):
         dependencies : list
             A list of *type:label* strings, or the special strings `"all"` and
             `"spam"`, indicating which GateSet parameters the function depends
-            upon. Here *type* can be `"gate"`, `"prep"`, or `"effect"`, and
-            *label* can be any of the corresponding labels found in the gate
-            sets being evaluated.  The reason for specifying this at all is to
-            speed up computation of the finite difference derivative 
-            needed to find the error bars.
+            upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or 
+            `"instrument"`, and  *label* can be any of the corresponding labels
+            found in the gate sets being evaluated.  The reason for specifying
+            this at all is to speed up computation of the finite difference
+            derivative needed to find the error bars.
         """
         self.base_gateset = gateset
         self.dependencies = dependencies
@@ -63,9 +63,9 @@ class GateSetFunction(object):
         list
             A list of *type:label* strings, or the special strings `"all"` and
             `"spam"`, indicating which GateSet parameters the function depends
-            upon. Here *type* can be `"gate"`, `"prep"`, or `"effect"`, and
-            *label* can be any of the corresponding labels found in the gate
-            sets being evaluated.
+            upon. Here *type* can be `"gate"`, `"prep"`, `"povm"`, or 
+            `"instrument"` and *label* can be any of the corresponding labels
+            found in the gate sets being evaluated.
         """
         return self.dependencies
           #determines which variations in gateset are used when computing confidence regions
@@ -73,8 +73,8 @@ class GateSetFunction(object):
 def spamfn_factory(fn):
     """
     Ceates a class that evaluates 
-    `fn(preps,effects,...)`, where `preps` and `effects` are lists of the
-    preparation and POVM effect  SPAM vectors of a GateSet, respectively,
+    `fn(preps,povms,...)`, where `preps` and `povms` are lists of the
+    preparation SPAM vectors and POVMs of a GateSet, respectively,
     and `...` are additional arguments (see below).
 
     Parameters
@@ -102,7 +102,8 @@ def spamfn_factory(fn):
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
-            return fn(gateset.get_preps(), gateset.get_effects(),
+            return fn(list(gateset.preps.values()),
+                      list(gateset.povms.values()),
                       *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -215,14 +216,22 @@ def vecfn_factory(fn):
             self.args = args
             self.kwargs = kwargs
             assert(typ in ['prep','effect']), "`typ` argument must be either 'prep' or 'effect'"
-            GateSetFunction.__init__(self, gateset, [typ + ":" + lbl])
+            if typ == 'effect':
+                typ = "povm"
+                lbl,_ = lbl.split(":") #for "effect"-mode, lbl must == "povmLbl:ELbl"
+                                       # and GateSetFunction depends on entire POVM
+            GateSetFunction.__init__(self, gateset, [typ + ":" + lbl]) 
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
-            vecsrc = gateset.preps if self.typ == "prep" else gateset.effects
-            return fn(vecsrc[self.lbl], gateset.basis,
+            if self.typ == "prep":
+                return fn(gateset.preps[self.lbl], gateset.basis,
                       *self.args, **self.kwargs)
-        
+            else:
+                povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
+                return fn(gateset.povms[povmlbl][Elbl], gateset.basis,
+                          *self.args, **self.kwargs)
+
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
@@ -258,15 +267,23 @@ def vecsfn_factory(fn):
             self.args = args
             self.kwargs = kwargs
             assert(typ in ['prep','effect']), "`typ` argument must be either 'prep' or 'effect'"
+            if typ == 'effect':
+                typ = "povm"
+                lbl,_ = lbl.split(":") #for "effect"-mode, lbl must == "povmLbl:ELbl"
+                                       # and GateSetFunction depends on entire POVM
             self.other_vecsrc = self.other_gateset.preps if self.typ == "prep" \
-                                else self.other_gateset.effects
+                                else self.other_gateset.povms
             GateSetFunction.__init__(self, gateset1, [typ + ":" + lbl])
             
         def evaluate(self, gateset):
             """ Evaluate this gate-set-function at `gateset`."""
-            vecsrc = gateset.preps if self.typ == "prep" else gateset.effects
-            return fn(vecsrc[self.lbl], self.other_vecsrc[self.lbl],
+            if self.typ == "prep":
+                return fn(gateset.preps[self.lbl], self.other_vecsrc[self.lbl],
                       gateset.basis,  *self.args, **self.kwargs)
+            else:
+                povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
+                return fn(gateset.preps[povmlbl][Elbl], self.other_vecsrc[povmlbl][Elbl],
+                          gateset.basis,  *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp

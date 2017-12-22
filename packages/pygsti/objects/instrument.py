@@ -42,6 +42,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         gates : dict of Gate objects
             A dict (or list of key,value pairs) of the gates.
         """
+        self._readonly = False #until init is done
         if len(items)>0:
             assert(gate_matrices is None), "`items` was given when gate_matrices != None"
 
@@ -66,6 +67,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         _collections.OrderedDict.__init__(self, items)
         _gm.GateSetMember.__init__(self, dim)
         self._paramvec = self._build_paramvec()
+        self._readonly = True
 
         
     def _build_paramvec(self):
@@ -92,6 +94,10 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
                         if i >= L: v[i] = w[ii]
                 off = M+1
         return v
+
+    def __setitem__(self, key, value):
+        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        else: return _collections.OrderedDict.__setitem__(self, key, value)
 
         
     def __reduce__(self):
@@ -314,6 +320,7 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
             A dict (or list of key,value pairs) of the gate matrices whose sum
             must be a trace-preserving (TP) map.
         """
+        self._readonly = False #until init is done
         if len(items)>0:
             assert(gate_matrices is None), "`items` was given when gate_matrices != None"
 
@@ -362,8 +369,12 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self,items)
         _gm.GateSetMember.__init__(self,dim)
+        self._readonly = True
 
-
+    def __setitem__(self, key, value):
+        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        else: return _collections.OrderedDict.__setitem__(self, key, value)
+        
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """

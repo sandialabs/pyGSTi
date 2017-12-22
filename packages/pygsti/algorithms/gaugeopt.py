@@ -425,12 +425,13 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
 
             # -- effect terms
             # -------------------------
-            for lbl, E in gs_pre.effects.items():
-                # d(ET_term) = E.T * dS
-                wt   = itemWeights.get(lbl, spamWeight)
-                result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
-                my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
-                start += d
+            for povmlbl, povm in gs_pre.povms.items():
+                for lbl,E in povm.items():
+                    # d(ET_term) = E.T * dS
+                    wt   = itemWeights.get(povmlbl+"_"+lbl, spamWeight)
+                    result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
+                    start += d
                 
 
             # -- penalty terms
@@ -721,38 +722,41 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     # but here, unlike in core.py, EMx = StdMx(S.T * E) = StdMx(E')
     # and we're differentiating wrt the parameters of S, the
     # gaugeGroupEl.
+
+    i = len(gs_post.preps)
+    for povmlbl,povm in gs_post.povms.items():
+        for lbl,effectvec in povm.items():
+
+            #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
+            EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+            dmDim = EMx.shape[0]
+            assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
+                "denMx should be Hermitian!"
     
-    for i,(lbl,effectvec) in enumerate(gs_post.iter_effects(), start=len(gs_post.preps)):
-
-        #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-        EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
-        dmDim = EMx.shape[0]
-        assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
-            "denMx should be Hermitian!"
-
-        sgnE = _tools.matrix_sign(EMx)
-        assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
-            "sgnE should be Hermitian!"
-
-        # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
-        #                      = [effectvec.T * dS].T
-        #  OR = dS.T * effectvec
-        pre_effectvec = gs_pre.effects[lbl]
-        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
-          # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
-        assert(dVdp.shape == (d,n))
-
-        # EMx = sum( spamvec[i] * Bmx[i] )
-
-        #contract to get (note contract along both mx indices b/c treat like a mx basis):
-        # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
-        # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-        v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
-        assert(_np.linalg.norm(v.imag) < 1e-4)
-        spamPenaltyVecGradToFill[i,:] = v.real
-            
-        denMx = sgndm = dVdp = v = None #free mem
+            sgnE = _tools.matrix_sign(EMx)
+            assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
+                "sgnE should be Hermitian!"
+    
+            # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
+            #                      = [effectvec.T * dS].T
+            #  OR = dS.T * effectvec
+            pre_effectvec = gs_pre.povms[povmlbl][lbl]
+            dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
+              # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
+            assert(dVdp.shape == (d,n))
+    
+            # EMx = sum( spamvec[i] * Bmx[i] )
+    
+            #contract to get (note contract along both mx indices b/c treat like a mx basis):
+            # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
+            # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
+            v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
+            assert(_np.linalg.norm(v.imag) < 1e-4)
+            spamPenaltyVecGradToFill[i,:] = v.real
+                
+            denMx = sgndm = dVdp = v = None #free mem
+            i += 1
 
     #return the number of leading-dim indicies we filled in
-    return len(gs_post.preps) + len(gs_post.effects)
+    return len(gs_post.preps) + sum([ len(povm) for povm in gs_post.povms.values()])

@@ -16,13 +16,13 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                            nSamples=1000, sampleError='none')
 
-        rank,evals,target_evals = pygsti.gram_rank_and_evals(ds, self.specs, self.gateset)
+        rank,evals,target_evals = pygsti.gram_rank_and_evals(ds, self.fiducials, self.fiducials, self.gateset)
         print("gram rank = ",rank)
         print("gram evals = ",evals)
         print("target gram evals = ",target_evals)
 
         with self.assertRaises(ValueError):
-            pygsti.gram_rank_and_evals(ds, self.specs, None) #no spam labels
+            pygsti.gram_rank_and_evals(ds, self.fiducials, self.fiducials, None) #no target
 
     def test_LGST(self):
 
@@ -31,8 +31,8 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            sampleError='binomial', seed=None)
 
         print("GG0 = ",self.gateset.default_gauge_group)
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_verb = self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=10)
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst_verb = self.runSilent(pygsti.do_lgst, ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=10)
         self.assertAlmostEqual(gs_lgst.frobeniusdist(gs_lgst_verb),0)
 
         print("GG = ",gs_lgst.default_gauge_group)
@@ -54,22 +54,21 @@ class TestCoreMethods(AlgorithmsBase):
 
         #Check for error conditions
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, svdTruncateTo=4, verbosity=0) #no gate labels
+            gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, None, svdTruncateTo=4, verbosity=0) #no target gateset
 
         with self.assertRaises(ValueError):
-            gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
+            gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, None, gateLabels=list(self.gateset.gates.keys()),
                                      svdTruncateTo=4, verbosity=0) #no spam dict
 
         #No need for identity vector anymore
         #with self.assertRaises(ValueError):
-        #    gs_lgst = pygsti.do_lgst(ds, self.specs, None, gateLabels=list(self.gateset.gates.keys()),
+        #    gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, None, gateLabels=list(self.gateset.gates.keys()),
         #                             spamDict=self.gateset.get_reverse_spam_defs(),
         #                             svdTruncateTo=4, verbosity=0) #no identity vector
 
         with self.assertRaises(ValueError):
-            bad_specs = pygsti.construction.build_spam_specs(
-                pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)]), effect_labels=['E0'])
-            gs_lgst = pygsti.do_lgst(ds, bad_specs, self.gateset, svdTruncateTo=4, verbosity=0) # bad specs (rank deficient)
+            bad_fids =pygsti.construction.gatestring_list([('Gx',),('Gx',),('Gx',),('Gx',)])
+            gs_lgst = pygsti.do_lgst(ds, bad_fids, bad_fids, self.gateset, svdTruncateTo=4, verbosity=0) # bad fiducials (rank deficient)
 
 
         with self.assertRaises(KeyError): # AB-matrix construction error
@@ -77,7 +76,7 @@ class TestCoreMethods(AlgorithmsBase):
             bad_ds = pygsti.construction.generate_fake_data(
                 self.datagen_gateset, incomplete_strings,
                 nSamples=10, sampleError='none')
-            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+            gs_lgst = pygsti.do_lgst(bad_ds, self.fiducials, self.fiducials, self.gateset,
                                      svdTruncateTo=4, verbosity=0)
                       # incomplete dataset
 
@@ -86,29 +85,35 @@ class TestCoreMethods(AlgorithmsBase):
             bad_ds = pygsti.construction.generate_fake_data(
                 self.datagen_gateset, incomplete_strings,
                 nSamples=10, sampleError='none')
-            gs_lgst = pygsti.do_lgst(bad_ds, self.specs, self.gateset,
+            gs_lgst = pygsti.do_lgst(bad_ds, self.fiducials, self.fiducials, self.gateset,
                                      svdTruncateTo=4, verbosity=0)
                       # incomplete dataset
 
+        #Deprecated / removed:
         #LGST on an "old-style" gateset
-        old_style_gateset = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-            prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["0"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('remainder','remainder') } )
-        gs_lgst = pygsti.do_lgst(ds, self.specs, old_style_gateset,
-                                 svdTruncateTo=4, verbosity=0)
+        #old_style_gateset = pygsti.construction.build_gateset(
+        #    [2], [('Q0',)],['Gi','Gx','Gy'],
+        #    [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
+        #    prepLabels=["rho0"], prepExpressions=["0"],
+        #    effectLabels=["E0"], effectExpressions=["0"],
+        #    spamdefs={'0': ('rho0','E0'),
+        #              '1': ('remainder','remainder') } )
+        #gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, old_style_gateset,
+        #                         svdTruncateTo=4, verbosity=0)
 
 
 
 
 
     def test_LGST_no_sample_error(self):
+        #change rep-count type so dataset can hold fractional counts for sampleError = 'none'
+        oldType = pygsti.objects.dataset.Repcount_type
+        pygsti.objects.dataset.Repcount_type = np.float64
         ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
-                                                    nSamples=1000, sampleError='none')
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+                                                    nSamples=10000, sampleError='none')
+        pygsti.objects.dataset.Repcount_type = oldType
+        
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
         print("DATAGEN:")
         print(self.datagen_gateset)
         print("\nLGST RAW:")
@@ -127,7 +132,7 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            nSamples=1000,sampleError='binomial', seed=100)
 
         assert(pygsti.obj.GateSet._pcheck)
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst._check_paramvec()
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_lgst_go._check_paramvec()
@@ -135,28 +140,28 @@ class TestCoreMethods(AlgorithmsBase):
         gs_clgst._check_paramvec()
         self.gateset._check_paramvec()
         
-        _,gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.specs,
+        _,gs_single_exlgst = pygsti.do_exlgst(ds, gs_clgst, self.elgstStrings[0], self.fiducials, self.fiducials,
                                             self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                               verbosity=0)
         gs_single_exlgst._check_paramvec()
 
-        _,gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.specs,
+        _,gs_single_exlgst_verb = self.runSilent(pygsti.do_exlgst, ds, gs_clgst, self.elgstStrings[0], self.fiducials, self.fiducials,
                                                self.gateset, regularizeFactor=1e-3, svdTruncateTo=4,
                                                verbosity=10)
         gs_single_exlgst_verb._check_paramvec()
         
         self.assertAlmostEqual(gs_single_exlgst.frobeniusdist(gs_single_exlgst_verb),0)
 
-        gs_exlgst = pygsti.do_iterative_exlgst(ds, gs_clgst, self.specs, self.elgstStrings,
+        gs_exlgst = pygsti.do_iterative_exlgst(ds, gs_clgst, self.fiducials, self.fiducials, self.elgstStrings,
                                                targetGateset=self.gateset, svdTruncateTo=4, verbosity=0)
 
         all_minErrs, all_gs_exlgst_tups = pygsti.do_iterative_exlgst(
-            ds, gs_clgst, self.specs, [ [gs.tup for gs in gsList] for gsList in self.elgstStrings],
+            ds, gs_clgst, self.fiducials, self.fiducials, [ [gs.tup for gs in gsList] for gsList in self.elgstStrings],
             targetGateset=self.gateset, svdTruncateTo=4, verbosity=0, returnAll=True, returnErrorVec=True)
 
-        gs_exlgst_verb = self.runSilent(pygsti.do_iterative_exlgst, ds, gs_clgst, self.specs, self.elgstStrings,
+        gs_exlgst_verb = self.runSilent(pygsti.do_iterative_exlgst, ds, gs_clgst, self.fiducials, self.fiducials, self.elgstStrings,
                                         targetGateset=self.gateset, svdTruncateTo=4, verbosity=10)
-        gs_exlgst_reg = pygsti.do_iterative_exlgst(ds, gs_clgst, self.specs, self.elgstStrings,
+        gs_exlgst_reg = pygsti.do_iterative_exlgst(ds, gs_clgst, self.fiducials, self.fiducials, self.elgstStrings,
                                                targetGateset=self.gateset, svdTruncateTo=4, verbosity=0,
                                                regularizeFactor=10)
         self.assertAlmostEqual(gs_exlgst.frobeniusdist(gs_exlgst_verb),0)
@@ -164,10 +169,10 @@ class TestCoreMethods(AlgorithmsBase):
 
 
         #Run internal checks on less max-L values (so it doesn't take forever)
-        gs_exlgst_chk = pygsti.do_iterative_exlgst(ds, gs_clgst, self.specs, self.elgstStrings[0:2],
+        gs_exlgst_chk = pygsti.do_iterative_exlgst(ds, gs_clgst, self.fiducials, self.fiducials, self.elgstStrings[0:2],
                                                    targetGateset=self.gateset, svdTruncateTo=4, verbosity=0,
                                                    check_jacobian=True)
-        gs_exlgst_chk_verb = self.runSilent(pygsti.do_iterative_exlgst,ds, gs_clgst, self.specs, self.elgstStrings[0:2],
+        gs_exlgst_chk_verb = self.runSilent(pygsti.do_iterative_exlgst,ds, gs_clgst, self.fiducials, self.fiducials, self.elgstStrings[0:2],
                                                    targetGateset=self.gateset, svdTruncateTo=4, verbosity=10,
                                                    check_jacobian=True)
 
@@ -192,7 +197,7 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000, sampleError='binomial', seed=100)
 
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         CM = pygsti.baseobjs.profiler._get_mem_usage()
@@ -298,7 +303,7 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lsgstStrings[-1],
         #                                            nSamples=1000, sampleError='binomial', seed=100)
 
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         CM = pygsti.baseobjs.profiler._get_mem_usage()
@@ -316,8 +321,8 @@ class TestCoreMethods(AlgorithmsBase):
         gs_mlegst_verb = self.runSilent(pygsti.do_iterative_mlgst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
                                              minProbClip=1e-6, probClipInterval=(-1e2,1e2),
                                              memLimit=CM + 1024**3)
-        self.assertAlmostEqual(gs_mlegst.frobeniusdist(gs_mlegst_verb),0)
-        self.assertAlmostEqual(gs_mlegst.frobeniusdist(all_gs_mlegst_tups[-1]),0)
+        self.assertAlmostEqual(gs_mlegst.frobeniusdist(gs_mlegst_verb),0, places=5)
+        self.assertAlmostEqual(gs_mlegst.frobeniusdist(all_gs_mlegst_tups[-1]),0,places=5)
 
 
         #Run internal checks on less max-L values (so it doesn't take forever)
@@ -382,7 +387,7 @@ class TestCoreMethods(AlgorithmsBase):
         for nSamples in nSamplesList:
             ds = pygsti.construction.generate_fake_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                         sampleError='binomial', seed=100)
-            gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+            gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
             gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, checkJac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(gs_lgst_go) )
 
@@ -399,14 +404,14 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            nSamples=1000,sampleError='binomial', seed=100)
 
 
-        gs_lgst4 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst6 = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=0)
+        gs_lgst4 = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst6 = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=6, verbosity=0)
         sys.stdout.flush()
 
-        self.runSilent(pygsti.do_lgst, ds, self.specs, self.gateset, svdTruncateTo=6, verbosity=4) # test verbose prints
+        self.runSilent(pygsti.do_lgst, ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=6, verbosity=4) # test verbose prints
 
-        chiSq4 = pygsti.chi2(ds, gs_lgst4, self.lgstStrings, minProbClipForWeighting=1e-4)
-        chiSq6 = pygsti.chi2(ds, gs_lgst6, self.lgstStrings, minProbClipForWeighting=1e-4)
+        chiSq4 = pygsti.chi2(gs_lgst4, ds, self.lgstStrings, minProbClipForWeighting=1e-4)
+        chiSq6 = pygsti.chi2(gs_lgst6, ds, self.lgstStrings, minProbClipForWeighting=1e-4)
 
         print("LGST dim=4 chiSq = ",chiSq4)
         print("LGST dim=6 chiSq = ",chiSq6)
@@ -442,7 +447,7 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                            nSamples=1000, sampleError='none')
 
-        strs = pygsti.construction.list_strings_lgst_can_estimate(ds, self.specs)
+        strs = pygsti.construction.list_strings_lgst_can_estimate(ds, self.fiducials, self.fiducials)
 
         self.runSilent(self.gateset.print_info) #just make sure it works
 

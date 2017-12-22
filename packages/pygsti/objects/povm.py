@@ -120,6 +120,7 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
         """
         dim = None
         self.Np = 0
+        self._readonly = False #until init is done
         
         if isinstance(effects,dict):
             items = [(k,v) for k,v in effects.items()] #gives definite ordering of effects
@@ -163,6 +164,12 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _gm.GateSetMember.__init__(self, dim)
+        self._readonly = True
+
+        
+    def __setitem__(self, key, value):
+        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        else: return _collections.OrderedDict.__setitem__(self, key, value)
 
         
     def __reduce__(self):

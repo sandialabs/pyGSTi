@@ -79,8 +79,9 @@ def evaluate(gatesetFn, cri=None, verbosity=0):
         return _make_reportable_qty_or_dict( gatesetFn.evaluate(gatesetFn.base_gateset) )
 
 
-def spam_dotprods(rhoVecs, EVecs):
+def spam_dotprods(rhoVecs, povms):
     """SPAM dot products"""
+    nEVecs = sum(len(povm) for povm in povms)
     ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
     for i,rhoVec in enumerate(rhoVecs):
         for j,EVec in enumerate(EVecs):

@@ -114,6 +114,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     # B       = (gsDim, nRhoSpecs)
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
+    if targetGateset is None:
+        raise ValueError("Must specify a target gateset for LGST!")
 
     #printer.log('', 2)
     printer.log("--- LGST ---", 1)
@@ -210,21 +212,27 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
         for effectLabel in targetGateset.povms[povmLabel]:
             EVec = _np.zeros( (1,nRhoSpecs) )
             for i,rhostr in enumerate(prepStrs):
-                gateString = rhostr + (povmLbl,)
+                gateString = rhostr + _objs.GateString((povmLabel,))
+                if gateString not in dataset and len(targetGateset.povms) == 1:
+                    # try without povmLabel since it will be the default
+                    gateString = rhostr
                 dsRow = dataset[ gateString ]
-                EVec[0,i] = dsRow.fraction(effectLabel) #outcome labels should just be effect labels (no instruments!)
+                EVec[0,i] = dsRow.fraction( (effectLabel,) ) #outcome labels should just be effect labels (no instruments!)
             EVec_p = _np.dot( _np.dot(EVec, Vd), Pj ) #truncate Evec => Evec', shape (1,trunc)
             povm_effects.append( (effectLabel, _np.transpose(EVec_p)) )
-        lgstGateset.povms[povmLabel] = _povm.POVM( povm_effects ) 
+        lgstGateset.povms[povmLabel] = _objs.POVM( povm_effects ) 
           # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
     for prepLabel in rhoLabelsToEstimate:
         rhoVec = _np.zeros((nESpecs,1)); eoff = 0
-        for i,(estr,povmLbl,povmLen) in enumerate((effectStrs,povmLbls,povmLens)):
-            gateString = (prepLabel,) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+        for i,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
+            gateString = _objs.GateString((prepLabel,)) + estr  #; spamLabel = spamDict[ (prepLabel, espec.lbl) ]
+            if gateString not in dataset and len(targetGateset.preps) == 1:
+                # try without prepLabel since it will be the default
+                gateString = estr
             dsRow = dataset[ gateString ]
-            rhoVec[eoff:eoff+povmLen] = [ dsRow.fraction(ol) for ol in targetGateset.povms[povmLbl] ]
+            rhoVec[eoff:eoff+povmLen,0] = [ dsRow.fraction((ol,)) for ol in targetGateset.povms[povmLbl] ]
             eoff += povmLen
         rhoVec_p = _np.dot( Pjt, _np.dot(Ud, rhoVec) ) #truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
@@ -317,14 +325,14 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                             padded_identityVec = identity
                         comp_effect = padded_identity - sum([v for k,v in new_effects])
                         new_effects.append( (povm.complement_label, comp_effect) ) #add complement
-                        lgstGateset.povms[povmLabel] = _povm.TPPOVM( new_effects )
+                        lgstGateset.povms[povmLabel] = _objs.TPPOVM( new_effects )
                         
                     else: #just create an unconstrained POVM
                         for effectLabel,EVec in povm.items():
                             new_vec = EVec.copy()
                             _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
                             new_effects.append( (effectLabel,new_vec) )                            
-                        lgstGateset.povms[povmLabel] = _povm.POVM( new_effects )
+                        lgstGateset.povms[povmLabel] = _objs.POVM( new_effects )
 
                     lgstGateset._check_paramvec()
 
@@ -347,6 +355,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     return lgstGateset
 
 def _lgst_matrix_dims(gs, prepStrs, effectStrs):
+    assert(gs is not None), "LGST matrix construction requires a non-None GateSet!"
     nRhoSpecs = len(prepStrs) # no instruments allowed in prepStrs
     povmLbls = [ gs.split_gatestring(s,('povm',))[2] #povm_label
                  for s in effectStrs]
@@ -366,7 +375,8 @@ def _constructAB(prepStrs, effectStrs, gateset, dataset, gateLabelAliases=None):
             dsStr = _tools.find_replace_tuple(gateLabelString,gateLabelAliases)
             raw_dict, outcomes = gateset.compile_gatestring(gateLabelString)
             assert(len(raw_dict) == 1), "No instruments are allowed in LGST fiducials!"
-            assert(len(list(raw_dict.keys())[0]) == povmLen)
+            unique_key = list(raw_dict.keys())[0]
+            assert(len(raw_dict[unique_key]) == povmLen)
             
             dsRow = dataset[dsStr]
             AB[eoff:eoff+povmLen,j] = [ dsRow.fraction(ol) for ol in outcomes ]
@@ -437,10 +447,10 @@ def _constructA(effectStrs, gs):
         #A[k,:] = st[0,:] # E_k == kth row of A                    
         for i in range(dim): # propagate each basis initial state
             basis_st[i] = 1.0
-            gs.preps['_LGST_tmp_st'] = basis_st
-            probs = gs.probs( ('_LGST_tmp_st',) + estr )
-            A[eoff:eoff+povmLen, i] = [ probs[ol] for ol in gs.povms[povmLbl] ] #CHECK will this work?
-            del gs.preps['_LGST_tmp_st']
+            gs.preps['rho_LGST_tmp'] = basis_st
+            probs = gs.probs( _objs.GateString(('rho_LGST_tmp',)) + estr )
+            A[eoff:eoff+povmLen, i] = [ probs[(ol,)] for ol in gs.povms[povmLbl] ] #CHECK will this work?
+            del gs.preps['rho_LGST_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
@@ -463,18 +473,18 @@ def _constructB(prepStrs, gs):
         basis_E = _np.zeros( (dim,1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    gs.povms['_LGST_tmp_povm'] = _povm.POVM(
-        [("E%d"%i,E) for i,E in enumerate(basisEs)] )
+    gs.povms['M_LGST_tmp_povm'] = _objs.POVM(
+        [("E%d"%i,E) for i,E in enumerate(basis_Es)] )
 
     for k,rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Gatestring(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         #OLD (matrix version only): st = _np.dot( gs.product(rhospec.str),
         #                           gs.preps[ rhospec.lbl ] ) # Nx1 vector
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = gs.probs( rhostr + ('_LGST_tmp_povm',) )
-        B[:, k] = [ probs["E%d" % i] for i in range(dim) ] #CHECK will this work?
+        probs = gs.probs( rhostr + _objs.GateString(('M_LGST_tmp_povm',)) )
+        B[:, k] = [ probs[("E%d" % i,)] for i in range(dim) ] #CHECK will this work?
 
-    del gs.povms['_LGST_tmp_povm']
+    del gs.povms['M_LGST_tmp_povm']
     #OLD
     #    custom_spamLabel = (gs.preps[ rhospec.lbl ], basis_st)
     #    st[i] = gs.pr( custom_spamLabel, rhospec.str )
@@ -532,6 +542,7 @@ def gram_rank_and_evals(dataset, prepStrs, effectStrs, targetGateset):
         the corresponding singular values of the Gram matrix
         generated by targetGateset.
     """
+    if targetGateset is None: raise ValueError("Must supply `targetGateset`")
     ABMat = _constructAB(prepStrs, effectStrs, targetGateset, dataset)
     _, s, _ = _np.linalg.svd(ABMat)
 
@@ -640,7 +651,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
     for prepLabel,rhoVec in gs.preps.items():
         gs.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
     for povmLabel,povm in gs.povms.items():
-        gs.povms[povmLabel] = _povm.POVM( [ (lbl, _objs.StaticSPAMVec(E))
+        gs.povms[povmLabel] = _objs.POVM( [ (lbl, _objs.StaticSPAMVec(E))
                                             for lbl,E in povm.items() ] )
 
     printer.log("--- eLGST (least squares) ---", 1)
@@ -665,7 +676,7 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
         gateLabelAliases["Gestimator%d" % i] = gateStrTuple
 
     lgstEstimates = do_lgst(dataset, prepStrs, effectStrs,  targetGateset, list(gateLabelAliases.keys()),
-                           gateLabelAliases, spamDict, guessGatesetForGauge, svdTruncateTo,
+                           gateLabelAliases, guessGatesetForGauge, svdTruncateTo,
                            verbosity=0) #override verbosity
 
     estimates = _np.empty( (len(gateStringsToUseInEstimation), gate_dim, gate_dim), 'd')
@@ -1135,7 +1146,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #        evTree.permute_original_to_computation(gatestringWeights)
 
     #Expand gate label aliases used in DataSet lookups
-    dsGateStringsToUse = _lt.find_replace_tuple_list(
+    dsGateStringsToUse = _tools.find_replace_tuple_list(
         gateStringsToUse, gateLabelAliases)
 
     #Compute "extra" (i.e. beyond the (gatestring,spamlabel)) rows of jacobian
@@ -1170,7 +1181,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
         if useFreqWeightedChiSq:
             wts = []
-            for x in enumerate(outcomes_lookup[i]):
+            for x in outcomes_lookup[i]:
                 Nx = dataset[gateStr].total()
                 f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
                 wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
@@ -1462,18 +1473,18 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     if printer.verbosity > 0:
         nGateStrings = len(gateStringsToUse)
-        nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
-                                                                     # in dataset (max. model # of params)
-
+        nDataParams  = dataset.get_degrees_of_freedom(dsGateStringsToUse) #number of independent parameters
+          # OLD: nGateStrings*(len(dataset.get_spam_labels())-1)          # in dataset (max. model # of params)
+                                                                     
         #Don't compute num gauge params if it's expensive (>10% of mem limit)
         memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
             * FLOATSIZE # see GateSet._buildup_dPG (this is mem for dPG)
         if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
-            try:
+            if 1: #try:
                 nModelParams = gs.num_nongauge_params() #len(x0)
-            except: #numpy can throw a LinAlgError
-                printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
-                nModelParams = gs.num_params()
+            #except: #numpy can throw a LinAlgError
+            #    printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+            #    nModelParams = gs.num_params()
         else:
             printer.log("Finding num_nongauge_params is too expensive: using total params.")
             nModelParams = gs.num_params() #just use total number of params
@@ -2349,7 +2360,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     #        evTree.permute_original_to_computation(gatestringWeights)
 
     #Expand gate label aliases used in DataSet lookups
-    dsGateStringsToUse = _lt.find_replace_tuple_list(
+    dsGateStringsToUse = _tools.find_replace_tuple_list(
         gateStringsToUse, gateLabelAliases)
 
     #Compute "extra" (i.e. beyond the (gatestring,spamlable)) rows of jacobian        
@@ -2361,20 +2372,20 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     #Allocate peristent memory
     cntVecMx = _np.empty( KM, 'd' )
     probs = _np.empty( KM, 'd' )
-    jac    = _np.empty( (KM,vec_gs_len), 'd' )
+    jac    = _np.empty( (KM+ex,vec_gs_len), 'd' )
 
 
     cntVecMx = _np.empty(KM, 'd' )
     totalCntVec = _np.empty(KM, 'd' )
     for (i,gateStr) in enumerate(dsGateStringsToUse):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-        countVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        cntVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
     logL_upperbound = _tools.logl_max(gs, dataset, dsGateStringsToUse,
-                                      cntVecMx, totalCntVec, poissonPicture) # The theoretical upper bound on the log(likelihood)
+                                      poissonPicture) # The theoretical upper bound on the log(likelihood)
     minusCntVecMx = -1.0 * cntVecMx
 
-    freqs = cntVecMx / totalCntVec[None,:]
+    freqs = cntVecMx / totalCntVec
     freqs_nozeros = _np.where(cntVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
 
     if gatestringWeights is not None:
@@ -2391,7 +2402,6 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         freqTerm = cntVecMx * _np.log(freqs_nozeros)
     freqTerm[ cntVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    KM = len(spamLabels)*len(gateStringsToUse) #shorthand for this combined dimension used below
     min_p = minProbClip
     a = radius # parameterizes "roundness" of f == 0 terms
 
@@ -2641,8 +2651,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     if printer.verbosity > 0:
         if _np.isfinite(deltaLogL):
             nGateStrings = len(gateStringsToUse)
-            nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1) #number of independent parameters
-                                                                         # in dataset (max. model # of params)
+            nDataParams  = dataset.get_degrees_of_freedom(dsGateStringsToUse) #number of independent parameters
+            # OLD: nGateStrings*(len(dataset.get_spam_labels())-1)          # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
             memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
@@ -2906,9 +2916,9 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             profiler.add_time('do_iterative_mlgst: iter %d chi2-opt'%(i+1),tRef)
             tRef2=tNxt
 
-            logL_ub = _tools.logl_max(dataset, stringsToEstimate, None, None, poissonPicture, check, gateLabelAliases)
+            logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
             maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, None, None, None, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
+                                  radius, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
@@ -2963,7 +2973,7 @@ def _cptp_penalty_size(gs):
     return len(gs.gates)
 
 def _spam_penalty_size(gs):
-    return len(gs.preps) + len(gs.effects)
+    return len(gs.preps) + sum([len(povm) for povm in gs.povms.values()])
 
 def _cptp_penalty(gs,prefactor,gateBasis):
     """
@@ -2978,7 +2988,7 @@ def _cptp_penalty(gs,prefactor,gateBasis):
     """        
     return prefactor*_np.sqrt( _np.array( [_tools.tracenorm(
                     _tools.fast_jamiolkowski_iso_std(gate, gateBasis)
-                    ) for _,gate in gs.iter_gates()], 'd') )
+                    ) for gate in gs.gates.values()], 'd') )
 
 
 def _spam_penalty(gs,prefactor,gateBasis):
@@ -2996,11 +3006,11 @@ def _spam_penalty(gs,prefactor,gateBasis):
         _np.array( [
             _tools.tracenorm(
                 _tools.vec_to_stdmx(prepvec, gateBasis)
-            ) for _,prepvec in gs.iter_preps()
+            ) for prepvec in gs.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(gs.effects[elbl], gateBasis)
-            ) for elbl in gs.get_effect_labels()], 'd')
+                _tools.vec_to_stdmx(gs.povms[plbl][elbl], gateBasis)
+            ) for plbl in gs.povms for elbl in gs.povms[plbl] ], 'd')
     ))        
 
 
@@ -3012,7 +3022,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs, prefactor, gateBasis):
     """
     
     # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
-    for i,(_,gate) in enumerate(gs.iter_gates()):
+    for i,gate in enumerate(gs.gates.values()):
         nP = gate.num_params()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
@@ -3085,7 +3095,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, gateBasis):
 
     
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
-    for i,(_,prepvec) in enumerate(gs.iter_preps()):
+    for i,prepvec in enumerate(gs.preps.values()):
         nP = prepvec.num_params()
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
@@ -3116,39 +3126,43 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs, prefactor, gateBasis):
 
 
     #Compute derivatives for effect terms
-    for i,(_,effectvec) in enumerate(gs.iter_effects(),start=len(gs.preps)):
-        nP = effectvec.num_params()
-
-        #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-        EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
-        dmDim = EMx.shape[0]
-        assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
-            "EMx should be Hermitian!"
-
-        sgnE = _tools.matrix_sign(EMx)
-        assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
-            "sgnE should be Hermitian!"
-
-        # get d(prepvec)/dp in gateBasis [shape == (nP,dim)]
-        dVdp = effectvec.deriv_wrt_params() #shape (dim, nP)
-        assert(dVdp.shape == (gs.dim,nP))
-
-        # EMx = sum( spamvec[i] * Bmx[i] )
-
-        #contract to get (note contract along both mx indices b/c treat like a mx basis):
-        # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
-        # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, nP]
-        v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
-        assert(_np.linalg.norm(v.imag) < 1e-4)
-
-        spamPenaltyVecGradToFill[i,:] = 0.0
-        spamPenaltyVecGradToFill[i,effectvec.gpindices] = v.real
-        
-        sgnE = dVdp = v = None #free mem
+    i = len(gs.preps)
+    for povmlbl,povm in gs.povms.items():
+        #Compile effects of povm so we can take their derivatives
+        # directly wrt parent GateSet parameters
+        for _,effectvec in povm.compile_effects(povmlbl).items():
+            nP = effectvec.num_params()
+    
+            #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
+            EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+            dmDim = EMx.shape[0]
+            assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
+                "EMx should be Hermitian!"
+    
+            sgnE = _tools.matrix_sign(EMx)
+            assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
+                "sgnE should be Hermitian!"
+    
+            # get d(prepvec)/dp in gateBasis [shape == (nP,dim)]
+            dVdp = effectvec.deriv_wrt_params() #shape (dim, nP)
+            assert(dVdp.shape == (gs.dim,nP))
+    
+            # EMx = sum( spamvec[i] * Bmx[i] )
+    
+            #contract to get (note contract along both mx indices b/c treat like a mx basis):
+            # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
+            # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, nP]
+            v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
+            assert(_np.linalg.norm(v.imag) < 1e-4)
+    
+            spamPenaltyVecGradToFill[i,:] = 0.0
+            spamPenaltyVecGradToFill[i,effectvec.gpindices] = v.real
+            
+            sgnE = dVdp = v = None #free mem
 
     #return the number of leading-dim indicies we filled in
-    return len(gs.preps) + len(gs.effects)
+    return len(gs.preps) + sum([ len(povm) for povm in gs.povms.values()])
 
 
 def find_closest_unitary_gatemx(gateMx):
