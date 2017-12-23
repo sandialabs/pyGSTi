@@ -409,6 +409,9 @@ def _contractToValidSPAM(gateset, verbosity=0):
                 vec = _tools.stdmx_to_ppvec(mx)
                 diff += _np.linalg.norm( gateset.povms[povmLbl][ELabel] - vec )
                 scaled_effects.append( (ELabel, vec) )
+            else:
+                scaled_effects.append( (ELabel,EVec) ) #no scaling
+                
         gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
     #gs.log("Contract to valid SPAM")
@@ -418,8 +421,8 @@ def _contractToValidSPAM(gateset, verbosity=0):
     for (prepLabel,rhoVec) in gateset.preps.items():
         printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec)),
                                    str(_np.transpose(gs.preps[prepLabel]))), 2)
-    for povmLbl in gateset.povms.items():
-        printer.log("  %s (POVM)" % povmLbl, 2)
+    for povmLbl,povm in gateset.povms.items():
+        printer.log(("  %s (POVM)" % povmLbl), 2)
         for ELabel,EVec in povm.items():
             printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
                                               str(_np.transpose(gs.povms[povmLbl][ELabel]))), 2)

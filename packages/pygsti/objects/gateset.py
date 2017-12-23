@@ -761,7 +761,11 @@ class GateSet(object):
         erroron : tuple of {'prep','povm'}
             A ValueError is raised if a preparation or povm label cannot be
             resolved when 'prep' or 'povm' is included in 'erroron'.  Otherwise
-            `None` is returned in place of unresolvable labels.
+            `None` is returned in place of unresolvable labels.  An exception
+            is when this gateset has no preps or povms, in which case `None`
+            is always returned and errors are never raised, since in this
+            case one usually doesn't expect to use the GateSet to compute
+            probabilities (e.g. in germ selection).
 
         Returns
         -------
@@ -775,7 +779,7 @@ class GateSet(object):
         elif len(self.preps) == 1:
             prep_lbl = list(self.preps.keys())[0]
         else:
-            if 'prep' in erroron:
+            if 'prep' in erroron and len(self.preps) > 0:
                 raise ValueError("Cannot resolve state prep in %s" % gatestring)
             else: prep_lbl = None
             
@@ -785,7 +789,7 @@ class GateSet(object):
         elif len(self.povms) == 1:
             povm_lbl = list(self.povms.keys())[0]
         else:
-            if 'povm' in erroron:
+            if 'povm' in erroron and len(self.povms) > 0:
                 raise ValueError("Cannot resolve POVM in %s" % gatestring)
             else: povm_lbl = None
             
@@ -812,19 +816,29 @@ class GateSet(object):
         outcomesByParent = _collections.OrderedDict()  # final
 
         # Helper dict: (rhoLbl,POVM_ELbl) -> (Elbl,) mapping
-        spamTupleToOutcome = _collections.OrderedDict()
+        spamTupleToOutcome = { None : ("NONE",) } #Dummy label for placeholding (see resolveSPAM below)
         for prep_lbl in self.preps:
             for povm_lbl in self.povms:
                 for elbl in self.povms[povm_lbl]:
                     spamTupleToOutcome[ (prep_lbl, povm_lbl + "_" + elbl) ] = (elbl,)
+                    
 
         def resolveSPAM(gatestring):
             """ Determines spam tuples that correspond to gatestring
                 and strips any spam-related pieces off """
             prep_lbl, gatestring, povm_lbl = \
                 self.split_gatestring(gatestring)
-            spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
-                         for elbl in self.povms[povm_lbl]]
+            if prep_lbl is None or povm_lbl is None:
+                spamtups = [ None ] #put a single "dummy" spam-tuple placeholder
+                  # so that there's a single "element" for each compiled string,
+                  # which means that the usual "lookup" or "elIndices" will map
+                  # original gatestring-list indices to compiled-string, i.e.,
+                  # evalTree index, which is useful when computing products
+                  # (often the case when a GateSet has no preps or povms,
+                  #  e.g. in germ selection)
+            else:
+                spamtups = [ (prep_lbl, povm_lbl + "_" + elbl)
+                             for elbl in self.povms[povm_lbl]]
             return gatestring, spamtups
                     
         def process(action,s,spamtuples,iParent=None,gate_outcomes=(),start=0):
@@ -2863,7 +2877,7 @@ class GateSet(object):
             for i,label in enumerate(self.gates):
                 rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
                 newGateset.gates[label].rotate(rot, myBasis)
-            r = max_gate_noise * rndm.random_sample( len(self.instruments) * (dim-1) )
+            r = max_rotate * rndm.random_sample( len(self.instruments) * (dim-1) )
             for i,label in enumerate(self.instruments):
                 rot = _np.array(r[(dim-1)*i:(dim-1)*(i+1)])
                 newGateset.instruments[label].rotate(rot, myBasis)

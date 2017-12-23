@@ -303,39 +303,22 @@ class TestGateSetConstructionMethods(BaseTestCase):
 
     def test_build_basis_gateset(self):
         gatesetA = pygsti.construction.build_gateset([2], [('Q0',)], ['Gi','Gx','Gy'],
-                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                     spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','Ec')})
-        gatesetB = pygsti.construction.basis_build_gateset([('Q0',)], ['Gi','Gx','Gy'],
-                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                     spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','Ec') }, 
-                                                     basis=pygsti.Basis('gm', 2))
-        
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        gatesetB = pygsti.construction.basis_build_gateset([('Q0',)], pygsti.Basis('gm', 2),
+                                                     ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.assertAlmostEqual(gatesetA.frobeniusdist(gatesetB), 0)
 
 
     def test_iter_gatesets(self):
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
-                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                     spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','Ec') })
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         gateset2 = pygsti.objects.GateSet()
-        for label,gate in gateset.iter_gates():
+        for label,gate in gateset.gates.items():
             gateset2[label] = gate
-        for label,vec in gateset.iter_preps():
+        for label,vec in gateset.preps.items():
             gateset2[label] = vec
-        for label,vec in gateset.iter_effects():
-            if label != "Ec": #Can't just assign Ec across gatesets - need to re-init (see below)
-                gateset2[label] = vec
-        gateset2.effects['Ec'] = pygsti.obj.ComplementSPAMVec(
-            gateset.effects['Ec'].identity, gateset2.effects.values())
+        for label,povm in gateset.povms.items():
+            gateset2[label] = povm
 
         self.assertAlmostEqual( gateset.frobeniusdist(gateset2), 0.0 )
 
@@ -346,20 +329,17 @@ class TestGateSetConstructionMethods(BaseTestCase):
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
         gateset1 = pygsti.objects.GateSet()
         gateset1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
-        gateset1['E0']   = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
-        gateset1['E1']   = pygsti.construction.build_vector(stateSpace,spaceLabels,"1")
+        gateset1['Mdefault'] = pygsti.obj.POVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
+                                                 ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
         gateset1['Gi'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)")
         gateset1['Gx'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
         gateset1['Gy'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"Y(pi/2,Q0)")
-        gateset1.spamdefs['0']  = ('rho0','E0')
-        gateset1.spamdefs['1_take_one'] = ('rho0','E1')
-        gateset1.spamdefs['1'] = ('rho0','E1') #tests replacement of spam label
 
         SQ2 = 1/np.sqrt(2)
         for defParamType in ("full", "TP", "static"):
             gateset_simple = pygsti.objects.GateSet(defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
-            gateset_simple['E0'] = [SQ2, 0, 0, -SQ2]
+            gateset_simple['Mdefault'] = pygsti.obj.POVM( [('0',[SQ2, 0, 0, -SQ2])] )
             gateset_simple['Gi'] = [ [1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
@@ -373,13 +353,15 @@ class TestGateSetConstructionMethods(BaseTestCase):
                 gateset_simple['Gx'] = [1,2,3,4]
             with self.assertRaises(ValueError):
                 gateset_simple['Gx'] = [[1,2,3,4],[5,6,7]]
+
+            #OLD
             #with self.assertRaises(KeyError):
                 #gateset_simple.spamdefs[1] = ('rho0','E0') #spam labels must be strings
-            with self.assertRaises(KeyError):
-                gateset_simple.spamdefs['0'] = 'not-a-2-tuple'
-            with self.assertRaises(ValueError):
-                gateset_simple.spamdefs['1'] = ('remainder','E0')
-                  # 2nd el must be 'remainder' when first is
+            #with self.assertRaises(KeyError):
+            #    gateset_simple.spamdefs['0'] = 'not-a-2-tuple'
+            #with self.assertRaises(ValueError):
+            #    gateset_simple.spamdefs['1'] = ('remainder','E0')
+            #      # 2nd el must be 'remainder' when first is
 
 
         gateset_badDefParam = pygsti.objects.GateSet("full")
@@ -402,94 +384,68 @@ class TestGateSetConstructionMethods(BaseTestCase):
             pygsti.construction.build_identity_vec(stateSpace, basis="foobar")
 
 
-        gateset_evec_first = pygsti.objects.GateSet() #set effect vector first
-        gateset_evec_first['E0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"1")
-        gateset_evec_first['Ec'] =  pygsti.obj.ComplementSPAMVec( pygsti.construction.build_identity_vec(stateSpace),
-                                                                [ gateset_evec_first['E0'] ])
+        gateset_povm_first = pygsti.objects.GateSet() #set effect vector first
+        gateset_povm_first['Mdefault'] = pygsti.obj.TPPOVM(
+            [ ('0', pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
+              ('1', pygsti.construction.build_vector(stateSpace,spaceLabels,"1")) ] )
+
         with self.assertRaises(ValueError):
-            gateset_evec_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension
+            gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension
         with self.assertRaises(ValueError):
-            gateset_evec_first['E0'] =  np.array([1,2,3],'d') #wrong dimension
+            gateset_povm_first['Mdefault'] =  pygsti.obj.POVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
 
         gateset2 = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
-                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      prepLabels=['rho0'], prepExpressions=["0"],
-                                                      effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                      spamdefs={'0': ('rho0','E0'),
-                                                                '1': ('rho0','Ec') })
+                                                      [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         
-        ordered_spamdefs = collections.OrderedDict( [('0',  ('rho0','E0')),
-                                                     ('1', ('rho0','Ec'))] )
         gateset2b = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                        [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                       prepLabels=['rho0'], prepExpressions=["0"],
-                                                       effectLabels=['E0','Ec'], effectExpressions=["1","C"],
-                                                       spamdefs=ordered_spamdefs)
-        self.assertEqual(list(gateset2b.spamdefs.keys())[0], '0')
-        self.assertEqual(list(gateset2b.spamdefs.keys())[1], '1')
-
-        
-        #gateset3 = self.assertWarns(pygsti.construction.build_gateset,
-        #                            [2], [('Q0',)],['Gi','Gx','Gy'],
-        #                            [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-        #                            prepLabels=['rho0'], prepExpressions=["0"],
-        #                            effectLabels=['E0'], effectExpressions=["0"],
-        #                            spamdefs={'0': ('rho0','E0'),
-        #                                      '1': ('remainder','remainder') })
-
-        #Travis CI fails above assertWarning test because it's broken (??)
-        gateset3 = pygsti.construction.build_gateset(
-            [2], [('Q0',)],['Gi','Gx','Gy'],
-            [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-            prepLabels=['rho0'], prepExpressions=["0"],
-            effectLabels=['E0'], effectExpressions=["0"],
-            spamdefs={'0': ('rho0','E0'),
-                      '1': ('remainder','remainder') })
-
+                                                       effectLabels=['1','0'] )
 
         gateset4_txt = \
 """
 # Test text file describing a gateset
 
 # State prepared, specified as a state in the Pauli basis (I,X,Y,Z)
-rho
-PauliVec
+PREP: rho
+LiouvilleVec
 1/sqrt(2) 0 0 1/sqrt(2)
 
 # State measured as yes outcome, also specified as a state in the Pauli basis
-E
-PauliVec
+POVM: Mdefault
+
+EFFECT: 0
+LiouvilleVec
 1/sqrt(2) 0 0 1/sqrt(2)
 
-Ec
-PauliVec
+EFFECT: 1
+LiouvilleVec
 1/sqrt(2) 0 0 -1/sqrt(2)
 
+END POVM
 
-Gi
-PauliMx
+GATE: Gi
+LiouvilleMx
 1 0 0 0
 0 1 0 0
 0 0 1 0
 0 0 0 1
 
-Gx
-PauliMx
+GATE: Gx
+LiouvilleMx
 1 0 0 0
 0 1 0 0
 0 0 0 1
 0 0 -1 0
 
-Gy
-PauliMx
+GATE: Gy
+LiouvilleMx
 1 0 0 0
 0 0 0 -1
 0 0 1 0
 0 1 0 0
 
-IDENTITYVEC sqrt(2) 0 0 0
-SPAMLABEL 0 = rho E
-SPAMLABEL 1 = rho Ec
+BASIS: pp 2
+GAUGEGROUP: Full
 """
         with open(temp_files + "/Test_Gateset.txt","w") as output:
             output.write(gateset4_txt)
@@ -497,62 +453,36 @@ SPAMLABEL 1 = rho Ec
 
         std_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                          [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                                         prepLabels=['rho0'], prepExpressions=["0"],
-                                                         effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                         spamdefs={'0': ('rho0','E0'),
-                                                                   '1': ('rho0','Ec') },
                                                          basis="std")
 
         pp_gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                         [ "I(Q0)","X(pi/8,Q0)", "Z(pi/8,Q0)"],
-                                                        prepLabels=['rho0'], prepExpressions=["0"],
-                                                        effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                        spamdefs={'0': ('rho0','E0'),
-                                                                  '1': ('rho0','Ec') },
                                                         basis="pp")
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('A0',)],['Gi','Gx','Gy'],
-                                               [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               prepLabels=['rho0'], prepExpressions=["0"],
-                                               effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                               spamdefs={'0': ('rho0','E0'),
-                                                         '1': ('rho0','Ec') })
+                                               [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # invalid state specifier (A0)
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [4], [('Q0',)],['Gi','Gx','Gy'],
-                                               [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               prepLabels=['rho0'], prepExpressions=["0"],
-                                               effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                               spamdefs={'0': ('rho0','E0'),
-                                                         '1': ('rho0','Ec') })
+                                               [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
                                                # state space dimension mismatch (4 != 2)
 
         with self.assertRaises(NotImplementedError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               prepLabels=['rho0'], prepExpressions=["0"],
-                                               effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                               spamdefs={'0': ('rho0','E0'),
-                                                         '1': ('rho0','Ec') },
                                                basis="FooBar") #Bad basis
 
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               prepLabels=['rho0'], prepExpressions=["FooBar"],
-                                               effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                               spamdefs={'0': ('rho0','E0'),
-                                                         '1': ('rho0','Ec') })
+                                               prepLabels=['rho0'], prepExpressions=["FooBar"],)
                                                #Bad rhoExpression
         with self.assertRaises(ValueError):
             pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
-                                               prepLabels=['rho0'], prepExpressions=["0"],
-                                               effectLabels=['E0','Ec'], effectExpressions=["FooBar","C"],
-                                               spamdefs={'0': ('rho0','E0'),
-                                                         '1': ('rho0','Ec') })
+                                               effectLabels=['0','1'], effectExpressions=["FooBar","1"])
                                                #Bad EExpression
 
 
@@ -563,18 +493,15 @@ SPAMLABEL 1 = rho Ec
     def test_gateset_tools(self):
 
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
-                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                     spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','Ec') })
+                                                     [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
         gateset_2q = pygsti.construction.build_gateset(
             [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
-            [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2','Ec'], effectExpressions=["0","1","2","C"],
-            spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
-                      'dnup': ('rho0','E2'), 'dndn': ('rho0','Ec') }, basis="pp")
+            [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ])
+            #prepLabels=['rho0'], prepExpressions=["0"],
+            #effectLabels=['E0','E1','E2','Ec'], effectExpressions=["0","1","2","C"],
+            #spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'),
+            #          'dnup': ('rho0','E2'), 'dndn': ('rho0','Ec') }, basis="pp")
 
         gateset_rot = gateset.rotate( (np.pi/2,0,0) ) #rotate all gates by pi/2 about X axis
         gateset_randu = gateset.randomize_with_unitary(0.01)
@@ -621,21 +548,22 @@ SPAMLABEL 1 = rho Ec
 
         gateset_spam = gateset.depolarize(spam_noise=0.1)
         #print gateset_spam
-        self.assertAlmostEqual(float(np.dot(gateset['E0'].T,gateset['rho0'])), 1.0)
+        self.assertAlmostEqual(float(np.dot(gateset['Mdefault']['0'].T,gateset['rho0'])), 1.0)
         # print(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']))
         # self.assertAlmostEqual(np.dot(gateset_spam['E0'].T,gateset_spam['rho0']), 0.095)
         # Since np.ndarray doesn't implement __round__... (assertAlmostEqual() doesn't work)
         # Compare the single element dot product result to 0.095 instead (coverting the array's contents ([[ 0.095 ]]) to a **python** float (0.095))
         print("DEBUG gateset_spam = ")
-        print(gateset_spam['E0'].T)
+        print(gateset_spam['Mdefault']['0'].T)
         print(gateset_spam['rho0'].T)
         print(gateset_spam)
-        print(gateset_spam['E0'].T)
+        print(gateset_spam['Mdefault']['0'].T)
         print(gateset_spam['rho0'].T)
-        self.assertSingleElemArrayAlmostEqual(np.dot(gateset_spam['E0'].T, gateset_spam['rho0']), 0.905)
+        self.assertSingleElemArrayAlmostEqual(np.dot(gateset_spam['Mdefault']['0'].T, gateset_spam['rho0']), 0.95) # not 0.905 b/c effecs aren't depolarized now
         self.assertArraysAlmostEqual(gateset_spam['rho0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gateset_spam['E0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) )
-
+        #self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) ) #not depolarized now
+        self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) ) #not depolarized now
+        
         gateset_rand_rot = gateset.rotate(max_rotate=0.2)
         gateset_rand_rot = gateset.rotate(max_rotate=0.2,seed=1234)
         with self.assertRaises(ValueError):
@@ -747,12 +675,12 @@ SPAMLABEL 1 = rho Ec
             M = np.asarray(gate) #gate as a matrix
             if type(gate) == pygsti.obj.LinearlyParameterizedGate:
                 with self.assertRaises(ValueError):
-                    gate.set_matrix(M)
+                    gate.set_value(M)
             else:
-                gate.set_matrix(M)
+                gate.set_value(M)
 
             with self.assertRaises(ValueError):
-                gate.set_matrix( np.zeros((1,1),'d') ) #bad size
+                gate.set_value( np.zeros((1,1),'d') ) #bad size
 
             v = gate.to_vector()
             gate.from_vector(v)
@@ -1044,7 +972,7 @@ SPAMLABEL 1 = rho Ec
             pygsti.obj.TPParameterizedSPAMVec([ 1.0, 0, 0, 0 ])
             # incorrect initial element for TP!
         with self.assertRaises(ValueError):
-            tp_spamvec.set_vector([1.0 ,0, 0, 0])
+            tp_spamvec.set_value([1.0 ,0, 0, 0])
             # incorrect initial element for TP!
 
 
@@ -1060,10 +988,10 @@ SPAMLABEL 1 = rho Ec
             self.assertEqual(svec.get_dimension(), 4)
 
             v = np.asarray(svec)
-            svec.set_vector(svec)
+            svec.set_value(svec)
 
             with self.assertRaises(ValueError):
-                svec.set_vector( np.zeros((1,1),'d') ) #bad size
+                svec.set_value( np.zeros((1,1),'d') ) #bad size
 
             v = svec.to_vector()
             svec.from_vector(v)
@@ -1150,7 +1078,7 @@ SPAMLABEL 1 = rho Ec
 
 
     def test_labeldicts(self):
-        d = pygsti.objects.labeldicts.OrderedSPAMVecDict(None,"foobar","rho")
+        d = pygsti.objects.labeldicts.OrderedMemberDict(None,"foobar","rho","spamvec")
 
         with self.assertRaises(ValueError):
             d['rho0'] = [0] # bad default parameter type

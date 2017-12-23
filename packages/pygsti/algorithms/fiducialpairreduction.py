@@ -13,6 +13,7 @@ import random     as _random
 import scipy.misc as _spmisc
 from ..construction import gatestringconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
+from ..tools        import slicetools             as _slct
 
 from ..             import objects as _objs
 
@@ -122,6 +123,8 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         firstRho = list(targetGateset.preps.keys())[0]
         firstPOVM = list(targetGateset.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
 
     nGatesetParams = targetGateset.num_params()
 
@@ -141,22 +144,21 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                 "pp[0]+f0+expGerm+f1+pp[1]", f0=prepStrs, f1=effectStrs,
                 expGerm=expGerm, pp=prepovmTuples, order=('f0','f1','pp'))
 
-            evTree,blkSz,_,lookup,_ = gsGerm.bulk_evaltree_from_resources(
+            evTree,blkSz,_,lookup,_ = targetGateset.bulk_evaltree_from_resources(
                 lst, memLimit=memLimit, distributeMethod="deriv",
                 subcalls=['bulk_fill_dprobs'], verbosity=0)
-            assert(evTree.num_final_strings() == len(prepStrs)*len(effectStrs))
-              #Make sure nothing compiled from gate strings created above results
-              # in *more* distinct string than we expect (e.g. instruments not allowed!)
+            #FUTURE: assert that no instruments are allowed?
 
-            dP = _np.empty( (evTree.num_final_elements(),gsGerm.num_params()), 'd' )
-            gsGerm.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
+            dP = _np.empty( (evTree.num_final_elements(),targetGateset.num_params()), 'd' )
+            targetGateset.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
             dPall.append(dP)
 
             #Add this germ's element indices for each fiducial pair (final gate string of evTree)
             nPrepPOVM = len(prepovmTuples)
             for k in range(len(prepStrs)*len(effectStrs)):
                 for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
-                    elIndicesForPair[k].extend( list(lookup[o]+st) )
+                    elArray = _slct.as_array(lookup[o]) + st
+                    elIndicesForPair[k].extend( list(elArray) )
             st += evTree.num_final_elements() # b/c we'll concatenate tree's elements later
                 
         return _np.concatenate( dPall, axis=0 ), elIndicesForPair
@@ -208,9 +210,12 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
     nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
 
     if testPairList is not None: #special mode for testing/debugging single pairlist
-        pairIndices = [ iRhoStr*nEStrs + iEStr for iRhoStr,iEStr in testPairList ]
-        testMx0 = _np.take( fullTestMx0, elIndices0[pairIndices], axis=0 )
-        testMx1 = _np.take( fullTestMx1, elIndices1[pairIndices], axis=0 )
+        pairIndices0 = _np.concatenate( [ elIndices0[iRhoStr*nEStrs + iEStr]
+                                         for iRhoStr,iEStr in testPairList ] )
+        pairIndices1 = _np.concatenate( [ elIndices1[iRhoStr*nEStrs + iEStr]
+                                         for iRhoStr,iEStr in testPairList ] )
+        testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
+        testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
         nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
@@ -233,9 +238,10 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                 pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         for pairIndicesToTest in pairIndicesToIterateOver:
-            pairIndices = [ iRhoStr*nEStrs + iEStr for iRhoStr,iEStr in testPairList ]
-            testMx0 = _np.take( fullTestMx0, elIndices0[pairIndices], axis=0 )
-            testMx1 = _np.take( fullTestMx1, elIndices1[pairIndices], axis=0 )
+            pairIndices0 = _np.concatenate( [ elIndices0[i] for i in pairIndicesToTest ] )
+            pairIndices1 = _np.concatenate( [ elIndices1[i] for i in pairIndicesToTest ] )            
+            testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
+            testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
             nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if printer.verbosity > 1:
@@ -346,6 +352,9 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
         firstRho = list(targetGateset.preps.keys())[0]
         firstPOVM = list(targetGateset.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
+    
 
     pairListDict = {} # dict of lists of 2-tuples: one pair list per germ
 
@@ -386,7 +395,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
             nPrepPOVM = len(prepovmTuples)
             for k in range(len(prepStrs)*len(effectStrs)):
                 for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
-                    elIndicesForPair[k].extend( list(lookup[o]+st) )
+                    elIndicesForPair[k].extend( list(_slct.indices(lookup[o])) )
 
             dPall = _np.empty( (evTree.num_final_elements(),gsGerm.num_params()), 'd' )
             gsGerm.bulk_fill_dprobs(dPall, evTree, wrtBlockSize=blkSz) # num_els x num_params
@@ -526,6 +535,9 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
         firstRho = list(targetGateset.preps.keys())[0]
         firstPOVM = list(targetGateset.povms.keys())[0]
         prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
+
 
     nGatesetParams = targetGateset.num_params()
 

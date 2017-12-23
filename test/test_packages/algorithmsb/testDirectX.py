@@ -13,7 +13,9 @@ class DirectXTestCase(BaseTestCase):
     def setUp(self):
         super(DirectXTestCase, self).setUp()
         self.tgt = std.gs_target
-        self.specs = pygsti.construction.build_spam_specs(None, std.prepStrs, std.effectStrs)
+        #OLDself.specs = pygsti.construction.build_spam_specs(None, std.prepStrs, std.effectStrs)
+        self.prepStrs = std.prepStrs
+        self.effectStrs = std.effectStrs
         self.strs = pygsti.construction.gatestring_list(
             [(),  #always need empty string
              ('Gx',), ('Gy',), ('Gi',), #need these for includeTargetGates=True
@@ -33,35 +35,35 @@ class DirectXTestCase(BaseTestCase):
 
     def test_direct_core(self):
         gs = directx.gateset_with_lgst_gatestring_estimates(
-            self.strs, self.ds, self.specs, self.tgt, includeTargetGates=True,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetGates=True,
             gateStringLabels=None, svdTruncateTo=4, verbosity=10)
 
         gs = directx.gateset_with_lgst_gatestring_estimates(
-            self.strs, self.ds, self.specs, self.tgt, includeTargetGates=False,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetGates=False,
             gateStringLabels=['G0','G1','G2','G3','G4','G5'], svdTruncateTo=4, verbosity=10)
         self.assertEqual(set(gs.gates.keys()), set(['G0','G1','G2','G3','G4','G5']))
 
 
     def test_direct_lgst(self):
         gslist = directx.direct_lgst_gatesets(
-            self.strs, self.ds, self.specs, self.tgt,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
             gateLabelAliases=None, svdTruncateTo=4, verbosity=10)
 
     def test_direct_mc2gst(self):
         gslist = directx.direct_mc2gst_gatesets(
-            self.strs, self.ds, self.specs, self.tgt,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
             gateLabelAliases=None, minProbClipForWeighting=1e-4,
             probClipInterval=(-1e6,1e6), svdTruncateTo=4, verbosity=10)
 
     def test_direct_mlgst(self):
         gslist = directx.direct_mlgst_gatesets(
-            self.strs, self.ds, self.specs, self.tgt,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
             gateLabelAliases=None, minProbClip=1e-6,
             probClipInterval=(-1e6,1e6), svdTruncateTo=4, verbosity=10)
         
     def test_focused_mc2gst(self):
         gslist = directx.focused_mc2gst_gatesets(
-            self.strs, self.ds, self.specs, self.tgt,
+            self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
             gateLabelAliases=None, minProbClipForWeighting=1e-4,
             probClipInterval=(-1e6,1e6), verbosity=10)
 

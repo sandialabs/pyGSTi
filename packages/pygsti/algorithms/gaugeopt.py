@@ -489,8 +489,8 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     else:
                         wts = itemWeights.copy(); wts['spam'] = 0.0
                         for k in wts:
-                            if k in gs.get_prep_labels() or \
-                               k in gs.get_effect_labels(): wts[k] = 0.0
+                            if k in gs.preps or \
+                               k in gs.povms: wts[k] = 0.0
                         ret += gs.frobeniusdist(targetGateset,None, wts)
         
                 elif gatesMetric == "fidelity":
@@ -613,7 +613,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
     dS.shape = (d, d, n) # call it (d1,d2,n)
     dS  = _np.rollaxis(dS, 2) # shape (n, d1, d2)
 
-    for i,(gl,gate) in enumerate(gs_post.iter_gates()):
+    for i,(gl,gate) in enumerate(gs_post.gates.items()):
         pre_gate = gs_pre.gates[gl]
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
@@ -688,7 +688,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     # and we're differentiating wrt the parameters of S, the
     # gaugeGroupEl.
     
-    for i,(lbl,prepvec) in enumerate(gs_post.iter_preps()):
+    for i,(lbl,prepvec) in enumerate(gs_post.preps.items()):
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]

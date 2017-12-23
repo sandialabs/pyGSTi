@@ -222,17 +222,17 @@ def merge_outcomes(dataset,label_merge_dict):
         The DataSet with outcomes merged according to the rules given in label_merge_dict.
     """
 
-    new_effects = label_merge_dict.keys()
-    merged_dataset = _ds.DataSet(spamLabels=new_effects)
-    if sorted([effect for sublist in label_merge_dict.values() for effect in sublist]) != sorted(dataset.get_spam_labels()):
-        print('Warning: There is a mismatch between original effects in label_merge_dict and original effects in original dataset.')
+    new_outcomes = label_merge_dict.keys()
+    merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
+    if sorted([outcome for sublist in label_merge_dict.values() for outcome in sublist]) != sorted(dataset.get_outcome_labels()):
+        print('Warning: There is a mismatch between original outcomes in label_merge_dict and outcomes in original dataset.')
     for key in dataset.keys():
         dataline = dataset[key]
         count_dict = {}
-        for new_effect in new_effects:
-            count_dict[new_effect] = 0
-            for old_effect in label_merge_dict[new_effect]:
-                count_dict[new_effect] += dataline[old_effect]
+        for new_outcome in new_outcomes:
+            count_dict[new_outcome] = 0
+            for old_outcome in label_merge_dict[new_outcome]:
+                count_dict[new_outcome] += dataline[old_outcome]
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset

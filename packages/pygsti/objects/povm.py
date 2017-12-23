@@ -143,7 +143,7 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
             if k == self.complement_label: continue
             effect = v.copy() if isinstance(v,_sv.SPAMVec) else \
                      _sv.FullyParameterizedSPAMVec(v)
-                
+
             if dim is None: dim = effect.dim
             assert(dim == effect.dim),"All effect vectors must have the same dimension"
 
@@ -165,6 +165,7 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
         _collections.OrderedDict.__init__(self, items)
         _gm.GateSetMember.__init__(self, dim)
         self._readonly = True
+        assert(self.dim == dim)
 
         
     def __setitem__(self, key, value):

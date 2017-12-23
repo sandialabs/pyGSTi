@@ -121,8 +121,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         if self.parent.dim is None:
             self.parent._dim = dim
         elif self.parent.dim != dim:
-            raise ValueError("Cannot add object with dimension" +
-                             "%d to gateset of dimension %d"
+            raise ValueError("Cannot add object with dimension " +
+                             "%s to gateset of dimension %d"
                              % (dim,self.parent.dim))
 
     def __getitem__(self, key):

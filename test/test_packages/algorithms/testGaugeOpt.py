@@ -17,7 +17,7 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
         #                                            nSamples=10000,sampleError='binomial', seed=100)
 
-        gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
 
 
         #Gauge Opt to Target
@@ -55,14 +55,14 @@ class TestCoreMethods(AlgorithmsBase):
         gs_clgst_cptp3 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0, maxiter=0)
         gs_clgst_xp    = self.runSilent(pygsti.contract, gs_lgst_target, "XP", ds,verbosity=10, tol=10.0)
         gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10, tol=10.0)
-        gs_clgst_vsp   = self.runSilent(pygsti.contract, gs_lgst_target, "vSPAM",verbosity=10, tol=10.0)
+        gs_clgst_vsp   = pygsti.contract(gs_lgst_target, "vSPAM",verbosity=10, tol=10.0) # self.runSilent(
         gs_clgst_none  = self.runSilent(pygsti.contract, gs_lgst_target, "nothing",verbosity=10, tol=10.0)
 
           #test bad effect vector cases
         gs_bad_effect = gs_lgst_target.copy()
-        gs_bad_effect.effects['E0'] = [100.0,0,0,0] # E eigvals all > 1.0
+        gs_bad_effect.povms['Mdefault'] = pygsti.obj.POVM( [('0',[100.0,0,0,0])] ) # E eigvals all > 1.0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
-        gs_bad_effect.effects['E0'] = [-100.0,0,0,0] # E eigvals all < 0
+        gs_bad_effect.povms['Mdefault'] = pygsti.obj.POVM( [('0',[-100.0,0,0,0])] ) # E eigvals all < 0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
 
         #with self.assertRaises(ValueError):
@@ -104,7 +104,9 @@ class TestCoreMethods(AlgorithmsBase):
         # routines are more tested
         gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
-        gs_badspam.effects['E0'] =  np.array( [[2],[0],[0],[4]], 'd') #set a bad evec so vSPAM has to work...
+        gs_badspam.povms['Mdefault'] = pygsti.obj.POVM( [('0',np.array( [[2],[0],[0],[4]], 'd'))] )
+          #set a bad evec so vSPAM has to work...
+        
 
         gs_clgst_tp    = self.runSilent(pygsti.contract,gs_bigkick, "TP", verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract,gs_bigkick, "CP", verbosity=10, tol=10.0)
