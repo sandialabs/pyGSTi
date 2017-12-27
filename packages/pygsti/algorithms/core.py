@@ -323,7 +323,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                             padded_identityVec = _np.concatenate( (identity, _np.zeros( (trunc-Idim,1), 'd')) )
                         else:
                             padded_identityVec = identity
-                        comp_effect = padded_identity - sum([v for k,v in new_effects])
+                        comp_effect = padded_identityVec - sum([v for k,v in new_effects])
                         new_effects.append( (povm.complement_label, comp_effect) ) #add complement
                         lgstGateset.povms[povmLabel] = _objs.TPPOVM( new_effects )
                         
@@ -2379,7 +2379,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     totalCntVec = _np.empty(KM, 'd' )
     for (i,gateStr) in enumerate(dsGateStringsToUse):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-        cntVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     logL_upperbound = _tools.logl_max(gs, dataset, dsGateStringsToUse,
                                       poissonPicture) # The theoretical upper bound on the log(likelihood)
@@ -2443,7 +2443,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             pos_probs = _np.where(probs < min_p, min_p, probs)
             S = minusCntVecMx / min_p + totalCntVec
             S2 = -0.5 * minusCntVecMx / (min_p**2)
-            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)
+            v = freqTerm + minusCntVecMx * _np.log(pos_probs) + totalCntVec*pos_probs # dims K x M (K = nSpamLabels, M = nGateStrings)                    
             v = _np.maximum(v,0)  #remove small negative elements due to roundoff error (above expression *cannot* really be negative)
             v = _np.where( probs < min_p, v + S*(probs - min_p) + S2*(probs - min_p)**2, v) #quadratic extrapolation of logl at min_p for probabilities < min_p
             v = _np.where( minusCntVecMx == 0, totalCntVec * _np.where(probs >= a, probs, (-1.0/(3*a**2))*probs**3 + probs**2/a + a/3.0), v)

@@ -1865,7 +1865,6 @@ class GateMatrixCalc(GateCalc):
                     [ self.hpr(spamTuple, gateString, False,False,clipTo)
                       for gateString in gatestring_list ], axis=0 )
                 if _nla.norm(hprMxToFill[fInds][0] - check_vhp[0]) > 1e-6:
-                    #HERE
                     print("Final inds = ",fInds)
                     print("Shape = ",check_vhp.shape, hprMxToFill[fInds].shape)
                     for i in range(2):
@@ -2217,8 +2216,8 @@ class GateMatrixCalc(GateCalc):
                 #gather results
                 tm = _time.time()                
                 _mpit.gather_slices(blocks, blkOwners, mxToFill,[felInds],
-                                    2, mySubComm, gatherMemLimit)
-                #note: gathering axis 1 of mxToFill[feInds], dim=(ks,M)
+                                    1, mySubComm, gatherMemLimit)
+                #note: gathering axis 1 of mxToFill[felInds], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
                 profiler.mem_check("bulk_fill_dprobs: post gather blocks")
 
@@ -2474,18 +2473,18 @@ class GateMatrixCalc(GateCalc):
                         hProdCache = hGs = dProdCache2 = dGs2 =  None # free mem
                     dProdCache1 = dGs1 = None #free mem
 
-                    #gather column results: gather axis 2 of mxToFill[feInds,blocks1[iBlk1]], dim=(ks,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [feInds,blocks1[iBlk1]],
+                    #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
+                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill, [felInds,blocks1[iBlk1]],
                                         2, blk1Comm, gatherMemLimit)
 
-                #gather row results; gather axis 1 of mxToFill[feInds], dim=(ks,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, mxToFill,[feInds],
+                #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
+                _mpit.gather_slices(blocks1, blk1Owners, mxToFill,[felInds],
                                     1, mySubComm, gatherMemLimit)
                 if deriv1MxToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill,[feInds],
+                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill,[felInds],
                                         1, mySubComm, gatherMemLimit)
                 if deriv2MxToFill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill,[feInds],
+                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill,[felInds],
                                         1, blk1Comm, gatherMemLimit) 
                    #Note: deriv2MxToFill gets computed on every inner loop completion
                    # (to save mem) but isn't gathered until now (but using blk1Comm).
@@ -2583,7 +2582,7 @@ class GateMatrixCalc(GateCalc):
           - `hprobs == mx[:,:,rowSlice,colSlice]`
           - `dprobs12 == dp1[:,:,rowSlice,None] * dp2[:,:,None,colSlice]`
         """
-        assert(not evalTree.is_split())
+        assert(not evalTree.is_split()), "`evalTree` cannot be split"
         nElements = evalTree.num_final_elements()
 
         #Fill product cache info (not distributed)

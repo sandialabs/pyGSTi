@@ -29,11 +29,11 @@ class ReportBaseCase(BaseTestCase):
         datagen_gateset = targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
         datagen_gateset2 = targetGateset.depolarize(gate_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
-        cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
-          #only use the first EVec
+        #cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
+        #  #only use the first EVec
 
         gateLabels = std.gates
-        cls.lgstStrings = pygsti.construction.list_lgst_gatestrings(cls.specs, gateLabels)
+        cls.lgstStrings = pygsti.construction.list_lgst_gatestrings(std.fiducials, std.fiducials, gateLabels)
         cls.maxLengthList = [1,2,4,8]
 
         cls.lsgstStrings = pygsti.construction.make_lsgst_lists(
@@ -60,7 +60,7 @@ class ReportBaseCase(BaseTestCase):
         cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
         cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
 
-        gs_lgst = pygsti.do_lgst(cls.ds, cls.specs, targetGateset, svdTruncateTo=4, verbosity=0)
+        gs_lgst = pygsti.do_lgst(cls.ds, std.fiducials, std.fiducials, targetGateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, targetGateset, {'gates': 1.0, 'spam': 0.0})
         cls.gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         cls.gs_clgst_tp = pygsti.contract(cls.gs_clgst, "vSPAM")
@@ -151,7 +151,7 @@ class ReportBaseCase(BaseTestCase):
         self.germs = std.germs[:]
         self.gateLabels = std.gates
         
-        self.specs = cls.specs
+        #self.specs = cls.specs
         self.maxLengthList = cls.maxLengthList[:]
         self.lgstStrings = cls.lgstStrings
         self.ds = cls.ds

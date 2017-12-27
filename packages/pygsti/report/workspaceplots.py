@@ -1626,7 +1626,11 @@ class ColorBoxPlot(WorkspacePlot):
 
                 
             n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp,
-                                                              len(dataset.get_spam_labels())-1 )
+                                                              len(dataset.get_outcome_labels())-1 )
+              # NOTE: currently dof_per_box is constant, and takes the total
+              # number of outcome labels in the DataSet, which can be incorrect
+              # when different sequences have different outcome labels.
+              
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                  for subMxRow in subMxs for mx in subMxRow] )
@@ -2234,7 +2238,7 @@ class GramMatrixBarPlot(WorkspacePlot):
         super(GramMatrixBarPlot,self).__init__(ws, self._create,
                                                dataset, target, maxlen, fixedLists, scale)
         
-    def _create(self, dataset, maxlen, target, fixedLists, scale):
+    def _create(self, dataset, target, maxlen, fixedLists, scale):
 
         _, svals, target_svals = _alg.max_gram_rank_and_evals( dataset, target, maxlen, fixedLists)
         svals = _np.sort(_np.abs(svals)).reshape(-1,1)

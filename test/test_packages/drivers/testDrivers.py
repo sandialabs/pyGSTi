@@ -33,30 +33,28 @@ class DriversTestCase(BaseTestCase):
             truncScheme='length as exponent' )
 
         ## RUN BELOW LINES TO GENERATE SAVED DATASETS
-        datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
-        datagen_gateset2 = self.gateset.depolarize(gate_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
-        ds = pygsti.construction.generate_fake_data(
-            datagen_gateset, self.lsgstStrings[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
-        ds2 = pygsti.construction.generate_fake_data(
-            datagen_gateset2, self.lsgstStrings[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
-        ds2 = ds2.copy_nonstatic()
-        ds2.add_counts_from_dataset(ds)
-        ds2.done_adding_data()
-        
-        ds_tgp = pygsti.construction.generate_fake_data(
-            datagen_gateset, self.lsgstStrings_tgp[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
-        
-        ds_lae = pygsti.construction.generate_fake_data(
-            datagen_gateset, self.lsgstStrings_lae[-1],
-            nSamples=1000,sampleError='binomial', seed=100)
-        
-        ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
-        ds2.save(compare_files + "/drivers2.dataset%s" % self.versionsuffix) #non-markovian
-        ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
-        ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
+        #datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0.1)
+        #datagen_gateset2 = self.gateset.depolarize(gate_noise=0.1, spam_noise=0.03).rotate((0.05,0.13,0.02))
+        #ds = pygsti.construction.generate_fake_data(
+        #    datagen_gateset, self.lsgstStrings[-1],
+        #    nSamples=1000,sampleError='binomial', seed=100)
+        #ds2 = pygsti.construction.generate_fake_data(
+        #    datagen_gateset2, self.lsgstStrings[-1],
+        #    nSamples=1000,sampleError='binomial', seed=100)
+        #ds2 = ds2.copy_nonstatic()
+        #ds2.add_counts_from_dataset(ds)
+        #ds2.done_adding_data()        
+        #ds_tgp = pygsti.construction.generate_fake_data(
+        #    datagen_gateset, self.lsgstStrings_tgp[-1],
+        #    nSamples=1000,sampleError='binomial', seed=100)
+        #
+        #ds_lae = pygsti.construction.generate_fake_data(
+        #    datagen_gateset, self.lsgstStrings_lae[-1],
+        #    nSamples=1000,sampleError='binomial', seed=100)
+        #ds.save(compare_files + "/drivers.dataset%s" % self.versionsuffix)
+        #ds2.save(compare_files + "/drivers2.dataset%s" % self.versionsuffix) #non-markovian
+        #ds_tgp.save(compare_files + "/drivers_tgp.dataset%s" % self.versionsuffix)
+        #ds_lae.save(compare_files + "/drivers_lae.dataset%s" % self.versionsuffix)
 
 class TestDriversMethods(DriversTestCase):
 
@@ -65,7 +63,7 @@ class TestDriversMethods(DriversTestCase):
         ts = "whole germ powers"
 
         maxLens = self.maxLens
-        result = self.runSilent(pygsti.do_long_sequence_gst,
+        result = pygsti.do_long_sequence_gst( #self.runSilent(
                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, advancedOptions={'truncScheme': ts})
 
@@ -265,10 +263,6 @@ class TestDriversMethods(DriversTestCase):
 
         gs_target = pygsti.construction.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
                                                       [ "D(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                      prepLabels=['rho0'], prepExpressions=["0"],
-                                                      effectLabels=['E0','Ec'], effectExpressions=["0","C"],
-                                                      spamdefs={'0': ('rho0','E0'),
-                                                                '1': ('rho0','Ec') },
                                                       parameterization="linear")
 
         maxLens = self.maxLens
@@ -447,20 +441,19 @@ class TestDriversMethods(DriversTestCase):
             print(title)
             for l,o in gs.gates.items(): print(l,":",o.num_params(),o.gpindices)
             for l,o in gs.preps.items(): print(l,":",o.num_params(),o.gpindices)
-            for l,o in gs.effects.items(): print(l,":",o.num_params(),o.gpindices)
+            for l,o in gs.povms.items(): print(l,":",o.num_params(),o.gpindices)
             print("")
             
         dbsizes(std.gs_target,"Orig target")
 
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
-        specs = self.runSilent(pygsti.construction.build_spam_specs, std.fiducials)
         tp_target = std.gs_target.copy();
         dbsizes(tp_target,"target copy")
         tp_target.set_all_parameterizations("TP")
         dbsizes(tp_target,"TP target")
 
         print("LGST------------------")
-        gs = pygsti.do_lgst(ds, specs, targetGateset=tp_target, svdTruncateTo=4, verbosity=0)
+        gs = pygsti.do_lgst(ds, std.fiducials, std.fiducials, targetGateset=tp_target, svdTruncateTo=4, verbosity=0)
 
         dbsizes(gs, "LGST result")
 

@@ -103,6 +103,10 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         return (Instrument, (None, list(self.items())), self.__dict__)
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
         
     def compile_gates(self,prefix=""):
         """
@@ -383,7 +387,10 @@ class TPInstrument(_gm.GateSetMember, _collections.OrderedDict):
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
         gate_matrices = [ (lbl,_np.asarray(val)) for lbl,val in self.items()]
-        return (TPInstrument, (gate_matrices,[]), {})
+        return (TPInstrument, (gate_matrices,[]), {'_gpindices': self._gpindices})
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
 
     def compile_gates(self, prefix=""):

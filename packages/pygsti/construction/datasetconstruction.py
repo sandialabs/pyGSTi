@@ -94,12 +94,12 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     TOL = 1e-10
     
     if isinstance(gatesetOrDataset, _ds.DataSet):
-        dsGen = gatesetOrDataset #dataset
+        dsGen = gatesetOrDataset
         gsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
         # OLD measurementGates=measurementGates)
     else:
-        gsGen = gatesetOrDataset #dataset
+        gsGen = gatesetOrDataset
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
         #OLD measurementGates=measurementGates)

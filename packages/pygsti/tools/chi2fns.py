@@ -29,11 +29,9 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     Returns
     -------
     chi2 : numpy.ndarray
-        Array of shape (nSpamLabels, nGateStrings) where 
-        `nSpamLabels = gateset.get_spam_labels()` and 
-        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
-        Values are the chi2 contributions of the corresponding SPAM
-        label and gate string.
+        Array of length either `len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the chi2 contributions of the corresponding gate
+        string aggregated over outcomes.
     """
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
@@ -43,7 +41,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
 
     evTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
         gateset.bulk_evaltree_from_resources(
-            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'],verbosity)
+            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'])
 
     #Memory allocation
     nEls = evTree.num_final_elements()
@@ -72,7 +70,18 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     gateset.bulk_fill_probs(probs, evTree, clipTo, check)
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    return N * ((probs - f)**2/cprobs)
+    v = N * ((probs - f)**2/cprobs)
+
+    #Aggregate over outcomes:
+    # v[iElement] contains all chi2 contributions - now aggregate over outcomes
+    # terms[iGateString] wiil contain chi2 contributions for each original gate
+    # string (aggregated over outcomes)    
+    nGateStrings = len(gateStrings)
+    terms = _np.empty(nGateStrings , 'd')
+    for i in range(nGateStrings):
+        terms[i] = _np.sum( v[lookup[i]], axis=0 )
+    return terms
+    
 
 
 def chi2(gateset, dataset, gateStrings=None,
@@ -195,7 +204,7 @@ def chi2(gateset, dataset, gateStrings=None,
         maxEvalSubTreeSize = None
 
     if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
+        lookup = evTree.split(lookup,maxEvalSubTreeSize, None)
 
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:

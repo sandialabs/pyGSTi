@@ -352,7 +352,7 @@ def state_to_stdmx(state_vec):
         A density matrix of shape (d,d), corresponding to the pure state
         given by the length-`d` array, `state_vec`.
     """
-    st_vec = state_vec.view(); st.shape = (len(st),1) #column vector
+    st_vec = state_vec.view(); st_vec.shape = (len(st_vec),1) #column vector
     dm_mx = _np.kron( _np.conjugate(_np.transpose(st_vec)), st_vec ) 
     return dm_mx #density matrix in standard (sigma-z) basis
 

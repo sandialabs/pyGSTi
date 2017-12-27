@@ -506,12 +506,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     if startingPt == "LGST":
         assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
                "Cannot run LGST: fiducials not specified!"
-        specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
-                                               effectStrs=lsgstLists[0].effectStrs,
-                                               prep_labels=gs_target.get_prep_labels(),
-                                               effect_labels=gs_target.get_effect_labels())
         gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
-        gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
+        gs_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, gs_target,
+                                gateLabels, svdTruncateTo=gate_dim,
                                 gateLabelAliases=lsgstLists[0].aliases,
                                 verbosity=printer) # returns a gateset with the *same*
                                                    # parameterizations as gs_target
@@ -1213,10 +1210,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                          advancedOptions.get('radius',1e-4),
                                          gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
                 fitQty = 2*(maxLogL - logL)
-            assert(False) # TODO: sum over indices as per lookup[i] now...
-            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels to get just "by-sequence"
 
-            expected = (len(ds.get_spam_labels())-1) # == "k"
+            #Note: fitQty[iGateString] gives fit quantity for a single gate
+            # string, aggregated over outcomes.
+            expected = (len(ds.get_outcome_labels())-1) # == "k"
             dof_per_box = expected; nboxes = len(rawLists[-1])
             pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
 

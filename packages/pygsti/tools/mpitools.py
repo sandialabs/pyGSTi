@@ -628,7 +628,7 @@ def gather_indices(indices, index_owners, arToFill, arToFillInds,
     for iIndex,indOrIndTup in enumerate(indices):
         owner = index_owners[iIndex] #owner's rank
         indTup =(indOrIndTup,) if not isinstance(indOrIndTup,tuple) else indOrIndTup
-        assert(len(intTup) == len(axes))
+        assert(len(indTup) == len(axes))
 
         def to_slice_list(indexArrayOrSlice):
             """Breaks a slice or index array into a list of slices"""

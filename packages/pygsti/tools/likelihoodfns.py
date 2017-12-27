@@ -176,7 +176,8 @@ def logl_terms(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          poissonPicture=True, check=False, gateLabelAliases=None):
     """
-    The vector of log-likelihood contributions for each gate string & SPAM label
+    The vector of log-likelihood contributions for each gate string, 
+    aggregated over outcomes.
 
     Parameters
     ----------
@@ -186,11 +187,9 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     Returns
     -------
     numpy.ndarray
-        Array of shape (nSpamLabels, nGateStrings) where 
-        `nSpamLabels = gateset.get_spam_labels()` and 
-        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
-        Values are the log-likelihood contributions of the corresponding
-        SPAM label and gate string.
+        Array of length either `len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the log-likelihood contributions of the corresponding gate
+        string aggregated over outcomes.
     """
     if gatestring_list is None:
         gatestring_list = list(dataset.keys())
@@ -209,7 +208,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(ds_gatestring_list):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-        countVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     #OLD
     #freqs = countVecMx / totalCntVec[None,:]
@@ -243,8 +242,15 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     #for i in range(v.shape[1]):
     #    print "%d %.0f (%f) %.0f (%g)" % (i,v[0,i],probs[0,i],v[1,i],probs[1,i])
 
-    # v[iSpamLabel,iGateString] contains all logl contributions
-    return v
+    #Aggregate over outcomes:
+    # v[iElement] contains all logl contributions - now aggregate over outcomes
+    # terms[iGateString] wiil contain logl contributions for each original gate
+    # string (aggregated over outcomes)    
+    nGateStrings = len(gatestring_list)
+    terms = _np.empty(nGateStrings , 'd')
+    for i in range(nGateStrings):
+        terms[i] = _np.sum( v[lookup[i]], axis=0 )
+    return terms
 
 
 @smart_cached
@@ -392,7 +398,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(ds_gatestring_list):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-        countVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     #OLD
     #freqs = cntVecMx / totalCntVec[None,:]
@@ -634,8 +640,18 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     #  Allocate memory (alloc max required & take views)
     max_nEls = max([subtrees[i].num_final_elements() for i in mySubTreeIndices])
-    cntVecMx_mem = _np.empty( max_nEls,'d')
     probs_mem  = _np.empty( max_nEls, 'd' )
+
+    # Fill cntVecMx, totalCntVec for all elements (all subtrees)
+    nEls = evalTree.num_final_elements()
+    cntVecMx_all = _np.empty( nEls,'d')
+    totalCntVec_all = _np.empty(nEls, 'd')
+
+    ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
+        gatestring_list, gateLabelAliases)
+    for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
+        totalCntVec_all[ lookup[i] ] = dataset[gateStr].total()
+        cntVecMx_all[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     tStart = _time.time()
 
@@ -644,17 +660,21 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         evalSubTree = subtrees[iSubTree]
         sub_nEls = evalSubTree.num_final_elements()
 
-        #  Create views into pre-allocated memory
-        cntVecMx = cntVecMx_mem[0:sub_nEls]
-        probs  =  probs_mem[0:sub_nEls]
-        totalCntVec = _np.empty(sub_nEls, 'd') # TODO: pre-allocate this too
+        if evalSubTree.myFinalElsToParentFinalElsMap is not None:
+            #Then `evalSubTree` is a nontrivial sub-tree and its .spamtuple_indices
+            # will index the *parent's* final index array space, which we
+            # usually want but NOT here, where we fill arrays just big
+            # enough for each subtree separately - so re-init spamtuple_indices
+            evalSubTree = evalSubTree.copy()
+            evalSubTree.recompute_spamtuple_indices(bLocal=True)
 
-        # Fill cntVecMx, totalCntVec
-        ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
-            evalSubTree.generate_gatestring_list(), gateLabelAliases)
-        for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
-            totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-            cntVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        # Create views into pre-allocated memory
+        probs  =  probs_mem[0:sub_nEls]
+
+        # Take portions of count arrays for this subtree
+        cntVecMx = cntVecMx_all[ evalSubTree.final_element_indices(evalTree) ]
+        totalCntVec = totalCntVec_all[ evalSubTree.final_element_indices(evalTree) ]
+        assert(len(cntVecMx) == len(probs))
 
         #compute pos_probs separately
         gateset.bulk_fill_probs(probs, evalSubTree,
@@ -779,8 +799,8 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
 def logl_max_terms(gateset, dataset, gatestring_list=None,
                    poissonPicture=True, gateLabelAliases=None):
     """
-    The vector of maximum log-likelihood contributions for each gate string
-    & SPAM label.
+    The vector of maximum log-likelihood contributions for each gate string,
+    aggregated over outcomes.
 
     Parameters
     ----------
@@ -790,11 +810,9 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     Returns
     -------
     numpy.ndarray
-        Array of shape (nSpamLabels, nGateStrings) where 
-        `nSpamLabels = gateset.get_spam_labels()` and 
-        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
-        Values are the maximum log-likelihood contributions of the
-         corresponding SPAM label and gate string.
+        Array of length either `len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the maximum log-likelihood contributions of the corresponding
+        gate string aggregated over outcomes.
     """
 
     if gatestring_list is None:
@@ -810,7 +828,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(gatestring_list):
         totalCntVec[ lookup[i] ] = dataset[gateStr].total()
-        countVecMx[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
+        countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
         
     freqs = countVecMx / totalCntVec
     freqs_nozeros = _np.where(countVecMx == 0, 1.0, freqs) # set zero freqs to 1.0 so np.log doesn't complain
@@ -822,8 +840,15 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
 
     maxLogLTerms[ countVecMx == 0 ] = 0.0 # set 0 * log(0) terms explicitly to zero since numpy doesn't know this limiting behavior
 
-    # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
-    return maxLogLTerms
+    #Aggregate over outcomes:
+    # maxLogLTerms[iElement] contains all logl-upper-bound contributions
+    # terms[iGateString] wiil contain contributions for each original gate
+    # string (aggregated over outcomes)    
+    nGateStrings = len(gatestring_list)
+    terms = _np.empty(nGateStrings , 'd')
+    for i in range(nGateStrings):
+        terms[i] = _np.sum( maxLogLTerms[lookup[i]], axis=0 )
+    return terms
 
 
 def forbidden_prob(gateset, dataset):

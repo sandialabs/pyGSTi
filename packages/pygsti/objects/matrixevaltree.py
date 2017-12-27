@@ -10,7 +10,6 @@ from . import gatestring as _gs
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..tools import slicetools as _slct
 from .evaltree import EvalTree
-from .evaltree import _compute_spamtuple_indices
 
 import numpy as _np
 import time as _time #DEBUG TIMERS
@@ -68,7 +67,7 @@ class MatrixEvalTree(EvalTree):
         self.compiled_gatestring_spamTuples = list(compiled_gatestring_list.values())
         self.num_final_els = sum([len(v) for v in self.compiled_gatestring_spamTuples])
         #self._compute_finalStringToEls() #depends on compiled_gatestring_spamTuples
-        self.spamtuple_indices = _compute_spamtuple_indices(self.compiled_gatestring_spamTuples)
+        self.recompute_spamtuple_indices(bLocal=True) # bLocal shouldn't matter here
 
         #Evaluation dictionary:
         # keys == gate strings that have been evaluated so far
@@ -612,12 +611,11 @@ class MatrixEvalTree(EvalTree):
                 subTree.myFinalElsToParentFinalElsMap = _np.concatenate(toConcat)
             else:
                 subTree.myFinalElsToParentFinalElsMap = _np.empty(0,'i')
-
-            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
-            subTree.spamtuple_indices = _compute_spamtuple_indices(subTree.compiled_gatestring_spamTuples,
-                                                                   subTree.myFinalElsToParentFinalElsMap)
             #Note: myFinalToParentFinalMap maps only between *final* elements
             #   (which are what is held in compiled_gatestring_spamTuples)
+
+            subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
+            subTree.recompute_spamtuple_indices(bLocal=False)
             
             return subTree
     

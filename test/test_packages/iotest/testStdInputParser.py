@@ -397,23 +397,27 @@ G2            20  100  5  200
         gatesetfile_test = \
 """#My Gateset file
 
-rho
-PauliVec
+PREP: rho
+LiouvilleVec
 1.0/sqrt(2) 0 0 1.0/sqrt(2)
 
-E
-PauliVec
+POVM: Mdefault
+
+EFFECT: 0
+LiouvilleVec
 1.0/sqrt(2) 0 0 -1.0/sqrt(2)
 
-G1
-PauliMx
+END POVM
+
+GATE: G1
+LiouvilleMx
 1 0 0 0
 0 1 0 0
 0 0 0 -1
 0 0 1 0
 
-G2
-PauliMx
+GATE: G2
+LiouvilleMx
 1 0 0 0
 0 0 0 1
 0 0 1 0
@@ -421,47 +425,51 @@ PauliMx
 """
 
         gatesetfile_test2 = \
-"""#My Gateset file specified using non-Pauli format
+"""#My Gateset file specified using non-Liouville format
 
-rho_up
+PREP: rho_up
 StateVec
 1 0
 
-rho_dn
+PREP: rho_dn
 DensityMx
 0 0
 0 1
 
-E
+POVM: Mdefault
+
+EFFECT: 0
 StateVec
 1 0
 
+END POVM
+
 #G1 = X(pi/2)
-G1
+GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 -1j/sqrt(2)   1/sqrt(2)
 
 #G2 = Y(pi/2)
-G2
+GATE: G2
 UnitaryMxExp
 0           -1j*pi/4.0
 1j*pi/4.0  0
 
 #G3 = X(pi)
-G3
+GATE: G3
 UnitaryMxExp
 0          pi/2
 pi/2      0
 
-
-SPAMLABEL 0 = rho_up E
+BASIS: pp 2
+GAUGEGROUP: Full
 """
 
         gatesetfile_test3 = \
 """#My Gateset file with bad StateVec size
 
-rho_up
+PREP: rho_up
 StateVec
 1 0 0
 
@@ -470,7 +478,7 @@ StateVec
         gatesetfile_test4 = \
 """#My Gateset file with bad DensityMx size
 
-rho_dn
+PREP: rho_dn
 DensityMx
 0 0 0
 0 1 0
@@ -482,7 +490,7 @@ DensityMx
 """#My Gateset file with bad UnitaryMx size
 
 #G1 = X(pi/2)
-G1
+GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2)
 
@@ -492,7 +500,7 @@ UnitaryMx
 """#My Gateset file with bad UnitaryMxExp size
 
 #G2 = Y(pi/2)
-G2
+GATE: G2
 UnitaryMxExp
 0           -1j*pi/4.0 0.0
 1j*pi/4.0  0           0.0
@@ -502,7 +510,7 @@ UnitaryMxExp
         gatesetfile_test7 = \
 """#My Gateset file with bad format spec
 
-G2
+GATE: G2
 FooBar
 0   1
 1   0
@@ -510,38 +518,49 @@ FooBar
 """
 
         gatesetfile_test8 = \
-"""#My Gateset file specifying 2-Qubit gates using non-Pauli format
+"""#My Gateset file specifying 2-Qubit gates using non-Lioville format
 
-rho_up
+PREP: rho_up
 DensityMx
 1 0 0 0
 0 0 0 0
 0 0 0 0
 0 0 0 0
 
-E
+POVM: Mdefault
+
+EFFECT: 00
 DensityMx
 0 0 0 0
 0 0 0 0
 0 0 0 0
 0 0 0 1
 
-G1
+EFFECT: 11
+DensityMx
+1 0 0 0
+0 0 0 0
+0 0 0 0
+0 0 0 0
+
+END POVM
+
+GATE: G1
 UnitaryMx
  1/sqrt(2)   -1j/sqrt(2) 0 0
 -1j/sqrt(2)   1/sqrt(2)  0 0
  0                0      1 0
  0                0      0 1
 
-G2
+GATE: G2
 UnitaryMxExp
 0           -1j*pi/4.0 0 0
 1j*pi/4.0  0           0 0
 0          0           1 0
 0          0           0 1
 
-IDENTITYVEC 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-SPAMLABEL 00 = rho_up E
+BASIS: pp 4
+GAUGEGROUP: Full
 """
 
 
@@ -598,13 +617,13 @@ SPAMLABEL 00 = rho_up E
         self.assertArraysAlmostEqual(gs1.gates['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.gates['G2'],rotYPiOv2)
         self.assertArraysAlmostEqual(gs1.preps['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs1.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs1.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,-1]).reshape(-1,1) )
 
         self.assertArraysAlmostEqual(gs2.gates['G1'],rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.gates['G2'],rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.gates['G3'],rotXPi)
         self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
-        self.assertArraysAlmostEqual(gs2.effects['E'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
+        self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]).reshape(-1,1) )
 
 
 

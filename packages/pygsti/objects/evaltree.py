@@ -491,6 +491,26 @@ class EvalTree(list):
         """
         raise NotImplementedError("split(...) not implemented!")
 
+    def recompute_spamtuple_indices(self, bLocal=False):
+        """ 
+        Recompute this tree's `.spamtuple_indices` array.
+
+        Parameters
+        ----------
+        bLocal : bool, optional
+            If True, then the indices computed will index 
+            this tree's final array (even if it's a subtree).
+            If False (the default), then a subtree's indices
+            will index the *parent* tree's final array.
+
+        Returns
+        -------
+        None
+        """
+        self.spamtuple_indices = _compute_spamtuple_indices(
+            self.compiled_gatestring_spamTuples,
+            None if bLocal else self.myFinalElsToParentFinalElsMap)
+        
 
     def _finish_split(self, elIndicesDict, subTreeSetList, permute_parent_element, create_subtree):
         # Create subtrees from index sets
@@ -598,7 +618,7 @@ class EvalTree(list):
         # Now update compiled_gatestring_spamTuples
         self.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[iCur]
                                                 for iCur in parentIndexRevPerm[0:self.num_final_strings()] ]
-        self.spamtuple_indices = _compute_spamtuple_indices(self.compiled_gatestring_spamTuples)
+        self.recompute_spamtuple_indices(bLocal=True) #bLocal shouldn't matter here - just for clarity
 
         #Assert this tree (self) is *not* split
         assert(self.myFinalToParentFinalMap is None)
@@ -723,7 +743,9 @@ def _compute_spamtuple_indices(compiled_gatestring_spamTuples,
     finalIndices = the "element" indices in any final filled quantities
                    which combines both spam and gate-sequence indices.
                    If this tree is a subtree, then these final indices
-                   refer to the *parent's* final elements.
+                   refer to the *parent's* final elements if 
+                   `subtreeFinalElsToParentFinalElsMap` is given, otherwise
+                   they refer to the subtree's final indices (usually desired).
     treeIndices = indices into the tree's final gatestring list giving
                   all of the (raw) gate sequences which need to be computed
                   for the current spamTuple (this list has the SAME length

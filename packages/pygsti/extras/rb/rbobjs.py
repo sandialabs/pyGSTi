@@ -167,7 +167,7 @@ class RBResults(object):
     http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032.
     """    
     def __init__(self, dataset, results, fit='standard', 
-                 success_spamlabel='plus', fit_parameters_dict=None, dim = 2, 
+                 success_outcomelabel='plus', fit_parameters_dict=None, dim = 2, 
                  weight_data=False, pre_avg=True, infinite_data=False, 
                  one_freq_adjust=False):
 
@@ -205,8 +205,8 @@ class RBResults(object):
             RB values for each of these gate-label-sets will be present in the 
             returned results object.
 
-        success_spamlabel : str, optional
-            The spam label which denotes the *expected* outcome of preparing,
+        success_outcomelabel : str, optional
+            The outcome label which denotes the *expected* outcome of preparing,
             doing nothing (or the identity), and measuring.  In the ideal case
             of perfect gates, the probability of seeing this outcome when just
             preparing and measuring (no intervening gates) is 100%.
@@ -253,7 +253,7 @@ class RBResults(object):
         self.dataset = dataset
         self.results = results
         self.fit = fit
-        self.success_spamlabel = success_spamlabel
+        self.success_outcomelabel = success_outcomelabel
         self.fit_parameters_dict = fit_parameters_dict
         self.d = dim
         self.weight_data = weight_data
@@ -378,7 +378,7 @@ class RBResults(object):
             resample_results = _do_rb_base(dsBootstrap, gatestrings,
                                            self.fit, 
                                            self.fit_parameters_dict,
-                                           self.success_spamlabel,
+                                           self.success_outcomelabel,
                                            self.d,
                                            self.weight_data,
                                            self.pre_avg,

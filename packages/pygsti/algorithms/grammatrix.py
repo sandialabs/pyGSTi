@@ -97,6 +97,6 @@ def max_gram_rank_and_evals(dataset, targetGateset, maxBasisStringLength=10,
         maxRhoStrs, maxEStrs = fixedLists
     else:
         maxRhoStrs = maxEStrs = get_max_gram_basis(dataset.get_gate_labels(),
-                                                   dataset, maxBasisStringLength)
+                                                  dataset, maxBasisStringLength)
 
     return _gramRankAndEvals(dataset, maxRhoStrs, maxEStrs, targetGateset)

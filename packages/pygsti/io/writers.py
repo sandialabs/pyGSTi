@@ -157,7 +157,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
+    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,ol)
                                                    for dsl in dsLabels
                                                    for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()

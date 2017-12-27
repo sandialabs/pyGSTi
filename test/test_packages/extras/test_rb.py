@@ -41,7 +41,7 @@ class RBTestCase(BaseTestCase):
                                                          collisionAction="keepseparate")
 
         rb_results = rb.do_randomized_benchmarking(rb_data, all_rb_sequences,
-                                                   fit='standard',success_spamlabel='1', 
+                                                   fit='standard',success_outcomelabel=('1',), 
                                                    dim=2)
         #Maybe move this to workspace tests?
         w = pygsti.report.Workspace()
@@ -61,7 +61,7 @@ class RBTestCase(BaseTestCase):
         print(rb_results.results['r_error_BS']) #random test
         
         rb_results = rb.do_randomized_benchmarking(rb_data, all_rb_sequences,
-                                                   fit='first order',success_spamlabel='1', 
+                                                   fit='first order',success_outcomelabel=('1',), 
                                                    dim=2)
         #Maybe move this to workspace tests?
         w = pygsti.report.Workspace()
@@ -263,18 +263,18 @@ class RBTestCase(BaseTestCase):
         self.assertAlmostEqual(rb.predicted_RB_number(gs_d,gs_target),rb.p_to_r(1-depol_strength))
         
         m1, P_m1 = rb.exact_RB_ASPs(gs_d_cliff,clifford_group,m_max=1000,m_min=1,m_step=1,
-                   d=2,success_spamlabel='0',subset_sampling=None,group_to_gateset=None,
+                   d=2,success_outcomelabel=('0',),subset_sampling=None,group_to_gateset=None,
                    compilation=None) # fixed_length_each_m = False, 
         self.assertAlmostEqual(np.amax(abs(P_m1 - rb.standard_fit_function(m1+1,0.5,0.5,1-depol_strength))),0.0)
         m2, P_m2 = rb.exact_RB_ASPs(gs_d,clifford_group,m_max=100,m_min=1,m_step=1,
-                   d=2,success_spamlabel='0', subset_sampling=['Gi','Gx','Gy'],group_to_gateset=
+                   d=2,success_outcomelabel=('0',), subset_sampling=['Gi','Gx','Gy'],group_to_gateset=
                    {'Gc0':'Gi','Gc16':'Gx','Gc21':'Gy'}, #fixed_length_each_m = False,
                    compilation=clifford_to_primitive)
         self.assertAlmostEqual(P_m2[0],(0.5+0.5*((1.*(1-depol_strength)**1. + 
                                           2.*(1-depol_strength)**3.)/3.)*(1-depol_strength)))
         
         m_L1 , P_m_L1 = rb.L_matrix_ASPs(gs_d_cliff,gs_clifford_target,m_max=1000,m_min=1,m_step=1,
-                                         d=2,success_spamlabel='0',error_bounds=False)
+                                         d=2,success_outcomelabel=('0',),error_bounds=False)
         self.assertAlmostEqual(np.amax(abs(P_m_L1 - rb.standard_fit_function(m_L1+1,0.5,0.5,1-depol_strength))),0.0)
         # Once the bounds on the asps are updated, put a test here for them, to check they are
         # consistent with exact ASPs.
@@ -284,7 +284,7 @@ class RBTestCase(BaseTestCase):
         # function is updated to be consistent with the exact ASPs with a compilation
         # at the end.
         m_L1 , P_m_L1 = rb.L_matrix_ASPs(gs_d,gs_target,m_max=100,m_min=1,m_step=1,
-                                          d=2,success_spamlabel='0',error_bounds=False)
+                                          d=2,success_outcomelabel=('0',),error_bounds=False)
         self.assertTrue(np.amax(abs(P_m_L1- rb.standard_fit_function(m_L1+1,
                                                                      0.5,0.5,1-depol_strength))) < 1e-9)
                

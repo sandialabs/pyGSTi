@@ -88,7 +88,7 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
     each generation).  Note: this assumes the dataset contains '0' and
-    '1' SPAM labels.
+    '1' outcome labels.
 
     Parameters
     ----------
@@ -123,10 +123,10 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     if lengthList == None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
-        xhatTemp = DS[angleSinStrs[i]]['0']
-        yhatTemp = DS[angleCosStrs[i]]['0']
-        Nx = xhatTemp + DS[angleSinStrs[i]]['1']
-        Ny = yhatTemp + DS[angleCosStrs[i]]['1']
+        xhatTemp = DS[angleSinStrs[i]][('0',)]
+        yhatTemp = DS[angleCosStrs[i]][('0',)]
+        Nx = xhatTemp + DS[angleSinStrs[i]][('1',)]
+        Ny = yhatTemp + DS[angleCosStrs[i]][('1',)]
         angleTemp1 = extract_rotation_hat(xhatTemp,yhatTemp,length,
                                           Nx,Ny,angleName,angleTemp1,rpeconfig_inst)
         angleHatList.append(angleTemp1)

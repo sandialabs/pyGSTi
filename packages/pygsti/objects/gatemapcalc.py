@@ -66,7 +66,7 @@ class GateMapCalc(GateCalc):
         
     def copy(self):
         """ Return a copy of this GateMatrixCalc """
-        return GateMatrixCalc(self.dim, self.gates, self.preps,
+        return GateMapCalc(self.dim, self.gates, self.preps,
                               self.effects, self.paramvec)
 
         

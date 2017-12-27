@@ -224,8 +224,16 @@ class SpamParametersTable(WorkspaceTable):
         if titles is None:
             titles = ['']*len(gatesets)
 
-        colHeadings = [''] + list(gatesets[0].get_effect_labels())
-        formatters  = [None] + [ 'Effect' ]*len(gatesets[0].get_effect_labels())
+        if len(gatesets[0].povms) == 1:
+            povmKey = list(gatesets[0].povms.keys())[0]
+            effectLbls = [ eLbl for eLbl in gatesets[0].povms[povmKey] ]
+        else:
+            effectLbls = [ povmLbl + "." + eLbl
+                           for povmLbl,povm in gatesets[0].povms.items()
+                           for eLbl in povm.keys() ]
+        
+        colHeadings = [''] + effectLbls
+        formatters  = [None] + [ 'Effect' ]*len(effectLbls)
     
         table       = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
@@ -234,13 +242,15 @@ class SpamParametersTable(WorkspaceTable):
                                            confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
             spamDotProdsQty = _ev( _reportables.Spam_dotprods(gateset), cri)
             DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
+            assert(DPs.shape[1] == len(effectLbls)), \
+                "Gatesets must have the same number of POVMs & effects"
         
-            formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
+            formatters      = [ 'Rho' ] + [ 'Normal' ]*len(effectLbls) #for rows below
         
-            for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
+            for ii,prepLabel in enumerate(gateset.preps.keys()): # ii enumerates rhoLabels to index DPs
                 prefix = gstitle + " " if len(gstitle) else ""
                 rowData = [prefix + prepLabel]
-                for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
+                for jj,_ in enumerate(effectLbls): # jj enumerates eLabels to index DPs
                     if cri is None:
                         rowData.append((DPs[ii,jj],None))
                     else:
@@ -713,7 +723,7 @@ class SpamVsTargetTable(WorkspaceTable):
         povmInfidelities = [_ev(_reportables.POVM_entanglement_infidelity(
                              gateset, targetGateset, l), confidenceRegionInfo)
                             for l in povmLabels]
-        povmTraceDists   = [_ev(_reportables.POVM_jt_fiff(
+        povmTraceDists   = [_ev(_reportables.POVM_jt_diff(
                              gateset, targetGateset, l), confidenceRegionInfo)
                             for l in povmLabels]
         povmDiamondDists = [_ev(_reportables.POVM_half_diamond_norm(
@@ -1475,13 +1485,13 @@ class DataSetOverviewTable(WorkspaceTable):
     
         table = _ReportTable(colHeadings, formatters)
     
-        minN = round(min([ row.total() for row in dataset.itervalues()]))
-        maxN = round(max([ row.total() for row in dataset.itervalues()]))
+        minN = round(min([ row.total() for row in dataset.values()]))
+        maxN = round(max([ row.total() for row in dataset.values()]))
         cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
     
         table.addrow(("Number of strings", str(len(dataset))), (None,None))
         table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
-        table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
+        table.addrow(("Outcome labels",  ", ".join(map(str,dataset.get_outcome_labels())) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
 
         if maxLengthList is not None:

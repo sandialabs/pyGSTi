@@ -187,7 +187,12 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
         else:
             preserve_sum = False
             
-        return (BasePOVM, (effects, preserve_sum), {} )
+        return (BasePOVM, (effects, preserve_sum),
+                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
     def compile_effects(self, prefix=""):
         """
@@ -378,7 +383,11 @@ class POVM(BasePOVM):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is None)
         effects = [ (lbl,effect) for lbl,effect in self.items()]
-        return (POVM, (effects,), {} )
+        return (POVM, (effects,), {'_gpindices': self._gpindices} )
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
 
     def copy(self, parent=None):
         """
@@ -426,7 +435,11 @@ class TPPOVM(BasePOVM):
         effects.append( (self.complement_label,
                          _np.array(self[self.complement_label])) )
             
-        return (TPPOVM, (effects,), {} )
+        return (TPPOVM, (effects,), {'_gpindices': self._gpindices} )
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
     
     def copy(self, parent=None):
         """

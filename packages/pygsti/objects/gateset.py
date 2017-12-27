@@ -2997,8 +2997,8 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [ (lbl,_np.concatenate( (EVec, vec_zeroPad) ))
-                        for lbl,EVec in povm.items() ]
+            effects = [ (elbl,_np.concatenate( (EVec, vec_zeroPad) ))
+                        for elbl,EVec in povm.items() ]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_gateset.povms[lbl] = _povm.TPPOVM(effects)
@@ -3043,7 +3043,6 @@ class GateSet(object):
         GateSet
             the decreased-dimension GateSet
         """
-
         curDim = self.get_dimension()
         assert(newDimension < curDim)
 
@@ -3060,7 +3059,7 @@ class GateSet(object):
 
         for lbl,povm in self.povms.items():
             assert( povm.dim == curDim )
-            effects = [ (lbl,EVec[0:newDimension,:]) for lbl,EVec in povm.items()]
+            effects = [ (elbl,EVec[0:newDimension,:]) for elbl,EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_gateset.povms[lbl] = _povm.TPPOVM(effects)

@@ -80,12 +80,14 @@ def evaluate(gatesetFn, cri=None, verbosity=0):
 
 
 def spam_dotprods(rhoVecs, povms):
-    """SPAM dot products"""
+    """SPAM dot products (concatenates POVMS)"""
     nEVecs = sum(len(povm) for povm in povms)
-    ret = _np.empty( (len(rhoVecs), len(EVecs)), 'd')
+    ret = _np.empty( (len(rhoVecs), nEVecs), 'd')
     for i,rhoVec in enumerate(rhoVecs):
-        for j,EVec in enumerate(EVecs):
-            ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec)
+        j = 0
+        for povm in povms:
+            for EVec in povm.values():
+                ret[i,j] = _np.dot(_np.transpose(EVec), rhoVec); j += 1
     return ret
 Spam_dotprods = _gsf.spamfn_factory(spam_dotprods) #init args == (gateset)
 

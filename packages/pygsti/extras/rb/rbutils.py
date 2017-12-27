@@ -764,7 +764,7 @@ def R_matrix(gs,group,subset_sampling=None,group_to_gateset=None,
             
     return R
 
-def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_spamlabel='0',
+def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_outcomelabel=('0',),
                   subset_sampling=None,group_to_gateset=None,weights=None,
                   d=None, compilation=None, twirled=False):
     """
@@ -799,8 +799,8 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_spamlabel='0',
     m_step : int, optional
         step size between sequence lengths
        
-    success_spamlabel : str, optional
-        Specifies the SPAM label associated with surival
+    success_outcomelabel : str or tuple, optional
+        Specifies the outcome label associated with surival
               
     subset_sampling : list, optional
         If not None, a list of gate labels from 'gs'. These are the gates
@@ -855,10 +855,10 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_spamlabel='0',
     group_dim = len(group)
     R = R_matrix(gs,group,subset_sampling=subset_sampling,
                  group_to_gateset=group_to_gateset,weights=weights,d=d)
-    rho_index = gs.spamdefs[success_spamlabel][0]
-    E_index = gs.spamdefs[success_spamlabel][1]
-    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs.effects[E_index].T)
-    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[rho_index])
+    success_prepLabel = list(gs.preps.keys())[0] #just take first prep
+    success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel,tuple) else success_outcomelabel
+    extended_E = _np.kron(column_basis_vector(0,group_dim).T,gs.povms['Mdefault'][success_effectLabel].T)
+    extended_rho = _np.kron(column_basis_vector(0,group_dim),gs.preps[success_prepLabel])
     
     if subset_sampling is None:
         extended_E = group_dim*_np.dot(extended_E, R)
@@ -880,7 +880,7 @@ def exact_RB_ASPs(gs,group,m_max,m_min=1,m_step=1,success_spamlabel='0',
         Riterate = _np.dot(Rstep,Riterate)
     return m, P_m
 
-def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
+def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_outcomelabel='0',
                   compilation=None,twirled=False,weights=None,d=None,
                   gauge_optimize=True,error_bounds=False,norm='diamond'):
     """
@@ -909,8 +909,8 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
     m_step : int, optional
         step size between sequence lengths
         
-    success_spamlabel : str, optional
-        Specifies the SPAM label associated with surival
+    success_outcomelabel : str or tuple, optional
+        Specifies the outcomeM label associated with surival
                
    compilation : dict, optional
        A compilation table that has as keys the elements of a larger gateset, e.g., 
@@ -983,8 +983,8 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
     else:
         gs_go = gs.copy()
     L = L_matrix(gs_go,gs_target,weights=weights)
-    rho_index = gs.spamdefs[success_spamlabel][0]
-    E_index = gs.spamdefs[success_spamlabel][1]
+    success_prepLabel = list(gs.preps.keys())[0] #just take first prep
+    success_effectLabel = success_outcomelabel[-1] if isinstance(success_outcomelabel,tuple) else success_outcomelabel
     identity_vec = vec(_np.identity(d**2,float))
     
     if compilation is not None:
@@ -992,7 +992,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
         gs_target_group = _cnst.build_alias_gateset(gs_target,compilation)
         delta = gatedependence_of_errormaps(gs_group,gs_target_group,norm=norm,d=d)
         emaps = errormaps(gs_group,gs_target_group)
-        E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
+        E_eff = _np.dot(gs_go.povms['Mdefault'][success_effectLabel].T,emaps.gates['Gavg'])
         
         if twirled is True:
             L_group = L_matrix(gs_group,gs_target_group)
@@ -1000,7 +1000,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
     if compilation is None:
         delta = gatedependence_of_errormaps(gs_go,gs_target,norm=norm,d=d)
         emaps = errormaps(gs_go,gs_target)
-        E_eff = _np.dot(gs_go.effects[E_index].T,emaps.gates['Gavg'])
+        E_eff = _np.dot(gs_go.povms['Mdefault'][success_effectLabel].T,emaps.gates['Gavg'])
     
     i_max = _np.floor((m_max - m_min ) / m_step).astype('int')
     m = _np.zeros(1+i_max,int)
@@ -1016,7 +1016,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
             L_m_rdd = unvec(_np.dot(L_group,_np.dot(Literate,identity_vec)))
         else:
             L_m_rdd = unvec(_np.dot(Literate,identity_vec))
-        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go.preps[rho_index]))
+        P_m[i] = _np.dot(E_eff,_np.dot(L_m_rdd,gs_go.preps[success_prepLabel]))
         Literate = _np.dot(Lstep,Literate)
         upper_bound[i] = P_m[i] + delta/2
         lower_bound[i] = P_m[i] - delta/2
@@ -1029,7 +1029,7 @@ def L_matrix_ASPs(gs,gs_target,m_max,m_min=1,m_step=1,success_spamlabel='0',
     else:
         return m, P_m
 
-def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='0', 
+def Magesan_theory_parameters(gs_actual, gs_target, success_outcomelabel=('0',), 
                               norm='1to1', d=2):                   
     """
     From a given actual and target gateset, computes the parameters
@@ -1044,8 +1044,8 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='0',
     gs_target : GateSet
        Target gateset.
         
-    success_spamlabel : str, optional
-        The spam label associated with survival.    
+    success_outcomelabel : str or tuple, optional
+        The outcome label associated with survival.    
         
     norm : str, optional
         The norm used in the calculation of the error bounds. Defaults to the
@@ -1098,21 +1098,27 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_spamlabel='0',
     error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])
     
     error_gs.preps['rhoc_mixed'] = 1./d*error_gs['identity']
-    error_gs.spamdefs['plus_cm'] = ('rhoc_mixed','E0')
-    error_gs.spamdefs['minus_cm'] = ('rhoc_mixed','remainder')
+
+    #HERE
+    #Assumes standard POVM labels
+    povm = _objs.POVM( [('plus_cm', gs_target.povms['Mdefault']['0']),
+                        ('minus_cm', gs_target.povms['Mdefault']['1'])] )
     gsl = [('Gavg',),('GR',),('Gavg','GQ',)]   
     ave_error_gsl = _cnst.create_gatestring_list("a", a=gsl)
     N=1
     data = _cnst.generate_fake_data(error_gs, ave_error_gsl, N, 
                                     sampleError="none", seed=1)
+
+    if isinstance(success_outcomelabel, tuple):
+        success_outcomelabel_cm = (success_outcomelabel[0] +'_cm',)
+    else:
+        success_outcomelabel_cm = success_outcomelabel +'_cm'
     
-    success_spamlabel_cm = success_spamlabel +'_cm'
-    
-    pr_L_p = data[('Gavg',)][success_spamlabel]
-    pr_L_I = data[('Gavg',)][success_spamlabel_cm]
-    pr_R_p = data[('GR',)][success_spamlabel]
-    pr_R_I = data[('GR',)][success_spamlabel_cm]
-    pr_Q_p = data[('Gavg','GQ',)][success_spamlabel]
+    pr_L_p = data[('Gavg',)][success_outcomelabel]
+    pr_L_I = data[('Gavg',)][success_outcomelabel_cm]
+    pr_R_p = data[('GR',)][success_outcomelabel]
+    pr_R_I = data[('GR',)][success_outcomelabel_cm]
+    pr_Q_p = data[('Gavg','GQ',)][success_outcomelabel]
     p = Magesan_theory_params['p']    
     B_1 = pr_R_I
     A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) \
@@ -1363,7 +1369,7 @@ def create_K_m_sched(m_min,m_max,Delta_m,epsilon,delta,r_0,
     return K_m_sched
 
 # ----- dataset tools ---- #
-def dataset_to_summary_dict(dataset,seqs,success_spam_label,use_frequencies=False):
+def dataset_to_summary_dict(dataset,seqs,success_outcome_label,use_frequencies=False):
     """
     Maps an RB dataset to an ordered dictionary; keys are 
     sequence lengths, values are number of success counts or frequencies, where
@@ -1392,7 +1398,7 @@ def dataset_to_summary_dict(dataset,seqs,success_spam_label,use_frequencies=Fals
 #                N = N_temp
 #            elif N_temp != N:
 #                raise ValueError("Different N values discovered!")
-            n = dataset[seq][success_spam_label]
+            n = dataset[seq][success_outcome_label]
             try:
                 output[m].append(n)
             except:
@@ -1412,7 +1418,7 @@ def dataset_to_summary_dict(dataset,seqs,success_spam_label,use_frequencies=Fals
             except:
                 output[m,'K'] = 1
             N = dataset[seq].total()
-            n = dataset[seq][success_spam_label]
+            n = dataset[seq][success_outcome_label]
             frac = float(n) / float(N)
             try:
                 output[m].append(frac)

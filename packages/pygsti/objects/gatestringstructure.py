@@ -98,8 +98,11 @@ class GatestringPlaquette(object):
             The gate set used to perform the compiling.
         """
         all_strs = self.get_all_strs()
-        _, self._elementIndicesByStr, self._outcomesByStr, nEls = \
-            gateset.compile_gatestrings(all_strs)
+        if len(all_strs) > 0:
+            rawmap, self._elementIndicesByStr, self._outcomesByStr, nEls = \
+              gateset.compile_gatestrings(all_strs)
+        else:
+            nEls = 0 #nothing to compile
         self.num_compiled_elements = nEls
 
     def iter_compiled(self):
@@ -228,8 +231,7 @@ class GatestringStructure(object):
             for y in self.yvals():
                 p = self.get_plaquette(x,y)
                 if p is not None:
-                    p.compile_gatestrings(gateset) 
-
+                    p.compile_gatestrings(gateset)
     
 
 class LsGermsStructure(GatestringStructure):
@@ -406,13 +408,17 @@ class LsGermsStructure(GatestringStructure):
         GatestringPlaquette
         """
         if (L,germ) not in self._plaquettes:
-            return self.create_plaquette(None,[]) # no elements
+            p =  self.create_plaquette(None,[]) # no elements
+            p.compile_gatestrings(None) # just marks as "compiled"
+            return p
         
         if not onlyfirst or (L,germ) in self._firsts:
             return self._plaquettes[(L,germ)]
         else:
             basestr = self._plaquettes[(L,germ)].base
-            return self.create_plaquette(basestr,[]) # no elements
+            p = self.create_plaquette(basestr,[]) # no elements
+            p.compile_gatestrings(None) # just marks as "compiled"
+            return p
 
     def truncate(self, Ls=None, germs=None, prepStrs=None, effectStrs=None):
         """

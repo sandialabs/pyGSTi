@@ -18,6 +18,7 @@ import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import listtools as _lt
+from ..tools import compattools as _compat
 
 from . import gatestring as _gs
 #from . import dataset as _ds
@@ -673,8 +674,9 @@ class DataSet(object):
                 if t == cur_t: cur_outcomes.add(ol)
                 else:
                     #assume final outcome at each time is constrained
-                    nDOF += len(cur_outcomes)-1
+                    nDOF += len(cur_outcomes)-1; cur_outcomes = set()
                     cur_t = t
+            nDOF += len(cur_outcomes)-1; #last time stamp
         return nDOF
 
 
@@ -731,9 +733,15 @@ class DataSet(object):
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
 
         outcomeLabelList = []; countList = []
-        for outcomeLabel,count in countDict.items():
+        if isinstance(countDict, _OrderedDict): #then don't sort keys
+            outcomeLabels = list(countDict.keys())
+        else:
+            # sort key for deterministic ordering of *new* outcome labels)
+            outcomeLabels = sorted( list(countDict.keys()) )
+
+        for outcomeLabel in outcomeLabels:
             outcomeLabelList.append(outcomeLabel)
-            countList.append(count)
+            countList.append(countDict[outcomeLabel])
 
         # if "keepseparate" mode, add tag onto end of gateString
         gateString = self._keepseparate_update_gatestr(gateString)
@@ -1227,7 +1235,7 @@ class DataSet(object):
 
 
     def __getstate__(self):
-        toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()),
+        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, self.gsIndex.keys())),
                      'gsIndexVals': list(self.gsIndex.values()),
                      'olIndex': self.olIndex,
                      'ol': self.ol,
@@ -1274,7 +1282,7 @@ class DataSet(object):
         None
         """
     
-        toPickle = { 'gsIndexKeys': map(_gs.CompressedGateString, self.gsIndex.keys()) if self.gsIndex else [],
+        toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, self.gsIndex.keys())) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
                      'olIndex': self.olIndex,
                      'ol': self.ol,
@@ -1287,7 +1295,7 @@ class DataSet(object):
                      'uuid' : self.uuid} #Don't pickle counts numpy data b/c it's inefficient
         if not self.bStatic: toPickle['nRows'] = len(self.oliData)
         
-        bOpen = (type(fileOrFilename) == str)
+        bOpen = _compat.isstr(fileOrFilename)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
@@ -1324,7 +1332,7 @@ class DataSet(object):
         -------
         None
         """
-        bOpen = (type(fileOrFilename) == str)
+        bOpen = _compat.isstr(fileOrFilename)
         if bOpen:
             if fileOrFilename.endswith(".gz"):
                 import gzip as _gzip
