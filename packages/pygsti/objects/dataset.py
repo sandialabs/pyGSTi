@@ -21,6 +21,7 @@ from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 
 from . import gatestring as _gs
+from . import labeldicts as _ld
 #from . import dataset as _ds
 
 Oindex_type = _np.uint8
@@ -164,7 +165,8 @@ class DataSetRow(object):
         if isinstance(indexOrOutcomeLabel, _numbers.Integral):
             index = indexOrOutcomeLabel; tup = val
             assert(len(tup) in (2,3) ), "Must set to a (<outcomeLabel>,<time>[,<repetitions>]) value"
-            self.oli[index] = self.dataset.olIndex[ tup[0] ]
+            ol = (tup[0],) if _compat.isstr(tup[0]) else tup[0] #strings -> tuple outcome labels
+            self.oli[index] = self.dataset.olIndex[ ol ]
             self.time[index] = tup[1]
       
             if self.reps is not None:
@@ -173,6 +175,8 @@ class DataSetRow(object):
                 assert(len(tup) == 2 or tup[2] == 1),"Repetitions must == 1 (not tracking reps)"
         else:
             outcomeLbl = indexOrOutcomeLabel; count = val
+            if _compat.isstr(outcomeLbl): outcomeLbl = (outcomeLbl,) #strings -> tuple outcome labels
+            
             assert( all([t == self.time[0] for t in self.time]) ), \
                 "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
             assert(self.reps is not None), \
@@ -193,7 +197,7 @@ class DataSetRow(object):
         #Note: when all_outcomes == False we don't add outcome labels that
         # aren't present for any of this row's elements (i.e. the #summed
         # is zero)
-        cntDict = _OrderedDict()
+        cntDict = _ld.OutcomeLabelDict()
         if self.reps is None:
             for ol,i in self.dataset.olIndex.items():
                 cnt = float(_np.count_nonzero( _np.equal(self.oli,i) ))
@@ -393,7 +397,9 @@ class DataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(outcomeLabels) ] )
+            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+                                  for ol in outcomeLabels] #strings -> tuple outcome labels
+            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
             self.olIndex = _OrderedDict() #OK, as outcome labels are added as they appear
         
@@ -732,16 +738,19 @@ class DataSet(object):
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
 
-        outcomeLabelList = []; countList = []
-        if isinstance(countDict, _OrderedDict): #then don't sort keys
-            outcomeLabels = list(countDict.keys())
+
+        #Convert input to an OutcomeLabelDict
+        if isinstance(countDict, _ld.OutcomeLabelDict):
+            outcomeCounts = countDict
+        elif isinstance(countDict, _OrderedDict): #then don't sort keys
+            outcomeCounts = _ld.OutcomeLabelDict( list(countDict.items()) )
         else:
             # sort key for deterministic ordering of *new* outcome labels)
-            outcomeLabels = sorted( list(countDict.keys()) )
+            outcomeCounts = _ld.OutcomeLabelDict( [
+                (lbl,countDict[lbl]) for lbl in sorted(list(countDict.keys()))])
 
-        for outcomeLabel in outcomeLabels:
-            outcomeLabelList.append(outcomeLabel)
-            countList.append(countDict[outcomeLabel])
+        outcomeLabelList = list(outcomeCounts.keys())
+        countList = list(outcomeCounts.values())
 
         # if "keepseparate" mode, add tag onto end of gateString
         gateString = self._keepseparate_update_gatestr(gateString)
@@ -783,16 +792,20 @@ class DataSet(object):
         # if "keepseparate" mode, add tag onto end of gateString
         gateString = self._keepseparate_update_gatestr(gateString)
 
+        #strings -> tuple outcome labels
+        tup_outcomeLabelList = [ ((ol,) if _compat.isstr(ol) else ol)
+                                 for ol in outcomeLabelList] 
+
         #Add any new outcome labels
         added = False
-        for ol in outcomeLabelList:
+        for ol in tup_outcomeLabelList:
             if ol not in self.olIndex:
                 iNext = max(self.olIndex.values())+1 if len(self.olIndex) > 0 else 0
                 self.olIndex[ol] = iNext; added=True
         if added: #rebuild self.ol because olIndex has changed
             self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
             
-        oliArray = _np.array([ self.olIndex[ol] for ol in outcomeLabelList ] , self.oliType)
+        oliArray = _np.array([ self.olIndex[ol] for ol in tup_outcomeLabelList ] , self.oliType)
         timeArray = _np.array(timeStampList, self.timeType)
         assert(oliArray.shape == timeArray.shape), \
             "Outcome-label and time stamp lists must have the same length!"

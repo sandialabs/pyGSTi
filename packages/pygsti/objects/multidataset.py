@@ -10,8 +10,11 @@ import numpy as _np
 import pickle as _pickle
 from collections import OrderedDict as _OrderedDict
 
+from ..tools import compattools as _compat
+
 from .dataset import DataSet as _DataSet
 from . import gatestring as _gs
+
 
 
 class MultiDataSet_KeyValIterator(object):
@@ -167,7 +170,9 @@ class MultiDataSet(object):
         if outcomeLabelIndices is not None:
             self.olIndex = outcomeLabelIndices
         elif outcomeLabels is not None:
-            self.olIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(outcomeLabels) ] )
+            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+                                  for ol in outcomeLabels] #strings -> tuple outcome labels
+            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
             self.olIndex = None
 
@@ -442,7 +447,7 @@ class MultiDataSet(object):
     def __str__(self):
         s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)
         s += " Dataset names = " + ", ".join(list(self.keys())) + "\n"
-        s += " Outcome labels = " + ", ".join(list(self.olIndex.keys()) if self.olIndex is not None else [])
+        s += " Outcome labels = " + ", ".join(map(str,self.olIndex.keys()) if self.olIndex is not None else [])
         if self.gsIndex is not None:
             s += "\nGate strings: \n" + "\n".join( map(str,list(self.gsIndex.keys())) )
         return s + "\n"

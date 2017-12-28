@@ -21,7 +21,7 @@ class TestDataSetMethods(BaseTestCase):
         #OLD ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
         #OLD ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
-        ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # not all outcome labels OK now
+        ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
         ds.done_adding_data()
 
         dsWritable = ds.copy_nonstatic()
@@ -71,7 +71,7 @@ class TestDataSetMethods(BaseTestCase):
 
         ds2 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
                                      gateStrings=gstrs, outcomeLabels=['0','1'])
-        ds3 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
+        ds3 = pygsti.objects.DataSet(oli_nonstc[:], time_nonstc[:], reps_nonstc[:],
                                      gateStringIndices=gstrInds, outcomeLabelIndices=olInds)
         ds4 = pygsti.objects.DataSet(oli_static, time_static, reps_static,
                                      gateStringIndices=gstrInds_static, outcomeLabels=['0','1'], bStatic=True)
@@ -548,7 +548,7 @@ Gx^4 20 80 0.2 100
         self.assertTrue( ('Gx',) in ds)
         self.assertTrue( ('Gx',) in ds.keys())
         self.assertTrue( ds.has_key(('Gx',)) )
-        self.assertEqual( list(ds.get_outcome_labels()), ['0','1'] )
+        self.assertEqual( list(ds.get_outcome_labels()), [('0',),('1',)] )
         self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
 
         #test iteration

@@ -210,82 +210,54 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
 
 
 
-class OrderedSPAMLabelDict(_collections.OrderedDict):
+class OutcomeLabelDict(_collections.OrderedDict):
     """
-    An ordered dictionary of SPAM (outcome) labels, which associates string-type
-    keys with 2-tuple values of the form `(prepLabel,effectLabel)`.  It also 
-    allows a special "remainder label" which should downstream generate 
-    probabilities equal to `1-(probabilities_of_all_other_outcomes)`.
+    An ordered dictionary of outcome labels, whose keys are tuple-valued
+    outcome labels.  This class extends an ordinary OrderedDict by
+    implements mapping string-values single-outcome labels to 1-tuples
+    containing that label (and vice versa), allowing the use of strings
+    as outcomes labels from the user's perspective.
     """
 
-    def __init__(self, remainderLabel, items=[]):
+    #Whether mapping from strings to 1-tuples is performed
+    _strict = False
+
+    def __init__(self, items=[]):
         """
-        Creates a new OrderedSPAMLabelDict.
+        Creates a new OutcomeLabelDict.
+
         Parameters
         ----------
-        remainderLabel : str
-            If not None, the remainder label that will signify the special
-            computation of probabilities described above, and is not associated
-            with a particular `(prepLabel,effectLabel)` pair.
-
         items : list, optional
             Used by pickle and other serializations to initialize elements.
         """  
         #** Note: if change __init__ signature, update __reduce__ below
-        self.remainderLabel = remainderLabel
-        super(OrderedSPAMLabelDict,self).__init__(items)
+        super(OutcomeLabelDict,self).__init__(items)
         
 
+    def __getitem__(self, key):
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        return super(OutcomeLabelDict,self).__getitem__(key)
+        
     def __setitem__(self, key, val):
-        if not _compat.isstr(key):
-            key = str(key)
-        if type(val) != tuple or len(val) != 2:
-            raise KeyError("SPAM label values must be 2-tuples!")
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        super(OutcomeLabelDict,self).__setitem__(key,val)
 
-        prepLabel, effectLabel = val
-        if prepLabel == self.remainderLabel:
-            if effectLabel != self.remainderLabel:
-                raise ValueError("POVM label must always == %s" % self.remainderLabel +
-                                 "when preparation label does")
-
-            # This spam label generates probabilities which equal
-            #  1 - sum(other spam label probs)
-            _warnings.warn( "You have choosen to use a gate set in a sum-to-one"
-                            + "mode in which the spam label %s " % key
-                            + "will generate probabilities equal to 1.0 minus "
-                            + "the sum of all the probabilities of the other "
-                            + "spam labels.")
-
-        # if inserted *value* already exists, clobber so values are unique
-        iToDel = None
-        for k,v in self.items():
-            if val == v:
-                iToDel = k; break
-        if iToDel is not None:
-            del self[iToDel] #can't do within loop in Python3
-
-        #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
-        # (would need to add a "parent" member to access the GateSet)
-
-        super(OrderedSPAMLabelDict,self).__setitem__(key,val)
+    def __contains__(self, key):
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        return key in super(OutcomeLabelDict,self).keys()
 
     def copy(self):
-        """ Return a copy of this OrderedSPAMLabelDict. """
-        return OrderedSPAMLabelDict(self.remainderLabel, [(lbl,val) for lbl,val in self.items()])
-
-
-    #def __pygsti_getstate__(self):
-    #    #Use '__pygsti_getstate__' instead of '__getstate__' because we
-    #    # don't want this json-serializer to interfere with the '__reduce__'
-    #    # function, which is needed b/c OrderedDicts use __reduce__ when pickling.
-    #    d = self.__dict__.copy()
-    #    d['parent'] = None #reset parent when saving
-    #    return d
+        """ Return a copy of this OutcomeLabelDict. """
+        return OutcomeLabelDict([(lbl,val) for lbl,val in self.items()])
 
     def __pygsti_reduce__(self):
         items = [(k,v) for k,v in self.items()]
-        return (OrderedSPAMLabelDict, (self.remainderLabel, items), None)
+        return (OutcomeLabelDict, (items,), None)
 
     def __reduce__(self):
         items = [(k,v) for k,v in self.items()]
-        return (OrderedSPAMLabelDict, (self.remainderLabel, items), None)
+        return (OutcomeLabelDict, (items,), None)
