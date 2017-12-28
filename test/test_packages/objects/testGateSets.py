@@ -445,18 +445,6 @@ class TestGateSetMethods(GateSetTestCase):
         #self.assertArraysAlmostEqual(mbulk_dP_m[0,:],dP0m, places=FD_JAC_PLACES)
         #self.assertArraysAlmostEqual(mbulk_dP_m[1,:],dP1m, places=FD_JAC_PLACES)
         #self.assertArraysAlmostEqual(mbulk_dP_m[2,:],dP2m, places=FD_JAC_PLACES)
-        #
-        #
-        ##Artificially reset the "smallness" threshold for scaling
-        ## to be sure to engate the scaling machinery
-        #PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
-        #DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
-        #bulk_dPb = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
-        #pygsti.objects.gatematrixcalc.PSMALL = PORIG
-        #bulk_dPc = self.gateset.bulk_dpr('0', evt, returnPr=False, check=True)
-        #pygsti.objects.gatematrixcalc.DSMALL = DORIG
-        #self.assertArraysAlmostEqual(bulk_dPb,bulk_dP_chk)
-        #self.assertArraysAlmostEqual(bulk_dPc,bulk_dP_chk)
 
 
         dProbs0 = self.gateset.dprobs(gatestring0)
@@ -546,6 +534,18 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertArraysAlmostEqual(mdprobs_to_fill,mdprobs_to_fillB, places=FD_JAC_PLACES)
 
 
+        #Artificially reset the "smallness" threshold for scaling
+        # to be sure to engate the scaling machinery
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
+        self.gateset.bulk_fill_dprobs(dprobs_to_fillB, evt, check=True)
+        self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
+        self.gateset.bulk_fill_dprobs(dprobs_to_fillB, evt, check=True)
+        self.assertArraysAlmostEqual(dprobs_to_fill,dprobs_to_fillB)
+        pygsti.objects.gatematrixcalc.DSMALL = DORIG
+
+
         #test with split eval tree
         evt_split = evt.copy(); lookup_splt = evt_split.split(lookup,numSubTrees=2)
         mevt_split = mevt.copy(); mlookup_splt = mevt_split.split(mlookup,numSubTrees=2)
@@ -630,21 +630,7 @@ class TestGateSetMethods(GateSetTestCase):
         #self.assertArraysAlmostEqual(mbulk_hP_m[0,:,:],hP0m, places=FD_HESS_PLACES)
         #self.assertArraysAlmostEqual(mbulk_hP_m[1,:,:],hP1m, places=FD_HESS_PLACES)
         #self.assertArraysAlmostEqual(mbulk_hP_m[2,:,:],hP2m, places=FD_HESS_PLACES)
-        #
-        #
-        ##Artificially reset the "smallness" threshold for scaling
-        ## to be sure to engate the scaling machinery
-        #PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
-        #DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
-        #HORIG = pygsti.objects.gatematrixcalc.HSMALL; pygsti.objects.gatematrixcalc.HSMALL = 10
-        #bulk_hPb = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
-        #pygsti.objects.gatematrixcalc.PSMALL = PORIG
-        #bulk_hPc = self.gateset.bulk_hpr('0', evt, returnPr=False, returnDeriv=False, check=True)
-        #pygsti.objects.gatematrixcalc.DSMALL = DORIG
-        #pygsti.objects.gatematrixcalc.HSMALL = HORIG
-        #self.assertArraysAlmostEqual(bulk_hPb,bulk_hP_chk)
-        #self.assertArraysAlmostEqual(bulk_hPc,bulk_hP_chk)
-
+        
 
         hProbs0 = self.gateset.hprobs(gatestring0)
         hProbs1 = self.gateset.hprobs(gatestring1)
@@ -764,6 +750,20 @@ class TestGateSetMethods(GateSetTestCase):
         self.assertNoWarnings(self.mgateset.bulk_fill_hprobs, mhprobs_to_fillB, mevt, check=True)
         self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
         self.assertArraysAlmostEqual(mhprobs_to_fill,mhprobs_to_fillB, places=FD_HESS_PLACES)
+
+
+        #Artificially reset the "smallness" threshold for scaling
+        # to be sure to engate the scaling machinery
+        PORIG = pygsti.objects.gatematrixcalc.PSMALL; pygsti.objects.gatematrixcalc.PSMALL = 10
+        DORIG = pygsti.objects.gatematrixcalc.DSMALL; pygsti.objects.gatematrixcalc.DSMALL = 10
+        HORIG = pygsti.objects.gatematrixcalc.HSMALL; pygsti.objects.gatematrixcalc.HSMALL = 10
+        self.gateset.bulk_fill_hprobs(hprobs_to_fillB, evt, check=True)
+        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
+        pygsti.objects.gatematrixcalc.PSMALL = PORIG
+        self.gateset.bulk_fill_hprobs(hprobs_to_fillB, evt, check=True)
+        self.assertArraysAlmostEqual(hprobs_to_fill,hprobs_to_fillB)
+        pygsti.objects.gatematrixcalc.DSMALL = DORIG
+        pygsti.objects.gatematrixcalc.HSMALL = HORIG
 
 
         #test with split eval tree
