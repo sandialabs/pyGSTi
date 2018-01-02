@@ -119,7 +119,7 @@ class GateTestCase(BaseTestCase):
             TPconstrainedAndUnital=False) )
         
         gates_to_test.append( pygsti.objects.LindbladParameterizedGate(
-            mx,unitaryPrefactor=None,
+            mx,unitaryPostfactor=None,
             ham_basis="pp", nonham_basis="pp", cptp=True,
             nonham_diagonal_only=False, truncate=True, mxBasis="pp") )
 
@@ -128,7 +128,7 @@ class GateTestCase(BaseTestCase):
             state = np.zeros( (4,1), 'd' )
             state[0] = state[3] = 1.0
 
-            T = pygsti.objects.FullGaugeGroup.element(
+            T = pygsti.objects.FullGaugeGroupElement(
                 np.array( [ [0,1],
                             [1,0] ], 'd') )
 
@@ -147,7 +147,7 @@ class GateTestCase(BaseTestCase):
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:
-                gate.rotate(0.01,'gm')
+                #gate.rotate(0.01,'gm') #float as arg is no longer allowed
                 gate.rotate([0.01,0.02,0.03],'gm')
             except ValueError: pass #OK, as this is unallowed for some gate types
             

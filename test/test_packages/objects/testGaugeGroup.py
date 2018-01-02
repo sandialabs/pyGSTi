@@ -13,8 +13,9 @@ class GaugeGroupTestCase(BaseTestCase):
         super(GaugeGroupTestCase, self).setUp()
 
     def test_construction(self):
-        gg   = ggrp.GaugeGroup()
-        ggg  = ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')))
+        gg   = ggrp.GaugeGroup('myGaugeGroupName')
+        ggg  = ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
+                                   ggrp.GateGaugeGroupElement,'myGateGaugeGroupName')
         fgg  = ggrp.FullGaugeGroup(4)
         tgg  = ggrp.TPGaugeGroup(4)
         dgg  = ggrp.DiagGaugeGroup(4)
@@ -48,17 +49,18 @@ class GaugeGroupTestCase(BaseTestCase):
         dgg_el  = dgg.get_element(dgg_ip) 
         tdgg_el = tdgg.get_element(tdgg_ip)
         
-        self.assertIsInstance(gg_el, ggrp.GaugeGroup.element)
-        self.assertIsInstance(ggg_el, ggrp.GateGaugeGroup.element)
-        self.assertIsInstance(fgg_el, ggrp.FullGaugeGroup.element)
-        self.assertIsInstance(tgg_el, ggrp.TPGaugeGroup.element)
-        self.assertIsInstance(dgg_el, ggrp.DiagGaugeGroup.element)
-        self.assertIsInstance(tdgg_el, ggrp.TPDiagGaugeGroup.element)
+        self.assertIsInstance(gg_el, ggrp.GaugeGroupElement)
+        self.assertIsInstance(ggg_el, ggrp.GateGaugeGroupElement)
+        self.assertIsInstance(fgg_el, ggrp.FullGaugeGroupElement)
+        self.assertIsInstance(tgg_el, ggrp.TPGaugeGroupElement)
+        self.assertIsInstance(dgg_el, ggrp.DiagGaugeGroupElement)
+        self.assertIsInstance(tdgg_el, ggrp.TPDiagGaugeGroupElement)
 
     def test_elements(self):
         ggs = []
-        ggs.append(ggrp.GaugeGroup())
-        ggs.append(ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d'))))
+        ggs.append(ggrp.GaugeGroup('myGroupName'))
+        ggs.append(ggrp.GateGaugeGroup(gate.FullyParameterizedGate(np.identity(4,'d')),
+                                       ggrp.GateGaugeGroupElement,'myGateGroupName'))
         ggs.append(ggrp.FullGaugeGroup(4))
         ggs.append(ggrp.TPGaugeGroup(4))
         ggs.append(ggrp.DiagGaugeGroup(4))

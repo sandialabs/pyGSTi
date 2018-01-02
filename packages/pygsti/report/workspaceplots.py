@@ -1,26 +1,26 @@
+""" Classes corresponding to plots within a Workspace context."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Classes corresponding to plots within a Workspace context."""
 
 import numpy             as _np
 import scipy             as _scipy
-import os                as _os
 import warnings          as _warnings
 import collections       as _collections
 
+from scipy.stats  import chi2 as _chi2
+    
 from .. import algorithms   as _alg
 from .. import tools        as _tools
-from .. import construction as _construction
 from .. import objects      as _objs
 
 from .workspace import WorkspacePlot
+from .figure import ReportFigure
 from . import colormaps as _colormaps
 from . import plothelpers as _ph
-
 import plotly.graph_objs as go
 
 
@@ -142,7 +142,7 @@ def color_boxplot(plt_data, colormap, colorbar=False, boxLabelSize=0,
     )
     
     fig = go.Figure(data=data, layout=layout)
-    return fig
+    return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
 
 
 
@@ -211,7 +211,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
 
     if hoverLabelFn:
         hoverLabels = []
-        for k in range(elRows*nRows + (nRows-1)): hoverLabels.append( [""]*(elCols*nCols + (nCols-1)) )
+        for _ in range(elRows*nRows + (nRows-1)):
+            hoverLabels.append( [""]*(elCols*nCols + (nCols-1)) )
 
         for i in range(nRows):
             for j in range(nCols):
@@ -226,8 +227,8 @@ def nested_color_boxplot(plt_data_list_of_lists, colormap,
                         prec, None, hoverLabels)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
-    fig['layout']['xaxis'].update(tickvals=xtics)
-    fig['layout']['yaxis'].update(tickvals=ytics)
+    fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
+    fig.plotlyfig['layout']['yaxis'].update(tickvals=ytics)
     return fig
 
 
@@ -343,7 +344,8 @@ def generate_boxplot(subMxs,
                          sumUp, False, scale)
                                 
 
-    def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+    def val_filter(vals):
+        """filter to latex-ify gate strings.  Later add filter as a possible parameter"""
         formatted_vals = []
         for val in vals:
             if (isinstance(val,tuple) or isinstance(val,_objs.GateString)) \
@@ -359,6 +361,7 @@ def generate_boxplot(subMxs,
         return formatted_vals
 
     def sum_up_mx(mx):
+        """ Sum up `mx` in a NAN-ignoring way """
         flat_mx = mx.flatten()
         if any([_np.isnan(x) for x in flat_mx]):
             if all([_np.isnan(x) for x in flat_mx]):
@@ -374,6 +377,7 @@ def generate_boxplot(subMxs,
 
         if hoverInfo == True:
             def hoverLabelFn(val,i,j):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]), val)
@@ -385,15 +389,18 @@ def generate_boxplot(subMxs,
         fig = color_boxplot( subMxSums, colormap, colorbar, boxLabelSize,
                              prec, hoverLabelFn)
         #update tickvals b/c color_boxplot doesn't do this (unlike nested_color_boxplot)
-        fig['layout']['xaxis'].update(tickvals=list(range(nXs)))
-        fig['layout']['yaxis'].update(tickvals=list(range(nYs)))
-        fig['layout'].update(width=80*(nXs+3)*scale,
-                             height=80*(nYs+3)*scale)
+        fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
+        fig.plotlyfig['layout']['yaxis'].update(tickvals=list(range(nYs)))
+
+        xBoxes = nXs
+        yBoxes = nYs
+
 
     else: #not summing up
 
         if hoverInfo == True:
             def hoverLabelFn(val,i,j,ii,jj):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 return "%s: %s<br>%s: %s<br>%s: %s<br>%s: %s<br>%g" % \
                     (xlabel,str(xlabels[j]),ylabel,str(ylabels[i]),
@@ -403,39 +410,63 @@ def generate_boxplot(subMxs,
             hoverLabelFn = hoverInfo
         else: hoverLabelFn = None
 
-        boxLabelSize = 8*scale if boxLabels else 0
+        boxLabelSize = 8 if boxLabels else 0 #do not scale (OLD: 8*scale)
         fig = nested_color_boxplot(subMxs, colormap, colorbar, boxLabelSize,
                                    prec, hoverLabelFn)
         assert(fig is not None), "No data to display!"
-        
-        fig['layout'].update(width=30*(nXs*nIXs+5)*scale,
-                             height=30*(nYs*nIYs+5)*scale)
-        
-    if xlabel: fig['layout']['xaxis'].update(title=xlabel,
+
+        xBoxes = nXs*(nIXs+1) - 1
+        yBoxes = nYs*(nIYs+1) - 1
+
+    pfig = fig.plotlyfig
+    if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
-    if ylabel: fig['layout']['yaxis'].update(title=ylabel,
+    if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
                                              titlefont={'size': 12*scale, 'color': "black"})
     if xlabels:
-        fig['layout']['xaxis'].update(tickmode="array",
+        pfig['layout']['xaxis'].update(tickmode="array",
                                       ticktext=val_filter(xlabels),
                                       tickfont={'size': 10*scale, 'color': "black"})
     if ylabels:
-        fig['layout']['yaxis'].update(tickmode="array",
+        pfig['layout']['yaxis'].update(tickmode="array",
                                       ticktext=val_filter(ylabels),
                                       tickfont={'size': 10*scale, 'color': "black"})
-        #lblLen = max(map(len,val_filter(ylabels)))
-        #fig['layout'].update(margin=go.Margin(l=5*lblLen*scale ) ) # r=50, b=100, t=100, pad=4
 
-    # ticSize, grid, title?
+    #Set plot size and margins
+    lmargin = rmargin = tmargin = bmargin = 20
+    if xlabel: bmargin += 30
+    if ylabel: lmargin += 30
+    if xlabels:
+        max_xl = max([len(xl) for xl in pfig['layout']['xaxis']['ticktext']])
+        if max_xl > 0: bmargin += max_xl*5
+    if ylabels:
+        max_yl = max([len(yl) for yl in pfig['layout']['yaxis']['ticktext']])
+        if max_yl > 0: lmargin += max_yl*5
+    if colorbar: rmargin = 100
 
-    #TODO: figure saving
-    #if rptFig is not None: #can be None if there's nothing to plot
-    #    rptFig.save_to(save_to)
-    #if rptFig is not None:
-    #    rptFig.set_extra_info( { 'nUsedXs': len(xvals),
-    #                             'nUsedYs': len(yvals) } )
+      #make sure there's enough margin for hover tooltips
+    if 10*xBoxes < 200: rmargin = max(200 - 10*xBoxes, rmargin)
+    if 10*yBoxes < 200: bmargin = max(200 - 10*xBoxes, bmargin)
+
+    width = lmargin + 10*xBoxes + rmargin
+    height = tmargin + 10*yBoxes + bmargin
+
+    width *= scale
+    height *= scale
+    lmargin *= scale
+    rmargin *= scale
+    tmargin *= scale
+    bmargin *= scale
+
+    #DEBUG
+    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
+    #print("DB dims = ",width,height)
+    
+    pfig['layout'].update(width=width,
+                         height=height,
+                         margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin))
+
     return fig
-
 
 def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                              colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
@@ -509,10 +540,11 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     if hoverInfo and invert == False and isinstance(g, _objs.LsGermsStructure):
         if sumUp:
             def hoverLabelFn(val,iy,ix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -529,13 +561,14 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                     
         else:
             def hoverLabelFn(val,iy,ix,iiy,iix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
                 rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -562,8 +595,8 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
                             sumUp, invert, scale)  #"$\\rho_i$","$\\E_i$"      
 
 def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
-                             colorbar=False, boxLabels=True, prec='compact', hoverInfo=True,
-                             sumUp=False,ylabel="",scale=1.0,addl_hover_subMxs=None):
+                                 colorbar=False, hoverInfo=True, sumUp=False,
+                                 ylabel="",scale=1.0,addl_hover_subMxs=None):
     """
     Similar to :func:`gatestring_color_boxplot` except a scatter plot is created.
 
@@ -630,10 +663,11 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     if hoverInfo and isinstance(g, _objs.LsGermsStructure):
         if sumUp:
             def hoverLabelFn(val,iy,ix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
                 L,germ = xvals[ix],tuple(yvals[iy])
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -650,13 +684,14 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                     
         else:
             def hoverLabelFn(val,iy,ix,iiy,iix):
+                """ Standard hover labels """
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
                 rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
-                reps = len(baseStr) // len(germ)
+                reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
                 if baseStr == guess:
                     if len(baseStr) == 0:
@@ -692,8 +727,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
 
     trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
-                                   color=[colormap.normalize(y) for y in ys],
-                                   colorscale=colormap.get_colorscale(),
+                                   color=[colormap.get_color(y) for y in ys],
+                                   #colorscale=colormap.get_colorscale(),  #doesn't seem to work properly
                                    line=dict(width=1)))
     if hoverInfo:
         trace['hoverinfo'] = 'text'
@@ -717,12 +752,140 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         xaxis=xaxis,
         yaxis=yaxis,
     )
-    return go.Figure(data=[trace], layout=layout)
+    return ReportFigure(go.Figure(data=[trace], layout=layout), colormap,
+                        {'x': xs, 'y': ys})
 
 
-def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
-                             mxBasisDimsY=None, xlabel=None, ylabel=None,
-                             boxLabels=False, colorbar=None, prec=0, scale=1.0):
+def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
+                               ylabel="",scale=1.0):
+    """
+    Similar to :func:`gatestring_color_boxplot` except a histogram is created.
+
+    Parameters
+    ----------
+    gatestring_structure : GatestringStructure
+        Specifies a set of gate sequences along with their outer and inner x,y
+        structure, e.g. fiducials, germs, and maximum lengths.
+
+    subMxs : list
+        A list of lists of 2D numpy.ndarrays.  subMxs[iy][ix] specifies the matrix of values
+        or sum (if sumUp == True) displayed in iy-th row and ix-th column of the plot.  NaNs
+        indicate elements should not be displayed.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    hoverInfo : bool, optional
+        Whether to incude interactive hover labels.
+
+    sumUp : bool, optional
+        False displays each matrix element as it's own color box
+        True sums the elements of each (x,y) matrix and displays
+        a single color box for the sum.
+
+    ylabel : str, optional
+        The y-axis label to use.
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+    g = gatestring_structure
+    
+    ys = [ ]; #artificially add minval so 
+    for ix,x in enumerate(g.used_xvals()):
+        for iy,y in enumerate(g.used_yvals()):
+            plaq = g.get_plaquette(x,y)
+            N = len(subMxs[iy][ix])
+            #TODO: if sumUp then need to sum before appending...
+            for iiy,iix,_ in plaq:
+                ys.append( subMxs[iy][ix][N-1-iiy][iix] )
+
+    minval = 0
+    maxval = max(minval+1e-3,_np.max(ys)) #don't let minval==maxval
+    nvals = len(ys)
+    cumulative = dict(enabled=False)
+    #             marker=dict(color=barcolor),
+    #barcolor = 'gray'
+
+    nbins = 50
+    binsize = (maxval-minval)/(nbins-1)
+    bincenters = _np.linspace(minval, maxval, nbins)
+    bindelta = (maxval-minval)/(nbins-1) #spacing between bin centers
+    
+    trace = go.Histogram(
+            x=[bincenters[0]] + ys, #artificially add 1 count in lowest bin so plotly anchors histogram properly
+            autobinx=False,
+            xbins=dict(
+                start=minval-binsize/2.0,
+                end=maxval+binsize/2.0,
+                size=binsize
+            ),
+            name = "count",
+            marker=dict(
+                color=[colormap.get_color(t) for t in bincenters],
+                line=dict(
+                    color='black',
+                    width=1.0,
+                )
+            ),
+            cumulative=cumulative,
+            opacity=1.00,
+            showlegend=False,
+        )
+
+    dof = colormap.dof if hasattr(colormap,"dof") else 1
+    line_trace = go.Scatter(
+        x = bincenters,
+        y = [ nvals*bindelta*_chi2.pdf(xval, dof) for xval in bincenters ],
+        name = "expected",
+        showlegend=False,
+        line = dict(
+            color = ('rgb(0, 0, 0)'),
+            width = 1) # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
+        )
+
+    xbins_for_numpy = _np.linspace(minval-binsize/2.0,maxval+binsize/2.0,nbins+1)
+    hist_values, np_bins = _np.histogram(ys, nbins, range=(minval-binsize/2.0,
+                                                     maxval+binsize/2.0))
+    if len(hist_values) > 0 and len(hist_values[hist_values>0]) > 0:
+        minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
+        maxlog = _np.log10(1.5*_np.max(hist_values) )
+    else:
+        minlog, maxlog = -3,0 #defaults to (1e-3,1) when there's no data
+    
+    layout = go.Layout(
+            width=500*scale,
+            height=350*scale,
+            font=dict(size=10),
+            xaxis=dict(
+                title=ylabel, #b/c "y-values" are along x-axis in histogram
+                showline=True
+                ),
+            yaxis=dict(
+                type='log',
+                #tickformat='g',
+                exponentformat='power',
+                showline=True,
+                range=[minlog,maxlog]
+            ),
+            bargap=0,
+            bargroupgap=0,
+            legend=dict(orientation="h")
+        )
+
+    pythonVal = {'histogram values': ys}
+    return ReportFigure(go.Figure(data=[trace, line_trace], layout=layout),
+                        colormap, pythonVal)
+
+
+def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisY=None,
+                             xlabel=None, ylabel=None,
+                             boxLabels=False, colorbar=None, prec=0, scale=1.0,
+                             EBmatrix=None, title=None):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -734,16 +897,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     m, M : float
         Minimum and maximum of the color scale.
 
-    mxBasis : str
-      The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-      Used to label the rows & columns.  If you don't want labels, set to None.
-
-    mxBasisDims, mxBasisDimsY : int or list, optional
-      The dimension of the density matrix space, or a list specifying the
-      dimensions of terms in a direct-sum decomposition of the density matrix
-      space, for the X and Y axes (columns and rows).  Used to label the 
-      columns and rows, respectively.  If `myBasisDimsY` is None if will 
-      default to `mxBasisDims`.
+    mxBasis, mxBasisY : str or Basis, optional
+      The name abbreviation for the basis or a Basis object. Used to label the
+      columns & rows (x- and y-ticklabels).  Typically in
+      {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
     xlabel, ylabel : str, optional
       Axis labels for the plot.
@@ -767,50 +924,148 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
 
+    EBmatrix : numpy array, optional
+        An array, of the same size as `gateMatrix`, which gives error bars to be
+        be displayed in the hover info.
+
+    title : str, optional
+        A title for the plot
+
+
     Returns
     -------
     plotly.Figure
     """
 
-    def one_sigfig(x):
-        if abs(x) < 1e-9: return 0
-        if x < 0: return -one_sigfig(-x)
-        e = -int(_np.floor(_np.log10(abs(x)))) #exponent
-        trunc_x = _np.floor(x * 10**e)/ 10**e #truncate decimal to make sure it gets *smaller*
-        return round(trunc_x, e) #round to truncation point just to be sure
+    if _tools.isstr(mxBasis):
+        if mxBasisY is None:
+            mxBasisY = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[0]))))
+        mxBasis = _objs.Basis(mxBasis, int(round(_np.sqrt(gateMatrix.shape[1]))))
+    else:
+        if mxBasisY is None and gateMatrix.shape[0] == gateMatrix.shape[1]:
+            mxBasisY = mxBasis #can use mxBasis, whatever it is
 
-    xextra = 2.25 if ylabel is None else 2.5
-    yextra = 2.25 if xlabel is None else 2.5
-
-    if mxBasis is not None and mxBasisDims is not None:
-        if mxBasisDimsY is None: mxBasisDimsY = mxBasisDims
-        xlabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDims)]
-        ylabels=[("<i>%s</i>" % x) if len(x) else "" \
-                 for x in _tools.basis_element_labels(mxBasis,mxBasisDimsY)]
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDims) > 1:
-                yextra += .5
-        elif mxBasisDims > 1:
-            yextra += .5
-        if isinstance(mxBasisDims, list):
-            if len(mxBasisDimsY) > 1:
-                yextra += .5
-        elif mxBasisDimsY > 1:
-            yextra += .5
+    if _tools.isstr(mxBasisY):
+        mxBasisY = _objs.Basis(mxBasisY, int(round(_np.sqrt(gateMatrix.shape[0]))))
+                
+    if mxBasis is not None:
+        xlabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasis.labels]
     else:
         xlabels = [""] * gateMatrix.shape[1]
+        
+    if mxBasisY is not None:
+        ylabels=[("<i>%s</i>" % x) if len(x) else "" for x in mxBasisY.labels]
+    else:
         ylabels = [""] * gateMatrix.shape[0]
 
     colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
+    thickLineInterval = 4 if (mxBasis is not None and mxBasis.name == "pp") \
+                        else None #TODO: separate X and Y thick lines?
+    return matrix_color_boxplot(gateMatrix, xlabels, ylabels,
+                                xlabel, ylabel, boxLabels, thickLineInterval,
+                                colorbar, colormap, prec, scale,
+                                EBmatrix, title)
+
+
+def matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
+                         xlabel=None, ylabel=None, boxLabels=False,
+                         thickLineInterval=None, colorbar=None, colormap=None,
+                         prec=0, scale=1.0, EBmatrix=None, title=None, grid="black"):
+    """
+    Creates a color box plot for visualizing a single matrix.
+
+    Parameters
+    ----------
+    matrix : numpy array
+        The matrix to visualize.
+
+    m, M : float
+        Minimum and maximum of the color scale.
+
+    xlabels, ylabels: list, optional
+        List of (str) axis labels.
+
+    xlabel, ylabel : str, optional
+        Axis labels for the plot.
+
+    boxLabels : bool, optional
+        Whether box labels are displayed.
+
+    thickLineInterval : int, optional
+        If not None, the interval at thicker (darker) lines should be placed.
+        For example, if 2 then every other grid line will be thick.
+    
+    colorbar : bool optional
+        Whether to display a color bar to the right of the box plot.  If None,
+        then a colorbar is displayed when `boxLabels == False`.
+
+    colormap : Colormap, optional
+        An a color map object used to convert the numerical matrix values into
+        colors.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Only relevant when boxLabels == True. Allowed
+        values are:
+
+        - 'compact' = round to nearest whole number using at most 3 characters
+        - 'compacthp' = show as much precision as possible using at most 3 characters
+        - int >= 0 = fixed precision given by int
+        - int <  0 = number of significant figures given by -int
+
+    scale : float, optional
+        Scaling factor to adjust the size of the final figure.
+
+    EBmatrix : numpy array, optional
+        An array, of the same size as `matrix`, which gives error bars to be
+        be displayed in the hover info.
+
+    title : str, optional
+        A title for the plot
+
+    grid : {"white","black",None}
+        What color grid lines, if any, to add to the plot.  Advanced usage
+        allows the addition of `:N` where `N` is an integer giving the line
+        width.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+    if xlabels is None:  xlabels = [""] * matrix.shape[1]
+    if ylabels is None:  ylabels = [""] * matrix.shape[0]
+    HOVER_PREC = 7 #precision for hover labels
+
     colorbar = colorbar if (colorbar is not None) else (not boxLabels)
     
-    flipped_mx = _np.flipud(gateMatrix)  # FLIP so [0,0] matrix el is at *top* left
+    flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels    = list(reversed(ylabels)) # FLIP y-labels to match
+
+    #Create hoverlabels manually, since hoverinfo='z' arg to Heatmap
+    # doesn't work for certain (e.g. linear-log) color maps
+    if EBmatrix is None:
+        def hoverLabelFn(i,j):
+            """ Standard hover labels """
+            val = flipped_mx[i, j]
+            if _np.isnan(val): return ""
+            return "%s" % round(val,HOVER_PREC) #TODO: something better - or user-specifiable
+    else:
+        flipped_EBmx = _np.flipud(EBmatrix)  # FLIP so [0,0] matrix el is at *top* left
+        def hoverLabelFn(i,j):
+            """ Standard hover labels w/error bars"""
+            val,eb = flipped_mx[i,j], flipped_EBmx[i,j]
+            if _np.isnan(val): return ""
+            return "%s <br>+/- %s" % (round(val,HOVER_PREC),round(eb,HOVER_PREC)) #TODO: something better - or user-specifiable
+    
+    hoverLabels = []
+    for i in range(matrix.shape[0]):
+        hoverLabels.append([ hoverLabelFn(i,j) 
+                             for j in range(matrix.shape[1]) ] )
+        
     trace = go.Heatmap(z=colormap.normalize(flipped_mx),
                        colorscale=colormap.get_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
-                       zmax=colormap.hmax, hoverinfo='z')
+                       zmax=colormap.hmax, hoverinfo='text',
+                       text=hoverLabels)
     #trace = dict(type='heatmapgl', z=colormap.normalize(flipped_mx),
     #             colorscale=colormap.get_colorscale(),
     #             showscale=colorbar, zmin=colormap.hmin,
@@ -818,36 +1073,55 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
     
     data = [trace]
     
-    nX = gateMatrix.shape[1]
-    nY = gateMatrix.shape[0]
+    nX = matrix.shape[1]
+    nY = matrix.shape[0]
     
     gridlines = []
-    
-    # Vertical lines
-    for i in range(nX-1):
-        #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
-        
-        gridlines.append(     
-            {
-                'type': 'line',
-                'x0': i+0.5, 'y0': -0.5,
-                'x1': i+0.5, 'y1': nY-0.5,
-                'line': {'color': 'black', 'width': w},
-            } )
-        
-    #Horizontal lines
-    for i in range(nY-1):
-        #add darker lines at multiples of 4 boxes
-        w = 3 if (mxBasis == "pp" and ((i+1) % 4 == 0)) else 1
+    showframe = True #show black axes except with white grid lines (aesthetic)
 
-        gridlines.append(     
-            {
-                'type': 'line',
-                'x0': -0.5, 'y0': i+0.5,
-                'x1': nX-0.5, 'y1': i+0.5,
-                'line': {'color': 'black', 'width': w},
-            } )
+    if grid:
+        if ':' in grid:
+            gridlinecolor,w = grid.split(':')
+            gridlinewidth = int(w)
+        else:
+            gridlinecolor = grid #then 'grid' is the line color
+            gridlinewidth = None
+            
+        if gridlinecolor == "white":
+            showframe = False
+        
+        # Vertical lines
+        for i in range(nX-1):
+            if gridlinewidth:
+                w = gridlinewidth
+            else:
+                #add darker lines at multiples of thickLineInterval boxes
+                w = 3 if (thickLineInterval and
+                          (i+1) % thickLineInterval == 0) else 1
+            
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': i+0.5, 'y0': -0.5,
+                    'x1': i+0.5, 'y1': nY-0.5,
+                    'line': {'color': gridlinecolor, 'width': w},
+                } )
+            
+        #Horizontal lines
+        for i in range(nY-1):
+            if gridlinewidth:
+                w = gridlinewidth
+            else:
+                #add darker lines at multiples of thickLineInterval boxes
+                w = 3 if (thickLineInterval and (i+1) % thickLineInterval == 0) else 1
+    
+            gridlines.append(     
+                {
+                    'type': 'line',
+                    'x0': -0.5, 'y0': i+0.5,
+                    'x1': nX-0.5, 'y1': i+0.5,
+                    'line': {'color': gridlinecolor, 'width': w},
+                } )
 
 
     annotations = []
@@ -856,22 +1130,68 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
             for iy in range(nY):
                 annotations.append(
                     dict(
-                    text=_ph._eformat(gateMatrix[iy,ix],prec),
+                    text=_ph._eformat(matrix[iy,ix],prec),
                     x=ix, y=nY-1-iy, xref='x1', yref='y1',
-                    font=dict(size=scale*10,
-                              color=colormap.besttxtcolor(gateMatrix[iy,ix])),
+                    font=dict(size=8,  #don't scale box labels (OLD: 8*scale)
+                              color=colormap.besttxtcolor(matrix[iy,ix])),
                         showarrow=False)
                 )
-                
+
+    #Set plot size and margins
+    lmargin = rmargin = tmargin = bmargin = 20
+    if title: tmargin += 25
+    if xlabel: tmargin += 30
+    if ylabel: lmargin += 30
+    max_xl = max([len(xl) for xl in xlabels])
+    if max_xl > 0: tmargin += max_xl*7
+    max_yl = max([len(yl) for yl in ylabels])
+    if max_yl > 0: lmargin += max_yl*5
+    if colorbar: rmargin = 100
+
+    boxSizeX = boxSizeY = 15
+
+    if boxLabels:
+        if prec in ('compact','compacthp'):
+            precnum = 3
+        else: precnum = abs(prec)+1
+        boxSizeX = boxSizeY = 8*precnum
+
+        if len(annotations) > 0:
+            maxTextLen = max([len(ann['text']) for ann in annotations])
+            boxSizeX = boxSizeY = max(8*maxTextLen, 8*precnum)
+
+    if (matrix.shape[0] < 3):
+        # there is issue with hover info not working for
+        # small row of horizontal boxes
+        boxSizeY = max(35, boxSizeY)     
+      
+    width = lmargin + boxSizeX*matrix.shape[1] + rmargin
+    height = tmargin + boxSizeY*matrix.shape[0] + bmargin
+
+    width *= scale
+    height *= scale
+    lmargin *= scale
+    rmargin *= scale
+    tmargin *= scale
+    bmargin *= scale
+
+    #DEBUG
+    #print("DB margins = ",lmargin,rmargin,tmargin,bmargin, " tot hor = ", lmargin+rmargin, " tot vert = ", tmargin+bmargin)
+    #print("DB dims = ",width,height)
+    
     layout = go.Layout(
-        width = 35*(gateMatrix.shape[1]+xextra)*scale,
-        height = 35*(gateMatrix.shape[0]+yextra)*scale,
+        title = title,
+        titlefont=dict(size=10*scale),
+        width = width,
+        height = height,
+        margin = go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin), #pad=0
         xaxis=dict(
             side="top",
             title=xlabel,
+            titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
-            showline=True,
+            showline=showframe,
             showticklabels=True,
             mirror=True,
             ticks="",
@@ -884,9 +1204,10 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
         yaxis=dict(
             side="left",
             title=ylabel,
+            titlefont=dict(size=10*scale),
             showgrid=False,
             zeroline=False,
-            showline=True,
+            showline=showframe,
             showticklabels=True,
             mirror=True,
             ticks="",
@@ -896,16 +1217,19 @@ def gatematrix_color_boxplot(gateMatrix, m, M, mxBasis=None, mxBasisDims=None,
             range=[-0.5,len(ylabels)-0.5],
             ),
         shapes = gridlines,
-        annotations = annotations,
-        margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
+        annotations = annotations
     )
-    #print("DEBUG width = ",40*(gateMatrix.shape[1]+xextra)*scale)
-    #print("DEBUG height = ",40*(gateMatrix.shape[0]+yextra)*scale)
-    return go.Figure(data=data, layout=layout)
+
+    return ReportFigure(go.Figure(data=data, layout=layout),
+                        colormap, flipped_mx, plt_data=flipped_mx)
 
 
 
 class BoxKeyPlot(WorkspacePlot):
+    """
+    Plot serving as a key for fiducial rows/columns of each plaquette of 
+    a gatestring color box plot.
+    """
     def __init__(self, ws, prepStrs, effectStrs,
                  xlabel="Preparation fiducial", ylabel="Measurement fiducial", scale=1.0):
         """
@@ -932,7 +1256,8 @@ class BoxKeyPlot(WorkspacePlot):
     def _create(self, prepStrs, effectStrs, xlabel, ylabel, scale):
         
         #Copied from generate_boxplot
-        def val_filter(vals):  #filter to latex-ify gate strings.  Later add filter as a possible parameter
+        def val_filter(vals):
+            """filter to latex-ify gate strings.  Later add filter as a possible parameter"""
             formatted_vals = []
             for val in vals:
                 if isinstance(val, (tuple,_objs.GateString)) and all([_tools.isstr(el) for el in val]):
@@ -1029,44 +1354,22 @@ class BoxKeyPlot(WorkspacePlot):
             ]
         )
         # margin = go.Margin(l=50,r=50,b=50,t=50) #pad=0
-        return go.Figure(data=data, layout=layout)
-
-
-
-
-
-
-        
-#        layout = go.Layout(
-#            width=70*scale*(len(prepStrs)+1),
-#            height=70*scale*(len(effectStrs)+1),
-#
-#
-#        xs = [i+0.5 for i in range(len(prepStrs))]
-#        ys = [i+0.5 for i in range(len(effectStrs))]
-#        allys = []
-#        for y in ys: allys.extend( [y]*len(xs) )
-#        allxs = xs*len(ys)
-#        trace = go.Scatter(x=allxs, y=allys, mode="markers",
-#                           marker=dict(
-#                               size = 12,
-#                               color = 'rgba(0,0,255,0.8)',
-#                               line = dict(
-#                                   width = 2,
-#                               )),
-#                           xaxis='x1', yaxis='y1', hoverinfo='none')
-#                          
-#        fig = go.Figure(data=[trace], layout=layout)
-#        return fig
+        return ReportFigure( go.Figure(data=data, layout=layout),
+                             None, "No data in box key plot!",
+                             special='keyplot', args=(prepStrs, effectStrs, xlabel, ylabel))
 
 
     
 class ColorBoxPlot(WorkspacePlot):
+    """ 
+    Plot of colored boxes arranged into plaquettes showing various quanties
+    for each gate sequence in an analysis.
+    """
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
                  directGSTgatesets=None, dscomparator=None, submatrices=None,
-                 scatter=False, scale=1.0):
+                 typ="boxes", scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -1133,9 +1436,10 @@ class ColorBoxPlot(WorkspacePlot):
             matrices to plot, corresponding to the used x and y values
             of `gss`.
 
-        scatter : bool, optional
-            If True, a scatter plot of the values vs. sequence length is created 
-            instead of a grid of boxes.
+        typ : {"boxes","scatter","histogram"}
+            Which type of plot to make: the standard grid of "boxes", a
+            "scatter" plot of the values vs. sequence length, or a "histogram"
+            of all the values.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
@@ -1145,22 +1449,21 @@ class ColorBoxPlot(WorkspacePlot):
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
                                           directGSTgatesets, dscomparator, submatrices,
-                                          scatter, scale)
+                                          typ, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
                 directGSTgatesets, dscomparator, submatrices,
-                scatter, scale):
+                typ, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
 
-
         # Begin "Additional sub-matrix" functions for adding more info to hover text
-        def list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
+        def _list_spam_dimension(mxs_with_leading_spam_dim,fmt="%.3g"):
             mxs = mxs_with_leading_spam_dim
             list_mx = _np.empty( (mxs.shape[1],mxs.shape[2]), dtype=_np.object)
             for i in range(mxs.shape[1]):
@@ -1168,25 +1471,25 @@ class ColorBoxPlot(WorkspacePlot):
                     list_mx[i,j] = ", ".join(["NaN" if _np.isnan(x) else (fmt % x) for x in mxs[:,i,j]])
             return list_mx
 
-        def addl_mx_fn_sl(plaq,x,y):
+        def _addl_mx_fn_sl(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
             slmx[:,:] = ", ".join(spamlabels)
             return slmx
 
-        def addl_mx_fn_p(plaq,x,y):
+        def _addl_mx_fn_p(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             probMxs = _ph.probability_matrices( plaq, gateset, spamlabels,
                                             probs_precomp_dict)
-            return list_spam_dimension(probMxs, "%.5g")
+            return _list_spam_dimension(probMxs, "%.5g")
 
-        def addl_mx_fn_f(plaq,x,y):
+        def _addl_mx_fn_f(plaq,x,y):
             spamlabels = gateset.get_spam_labels()
             plaq_ds = plaq.expand_aliases(dataset)
             freqMxs = _ph.frequency_matrices( plaq_ds, dataset, spamlabels)
-            return list_spam_dimension(freqMxs, "%.5g")
+            return _list_spam_dimension(freqMxs, "%.5g")
 
-        def addl_mx_fn_cnt(plaq,x,y):
+        def _addl_mx_fn_cnt(plaq,x,y):
             plaq_ds = plaq.expand_aliases(dataset)
             cntMxs = _ph.total_count_matrix(plaq_ds, dataset)
             return cntMxs
@@ -1194,10 +1497,10 @@ class ColorBoxPlot(WorkspacePlot):
             # Could do this to get counts for all spam labels
             #spamlabels = gateset.get_spam_labels()
             #cntMxs  = _ph.count_matrices( plaq_ds, dataset, spamlabels)
-            #return list_spam_dimension(cntMxs, "%d")
+            #return _list_spam_dimension(cntMxs, "%d")
 
         #DEBUG: for checking
-        #def addl_mx_fn_chk(plaq,x,y):
+        #def _addl_mx_fn_chk(plaq,x,y):
         #    gsplaq_ds = plaq.expand_aliases(dataset)
         #    spamlabels = gateset.get_spam_labels()
         #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
@@ -1213,81 +1516,81 @@ class ColorBoxPlot(WorkspacePlot):
         if _tools.isstr(plottypes):
             plottypes = [plottypes]
 
-        for typ in plottypes:
-            if typ == "chi2":
+        for ptyp in plottypes:
+            if ptyp == "chi2":
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
                 ytitle="chi<sup>2</sup>"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.chi2_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
-                addl_hover_info_fns['p'] = addl_mx_fn_p
-                addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
+                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
+                addl_hover_info_fns['p'] = _addl_mx_fn_p
+                addl_hover_info_fns['f'] = _addl_mx_fn_f
+                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
 
-            elif typ == "logl":
+            elif ptyp == "logl":
                 precomp=True
                 colormapType = "linlog"
                 linlog_color = "red"
                 ytitle="2 log(L ratio)"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.logl_matrix( plaq, dataset, gateset, minProbClipForWeighting,
                                             probs_precomp_dict)
 
-                addl_hover_info_fns['outcomes'] = addl_mx_fn_sl
-                addl_hover_info_fns['p'] = addl_mx_fn_p
-                addl_hover_info_fns['f'] = addl_mx_fn_f
-                addl_hover_info_fns['total counts'] = addl_mx_fn_cnt
-                #DEBUG: addl_hover_info_fns['chk'] = addl_mx_fn_chk
+                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
+                addl_hover_info_fns['p'] = _addl_mx_fn_p
+                addl_hover_info_fns['f'] = _addl_mx_fn_f
+                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+                #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
 
-            elif typ == "blank":
+            elif ptyp == "blank":
                 precomp=False
                 colormapType = "trivial"
                 ytitle = ""
 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _np.nan * _np.zeros( (len(gss.minor_yvals()),
                                                  len(gss.minor_xvals())), 'd')
 
-            elif typ == "errorrate":
+            elif ptyp == "errorrate":
                 precomp=False
                 colormapType = "seq"
                 ytitle="error rate"
 
                 assert(sumUp == True),"Can only use 'errorrate' plot with sumUp == True"
-                def mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
-                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, dataset, directGSTgatesets) ]] )
+                def _mx_fn(plaq,x,y): #error rate as 1x1 matrix which we have plotting function sum up
+                    return _np.array( [[ _ph.small_eigval_err_rate(plaq.base, directGSTgatesets) ]] )
 
-            elif typ == "directchi2":
+            elif ptyp == "directchi2":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="chi<sup>2</sup>"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.direct_chi2_matrix(
                         plaq, gss, dataset,
                         directGSTgatesets.get(plaq.base,None),
                         minProbClipForWeighting)
 
-            elif typ == "directlogl":
+            elif ptyp == "directlogl":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "yellow"
                 ytitle="Direct 2 log(L ratio)"
                 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.direct_logl_matrix(
                         plaq, gss, dataset,
                         directGSTgatesets.get(plaq.base,None),
                         minProbClipForWeighting)
 
-            elif typ == "dscmp":
+            elif ptyp == "dscmp":
                 precomp=False
                 colormapType = "linlog"
                 linlog_color = "green"
@@ -1295,36 +1598,38 @@ class ColorBoxPlot(WorkspacePlot):
                 assert(dscomparator is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
 
-                def mx_fn(plaq,x,y):
+                def _mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
-            elif (submatrices is not None) and typ in submatrices:
-                precomp = False; ytitle = typ
-                if typ + ".colormap" in submatrices:
-                    colormapType = submatrices[typ + ".colormap"]
+            elif (submatrices is not None) and ptyp in submatrices:
+                precomp = False; ytitle = ptyp
+                if ptyp + ".colormap" in submatrices:
+                    colormapType = submatrices[ptyp + ".colormap"]
                 else:
                     colormapType = "seq"
             
             else:
-                raise ValueError("Invalid plot type: %s" % typ)
+                raise ValueError("Invalid plot type: %s" % ptyp)
 
             if precomp and probs_precomp_dict is None: #bulk-compute probabilities for performance
                 probs_precomp_dict = _ph._computeProbabilities(gss, gateset, dataset)
 
-            if (submatrices is not None) and typ in submatrices:
-                subMxs = submatrices[typ] # "custom" type -- all mxs precomputed by user
+            if (submatrices is not None) and ptyp in submatrices:
+                subMxs = submatrices[ptyp] # "custom" type -- all mxs precomputed by user
             else:
-                subMxs = _ph._computeSubMxs(gss,mx_fn,sumUp)
+                subMxs = _ph._computeSubMxs(gss,_mx_fn)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl,addl_mx_fn in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl] #ever useful?
                 else:
-                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn,sumUp)
+                    addl_subMxs = _ph._computeSubMxs(gss,addl_mx_fn)
                 addl_hover_info[lbl] = addl_subMxs
-            
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, gss.used_xvals(), gss.used_yvals(), sumUp)
+
+                
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp,
+                                                              len(dataset.get_spam_labels())-1 )
             if len(subMxs) > 0:                
                 dataMax = max( [ (0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                  for subMxRow in subMxs for mx in subMxRow] )
@@ -1347,27 +1652,33 @@ class ColorBoxPlot(WorkspacePlot):
                 
             else: assert(False) #invalid colormapType was set above
 
-            if scatter:
-                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
-                                                      False, boxLabels, prec,
-                                                      hoverInfo, sumUp, ytitle,
-                                                      scale, addl_hover_info)
-            else:
+
+            if typ == "boxes":
                 newfig = gatestring_color_boxplot(gss, subMxs, colormap,
                                                   False, boxLabels, prec,
                                                   hoverInfo, sumUp, invert,
                                                   scale, addl_hover_info)
+                
+            elif typ == "scatter":
+                newfig = gatestring_color_scatterplot(gss, subMxs, colormap,
+                                                      False, hoverInfo, sumUp, ytitle,
+                                                      scale, addl_hover_info)
+            elif typ == "histogram":
+                newfig = gatestring_color_histogram(gss, subMxs, colormap,
+                                                    ytitle, scale)
+            else:
+                raise ValueError("Invalid `typ` argument: %s" % typ)
 
             if fig is None:
                 fig = newfig
             else:
-                newfig['data'][0].update(visible=False)
-                fig['data'].append(newfig['data'][0])
+                newfig.plotlyfig['data'][0].update(visible=False)
+                fig.plotlyfig['data'].append(newfig.plotlyfig['data'][0])
 
-        nTraces = len(fig['data'])
-        assert(nTraces == len(plottypes))
+        nTraces = len(fig.plotlyfig['data'])
+        assert(nTraces >= len(plottypes)) # not == b/c histogram adds line trace
 
-        if nTraces > 1:
+        if len(plottypes) > 1:
             buttons = []
             for i,nm in enumerate(plottypes):
                 visible = [False]*nTraces
@@ -1376,7 +1687,7 @@ class ColorBoxPlot(WorkspacePlot):
                     dict(args=['visible', visible],
                          label=nm,
                          method='restyle') )
-            fig['layout'].update(
+            fig.plotlyfig['layout'].update(
                 updatemenus=list([
                     dict(buttons=buttons,
                          direction = 'left',
@@ -1400,11 +1711,15 @@ class ColorBoxPlot(WorkspacePlot):
 #                        mxBasisDims=None, xlabel=None, ylabel=None,
 #                        title=None, boxLabels=False, prec=0, mxBasisDimsY=None):
 class GateMatrixPlot(WorkspacePlot):
+    """ 
+    Plot of a gate matrix using colored boxes.  More specific than MatrixPlot
+    because of basis formatting for x and y labels.
+    """
     # separate in rendering/saving: size=None,fontSize=20, save_to=None, title=None, scale
     def __init__(self, ws, gateMatrix, m=-1.0, M=1.0,
-                 mxBasis=None, mxBasisDims=None, xlabel=None, ylabel=None,
-                 boxLabels=False, colorbar=None, prec=0, mxBasisDimsY=None,
-                 scale=1.0):
+                 mxBasis=None, xlabel=None, ylabel=None,
+                 boxLabels=False, colorbar=None, prec=0, mxBasisY=None,
+                 scale=1.0, EBmatrix=None):
         """
         Creates a color box plot of a gate matrix using a diverging color map.
     
@@ -1419,17 +1734,11 @@ class GateMatrixPlot(WorkspacePlot):
         m, M : float, optional
           Min and max values of the color scale.
     
-        mxBasis : str, optional
-          The name abbreviation for the basis. Typically in {"pp","gm","std","qt"}.
-          Used to label the rows & columns.  If you don't want labels, leave as
-          None.
-    
-        mxBasisDims : int or list, optional
-          The dimension of the density matrix space this basis spans, or a
-          list specifying the dimensions of terms in a direct-sum
-          decomposition of the density matrix space.  Used to label the
-          rows & columns.  If you don't want labels, leave as None.
-    
+        mxBasis : str or Basis object, optional
+          The basis, often of `gateMatrix`, used to create the x-labels (and
+          y-labels when `mxBasisY` is None). Typically in {"pp","gm","std","qt"}.
+          If you don't want labels, leave as None.
+        
         xlabel : str, optional
           An x-axis label for the plot.
     
@@ -1452,25 +1761,104 @@ class GateMatrixPlot(WorkspacePlot):
             - int >= 0 = fixed precision given by int
             - int <  0 = number of significant figures given by -int
     
-        mxBasisDimsY : int or list, optional
-            Specifies the dimension of the basis along the Y-axis direction
-            if and when this is *different* from the X-axis direction.  If
-            the two are the same, this parameter can be set to None.
+        mxBasisY : str or Basis object, optional
+          The basis, used to create the y-labels (for rows) when these are
+          *different* from the x-labels.  Typically in
+          {"pp","gm","std","qt"}.  If you don't want labels, leave as None.
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        EBmatrix : numpy array, optional
+            An array, of the same size as `gateMatrix`, which gives error bars to be
+            be displayed in the hover info.
         """
         super(GateMatrixPlot,self).__init__(ws, self._create, gateMatrix, m, M,
-                                            mxBasis, mxBasisDims, xlabel, ylabel,
-                                            boxLabels, colorbar, prec, mxBasisDimsY, scale)
+                                            mxBasis, xlabel, ylabel,
+                                            boxLabels, colorbar, prec, mxBasisY, scale, EBmatrix)
+
           
     def _create(self, gateMatrix, m, M, 
-                mxBasis, mxBasisDims, xlabel, ylabel,
-                boxLabels, colorbar, prec, mxBasisDimsY, scale):
+                mxBasis, xlabel, ylabel,
+                boxLabels, colorbar, prec, mxBasisY, scale, EBmatrix):
         
         return gatematrix_color_boxplot(
-            gateMatrix, m, M, mxBasis, mxBasisDims, mxBasisDimsY,
-            xlabel, ylabel, boxLabels, colorbar, prec, scale)
+            gateMatrix, m, M, mxBasis, mxBasisY,
+            xlabel, ylabel, boxLabels, colorbar, prec, scale, EBmatrix)
+
+
+
+class MatrixPlot(WorkspacePlot):
+    """ Plot of a general matrix using colored boxes """
+    def __init__(self, ws, matrix, m=-1.0, M=1.0,
+                 xlabels=None, ylabels=None, xlabel=None, ylabel=None,
+                 boxLabels=False, colorbar=None, colormap=None, prec=0,
+                 scale=1.0, grid="black"):
+        """
+        Creates a color box plot of a matrix using the given color map.
+    
+        This can be a useful way to display large matrices which have so many
+        entries that their entries cannot easily fit within the width of a page.
+    
+        Parameters
+        ----------
+        matrix : ndarray
+          The gate matrix data to display.
+        
+        m, M : float, optional
+          Min and max values of the color scale.
+    
+        xlabels, ylabels: list, optional
+          List of (str) axis labels.
+    
+        xlabel : str, optional
+          An x-axis label for the plot.
+    
+        ylabel : str, optional
+          A y-axis label for the plot.
+    
+        boxLabels : bool, optional
+          Whether box labels are displayed.
+
+        colorbar : bool optional
+          Whether to display a color bar to the right of the box plot.  If None,
+          then a colorbar is displayed when `boxLabels == False`.
+
+        colormap : Colormap, optional
+          An a color map object used to convert the numerical matrix values into
+          colors.
+    
+        prec : int or {'compact','compacthp'}, optional
+            Precision for box labels.  Only relevant when boxLabels == True. Allowed
+            values are:
+    
+            - 'compact' = round to nearest whole number using at most 3 characters
+            - 'compacthp' = show as much precision as possible using at most 3 characters
+            - int >= 0 = fixed precision given by int
+            - int <  0 = number of significant figures given by -int
+    
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+
+        grid : {"white","black",None}
+            What color grid lines, if any, to add to the plot.  Advanced usage
+            allows the addition of `:N` where `N` is an integer giving the line
+            width.
+        """
+        super(MatrixPlot,self).__init__(ws, self._create, matrix, m, M,
+                                        xlabels, ylabels, xlabel, ylabel,
+                                        boxLabels, colorbar, colormap, prec, scale, grid)
+          
+    def _create(self, matrix, m, M,
+                xlabels, ylabels, xlabel, ylabel,
+                boxLabels, colorbar, colormap, prec, scale, grid):
+
+        if colormap is None:
+            colormap = _colormaps.DivergingColormap(vmin=m, vmax=M)
+            
+        return matrix_color_boxplot(
+            matrix, xlabels, ylabels, xlabel, ylabel,
+            boxLabels, None, colorbar, colormap, prec, scale, grid=grid)
 
 
 
@@ -1481,6 +1869,7 @@ class GateMatrixPlot(WorkspacePlot):
 #    rel_evals10 = rel_evals**10
    
 class PolarEigenvaluePlot(WorkspacePlot):
+    """ Polar plot of complex eigenvalues """
     def __init__(self, ws, evals_list, colors, labels=None, scale=1.0, amp=None,
                  centerText=None):
         """
@@ -1609,14 +1998,22 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 showlegend=False,
                 ))
         assert(len(data) >= 3)
+
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'r': tr['r'], 't': tr['t']}
         
-        return go.Figure(data=data, layout=layout)
+        return ReportFigure( go.Figure(data=data, layout=layout),
+                             None, pythonVal )
 
 
 
 class ProjectionsBoxPlot(WorkspacePlot):
+    """ Plot of matrix of (usually error-generator) projections """
     def __init__(self, ws, projections, projection_basis, m=None, M=None,
-                 boxLabels=False, colorbar=None, prec="compacthp", scale=1.0):
+                 boxLabels=False, colorbar=None, prec="compacthp", scale=1.0,
+                 EBmatrix=None, title=None):
         """
         Creates a color box plot displaying projections.
 
@@ -1661,14 +2058,22 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
         scale : float, optional
             Scaling factor to adjust the size of the final figure.
+
+        EBmatrix : numpy array, optional
+            An array, of the same size as `projections`, which gives error bars to be
+            be displayed in the hover info.
+
+        title : str, optional
+            A title for the plot
         """
         super(ProjectionsBoxPlot,self).__init__(ws, self._create, projections,
-                                                 projection_basis, m, M,
-                                                 boxLabels, colorbar, prec, scale)
-        
+                                                projection_basis, m, M,
+                                                boxLabels, colorbar, prec, scale,
+                                                EBmatrix, title)
     def _create(self, projections,
                 projection_basis, m, M,
-                boxLabels, colorbar, prec, scale):
+                boxLabels, colorbar, prec, scale,
+                EBmatrix, title):
 
         absMax = _np.max(_np.abs(projections))
         if m is None: m = -absMax
@@ -1683,7 +2088,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             projections = projections.reshape( (1,projections.size) )
             xlabel = ""; ylabel = ""        
         elif nQubits == 1:
-            projections = projections.reshape( (1,4) )
+            projections = projections.reshape( (1,4) )                
             xlabel = "Q1"; ylabel = ""
         elif nQubits == 2:
             projections = projections.reshape( (4,4) )
@@ -1691,13 +2096,19 @@ class ProjectionsBoxPlot(WorkspacePlot):
         else:
             projections = projections.reshape( (4,projections.size/4) )
             xlabel = "Q*"; ylabel="Q1"
+
+        if EBmatrix is not None:
+            EBmatrix = EBmatrix.reshape( projections.shape )
     
         xd = int(round(_np.sqrt(projections.shape[1]))) #x-basis-dim
         yd = int(round(_np.sqrt(projections.shape[0]))) #y-basis-dim
     
         return gatematrix_color_boxplot(
-            projections, m, M, projection_basis, xd, yd,
-            xlabel, ylabel, boxLabels, colorbar, prec,  scale)
+            projections, m, M,
+            _objs.Basis(projection_basis,xd),
+            _objs.Basis(projection_basis,yd),
+            xlabel, ylabel, boxLabels, colorbar, prec,
+            scale, EBmatrix, title)
 
 
 
@@ -1708,6 +2119,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
 # xlabel="index", ylabel="Re[eigenvalue]", title=None
 # TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
 class ChoiEigenvalueBarPlot(WorkspacePlot):
+    """ Bar plot of eigenvalues showing red bars for negative values """
     def __init__(self, ws, evals, errbars=None, scale=1.0):
         """
         Creates a bar plot showing the real parts of each of the eigenvalues
@@ -1731,15 +2143,17 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
         
     def _create(self, evals, errbars, scale):
 
+        HOVER_PREC = 7
         xs = list(range(evals.size))
         ys = []; colors = []; texts=[]
         for i,ev in enumerate(evals.flatten()):
             ys.append( abs(ev.real) )
             colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
             if errbars is not None:
-                texts.append("%g +/- %g" % (ev.real,errbars.flatten()[i].real))
+                texts.append("%g +/- %g" % (round(ev.real,HOVER_PREC),
+                                            round(errbars.flatten()[i].real,HOVER_PREC)))
             else:
-                texts.append("%g" % ev.real)
+                texts.append("%g" % round(ev.real,HOVER_PREC))
                 
         trace = go.Bar(
             x=xs, y=ys, text=texts,
@@ -1747,15 +2161,32 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             hoverinfo='text'
         )
 
+        LOWER_LOG_THRESHOLD = -6 #so don't plot all the way down to, e.g., 1e-13
         ys = _np.clip(ys, 1e-30, 1e100) #to avoid log(0) errors
         log_ys = _np.log10(_np.array(ys,'d'))
-        minlog = _np.floor(min(log_ys))
-        maxlog = _np.ceil(max(log_ys))
+        minlog = max( _np.floor(min(log_ys))-0.1, LOWER_LOG_THRESHOLD)
+        maxlog = max(_np.ceil(max(log_ys)), minlog+1)
+
+        #Set plot size and margins
+        lmargin = rmargin = tmargin = bmargin = 10
+        lmargin += 30 # for y-tics
+        bmargin += 40 # for x-tics & xlabel
+        
+        width = lmargin + max(20*len(xs),120) + rmargin
+        height = tmargin + 120 + bmargin
+    
+        width *= scale
+        height *= scale
+        lmargin *= scale
+        rmargin *= scale
+        tmargin *= scale
+        bmargin *= scale
         
         data = [trace]
         layout = go.Layout(
-            width = 400*scale,
-            height = 300*scale,
+            width = width, 
+            height = height,
+            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title="index",
                 tickvals=xs
@@ -1767,11 +2198,14 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             bargap=0.02
         )
         
-        return go.Figure(data=data, layout=layout)
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, evals,plt_y=evals, plt_yerr=errbars,
+                            pythonErrorBar=errbars)
 
 
 
 class GramMatrixBarPlot(WorkspacePlot):
+    """ Bar plot of Gram matrix eigenvalues stacked against those of target """
     def __init__(self, ws, dataset, target, maxlen=10,
                  fixedLists=None, scale=1.0):
         """
@@ -1796,6 +2230,9 @@ class GramMatrixBarPlot(WorkspacePlot):
             2-tuple of gate string lists, specifying the preparation and
             measurement fiducials to use when constructing the Gram matrix,
             and thereby bypassing the search for such lists.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         super(GramMatrixBarPlot,self).__init__(ws, self._create,
                                                dataset, target, maxlen, fixedLists, scale)
@@ -1819,6 +2256,10 @@ class GramMatrixBarPlot(WorkspacePlot):
             hoverinfo='y',
             name="from Target"
         )
+
+        ymin = min(_np.min(svals), _np.min(target_svals))
+        ymax = max(_np.max(svals), _np.max(target_svals))
+        ymin = max(ymin, 1e-8) #prevent lower y-limit from being riduculously small
         
         data = [trace1,trace2]
         layout = go.Layout(
@@ -1832,18 +2273,25 @@ class GramMatrixBarPlot(WorkspacePlot):
                 title="eigenvalue",
                 type='log',
                 exponentformat='power',
+                range=[_np.log10(ymin),_np.log10(ymax)],
                 ),
             bargap=0.1
         )
-        
-        return go.Figure(data=data, layout=layout)
+
+        pythonVal = {}
+        for tr in data:
+            pythonVal[tr['name']] = tr['y']
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, pythonVal)
 
 class FitComparisonBarPlot(WorkspacePlot):
-    def __init__(self, ws, Xs, gssByX, gatesetByX, dataset,
+    """ Bar plot showing the overall (aggregate) goodness of fit
+        (along one dimension)"""
+    def __init__(self, ws, Xs, gssByX, gatesetByX, datasetByX,
                  objective="logl", Xlabel='L', NpByX=None, scale=1.0):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
-        for one or more gate set estimates to a data set.
+        for one or more gate set estimates to corresponding data sets.
 
         Parameters
         ----------
@@ -1857,8 +2305,9 @@ class FitComparisonBarPlot(WorkspacePlot):
         gatesetByX : list of GateSets
             `GateSet`s corresponding to each X value.
     
-        dataset : DataSet
-            The data set to compare each gate set against.
+        datasetByX : DataSet or list of DataSets
+            The data sets to compare each gate set against.  If a single
+            :class:`DataSet` is given, then it is used for all comparisons.
     
         objective : {"logl", "chi2"}, optional
             Whether to use log-likelihood or chi^2 values.
@@ -1870,11 +2319,15 @@ class FitComparisonBarPlot(WorkspacePlot):
         NpByX : list of ints, optional
             A list of parameter counts to use for each X.  If None, then
             the number of non-gauge parameters for each gate set is used.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
         """
         super(FitComparisonBarPlot,self).__init__(ws, self._create,
-                                                  Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale)
+                                                  Xs, gssByX, gatesetByX, datasetByX,
+                                                  objective, Xlabel, NpByX, scale)
         
-    def _create(self, Xs, gssByX, gatesetByX, dataset, objective, Xlabel, NpByX, scale):
+    def _create(self, Xs, gssByX, gatesetByX, datasetByX, objective, Xlabel, NpByX, scale):
 
         xs = list(range(len(Xs)))
         xtics = []; ys = []; colors = []; texts=[]
@@ -1882,53 +2335,59 @@ class FitComparisonBarPlot(WorkspacePlot):
         if NpByX is None:
             NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
 
-        # BEGIN code that is the same as FitComparisonTable creation code
-        for X,gs,gss,Np in zip(Xs,gatesetByX,gssByX,NpByX):
-            gstrs = gss.allstrs
-            
-            if objective == "chi2":
-                fitQty = _tools.chi2( dataset, gs, gstrs,
-                                    minProbClipForWeighting=1e-4,
-                                    gateLabelAliases=gss.aliases )
-            elif objective == "logl":
-                logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
-                logl = _tools.logl( gs, dataset, gstrs, gateLabelAliases=gss.aliases)
-                fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
-                if(logL_upperbound < logl):
-                    raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+        if isinstance(datasetByX, _objs.DataSet):
+            datasetByX = [datasetByX]*len(gatesetByX)
 
-            Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
-            k = max(Ns-Np,0) #expected chi^2 or 2*(logL_ub-logl) mean
-            Nsig = (fitQty-k)/_np.sqrt(2*k)
-            #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
-    
-            if   (fitQty-k) < _np.sqrt(2*k):
-                rating = 5; color="darkgreen"
-            elif (fitQty-k) < 2*k:
-                rating = 4; color="blue"
-            elif (fitQty-k) < 5*k:
-                rating = 3; color="yellow"
-            elif (fitQty-k) < 10*k:
-                rating = 2; color="orange"
+        for X,gs,gss,dataset,Np in zip(Xs,gatesetByX,gssByX,datasetByX,NpByX):
+            if gss is None or gs is None:
+                Nsig, rating = _np.nan, 5
             else:
-                rating = 1; color="red"
-            # END code that is the same as FitComparisonTable creation code
+                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective, Np)
+                
+            if   rating==5: color="darkgreen"
+            elif rating==4: color="lightgreen"
+            elif rating==3: color="yellow"
+            elif rating==2: color="orange"
+            else:           color="red"
             
             xtics.append(str(X))
             ys.append(Nsig)
             texts.append("%g<br>rating: %d" % (Nsig,rating))
             colors.append(color)
 
+        MIN_BAR = 1e-4 #so all bars have positive height (since log scale)
+        plotted_ys = [ max(y,MIN_BAR) for y in ys]
         trace = go.Bar(
-            x=xs, y=ys, text=texts,
+            x=xs, y=plotted_ys, text=texts,
             marker=dict(color=colors),
             hoverinfo='text'
         )
+
+        #Set plot size and margins
+        lmargin = rmargin = tmargin = bmargin = 10
+        if Xlabel: bmargin += 20
+        lmargin += 20 #y-label is always present
+        if xtics:
+            max_xl = max([len(xl) for xl in xtics])
+            if max_xl > 0: bmargin += max_xl*5
+        lmargin += 20 #for y-labels (guess)
+        
+        width = lmargin + max(30*len(xs),150) + rmargin
+        height = tmargin + 200 + bmargin
+    
+        width *= scale
+        height *= scale
+        lmargin *= scale
+        rmargin *= scale
+        tmargin *= scale
+        bmargin *= scale
+
         
         data = [trace]
         layout = go.Layout(
-            width = 400*scale,
-            height = 300*scale,
+            width = width, 
+            height = height,
+            margin=go.Margin(l=lmargin,r=rmargin,b=bmargin,t=tmargin),
             xaxis = dict(
                 title=Xlabel,
                 tickvals=xs,
@@ -1940,16 +2399,197 @@ class FitComparisonBarPlot(WorkspacePlot):
                 ),
             bargap=0.1
         )
-        if max(ys) < 1.0:
-            layout['yaxis']['range'] = [min(ys)/2.0,1]
+        if max(plotted_ys) < 1.0:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(1.0)]
+        else:
+            layout['yaxis']['range'] = [_np.log10(min(plotted_ys)/2.0),
+                                        _np.log10(max(plotted_ys)*2.0)]
         
-        return go.Figure(data=data, layout=layout)
-    
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, {'x': xs, 'y': ys})
 
-class DatasetComparisonPlot(WorkspacePlot):
+
+class FitComparisonBoxPlot(WorkspacePlot):
+    """ Box plot showing the overall (aggregate) goodness of fit
+        (along 2 dimensions)"""
+    def __init__(self, ws, Xs, Ys, gssByYthenX, gatesetByYthenX, datasetByYthenX,
+                 objective="logl", Xlabel=None, Ylabel=None, scale=1.0):
+        """
+        Creates a box plot showing the overall (aggregate) goodness of fit
+        for one or more gate set estimates to their respective  data sets.
+
+        Parameters
+        ----------
+        Xs, Ys : list
+            List of X-values and Y-values (converted to strings).
+
+        gssByYthenX : list of lists of LsGermsStructure objects
+            Specifies the set (& structure) of the gate strings used at each Y
+            and X value, indexed as `gssByYthenX[iY][iX]`, where `iX` and `iY`
+            are X and Y indices, respectively.
+
+        gatesetByYthenX : list of lists of GateSets
+            `GateSet`s corresponding to each X and Y value.
+
+        datasetByYthenX : list of lists of DataSets
+            `DataSet`s corresponding to each X and Y value.
+    
+        objective : {"logl", "chi2"}, optional
+            Whether to use log-likelihood or chi^2 values.
+
+        Xlabel, Ylabel : str, optional
+            Labels for the 'X' and 'Y' variables which index the different gate
+            sets. These strings will be the x- and y-label of the resulting box
+            plot.
+
+        scale : float, optional
+            Scaling factor to adjust the size of the final figure.
+        """
+        super(FitComparisonBoxPlot,self).__init__(
+            ws, self._create, Xs, Ys, gssByYthenX, gatesetByYthenX,
+            datasetByYthenX, objective, Xlabel, Ylabel, scale)
+        
+    def _create(self, Xs, Ys, gssByYX, gatesetByYX, datasetByYX, objective,
+                    Xlabel, Ylabel, scale):
+
+        xs = list(range(len(Xs)))
+        ys = list(range(len(Ys)))
+        xlabels = list(map(str,Xs))
+        ylabels = list(map(str,Ys))
+
+        NsigMx = _np.empty( (len(Ys),len(Xs)), 'd')
+        cmap = _colormaps.PiecewiseLinearColormap(
+            [[0,(0,0.5,0)], [2,(0,0.5,0)],   #rating=5 darkgreen
+             [20,(0,1.0,0)],                 #rating=4 lightgreen
+             [100,(1.0,1.0,0)],              #rating=3 yellow
+             [500,(1.0,0.5,0)],              #rating=2 orange
+             [1000,(1.0,0,0)]])              #rating=1 red
+
+        for iY,Y in enumerate(Ys):
+            for iX,X in enumerate(Xs):
+                dataset = datasetByYX[iY][iX]
+                gs = gatesetByYX[iY][iX]
+                gss = gssByYX[iY][iX]
+                
+                if dataset is None or gss is None or gs is None:
+                    NsigMx[iY][iX] = _np.nan
+                    continue
+
+                Nsig, rating = _ph.ratedNsigma(dataset, gs, gss, objective)
+                NsigMx[iY][iX] = Nsig
+
+        return matrix_color_boxplot(
+            NsigMx, xlabels, ylabels, Xlabel, Ylabel,
+            boxLabels=True, colorbar=False, colormap=cmap,
+            prec='compact', scale=scale, grid="white")
+
+
+class DatasetComparisonSummaryPlot(WorkspacePlot):
+    """ A grid of grayscale boxes comparing data sets pair-wise."""
+    def __init__(self, ws, dslabels, dsc_dict, scale=1.0):
+        """
+        Creates a plot showing the total 2*deltaLogL values for each pair of
+        DataSets out of some number of total DataSets. 
+
+        Background: For every pair of data sets, the likelihood is computed for
+        two different models: 1) the model in which a single set of
+        probabilities (one per gate sequence, obtained by the combined outcome
+        frequencies) generates both data sets, and 2) the model in which each
+        data is generated from different sets of probabilities.  Twice the ratio
+        of these log-likelihoods can be compared to the value that is expected
+        when model 1) is valid.  This plot shows the difference between the
+        expected and actual twice-log-likelihood ratio in units of standard
+        deviations.  Zero or negative values indicate the data sets appear to be
+        generated by the same underlying probabilities.  Large positive values
+        indicate the data sets appear to be generated by different underlying
+        probabilities.
+        
+        Parameters
+        ----------
+        dslabels : list
+            A list of data set labels, specifying the ordering and the number
+            of data sets.
+
+        dsc_dict : dict
+            A dictionary of `DataComparator` objects whose keys are 2-tuples of
+            integers such that the value associated with `(i,j)` is a
+            `DataComparator` object that compares the `i`-th and `j`-th data
+            sets (as indexed by `dslabels`.
+        """
+        super(DatasetComparisonSummaryPlot,self).__init__(ws, self._create, dslabels, dsc_dict, scale)
+        
+    def _create(self, dslabels, dsc_dict, scale):
+        nSigmaMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
+        logLMx = _np.zeros( (len(dslabels), len(dslabels)), 'd' ) * _np.nan
+        max_nSigma = max_2DeltaLogL = 0.0
+        for i,_ in enumerate(dslabels):
+            for j,_ in enumerate(dslabels[i+1:],start=i+1):
+                dsc = dsc_dict.get( (i,j), dsc_dict.get( (j,i), None) )
+                
+                val = dsc.get_composite_nsigma() if (dsc is not None) else None                
+                nSigmaMx[i,j] = nSigmaMx[j,i] = val
+                if val and val > max_nSigma: max_nSigma = val
+
+                val = dsc.get_composite_2DeltaLogL() if (dsc is not None) else None
+                logLMx[i,j] = logLMx[j,i] = val
+                if val and val > max_2DeltaLogL: max_2DeltaLogL = val
+                
+        colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_nSigma)
+        nSigma_fig = matrix_color_boxplot(
+            nSigmaMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
+            boxLabels=True, prec=1, colormap=colormap, scale=scale)
+
+        colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_2DeltaLogL)
+        logL_fig = matrix_color_boxplot(
+            logLMx, dslabels, dslabels, "Dataset 1", "Dataset 2",
+            boxLabels=True, prec=1, colormap=colormap, scale=scale)
+        
+        #Combine plotly figures into one
+        combined_fig = nSigma_fig
+        logL_fig.plotlyfig['data'][0].update(visible=False)
+        combined_fig.plotlyfig['data'].append(logL_fig.plotlyfig['data'][0])
+        annotations = [ nSigma_fig.plotlyfig['layout']['annotations'],
+                        logL_fig.plotlyfig['layout']['annotations'] ]
+        
+        buttons = []; nTraces = 2
+        for i,nm in enumerate(['Nsigma','2DeltaLogL']):
+            visible = [False]*nTraces
+            visible[i] = True
+            buttons.append(
+                dict(args=[{'visible': visible},
+                           {'annotations': annotations[i]}],
+                     label=nm,
+                     method='update') ) #'restyle'
+        combined_fig.plotlyfig['layout'].update(
+            updatemenus=list([
+                dict(buttons=buttons,
+                     direction = 'left',
+                     #pad = {'r': 1, 'b': 1},
+                     showactive = True, type = 'buttons',
+                     x = 0.0, xanchor = 'left',
+                     y = -0.1, yanchor = 'top')
+                ]) )
+        m = combined_fig.plotlyfig['layout']['margin']
+        w = combined_fig.plotlyfig['layout']['width']
+        h = combined_fig.plotlyfig['layout']['height']
+        exr = 0 if w > 240 else 240-w # extend to right
+        combined_fig.plotlyfig['layout'].update(
+            margin=go.Margin(l=m['l'],r=m['r']+exr,b=m['b']+40,t=m['t']),
+            width=w+exr,
+            height=h+40
+        )
+
+        return combined_fig
+
+
+
+
+class DatasetComparisonHistogramPlot(WorkspacePlot):
+    """ Histogram of p-values comparing two data sets """
     def __init__(self, ws, dsc, nbins=50, frequency=True,
                   log=True, display='pvalue', scale=1.0):
-        super(DatasetComparisonPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
+        super(DatasetComparisonHistogramPlot,self).__init__(ws, self._create, dsc, nbins, frequency,
                                                    log, display, scale)
         
     def _create(self, dsc, nbins, frequency, log, display, scale):
@@ -1961,13 +2601,17 @@ class DatasetComparisonPlot(WorkspacePlot):
         pVals_nz = _np.array([x for x in pVals if abs(x)>TOL])
         pVals0 = (len(pVals)-len(pVals_nz)) if log else dsc.pVals0
         llrVals = dsc.llrVals.astype('d')
-        
+
         if log:
-            minval = _np.floor(_np.log10(min(pVals_nz)))
-            maxval = _np.ceil(_np.log10(max(pVals_nz)))
-            thres = (maxval-minval)/(nbins-1) * (nbins-2)
-            lastBinCount = (_np.log10(pVals_nz)>thres).sum()
-             #Kenny: why use this as a normalization?  Is this correct?
+            if len(pVals_nz) == 0:
+                minval = maxval = thres = 0.0
+                lastBinCount = 0
+            else:
+                minval = _np.floor(_np.log10(min(pVals_nz)))
+                maxval = _np.ceil(_np.log10(max(pVals_nz)))
+                thres = (maxval-minval)/(nbins-1) * (nbins-2)
+                lastBinCount = (_np.log10(pVals_nz)>thres).sum()
+                #Kenny: why use this as a normalization?  Is this correct?
         else:
             minval = min(pVals)
             maxval = max(pVals)
@@ -2070,16 +2714,21 @@ class DatasetComparisonPlot(WorkspacePlot):
             legend=dict(orientation="h")
         )
 
-        return go.Figure(data=data, layout=layout)
+        pythonVal = {'histogram values': vals}
+        if display == 'pvalue':
+            pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
+        return ReportFigure(go.Figure(data=data, layout=layout),
+                            None, pythonVal)
     
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
+    """ Plot of RB Decay curve """
     def __init__(self, ws, rbR,xlim=None, ylim=None,
                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
                  gs_target=False,group=False, norm='1to1', legend=True,
-                 title=True, scale=1.0):
+                 title='Randomized Benchmarking Decay', scale=1.0):
         """
         Plot RB decay curve, as a function of some the sequence length
         computed using the `gstyp` gate-label-set.
@@ -2155,8 +2804,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         legend : bool, optional
             Specifies whether a legend is added to the graph
             
-        title : bool, optional
-            Specifies whether a title is added to the graph
+        title : str, optional
+            Specifies a title for the graph
             
         Returns
         -------
@@ -2189,8 +2838,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         A = rbR.results['A']
         B = rbR.results['B']
         f = rbR.results['f']
-        if fit == 'first order':
-            C = rbR.dicts[gstyp]['C1']
+        #if fit == 'first order':
+        #    C = rbR.dicts[gstyp]['C1']
         pre_avg = rbR.pre_avg
         
         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
@@ -2395,7 +3044,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         layout = go.Layout(
             width=800*scale,
             height=400*scale,
-            title='Randomized Benchmarking Decay',
+            title=title,
             titlefont=dict(size=16),
             xaxis=dict(
                 title=xlabel,
@@ -2414,8 +3063,14 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             )
         )
 
+        pythonVal = {}
+        for i,tr in enumerate(data):
+            key = tr['name'] if ("name" in tr) else "trace%d" % i
+            pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
+        
         #reverse order of data so z-ordering is nicer
-        return go.Figure(data=list(reversed(data)), layout=layout)
+        return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
+                            None, pythonVal)
 
         #newplotgca.set_xlabel(xlabel, fontsize=15)
         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)

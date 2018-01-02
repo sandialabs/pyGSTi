@@ -1,3 +1,4 @@
+""" Defines the Row class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -7,14 +8,13 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 from .cell        import Cell
-from .formatters  import formatDict as _formatDict
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 class Row(object):
     '''
     Representation of a table row
     '''
-    def __init__(self, rowData=None, formatters=None, labels=None):
+    def __init__(self, rowData=None, formatters=None, labels=None, nonMarkovianEBs=False):
         '''
         Create a row object 
 
@@ -26,11 +26,13 @@ class Row(object):
             formatting options for each cell
         labels : optional list[string]
             labeling options for each cell
+        nonMarkovianEBs : bool
+            boolean indicating if non markovian error bars should be used
         '''
         if rowData is None:
             rowData = []
         else:
-            rowData = [_ReportableQty.from_val(item) for item in rowData]
+            rowData = [_ReportableQty.from_val(item, nonMarkovianEBs) for item in rowData]
         if formatters is None:
             formatters = []
         if labels is None:
@@ -46,7 +48,15 @@ class Row(object):
                 for item, formatter, label in 
                 zip(rowData, formatters, labels)]
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
     def add(self, data, formatter=None, label=None):
+        """ Adds a cell with the given `data`, `formatter` and `label` """
         self.cells.append(Cell(data, formatter, label))
 
     def render(self, fmt, specs):

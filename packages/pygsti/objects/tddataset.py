@@ -1,16 +1,16 @@
+""" Defines the DataSet class and supporting classes and functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation              
 #    This Software is released under the GPL license detailed    
 #    in the file "license.txt" in the top-level pyGSTi directory 
 #*****************************************************************
-""" Defines the DataSet class and supporting classes and functions """
 
 import numpy as _np
-import scipy.special as _sps
-import scipy.fftpack as _fft
-from scipy.integrate import quad as _quad
-from scipy.interpolate import interp1d as _interp1d
+#import scipy.special as _sps
+#import scipy.fftpack as _fft
+#from scipy.integrate import quad as _quad
+#from scipy.interpolate import interp1d as _interp1d
 import pickle as _pickle
 import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
@@ -18,7 +18,7 @@ from collections import OrderedDict as _OrderedDict
 from ..tools import listtools as _lt
 
 from . import gatestring as _gs
-from . import dataset as _ds
+#from . import dataset as _ds
 
 
 class TDDataSet_KeyValIterator(object):
@@ -86,9 +86,17 @@ class TDDataSetRow(object):
     self.reps = rowRepData
 
   def get_sl(self):
+    """ 
+    Returns this row's sequence of spam labels, one per "bin" of repetition
+    counts (returned by :method:`get_counts`).
+    """
     return [self.dataset.sl[i] for i in self.sli]
 
   def get_expanded_sl(self):
+    """ 
+    Returns this row's sequence of spam labels, with repetition counts
+    expanded, so there's one element in the returned list for *each* count.
+    """
     if self.reps is not None:
       sl = []
       for sli, _, nreps in zip(self.sli,self.time,self.reps):
@@ -97,6 +105,10 @@ class TDDataSetRow(object):
     else: return self.get_sl()
 
   def get_expanded_sli(self):
+    """ 
+    Returns this row's sequence of spam label indices, with repetition counts
+    expanded, so there's one element in the returned list for *each* count.
+    """
     if self.reps is not None:
       inds = []
       for sli, _, nreps in zip(self.sli,self.time,self.reps):
@@ -105,6 +117,10 @@ class TDDataSetRow(object):
     else: return self.sli.copy()
 
   def get_expanded_times(self):
+    """ 
+    Returns this row's sequence of time stamps, with repetition counts
+    expanded, so there's one element in the returned list for *each* count.
+    """
     if self.reps is not None:
       times = []
       for _, time, nreps in zip(self.sli,self.time,self.reps):
@@ -135,6 +151,11 @@ class TDDataSetRow(object):
       assert(len(tup) == 2 or tup[2] == 1),"Repetitions must == 1 (not tracking reps)"
 
   def get_counts(self):
+    """ 
+    Returns this row's sequence of "repetition counts", that is, the number of
+    repetitions of each spam label in the list returned by :method:`get_sl`, or
+    equivalently, each spam label index in this rows `.sli` member.
+    """    
     cntDict = _OrderedDict()
     if self.reps is None:
       for sl,i in self.dataset.slIndex.items():
@@ -146,7 +167,7 @@ class TDDataSetRow(object):
     return cntDict
     
   def total(self):
-    """ Returns the total number of counts."""
+    """ Returns the total number of counts contained in this row."""
     if self.reps is None:
       return float(len(self.sli))
     else:
@@ -944,6 +965,7 @@ class TDDataSet(object):
 
     state_dict = _pickle.load(f)
     def expand(x): #to be backward compatible
+      """ Expand a compressed gate string """
       if isinstance(x,_gs.CompressedGateString): return x.expand()
       else: 
         _warnings.warn("Deprecated dataset format.  Please re-save " +
@@ -968,16 +990,16 @@ class TDDataSet(object):
         self.repData = _np.lib.format.read_array(f) #_np.load(f) doesn't play nice with gzip
     else:
       self.sliData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.sliData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       self.timeData = []
-      for i in range(state_dict['nRows']):
+      for _ in range(state_dict['nRows']):
         self.timeData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
 
       if useReps:
         self.repData = []
-        for i in range(state_dict['nRows']):
+        for _ in range(state_dict['nRows']):
           self.repData.append( _np.lib.format.read_array(f) ) #_np.load(f) doesn't play nice with gzip
       else:
         self.repData = None

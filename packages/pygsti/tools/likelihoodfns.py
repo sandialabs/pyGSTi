@@ -1,23 +1,23 @@
+"""Functions related to computation of the log-likelihood."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions related to computation of the log-likelihood."""
 
 import numpy as _np
 import warnings as _warnings
 import itertools as _itertools
-#import time as _time
-from . import basis as _basis
+import time as _time
+import sys as _sys
+from . import basistools as _bt
 from . import listtools as _lt
 from . import jamiolkowski as _jam
 from . import mpitools as _mpit
-from . import slicetools as _slct
+from ..baseobjs import smart_cached
 
 TOL = 1e-20
-
 
 # Functions for computing the log liklihood function and its derivatives
 
@@ -169,7 +169,7 @@ def fill_count_vecs(mxToFill, spam_label_rows, dataset, gatestring_list):
 
 
 
-
+@smart_cached
 def logl_terms(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
@@ -249,7 +249,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     return v
 
 
-
+@smart_cached
 def logl(gateset, dataset, gatestring_list=None,
          minProbClip=1e-6, probClipInterval=(-1e6,1e6), radius=1e-4,
          evalTree=None, countVecMx=None, totalCntVec=None, poissonPicture=True,
@@ -573,6 +573,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     if poissonPicture:
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+            """ Factored-out computation of hessian from raw components """
             # Notation:  (K=#spam, M=#strings, N=#wrtParams1, N'=#wrtParams2 )
             totCnts = totalCntVec[None,:]  #shorthand (just a view)
             S = cntVecMx / min_p - totCnts # slope term that is derivative of logl at min_p
@@ -620,6 +621,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
         #(the non-poisson picture requires that the probabilities of the spam labels for a given string are constrained to sum to 1)
         #NOTE: hessian_from_hprobs MAY modify hprobs and dprobs12 (to save mem)
         def hessian_from_hprobs(hprobs, dprobs12, cntVecMx, totalCntVec, pos_probs):
+            """ Factored-out computation of hessian from raw components """
             S = cntVecMx / min_p # slope term that is derivative of logl at min_p
             S2 = -0.5 * cntVecMx / (min_p**2) # 2nd derivative of logl term at min_p
 
@@ -665,10 +667,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     cntVecMx_mem = _np.empty( (len(spamLabels),maxNumGatestrings),'d')
     probs_mem  = _np.empty( (len(spamLabels),maxNumGatestrings), 'd' )
 
-    #DEBUG
-    #import time
-    #import sys
-    #tStart = time.time()
+    tStart = _time.time()
 
     #Loop over subtrees
     for iSubTree in mySubTreeIndices:
@@ -708,16 +707,17 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
        
         subtree_hessian = _np.zeros( (nP,nP), 'd')
 
-        #k,kmax = 0,len(mySliceTupList) #DEBUG
+        k,kmax = 0,len(mySliceTupList)
         for (slice1,slice2,hprobs,dprobs12) in gateset.bulk_hprobs_by_block(
             spam_lbl_rows, evalSubTree, mySliceTupList, True, blkComm):
+            rank = comm.Get_rank() if (comm is not None) else 0
 
-            #DEBUG
-            #iSub = mySubTreeIndices.index(iSubTree)
-            #print("DEBUG: rank%d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
-            #          % (comm.Get_rank(),time.time()-tStart,k,kmax,iSub,
-            #             len(mySubTreeIndices), len(evalSubTree)))            
-            #sys.stdout.flush(); k += 1
+            if verbosity > 3 or (verbosity == 3 and rank == 0):
+                iSub = mySubTreeIndices.index(iSubTree)
+                print("rank %d: %gs: block %d/%d, sub-tree %d/%d, sub-tree-len = %d"
+                      % (rank,_time.time()-tStart,k,kmax,iSub,
+                         len(mySubTreeIndices), len(evalSubTree)))            
+                _sys.stdout.flush(); k += 1
 
             subtree_hessian[slice1,slice2] = \
                 hessian_from_hprobs(hprobs, dprobs12, cntVecMx,
@@ -743,7 +743,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
 
     return final_hessian # (N,N)
 
-
+@smart_cached
 def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
              poissonPicture=True, check=False, gateLabelAliases=None):
     """
@@ -790,7 +790,7 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
     float
     """
     maxLogLTerms = logl_max_terms(dataset, gatestring_list, countVecMx,
-                                  totalCntVec, poissonPicture, check,
+                                  totalCntVec, poissonPicture,
                                   gateLabelAliases)
     
     # maxLogLTerms[iSpamLabel,iGateString] contains all logl-upper-bound contributions
@@ -814,9 +814,9 @@ def logl_max(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
 
     return maxLogL
 
-
+@smart_cached
 def logl_max_terms(dataset, gatestring_list=None, countVecMx=None, totalCntVec=None,
-                   poissonPicture=True, check=False, gateLabelAliases=None):
+                   poissonPicture=True, gateLabelAliases=None):
     """
     The vector of maximum log-likelihood contributions for each gate string
     & SPAM label.
@@ -925,7 +925,7 @@ def prep_penalty(rhoVec, basis):
     float
     """
     # rhoVec must be positive semidefinite and trace = 1
-    rhoMx = _basis.vec_to_stdmx(_np.asarray(rhoVec),basis)
+    rhoMx = _bt.vec_to_stdmx(_np.asarray(rhoVec),basis)
     evals = _np.linalg.eigvals( rhoMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfNeg = sum( [ -ev.real for ev in evals if ev.real < 0 ] )
     tracePenalty = abs(rhoVec[0,0]-(1.0/_np.sqrt(rhoMx.shape[0])))
@@ -956,7 +956,7 @@ def effect_penalty(EVec, basis):
     float
     """
     # EVec must have eigenvalues between 0 and 1
-    EMx = _basis.vec_to_stdmx(_np.asarray(EVec),basis)
+    EMx = _bt.vec_to_stdmx(_np.asarray(EVec),basis)
     evals = _np.linalg.eigvals( EMx )  #could use eigvalsh, but wary of this since eigh can be wrong...
     sumOfPen = 0
     for ev in evals:
@@ -989,12 +989,12 @@ def cptp_penalty(gateset, include_spam_penalty=True):
     """
     ret = _jam.sum_of_negative_choi_evals(gateset)
     if include_spam_penalty:
-        b = gateset.basis.name
+        b = gateset.basis
         ret += sum([ prep_penalty(r,b) for r in list(gateset.preps.values()) ])
         ret += sum([ effect_penalty(e,b) for e in list(gateset.effects.values()) ])
     return ret
 
-
+@smart_cached
 def two_delta_loglfn(N, p, f, minProbClip=1e-6, poissonPicture=True):
     """
     Term of the 2*[log(L)-upper-bound - log(L)] sum corresponding

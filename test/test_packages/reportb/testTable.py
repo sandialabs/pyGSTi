@@ -12,9 +12,8 @@ class TestTable(BaseTestCase):
         self.headings   = [0.1]
         self.formatters = ['Normal']
         self.customHeadings = {'html'  : 'test',
-                               'text'  : 'test',
-                               'latex' : 'test',
-                               'ppt'   : 'test'}
+                               'python': 'test',
+                               'latex' : 'test'}
 
     def custom_headings(self, fmt):
         table = ReportTable(self.headings, self.formatters, self.customHeadings)

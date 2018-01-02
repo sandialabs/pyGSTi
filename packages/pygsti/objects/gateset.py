@@ -1,13 +1,12 @@
+""" Defines the GateSet class and supporting functionality."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateSet class and supporting functionality."""
 
 import numpy as _np
-import numpy.linalg as _nla
 import scipy as _scipy
 import itertools as _itertools
 import collections as _collections
@@ -19,17 +18,17 @@ from ..tools import gatetools as _gt
 from ..tools import likelihoodfns as _lf
 from ..tools import jamiolkowski as _jt
 from ..tools import compattools as _compat
+from ..tools import basistools as _bt
 
-from . import evaltree as _evaltree
 from . import gate as _gate
 from . import spamvec as _sv
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
-from .gatemapcalc import GateMapCalc as _GateMapCalc
+#from .gatemapcalc import GateMapCalc as _GateMapCalc
 
-from .verbosityprinter import VerbosityPrinter
-from ..tools.basis import Basis, change_basis, _mut
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
+from ..baseobjs import Basis as _Basis
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
@@ -81,7 +80,6 @@ class GateSet(object):
             identity vector.
 
         """
-
         assert(default_param in ('full','TP','static'))
         default_e_param = "full" if default_param == "TP" else default_param
 
@@ -120,10 +118,12 @@ class GateSet(object):
 
     @property
     def povm_identity(self):
+        """ The POVM identity vector, used when 'remainder' is used. """
         return self._povm_identity
 
     @povm_identity.setter
     def povm_identity(self, value):
+        """ The POVM identity vector, used when 'remainder' is used. """
         if value is None:
             self._povm_identity = None
             return
@@ -181,29 +181,32 @@ class GateSet(object):
         return self._dim
 
     def get_basis_name(self):
+        """ DEPRECATED: use `<this object>.basis.name` instead. """
         _warnings.warn('gs.get_basis_name() is deprecated. ' + \
                 'Use gs.basis.name instead.')
         return self.basis.name
 
     def get_basis_dimension(self):
+        """ DEPRECATED: use `<this object>.basis.dim.dmDim` instead. """
         _warnings.warn('gs.get_basis_dimension() is deprecated. ' + \
                 'Use gs.basis.dim.dmDim (same functionality) or gs.basis.dim.blockDims (full blockDims) instead')
         return self.basis.dim.dmDim
 
     def set_basis(self, name, dimension):
+        """ DEPRECATED: use `<this object>.basis = Basis(...) instead. """
         _warnings.warn('gs.set_basis() is deprecated. ' + \
                 'Use gs.basis = Basis({}, {}) ' + \
                 '(or another method of basis construction, ' + \
                 'like gs.basis = Basis([(\'std\', 2), (\'gm\', 2)])) ' + \
                 'instead.'.format(name, dimension))
-        self.basis = Basis(name, dimension)
+        self.basis = _Basis(name, dimension)
 
     def reset_basis(self):
         """
         "Forgets" the basis name and dimension by setting
         these quantities to "unkown" and None, respectively.
         """
-        self.basis = Basis('unknown', None)
+        self.basis = _Basis('unknown', None)
 
     def get_prep_labels(self):
         """
@@ -216,19 +219,20 @@ class GateSet(object):
         return list(self.preps.keys())
 
 
-    def get_effect_labels(self):
+    def get_effect_labels(self, include_remainder=True):
         """
         Get all the effect vector labels present in a SPAM label.  This
         may include the special "remainder" label signifying the "complement"
-        effect vector, equal to Identity - sum(other effect vectors).
+        effect vector, equal to Identity - sum(other effect vectors), when
+        `include_remainder = True`.
 
         Returns
         -------
         list of strings
         """
         labels = list(self.effects.keys())
-        if any( [effectLabel == self._remainderlabel and
-                 prepLabel != self._remainderlabel
+        if include_remainder and any(
+                [effectLabel == self._remainderlabel and prepLabel != self._remainderlabel
                  for prepLabel,effectLabel in list(self.spamdefs.values())] ):
             labels.append( self._remainderlabel )
         return labels
@@ -419,25 +423,26 @@ class GateSet(object):
         typ = parameterization_type
         assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
         rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
         etyp = "static" if typ == "static" else "full"
 
-        basisname = self.basis.name
+        basis = self.basis
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basisname)
+            self.gates[lbl] = _gate.convert(gate, typ, basis)
 
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, rtyp)
+            self.preps[lbl] = _sv.convert(vec, rtyp, basis)
 
         for lbl,vec in self.effects.items():
-            self.effects[lbl] = _sv.convert(vec, etyp)
+            self.effects[lbl] = _sv.convert(vec, etyp, basis)
 
         if typ == 'full': 
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
         elif typ == 'TP': 
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim)
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
         else: # typ in ('static','H+S','S')
             self.default_gauge_group = None
         
@@ -476,13 +481,19 @@ class GateSet(object):
         return L
 
 
-    def num_elements(self):
+    def num_elements(self, include_povm_identity=False):
         """
         Return the number of total gate matrix and spam vector
         elements in this gateset.  This is in general different
         from the number of *parameters* in the gateset, which
         are the number of free variables used to generate all of
         the matrix and vector *elements*.
+
+        Parameters
+        ----------
+        include_povm_identity : bool, optional
+            Whether to include the elements of the GateSet's
+            povm_identity member (if present, i.e. not None).
 
         Returns
         -------
@@ -492,7 +503,8 @@ class GateSet(object):
         rhoSize = [ rho.size for rho in list(self.preps.values()) ]
         eSize   = [ E.size for E in list(self.effects.values()) ]
         gateSize = [ gate.size for gate in list(self.gates.values()) ]
-        return sum(rhoSize) + sum(eSize) + sum(gateSize)
+        povmSize = self.povm_identity.size if (include_povm_identity and self.povm_identity.size) else 0
+        return sum(rhoSize) + sum(eSize) + sum(gateSize) + povmSize
 
 
     def num_nongauge_params(self):
@@ -622,12 +634,12 @@ class GateSet(object):
             eo += ne; po += np
 
         return deriv
+    
 
     def _buildup_dPG(self):
         """ 
         Helper function for building gauge/non-gauge projectors and 
           for computing the number of gauge/non-gauge elements.
-
         Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
         whose nullspace gives the gauge directions in parameter space.
         """
@@ -664,7 +676,7 @@ class GateSet(object):
         dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
         for i in range(dim):      # always range over all rows: this is the
             for j in range(dim):  # *generator* mx, not gauge mx itself
-                unitMx = _mut(i,j,dim)
+                unitMx = _bt.mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
                     gsDeriv.preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl,EVec in self.effects.items():
@@ -779,7 +791,6 @@ class GateSet(object):
         #   above to get the general case projector.
 
         nParams = self.num_params()
-        nElements = self.num_elements()
         dPG = self._buildup_dPG()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
@@ -792,6 +803,7 @@ class GateSet(object):
         #  (below) is (nParams)x(nParams) as desired.
 
         #DEBUG
+        #nElements = self.num_elements()
         #for iRow in range(nElements):
         #    pNorm = _np.linalg.norm(dP[iRow])
         #    if pNorm < 1e-6:
@@ -910,7 +922,7 @@ class GateSet(object):
 
         Parameters
         ----------
-        S : GaugeGroup.element
+        S : GaugeGroupElement
             A gauge group element which specifies the "S" matrix 
             (and it's inverse) used in the above similarity transform.
         """
@@ -1302,7 +1314,7 @@ class GateSet(object):
         #       - num_params % np == 0 (each param group has same size)
         #       - np % (nprocs/Ng) == 0 would be nice (all procs have same num of param groups to process)
 
-        printer = VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.build_printer(verbosity, comm)
 
         nprocs = 1 if comm is None else comm.Get_size()
         num_params = self.num_params()
@@ -1320,6 +1332,7 @@ class GateSet(object):
                         % (distributeMethod, memLimit*C))
 
         def prime_factors(n):  #TODO: move this fn somewhere else
+            """ GCD algorithm to produce prime factors of `n` """
             i = 2; factors = []
             while i * i <= n:
                 if n % i:
@@ -1332,6 +1345,7 @@ class GateSet(object):
             return factors
 
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
+            """ Returns a memory estimate based on arguments """
             tm = _time.time()
             
             #Get cache size
@@ -1397,9 +1411,9 @@ class GateSet(object):
                 
         elif distributeMethod == "deriv":
 
-            #Set Ng, the number of subTree processor groups, such
-            # that Ng divides nprocs evenly or vice versa
             def set_Ng(desired_Ng):
+                """ Set Ng, the number of subTree processor groups, such
+                    that Ng divides nprocs evenly or vice versa. """
                 if desired_Ng >= nprocs:
                     return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
@@ -1553,7 +1567,7 @@ class GateSet(object):
             An evaluation tree object.
         """
         tm = _time.time()
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
         evalTree = self._calc().construct_evaltree()
         evalTree.initialize([""] + list(self.gates.keys()), gatestring_list, numSubtreeComms)
 
@@ -2380,13 +2394,12 @@ class GateSet(object):
             
 
     def frobeniusdist(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
+                      itemWeights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this
         gateset and otherGateSet.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using gateWeight
-        or spamWeight as applicable), then summed.  The value returned is the
+        matrix and spam vector element are squared, weighted (using 
+        `itemWeights` as applicable), then summed.  The value returned is the
         square root of this sum, or the square root of this sum divided by the
         number of summands if normalize == True.
 
@@ -2402,43 +2415,32 @@ class GateSet(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
 
-        gateWeight : float, optional
-           weighting factor for differences between gate elements.
-
-        spamWeight : float, optional
-           weighting factor for differences between elements of spam vectors.
-
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
            operators. Weights are applied multiplicatively to the squared
            differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels.  Values
-           are floating point numbers.  By default, weights are set by
-           gateWeight and spamWeight.
+           can be gate, state preparation, POVM effect, or spam labels, as well
+           as the two special labels `"gates"` and `"spam"` which apply to all
+           of the gate or SPAM elements, respectively (but are overridden by
+           specific element values).  Values are floating point numbers.
+           By default, all weights are 1.0.
 
         normalize : bool, optional
-           if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of
-           differences.  If False, this final division is not performed.
+           if True (the default), the sum of weighted squared-differences
+           is divided by the weighted number of differences before the 
+           final square root is taken.  If False, the division is not performed.
 
         Returns
         -------
         float
         """
         return self._calc().frobeniusdist(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, itemWeights,
-                                          normalize)
+                                          itemWeights, normalize)
 
-    def residuals(self, otherGateSet, transformMx=None,
-                      gateWeight=1.0, spamWeight=1.0, itemWeights=None,
-                      normalize=True):
+    def residuals(self, otherGateSet, transformMx=None, itemWeights=None):
         """
-        Compute the weighted residuals between this
-        gateset and otherGateSet.  Differences in each corresponding gate
-        matrix and spam vector element are squared, weighted (using gateWeight
-        or spamWeight as applicable), then summed.  The value returned is the
-        square root of this sum, or the square root of this sum divided by the
-        number of summands if normalize == True.
+        Compute the weighted residuals between two gate sets (the differences
+        in corresponding gate matrix and spam vector elements).
 
         Parameters
         ----------
@@ -2452,33 +2454,27 @@ class GateSet(object):
             This transformation is applied only for the difference and does
             not alter the values stored in this gateset.
 
-        gateWeight : float, optional
-           weighting factor for differences between gate elements.
-
-        spamWeight : float, optional
-           weighting factor for differences between elements of spam vectors.
-
         itemWeights : dict, optional
            Dictionary of weighting factors for individual gates and spam
-           operators. Weights are applied multiplicatively to the squared
-           differences, i.e., (*before* the final square root is taken).  Keys
-           can be gate, state preparation, POVM effect, or spam labels.  Values
-           are floating point numbers.  By default, weights are set by
-           gateWeight and spamWeight.
-
-        normalize : bool, optional
-           if True (the default), the frobenius difference is defined by the
-           sum of weighted squared-differences divided by the number of
-           differences.  If False, this final division is not performed.
+           operators. Weights applied such that they act multiplicatively on 
+           the *squared* differences, so that the residuals themselves are
+           scaled by the square roots of these weights.  Keys can be gate, state
+           preparation, POVM effect, or spam labels, as well as the two special
+           labels `"gates"` and `"spam"` which apply to all of the gate or SPAM
+           elements, respectively (but are overridden by specific element
+           values).  Values are floating point numbers.  By default, all weights
+           are 1.0.
 
         Returns
         -------
-        float
+        residuals : numpy.ndarray
+            A 1D array of residuals (differences w.r.t. other)
+        nSummands : int
+            The (weighted) number of elements accounted for by the residuals.
         """
-        return self._calc().residuals(otherGateSet._calc(), transformMx,
-                                          gateWeight, spamWeight, itemWeights,
-                                          normalize)
+        return self._calc().residuals(otherGateSet._calc(), transformMx, itemWeights)
 
+    
     def jtracedist(self, otherGateSet, transformMx=None):
         """
         Compute the Jamiolkowski trace distance between this
@@ -2615,7 +2611,7 @@ class GateSet(object):
         newGateset._calcClass = self._calcClass
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
-            self.basis = Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
+            self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
         newGateset.basis = self.basis
         
         return newGateset
@@ -2726,7 +2722,6 @@ class GateSet(object):
 
         elif gate_noise is not None:
             #Apply the same depolarization to each gate
-            D = _np.diag( [1]+[1-gate_noise]*(gateDim-1) )
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].depolarize(gate_noise)
 
@@ -2746,9 +2741,9 @@ class GateSet(object):
         elif spam_noise is not None:
             #Apply the same depolarization to each gate
             D = _np.diag( [1]+[1-spam_noise]*(gateDim-1) )
-            for lbl,rhoVec in self.preps.items():
+            for lbl in self.preps.keys():
                 newGateset.preps[lbl].depolarize(spam_noise)
-            for lbl,EVec in self.effects.items():
+            for lbl in self.effects.keys():
                 newGateset.effects[lbl].depolarize(spam_noise)
 
         return newGateset
@@ -2756,27 +2751,30 @@ class GateSet(object):
 
     def rotate(self, rotate=None, max_rotate=None, seed=None):
         """
-        Apply rotation uniformly or randomly to this gateset,
-        and return the result, without modifying the original
-        (this) gateset.  You must specify either 'rotate' or
-        'max_rotate'. This method currently only works on
-        n-qubit gatesets.
+        Apply a rotation uniformly (the same rotation applied to each gate)
+        or randomly (different random rotations to each gate) to this gateset,
+        and return the result, without modifying the original (this) gateset.
+
+        You must specify either 'rotate' or 'max_rotate'. This method currently
+        only works on n-qubit gatesets.
 
         Parameters
         ----------
-        rotate : float or tuple of floats, optional
-          if a single float, apply rotation of rotate radians along each of
-          the pauli-product axes (X,Y,Z for 1-qubit) of all gates in the gateset.
-          For a 1-qubit gateset, a 3-tuple of floats can be specifed to apply
-          separate rotations along the X, Y, and Z axes.  For a 2-qubit gateset,
-          a 15-tuple of floats can be specified to apply separate rotations along
-          the IX, IY, IZ, XI, XX, XY, XZ, YI, YX, YY, YZ, ZI, ZX, ZY, ZZ axes.
-
+        rotate : tuple of floats, optional
+            If you specify the `rotate` argument, then the same rotation
+            operation is applied to each gate.  That is, each gate's matrix `G`
+            is composed with a rotation operation `R`  (so `G` -> `dot(R, G)` )
+            where `R` is the unitary superoperator corresponding to the unitary
+            operator `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here
+            `Pauli_k` ranges over all of the non-identity un-normalized Pauli
+            operators (e.g. {X,Y,Z} for 1 qubit, {IX, IY, IZ, XI, XX, XY, XZ,
+            YI, YX, YY, YZ, ZI, ZX, ZY, ZZ} for 2 qubits).
+  
         max_rotate : float, optional
-          specified instead of 'rotate'; apply a random rotation with
-          maximum max_rotate radians along each of the relevant axes
-          of each each gate in the gateset.  That is, rotations of a
-          particular gate around different axes are different random amounts.
+            If `max_rotate` is specified (*instead* of `rotate`), then pyGSTi 
+            randomly generates a different `rotate` tuple, and applies the 
+            corresponding rotation, to each gate in this `GateSet`.  Each
+            component of each tuple is drawn uniformly from [0, `max_rotate`).
 
         seed : int, optional
           if  not None, seed numpy's random number generator with this value
@@ -2789,7 +2787,7 @@ class GateSet(object):
         """
         newGateset = self.copy() # start by just copying gateset
         dim = self.get_dimension()
-        myBasis = self.basis.name
+        myBasis = self.basis
 
         if max_rotate is not None:
             if rotate is not None:
@@ -2803,7 +2801,8 @@ class GateSet(object):
                 newGateset.gates[label].rotate(rot, myBasis)
 
         elif rotate is not None:
-            assert(isinstance(rotate,float) or _compat.isint(rotate) or len(rotate) == dim-1), "Invalid 'rotate' argument"
+            assert(len(rotate) == dim-1), \
+                "Invalid 'rotate' argument. You must supply a tuple of length %d" % (dim-1)
             for (i,label) in enumerate(self.gates):
                 newGateset.gates[label].rotate(rotate, myBasis)
 
@@ -2860,7 +2859,7 @@ class GateSet(object):
             randUnitary   = _scipy.linalg.expm(-1j*randMat)
 
             randGate = _gt.unitary_to_process_mx(randUnitary) #in std basis
-            randGate = change_basis(randGate, "std", self.basis.name)
+            randGate = _bt.change_basis(randGate, "std", self.basis)
 
             gs_randomized.gates[gateLabel] = _gate.FullyParameterizedGate(
                             _np.dot(randGate,gate))
@@ -3029,10 +3028,9 @@ class GateSet(object):
         -------
         None
         """
-        mxBasis = self.basis.name
         print(self)
         print("\n")
-        print("Basis = ",mxBasis)
+        print("Basis = ",self.basis.name)
         print("Choi Matrices:")
         for (label,gate) in self.gates.items():
             print(("Choi(%s) in pauli basis = \n" % label,
@@ -3042,9 +3040,9 @@ class GateSet(object):
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
 
-        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,mxBasis)
+        prep_penalty = sum( [ _lf.prep_penalty(rhoVec,self.basis)
                                 for rhoVec in list(self.preps.values()) ] )
-        effect_penalty   = sum( [ _lf.effect_penalty(EVec,mxBasis)
+        effect_penalty   = sum( [ _lf.effect_penalty(EVec,self.basis)
                                 for EVec in list(self.effects.values()) ] )
         print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
         print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))

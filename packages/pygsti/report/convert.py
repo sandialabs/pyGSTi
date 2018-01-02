@@ -1,3 +1,8 @@
+'''
+This module defines type-differentiation for low level formatting types
+Its main function, convert, takes any item x, a specs dictionary, and a format (ie 'html')
+and returns a formatted version of x using the format
+'''
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -6,19 +11,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 from . import html
 from . import latex
+from . import python
 
 import numpy as _np
-import cmath
 import functools
 from .. import objects as _objs
 from ..tools import compattools as _compat
-from .reportables import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
-'''
-This module defines type-differentiation for low level formatting types
-Its main function, convert, takes any item x, a specs dictionary, and a format (ie 'html')
-and returns a formatted version of x using the format
-'''
 
 def functions_in(module):
     '''
@@ -28,7 +28,8 @@ def functions_in(module):
 
 convertDict = {
         'html'  : functions_in(html),
-        'latex' : functions_in(latex)}
+        'latex' : functions_in(latex),
+        'python' : functions_in(python)}
 
 def calc_dim(x):
     '''

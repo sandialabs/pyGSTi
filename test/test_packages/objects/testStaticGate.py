@@ -34,7 +34,7 @@ class StaticGateTestCase(BaseTestCase):
 
     def test_transform(self):
         with self.assertRaises(ValueError):
-            elT = pygsti.objects.FullGaugeGroup.element([[1,0],[0,1]])
+            elT = pygsti.objects.FullGaugeGroupElement([[1,0],[0,1]])
             self.gate.transform(elT) # can't transform a static gate - no params!
 
     def test_compose(self):

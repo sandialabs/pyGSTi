@@ -10,8 +10,20 @@ function max_height(els) {
     return Math.max.apply(null, hs);
 }
 
+function get_wsobj_group(id) {
+    var obj = $("#" + id);
+    if(obj.hasClass("pygsti-wsoutput-group")) {
+        return obj; // then id was the id of the entire group (OK)
+    } else { // assume id was for one of the items within a group
+        return obj.closest(".pygsti-wsoutput-group");
+    }
+}
+
 function make_wstable_resizable(id) {
-    $("#" + id).resizable({
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
+    
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("padding-bottom", "7px"); //weird jqueryUI hack: to compensate for handle(?)
@@ -40,7 +52,10 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
-    $("#" + id).resizable({
+    wsgroup = get_wsobj_group(id);
+    if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
+    
+    wsgroup.resizable({
         autoHide: true,
         resize: function( event, ui ) {
             ui.element.css("max-width","none"); //remove max-width restriction
@@ -63,7 +78,7 @@ function make_wsplot_resizable(id) {
 }
 
 
-function trigger_wstable_plot_creation(id) {
+function trigger_wstable_plot_creation(id, initial_autosize) {
     $("#"+id).on("createplots", function(event) {
         var wstable = $("#"+id); //actually a div, a "workspace table"
         console.log("Initial sizing of plot table " + id + " cells");
@@ -78,8 +93,15 @@ function trigger_wstable_plot_creation(id) {
 	    var padding = $(td).css("padding-left");
 	    if(padding == "") { padding = 0; }
 	    else { padding = parseFloat(padding); }
-            $(td).css("width", max_width(plots)+2*padding);
-            $(td).css("height", max_height(plots)+2*padding);
+	    desiredW =	max_width(plots)+2*padding;
+            desiredH =	max_height(plots)+2*padding
+            $(td).css("width", desiredW);
+            $(td).css("height", desiredH);
+	    if(!initial_autosize) {
+		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		firstChild.css("width", max_width(plots)+2*padding);
+		firstChild.css("height", max_height(plots)+2*padding);
+	    }
 	});
 	
         //2) lock down initial widths of non-plot cells to they don't change later
@@ -93,7 +115,8 @@ function trigger_wstable_plot_creation(id) {
 	    parent_was_visible = false;
 	    tab.show();
 	}
-        wstable.children("div").each( function(k,div) {
+
+	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
             $(div).find("td").not(".plotContainingTD").each(
@@ -101,7 +124,14 @@ function trigger_wstable_plot_creation(id) {
 	    $(div).find("th").each(
 		function(i,el){ $(el).css("height", $(el).height()); });
             if(!was_visible) { $(div).hide(); }
-        });
+        }
+
+	if(wstable.hasClass("single_switched_value")) {
+	    fnForSingleTableDivs( 0, wstable[0]);
+	} else {
+            wstable.children("div").each( fnForSingleTableDivs );
+	}
+
 	if(!parent_was_visible) { tab.hide(); } 
 
 	//3) create the plots.  Each plot will look at its container's (TD's)
@@ -113,6 +143,22 @@ function trigger_wstable_plot_creation(id) {
 	//   'display: block', which isn't what we want.]
         console.log("Creating table " + id + " plots");
         wstable.find(".pygsti-plotgroup-master").trigger("create");
+
+	//Finish the rest of plot creation *after* all the plots have been 
+	// created (the trigger stmt above just queues them).
+	if(plotman != null) {
+	    plotman.enqueue( function() {
+		$("#"+id).trigger("after_createplots");
+	    }, "Finishing table " + id + " plot creation");
+	} else {
+	    wstable.trigger("after_createplots");
+	}
+
+    });
+
+    $("#"+id).on("after_createplots", function(event) {
+	console.log("Post plot-creation sizing of plot table " + id + " cells");
+	var wstable = $("#"+id); //actually a div, a "workspace table"
 
 	//4) Thus, since the created plots may be smaller than their
 	//  native sizes, and we may need to decrease table cell heights.
@@ -127,10 +173,28 @@ function trigger_wstable_plot_creation(id) {
 	//5) It's possible that the plot div (wstable) has
         //   a max-height set.  This won't confine the table
         //   at all (since it's not a block element), so we
-        //   should remove it (it would useful for plots,
+        //   should remove it (it would be useful for plots,
         //   but not tables).
 	wstable.css("max-height","none");
+
+	// 6) If this table is within a <figure> tag try to set
+	//    caption detail's width based on rendered table width
+	caption = wstable.closest('figure').children('figcaption:first');
+	if(caption.length > 0) {
+            caption.css('width', Math.round(wstable.width()*0.9) + 'px');
+	}
+
+	// 7) Remove the hard-set width and height of the plot-containing
+	//   div used to prevent initial auto-sizing.
+	if(!initial_autosize) {
+	    wstable.find("td.plotContainingTD").each( function(k,td) {
+		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		firstChild.css("width", "");
+		firstChild.css("height", "");
+	    });
+	}
     });
+    
     //Create table plots after typesetting is done and non-plot TDs are fixed
     // (note: table must be visible to compute widths correctly)
     if(typeof MathJax !== "undefined") {
@@ -144,7 +208,7 @@ function trigger_wstable_plot_creation(id) {
     }
 }
 
-function trigger_wsplot_plot_creation(id) {
+function trigger_wsplot_plot_creation(id, initial_autosize) {
     console.log("Triggering init and creation of workspace-plot" + id + " plots");
     var wsplot = $("#" + id);
     
@@ -156,18 +220,32 @@ function trigger_wsplot_plot_creation(id) {
     //  will cause the container to expand *up to* the pixel value (set to
     //  the "natural" width).  This seems to give good behavior, and so we
     //  set the width below.
-    var plots = wsplot.find(".plotly-graph-div");
+    var wsplotgroup = null;
+    if(wsplot.hasClass("pygsti-wsoutput-group")) {
+        wsplotgroup = wsplot; // then id was the id of the entire group (OK)
+    } else { // assume id was for one of the plots within a group
+             // (also OK, but we want to set the css of the *group* div below)
+        wsplotgroup = wsplot.closest(".pygsti-wsoutput-group");
+    }
+
+    if(!initial_autosize) {
+	//ignore max-width and max-height settings to desired height
+	wsplotgroup.css("max-width","none");
+	wsplotgroup.css("max-height","none");
+    }
+
+    var plots = wsplotgroup.find(".plotly-graph-div");
     var maxDesiredWidth = max_width(plots);
     var maxDesiredHeight = max_height(plots);
-    wsplot.css("width", maxDesiredWidth);
-    wsplot.css("height", maxDesiredHeight);
+    wsplotgroup.css("width", maxDesiredWidth);
+    wsplotgroup.css("height", maxDesiredHeight);
     console.log("Max desired size = " + maxDesiredWidth + ", " + maxDesiredHeight);
 
     //3) update the max-height of this container based on the maximum desired height
-    existing_max_height = wsplot.css("max-height");
+    existing_max_height = wsplotgroup.css("max-height");
     if(existing_max_height != "none") {
-	wsplot.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
-    } else { wsplot.css("max-height", maxDesiredHeight); }
+	wsplotgroup.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
+    } else { wsplotgroup.css("max-height", maxDesiredHeight); }
 
     //4) create the plots, based on the container size.  Note that the
     //   actual width and/or height of the container could be smaller
@@ -178,11 +256,18 @@ function trigger_wsplot_plot_creation(id) {
     //5) update width and/or height of container based on content, as
     // aspect ratio restrictions may have caused plots to be smaller
     // than desired, leaving free space.
-    wsplot.css("width", max_width(plots));
-    wsplot.css("height", max_height(plots));
+    wsplotgroup.css("width", max_width(plots));
+    wsplotgroup.css("height", max_height(plots));
     console.log("Handshake: resizing container to = " + max_width(plots) + ", " + max_height(plots));
-}
 
+    // 6) If this table is within a <figure> tag try to set
+    //    caption detail's width based on rendered table width
+    caption = wsplotgroup.closest('figure').children('figcaption:first');
+    if(caption.length > 0) {
+        caption.css('width', Math.round(wsplotgroup.width()*0.9) + 'px');
+    }
+
+}
 
 
 function make_wsobj_autosize(boxid) {
@@ -394,7 +479,7 @@ PlotManager.prototype.run = function(){
 	    pm.processor = null;
             $("#status").hide();
 	}
-    }, 100, this); //pass this as "pm" argument to function
+    }, 200, this); //pass this as "pm" argument to function
 }
 
 PlotManager.prototype.enqueue = function(callback, label, autostart=true){
@@ -402,3 +487,103 @@ PlotManager.prototype.enqueue = function(callback, label, autostart=true){
     this.labelqueue.push(label);
     if(autostart && this.processor === null) { this.run(); } // in case queue hasn't started
 }
+
+
+function cloneAndReplace(jquery_element) {    
+    var old_element = jquery_element.get(0);
+    var new_element = old_element.cloneNode(true);
+    old_element.parentNode.replaceChild(new_element, old_element);
+    return $(new_element)
+}
+
+function cloneAndAppend(jquery_element) {    
+    var old_element = jquery_element.get(0);
+    var new_element = old_element.cloneNode(true);
+    old_element.parentNode.appendChild(new_element, old_element);
+    return $(new_element)
+}
+
+
+
+/*
+CollapsibleLists.js
+An object allowing lists to dynamically expand and collapse
+
+Created by Stephen Morley - http://code.stephenmorley.org/ - and released under
+the terms of the CC0 1.0 Universal legal code:
+
+http://creativecommons.org/publicdomain/zero/1.0/legalcode
+*/
+
+const CollapsibleLists = (function(){
+  // Makes all lists with the class 'collapsibleList' collapsible. The
+  // parameter is:
+  //
+  // doNotRecurse - true if sub-lists should not be made collapsible
+  function apply(doNotRecurse){
+    [].forEach.call(document.getElementsByTagName('ul'), node => {
+      if (node.classList.contains('collapsibleList')){
+        applyTo(node, true);
+        if (!doNotRecurse){
+          [].forEach.call(node.getElementsByTagName('ul'), subnode => {
+            subnode.classList.add('collapsibleList')
+          });
+        }
+      }
+    })
+  }
+
+  // Makes the specified list collapsible. The parameters are:
+  //
+  // node         - the list element
+  // doNotRecurse - true if sub-lists should not be made collapsible
+  function applyTo(node, doNotRecurse){
+    [].forEach.call(node.getElementsByTagName('li'), li => {
+      if (!doNotRecurse || node === li.parentNode){
+        li.style.userSelect       = 'none';
+        li.style.MozUserSelect    = 'none';
+        li.style.msUserSelect     = 'none';
+        li.style.WebkitUserSelect = 'none';
+        li.addEventListener('click', handleClick.bind(null, li));
+        toggle(li);
+      }
+    });
+  }
+
+  // Handles a click. The parameter is:
+  // node - the node for which clicks are being handled
+  function handleClick(node, e){
+    let li = e.target;
+    while (li.nodeName !== 'LI'){
+      li = li.parentNode;
+    }
+    if (li === node){
+      toggle(node);
+    }
+  }
+
+  // Opens or closes the unordered list elements directly within the
+  // specified node. The parameter is:
+  //
+  // node - the node containing the unordered list elements
+  function toggle(node){
+    const open = node.classList.contains('collapsibleListClosed');
+    const uls  = node.getElementsByTagName('ul');
+    [].forEach.call(uls, ul => {
+      let li = ul;
+      while (li.nodeName !== 'LI'){
+        li = li.parentNode;
+      }
+      if (li === node){
+        ul.style.display = (open ? 'block' : 'none');
+      }
+    });
+
+    node.classList.remove('collapsibleListOpen');
+    node.classList.remove('collapsibleListClosed');
+    if (uls.length > 0){
+      node.classList.add('collapsibleList' + (open ? 'Open' : 'Closed'));
+    }
+  }
+  return {apply, applyTo};
+})();

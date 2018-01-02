@@ -1,21 +1,17 @@
+"""
+Routines for converting python objects to HTML.  Parallel rountines as
+latex.py has for latex conversion.
+"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""
-Routines for converting python objects to HTML.  Parallel rountines as
-LatexUtil has for latex conversion.
-"""
 
 import numpy as _np
 import cmath
-from .. import objects as _objs
 from ..tools import compattools as _compat
-from .latex import vector as latex_vector
-from .latex import matrix as latex_matrix
-from .reportables import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -134,7 +130,16 @@ def vector(v, specs):
     string
         html string for v.
     """
-    return latex_vector(v, specs)
+    lines = [ ]
+    for el in v:
+        lines.append( value(el, specs, mathmode=True) )
+    if specs['brackets']:
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+    else:
+        return "$ \\begin{pmatrix}\n" + \
+                " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+
 
 def matrix(m, specs):
     """
@@ -153,9 +158,27 @@ def matrix(m, specs):
     string
         html string for m.
     """
-    return latex_matrix(m, specs)
+    lines    = [ ]
+    prefix   = ""
+    fontsize = specs['fontsize']
 
-def value(el, specs):
+    if fontsize is not None:
+        prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize*1.2)
+
+    for r in range(m.shape[0]):
+        lines.append( " & ".join(
+                [value(el, specs, mathmode=True) for el in m[r,:] ] ) )
+
+    if specs['brackets']:
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+    else:
+        return prefix + "$ \\begin{pmatrix}\n"  + \
+        " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+
+
+
+def value(el, specs, mathmode=False):
     """
     Convert a floating point or complex value to html.
 
@@ -166,6 +189,11 @@ def value(el, specs):
 
     specs : dictionary
         Dictionary of user-specified and default parameters to formatting
+
+    mathmode : bool, optional
+        Whether this routine should generate HTML for use within a math-rendered
+        HTML element (rather than a normal plain-HTML one).  So when set to True
+        output is essentially the same as latex format.
 
     Returns
     -------
@@ -182,6 +210,7 @@ def value(el, specs):
     complexAsPolar = specs['complexAsPolar']
 
     def render(x):
+        """Render a single float (can be real or imag part)"""
         if abs(x) < 5*10**(-(precision+1)):
             s = "%.*e" % (sciprecision,x)
         elif abs(x) < 1:
@@ -195,7 +224,11 @@ def value(el, specs):
         p = s.split('e')
         if len(p) == 2:
             ex = str(int(p[1])) #exponent without extras (e.g. +04 => 4)
-            s = p[0] + "&times;10<sup>" + ex + "</sup>"
+            if mathmode: #don't use <sup> in math mode
+                s = p[0] + "\\times 10^{" + ex + "}"
+            else:
+                s = p[0] + "&times;10<sup>" + ex + "</sup>"
+
 
         #Strip superfluous endings
         if "." in s:
@@ -215,10 +248,14 @@ def value(el, specs):
             if abs(el.imag) > TOL:
                 if complexAsPolar:
                     r,phi = cmath.polar(el)
-                    ex = ("i%.1f" % phi/_np.pi) if phi >= 0 else ("-i%.1f" % -phi/_np.pi)
-                    s = "%se<sup>%s &pi;</sup>" % (render(r),ex)
+                    ex = ("i%.*f" % (polarprecision, phi/_np.pi)) if phi >= 0 \
+                        else ("-i%.*f" % (polarprecision, -phi/_np.pi))
+                    if mathmode: #don't use <sup> in math mode
+                        s = "%se^{%s\\pi}" % (render(r),ex)
+                    else:
+                        s = "%se<sup>%s &pi;</sup>" % (render(r),ex)
                 else:
-                    s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))
+                    s = "%s%s%si" % (render(el.real),'+' if el.imag > 0 else '-', render(abs(el.imag)))                    
             else:
                 s = "%s" % render(el.real)
         else:

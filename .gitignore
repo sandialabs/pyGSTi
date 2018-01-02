@@ -11,6 +11,7 @@
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
 jupyter_notebooks/Tutorials/offline
+jupyter_notebooks/Examples/example_files
 test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
@@ -81,9 +82,12 @@ doc/build/_build/*
 scripts/profiling/report/*.ipynb
 scripts/profiling/report/Analyze+2Q+data.py
 scripts/profiling/report/*.html
+scripts/profiling/*.html
 scripts/profiling/report/standard_report.py
 scripts/profiling/report/tp_report.py
+scripts/profiling/report/rigetti_nocache.py
 
 # Profiling data #
 scripts/profiling/output
+scripts/profiling/data
 

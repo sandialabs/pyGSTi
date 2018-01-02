@@ -1,10 +1,10 @@
+""" Optimization (minimization) functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Optimization (minimization) functions """
 
 import numpy as _np
 import time as _time
@@ -18,8 +18,6 @@ except:
     from scipy.optimize import OptimizeResult as _optResult #for later scipy versions
 
 from .customcg import fmax_cg
-
-from scipy.optimize import least_squares
 
 
 def minimize(fn,x0, method='cg', callback=None,
@@ -90,10 +88,12 @@ def minimize(fn,x0, method='cg', callback=None,
 
     elif method == 'customcg':
         def fn_to_max(x):
+            """ Function to maximize """
             f = fn(x); return -f if f is not None else None
 
         if jac is not None:
             def dfdx_and_bdflag(x):
+                """ Returns derivative and boundary flag """
                 j = -jac(x)
                 bd = _np.zeros(len(j)) #never say fn is on boundary, since this is an analytic derivative
                 return j, bd
@@ -109,13 +109,13 @@ def minimize(fn,x0, method='cg', callback=None,
         solution = _spo.minimize(fn,xmin,method="Nelder-Mead", options={}, tol=tol, callback = callback, jac=jac)
 
     elif method == 'basinhopping':
-        def basin_callback(x, f, accept):
+        def _basin_callback(x, f, accept):
             if callback is not None: callback(x,f=f,accepted=accept)
             if stopval is not None and f <= stopval:
                 return True #signals basinhopping to stop
             return False
         solution = _spo.basinhopping(fn, x0, niter=maxiter, T=2.0, stepsize=1.0,
-                                               callback=basin_callback, minimizer_kwargs={'method': "L-BFGS-B", 'jac': jac})
+                                               callback=_basin_callback, minimizer_kwargs={'method': "L-BFGS-B", 'jac': jac})
 
         #DEBUG -- follow with Nelder Mead to make sure basinhopping found a minimum. (It seems to)
         #print "DEBUG: running Nelder-Mead:"
@@ -372,6 +372,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     LARGE = 1e10
 
     class Particle:
+        """ Particle "container" class """
         pass
 
     #initialize the particles
@@ -541,7 +542,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         Includes members 'x', 'fun', 'success', and 'message'.
     """
 
-    import deap as _deap
     import deap.creator as _creator
     import deap.base as _base
     import deap.tools as _tools
@@ -559,13 +559,13 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     toolbox.register("population", _tools.initRepeat, list, toolbox.individual) # fn to create a population (still need to specify n)
 
     # Create operation functions
-    def evaluate(individual):
+    def _evaluate(individual):
         return f( _np.array(individual) ),  #note: must return a tuple
 
     toolbox.register("mate", _tools.cxTwoPoint)
     toolbox.register("mutate", _tools.mutGaussian, mu=0, sigma=0.5, indpb=0.1)
     toolbox.register("select", _tools.selTournament, tournsize=3)
-    toolbox.register("evaluate", evaluate)
+    toolbox.register("evaluate", _evaluate)
 
     # Create the population
     pop = toolbox.population(n=num_individuals)
@@ -738,7 +738,8 @@ def create_obj_func_printer(objFunc, startTime=None):
     if startTime is None:
         startTime = _time.time() #for reference point of obj func printer
 
-    def print_obj_func(x,f=None,accepted=None): # Just print the objective function value (used to monitor convergence in a callback)
+    def print_obj_func(x,f=None,accepted=None):
+        """Just print the objective function value (used to monitor convergence in a callback) """
         if f is not None and accepted is not None:
             print("%5ds %22.10f %s" % (_time.time()-startTime, f, 'accepted' if accepted else 'not accepted'))
         else:
@@ -771,7 +772,8 @@ def _fwd_diff_jacobian(f, x0, eps=1e-10):
 
     return jac
 
-def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
+def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
+              verbosity=1):
     """
     Checks a jacobian function using finite differences.
 
@@ -793,6 +795,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
         The allowd tolerance on the relative differene between the
         values of the finite difference and jacToCheck jacobians
         if errType == 'rel' or the absolute difference if errType == 'abs'.
+
+    verbosity : int, optional
+        Controls how much detail is printed to stdout.
 
     Returns
     -------
@@ -830,8 +835,9 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
                 err = _np.abs(fd_jac[i,j]-jacToCheck[i,j])
                 if err > tol: 
                     errs.append( (i,j,err) )
-                    #print("DEBUG JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
-                    # (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
+                    if verbosity > 1:
+                        print("JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
+                              (i,j,fd_jac[i,j],jacToCheck[i,j],fd_jac[i,j]-jacToCheck[i,j]))
                 errSum += err
 
     errs.sort(key=lambda x: -x[2])
@@ -839,7 +845,11 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel'):
     if len(errs) > 0:
         maxabs = _np.max(_np.abs(jacToCheck))
         max_err_ratio = _np.max([ x[2]/maxabs for x in errs ])
-        if max_err_ratio > 0.01: 
-            print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+        if verbosity > 0:
+            if max_err_ratio > 0.01: 
+                print("Warning: jacobian_check has max err/jac_max = %g (jac_max = %g)" % (max_err_ratio,maxabs))
+
+    if verbosity > 0:
+        print("check_jac %s [err = %g]" % (("ERROR" if len(errs) else "OK"),errSum))
 
     return errSum, errs, fd_jac

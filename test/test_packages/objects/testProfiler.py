@@ -16,11 +16,11 @@ class ProfilerTestCase(BaseTestCase):
 
     def test_profler_methods(self):
         comm=None
-        mem = pygsti.objects.profiler._get_root_mem_usage(comm)
-        mem = pygsti.objects.profiler._get_max_mem_usage(comm)
+        mem = pygsti.baseobjs.profiler._get_root_mem_usage(comm)
+        mem = pygsti.baseobjs.profiler._get_max_mem_usage(comm)
 
         start_time = time.time()
-        p = pygsti.objects.Profiler(comm, default_print_memcheck=True)
+        p = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)
@@ -51,7 +51,7 @@ class ProfilerTestCase(BaseTestCase):
     def test_profiler_pickling(self):
         comm=None
         start_time = time.time()
-        p = pygsti.objects.Profiler(comm, default_print_memcheck=True)
+        p = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)

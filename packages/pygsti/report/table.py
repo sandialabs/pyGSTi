@@ -1,3 +1,4 @@
+""" Defines the ReportTable class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -6,19 +7,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
-from .row         import Row
-from .formatters  import formatDict    as _formatDict
-from .reportables import ReportableQty as _ReportableQty
 from collections  import OrderedDict   as _OrderedDict
-import re as _re
-
+from .row         import Row
 from .convert import convertDict as _convertDict
 
 class ReportTable(object):
     '''
     Table representation, renderable in multiple formats
     '''
-    def __init__(self, colHeadings, formatters, customHeader=None, colHeadingLabels=None):
+    def __init__(self, colHeadings, formatters, customHeader=None, 
+                 colHeadingLabels=None, confidenceRegionInfo=None):
         '''
         Create a table object
 
@@ -33,13 +31,20 @@ class ReportTable(object):
             dictionary of overriden headers
         colHeadingLabels : list
             labels for column headings (tooltips)
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+            Specifically, tells reportableqtys if
+            they should use non markovian error bars or not
         '''
+        self.nonMarkovianEBs = bool(confidenceRegionInfo is not None 
+                               and confidenceRegionInfo.nonMarkRadiusSq > 0)
         self._customHeadings = customHeader
         self._rows           = []
         self._override       = isinstance(colHeadings, dict)
 
         if self._override:
-            self._columnNames = colHeadings['text']
+            self._columnNames = colHeadings['python']
         else:
             self._columnNames = colHeadings 
 
@@ -48,14 +53,34 @@ class ReportTable(object):
 
         if self._override:
             # Dictionary of overridden formats
-            self._headings    = {k : Row(v, labels=colHeadingLabels) for k, v in colHeadings.items()}
+            self._headings    = {k : Row(v, labels=colHeadingLabels, nonMarkovianEBs=self.nonMarkovianEBs) 
+                                 for k, v in colHeadings.items()}
         else:
-            self._headings    = Row(colHeadings, formatters, colHeadingLabels)
+            self._headings    = Row(colHeadings, formatters, colHeadingLabels, self.nonMarkovianEBs)
 
-    def addrow(self, data, formatters=None, labels=None):
-        self._rows.append(Row(data, formatters, labels))
+    def addrow(self, data, formatters=None, labels=None, nonMarkovianEBs=None):
+        """
+        Adds a row to the table.
+
+        Parameters
+        ----------
+        data, formatters, labels : list
+            Parallel lists of the data, formatter names, and labels for each
+            cell within the new row.
+
+        nonMarkovianEBs : bool, optional
+            Whether non-Markovian error bars should be indicated.
+
+        Returns
+        -------
+        None
+        """
+        if nonMarkovianEBs is None:
+            nonMarkovianEBs = self.nonMarkovianEBs
+        self._rows.append(Row(data, formatters, labels, nonMarkovianEBs))
 
     def finish(self):
+        """ Finish table creation.  Indicates no more rows will be added."""
         pass #nothing to do currently
 
     def _get_col_headings(self, fmt, spec):
@@ -67,10 +92,10 @@ class ReportTable(object):
             return self._headings.render(fmt, spec)
 
 
-    def render(self, fmt, longtables=False, tableID=None, tableclass=None,
-               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+    def render(self, fmt, longtables=False, tableID=None, tableclass=None, 
+               output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
-               brackets=False, click_to_display=False):
+               brackets=False, click_to_display=False, link_to=None, render_includes=True):
         '''
         Render a table object
 
@@ -78,7 +103,7 @@ class ReportTable(object):
         ----------
         fmt : string
             name of format to be used
-        scratchDir     : string
+        output_dir     : string
             directory for latex figures to be rendered in
         precision      : int
             number of digits to render
@@ -104,13 +129,18 @@ class ReportTable(object):
             id tag for HTML tables
         tableclass     : string
             class tag for HTML tables
+        link_to        : list or {'tex', 'pdf', 'pkl'}
+            whether to create links to TEX, PDF, and/or PKL files
+        render_includes: bool
+            whether files included in rendered latex should also be rendered
+            (usually as PDFs for use with the 'includegraphics' latex statement)
+
         Returns
         -------
         string
         '''
-
         spec = {
-            'scratchDir'     : scratchDir,
+            'output_dir'     : output_dir,
             'precision'      : precision,
             'polarprecision' : polarprecision,
             'sciprecision'   : sciprecision,
@@ -122,7 +152,9 @@ class ReportTable(object):
             'brackets'       : brackets,
             'longtables'     : longtables,
             'tableID'        : tableID,
-            'tableclass'     : tableclass}
+            'tableclass'     : tableclass,
+            'link_to'        : link_to,
+            'render_includes': render_includes }
 
         if fmt not in _convertDict:
             raise NotImplementedError('%s format option is not currently supported')
@@ -135,11 +167,11 @@ class ReportTable(object):
 
     def __str__(self):
 
-        def strlen(x):
+        def _strlen(x):
             return max([len(p) for p in str(x).split('\n')])
-        def nlines(x):
+        def _nlines(x):
             return len(str(x).split('\n'))
-        def getline(x,i):
+        def _getline(x,i):
             lines = str(x).split('\n')
             return lines[i] if i < len(lines) else ""
 
@@ -149,13 +181,13 @@ class ReportTable(object):
         header_lines = 0
 
         for i,nm in enumerate(self._columnNames):
-            col_widths[i] = max( strlen(nm), col_widths[i] )
-            header_lines = max(header_lines, nlines(nm))
+            col_widths[i] = max( _strlen(nm), col_widths[i] )
+            header_lines = max(header_lines, _nlines(nm))
         for k,row in enumerate(self._rows):
             for i,el in enumerate(row.cells):
                 el = el.data.get_value()
-                col_widths[i] = max( strlen(el), col_widths[i] )
-                row_lines[k] = max(row_lines[k], nlines(el))
+                col_widths[i] = max( _strlen(el), col_widths[i] )
+                row_lines[k] = max(row_lines[k], _nlines(el))
 
         row_separator = "|" + '-'*(sum([w+5 for w in col_widths])-1) + "|\n"
           # +5 for pipe & spaces, -1 b/c don't count first pipe
@@ -165,7 +197,7 @@ class ReportTable(object):
 
         for k in range(header_lines):
             for i,nm in enumerate(self._columnNames):
-                s += "|  %*s  " % (col_widths[i],getline(nm,k))
+                s += "|  %*s  " % (col_widths[i],_getline(nm,k))
             s += "|\n"
         s += row_separator
 
@@ -173,7 +205,7 @@ class ReportTable(object):
             for k in range(row_lines[rowIndex]):
                 for i, el in enumerate(row.cells):
                     el = el.data.get_value()
-                    s += "|  %*s  " % (col_widths[i],getline(el,k))
+                    s += "|  %*s  " % (col_widths[i],_getline(el,k))
                 s += "|\n"
             s += row_separator
 
@@ -200,6 +232,13 @@ class ReportTable(object):
     def __contains__(self, key):
         return key in list(self.keys())
 
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+
     def keys(self):
         """
         Return a list of the first element of each row, which can be
@@ -208,9 +247,18 @@ class ReportTable(object):
         return [row.cells[0].data.get_value() for row in self._rows if len(row.cells) > 0]
 
     def has_key(self, key):
+        """ Whether `key` exists (as the first element of some row) """
         return key in list(self.keys())
 
     def row(self, key=None, index=None):
+        """ 
+        Retrieve a row's cell data.  A row is identified by either its `key`
+        (its first cell's value) OR its `index` (0-based).
+
+        Returns
+        -------
+        list
+        """
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
@@ -231,6 +279,14 @@ class ReportTable(object):
 
 
     def col(self, key=None, index=None):
+        """ 
+        Retrieve a column's cell data.  A column is identified by either its
+        `key` (its column header's value) OR its `index` (0-based).
+
+        Returns
+        -------
+        list
+        """
         if key is not None:
             if index is not None:
                 raise ValueError("Cannot specify *both* key and index")
@@ -251,16 +307,20 @@ class ReportTable(object):
 
     @property
     def num_rows(self):
+        """ The number of rows in this table """
         return len(self._rows)
 
     @property
     def num_cols(self):
+        """ The number of columns in this table """
         return len(self._columnNames)
 
     @property
     def row_names(self):
+        """ The names (keys) of the rows in this table """
         return list(self.keys())
 
     @property
     def col_names(self):
+        """ The names (keys) of the columns in this table """
         return self._columnNames

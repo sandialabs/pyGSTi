@@ -1,3 +1,4 @@
+""" Defines the Cell class """
 from __future__ import division, print_function, absolute_import, unicode_literals
 
 #*****************************************************************
@@ -8,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 from .formatters import formatDict  as _formatDict
 from .convert    import convertDict as _convertDict
+
 
 class Cell(object):
     '''
@@ -29,6 +31,13 @@ class Cell(object):
         self.data          = data
         self.formatterName = formatterName
         self.label         = label
+
+    def __getstate__(self):
+        state_dict = self.__dict__.copy()
+        return state_dict 
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def _render_data(self, fmt, spec):
         '''

@@ -1,0 +1,55 @@
+@@markdown
+# Gauge Invariant Outputs
+Quantities which are *gauge-invariant* are the most reliable means of assessing the quality of the gates, as these do not depend on any unphysical gauge degrees of freedom
+
+@@markdown
+### SPAM probabilities
+The estimated SPAM probabilities for each measurement outcome.
+@@code
+ws.SpamParametersTable( (gs_target, gs), ['Target','Estimated'], cri)
+
+@@markdown
+### Spectral error metrics between estimated gates and ideal targets
+A variety of gauge-invariant quantities that quantify the distance or discrepancy between (1) an estimated gate, and (2) the ideal corresponding target operation.
+@@code
+ws.GatesVsTargetTable(gs, gs_target, cri,
+                      display=('evinf','evagi','evnuinf','evnuagi','evdiamond','evnudiamond'))
+
+@@markdown
+### Eigenvalues of estimated gates: 
+The spectrum (Eigenvalues column) of each estimated gate.  It also breaks out the real and imaginary parts of each eigenvalue, and it compares the estimated eigenvalues to those of the ideal target gates in several useful ways.
+@@code
+ws.GateEigenvalueTable(gs, gs_target, cri,
+                       display=('evals','target','absdiff-evals',
+                       'infdiff-evals','log-evals','absdiff-log-evals'))
+
+@@markdown
+### Gram Matrix Eigenvalues: 
+Compares the eigenvalues of the data-derived Gram matrix with those of a Gram matrix computed using the target gates.
+@@code
+ws.GramMatrixBarPlot(ds, gs_target, 10, strs)
+
+@@markdown
+### RB error metrics
+Estimates for the error rate that would be obtained using the Randomized Benchmarking (RB) protocol.
+@@code
+ws.GatesetVsTargetTable(gs, gs_target, clifford_compilation, cri)
+
+
+@@markdown
+## Germs Detail
+The figures in this section compare each germ-spectrum to the spectrum of that germ if it were generated using the set "eigenspace-projected" gates obtained by placing each gate's GST-estimated eigenvalues within eigenbasis of the ideal target gate.
+### Discrepancy between germs and spectral gates
+Compares each germ's estimated spectrum to the spectrum it *would* have if each individual gate had the eigenvalues that GST estimated for it, but exactly the right (target) eigenbasis.
+@@code
+ws.GatesVsTargetTable(gs, gs_eigenspace_projected, None, 
+                      display=('evdiamond','evnudiamond'), virtual_gates=germs)
+
+@@markdown
+### Eigenvalues of estimated germs
+Lists each germ's spectrum.  It also lists metrics that compare these spectra to the ones predicted by the "eigenspace-projected" gates.
+@@code
+ws.GateEigenvalueTable(gs, gs_eigenspace_projected, cri,
+                       display=('evals','target','absdiff-evals',
+		                'infdiff-evals','log-evals','absdiff-log-evals'),
+                       virtual_gates=germs)

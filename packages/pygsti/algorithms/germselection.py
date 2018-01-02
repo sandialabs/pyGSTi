@@ -1,10 +1,10 @@
+""" Functions for selecting a complete set of germs for a GST analysis."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for selecting a complete set of germs for a GST analysis."""
 
 import warnings as _warnings
 
@@ -20,8 +20,8 @@ from . import scoring as _scoring
 FLOATSIZE = 8 # in bytes: TODO: a better way
 
 def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
-                   numGSCopies=5, seed=None, maxGermLength=6,
-                   force="singletons", algorithm='greedy',
+                   numGSCopies=5, seed=None, candidateGermCounts=None,
+                   candidateSeed=None, force="singletons", algorithm='greedy',
                    algorithm_kwargs=None, memLimit=None, comm=None,
                    profiler=None, verbosity=1):
     """
@@ -63,11 +63,19 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
         Seed for generating random unitary perturbations to gatesets. Also
         passed along to stochastic germ-selection algorithms.
 
-    maxGermsLength : int, optional
-        The maximum length (in terms of gates) of any germ allowed in the germ
-        set. Currently will construct a list of all non-equivalent germs of
-        length up to `maxGermsLength` for the germ selection algorithms to play
-        around with.
+    candidateGermCounts : dict, optional
+        A dictionary of *germ_length* : *count* key-value pairs, specifying 
+        the germ "candidate list" - a list of potential germs to draw from.
+        *count* is either an integer specifying the number of random germs
+        considered at the given *germ_length* or the special values `"all upto"`
+        that considers all of the of all non-equivalent germs of length up to
+        the corresponding *germ_length*.  If None, all germs of up to length
+        6 are used, the equivalent of `{6: 'all upto'}`.
+
+    candidateSeed : int, optional
+        A seed value used when randomly selecting candidate germs.  For each
+        germ length being randomly selected, the germ length is added to 
+        the value of `candidateSeed` to get the actual seed used.
 
     force : str or list, optional
         A list of GateStrings which *must* be included in the final germ set.
@@ -121,10 +129,18 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
     printer = _objs.VerbosityPrinter.build_printer(verbosity, comm)
     gatesetList = setup_gateset_list(gs_target, randomize,
                                      randomizationStrength, numGSCopies, seed)
-    gates = gs_target.gates.keys()
-    availableGermsList = _constr.list_all_gatestrings_without_powers_and_cycles(
-        gates, maxGermLength)
-
+    gates = list(gs_target.gates.keys())
+    availableGermsList = []
+    if candidateGermCounts is None: candidateGermCounts = {6: 'all upto'}
+    for germLength, count in candidateGermCounts.items():
+        if count == "all upto":
+            availableGermsList.extend( _constr.list_all_gatestrings_without_powers_and_cycles(
+                    gates, maxLength=germLength) )
+        else:
+            seed = None if candidateSeed is None else candidateSeed+germLength
+            availableGermsList.extend( _constr.list_random_gatestrings_onelen(
+                    gates, germLength, count, seed=seed))
+            
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
         algorithm_kwargs = {}
@@ -155,7 +171,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Constructed germ set:', 1)
             printer.log(str([str(germ) for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore.score), 1)
+            printer.log('Score: {}'.format(germsetScore), 1)
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
         # Define defaults for parameters that currently have no default or
@@ -182,12 +198,12 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                 germList[0], neighborhood=gatesetList,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log(str([str(germ) for germ in germList[0]]), 1)
-            printer.log('Score: {}'.format(germsetScore.score))
+            printer.log('Score: {}'.format(germsetScore))
         elif not algorithm_kwargs['returnAll'] and germList is not None:
             germsetScore = calculate_germset_score(germList,
                                                    neighborhood=gatesetList)
             printer.log(str([str(germ) for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore.score), 1)
+            printer.log('Score: {}'.format(germsetScore), 1)
     elif algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
         # Define defaults for parameters that currently have no default or
@@ -214,7 +230,7 @@ def generate_germs(gs_target, randomize=True, randomizationStrength=1e-2,
                 scoreFunc=algorithm_kwargs['scoreFunc'])
             printer.log('Constructed germ set:', 1)
             printer.log(str([str(germ) for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore.score), 1)
+            printer.log('Score: {}'.format(germsetScore), 1)
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
@@ -232,10 +248,10 @@ def calculate_germset_score(germs, gs_target=None, neighborhood=None,
     if neighborhood is None:
         neighborhood = [gs_target.randomize_with_unitary(randomizationStrength)
                         for n in range(neighborhoodSize)]
-    scores = [compute_non_AC_score(scoreFn, gateset=gateset,
-                                   partialGermsList=germs,
-                                   gatePenalty=gatePenalty,
-                                   l1Penalty=l1Penalty)
+    scores = [compute_composite_germ_score(scoreFn, gateset=gateset,
+                                           partialGermsList=germs,
+                                           gatePenalty=gatePenalty,
+                                           l1Penalty=l1Penalty)
               for gateset in neighborhood]
 
     return max(scores)
@@ -314,11 +330,13 @@ def setup_gateset_list(gatesetList, randomize, randomizationStrength,
     return gatesetList
 
 
-def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
-                         partialDerivDaggerDeriv=None, gateset=None,
-                         partialGermsList=None, eps=None, numGaugeParams=None,
-                         gatePenalty=0.0, germLengths=None, l1Penalty=0.0):
-    """Compute the score for a germ set when it is not AC against a gateset.
+def compute_composite_germ_score(scoreFn, thresholdAC=1e6, initN=1,
+                                 partialDerivDaggerDeriv=None, gateset=None,
+                                 partialGermsList=None, eps=None, numGaugeParams=None,
+                                 gatePenalty=0.0, germLengths=None, l1Penalty=0.0):
+    """
+    Compute the score for a germ set when it is not AC against a gateset.
+
     Normally scores computed for germ sets against gatesets for which they are
     not AC will simply be astronomically large. This is fine if AC is all you
     care about, but not so useful if you want to compare partial germ sets
@@ -423,10 +441,18 @@ def compute_non_AC_score(scoreFn, thresholdAC=1e6, initN=1,
         else:
             AC_score = candidate_AC_score
             N_AC = N
-    # Apply penalties
-    score = AC_score + l1Score + gateScore
 
-    return _scoring.CompositeScore(score, N_AC)
+    # OLD Apply penalties to the minor score; major part is just #amplified
+    #major_score = N_AC
+    #minor_score = AC_score + l1Score + gateScore
+
+    # Apply penalties to the major score
+    major_score = -N_AC + gateScore + l1Score
+    minor_score = AC_score
+    ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
+    #DEBUG: ret.extra = {'gateScore': gateScore,
+    #    'sum(germLengths)': _np.sum(germLengths), 'l1': l1Score}
+    return ret
 
 
 def calc_bulk_twirled_DDD(gateset, germsList, eps=1e-6, check=False,
@@ -439,9 +465,20 @@ def calc_bulk_twirled_DDD(gateset, germsList, eps=1e-6, check=False,
     if germLengths is None:
         germLengths = _np.array([len(germ) for germ in germsList])
     twirledDeriv = bulk_twirled_deriv(gateset, germsList, eps, check, comm) / germLengths[:, None, None]
-    twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
-                                         _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+
+    #OLD: slow, I think because conjugate *copies* a large tensor, causing a memory bottleneck
+    #twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
+    #                                     _np.conjugate(twirledDeriv),
+    #                                     twirledDeriv)
+
+    #NEW: faster, one-germ-at-a-time computation requires less memory.
+    nGerms, _, vec_gateset_dim = twirledDeriv.shape
+    twirledDerivDaggerDeriv = _np.empty((nGerms, vec_gateset_dim, vec_gateset_dim),
+                                        dtype=_np.complex)
+    for i in range(nGerms):
+        twirledDerivDaggerDeriv[i, :, :] = _np.dot(
+            twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
+
     return twirledDerivDaggerDeriv
 
 
@@ -455,7 +492,7 @@ def calc_twirled_DDD(gateset, germ, eps=1e-6):
     twirledDeriv = twirled_deriv(gateset, germ, eps) / len(germ)
     twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
                                          _np.conjugate(twirledDeriv),
-                                         twirledDeriv)
+                                         twirledDeriv)         
     return twirledDerivDaggerDeriv
 
 
@@ -473,8 +510,16 @@ def compute_score(weights, gateset_num, scoreFunc, derivDaggerDerivList,
     if forceIndices is not None and _np.any(weights[forceIndices] <= 0):
         score = forceScore
     else:
-        combinedDDD = _np.einsum('i,ijk', weights,
-                                 derivDaggerDerivList[gateset_num])
+        #OLD
+        #combinedDDD = _np.einsum('i,ijk', weights,
+        #                         derivDaggerDerivList[gateset_num])
+
+        #NEW: tensordot is a bit faster than einsum
+        combinedDDD = _np.squeeze(
+            _np.tensordot(_np.expand_dims(weights, 1),
+                          derivDaggerDerivList[gateset_num], (0, 0)))
+        assert len(combinedDDD.shape) == 2
+        
         sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
         observableEigenvals = sortedEigenvals[nGaugeParams:]
         score = (_scoring.list_score(observableEigenvals, scoreFunc)
@@ -551,6 +596,17 @@ def checkGermsListCompleteness(gatesetList, germsList, scoreFunc, threshold):
 
 
 def removeSPAMVectors(gateset):
+    """
+    Returns a copy of `gateset` with state preparations and effects removed.
+
+    Parameters
+    ----------
+    gateset : GateSet
+
+    Returns
+    -------
+    GateSet
+    """
     reducedGateset = gateset.copy()
     for prepLabel in list(reducedGateset.preps.keys()):
         del reducedGateset.preps[prepLabel]
@@ -559,15 +615,19 @@ def removeSPAMVectors(gateset):
     return reducedGateset
 
 
-def get_neighbors(boolVec):
-    for i in range(len(boolVec)):
-        v = boolVec.copy()
-        v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
-        yield v
-
-
 def num_non_spam_gauge_params(gateset):
-    """Return number of non-gauge, non-SPAM parameters in a GateSet.
+    """
+    Return the number of non-gauge, non-SPAM parameters in `gateset`.
+
+    Equivalent to `removeSPAMVectors(gateset).num_gauge_params()`.
+
+    Parameters
+    ---------
+    gateset : GateSet
+    
+    Returns
+    -------
+    int
     """
     return removeSPAMVectors(gateset).num_gauge_params()
 
@@ -884,8 +944,7 @@ def build_up(gatesetList, germsList, randomize=True,
                                      randomizationStrength, numCopies, seed)
 
     (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+     numGaugeParams, _, _) = get_gateset_params(gatesetList)
 
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
     numGerms = len(germsList)
@@ -953,7 +1012,7 @@ def build_up(gatesetList, germsList, randomize=True,
                 candidateWeights[candidateGermIdx] = 1
                 partialDDD = derivDaggerDeriv[
                     _np.where(candidateWeights == 1)[0], :, :]
-                candidateGermScore = compute_non_AC_score(
+                candidateGermScore = compute_composite_germ_score(
                     partialDerivDaggerDeriv=partialDDD, **nonAC_kwargs)
                 candidateGermScores.append(candidateGermScore)
             # Add the germ that give the best score
@@ -1071,9 +1130,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     #assert(all([(gs.num_params() == Np) for gs in gatesetList])), \
     #    "All gate sets must have the same number of parameters!"
 
-    (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+    (_, numGaugeParams,
+     numNonGaugeParams, _) = get_gateset_params(gatesetList)
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
 
     numGerms = len(germsList)
@@ -1145,7 +1203,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     elif mode == "single-Jac":
         currentDDDList = [ _np.zeros((Np,Np),'complex') for gs in gatesetList ]
 
-        loc_Indices, owners, _ = _mpit.distribute_indices(
+        loc_Indices, _, _ = _mpit.distribute_indices(
             list(range(len(goodGerms))), comm, False)
         
         with printer.progress_logging(3):
@@ -1196,7 +1254,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
 
         # Since the germs aren't sufficient, add the best single candidate germ
         bestDDDs = None
-        bestGermScore = _scoring.CompositeScore(1.0,0.0) #lower is better
+        bestGermScore = _scoring.CompositeScore(1.0e100,0,None) #lower is better
         iBestCandidateGerm = None
         with printer.progress_logging(3):
             for i,candidateGermIdx in enumerate(loc_candidateIndices):
@@ -1205,7 +1263,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                                       suffix=str(germsList[candidateGermIdx]))
 
                 #print("DB: Rank%d computing index %d" % (comm.Get_rank(),candidateGermIdx))
-                worstScore = _scoring.CompositeScore(1.0,1e8) # worst of all gatesets
+                worstScore = _scoring.CompositeScore(-1.0e100,0,None) # worst of all gatesets
 
                 # Loop over all gatesets
                 testDDDs = []
@@ -1222,9 +1280,12 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                         gateset = gatesetList[k]
                         testDDD += calc_twirled_DDD(
                             gateset, germsList[candidateGermIdx], tol)
-                    # (else already checked above)
+                    # (else already checked above)                        
 
-                    worstScore = max( worstScore, compute_non_AC_score(
+                    nonAC_kwargs['germLengths'] = \
+                        _np.array([len(germ) for germ in
+                                   (goodGerms + [germsList[candidateGermIdx]]) ])
+                    worstScore = max( worstScore, compute_composite_germ_score(
                         partialDerivDaggerDeriv=testDDD[None,:,:], initN=initN,
                         **nonAC_kwargs))
                     testDDDs.append(testDDD) #save in case this is a keeper
@@ -1466,13 +1527,20 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
     printer.log("Gateset has %d gauge params." % nGaugeParams, 1)
 
+    def _get_neighbors(boolVec):
+        for i in range(len(boolVec)):
+            v = boolVec.copy()
+            v[i] = (v[i] + 1) % 2 # Toggle v[i] btwn 0 and 1
+            yield v
+
+
     with printer.progress_logging(1):
         for iIter in range(maxIter):
             printer.show_progress(iIter, maxIter,
                                   suffix="score=%g, nGerms=%d" % (score, L1))
 
             bFoundBetterNeighbor = False
-            for neighbor in get_neighbors(weights):
+            for neighbor in _get_neighbors(weights):
                 neighborScoreList = []
                 for gateset_num in range(len(gatesetList)):
                     if (gateset_num, tuple(neighbor)) not in scoreD:
@@ -1514,7 +1582,7 @@ def optimize_integer_germs_slack(gatesetList, germsList, randomize=True,
                 # now...
                 score += slack
 
-                for neighbor in get_neighbors(weights):
+                for neighbor in _get_neighbors(weights):
                     scoreList = [scoreD[gateset_num, tuple(neighbor)]
                                  for gateset_num in range(len(gatesetList))]
                     maxScore = _np.max(scoreList)
@@ -1565,12 +1633,12 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
         array, where the first index indexes the particular germ.
     nonAC_kwargs : dict
         Dictionary containing further arguments to pass to
-        :func:`compute_non_AC_score` for the scoring of the germ set against
+        :func:`compute_composite_germ_score` for the scoring of the germ set against
         individual gatesets.
     initN : int
         The number of eigenvalues to begin checking for amplificational
         completeness with respect to. Passed as an argument to
-        :func:`compute_non_AC_score`.
+        :func:`compute_composite_germ_score`.
     Returns
     -------
     CompositeScore
@@ -1583,7 +1651,7 @@ def germ_breadth_score_fn(germSet, germsList, twirledDerivDaggerDerivList,
     for derivDaggerDeriv in twirledDerivDaggerDerivList:
         # Loop over all gatesets
         partialDDD = derivDaggerDeriv[_np.where(weights == 1)[0], :, :]
-        germsVsGatesetScores.append(compute_non_AC_score(
+        germsVsGatesetScores.append(compute_composite_germ_score(
             partialDerivDaggerDeriv=partialDDD, initN=initN, **nonAC_kwargs))
     # Take the score for the current germ set to be its worst score over all
     # gatesets.
@@ -1690,9 +1758,8 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
     gatesetList = setup_gateset_list(gatesetList, randomize,
                                      randomizationStrength, numCopies, seed)
 
-    (reducedGatesetList,
-     numGaugeParams,
-     numNonGaugeParams, numGates) = get_gateset_params(gatesetList)
+    (_,  numGaugeParams,
+     numNonGaugeParams, _) = get_gateset_params(gatesetList)
 
     germLengths = _np.array([len(germ) for germ in germsList], 'i')
 
@@ -1717,7 +1784,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
         printer.warning("Complete initial germ set FAILS on gateset "
                         + str(undercompleteGatesetNum) + ".")
         printer.warning("Aborting search.")
-        return None
+        return (None,None,None) if returnAll else None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
     printer.log("Now searching for best germ set.", 1)
@@ -1750,7 +1817,12 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                                           twirledDerivDaggerDerivList,
                                           final_nonAC_kwargs, initN=1))
 
-    feasibleThreshold = _scoring.CompositeScore(threshold, numNonGaugeParams)
+    #OLD: feasibleThreshold = _scoring.CompositeScore(-numNonGaugeParams,threshold,numNonGaugeParams))
+    def _feasibleFn(germSet): #now that scoring is not ordered entirely by N
+        s = germ_breadth_score_fn(germSet, germsList,
+                                  twirledDerivDaggerDerivList, nonAC_kwargs,
+                                  initN=1)
+        return (s.N >= numNonGaugeParams and s.minor < threshold)
 
     rclFn = lambda x: _scoring.composite_rcl_fn(x, alpha)
 
@@ -1770,7 +1842,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                     elements=germsList, greedyScoreFn=scoreFn, rclFn=rclFn,
                     localScoreFn=scoreFn,
                     getNeighborsFn=getNeighborsFn,
-                    feasibleThreshold=feasibleThreshold,
+                    feasibleFn=_feasibleFn,
                     initialElements=initialWeights, seed=seed,
                     verbosity=verbosity)
 

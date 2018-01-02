@@ -23,18 +23,18 @@ germs = _strc.gatestring_list(
     [ ('Gx',),
       ('Gy',),
       ('Gx','Gy',),
-      ('Gy','Gy','Gy','Gx',),
-      ('Gx','Gx','Gy','Gx','Gy','Gy',),
-      ('Gy','Gx','Gy','Gx','Gx','Gx',),
-      ('Gy','Gx','Gy','Gy','Gx','Gx',),
-      ('Gy','Gy','Gy','Gx','Gy','Gx',)] )
+      ('Gx','Gx','Gy'),
+      ('Gx','Gy','Gy'),
+      ('Gx','Gx','Gy','Gx','Gy','Gy',)])
+germs_lite = germs[0:4]
 
 #Construct a target gateset:  X(pi/2), Y(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gx','Gy'],
                                 [ "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                effectLabels=["E0"], effectExpressions=["1"],
-                                spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                effectLabels=["E0"], effectExpressions=["0"],
+                                spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
+                                basis='pp')
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = []
@@ -61,3 +61,36 @@ clifford_compilation["Gc20"] = ['Gx','Gy','Gy','Gy','Gx',]
 clifford_compilation["Gc21"] = ['Gy',]
 clifford_compilation["Gc22"] = ['Gx','Gx','Gx','Gy','Gy',]
 clifford_compilation["Gc23"] = ['Gx','Gy','Gx','Gx','Gx',]
+
+
+global_fidPairs =  [
+    (0, 0), (2, 3), (5, 2), (5, 4)]
+
+pergerm_fidPairsDict = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gy',): [
+        (0, 2), (2, 2), (2, 4), (4, 4)],
+  ('Gx', 'Gy'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gx', 'Gx', 'Gy'): [
+        (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
+  ('Gx', 'Gy', 'Gy'): [
+        (0, 3), (1, 2), (2, 5), (3, 1), (3, 3), (5, 3)],
+  ('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy'): [
+        (0, 0), (2, 3), (5, 2), (5, 4)],
+}
+
+global_fidPairs_lite =  [
+    (0, 2), (2, 4), (3, 1), (3, 3)]
+
+pergerm_fidPairsDict_lite = {
+  ('Gx',): [
+        (1, 1), (3, 4), (4, 2), (5, 5)],
+  ('Gy',): [
+        (0, 2), (2, 2), (2, 4), (4, 4)],
+  ('Gx', 'Gy'): [
+        (0, 0), (0, 4), (2, 5), (5, 4)],
+  ('Gx', 'Gx', 'Gy'): [
+        (1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)],
+}

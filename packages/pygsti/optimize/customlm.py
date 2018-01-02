@@ -1,10 +1,10 @@
+""" Custom implementation of the Levenberg-Marquardt Algorithm """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Custom implementation of the Levenberg-Marquardt Algorithm """
 
 import time as _time
 import numpy as _np
@@ -12,6 +12,7 @@ import scipy as _scipy
 #from scipy.optimize import OptimizeResult as _optResult 
 
 from ..tools import mpitools as _mpit
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 #constants
 MACH_PRECISION = 1e-12
@@ -22,6 +23,67 @@ MACH_PRECISION = 1e-12
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, comm=None,
                    verbosity=0, profiler=None):
+    """
+    An implementation of the Levenberg-Marquardt least-squares optimization
+    algorithm customized for use within pyGSTi.  This general purpose routine
+    mimic to a large extent the interface used by `scipy.optimize.leastsq`,
+    though it implements a newer (and more robust) version of the algorithm.
+
+    Parameters
+    ----------
+    obj_fn : function
+        The objective function.  Must accept and return 1D numpy ndarrays of 
+        length N and M respectively.  Same form as scipy.optimize.leastsq.
+
+    jac_fn : function
+        The jacobian function (not optional!).  Accepts a 1D array of length N
+        and returns an array of shape (M,N).
+
+    x0 : numpy.ndarray
+        Initial evaluation point.
+
+    f_norm2_tol : float, optional
+        Tolerace for `F^2` where `F = `norm( sum(obj_fn(x)**2) )` is the
+        least-squares residual.  If `F**2 < f_norm2_tol`, then mark converged.
+
+    jac_norm_tol : float, optional
+        Tolerance for jacobian norm, namely if `infn(dot(J.T,f)) < jac_norm_tol`
+        then mark converged, where `infn` is the infinity-norm and 
+        `f = obj_fn(x)`.
+    
+    rel_ftol : float, optional
+        Tolerance on the relative reduction in `F^2`, that is, if 
+        `d(F^2)/F^2 < rel_ftol` then mark converged.
+    
+    rel_xtol : float, optional
+        Tolerance on the relative value of `|x|`, so that if
+        `d(|x|)/|x| < rel_xtol` then mark converged.
+
+    max_iter : int, optional
+        The maximum number of (outer) interations.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+
+    verbosity : int, optional
+        Amount of detail to print to stdout.
+
+    profiler : Profiler, optional
+        A profiler object used for to track timing and memory usage.
+
+    Returns
+    -------
+    x : numpy.ndarray
+        The optimal solution.
+    converged : bool
+        Whether the solution converged.
+    msg : str
+        A message indicating why the solution converged (or didn't).
+    """
+
+    printer = _VerbosityPrinter.build_printer(verbosity, comm)
+    
     msg = ""
     converged = False
     x = x0
@@ -32,9 +94,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     nu = 2
     mu = 0 #initialized on 1st iter
     my_cols_slice = None
-
-    if comm is not None and comm.Get_rank() != 0:
-        verbosity = 0 #Only print to stdout from root process
 
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
@@ -50,8 +109,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             msg = "Sum of squares is at most %g" % f_norm2_tol
             converged = True; break
 
-        if verbosity > 0:
-            print("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
+        printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
             
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
@@ -107,8 +165,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 new_x = x + dx
                 norm_dx = _np.dot(dx,dx) # _np.linalg.norm(dx)**2
 
-                if verbosity > 1:
-                    print("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx))
+                printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx),2)
 
                 if norm_dx < (rel_xtol**2)*norm_x: # and mu < MU_TOL2:
                     msg = "Relative change in |x| is at most %g" % rel_xtol
@@ -126,9 +183,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 dL = _np.dot(dx, mu*dx - JTf) # expected decrease in ||F||^2 from linear model
                 dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
-                if verbosity > 1:
-                    print("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
-                          (norm_new_f,dL,dF,dL/norm_f,dF/norm_f))
+                printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
+                            (norm_new_f,dL,dF,dL/norm_f,dF/norm_f),2)
 
                 if dL/norm_f < rel_ftol and dF/norm_f < rel_ftol and dF/dL < 2.0:
                     msg = "Both actual and predicted relative reductions in the" + \
@@ -144,9 +200,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     nu = 2
                     x,f, norm_f = new_x, new_f, norm_new_f
 
-                    if verbosity > 1:
-                        print("      Accepted! gain ratio=%g  mu * %g => %g"
-                              % (dF/dL,max(t,1.0/3.0),mu))
+                    printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
+                                % (dF/dL,max(t,1.0/3.0),mu), 2)
 
                     ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
                     #new_Jac = jac_fn(new_x)
@@ -156,7 +211,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                     break # exit inner loop normally
             else:
-                if verbosity > 1: print("LinSolve Failure!!")
+                printer.log("LinSolve Failure!!",2)
 
             # if this point is reached, either the linear solve failed
             # or the error did not reduce.  In either case, reject increment.
@@ -167,9 +222,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             if nu > half_max_nu : #watch for nu getting too large (&overflow)
                 msg = "Stopping after nu overflow!"; break
             nu = 2*nu
-            if verbosity > 1:
-                print("      Rejected!  mu => mu*nu = %g, nu => 2*nu = %g"
-                      % (mu, nu))
+            printer.log("      Rejected!  mu => mu*nu = %g, nu => 2*nu = %g"
+                        % (mu, nu),2)
             
             JTJ[idiag] = undampled_JTJ_diag #restore diagonal
         #end of inner loop

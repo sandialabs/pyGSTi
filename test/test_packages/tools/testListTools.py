@@ -23,7 +23,7 @@ class ListToolsBaseTestCase(BaseTestCase):
         self.assertEqual(l2, lt.remove_duplicates(l))
 
         letters = list('ABCCA')
-        self.assertEqual(lt.compute_occurance_indices(letters), [0, 0, 0, 1, 1])
+        self.assertEqual(lt.compute_occurrence_indices(letters), [0, 0, 0, 1, 1])
 
         begin = ('A', 'B', 'C')
         self.assertEqual(lt.find_replace_tuple(begin, {'B' : 'C'}), ('A', 'C', 'C'))

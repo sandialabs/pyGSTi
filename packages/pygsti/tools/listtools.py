@@ -1,10 +1,10 @@
+""" Utility functions for working with lists """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions for working with lists """
 
 def remove_duplicates_in_place(l,indexToTest=None):
     """
@@ -76,9 +76,9 @@ def remove_duplicates(l,indexToTest=None):
     return lcopy
 
 
-def compute_occurance_indices(lst):
+def compute_occurrence_indices(lst):
     """
-    Returns a 0-based list of integers specifying which occurance,
+    Returns a 0-based list of integers specifying which occurrence,
     i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the

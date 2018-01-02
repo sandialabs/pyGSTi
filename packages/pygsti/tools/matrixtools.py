@@ -1,17 +1,20 @@
+""" Matrix related utility functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Matrix related utility functions """
 
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
+from .basistools import change_basis
+
 def array_eq(a, b, tol=1e-8):
+    """Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol` """
     print(_np.linalg.norm(a-b))
     return _np.linalg.norm(a-b) < tol
 
@@ -188,20 +191,23 @@ def nullspace_qr(m, tol=1e-7):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
-    M,N = m.shape
-    q,r,p = _spl.qr(m.T,mode='full', pivoting=True)
-      # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
-      
-    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
+    #if M,N = m.shape, and q,r,p = _spl.qr(...)
+    # q.shape == (N,N), r.shape = (N,M), p.shape = (M,)
+    q,r,_ = _spl.qr(m.T, mode='full', pivoting=True)
     rank = (_np.abs(_np.diagonal(r)) > tol).sum()
     
-    #DEBUG
+    #DEBUG: requires q,r,p = _sql.qr(...) above
+    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
     #print("Rank QR = ",rank)
     #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
     #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
     
     return q[:,rank:]
 
+def matrix_sign(M):
+    """ The "sign" matrix of `M` """
+    U,_,Vt = _np.linalg.svd(M)
+    return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):
     """
@@ -308,9 +314,10 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     M : numpy array
         The superoperator matrix whose logarithm is taken
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      The basis `M` is represented in.  Allowed options are Matrix-unit
-      (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
@@ -320,7 +327,6 @@ def unitary_superoperator_matrix_log(M, mxBasis):
     """
     from . import lindbladtools as _lt # (would create circular imports if at top)
     from . import gatetools as _gt # (would create circular imports if at top)
-    from .basis import change_basis
 
     M_std = change_basis(M, mxBasis, "std")
     evals = _np.linalg.eigvals(M_std)
@@ -358,11 +364,13 @@ def near_identity_matrix_log(M, TOL=1e-8):
     # real if the original matrix is real
     M_is_real = bool(_np.linalg.norm(M.imag) < TOL)
     logM = _spl.logm(M)
-    if M_is_real: 
-        assert(_np.linalg.norm(logM.imag) < TOL)
+    if M_is_real:
+        assert(_np.linalg.norm(logM.imag) < TOL), \
+            "near_identity_matrix_log has failed to construct a real logarithm!\n" \
+            + "This is probably because M is not near the identity.\n" \
+            + "Its eigenvalues are: " + str(_np.linalg.eigvals(M))
         logM = logM.real
     return logM
-
 
 def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     """ 
@@ -399,7 +407,7 @@ def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
     assert(_np.linalg.norm(M.imag) < 1e-8), "Argument `M` must be a *real* matrix!"
     mx_shape = M.shape
     
-    def objective(flat_logM):
+    def _objective(flat_logM):
         logM = flat_logM.reshape(mx_shape)
         testM = _spl.expm(logM)
         ret=  targetWeight*_np.linalg.norm(logM-target_logM)**2 + \
@@ -416,24 +424,24 @@ def approximate_matrix_log(M, target_logM, targetWeight=10.0, TOL=1e-6):
         #        _np.linalg.norm(testM - M)**2
 
     #from .. import optimize as _opt
-    #print_obj_func = _opt.create_obj_func_printer(objective) #only ever prints to stdout!                    
+    #print_obj_func = _opt.create_obj_func_printer(_objective) #only ever prints to stdout!                    
     print_obj_func = None
 
     logM = _np.real( real_matrix_log(M, actionIfImaginary="ignore") ) #just drop any imaginary part
     initial_flat_logM = logM.flatten() # + 0.1*target_logM.flatten()
       # Note: adding some of target_logM doesn't seem to help; and hurts in easy cases
 
-    if objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
+    if _objective(initial_flat_logM) > 1e-16: #otherwise initial logM is fine!
         
-        #print("Initial objective fn val = ",objective(initial_flat_logM))
+        #print("Initial objective fn val = ",_objective(initial_flat_logM))
         #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
         #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
         #      _np.linalg.norm(logM-target_logM)**2)
     
-        solution = _spo.minimize(objective, initial_flat_logM,  options={'maxiter': 1000},
+        solution = _spo.minimize(_objective, initial_flat_logM,  options={'maxiter': 1000},
                                            method='L-BFGS-B',callback=print_obj_func, tol=TOL)
         logM = solution.x.reshape(mx_shape)
-        #print("Final objective fn val = ",objective(solution.x))
+        #print("Final objective fn val = ",_objective(solution.x))
         #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-M),
         #      _np.linalg.norm(_spl.expm(logM).flatten()-M.flatten(), 1),
         #      _np.linalg.norm(logM-target_logM)**2)
@@ -547,3 +555,64 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
         
     return logM
 
+
+
+def minweight_match(a, b, metricfn=None, return_pairs=True,
+                    pass_indices_to_metricfn=False):
+    """
+    Matches the elements of two vectors, `a` and `b` by minimizing the
+    weight between them, defined as the sum of `metricfn(x,y)` over
+    all `(x,y)` pairs (`x` in `a` and `y` in `b`).
+
+    Parameters
+    ----------
+    a, b : list or numpy.ndarray
+        1D arrays to match elements between.
+
+    metricfn : function, optional
+        A function of two float parameters, `x` and `y`,which defines the cost
+        associated with matching `x` with `y`.  If None, `abs(x-y)` is used.
+
+    return_pairs : bool, optional
+        If True, the matching is also returned.
+
+    pass_indices_to_metricfn : bool, optional
+        If True, the metric function is passed two *indices* into the `a` and
+        `b` arrays, respectively, instead of the values.
+
+    Returns
+    -------
+    weight_array : numpy.ndarray
+        The array of weights corresponding to the min-weight matching. The sum
+        of this array's elements is the minimized total weight.
+
+    pairs : list
+        Only returned when `return_pairs == True`, a list of 2-tuple pairs of
+        indices `(ix,iy)` giving the indices into `a` and `b` respectively of 
+        each matched pair.
+    """
+    assert(len(a) == len(b))
+    if metricfn is None:
+        metricfn = lambda x,y: abs(x-y)
+        
+    D = len(a)
+    weightMx = _np.empty((D,D),'d')
+    
+    if pass_indices_to_metricfn:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(i,j) for j,y in enumerate(b)]
+    else:
+        for i,x in enumerate(a):
+            weightMx[i,:] = [metricfn(x,y) for j,y in enumerate(b)]
+            
+    a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
+    assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
+
+    matched_pairs = list(zip(a_inds,b_inds))
+    min_weights = weightMx[a_inds, b_inds]
+
+    if return_pairs:
+        return min_weights, matched_pairs
+    else:
+        return min_weights
+           

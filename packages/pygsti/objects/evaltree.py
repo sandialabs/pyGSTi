@@ -1,17 +1,16 @@
+""" Defines the EvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the EvalTree class which implements an evaluation tree. """
 
-from . import gatestring as _gs
 from ..tools import mpitools as _mpit
-from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 import numpy as _np
-import time as _time #DEBUG TIMERS
+#import time as _time #DEBUG TIMERS
 
 class EvalTree(list):
     """
@@ -262,14 +261,14 @@ class EvalTree(list):
         nFinal = self.num_final_strings()
         ret = a.copy()
 
-        def mkindx(i):
+        def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
             return mi
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
                 if iorig < nFinal: 
-                    ret[mkindx(icur)] = a[mkindx(iorig)]
+                    ret[_mkindx(icur)] = a[_mkindx(iorig)]
 
         return ret
 
@@ -301,14 +300,14 @@ class EvalTree(list):
         nFinal = self.num_final_strings()
         ret = a.copy()
 
-        def mkindx(i):
+        def _mkindx(i):
             mi = [slice(None)]*a.ndim; mi[axis] = i
             return mi
 
         if self.original_index_lookup is not None:
             for iorig,icur in self.original_index_lookup.items():                
                 if iorig < nFinal: 
-                    ret[mkindx(iorig)] = a[mkindx(icur)]
+                    ret[_mkindx(iorig)] = a[_mkindx(icur)]
 
         return ret
         
@@ -363,7 +362,7 @@ class EvalTree(list):
         # processors (group can then parallelize derivative calcs over
         # gate set parameters) 
 
-        rank = 0 if (comm is None) else comm.Get_rank()
+        #rank = 0 if (comm is None) else comm.Get_rank()
         nprocs = 1 if (comm is None) else comm.Get_size()
         nSubtreeComms = self.distribution.get('numSubtreeComms',1)
         nSubtrees = len(self.get_sub_trees())
@@ -383,7 +382,7 @@ class EvalTree(list):
         subTreeOwners = { iSubTree: subCommOwners[subTreeOwners[iSubTree]]
                           for iSubTree in subTreeOwners }
 
-        printer = VerbosityPrinter.build_printer(verbosity, comm)
+        printer = _VerbosityPrinter.build_printer(verbosity, comm)
         printer.log("*** Distributing %d subtrees into %d sub-comms (%s processors) ***"% \
                         (nSubtrees, nSubtreeComms, nprocs))
 
@@ -429,7 +428,7 @@ class EvalTree(list):
         parentIndexRevPerm = [] # parentIndexRevPerm[newIndex] = currentIndex (i.e. oldIndex)
         subTreeIndicesList = []
         numFinalList = []
-        for iSubTree,subTreeSet in enumerate(subTreeSetList):
+        for subTreeSet in subTreeSetList:
             subTreeIndices = list(subTreeSet)
             #if bDebug: print("SUBTREE0: %s (len=%d)" % (str(subTreeIndices),len(subTreeIndices)))
             #if bDebug: print("  NEED: %s" % ",".join([ "1" if b else "0" for b in need_to_compute]))

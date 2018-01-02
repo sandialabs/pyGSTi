@@ -1,10 +1,10 @@
+""" Chi-squared and related functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Chi-squared and related functions """
 
 import numpy as _np
 from . import listtools as _lt
@@ -54,7 +54,7 @@ def chi2_terms(dataset, gateset, gateStrings=None,
 
     #Memory allocation
     ns = nSpamLabels; ng = nGateStrings
-    ne = gateset.num_params(); gd = gateset.get_dimension()
+    gd = gateset.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
@@ -373,7 +373,7 @@ def chi2fn_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):
     return N*(p-f)**2/(cp*(1-cp))
 
 
-def chi2fn_2outcome_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
+def chi2fn_2outcome_wfreqs( N, p, f ):
     """
     Computes chi^2 for a 2-outcome measurement using frequency-weighting.
 
@@ -390,10 +390,6 @@ def chi2fn_2outcome_wfreqs( N, p, f, minProbClipForWeighting=1e-4 ):
 
     f : float or numpy array
         Frequency of 1st outcome (typically observed).
-
-    minProbClipForWeighting : float, optional
-        unused but present to keep the same function
-        signature as chi2fn_2outcome.
 
     Returns
     -------

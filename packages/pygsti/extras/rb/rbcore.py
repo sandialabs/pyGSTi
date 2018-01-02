@@ -1,10 +1,10 @@
+""" Randomized Benhmarking Core Routines """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Randomized Benhmarking Core Routines """
 
 from ... import construction as _cnst
 from ... import objects as _objs
@@ -17,7 +17,6 @@ import itertools as _itertools
 import numpy as _np
 from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
-from collections import OrderedDict as _OrderedDict
 
 def create_random_gatestring(m, group_or_gateset, inverse = True,
                              interleaved = None, seed=None,
@@ -134,12 +133,12 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
                 rndm_indices = interleaved_indices.flatten()
         random_string = [ gateset.gates.keys()[i] for i in rndm_indices ] 
         random_string_group = [ gateset_to_group_labels[gateset.gates.keys()[i]] for i in rndm_indices ] 
-        print(random_string)
+        #print(random_string)
         inversion_group_element = generated_group.get_inv(generated_group.product(random_string_group))
         inversion_sequence = compilation[inversion_group_element]
-        print(inversion_sequence)
+        #print(inversion_sequence)
         random_string.extend(inversion_sequence)
-        print(random_string)
+        #print(random_string)
         
     if not inverse:
         if gateset:
@@ -866,7 +865,7 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
 
     #Note: assumes dataset contains gate strings which use *base* labels
     base_lengths = list(map(len,gatestrings))
-    occ_indices = _tools.compute_occurance_indices(gatestrings)
+    occ_indices = _tools.compute_occurrence_indices(gatestrings)
     Ns = [ dataset.get_row(seq,k).total() 
            for seq,k in zip(gatestrings,occ_indices) ]
     successes = [ dataset.get_row(seq,k).fraction(success_spamlabel) 
@@ -956,10 +955,11 @@ def generate_sim_rb_data(gateset, expRBdataset, seed=None):
     -------
     DataSet
     """
-    gateStrings = list(expRBdataset.keys(stripOccuranceTags=True))
+    gateStrings = list(expRBdataset.keys(stripOccurrenceTags=True))
     Ns = [ expRBdataset[s].total() for s in gateStrings ]
     return _cnst.generate_fake_data(gateset,gateStrings,Ns,sampleError='multinomial',
-                                    collisionAction=expRBdataset.collisionAction)
+                                    collisionAction=expRBdataset.collisionAction,
+                                    seed=seed)
 
 
 def generate_sim_rb_data_perfect(gateset,expRBdataset,N=1e6):
@@ -984,7 +984,7 @@ def generate_sim_rb_data_perfect(gateset,expRBdataset,N=1e6):
     -------
     DataSet
     """
-    gateStrings = list(expRBdataset.keys(stripOccuranceTags=True))
+    gateStrings = list(expRBdataset.keys(stripOccurrenceTags=True))
     return _cnst.generate_fake_data(gateset,gateStrings,N,sampleError='none',
                                     collisionAction=expRBdataset.collisionAction)
 

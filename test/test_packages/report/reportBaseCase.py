@@ -27,6 +27,7 @@ class ReportBaseCase(BaseTestCase):
 
         targetGateset = std.gs_target
         datagen_gateset = targetGateset.depolarize(gate_noise=0.05, spam_noise=0.1)
+        datagen_gateset2 = targetGateset.depolarize(gate_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
         cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
           #only use the first EVec
@@ -40,12 +41,24 @@ class ReportBaseCase(BaseTestCase):
         cls.lsgstStructs = pygsti.construction.make_lsgst_structs(
             gateLabels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
 
-        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset")
 
+        try:
+            basestring #Only defined in Python 2
+            cls.versionsuffix = "" #Python 2
+        except NameError:
+            cls.versionsuffix = "v3" #Python 3
+        
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET
-        #ds = pygsti.construction.generate_fake_data(datagen_gateset, lsgstStrings[-1], nSamples=1000,
+        #ds = pygsti.construction.generate_fake_data(datagen_gateset, cls.lsgstStrings[-1], nSamples=1000,
         #                                            sampleError='binomial', seed=100)
-        #ds.save(compare_files + "/reportgen.dataset")
+        #ds.save(compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+        #ds2 = pygsti.construction.generate_fake_data(datagen_gateset2, cls.lsgstStrings[-1], nSamples=1000,
+        #                                            sampleError='binomial', seed=100)
+        #ds2.save(compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
+
+
+        cls.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen.dataset%s" % cls.versionsuffix)
+        cls.ds2 = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/reportgen2.dataset%s" % cls.versionsuffix)
 
         gs_lgst = pygsti.do_lgst(cls.ds, cls.specs, targetGateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, targetGateset, {'gates': 1.0, 'spam': 0.0})
@@ -59,7 +72,7 @@ class ReportBaseCase(BaseTestCase):
             minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
             returnAll=True)
 
-        cls.results = pygsti.report.Results()
+        cls.results = pygsti.objects.Results()
         cls.results.init_dataset(cls.ds)
         cls.results.init_gatestrings(cls.lsgstStructs)
         cls.results.add_estimate(targetGateset, cls.gs_clgst,
@@ -71,38 +84,59 @@ class ReportBaseCase(BaseTestCase):
                                   'defaultBasename': "MyDefaultReportName"})
         
         gaugeOptParams = collections.OrderedDict([
-                ('TPpenalty', 0),
-                ('CPpenalty', 0),
+                ('gateset', lsgst_gatesets_prego[-1]),  #so can gauge-propagate CIs
+                ('targetGateset', targetGateset),       #so can gauge-propagate CIs
+                ('cptp_penalty_factor', 0),
                 ('gatesMetric',"frobenius"),
                 ('spamMetric',"frobenius"),
-                ('itemWeights', {'gates': 1.0, 'spam': 0.001}) ])
+                ('itemWeights', {'gates': 1.0, 'spam': 0.001}),
+                ('returnAll', True) ])
 
-        go_final_gateset = pygsti.gaugeopt_to_target(lsgst_gatesets_prego[-1],
-                                        targetGateset, **gaugeOptParams)
+        _, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
+        gaugeOptParams['_gaugeGroupEl'] = gaugeEl  #so can gauge-propagate CIs
         cls.results.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
 
         #Compute results for MLGST with TP constraint
-        lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.gs_clgst_tp, cls.lsgstStrings, verbosity=0,
-                                                   minProbClip=1e-4, probClipInterval=(-1e6,1e6),
-                                                   returnAll=True) #TP initial gateset => TP output gatesets
-        cls.results_logL = pygsti.report.Results()
-        cls.results_logL.init_dataset(cls.ds)
-        cls.results_logL.init_gatestrings(cls.lsgstStructs)
-        cls.results_logL.add_estimate(targetGateset, cls.gs_clgst_tp,
-                                 lsgst_gatesets_TP,
-                                 {'objective': "logl",
-                                  'minProbClip': 1e-4,
-                                  'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-                                  'weights': None, 'defaultDirectory': temp_files + "",
-                                  'defaultBasename': "MyDefaultReportName"})
-        
+        # Use do_long_sequence_gst with a non-mark dataset to trigger data scaling
         tp_target = targetGateset.copy(); tp_target.set_all_parameterizations("TP")
-        go_final_gateset = pygsti.gaugeopt_to_target(lsgst_gatesets_TP[-1],
-                                        tp_target, **gaugeOptParams)
-        cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
 
-        #self.results_logL.options.precision = 3
-        #self.results_logL.options.polar_precision = 2
+        
+        cls.ds3 = cls.ds2.copy_nonstatic()
+        cls.ds3.add_counts_from_dataset(cls.ds2)
+        cls.ds3.done_adding_data()
+        
+        cls.results_logL = pygsti.do_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
+                                                       std.germs, cls.maxLengthList, verbosity=0,
+                                                       advancedOptions={'tolerance': 1e-6, 'starting point': 'LGST',
+                                                                        'onBadFit': ["robust","Robust","robust+","Robust+"],
+                                                                        'badFitThreshold': -1.0,
+                                                                        'germLengthLimits': {('Gx','Gi','Gi'): 2} })
+        #OLD
+        #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.gs_clgst_tp, cls.lsgstStrings, verbosity=0,
+        #                                           minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+        #                                           returnAll=True) #TP initial gateset => TP output gatesets
+        #cls.results_logL = pygsti.objects.Results()
+        #cls.results_logL.init_dataset(cls.ds)
+        #cls.results_logL.init_gatestrings(cls.lsgstStructs)
+        #cls.results_logL.add_estimate(targetGateset, cls.gs_clgst_tp,
+        #                         lsgst_gatesets_TP,
+        #                         {'objective': "logl",
+        #                          'minProbClip': 1e-4,
+        #                          'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+        #                          'weights': None, 'defaultDirectory': temp_files + "",
+        #                          'defaultBasename': "MyDefaultReportName"})
+        #
+        #tp_target = targetGateset.copy(); tp_target.set_all_parameterizations("TP")
+        #gaugeOptParams = gaugeOptParams.copy() #just to be safe
+        #gaugeOptParams['gateset'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
+        #gaugeOptParams['targetGateset'] = tp_target  #so can gauge-propagate CIs
+        #_, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
+        #gaugeOptParams['_gaugeGroupEl'] = gaugeEl #so can gauge-propagate CIs
+        #cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
+        #
+        ##self.results_logL.options.precision = 3
+        ##self.results_logL.options.polar_precision = 2
+                                                       
         os.chdir(orig_cwd)
 
 
@@ -127,9 +161,3 @@ class ReportBaseCase(BaseTestCase):
 
         self.results = cls.results.copy()
         self.results_logL = cls.results_logL.copy()
-
-        try:
-            basestring #Only defined in Python 2
-            self.versionsuffix = "" #Python 2
-        except NameError:
-            self.versionsuffix = "v3" #Python 3

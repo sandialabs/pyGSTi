@@ -30,42 +30,86 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportA.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
+                                            confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
 
 
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportB.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('intrinsic error')
+
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
+                                            "Report B", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 
 
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results,temp_files + "/general_reportE.html",
-                                                 confidenceLevel=-95, verbosity=3,  auto_open=False)
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('std')
+
+        #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
+                                             "Report E", confidenceLevel=95, verbosity=3,  auto_open=False,
+                                             advancedOptions={'nm threshold': -10})
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportC.html",
-                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+
+        #Also test adding a model-test estimate to this report
+        gs_guess = std.gs_target.depolarize(gate_noise=0.07,spam_noise=0.03)
+        results = self.results_logL.copy()
+        results.add_model_test(std.gs_target, gs_guess, estimate_key='Test', gauge_opt_keys="auto")
+
+        
+        #Note: this report will have (un-combined) Robust estimates too
+        pygsti.report.create_standard_report(results,temp_files + "/general_reportC",
+                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'combine_robust': False} )
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_wCIs(self):
         vs = self.versionsuffix
-        pygsti.report.create_general_report(self.results_logL,temp_files + "/general_reportD.html",
-                                                 confidenceLevel=95, verbosity=3,  auto_open=False)
+
+        #Use propagation method instead of directly computing a factory for the go0 gauge-opt
+        crfact = self.results.estimates['default'].add_confidence_region_factory('final iteration estimate', 'final')
+        crfact.compute_hessian(comm=None)
+
+        self.results.estimates['default'].gauge_propagate_confidence_region_factory('go0') #instead of computing one        
+        crfact = self.results.estimates['default'].get_confidence_region_factory('go0') #was created by propagation
+        crfact.project_hessian('optimal gate CIs')
+
+        #Note: this report will have Robust estimates too
+        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
+                                             "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
+
+    def test_reports_multiple_ds(self):
+        vs = self.versionsuffix
+        
+        #Note: this report will have (un-combined) Robust estimates too
+        pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
+                                             temp_files + "/general_reportF",
+                                             "Report F", confidenceLevel=None, verbosity=3,  auto_open=False)
+        #Compare the html files?
+        #self.checkFile("general_reportC%s.html" % vs)
+
+
+    def test_report_notebook(self):
+        pygsti.report.create_report_notebook(self.results_logL, temp_files + "/report_notebook.ipynb", None,
+                                             verbosity=3)
 
 
     def test_table_formatting(self):
@@ -132,32 +176,33 @@ class TestReport(ReportBaseCase):
         with self.assertRaises(ValueError):
             latex(rank3Tensor, specs)
 
-    def test_reportables(self):
-        #Test that None is returned when qty cannot be computed
-        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
-        self.assertIsNone(qty)
-
-        #test ignoring gate strings not in dataset
-        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
-                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(plus) diff", self.gs_clgst, self.ds,
-                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty_str = str(qty) #test __str__
-
-        #Test gateset gates mismatch
-        from pygsti.construction import std1Q_XY as stdXY
-        with self.assertRaises(ValueError):
-            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
-        with self.assertRaises(ValueError):
-            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
+#Test functions within reportables separately? This version of the test is outdated:
+#    def test_reportables(self):
+#        #Test that None is returned when qty cannot be computed
+#        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
+#        self.assertIsNone(qty)
+#
+#        #test ignoring gate strings not in dataset
+#        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
+#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
+#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty_str = str(qty) #test __str__
+#
+#        #Test gateset gates mismatch
+#        from pygsti.construction import std1Q_XY as stdXY
+#        with self.assertRaises(ValueError):
+#            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
+#                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
+#        with self.assertRaises(ValueError):
+#            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
+#                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
 
 
 

@@ -46,7 +46,7 @@ class DataComparatorTestCase(BaseTestCase):
 
         #Also test "rectification" (re-scaling to make consistent) here:
         comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof',x0=0.5,method='Nelder-Mead')
+                                        target_score='dof')
 
 
 
@@ -84,7 +84,7 @@ class DataComparatorTestCase(BaseTestCase):
         N=100
         DS_0 = pygsti.construction.generate_fake_data(gs_exp_0,gate_sequences,N,'binomial',seed=10)
         DS_1 = pygsti.construction.generate_fake_data(gs_exp_0,gate_sequences,N,'binomial',seed=20)
-        mds = pygsti.objects.MultiDataSet(spamLabels=['minus','plus'])
+        mds = pygsti.objects.MultiDataSet(spamLabels=['0','1'])
         mds.add_dataset('D0', DS_0)
         mds.add_dataset('D1', DS_1)
         
@@ -96,7 +96,7 @@ class DataComparatorTestCase(BaseTestCase):
 
         #Also test "rectification" (re-scaling to make consistent) here:
         comparator_0_1.rectify_datasets(confidence_level=0.95,
-                                        target_score='dof',x0=0.5,method='Nelder-Mead')
+                                        target_score='dof')
 
 
         

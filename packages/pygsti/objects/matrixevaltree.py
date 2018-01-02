@@ -1,14 +1,13 @@
+""" Defines the MatrixEvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the EvalTree class which implements an evaluation tree. """
 
 from . import gatestring as _gs
-from ..tools import mpitools as _mpit
-from .verbosityprinter import VerbosityPrinter
+from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from .evaltree import EvalTree
 
 import numpy as _np
@@ -138,7 +137,9 @@ class MatrixEvalTree(EvalTree):
                 for b in range(L-start,0,-1):
                     if gateString[start:start+b] in evalDict:
                         bite = b; break
-                else: assert(False) #Logic error - loop above should always exit when b == 1
+                else: assert(False), ("EvalTree Error: probably caused because "
+                  "your gate strings contain gates that your gate set does not")
+                  #Logic error - loop above should always exit when b == 1
 
                 #iInFinal = k if bool(start + bite == L) else -1
                 bFinal = bool(start + bite == L)
@@ -283,7 +284,7 @@ class MatrixEvalTree(EvalTree):
         """
         #dbList = self.generate_gatestring_list()
         tm = _time.time()
-        printer = VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.build_printer(verbosity)
 
         if (maxSubTreeSize is None and numSubTrees is None) or \
            (maxSubTreeSize is not None and numSubTrees is not None):
@@ -296,7 +297,6 @@ class MatrixEvalTree(EvalTree):
             if numSubTrees is None or numSubTrees == 1: return
 
         self.subTrees = []
-        subTreesFinalList = [None]*self.num_final_strings()
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
 
@@ -354,6 +354,10 @@ class MatrixEvalTree(EvalTree):
                 #elif start_select_method == "fast":
                 
                 def get_start_indices(maxIntersect):
+                    """ Builds an initial set of indices by merging single-
+                        item trees that don't intersect too much (intersection
+                        is less than `maxIntersect`.  Returns a list of the
+                        single-item tree indices and the final set of indices."""
                     starting = [0] #always start with 0th tree
                     startingSet = singleItemTreeSetList[0].copy() 
                     for i,s in enumerate(singleItemTreeSetList[1:],start=1):
@@ -399,8 +403,8 @@ class MatrixEvalTree(EvalTree):
 
                 printer.log("EvalTree.split deleted initial indices in %.0fs" %
                             (_time.time()-tm)); tm = _time.time()
-                merge_method = "fast"
-
+                
+                #merge_method = "fast"
                 #Another possible algorith (but slower)
                 #if merge_method == "best":
                 #    while len(indicesLeft) > 0:
@@ -420,7 +424,6 @@ class MatrixEvalTree(EvalTree):
                 #        
                 #elif merge_method == "fast":
                 most_at_once = 10
-                desiredLength = int(len(self) / numSubTrees)
                 while len(indicesLeft) > 0:
                     iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)), 
                                          key=lambda x: x[1]) #argmin

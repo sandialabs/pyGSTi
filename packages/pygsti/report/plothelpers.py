@@ -1,16 +1,18 @@
+""" Helper Functions for generating plots """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Helper Functions for generating plots """
 
 import numpy             as _np
 import warnings          as _warnings
 
 from .. import tools     as _tools
 from .. import objects   as _objs
+
+from ..baseobjs import smart_cached
 
 
 def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
@@ -88,6 +90,7 @@ def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
     return tuples,len(effectStrs),len(prepStrs)
 
 
+
 def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     """
     Returns a new gate string map whose strings have been 
@@ -126,6 +129,7 @@ def expand_aliases_in_map(gatestring_map, gateLabelAliases):
     return new_gatestring_tuples, rows, cols
 
 
+
 def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
@@ -152,6 +156,7 @@ def total_count_matrix(gsplaq, dataset):
     for i,j,gstr in gsplaq:
         ret[i,j] = dataset[ gstr ].total()
     return ret
+
 
 
 def count_matrices(gsplaq, dataset, spamlabels):
@@ -257,7 +262,7 @@ def probability_matrices(gsplaq, gateset, spamlabels,
             ret[:,i,j] = [probs[sl] for sl in spamlabels]
     return ret
 
-
+@smart_cached
 def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                 probs_precomp_dict=None):
     """
@@ -302,6 +307,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
     return chiSqMxs.sum(axis=0) # sum over spam labels
 
 
+@smart_cached
 def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
                 probs_precomp_dict=None):
     """
@@ -348,7 +354,8 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
     return logLMxs.sum(axis=0) # sum over spam labels
 
 
-def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
+
+def small_eigval_err_rate(sigma, directGSTgatesets):
     """
     Compute per-gate error rate.
 
@@ -378,18 +385,30 @@ def small_eigval_err_rate(sigma, dataset, directGSTgatesets):
     return 1.0 - minEigval**(1.0/max(len(sigma),1)) # (approximate) per-gate error rate; max averts divide by zero error
 
 
+
 def _eformat(f, prec):
     """
     Formatting routine for writing compact representations of
     numbers in plot boxes
     """
+    if _np.isnan(f): return "" #show NAN as blanks
     if prec == 'compact' or prec == 'compacthp':
         if f < 0:
-            return "-" + _eformat(-f,prec)
+            ef = _eformat(-f,prec)
+            return "-" + ef if (ef != "0") else "0"
 
         if prec == 'compacthp':
-            if f < 0.005: #can't fit in 2 digits; would just be .00, so just print "0"
+            if f <= 0.5e-9: #can't fit in 3 digits; 1e-9 = "1m9" is the smallest 3-digit (not counting minus signs)
                 return "0"
+            if f < 0.005: # then need scientific notation since 3-digit float would be 0.00...
+                s = "%.0e" % f
+                try:
+                    mantissa, exp = s.split('e')
+                    exp = int(exp); assert(exp < 0)
+                    if exp < -9: return "0" #should have been caugth above, but just in case
+                    return "%sm%d" % (mantissa, -exp)
+                except:
+                    return "?"
             if f < 1:
                 z = "%.2f" % f # print first two decimal places
                 if z.startswith("0."): return z[1:]  # fails for '1.00'; then thunk down to next f<10 case
@@ -419,6 +438,7 @@ def _eformat(f, prec):
         return "%g" % f #fallback to general format
 
 #OLD
+#
 #def _computeGateStringMaps(gss, dataset):
 ##    xvals, yvals, xyGateStringDict
 ##    strs, fidpair_filters, gatestring_filters,
@@ -433,14 +453,17 @@ def _eformat(f, prec):
 #                                    gss.aliases)
 #             for x in gss.used_xvals for y in gss.used_yvals }
 
+
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
     return int(len(ixs))
 
+
 def _all_same(items):
     return all(x == items[0] for x in items)
 
-def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
+
+def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
     """
     A helper function to compute the number of boxes, and corresponding
     number of degrees of freedom, for the GST chi2/logl boxplots.
@@ -455,7 +478,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         #Get all the boxes where the entries are not all NaN
         non_all_NaN = reshape_subMxs[_np.where(_np.array([_np.isnan(k).all() for k in reshape_subMxs]) == False)]
         s = _np.shape(non_all_NaN)
-        dof_each_box = [_num_non_nan(k) for k in non_all_NaN]
+        dof_each_box = [_num_non_nan(k)*element_dof for k in non_all_NaN]
 
         # Don't assert this anymore -- just use average below
         if not _all_same(dof_each_box):
@@ -471,8 +494,9 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
         else:
             dof_per_box = None #unknown, since there are no boxes
     else:
-        # Each box is a chi2_1 random variable
-        dof_per_box = 1
+        # Each box is a chi2_m random variable currently dictated by the number of
+        # dataset degrees of freedom.
+        dof_per_box = element_dof
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
@@ -481,6 +505,7 @@ def _compute_num_boxes_dof(subMxs, used_xvals, used_yvals, sumUp):
     return n_boxes, dof_per_box
 
     
+
 def _computeProbabilities(gss, gateset, dataset):
     """ 
     Returns a dictionary of probabilities for each gate sequence in
@@ -498,14 +523,15 @@ def _computeProbabilities(gss, gateset, dataset):
     return probs_dict
 
     
-
-def _computeSubMxs(gss, subMxCreationFn, sumUp):
+#@smart_cached
+def _computeSubMxs(gss, subMxCreationFn):
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
 
 
+@smart_cached
 def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClipForWeighting=1e-4):
     """
@@ -558,6 +584,7 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
+@smart_cached
 def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
                        minProbClip=1e-6):
     """
@@ -609,6 +636,7 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
 
 
 
+@smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
     """
     Computes matrix of 2*log-likelihood-ratios comparing the 
@@ -636,3 +664,94 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     for i,j,gstr in gsplaq:
         ret[i,j] = llrVals_and_strings_dict[gstr]
     return ret
+
+
+def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
+    """ 
+    Computes the number of standard deviations of model violation, comparing
+    the data in `dataset` with the `gateset` model at the "points" (sequences)
+    specified by `gss`.
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The data set.
+    
+    gateset : GateSet
+        The gate set (model).
+
+    gss : GateStringStructure
+        A gate string structure whose `.allstrs` member contains a list of
+        `GateStrings` specifiying the sequences used to compare the data and
+        model.  Its `.aliases` member optionally specifies gate label aliases
+        to be used when querying `dataset`.
+
+    objective : {"logl", "chi2"}
+        Which objective function is used to compute the model violation.
+
+    Np : int, optional
+        The number of free parameters in the model.  If None, then 
+        `gateset.num_nongauge_params()` is used.
+
+    returnAll : bool, optional
+        Returns additional information such as the raw and expected model
+        violation (see below).
+
+    Returns
+    -------
+    Nsig : float
+        The number of sigma of model violaition
+
+    rating : int
+        A 1-5 rating (e.g. "number of stars") used to indicate the rough
+        abililty of the model to fit the data (better fit = higher rating).
+
+    modelViolation : float
+        The raw value of the objective function.  Only returned when
+        `returnAll==True`.
+
+    expectedViolation : float
+        The expected value of the objective function.  Only returned when
+        `returnAll==True`.
+
+    Ns, Np : int
+        The number of dataset and model parameters, respectively. Only 
+        returned when `returnAll==True`.
+
+    """
+    gstrs = gss.allstrs
+    if objective == "chi2":
+        fitQty = _tools.chi2( dataset, gateset, gstrs,
+                              minProbClipForWeighting=1e-4,
+                              gateLabelAliases=gss.aliases )
+    elif objective == "logl":
+        logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
+        logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
+        fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
+        if(logL_upperbound < logl):
+            raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
+
+    if Np is None: Np = gateset.num_nongauge_params()
+    Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+    k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
+    Nsig = (fitQty-k)/_np.sqrt(2*k)
+    if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
+        #pv = 1.0 - _stats.chi2.cdf(chi2,k) # reject GST model if p-value < threshold (~0.05?)
+
+    if   Nsig <= 2: rating = 5
+    elif Nsig <= 20: rating = 4
+    elif Nsig <= 100: rating = 3
+    elif Nsig <= 500: rating = 2
+    else: rating = 1
+
+    #OLD:
+    #if (fitQty-k) < _np.sqrt(2*k):  rating = 5
+    #elif (fitQty-k) < 2*k:          rating = 4
+    #elif (fitQty-k) < 5*k:          rating = 3
+    #elif (fitQty-k) < 10*k:         rating = 2
+    #else:                           rating = 1
+
+    if returnAll:
+        return Nsig, rating, fitQty, k, Ns, Np
+    else:
+        return Nsig, rating

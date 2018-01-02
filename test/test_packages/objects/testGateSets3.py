@@ -5,6 +5,7 @@ import warnings
 import os
 
 from .testGateSets import GateSetTestCase
+from pygsti.objects.gatemapcalc import GateMapCalc
 
 class TestGateSetMethods(GateSetTestCase):
 
@@ -24,7 +25,7 @@ class TestGateSetMethods(GateSetTestCase):
         copiedGateset = self.gateset.copy()
         copiedGateset = copiedGateset.increase_dimension(11)
         with self.assertRaises(AssertionError):
-            copiedGateset.rotate(0.1)
+            copiedGateset.rotate((0.1,0.1,0.1))
         with self.assertRaises(AssertionError):
             copiedGateset.randomize_with_unitary(1, randState=np.random.RandomState()) # scale shouldn't matter
 
@@ -34,12 +35,12 @@ class TestGateSetMethods(GateSetTestCase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'),
-                           'minus': ('rho0','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('rho0','remainder') } )
 
         mgateset = self.gateset.copy()
-        mgateset._calcClass = pygsti.objects.gatemapcalc.GateMapCalc
+        mgateset._calcClass = GateMapCalc
 
         est = gateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
                                                  cache_size=100, num_subtrees=2, 

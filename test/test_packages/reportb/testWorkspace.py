@@ -31,8 +31,8 @@ class TestWorkspace(ReportBaseCase):
         tbls = []; cr = None
         
         tbls.append( w.BlankTable() )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], cr, True ) )
-        tbls.append( w.SpamTable(self.gs, ["mytitle"], cr, False ) )
+        tbls.append( w.SpamTable(self.gs, ["mytitle"], "boxes", cr, True ) )
+        tbls.append( w.SpamTable(self.gs, ["mytitle"], "numbers", cr, False ) )
         tbls.append( w.SpamParametersTable(self.gs, cr ) )
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
@@ -54,14 +54,16 @@ class TestWorkspace(ReportBaseCase):
         effectStrs = self.results.gatestring_lists['effect fiducials']
         tbls.append( w.GatestringTable((prepStrs,effectStrs),
                                        ["Prep.","Measure"], commonTitle="Fiducials"))
-        
-        tbls.append( w.GatesSingleMetricTable( [self.gs,self.gs], ['one','two'],
-                                               self.tgt, metric="infidelity") )
-        tbls.append( w.GatesSingleMetricTable( [self.gs,self.gs], ['one','two'],
-                                               self.tgt, metric="diamond") )
-        tbls.append( w.GatesSingleMetricTable( [self.gs,self.gs], ['one','two'],
-                                               self.tgt, metric="jtrace") )
 
+        metric_abbrevs = ["evinf", "evagi","evnuinf","evnuagi","evdiamond",
+                          "evnudiamond", "inf","agi","trace","diamond","nuinf","nuagi",
+                          "frob"]
+        for metric in metric_abbrevs:
+            tbls.append( w.GatesSingleMetricTable(
+                metric, [self.gs,self.gs],[self.tgt,self.tgt], ['one','two'])) #1D
+            tbls.append( w.GatesSingleMetricTable(
+                metric, [[self.gs],[self.gs]],[[self.tgt],[self.tgt]],
+                ['column one'], ['row one','row two'], gateLabel="Gx")) #2D
 
         tbls.append( w.StandardErrgenTable(4, "hamiltonian", "pp") )
         tbls.append( w.StandardErrgenTable(4, "stochastic", "pp") )
@@ -92,7 +94,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=True) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
-                                    hoverInfo=True, sumUp=False, invert=False, scatter=True) )
+                                    hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
 
         from pygsti.algorithms import directx as dx
         specs = pygsti.construction.build_spam_specs(
@@ -107,7 +109,9 @@ class TestWorkspace(ReportBaseCase):
                                     self.ds, self.gs, boxLabels=False, directGSTgatesets=directGatesets) )
         
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
-        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", 2, "in", "out", boxLabels=True) )
+        plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
+                                  colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
+        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", boxLabels=True) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],scale=1.5) )
 
         projections = np.zeros(16,'d')

@@ -1,18 +1,17 @@
+""" Functions for writing GST objects to text files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for writing GST objects to text files."""
 
-import json as _json
 # from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
 
 def write_empty_dataset(filename, gatestring_list,
-                        headerString='## Columns = plus frequency, count total', numZeroCols=None,
+                        headerString='## Columns = 1 frequency, count total', numZeroCols=None,
                         appendWeightsColumn=False):
     """
     Write an empty dataset file to be used as a template.

@@ -1,7 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
-from pygsti.tools.basis import Basis
+from pygsti.baseobjs.basis import Basis
 
 import numpy as np
 from scipy import polyfit
@@ -36,7 +36,6 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual(gs_lgst.frobeniusdist(gs_lgst_verb),0)
 
         print("GG = ",gs_lgst.default_gauge_group)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0) #DEPRECATED
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
 
@@ -49,9 +48,9 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_go_compare = pygsti.io.load_gateset(compare_files + "/lgst_go.gateset")
         gs_clgst_compare = pygsti.io.load_gateset(compare_files + "/clgst.gateset")
 
-        self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0)
-        self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0)
-        self.assertAlmostEqual( gs_clgst.frobeniusdist(gs_clgst_compare), 0)
+        self.assertAlmostEqual( gs_lgst.frobeniusdist(gs_lgst_compare), 0, places=5)
+        self.assertAlmostEqual( gs_lgst_go.frobeniusdist(gs_lgst_go_compare), 0, places=5)
+        self.assertAlmostEqual( gs_clgst.frobeniusdist(gs_clgst_compare), 0, places=5)
 
         #Check for error conditions
         with self.assertRaises(ValueError):
@@ -95,9 +94,9 @@ class TestCoreMethods(AlgorithmsBase):
             [2], [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'),
-            'minus': ('remainder','remainder') } )
+            effectLabels=["E0"], effectExpressions=["0"],
+            spamdefs={'0': ('rho0','E0'),
+                      '1': ('remainder','remainder') } )
         gs_lgst = pygsti.do_lgst(ds, self.specs, old_style_gateset,
                                  svdTruncateTo=4, verbosity=0)
 
@@ -109,9 +108,8 @@ class TestCoreMethods(AlgorithmsBase):
         ds = pygsti.construction.generate_fake_data(self.datagen_gateset, self.lgstStrings,
                                                     nSamples=1000, sampleError='none')
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        #gs_lgst = pygsti.optimize_gauge(gs_lgst, "target", targetGateset=self.datagen_gateset, gateWeight=1.0, spamWeight=1.0) #DEPRECATED
         gs_lgst = pygsti.gaugeopt_to_target(gs_lgst,self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
-        self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0)
+        self.assertAlmostEqual( gs_lgst.frobeniusdist(self.datagen_gateset), 0, places=4)
 
 
     def test_eLGST(self):
@@ -121,7 +119,6 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            nSamples=1000,sampleError='binomial', seed=100)
 
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0) #DEPRECATED
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
 
@@ -163,9 +160,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_exlgst_reg_compare = pygsti.io.load_gateset(compare_files + "/exlgst_reg.gateset")
         gs_exlgst.set_all_parameterizations("full") # b/c ex-LGST sets spam to StaticSPAMVec objects (b/c they're not optimized)
         gs_exlgst_reg.set_all_parameterizations("full") # b/c ex-LGST sets spam to StaticSPAMVec objects (b/c they're not optimized)
-        gs_exlgst_go = pygsti.optimize_gauge(gs_exlgst, 'target', targetGateset=gs_exlgst_compare, spamWeight=1.0)  #DEPRECATED
         gs_exlgst_go = pygsti.gaugeopt_to_target(gs_exlgst,gs_exlgst_compare, {'spam':1.0 }, checkJac=True)
-        gs_exlgst_reg_go = pygsti.optimize_gauge(gs_exlgst_reg, 'target', targetGateset=gs_exlgst_reg_compare, spamWeight=1.0) #DEPRECATED
         gs_exlgst_reg_go = pygsti.gaugeopt_to_target(gs_exlgst_reg,gs_exlgst_reg_compare, {'spam':1.0 }, checkJac=True)
 
         #self.assertAlmostEqual( gs_exlgst_go.frobeniusdist(gs_exlgst_compare), 0, places=5)
@@ -179,10 +174,9 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            nSamples=1000, sampleError='binomial', seed=100)
 
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0) #DEPRECATED
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        CM = pygsti.objects.profiler._get_mem_usage()
+        CM = pygsti.baseobjs.profiler._get_mem_usage()
 
         gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
                                            probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
@@ -192,6 +186,15 @@ class TestCoreMethods(AlgorithmsBase):
                                            probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                            verbosity=0) #uses cptp_penalty_factor
 
+        gs_single_lsgst_sp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                              probClipInterval=(-1e6,1e6), spam_penalty_factor=1.0,
+                                              verbosity=0) #uses spam_penalty_factor
+
+        gs_single_lsgst_cpsp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                                probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
+                                                spam_penalty_factor=1.0, verbosity=0) #uses both penalty factors
+
+        
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
                                              memLimit=CM + 1024**3)
@@ -257,14 +260,16 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lsgst_compare = pygsti.io.load_gateset(compare_files + "/lsgst.gateset")
         gs_lsgst_reg_compare = pygsti.io.load_gateset(compare_files + "/lsgst_reg.gateset")
 
-        gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0) #DEPRECATED
         gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, gs_lsgst_compare, {'spam':1.0}, checkJac=True)
 
-        gs_lsgst_reg_go = pygsti.optimize_gauge(gs_lsgst_reg, 'target', targetGateset=gs_lsgst_reg_compare, spamWeight=1.0) #DEPRECATED
         gs_lsgst_reg_go = pygsti.gaugeopt_to_target(gs_lsgst_reg, gs_lsgst_reg_compare, {'spam':1.0}, checkJac=True)
 
         self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=4)
         self.assertAlmostEqual( gs_lsgst_reg_go.frobeniusdist(gs_lsgst_reg_compare), 0, places=4)
+
+        # RUN BELOW LINES TO SEED SAVED GATESET FILES
+        #gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, self.gateset, {'spam':1.0})
+        #pygsti.io.write_gateset(gs_lsgst_go,compare_files + "/analysis.gateset", "Saved LSGST Analysis Gateset")
 
 
     def test_MLGST(self):
@@ -274,10 +279,9 @@ class TestCoreMethods(AlgorithmsBase):
         #                                            nSamples=1000, sampleError='binomial', seed=100)
 
         gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-        gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=self.gateset, spamWeight=1.0, gateWeight=1.0) #DEPRECATED
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
-        CM = pygsti.objects.profiler._get_mem_usage()
+        CM = pygsti.baseobjs.profiler._get_mem_usage()
 
         gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                                           probClipInterval=(-1e2,1e2), verbosity=0)
@@ -345,10 +349,9 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.io.write_gateset(gs_mlegst,compare_files + "/mle_gst.gateset", "Saved MLE-GST Gateset")
 
         gs_mle_compare = pygsti.io.load_gateset(compare_files + "/mle_gst.gateset")
-        gs_mlegst_go = pygsti.optimize_gauge(gs_mlegst, 'target', targetGateset=gs_mle_compare, spamWeight=1.0) #DEPRECATED
         gs_mlegst_go = pygsti.gaugeopt_to_target(gs_mlegst, gs_mle_compare, {'spam':1.0}, checkJac=True)
 
-        self.assertAlmostEqual( gs_mlegst_go.frobeniusdist(gs_mle_compare), 0, places=5)
+        self.assertAlmostEqual( gs_mlegst_go.frobeniusdist(gs_mle_compare), 0, places=4)
 
     def test_LGST_1overSqrtN_dependence(self):
         my_datagen_gateset = self.gateset.depolarize(gate_noise=0.05, spam_noise=0)
@@ -360,8 +363,6 @@ class TestCoreMethods(AlgorithmsBase):
             ds = pygsti.construction.generate_fake_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                         sampleError='binomial', seed=100)
             gs_lgst = pygsti.do_lgst(ds, self.specs, self.gateset, svdTruncateTo=4, verbosity=0)
-            gs_lgst_go = pygsti.optimize_gauge(gs_lgst,"target",targetGateset=my_datagen_gateset,
-                                               spamWeight=1.0, gateWeight=1.0) #DEPRECATED
             gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, checkJac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(gs_lgst_go) )
 
@@ -413,7 +414,6 @@ class TestCoreMethods(AlgorithmsBase):
         #pygsti.io.write_gateset(gs_lsgst,compare_files + "/lsgstMS.gateset", "Saved LSGST Gateset with model selection")
 
         gs_lsgst_compare = pygsti.io.load_gateset(compare_files + "/lsgstMS.gateset")
-        gs_lsgst_go = pygsti.optimize_gauge(gs_lsgst, 'target', targetGateset=gs_lsgst_compare, spamWeight=1.0) #DEPRECATED
         gs_lsgst_go = pygsti.gaugeopt_to_target(gs_lsgst, gs_lsgst_compare, {'spam':1.0}, checkJac=True)
         self.assertAlmostEqual( gs_lsgst_go.frobeniusdist(gs_lsgst_compare), 0, places=4)
 

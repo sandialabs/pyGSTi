@@ -22,19 +22,18 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         gs_target = constr.build_gateset([2], [('Q0',)], ['Gi', 'Gx', 'Gy'],
                                          ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                          prepLabels=['rho0'], prepExpressions=["0"],
-                                         effectLabels=['E0'], effectExpressions=["1"],
-                                         spamdefs={'plus': ('rho0', 'E0'),
-                                                   'minus': ('rho0', 'remainder')})
+                                         effectLabels=['E0'], effectExpressions=["0"],
+                                         spamdefs={'0': ('rho0', 'E0'),
+                                                   '1': ('rho0', 'remainder')})
 
 
         # ## Hands-off
 
         # We begin by demonstrating the most hands-off approach.
 
-        # We can generate a germ set simply by providing the target gateset.
-
-
-        germs = germsel.generate_germs(gs_target)
+        # We can generate a germ set simply by providing the target gateset. (and seed so it's deterministic)
+        
+        germs = germsel.generate_germs(gs_target, seed=2017)
 
 
         # In the same way we can generate preparation and measurement fiducials.
@@ -61,18 +60,15 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         # form to present the information in, so we can write the experiment list out to an empty data
         # file to be filled in after the experiments are performed.
 
-        graspGerms = germsel.generate_germs(gs_target, algorithm='grasp', algorithm_kwargs={'iterations': 1})
+        graspGerms = germsel.generate_germs(gs_target, algorithm='grasp', 
+                                            seed=2017, numGSCopies=2,
+                                            candidateGermCounts={3: 'all upto', 4:10, 5:10, 6:10},
+                                            candidateSeed=2017,
+                                            algorithm_kwargs={'iterations': 1})
         slackPrepFids, slackMeasFids = fidsel.generate_fiducials(gs_target, algorithm='slack',
                                                                  algorithm_kwargs={'slackFrac': 0.25})
 
-
-        max([len(germ) for germ in germs])
-
-        germsMaxLength5 = germsel.generate_germs(gs_target, maxGermLength=5)
-
-        max([len(germ) for germ in germsMaxLength5])
-
-        germsMaxLength3 = germsel.generate_germs(gs_target, maxGermLength=3)
+        germsMaxLength3 = germsel.generate_germs(gs_target, candidateGermCounts={3: 'all upto'}, seed=2017)
 
         uniformPrepFids, uniformMeasFids = fidsel.generate_fiducials(gs_target, maxFidLength=3,
                                                                      algorithm='grasp',
@@ -81,8 +77,9 @@ class AutoExperimentDesignTestCase(BaseTestCase):
 
         incompletePrepFids, incompleteMeasFids = fidsel.generate_fiducials(gs_target, maxFidLength=1)
 
-        nonSingletonGerms = germsel.generate_germs(gs_target, force=None, maxGermLength=4,
-                                                   algorithm='grasp', algorithm_kwargs={'iterations': 5})
+        nonSingletonGerms = germsel.generate_germs(gs_target, numGSCopies=2, force=None, candidateGermCounts={4: 'all upto'},
+                                                   algorithm='grasp', algorithm_kwargs={'iterations': 5},
+                                                   seed=2017)
 
 
         omitIdentityPrepFids, omitIdentityMeasFids = fidsel.generate_fiducials(gs_target, omitIdentity=False,

@@ -1,10 +1,10 @@
+""" Defines Randomized Benhmarking support objects """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines Randomized Benhmarking support objects """
 
 from ... import drivers as _drivers
 from . import rbutils as _rbutils
@@ -346,24 +346,17 @@ class RBResults(object):
         resamples : int, optional
             The number of nonparametric bootstrap resamplings
 
-        seed : int, optional
-            Seed for random number generator; optional.
-    
-        randState : numpy.random.RandomState, optional
-            A RandomState object to generate samples from. Can be useful to set
-            instead of `seed` if you want reproducible distribution samples
-            across multiple random function calls but you don't want to bother
-            with manually incrementing seeds between those calls.
+        seed : int or numpy.random.RandomState, optional
+            Seed for random number generator.  A RandomState object to generate
+            samples from, which can be useful if you want reproducible
+            distribution of samples across multiple random function calls but
+            you don't want to bother with manually changing seeds between
+            those calls.
 
         Returns
         -------
         None
         """
-        if randState is None:
-            rndm = _rndm.RandomState(seed) # ok if seed is None
-        else:
-            rndm = randState
-
         #Setup lists to hold items to take stddev of:
         A_list = []; B_list = []; f_list = []; 
         if self.fit == 'first order':
@@ -371,10 +364,10 @@ class RBResults(object):
 
         #Create bootstrap datasets
         bootstrapped_dataset_list = []
-        for resample in range(resamples):
+        for _ in range(resamples):
             bootstrapped_dataset_list.append(
                 _drivers.bootstrap.make_bootstrap_dataset(
-                    self.dataset,'nonparametric'))
+                    self.dataset,'nonparametric',seed=seed))
 
         #Run RB analysis for each dataset
         gatestrings = self.results['gatestrings']
@@ -459,7 +452,7 @@ class RBResults(object):
         print('epsilon =',epsilon)
         print('r_0 =',r_0)
 
-        gstyp_list = ['clifford'] 
+        #DEBUG? gstyp_list = ['clifford'] 
           #KENNY: does WF assume clifford-gatestring data?
         
         for gstyp in gstyp_list:

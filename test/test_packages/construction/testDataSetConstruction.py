@@ -12,8 +12,8 @@ class DataSetConstructionTestCase(BaseTestCase):
         self.gateset = pc.build_gateset( [2], [('Q0',)],
                                          ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                          prepLabels = ['rho0'], prepExpressions=["0"],
-                                         effectLabels = ['E0'], effectExpressions=["1"],
-                                         spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') })
+                                         effectLabels = ['E0'], effectExpressions=["0"],
+                                         spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') })
         self.depolGateset = self.gateset.depolarize(gate_noise=0.1)
 
         def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList):
@@ -57,7 +57,7 @@ class DataSetConstructionTestCase(BaseTestCase):
 
 
     def test_merge_outcomes(self):
-        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['plus', 'minus']})
+        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['0', '1']})
         for dsRow in merged_dataset.itervalues():
             self.assertEqual( dsRow.total(), dsRow['merged_spam_label'] )
 

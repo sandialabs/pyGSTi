@@ -1,10 +1,10 @@
+"""Functions for working with MPI processor distributions"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for working with MPI processor distributions"""
 
 import numpy as _np
 import warnings as _warnings
@@ -599,4 +599,36 @@ def mpidot(a,b,loc_slice,comm):
     #comm.Allgatherv([CTelsLoc, size, MPI.F_DOUBLE_COMPLEX], \
     #                [CTels, (sizes,displacements[:-1]), MPI.F_DOUBLE_COMPLEX])
 
-    
+def parallel_apply(f, l, comm):
+    '''
+    Apply a function, f to every element of a list, l in parallel, using MPI
+    Parameters
+    ----------
+    f : function
+        function of an item in the list l
+    l : list
+        list of items as arguments to f
+
+    Returns
+    -------
+    results : list
+        list of items after f has been applied
+    '''
+    locIndices, _, locComm = distribute_indices(l, comm)
+    if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group 
+        locResults = [f(l[i]) for i in locIndices] # needs to do anything
+    else: locResults = []
+    results = comm.allgather(locResults, root=0) # Certain there is a better way to do this (see above)
+    return results
+
+def get_comm():
+    '''
+    Get a comm object
+
+    Returns
+    -------
+    MPI.Comm
+        Comm object to be passed down to parallel pygsti routines
+    '''
+    from mpi4py import MPI #not at top so can import pygsti on cluster login nodes
+    return MPI.COMM_WORLD

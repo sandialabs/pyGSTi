@@ -1,0 +1,10 @@
+### Optional Requirements ###
+cvxpy
+mpi4py
+deap
+psutil
+pandas
+matplotlib
+ipython
+notebook
+msgpack-python

@@ -1,3 +1,4 @@
+"""Defines the Formatter class"""
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
@@ -7,9 +8,7 @@
 import re as _re
 from copy import deepcopy
 
-from functools import partial
-
-from .reportableqty import ReportableQty as _ReportableQty
+from ..objects.reportableqty import ReportableQty as _ReportableQty
 
 class Formatter(object):
     '''
@@ -29,6 +28,7 @@ class Formatter(object):
             regexreplace=None,
             formatstring='%s',
             ebstring='%s +/- %s',
+            nmebstring=None,
             stringreturn=None,
             defaults=None):
         '''
@@ -61,6 +61,10 @@ class Formatter(object):
         self.regexreplace    = regexreplace
         self.formatstring    = formatstring
         self.ebstring        = ebstring
+        if nmebstring is None:
+            nmebstring = ebstring
+        self.nmebstring      = nmebstring
+
         if defaults is None:
             self.defaults = dict()
         else:
@@ -89,7 +93,7 @@ class Formatter(object):
             s = str(item.get_value())
             if s == '--' or s == '':
                 return s
-            return item.render_with(self, specs, self.ebstring)
+            return item.render_with(self, specs, self.ebstring, self.nmebstring)
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
         elif self.custom is not None: 
@@ -101,16 +105,39 @@ class Formatter(object):
             return self.stringreturn[1]
 
         # Below is the standard formatter case:
-        # Replace all occurances of certain substrings
+        # Replace all occurrences of certain substrings
         if self.stringreplacers is not None:
             for stringreplace in self.stringreplacers:
                 item = item.replace(stringreplace[0], stringreplace[1])
-        # And then replace all occurances of certain regexes
+        # And then replace all occurrences of certain regexes
         if self.regexreplace is not None:
-            result = _re.match(self.regexreplace[0], item)
-            if result is not None:
-                grouped = result.group(1)
-                item   = item[0:-len(grouped)] + (self.regexreplace[1] % grouped)
+            result = _re.search(self.regexreplace[0], item)
+            if result is not None:  #Note: specific to 1-group regexps currently...
+                s,e = result.span() # same as result.start(), result.end()
+                item = item[0:s] + (self.regexreplace[1] % result.group(1)) + item[e:]
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
         return formatstring % item
+
+    def variant(self, **kwargs):
+        '''
+        Create a Formatter object from an existing formatter object, tweaking it slightly
+
+        Parameters
+        ----------
+        Same as Formatter.__init__()
+        '''
+        ret = deepcopy(self)
+        for k, v in kwargs.items():
+            if k not in ret.__dict__:
+                raise ValueError('Invalid argument to Formatter.variant: {}={}\n{}'.format(k, v,
+                    'Valid arguments are: {}'.format(list(ret.__dict__.keys()))))
+            if k == 'ebstring' and ('nmebstring' not in kwargs) \
+               and ret.ebstring == ret.nmebstring:
+                ret.__dict__[k] = v
+                ret.__dict__['nmebstring'] = v
+            elif k == 'defaults':
+                ret.__dict__['defaults'].update(v)
+            else:
+                ret.__dict__[k] = v
+        return ret

@@ -1,11 +1,12 @@
+""" Text-parsing classes and functions to read input files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Text-parsering classes and functions to read input files."""
 
+import re as _re
 import os as _os
 import sys as _sys
 import time as _time
@@ -13,155 +14,51 @@ import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
-import pyparsing as _pp
 
 from .. import objects as _objs
 from .. import tools as _tools
 
-_pp.ParserElement.enablePackrat()
-_sys.setrecursionlimit(10000)
+from ..baseobjs import GateStringParser as _GateStringParser
+
 
 def get_display_progress_fn(showProgress):
+    """
+    Create and return a progress-displaying function if `showProgress == True`
+    and it's run within an interactive environment.
+    """
     
-    def is_interactive():
+    def _is_interactive():
         import __main__ as main
         return not hasattr(main, '__file__')
 
-    if is_interactive() and showProgress:
+    if _is_interactive() and showProgress:
         try:
             from IPython.display import clear_output
-            def display_progress(i,N,filename):
+            def _display_progress(i,N,filename):
                 _time.sleep(0.001); clear_output()
                 print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
                 _sys.stdout.flush()
         except:
-            def display_progress(i,N,f): pass
+            def _display_progress(i,N,f): pass
     else:
-        def display_progress(i,N,f): pass
+        def _display_progress(i,N,f): pass
         
-    return display_progress
+    return _display_progress
 
 
 class StdInputParser(object):
     """
     Encapsulates a text parser for reading GST input files.
-
-    ** Grammar **
-
-    expop   :: '^'
-    multop  :: '*'
-    integer :: '0'..'9'+
-    real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
-    reflbl  :: (alpha | digit | '_')+
-
-    nop     :: '{}'
-    gate    :: 'G' [ lowercase | digit | '_' ]+
-    strref  :: 'S' '[' reflbl ']'
-    slcref  :: strref [ '[' integer ':' integer ']' ]
-    expable :: gate | slcref | '(' string ')' | nop
-    expdstr :: expable [ expop integer ]*
-    string  :: expdstr [ [ multop ] expdstr ]*
-
-    dataline :: string [ real ]+
-    dictline :: reflbl string
     """
 
+    #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
+    _string_parser = _GateStringParser()
+
     def __init__(self):
-        """ Creates a new StdInputParser object """
+        """ Create a new standard-input parser object """
+        pass
 
-        def push_first( strg, loc, toks ):
-            self.exprStack.append( toks[0] )
-        def push_mult( strg, loc, toks ):
-            self.exprStack.append( '*' )
-        def push_slice( strg, loc, toks ):
-            self.exprStack.append( 'SLICE' )
-        #def push_count( strg, loc, toks ):
-        #    self.exprStack.append( toks[0] )
-        #    self.exprStack.append( 'COUNT' )
-
-        # caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        # lowers = 'abcdefghijklmnopqrstuvwxyz' #caps.lower()
-        digits = _pp.nums #"0123456789"  #same as "nums"
-        #point = _pp.Literal( "." )
-        #e     = _pp.CaselessLiteral( "E" )
-        #real  = _pp.Combine( _pp.Word( "+-"+_pp.nums, _pp.nums ) +
-        #                  _pp.Optional( point + _pp.Optional( _pp.Word( _pp.nums ) ) ) +
-        #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(push_first)
-        # real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
-        nop   = _pp.Literal("{}").setParseAction(push_first)
-
-        expop = _pp.Literal( "^" )
-        lpar  = _pp.Literal( "(" ).suppress()
-        rpar  = _pp.Literal( ")" ).suppress()
-        # lbrk  = _pp.Literal( "[" ).suppress()
-        # rbrk  = _pp.Literal( "]" ).suppress()
-
-        integer = _pp.Word( digits ).setParseAction(push_first)
-        reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(push_first)
-        #gate   = _pp.Word( "G", lowers + digits + "_" ).setParseAction(push_first)
-        gate    = _pp.Regex(r'G[a-z0-9_]+').setParseAction(push_first) #faster than above
-        strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(push_first)
-        slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(push_slice)) )
-
-        #bSimple = False #experimenting with possible parser speedups
-        #if bSimple:
-        #    string  = _pp.Forward()
-        #    gateSeq = _pp.OneOrMore( gate )
-        #    expable = (nop | gateSeq | lpar + gateSeq + rpar)
-        #    expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
-        #    string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
-        #else:
-        string  = _pp.Forward()
-        expable = (gate | slcref | lpar + string + rpar | nop)
-        expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult)) #pylint: disable=expression-not-assigned
-
-        #count = real.copy().setParseAction(push_count)
-        #dataline = string + _pp.OneOrMore( count )
-        dictline = reflbl + string
-
-        self.string_parser = string
-        #self.dataline_parser = dataline #OLD: when data lines had their own parser
-        self.dictline_parser = dictline
-
-
-    def _evaluateStack(self, s):
-        op = s.pop()
-        if op == "*":
-            op2 = self._evaluateStack( s )
-            op1 = self._evaluateStack( s )
-            return op1 + op2 #tuple addition
-
-        elif op == "^":
-            exp = self._evaluateStack( s )
-            op  = self._evaluateStack( s )
-            return op*exp #tuple mulitplication = repeat op exp times
-
-        elif op == "SLICE":
-            upper = self._evaluateStack( s )
-            lower = self._evaluateStack( s )
-            op = self._evaluateStack( s )
-            return op[lower:upper]
-
-        #elif op == 'COUNT':
-        #    cnt = float(s.pop())          # next item on stack is a count
-        #    self.countList.insert(0, cnt) # so add it to countList and eval the rest of the stack
-        #    return self._evaluateStack( s )
-
-        elif op[0] == 'G':
-            return (op,) #as tuple
-
-        elif op[0] == 'S':
-            reflabel = s.pop() # next item on stack is a reference label (keep as a str)
-            return tuple(self.lookup[reflabel]) #lookup dict typically holds GateString objs...
-
-        elif op == '{}': # no-op returns empty tuple
-            return ()
-
-        else:
-            return int(op)
-
-    def parse_gatestring(self, s, lookup=None):
+    def parse_gatestring(self, s, lookup={}):
         """
         Parse a gate string (string in grammar)
 
@@ -179,16 +76,11 @@ class StdInputParser(object):
         tuple of gate labels
             Representing the gate string.
         """
-        if lookup is None: lookup = {}
-        self.lookup = lookup
-        self.exprStack = []
-        try:
-            self.string_parser.parseString(s)
-        except _pp.ParseException as e:
-            raise ValueError("Parsing error when parsing %s: %s" % (s,str(e)))
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        return self._evaluateStack(self.exprStack)
+        self._string_parser.lookup = lookup
+        gate_tuple = self._string_parser.parse(s)
+        # print "DB: result = ",result
+        # print "DB: stack = ",self.exprStack
+        return gate_tuple
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -217,18 +109,18 @@ class StdInputParser(object):
         counts : list
             List of counts following the gate string.
         """
-        self.lookup = lookup
-        self.exprStack = []
-        self.countList = []
 
-        #get counts from end of s
-        parts = s.split(); counts = []
+        # get counts from end of s
+        parts = s.split();
+        counts = []
         for p in reversed(parts):
-            try: f = float(p)
-            except: break
-            counts.append( f )
-        counts.reverse() #because we appended them in reversed order
-        totalCounts = len(counts) #in case expectedCounts is less
+            try:
+                f = float(p)
+            except:
+                break
+            counts.append(f)
+        counts.reverse()  # because we appended them in reversed order
+        totalCounts = len(counts)  # in case expectedCounts is less
         if len(counts) > expectedCounts >= 0:
             counts = counts[0:expectedCounts]
 
@@ -241,7 +133,6 @@ class StdInputParser(object):
         gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
         gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
         return gateStringTuple, gateStringStr, counts
-
 
     def parse_dictline(self, s):
         """
@@ -261,13 +152,13 @@ class StdInputParser(object):
         gateStringStr : string
             The gate string as represented as a string in the dictline.
         """
-        self.exprStack = []
-        result = self.dictline_parser.parseString(s)
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        gateStringLabel = result[0]
-        gateStringTuple = self._evaluateStack(self.exprStack)
-        gateStringStr = s[ s.index(gateStringLabel) + len(gateStringLabel) : ].strip()
+        label = r'\s*([a-zA-Z0-9_]+)\s+'
+        match = _re.match(label, s)
+        if not match:
+            raise ValueError("'{}' is not a valid dictline".format(s))
+        gateStringLabel = match.group(1)
+        gateStringStr = s[match.end():]
+        gateStringTuple = self._string_parser.parse(gateStringStr)
         return gateStringLabel, gateStringTuple, gateStringStr
 
     def parse_stringfile(self, filename):
@@ -340,7 +231,7 @@ class StdInputParser(object):
             labels" and whose values are lists if gate labels.  The gate labels 
             in each list define the set of gates which describe the the operation
             that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_plus','Gmz_minus'] }`.
+            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
         Returns
         -------
@@ -371,7 +262,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
             spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -412,7 +303,7 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = -1
+        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
                 spamLabel = colLabel[:-len(' count')]
@@ -428,9 +319,12 @@ class StdInputParser(object):
                 freqCols.append( (spamLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if 'plus' in spamLabels and 'minus' not in spamLabels:
-                spamLabels.append('minus')
-                impliedCountTotCol1Q = colLabels.index( 'count total' )
+            if '1' in spamLabels and '0' not in spamLabels:
+                spamLabels.append('0')
+                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
+            elif '0' in spamLabels and '1' not in spamLabels:
+                spamLabels.append('1')
+                impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
@@ -452,8 +346,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        if impliedCountTotCol1Q >= 0:
-            countDict['minus'] = colValues[impliedCountTotCol1Q] - countDict['plus']
+        if impliedCountTotCol1Q[1] >= 0:
+            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedSpamLabel == '0':
+                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            else:
+                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -508,7 +406,7 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
+            else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
             dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
@@ -585,10 +483,15 @@ class StdInputParser(object):
 
         for dsLabel,spamLabels in dsSpamLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if 'plus' in spamLabels and 'minus' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('minus')
+                if '1' in spamLabels and '0' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '0', iTotal) )
+                if '0' in spamLabels and '1' not in spamLabels:
+                    dsSpamLabels[dsLabel].append('1')
+                    iTotal = colLabels.index( '%s count total' % dsLabel )
+                    impliedCounts1Q.append( (dsLabel, '1', iTotal) )
+
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
@@ -610,8 +513,12 @@ class StdInputParser(object):
                                  "outside of [0,1.0] interval - could this be a count?")
             countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['minus'] = colValues[iTotCol] - countDicts[dsLabel]['plus']
+        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
+            if spamLabel == '0':
+                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            elif spamLabel == '1':
+                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
 
@@ -715,17 +622,17 @@ def read_gateset(filename):
     GateSet
     """
 
-    def add_current_label():
+    def _add_current_label():
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _objs.basis.state_to_pauli_density_vec(ar[0,:])
+                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _objs.basis.stdmx_to_ppvec(ar)
+                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "PauliVec":
@@ -771,7 +678,7 @@ def read_gateset(filename):
             if len(line) == 0:
                 state = "look for label"
                 if len(cur_label) > 0:
-                    add_current_label()
+                    _add_current_label()
                     cur_label = ""; cur_rows = []
                 continue
 
@@ -817,7 +724,7 @@ def read_gateset(filename):
                 cur_rows.append( line.split() )
 
     if len(cur_label) > 0:
-        add_current_label()
+        _add_current_label()
 
     #Try to infer basis dimension if none is given
     if basis_dims is None:
@@ -833,8 +740,8 @@ def read_gateset(filename):
 
     #Default SPAMLABEL directive if none are give and rho and E vectors are:
     if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['plus'] = [ 'rho', 'E' ]
-        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
+        spam_labels['1'] = [ 'rho', 'E' ]
+        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
         # OLD default behavior: remainder_spam_label = 'minus'
     if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
 

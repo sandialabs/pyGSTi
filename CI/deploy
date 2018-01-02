@@ -98,35 +98,39 @@ if TRAVIS_BRANCH == "develop" and TRAVIS_PULL_REQUEST == "false":
                                       branchname]) # View merge tree between beta and (our) develop
     output = output.decode('utf-8', 'ignore')
     print('Done:')
-    # print(output)
+    #print(output)
     
     canMerge = ('<' * 5) not in output # '<' * 5 avoids git finding the expanded string in this file and thinking it is a merge conflict
     
     if canMerge:
         print('Merge of develop into beta is possible')
         # The below code is active, but only for testing
-        subprocess.call(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
-        print('Merge command finished.')
-        print('Staging files..')
-        subprocess.call(['git', 'add', '-u'])
-        print('Committing..')
-        subprocess.call(['git', 'commit', '--no-verify', '-m', 
-                         'Auto-merged develop -> beta (No conflicts, CI passed)'])
-        print('Commit finished')
-    
-        PUSHKEY  = os.environ['PUSHKEY']
-        push_uri = 'https://%s:%s@github.com/pyGSTio/pyGSTi.git' % (USER, PUSHKEY) # yikes
-        try:
-            print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
-            with open(os.devnull, 'w') as FNULL:
-                result = subprocess.call(['git', 'push', '--no-verify', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
-                if result != 0:
-                    print('Secure push failed')
-                else:
-                    print('Secure push worked')
-        except:
-            print('Secure push failed')
-    
+        merge_output = subprocess.check_output(['git', 'merge', '--no-ff', '--no-commit', 'develop']) #into beta
+        merge_output = merge_output.decode('utf-8', 'ignore')
+        if ("Automatic merge failed" in merge_output) or ("CONFLICT" in merge_output):
+            print('Merge command failed to automatically merge.  Exiting without committing!')
+        else:
+            print('Merge command automatically merged successfully.')
+            
+            print('Staging files..')
+            subprocess.call(['git', 'add', '-u'])
+            print('Committing..')
+            subprocess.call(['git', 'commit', '--no-verify', '-m', 
+                             'Auto-merged develop -> beta (No conflicts, CI passed)'])
+            print('Commit finished')
+        
+            PUSHKEY  = os.environ['PUSHKEY']
+            push_uri = 'https://%s:%s@github.com/pyGSTio/pyGSTi.git' % (USER, PUSHKEY) # yikes
+            try:
+                print('Pushing to origin/beta. If this fails, there shouldn\'t be any useful output, since it would contain my access token')
+                with open(os.devnull, 'w') as FNULL:
+                    result = subprocess.call(['git', 'push', '--no-verify', push_uri, 'beta'], stdout=FNULL, stderr=FNULL)
+                    if result != 0:
+                        print('Secure push failed')
+                    else:
+                        print('Secure push worked')
+            except:
+                print('Secure push failed')    
     else:
         print('Potential merge conflicts found! Cannot merge beta into develop')
 

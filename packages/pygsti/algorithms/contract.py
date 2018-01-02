@@ -1,10 +1,10 @@
+""" GST contraction algorithms """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" GST contraction algorithms """
 
 import numpy as _np
 import warnings as _warnings
@@ -12,7 +12,6 @@ import warnings as _warnings
 from .. import objects as _objs
 from .. import tools as _tools
 from .. import optimize as _opt
-from ..objects import Basis
 
 def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirectCP=True, method="Nelder-Mead", verbosity=0):
     """
@@ -73,24 +72,24 @@ def contract(gateset, toWhat, dataset=None, maxiter=1000000, tol=0.01, useDirect
 
     if toWhat == 'CPTP':
         if useDirectCP:
-            distance,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=True, maxiter=maxiter)
+            _,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=True, maxiter=maxiter)
         else:
-            distance,contractedGateset = _contractToTP(gateset,verbosity)
-            distance,contractedGateset = _contractToCP(contractedGateset, printer, method, maxiter, tol)
+            _,contractedGateset = _contractToTP(gateset,verbosity)
+            _,contractedGateset = _contractToCP(contractedGateset, printer, method, maxiter, tol)
     elif toWhat == 'XPTP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        distance,contractedGateset = _contractToTP(gateset,verbosity)
-        distance,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
+        _,contractedGateset = _contractToTP(gateset,verbosity)
+        _,contractedGateset = _contractToXP(contractedGateset, dataset,verbosity, method, maxiter, tol)
     elif toWhat == 'CP':
         if useDirectCP:
-            distance,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=False, maxiter=maxiter)
+            _,contractedGateset = _contractToCP_direct(gateset, printer, TPalso=False, maxiter=maxiter)
         else:
-            distance,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
+            _,contractedGateset = _contractToCP(gateset, printer, method, maxiter, tol)
     elif toWhat == 'TP':
-        distance,contractedGateset = _contractToTP(gateset,verbosity)
+        _,contractedGateset = _contractToTP(gateset,verbosity)
     elif toWhat == 'XP':
         if dataset is None: raise ValueError("dataset must be given to contract to " + toWhat)
-        distance,contractedGateset = _contractToXP(gateset,dataset,verbosity,method,maxiter,tol)
+        _,contractedGateset = _contractToXP(gateset,dataset,verbosity,method,maxiter,tol)
     elif toWhat == 'vSPAM':
         contractedGateset = _contractToValidSPAM(gateset, printer)
     elif toWhat == 'nothing':
@@ -112,19 +111,19 @@ def _contractToXP(gateset,dataset,verbosity,method='Nelder-Mead',
     printer.log("--- Contract to XP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
 
-    def objective_func(vectorGS):
+    def _objective_func(vectorGS):
         gs.from_vector(vectorGS)
         forbiddenProbPenalty = _tools.forbidden_prob(gs,dataset)
         return (CLIFF + forbiddenProbPenalty if forbiddenProbPenalty > 1e-10 else 0) \
             + gs.frobeniusdist(gateset)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
-    if objective_func(gs.to_vector()) < 1e-8:
+    print_obj_func = _opt.create_obj_func_printer(_objective_func) #only ever prints to stdout!
+    if _objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in XP - no contraction necessary', 1)
         return 0.0, gs
 
-    optSol = _opt.minimize(objective_func,gs.to_vector(),
+    optSol = _opt.minimize(_objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
                           callback = print_obj_func if bToStdout else None)
 
@@ -146,22 +145,21 @@ def _contractToCP(gateset,verbosity,method='Nelder-Mead',
     #printer.log('', 2)
     printer.log("--- Contract to CP ---", 1)
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.basis.name
-    basisDim = gs.basis.dim.blockDims
+    mxBasis = gs.basis
 
-    def objective_func(vectorGS):
+    def _objective_func(vectorGS):
         gs.from_vector(vectorGS)
-        gs.basis = Basis(mxBasis,basisDim) #set basis for jamiolkowski iso
+        gs.basis = mxBasis #set basis for jamiolkowski iso
         cpPenalty = _tools.sum_of_negative_choi_evals(gs) * 1000
         return (CLIFF + cpPenalty if cpPenalty > 1e-10 else 0) + gs.frobeniusdist(gateset)
 
     bToStdout = (printer.verbosity > 2 and printer.filename is None)
-    print_obj_func = _opt.create_obj_func_printer(objective_func) #only ever prints to stdout!
-    if objective_func(gs.to_vector()) < 1e-8:
+    print_obj_func = _opt.create_obj_func_printer(_objective_func) #only ever prints to stdout!
+    if _objective_func(gs.to_vector()) < 1e-8:
         printer.log('Already in CP - no contraction necessary', 1)
         return 0.0, gs
 
-    optSol = _opt.minimize(objective_func,gs.to_vector(),
+    optSol = _opt.minimize(_objective_func,gs.to_vector(),
                           method=method, tol=tol, maxiter=maxiter,
                           callback = print_obj_func if bToStdout else None)
 
@@ -180,8 +178,6 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
     gs = gateset.copy() #working copy that we keep overwriting with vectorized data
-    mxBasis = gs.basis.name
-    #printer.log('', 1)
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if TPalso else "CP")), 1)
 
     for (gateLabel,gate) in gateset.gates.items():
@@ -189,7 +185,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         if(TPalso):
             for k in range(new_gate.shape[1]): new_gate[0,k] = 1.0 if k == 0 else 0.0
 
-        Jmx = _tools.jamiolkowski_iso(new_gate,gateMxBasis=mxBasis,choiMxBasis="gm")
+        Jmx = _tools.jamiolkowski_iso(new_gate,gateMxBasis=gs.basis,choiMxBasis="gm")
         evals,evecs = _np.linalg.eig(Jmx)
 
         if TPalso:
@@ -273,7 +269,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
 
             assert( min(evals) >= -1e-10 and abs( sum(evals) - 1.0 ) < 1e-8) #Check that trace-trunc above didn't mess up positivity
 
-            new_gate = _tools.jamiolkowski_iso_inv(new_Jmx,gateMxBasis=mxBasis,choiMxBasis="gm")
+            new_gate = _tools.jamiolkowski_iso_inv(new_Jmx,gateMxBasis=gs.basis,choiMxBasis="gm")
 
             #Old way of enforcing TP -- new way should be better since it's not iterative, but keep this around just in case.
             #  new_gate = _tools.jamiolkowski_iso_inv(new_Jmx)
@@ -359,7 +355,7 @@ def _contractToValidSPAM(gateset, verbosity=0):
 
     # ** assumption: only the first vector element of pauli vectors has nonzero trace
     dummyVec = _np.zeros( (gateset.get_dimension(),1), 'd'); dummyVec[0,0] = 1.0
-    firstElTrace = _np.real( _tools.trace(_objs.basis.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
+    firstElTrace = _np.real( _tools.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
     diff = 0
 
     # rhoVec must be positive semidefinite and trace = 1
@@ -377,21 +373,21 @@ def _contractToValidSPAM(gateset, verbosity=0):
             for ELabel,EVec in gs.effects.items():
                 gs.effects[ELabel] = EVec / r
 
-        mx = _objs.basis.ppvec_to_stdmx(vec)
+        mx = _tools.ppvec_to_stdmx(vec)
 
         #Ensure positive semidefinite
         lowEval = min( [ev.real for ev in _np.linalg.eigvals( mx ) ])
         while(lowEval < -TOL):
             idEl = vec[0,0] #only element with trace (even for multiple qubits) -- keep this constant and decrease others
             vec /= 1.00001; vec[0,0] = idEl
-            lowEval = min( [ev.real for ev in _np.linalg.eigvals( _objs.basis.ppvec_to_stdmx(vec) ) ])
+            lowEval = min( [ev.real for ev in _np.linalg.eigvals( _tools.ppvec_to_stdmx(vec) ) ])
 
         diff += _np.linalg.norm( gateset.preps[prepLabel] - vec )
         gs.preps[prepLabel] = vec
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
     for ELabel,EVec in gs.effects.items():
-        evals,evecs = _np.linalg.eig( _objs.basis.ppvec_to_stdmx(EVec) )
+        evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
         if(min(evals) < 0.0 or max(evals) > 1.0):
             if all([ev > 1.0 for ev in evals]):
                 evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
