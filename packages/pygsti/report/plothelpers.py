@@ -309,7 +309,7 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
 
-    ret = _np.empty( (gsplaq.rows,gsplaq.cols), 'd')
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
             gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
         chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
@@ -361,12 +361,12 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
                                  probs_precomp_dict)
     freqs = frequency_matrices(gsplaq_ds, dataset)
     
-    ret = _np.empty( (gsplaq.rows,gsplaq.cols), 'd')
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
             gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
         logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
                                          freqs[elIndices_ds], minProbClip)
-        ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair 
+        ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
     return ret
 
 

@@ -21,6 +21,7 @@ from ..tools   import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
 from .. import tools as _tools
+from .. import _version
 
 from . import workspace as _ws
 from . import autotitle as _autotitle
@@ -688,6 +689,10 @@ def create_standard_report(results, filename, title="auto",
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
+    
+    pdfInfo = [('Author','pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
+    qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")

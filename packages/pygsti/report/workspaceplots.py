@@ -1595,6 +1595,14 @@ class ColorBoxPlot(WorkspacePlot):
                 assert(dscomparator is not None), \
                     "Must specify `dscomparator` argument to create `dscmp` plot!"
 
+                if dataset is None: # then set dataset to be first compared dataset (for
+                                    # extracting # degrees of freedom below)
+                    if isinstance(dscomparator.dataset_list_or_multidataset,list):
+                        dataset = dscomparator.dataset_list_or_multidataset[0]
+                    elif isinstance(dscomparator.dataset_list_or_multidataset,_objs.MultiDataSet):
+                        key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
+                        dataset = dscomparator.dataset_list_or_multidataset[key0]
+
                 def _mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
@@ -1624,9 +1632,14 @@ class ColorBoxPlot(WorkspacePlot):
                     addl_subMxs = _ph._computeSubMxs(gss,gateset,addl_mx_fn)
                 addl_hover_info[lbl] = addl_subMxs
 
-                
-            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp,
-                                                              len(dataset.get_outcome_labels())-1 )
+
+            if dataset is None:
+                _warnings.warn("No dataset specified: using DOF-per-element == 1")
+                element_dof = 1
+            else:
+                element_dof = len(dataset.get_outcome_labels())-1
+                          
+            n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sumUp, element_dof)
               # NOTE: currently dof_per_box is constant, and takes the total
               # number of outcome labels in the DataSet, which can be incorrect
               # when different sequences have different outcome labels.
@@ -1652,7 +1665,6 @@ class ColorBoxPlot(WorkspacePlot):
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
                 
             else: assert(False) #invalid colormapType was set above
-
 
             if typ == "boxes":
                 newfig = gatestring_color_boxplot(gss, subMxs, colormap,

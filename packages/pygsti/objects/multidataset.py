@@ -300,7 +300,7 @@ class MultiDataSet(object):
             
         #add data for each gate sequence to build up aggregate lists
         gstrSlices = _OrderedDict()
-        agg_oli = []; agg_time = []; agg_rep = []; i = 0
+        agg_oli = []; agg_time = []; agg_rep = []; slc_i = 0
         for gstr, slc in self.gsIndex.items():
             concat_oli = _np.concatenate( [ self.oliDict[datasetName][slc]
                                             for datasetName in datasetNames ], axis=0 )
@@ -322,7 +322,7 @@ class MultiDataSet(object):
                     for oli,reps in cur_reps.items():
                         sorted_time.append( last_time )
                         sorted_oli.append( oli )
-                        sorted_rep.append( reps )                    
+                        sorted_rep.append( reps )
                     last_time = concat_time[i]; cur_reps = {}
                     
                 #add i-th element data to cur_reps
@@ -342,14 +342,14 @@ class MultiDataSet(object):
             agg_time.extend( sorted_time )
             agg_rep.extend( sorted_rep )
 
-            gstrSlices[gstr] = slice(i, i+len(sorted_oli))
-            i += len(sorted_oli)
+            gstrSlices[gstr] = slice(slc_i, slc_i+len(sorted_oli))
+            slc_i += len(sorted_oli)
 
         agg_oli = _np.array(agg_oli, self.oliType)
         agg_time = _np.array(agg_time, self.timeType)
         agg_rep = _np.array(agg_rep, self.repType)
         if _np.max(agg_rep) == 1: agg_rep = None #don't store trivial reps
-            
+
         return _DataSet(agg_oli, agg_time, agg_rep,
                         gateStringIndices=gstrSlices,
                         outcomeLabelIndices=self.olIndex, bStatic=True)

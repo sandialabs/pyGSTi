@@ -86,6 +86,10 @@ def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=Non
         if _tools.isstr(x): return x
         else: return ":".join([str(i) for i in x])
 
+    if outcomeLabelOrder is not None: #convert to tuples if needed
+        outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
+                              for ol in outcomeLabelOrder ]
+        
     outcomeLabels = dataset.get_outcome_labels()
     if outcomeLabelOrder is not None:
         assert(len(outcomeLabelOrder) == len(outcomeLabels))

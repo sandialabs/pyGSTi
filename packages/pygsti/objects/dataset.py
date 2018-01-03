@@ -256,14 +256,43 @@ class DataSetRow(object):
         """ Returns the (outcomeLabel,count) pairs as a dictionary."""
         return dict( self.counts )
 
+    def to_str(self, mode="auto"):
+        """
+        Render this DataSetRow as a string.
+
+        Parameters
+        ----------
+        mode : {"auto","time-dependent","time-independent"}
+            Whether to display the data as time-series of outcome counts 
+            (`"time-dependent"`) or to report per-outcome counts aggregated over
+            time (`"time-independent"`).  If `"auto"` is specified, then the
+            time-independent mode is used only if all time stamps in the 
+            DataSetRow are equal (trivial time dependence).
+
+        Returns
+        -------
+        str
+        """
+        if mode == "auto":
+            if all([t == self.time[0] for t in self.time]):
+                mode = "time-independent"
+            else: mode = "time-dependent"
+
+        assert(mode in ('time-dependent','time-independent')),"Invalid `mode` argument: %s" % mode
+
+        if mode == "time-dependent":
+            s  = "Outcome Label Indices = " + str(self.oli) + "\n"
+            s += "Time stamps = " + str(self.time) + "\n"
+            if self.reps is not None:
+                s += "Repetitions = " + str(self.reps) + "\n"
+            else:
+                s += "( no repetitions )\n"
+            return s
+        else: # time-independent
+            return str(self.as_dict())
+
     def __str__(self):
-        s  = "Outcome Label Indices = " + str(self.oli) + "\n"
-        s += "Time stamps = " + str(self.time) + "\n"
-        if self.reps is not None:
-            s += "Repetitions = " + str(self.reps) + "\n"
-        else:
-            s += "( no repetitions )\n"
-        return s
+        return self.to_str()
 
     def __len__(self):
         return len(self.oli)
@@ -877,12 +906,43 @@ class DataSet(object):
 
       
     def __str__(self):
-        s = ""
-        print("Dataset outcomes: ",self.olIndex)
-        for gateString in self: # tuple-type gate label strings are keys
-            s += "%s  :  %s\n" % (gateString, self[gateString])
-            #s += "%d  :  %s\n" % (len(gateString), self[gateString]) #Uncomment to print string lengths instead of strings themselves
-        return s + "\n"
+        return self.to_str()
+    
+    def to_str(self, mode="auto"):
+        """
+        Render this DataSet as a string.
+
+        Parameters
+        ----------
+        mode : {"auto","time-dependent","time-independent"}
+            Whether to display the data as time-series of outcome counts 
+            (`"time-dependent"`) or to report per-outcome counts aggregated over
+            time (`"time-independent"`).  If `"auto"` is specified, then the
+            time-independent mode is used only if all time stamps in the 
+            DataSet are equal to zero (trivial time dependence).
+
+        Returns
+        -------
+        str
+        """
+        if mode == "auto":            
+            if all([_np.all(self.timeData[gsi] == 0) for gsi in self.gsIndex.values()]):
+                mode = "time-independent"
+            else: mode = "time-dependent"
+
+        assert(mode in ('time-dependent','time-independent')),"Invalid `mode` argument: %s" % mode
+        
+        if mode == "time-dependent":
+            s = "Dataset outcomes: " + str(self.olIndex) + "\n"
+            for gateString in self: # tuple-type gate label strings are keys
+                s += "%s :\n%s\n" % (gateString, self[gateString].to_str(mode))
+            return s + "\n"
+        else: # time-independent
+            s = ""
+            for gateString in self: # tuple-type gate label strings are keys
+                s += "%s  :  %s\n" % (gateString, self[gateString].to_str(mode))
+            return s + "\n"
+
 
     def truncate(self, listOfGateStringsToKeep, bThrowErrorIfStringIsMissing=True):
         """ 

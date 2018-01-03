@@ -171,7 +171,62 @@ class Results(object):
                                    + " want to do this.")
                 self.estimates[estimate_key] = results.estimates[estimate_key]
 
+                
+    def rename_estimate(self, old_name, new_name):
+        """
+        Rename an estimate in this Results object.  Ordering of estimates is 
+        not changed.
+
+        Parameters
+        ----------
+        old_name : str
+            The labels of the estimate to be renamed
         
+        new_name : str
+            The new name for the estimate.
+
+        Returns
+        -------
+        None
+        """
+        if old_name not in self.estimates:
+            raise KeyError("%s does not name an existing estimate" % old_name)
+
+        if hasattr(self.estimates, "move_to_end"):
+            #Python3: use move_to_end method of OrderedDict to restore ordering:
+            ordered_keys = list(self.estimates.keys())
+            self.estimates[new_name] = self.estimates[old_name] #at end
+            del self.estimates[old_name]
+            keys_to_move = ordered_keys[ordered_keys.index(old_name)+1:] #everything after old_name
+            for key in keys_to_move: self.estimates.move_to_end(key)
+
+        else:
+            #Python2.7: Manipulate internals of OrderedDict to change a key while preserving order
+            PREV = 0; NEXT = 1 # ~enumerated
+    
+            #Unneeded, since root will be manipulated by link_prev or link_next below if needed
+            #root = self.estimates._OrderedDict__root # [prev,next,value] element - the
+            #  # root of the OrdereDict's circularly-linked list whose next member points
+            #  # to the first element of the list.
+            #first = root[NEXT] # first [prev,next,val] element of circularly linked list.
+    
+            old_element = self.estimates._OrderedDict__map[old_name]
+            link_prev, link_next, _ = old_element # ('_' == old_name)
+            new_element = [link_prev,link_next,new_name]
+    
+            #Replace element in circularly linked list (w/"root" sentinel element)
+            link_prev[NEXT] = new_element
+            link_next[PREV] = new_element
+    
+            #Replace element in map
+            del self.estimates._OrderedDict__map[old_name]
+            self.estimates._OrderedDict__map[new_name] = new_element
+    
+            #Replace values in underlying dict
+            value = dict.__getitem__(self.estimates, old_name)
+            dict.__setitem__(self.estimates, new_name, value)        
+
+                
     def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
                      parameters, estimate_key='default'):
         """
