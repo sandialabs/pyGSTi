@@ -394,7 +394,7 @@ class GateSet(object):
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
         else: # typ in ('static','H+S','S')
-            self.default_gauge_group = None
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 
     #def __getstate__(self):
