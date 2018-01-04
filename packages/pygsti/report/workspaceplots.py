@@ -720,7 +720,6 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 if gstr in gstrs: continue #skip duplicates
                 xs.append( len(gstr))
                 ys.append( subMxs[iy][ix][iiy][iix] )
-                assert(not _np.isnan(subMxs[iy][ix][iiy][iix])), "Error on gstr %s" % str(gstr) #DEBUG
                 gstrs.add(gstr)
                 if hoverInfo:
                     if callable(hoverInfo):

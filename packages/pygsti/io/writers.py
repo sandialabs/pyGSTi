@@ -145,6 +145,14 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
     else:
         gatestring_list = list(multidataset.gsIndex.keys()) #TODO: make access function for gatestrings?
 
+    def outcome_to_str(x):
+        if _tools.isstr(x): return x
+        else: return ":".join([str(i) for i in x])
+
+    if outcomeLabelOrder is not None: #convert to tuples if needed
+        outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
+                              for ol in outcomeLabelOrder ]
+
     outcomeLabels = multidataset.get_outcome_labels()
     if outcomeLabelOrder is not None:
         assert(len(outcomeLabelOrder) == len(outcomeLabels))
@@ -161,7 +169,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,ol)
+    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,outcome_to_str(ol))
                                                    for dsl in dsLabels
                                                    for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()
