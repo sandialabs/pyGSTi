@@ -20,11 +20,7 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         # Let's construct a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ gateset for which we will need to find germs and fiducials.
 
         gs_target = constr.build_gateset([2], [('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                         ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                         prepLabels=['rho0'], prepExpressions=["0"],
-                                         effectLabels=['E0'], effectExpressions=["0"],
-                                         spamdefs={'0': ('rho0', 'E0'),
-                                                   '1': ('rho0', 'remainder')})
+                                         ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 
         # ## Hands-off

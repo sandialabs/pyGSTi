@@ -17,7 +17,7 @@ class rpeconfig:
         for nm in ('fixed_axis_gate_label','fixed_axis_label','fixed_axis_target',
                    'loose_axis_gate_label','loose_axis_label','loose_axis_target',
                    'auxiliary_axis_gate_label','auxiliary_axis_label',
-                   'rhoExpressions','EExpressions','spamLabelDict',
+                   'rhoExpressions','ELabels','EExpressions',
                    'alpha','epsilon','theta',
                    'new_epsilon_func','alpha_hat_func','epsilon_hat_func','Phi_hat_func',
                    'alpha_cos_prep_tuple','alpha_cos_prep_str','alpha_cos_germ_tuple',

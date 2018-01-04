@@ -38,12 +38,7 @@ germs_lite = germs[0:4]
 
 #Construct a target gateset:  X(pi/4), Z(pi/2)
 gs_target = _setc.build_gateset( [2], [('Q0',)],['Gx','Gz'],
-                                 ["X(pi/4,Q0)", "Z(pi/2,Q0)"],
-                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                 effectLabels=["E0"], effectExpressions=["0"],
-                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
-                                 basis='pp')
-
+                                 ["X(pi/4,Q0)", "Z(pi/2,Q0)"])
 
 global_fidPairs =  [
     (0, 3), (3, 2), (4, 0), (5, 3)]

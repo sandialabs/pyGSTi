@@ -352,7 +352,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             start = 0
             d = gs_pre.dim
             N = gaugeGroupEl.num_params()
-            L = gs_pre.num_elements(include_povm_identity=True)
+            L = gs_pre.num_elements()
 
             #Compute "extra" (i.e. beyond the gateset-element) rows of jacobian
             if cptp_penalty_factor != 0: L += _cptp_penalty_size(gs_pre)
@@ -425,19 +425,14 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
 
             # -- effect terms
             # -------------------------
-            for lbl, E in gs_pre.effects.items():
-                # d(ET_term) = E.T * dS
-                wt   = itemWeights.get(lbl, spamWeight)
-                result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
-                my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
-                start += d
+            for povmlbl, povm in gs_pre.povms.items():
+                for lbl,E in povm.items():
+                    # d(ET_term) = E.T * dS
+                    wt   = itemWeights.get(povmlbl+"_"+lbl, spamWeight)
+                    result = _np.dot(E.T, dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
+                    start += d
                 
-            if gs_pre._povm_identity is not None:
-                # same as effects
-                wt   = itemWeights.get(gs_pre._identitylabel, spamWeight)
-                result = _np.dot(gs_pre._povm_identity.T, dS).T
-                my_jacMx[start:start+d] = wt * result.squeeze(2) # (d2,n)
-                start += d
 
             # -- penalty terms
             # -------------------------
@@ -454,7 +449,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
 
             #At this point, each proc has filled the portions (columns) of jacMx that
             # it's responsible for, and so now we gather them together.
-            _mpit.gather_slices(derivSlices, derivOwners, jacMx, 1, comm)
+            _mpit.gather_slices(derivSlices, derivOwners, jacMx,[], 1, comm)
             #Note jacMx is completely filled (on all procs)
 
             if checkJac and (comm is None or comm.Get_rank() == 0):
@@ -494,8 +489,8 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     else:
                         wts = itemWeights.copy(); wts['spam'] = 0.0
                         for k in wts:
-                            if k in gs.get_prep_labels() or \
-                               k in gs.get_effect_labels(): wts[k] = 0.0
+                            if k in gs.preps or \
+                               k in gs.povms: wts[k] = 0.0
                         ret += gs.frobeniusdist(targetGateset,None, wts)
         
                 elif gatesMetric == "fidelity":
@@ -516,18 +511,31 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     pass #added in special case above to match normalization in frobeniusdist
         
                 elif spamMetric == "fidelity":
-                    for spamlabel in gs.get_spam_labels():
-                        wt = itemWeights.get(spamlabel, spamWeight)
-                        ret += wt * (1.0 - _tools.process_fidelity(
-                                targetGateset.get_spamgate(spamlabel),
-                                gs.get_spamgate(spamlabel)))**2
+                    for preplabel,prep in gs.preps.items():
+                        wt = itemWeights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx2 = _tools.vec_to_stdmx(
+                            targetGateset.preps[preplabel], mxBasis)
+                        ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
+
+                    for povmlabel,povm in gs.povms.items():
+                        wt = itemWeights.get(povmlabel, spamWeight)
+                        ret += wt * (1.0 - _tools.povm_fidelity(
+                            gs, targetGateset, povmlabel))**2
+
         
                 elif spamMetric == "tracedist":
-                    for spamlabel in gs.get_spam_labels():
-                        wt = itemWeights.get(spamlabel, spamWeight)
-                        ret += wt * _tools.jtracedist(
-                            targetGateset.get_spamgate(spamlabel),
-                            gs.get_spamgate(spamlabel))
+                    for preplabel,prep in gs.preps.items():
+                        wt = itemWeights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx2 = _tools.vec_to_stdmx(
+                            targetGateset.preps[preplabel], mxBasis)
+                        ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+
+                    for povmlabel,povm in gs.povms.items():
+                        wt = itemWeights.get(povmlabel, spamWeight)
+                        ret += wt * (1.0 - _tools.povm_jtracedist(
+                            gs, targetGateset, povmlabel))**2
         
                 else: raise ValueError("Invalid spamMetric: %s" % spamMetric)
     
@@ -605,7 +613,7 @@ def _cptp_penalty_jac_fill(cpPenaltyVecGradToFill, gs_pre, gs_post,
     dS.shape = (d, d, n) # call it (d1,d2,n)
     dS  = _np.rollaxis(dS, 2) # shape (n, d1, d2)
 
-    for i,(gl,gate) in enumerate(gs_post.iter_gates()):
+    for i,(gl,gate) in enumerate(gs_post.gates.items()):
         pre_gate = gs_pre.gates[gl]
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
@@ -680,7 +688,7 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     # and we're differentiating wrt the parameters of S, the
     # gaugeGroupEl.
     
-    for i,(lbl,prepvec) in enumerate(gs_post.iter_preps()):
+    for i,(lbl,prepvec) in enumerate(gs_post.preps.items()):
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
@@ -709,79 +717,46 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         spamPenaltyVecGradToFill[i,:] = v.real
         denMx = sgndm = dVdp = v = None #free mem
 
-
-    # remainder effectvec has derivative wrt gauge parameters that is
-    # minus the sum of the derivatives for each term except with
-    # sgn(EMx) replaced with sgn(EcMx).
-    if gs_post._remainderlabel in gs_post.get_effect_labels():
-        EcMx = _tools.vec_to_stdmx( gs_post.effects[gs_post._remainderlabel], gateBasis)
-        assert(_np.linalg.norm(EcMx - EcMx.T.conjugate()) < 1e-4), \
-            "EMx should be Hermitian!"
-
-        sgnEc = _tools.matrix_sign(EcMx)
-        assert(_np.linalg.norm(sgnEc - sgnEc.T.conjugate()) < 1e-4), \
-            "sgnEc should be Hermitian!"
-
-        #Initialize Ec derivative with derivative of povm_identity term
-        # within Ec (which transforms under gauge optimizations) - see below
-        pre_effectvec = gs_pre.povm_identity
-        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
-        vc =  _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
-        vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx)))
-        assert(_np.linalg.norm(vc.imag) < 1e-4)
-        
-        iC = len(gs_post.preps) + len(gs_post.effects) # index corresponding to |Ec|_Tr term
-        spamPenaltyVecGradToFill[iC,:] = vc.real
-    else:
-        EcMx = sgnEc = iC = None
-
         
     # d( sqrt(|EMx|_Tr) ) = (0.5 / sqrt(|EMx|_Tr)) * d( |EMx|_Tr )
     # but here, unlike in core.py, EMx = StdMx(S.T * E) = StdMx(E')
     # and we're differentiating wrt the parameters of S, the
     # gaugeGroupEl.
+
+    i = len(gs_post.preps)
+    for povmlbl,povm in gs_post.povms.items():
+        for lbl,effectvec in povm.items():
+
+            #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
+            EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
+            dmDim = EMx.shape[0]
+            assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
+                "denMx should be Hermitian!"
     
-    for i,(lbl,effectvec) in enumerate(gs_post.iter_effects(), start=len(gs_post.preps)):
-
-        #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-        EMx = _tools.vec_to_stdmx(effectvec, gateBasis)
-        dmDim = EMx.shape[0]
-        assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
-            "denMx should be Hermitian!"
-
-        sgnE = _tools.matrix_sign(EMx)
-        assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
-            "sgnE should be Hermitian!"
-
-        # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
-        #                      = [effectvec.T * dS].T
-        #  OR = dS.T * effectvec
-        pre_effectvec = gs_pre.effects[lbl]
-        dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
-          # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
-        assert(dVdp.shape == (d,n))
-
-        # EMx = sum( spamvec[i] * Bmx[i] )
-
-        #contract to get (note contract along both mx indices b/c treat like a mx basis):
-        # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
-        # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
-        v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
-        assert(_np.linalg.norm(v.imag) < 1e-4)
-        spamPenaltyVecGradToFill[i,:] = v.real
-
-        if sgnEc is not None: #Add contribution of derivative of this effect within |Ec|_Tr
-            vc =  -1.0 * _np.einsum("ij,aij,ab->b",sgnEc,dEMxdV,dVdp)
-            vc *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EcMx))) #add 0.5/|EcMx|_Tr factor
-            assert(_np.linalg.norm(vc.imag) < 1e-4)
-            spamPenaltyVecGradToFill[iC,:] += vc.real
-            vc = None
-            
-        denMx = sgndm = dVdp = v = None #free mem
+            sgnE = _tools.matrix_sign(EMx)
+            assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
+                "sgnE should be Hermitian!"
+    
+            # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in gateBasis [shape == (n,dim)]
+            #                      = [effectvec.T * dS].T
+            #  OR = dS.T * effectvec
+            pre_effectvec = gs_pre.povms[povmlbl][lbl]
+            dVdp = _np.dot( pre_effectvec.T, dS ).squeeze(0).T
+              # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
+            assert(dVdp.shape == (d,n))
+    
+            # EMx = sum( spamvec[i] * Bmx[i] )
+    
+            #contract to get (note contract along both mx indices b/c treat like a mx basis):
+            # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
+            # [dmDim,dmDim] * [gs.dim, dmDim,dmDim] * [gs.dim, n]
+            v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
+            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(EMx))) #add 0.5/|EMx|_Tr factor
+            assert(_np.linalg.norm(v.imag) < 1e-4)
+            spamPenaltyVecGradToFill[i,:] = v.real
+                
+            denMx = sgndm = dVdp = v = None #free mem
+            i += 1
 
     #return the number of leading-dim indicies we filled in
-    if sgnEc is not None:
-        return len(gs_post.preps) + len(gs_post.effects) + 1
-    else:
-        return len(gs_post.preps) + len(gs_post.effects)
+    return len(gs_post.preps) + sum([ len(povm) for povm in gs_post.povms.values()])

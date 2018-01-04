@@ -129,8 +129,9 @@ def composite_rcl_fn(candidateScores, alpha):
     minScore = min(candidateScores)
     if maxScore.major == minScore.major:
         threshold = CompositeScore( maxScore.major, 
-                                    (alpha * (minScore.minor - 1)
+                                    (alpha * minScore.minor
                                      + (1 - alpha) * maxScore.minor), None)
+        #Don't use "-1" heuristic on minor threshold.
     else:
         threshold = CompositeScore( (alpha * (minScore.major - 1)
                                      + (1 - alpha) * maxScore.major),

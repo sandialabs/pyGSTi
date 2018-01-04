@@ -12,7 +12,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #Import Objects at package level
 from .confidenceregionfactory import ConfidenceRegionFactory
 from .dataset import DataSet
-from .tddataset import TDDataSet
 from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
@@ -24,11 +23,17 @@ from .gate import TPParameterizedGate
 from .gate import StaticGate
 from .gate import EigenvalueParameterizedGate
 from .gate import LindbladParameterizedGate
+from .gate import TPInstrumentGate
 from .spamvec import SPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
 from .spamvec import CPTPParameterizedSPAMVec
+from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
+from .povm import POVM
+from .povm import TPPOVM
+from .instrument import Instrument
+from .instrument import TPInstrument
 
 from .gateset import GateSet
 from .gatestring import GateString

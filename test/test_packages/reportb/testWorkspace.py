@@ -97,14 +97,14 @@ class TestWorkspace(ReportBaseCase):
                                     hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
 
         from pygsti.algorithms import directx as dx
-        specs = pygsti.construction.build_spam_specs(
-                prepStrs=prepStrs,
-                effectStrs=effectStrs,
-                prep_labels=self.gs.get_prep_labels(),
-                effect_labels=self.gs.get_effect_labels() )
+        #specs = pygsti.construction.build_spam_specs(
+        #        prepStrs=prepStrs,
+        #        effectStrs=effectStrs,
+        #        prep_labels=list(self.gs.preps.keys()),
+        #        effect_labels=self.gs.get_effect_labels() )
         baseStrs = self.gss.get_basestrings()
         directGatesets = dx.direct_mlgst_gatesets(
-            baseStrs, self.ds, specs, self.tgt, svdTruncateTo=4)
+            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svdTruncateTo=4)
         plts.append( w.ColorBoxPlot(["chi2","logl","blank",'directchi2','directlogl'], self.gss,
                                     self.ds, self.gs, boxLabels=False, directGSTgatesets=directGatesets) )
         

@@ -194,7 +194,6 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         #  print "WARNING: JMx given with evals = %s (sum = %s != 1)" % (evals,sum(evals))
         #  print "WARNING: JMx from: "; _tools.print_mx(new_gate)
 
-
         it = 0
         while min(evals) < -tol or abs( sum(evals) - 1.0 ) >= tol:
 
@@ -303,6 +302,7 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
         gate_dim = gs.get_dimension()
         for rhoVec in list(gs.preps.values()):
             rhoVec[0,0] = 1.0 / gate_dim**0.25
+            gs._update_paramvec(rhoVec) #tell GateSet that rhoVec has been updated
 
     return distance, gs
 
@@ -316,10 +316,12 @@ def _contractToTP(gateset,verbosity):
     for gate in list(gs.gates.values()):
         gate[0,0] = 1.0
         for k in range(1,gate.shape[1]): gate[0,k] = 0.0
+        gs._update_paramvec(gate)
 
     gate_dim = gs.get_dimension()
     for rhoVec in list(gs.preps.values()):
         rhoVec[0,0] = 1.0 / gate_dim**0.25
+        gs._update_paramvec(rhoVec)
 
     distance = gs.frobeniusdist(gateset)
     printer.log(('Projected TP gateset was at distance: %g' % distance), 1)
@@ -370,8 +372,11 @@ def _contractToValidSPAM(gateset, verbosity=0):
         if abs(firstElTarget - vec[0,0]) > TOL:
             r = firstElTarget / vec[0,0]
             vec *= r  #multiply rhovec by factor
-            for ELabel,EVec in gs.effects.items():
-                gs.effects[ELabel] = EVec / r
+            for povmLbl in list(gs.povms.keys()):
+                scaled_effects = []
+                for ELabel,EVec in gs.povms[povmLbl].items():
+                    scaled_effects.append( (ELabel, EVec / r) )
+                gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
         mx = _tools.ppvec_to_stdmx(vec)
 
@@ -386,20 +391,28 @@ def _contractToValidSPAM(gateset, verbosity=0):
         gs.preps[prepLabel] = vec
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
-    for ELabel,EVec in gs.effects.items():
-        evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
-        if(min(evals) < 0.0 or max(evals) > 1.0):
-            if all([ev > 1.0 for ev in evals]):
-                evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
-            if all([ev < 0.0 for ev in evals]):
-                evals[ evals.argmax() ] = 1.0 #at least one eigenvalue must be != 0.0
-            for (k,ev) in enumerate(evals):
-                if ev < 0.0: evals[k] = 0.0
-                if ev > 1.0: evals[k] = 1.0
-            mx = _np.dot(evecs, _np.dot( _np.diag(evals), _np.linalg.inv(evecs) ) )
-            vec = _tools.stdmx_to_ppvec(mx)
-            diff += _np.linalg.norm( gateset.effects[ELabel] - vec )
-            gs.effects[ELabel] = vec
+    for povmLbl in list(gs.povms.keys()):
+        scaled_effects = []
+        for ELabel,EVec in gs.povms[povmLbl].items():
+            #if isinstance(EVec, _objs.ComplementSPAMVec):
+            #    continue #don't contract complement vectors
+            evals,evecs = _np.linalg.eig( _tools.ppvec_to_stdmx(EVec) )
+            if(min(evals) < 0.0 or max(evals) > 1.0):
+                if all([ev > 1.0 for ev in evals]):
+                    evals[ evals.argmin() ] = 0.0 #at least one eigenvalue must be != 1.0
+                if all([ev < 0.0 for ev in evals]):
+                    evals[ evals.argmax() ] = 1.0 #at least one eigenvalue must be != 0.0
+                for (k,ev) in enumerate(evals):
+                    if ev < 0.0: evals[k] = 0.0
+                    if ev > 1.0: evals[k] = 1.0
+                mx = _np.dot(evecs, _np.dot( _np.diag(evals), _np.linalg.inv(evecs) ) )
+                vec = _tools.stdmx_to_ppvec(mx)
+                diff += _np.linalg.norm( gateset.povms[povmLbl][ELabel] - vec )
+                scaled_effects.append( (ELabel, vec) )
+            else:
+                scaled_effects.append( (ELabel,EVec) ) #no scaling
+                
+        gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
     #gs.log("Contract to valid SPAM")
     #printer.log('', 2)
@@ -408,8 +421,10 @@ def _contractToValidSPAM(gateset, verbosity=0):
     for (prepLabel,rhoVec) in gateset.preps.items():
         printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec)),
                                    str(_np.transpose(gs.preps[prepLabel]))), 2)
-    for (ELabel,EVec) in gateset.effects.items():
-        printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
-                                    str(_np.transpose(gs.effects[ELabel]))), 2)
+    for povmLbl,povm in gateset.povms.items():
+        printer.log(("  %s (POVM)" % povmLbl), 2)
+        for ELabel,EVec in povm.items():
+            printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
+                                              str(_np.transpose(gs.povms[povmLbl][ELabel]))), 2)
 
     return gs #return contracted gateset

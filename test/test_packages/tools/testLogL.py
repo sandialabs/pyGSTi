@@ -8,15 +8,15 @@ class LogLTestCase(BaseTestCase):
     def test_logl_fn(self):
         ds          = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gatestrings = pygsti.construction.gatestring_list( [ ('Gx',), ('Gy',), ('Gx','Gx') ] )
-        spam_labels = std.gs_target.get_spam_labels()
-        pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
+        #OLD spam_labels = std.gs_target.get_spam_labels()
+        #OLD pygsti.create_count_vec_dict( spam_labels, ds, gatestrings )
         gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
 
         L1 = pygsti.logl(gateset, ds, gatestrings,
-                         probClipInterval=(-1e6,1e6), countVecMx=None,
+                         probClipInterval=(-1e6,1e6),
                          poissonPicture=True, check=False)
         L2 = pygsti.logl(gateset, ds, gatestrings,
-                         probClipInterval=(-1e6,1e6), countVecMx=None,
+                         probClipInterval=(-1e6,1e6),
                          poissonPicture=False, check=False) #Non-poisson-picture
 
         dL1 = pygsti.logl_jacobian(gateset, ds, gatestrings,
@@ -42,8 +42,8 @@ class LogLTestCase(BaseTestCase):
                                    poissonPicture=False, check=False) #test None as gs list
 
 
-        maxL1 = pygsti.logl_max(ds, gatestrings, poissonPicture=True, check=True)
-        maxL2 = pygsti.logl_max(ds, gatestrings, poissonPicture=False, check=True)
+        maxL1 = pygsti.logl_max(gateset, ds, gatestrings, poissonPicture=True, check=True)
+        maxL2 = pygsti.logl_max(gateset, ds, gatestrings, poissonPicture=False, check=True)
 
         pygsti.cptp_penalty(gateset, include_spam_penalty=True)
         twoDelta1 = pygsti.two_delta_loglfn(N=100, p=0.5, f=0.6, minProbClip=1e-6, poissonPicture=True)
@@ -53,15 +53,15 @@ class LogLTestCase(BaseTestCase):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset%s" % self.versionsuffix)
         gateset = std.gs_target #could use pygsti.io.load_gateset(compare_files + "/analysis.gateset"), but then change hardcoded #'s
         L1 = pygsti.logl(gateset, ds,
-                         probClipInterval=(-1e6,1e6), countVecMx=None,
+                         probClipInterval=(-1e6,1e6),
                          poissonPicture=True, check=False)
-        self.assertAlmostEqual(L1,-22711008.7481, 2)
+        self.assertAlmostEqual(L1,-21393568.52986, 2)
         #self.assertAlmostEqual(L1,-21579292.1837, 2) #OLD2
         #self.assertAlmostEqual(L1, -4531934.43735, 2) #OLD
         
-        L2 = pygsti.logl_max(ds)
+        L2 = pygsti.logl_max(gateset, ds)
         
-        self.assertAlmostEqual(L2, -14144760.2866, 2)
+        self.assertAlmostEqual(L2, -14028782.1039, 2)
         #self.assertAlmostEqual(L2, -13402461.9294, 2) #OLD2
         #self.assertAlmostEqual(L2, -1329179.7675, 5) #OLD
 

@@ -21,6 +21,7 @@ from ..tools   import timed_block as _timed_block
 from ..tools.mpitools import distribute_indices as _distribute_indices
 
 from .. import tools as _tools
+from .. import _version
 
 from . import workspace as _ws
 from . import autotitle as _autotitle
@@ -252,6 +253,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("gsTarget",(0,1))
     switchBd.add("params",(0,1))
     switchBd.add("objective",(0,1))
+    switchBd.add("objective_tvd_tuple",(0,1))
     switchBd.add("objective_modvi",(0,1))
     switchBd.add("mpc",(0,1))
     switchBd.add("mpc_modvi",(0,1))
@@ -309,6 +311,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             switchBd.params[d,i] = est.parameters
             switchBd.objective[d,i] = est.parameters['objective']
+            switchBd.objective_tvd_tuple[d,i] = (est.parameters['objective'],'tvd')
             switchBd.objective_modvi[d,i] = est_modvi.parameters['objective']
             if est.parameters['objective'] == "logl":
                 switchBd.mpc[d,i] = est.parameters['minProbClip']
@@ -688,6 +691,10 @@ def create_standard_report(results, filename, title="auto",
     qtys['linlg_pcntle'] = "%d" % round(linlogPercentile) #to nearest %
     qtys['linlg_pcntle_inv'] = "%d" % (100 - int(round(linlogPercentile)))
     qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
+    
+    pdfInfo = [('Author','pyGSTi'), ('Title', title),
+               ('Keywords', 'GST'), ('pyGSTi Version',_version.__version__)]
+    qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
@@ -869,11 +876,16 @@ def create_standard_report(results, filename, title="auto",
         addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot, 
                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate')
 
-    addqty(1,'bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
+    addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi)
-    if brevity < 1: qtys['bestEstimateColorBoxPlotPages'].set_render_options(
+    if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
+            click_to_display=False, valign='bottom')
+
+    addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
+           'tvd', gss, modvi_ds, gsL_modvi)
+    if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
@@ -903,11 +915,11 @@ def create_standard_report(results, filename, title="auto",
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
-        addqty(1,'bestEstimateColorBoxPlotPages_scl', ws.ColorBoxPlot,
+        addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
-        if brevity < 1: qtys['bestEstimateColorBoxPlotPages_scl'].set_render_options(
+        if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
                 click_to_display=False, valign='bottom')
 
         addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
@@ -1287,7 +1299,7 @@ def find_std_clifford_compilation(gateset, verbosity):
         mod = importlib.import_module("pygsti.construction." + module_name)
         if set(mod.gs_target.gates.keys()) == set(gateset.gates.keys()) and \
            set(mod.gs_target.preps.keys()) == set(gateset.preps.keys()) and \
-           set(mod.gs_target.effects.keys()) == set(gateset.effects.keys()):
+           set(mod.gs_target.povms.keys()) == set(gateset.povms.keys()):
             if mod.gs_target.frobeniusdist(gateset) < 1e-6:
                 if hasattr(mod,"clifford_compilation"):
                     printer.log("Found standard clifford compilation from %s" % module_name)

@@ -127,7 +127,7 @@ class VerbosityPrinter(object):
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
-    def __init__(self, verbosity, filename=None, comm=None, warnings=True):
+    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True):
         '''
         Customize a verbosity printer object
 

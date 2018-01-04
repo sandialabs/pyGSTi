@@ -73,8 +73,8 @@ class SpamTable(WorkspaceTable):
         if isinstance(gatesets, _objs.GateSet):
             gatesets = [gatesets]
 
-        rhoLabels = list(gatesets[0].get_prep_labels()) #use labels of 1st gateset
-        ELabels = list(gatesets[0].get_effect_labels()) #use labels of 1st gateset
+        rhoLabels = list(gatesets[0].preps.keys()) #use labels of 1st gateset
+        povmLabels = list(gatesets[0].povms.keys()) #use labels of 1st gateset
             
         if titles is None:
             titles = ['']*len(gatesets)
@@ -144,44 +144,47 @@ class SpamTable(WorkspaceTable):
             table.addrow(rowData, rowFormatters)
 
 
-        for lbl in ELabels:
-            rowData = [lbl]; rowFormatters = ['Effect']
-
-            for gateset in gatesets:
-                EMx = _ev(_reportables.Vec_as_stdmx(gateset, lbl, "effect"))
-                          #confidenceRegionInfo) #don't put CIs on matrices for now
-                if display_as == "numbers":
-                    rowData.append( EMx )
+        for povmlbl in povmLabels:
+            for lbl in gatesets[0].povms[povmlbl].keys():
+                povmAndELbl = povmlbl + ":" + lbl # format for GateSetFunction objs
+                rowData = [lbl] if (len(povmLabels) == 1) else [povmAndELbl] #show POVM name if there's more than one of them
+                rowFormatters = ['Effect']
+    
+                for gateset in gatesets:
+                    EMx = _ev(_reportables.Vec_as_stdmx(gateset, povmAndELbl, "effect"))
+                              #confidenceRegionInfo) #don't put CIs on matrices for now
+                    if display_as == "numbers":
+                        rowData.append( EMx )
+                        rowFormatters.append('Brackets')
+                    elif display_as == "boxes":
+                        EMx_real = EMx.hermitian_to_real()
+                        v = EMx_real.get_value()
+                        fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                                                 boxLabels=True, prec='compacthp',
+                                                 mxBasis=None) #no basis labels 
+                        rowData.append( fig )
+                        rowFormatters.append('Figure')
+                    else:
+                        raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+    
+                for gateset in gatesets:
+                    cri = confidenceRegionInfo if confidenceRegionInfo and \
+                          (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
+                    evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, povmAndELbl, "effect"),
+                                cri)
+                    rowData.append( evals )
                     rowFormatters.append('Brackets')
-                elif display_as == "boxes":
-                    EMx_real = EMx.hermitian_to_real()
-                    v = EMx_real.get_value()
-                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
-                                             boxLabels=True, prec='compacthp',
-                                             mxBasis=None) #no basis labels 
-                    rowData.append( fig )
-                    rowFormatters.append('Figure')
-                else:
-                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
-
-            for gateset in gatesets:
-                cri = confidenceRegionInfo if confidenceRegionInfo and \
-                      (confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
-                evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(gateset, lbl, "effect"),
-                            cri)
-                rowData.append( evals )
-                rowFormatters.append('Brackets')
-    
-            if includeHSVec:
-                rowData.append( gatesets[-1].effects[lbl] )
-                rowFormatters.append('Normal')
-    
-                if confidenceRegionInfo is not None:
-                    intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
-                    rowData.append( intervalVec ); rowFormatters.append('Normal')
-    
-            #Note: no dependence on confidence region (yet) when HS vector is not shown...
-            table.addrow(rowData, rowFormatters)
+        
+                if includeHSVec:
+                    rowData.append( gatesets[-1].povms[povmlbl][lbl] )
+                    rowFormatters.append('Normal')
+        
+                    if confidenceRegionInfo is not None:
+                        intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                        rowData.append( intervalVec ); rowFormatters.append('Normal')
+        
+                #Note: no dependence on confidence region (yet) when HS vector is not shown...
+                table.addrow(rowData, rowFormatters)
     
         table.finish()
         return table
@@ -221,8 +224,16 @@ class SpamParametersTable(WorkspaceTable):
         if titles is None:
             titles = ['']*len(gatesets)
 
-        colHeadings = [''] + list(gatesets[0].get_effect_labels())
-        formatters  = [None] + [ 'Effect' ]*len(gatesets[0].get_effect_labels())
+        if len(gatesets[0].povms) == 1:
+            povmKey = list(gatesets[0].povms.keys())[0]
+            effectLbls = [ eLbl for eLbl in gatesets[0].povms[povmKey] ]
+        else:
+            effectLbls = [ povmLbl + "." + eLbl
+                           for povmLbl,povm in gatesets[0].povms.items()
+                           for eLbl in povm.keys() ]
+        
+        colHeadings = [''] + effectLbls
+        formatters  = [None] + [ 'Effect' ]*len(effectLbls)
     
         table       = _ReportTable(colHeadings, formatters, confidenceRegionInfo=confidenceRegionInfo)
 
@@ -231,13 +242,15 @@ class SpamParametersTable(WorkspaceTable):
                                            confidenceRegionInfo.gateset.frobeniusdist(gateset) < 1e-6) else None
             spamDotProdsQty = _ev( _reportables.Spam_dotprods(gateset), cri)
             DPs, DPEBs      = spamDotProdsQty.get_value_and_err_bar()
+            assert(DPs.shape[1] == len(effectLbls)), \
+                "Gatesets must have the same number of POVMs & effects"
         
-            formatters      = [ 'Rho' ] + [ 'Normal' ]*len(gateset.get_effect_labels()) #for rows below
+            formatters      = [ 'Rho' ] + [ 'Normal' ]*len(effectLbls) #for rows below
         
-            for ii,prepLabel in enumerate(gateset.get_prep_labels()): # ii enumerates rhoLabels to index DPs
+            for ii,prepLabel in enumerate(gateset.preps.keys()): # ii enumerates rhoLabels to index DPs
                 prefix = gstitle + " " if len(gstitle) else ""
                 rowData = [prefix + prepLabel]
-                for jj,_ in enumerate(gateset.get_effect_labels()): # jj enumerates eLabels to index DPs
+                for jj,_ in enumerate(effectLbls): # jj enumerates eLabels to index DPs
                     if cri is None:
                         rowData.append((DPs[ii,jj],None))
                     else:
@@ -682,8 +695,8 @@ class SpamVsTargetTable(WorkspaceTable):
     
     def _create(self, gateset, targetGateset, confidenceRegionInfo):
     
-        prepLabels   = gateset.get_prep_labels()
-        #effectLabels = gateset.get_effect_labels()
+        prepLabels = list(gateset.preps.keys())
+        povmLabels = list(gateset.povms.keys())
     
         colHeadings  = ('Prep/POVM', "Infidelity", "1/2 Trace|Distance", "1/2 Diamond-Dist")
         formatters   = (None,'Conversion','Conversion','Conversion')
@@ -706,27 +719,20 @@ class SpamVsTargetTable(WorkspaceTable):
             table.addrow(rowData, formatters)
 
 
-        #OLD - when per-effect metrics were displayed
-        #formatters = [ 'Effect' ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        #effectInfidelities = [_ev(_reportables.Vec_infidelity(gateset, targetGateset, l,
-        #                                                'effect'), confidenceRegionInfo)
-        #                    for l in effectLabels]
-        #effectTraceDists   = [_ev(_reportables.Vec_tr_diff(gateset, targetGateset, l,
-        #                                                'effect'), confidenceRegionInfo)
-        #                    for l in effectLabels]
-        #for rowData in zip(effectLabels, confidenceRegionInfo, effectInfidelities,
-        #                   effectTraceDists):
-        #    table.addrow(rowData, formatters)
+        formatters = [ 'Normal' ] + [ 'Normal' ] * (len(colHeadings) - 1)
+        povmInfidelities = [_ev(_reportables.POVM_entanglement_infidelity(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
+        povmTraceDists   = [_ev(_reportables.POVM_jt_diff(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
+        povmDiamondDists = [_ev(_reportables.POVM_half_diamond_norm(
+                             gateset, targetGateset, l), confidenceRegionInfo)
+                            for l in povmLabels]
 
-        formatters = [ None ] + [ 'Normal' ] * (len(colHeadings) - 1)
-        povmInfidelity = _ev(_reportables.POVM_entanglement_infidelity(
-            gateset, targetGateset), confidenceRegionInfo)                 
-        povmTraceDist = _ev(_reportables.POVM_jt_diff(
-            gateset, targetGateset), confidenceRegionInfo) 
-        povmDiamondDist = _ev(_reportables.POVM_half_diamond_norm(
-            gateset, targetGateset), confidenceRegionInfo)
-        table.addrow(['POVM', povmInfidelity, povmTraceDist, povmDiamondDist],
-                     formatters)
+        for rowData in zip(povmLabels, povmInfidelities, povmTraceDists,
+                           povmDiamondDists):
+            table.addrow(rowData, formatters)
     
         table.finish()
         return table
@@ -1479,13 +1485,13 @@ class DataSetOverviewTable(WorkspaceTable):
     
         table = _ReportTable(colHeadings, formatters)
     
-        minN = round(min([ row.total() for row in dataset.itervalues()]))
-        maxN = round(max([ row.total() for row in dataset.itervalues()]))
+        minN = round(min([ row.total() for row in dataset.values()]))
+        maxN = round(max([ row.total() for row in dataset.values()]))
         cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
     
         table.addrow(("Number of strings", str(len(dataset))), (None,None))
         table.addrow(("Gate labels", ", ".join(dataset.get_gate_labels()) ), (None,None))
-        table.addrow(("SPAM labels",  ", ".join(dataset.get_spam_labels()) ), (None,None))
+        table.addrow(("Outcome labels",  ", ".join(map(str,dataset.get_outcome_labels())) ), (None,None))
         table.addrow(("Counts per string", cntStr  ), (None,None))
 
         if maxLengthList is not None:
@@ -1567,7 +1573,13 @@ class FitComparisonTable(WorkspaceTable):
             raise ValueError("Invalid `objective` argument: %s" % objective)
 
         if NpByX is None:
-            NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            try:
+                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            except _np.LinAlgError:
+                _warnings.warn(("LinAlgError when trying to compute the number"
+                                " of non-gauge parameters.  Using total"
+                                " parameters instead."))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
@@ -2039,26 +2051,24 @@ class MetadataTable(WorkspaceTable):
             if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
             elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
             elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+            elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
             else: paramTyp = "unknown"
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-    
-        for lbl,vec in gateset.effects.items():
-            if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-            elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-            elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+
+        for povmlbl, povm in gateset.povms.items():
+            if isinstance(povm, _objs.POVM): paramTyp = "unconstrained"
+            elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
             else: paramTyp = "unknown"
-            table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
-    
-        #Not displayed since the POVM identity is always fully parameterized,
-        # even through it doesn't contribute to the gate set parameters (a special case)
-        #if gateset.povm_identity is not None:
-        #    vec = gateset.povm_identity
-        #    if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
-        #    elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
-        #    elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
-        #    else: paramTyp = "unknown"
-        #    table.addrow(("POVM identity parameterization", paramTyp), (None,'Verbatim'))
-    
+            table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
+
+            for lbl,vec in povm.items():
+                if isinstance(vec, _objs.StaticSPAMVec): paramTyp = "static"
+                elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
+                elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
+                elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
+                else: paramTyp = "unknown"
+                table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
+        
         for gl,gate in gateset.gates.items():
             if isinstance(gate, _objs.StaticGate): paramTyp = "static"
             elif isinstance(gate, _objs.FullyParameterizedGate): paramTyp = "full"

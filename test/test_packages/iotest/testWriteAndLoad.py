@@ -24,7 +24,7 @@ class TestWriteAndLoad(BaseTestCase):
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
 
-        ds = pygsti.obj.DataSet(spamLabels=['0','1'], comment="Hello")
+        ds = pygsti.obj.DataSet(outcomeLabels=['0','1'], comment="Hello")
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds.add_count_dict( ('Gx','Gy'), {'0': 40, '1': 60} )
         ds.done_adding_data()
@@ -36,12 +36,12 @@ class TestWriteAndLoad(BaseTestCase):
         ds4 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #loads from cache file
 
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt", ds,
-                                spamLabelOrder=['0','1'])
+                                outcomeLabelOrder=['0','1'])
         ds5 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
-            self.assertEqual(ds[s]['0'],ds5[s]['0'])
-            self.assertEqual(ds[s]['1'],ds5[s]['1'])
+            self.assertEqual(ds[s]['0'],ds5[s][('0',)])
+            self.assertEqual(ds[s]['1'],ds5[s][('1',)])
 
         with self.assertRaises(ValueError):
             pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
@@ -76,7 +76,7 @@ Gx^4 20 80 0.2 100
 
         #write all strings in ds to file with given spam label ordering
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset3.txt",
-                                     ds, spamLabelOrder=('0','1'))
+                                     ds, outcomeLabelOrder=('0','1'))
 
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
@@ -113,60 +113,62 @@ Gx^4 20 80 0.2 100
         gs = pygsti.io.load_gateset(temp_files + "/gateset_loadwrite.txt")
         self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
 
-        gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
-                                                         [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                         prepLabels=['rho0'], prepExpressions=["0"],
-                                                         effectLabels=['E0'], effectExpressions=["0"],
-                                                         spamdefs={'0': ('rho0','E0'),
-                                                                   '1': ('remainder','remainder') })
-        pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
-        gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
-        self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
+        #OLD (remainder gateset type)
+        #gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
+        #                                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+        #                                                 prepLabels=['rho0'], prepExpressions=["0"],
+        #                                                 effectLabels=['E0'], effectExpressions=["0"],
+        #                                                 spamdefs={'0': ('rho0','E0'),
+        #                                                           '1': ('remainder','remainder') })
+        #pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
+        #gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
+        #self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
 
         gateset_txt = """# Gateset file using other allowed formats
-rho0
+PREP: rho0
 StateVec
 1 0
 
-rho1
+PREP: rho1
 DensityMx
 0 0
 0 1
 
-E
+POVM: Mdefault
+
+EFFECT: 00
 StateVec
 1 0
 
-Gi
+END POVM
+
+GATE: Gi
 UnitaryMx
  1 0
  0 1
 
-Gx
+GATE: Gx
 UnitaryMxExp
  0    pi/4
 pi/4   0
 
-Gy
+GATE: Gy
 UnitaryMxExp
  0       -1j*pi/4
 1j*pi/4    0
 
-Gx2
+GATE: Gx2
 UnitaryMx
  0  1
  1  0
 
-Gy2
+GATE: Gy2
 UnitaryMx
  0   -1j
 1j    0
 
-
-IDENTITYVEC sqrt(2) 0 0 0
-SPAMLABEL 00 = rho0 E
-SPAMLABEL 10 = rho1 E
-SPAMLABEL 11 = remainder
+BASIS: pp 2
+GAUGEGROUP: Full
 """
         with open(temp_files + "/formatExample.gateset","w") as output:
             output.write(gateset_txt)
@@ -186,7 +188,7 @@ SPAMLABEL 11 = remainder
 
         self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
         self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.povms['Mdefault']['00'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )

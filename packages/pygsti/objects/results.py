@@ -171,7 +171,62 @@ class Results(object):
                                    + " want to do this.")
                 self.estimates[estimate_key] = results.estimates[estimate_key]
 
+                
+    def rename_estimate(self, old_name, new_name):
+        """
+        Rename an estimate in this Results object.  Ordering of estimates is 
+        not changed.
+
+        Parameters
+        ----------
+        old_name : str
+            The labels of the estimate to be renamed
         
+        new_name : str
+            The new name for the estimate.
+
+        Returns
+        -------
+        None
+        """
+        if old_name not in self.estimates:
+            raise KeyError("%s does not name an existing estimate" % old_name)
+
+        if hasattr(self.estimates, "move_to_end"):
+            #Python3: use move_to_end method of OrderedDict to restore ordering:
+            ordered_keys = list(self.estimates.keys())
+            self.estimates[new_name] = self.estimates[old_name] #at end
+            del self.estimates[old_name]
+            keys_to_move = ordered_keys[ordered_keys.index(old_name)+1:] #everything after old_name
+            for key in keys_to_move: self.estimates.move_to_end(key)
+
+        else:
+            #Python2.7: Manipulate internals of OrderedDict to change a key while preserving order
+            PREV = 0; NEXT = 1 # ~enumerated
+    
+            #Unneeded, since root will be manipulated by link_prev or link_next below if needed
+            #root = self.estimates._OrderedDict__root # [prev,next,value] element - the
+            #  # root of the OrdereDict's circularly-linked list whose next member points
+            #  # to the first element of the list.
+            #first = root[NEXT] # first [prev,next,val] element of circularly linked list.
+    
+            old_element = self.estimates._OrderedDict__map[old_name]
+            link_prev, link_next, _ = old_element # ('_' == old_name)
+            new_element = [link_prev,link_next,new_name]
+    
+            #Replace element in circularly linked list (w/"root" sentinel element)
+            link_prev[NEXT] = new_element
+            link_next[PREV] = new_element
+    
+            #Replace element in map
+            del self.estimates._OrderedDict__map[old_name]
+            self.estimates._OrderedDict__map[new_name] = new_element
+    
+            #Replace values in underlying dict
+            value = dict.__getitem__(self.estimates, old_name)
+            dict.__setitem__(self.estimates, new_name, value)        
+
+                
     def add_estimate(self, targetGateset, seedGateset, gatesetsByIter,
                      parameters, estimate_key='default'):
         """
@@ -530,6 +585,12 @@ def enable_old_python_results_unpickling():
     
     #Define empty ResultCache class in resultcache module to enable loading old Results pickles
     import sys as _sys
+    from .labeldicts import OrderedMemberDict as _OMD
+    from ..baseobjs import profiler as _profiler
+    from ..baseobjs import protectedarray as _protectedarray
+    from ..baseobjs import basis as _basis
+    from ..baseobjs import dim as _dim
+    from ..baseobjs import verbosityprinter as _verbosityprinter
     class dummy_ResultCache(object):
         """ Dummy """
         pass
@@ -540,7 +601,32 @@ def enable_old_python_results_unpickling():
         """ Dummy """
         def __init__(self):
             self.ResultCache = dummy_ResultCache
+    class dummy_OrderedGateDict(_OMD):
+        """ Dummy """
+        def __init__(self, parent, default_param, prefix, items=[]):
+            _OMD.__init__(self, parent, default_param, prefix, "gate", items)
+    class dummy_OrderedSPAMVecDict(_OMD):
+        """ Dummy """
+        def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
+            _OMD.__init__(self, parent, default_param, prefix, "spamvec", items)
+              # (drop remainderLabel)
+    class dummy_OrderedSPAMLabelDict(_collections.OrderedDict):
+        def __init__(self, remainderLabel, items=[]):
+            super(dummy_OrderedSPAMLabelDict,self).__init__(items)
+            
+
+    #Classes
     _sys.modules[__name__].ResultOptions = dummy_ResultOptions
     _sys.modules[__name__].Estimate = _Estimate
+    _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict = dummy_OrderedGateDict
+    _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict = dummy_OrderedSPAMVecDict
+    _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict = dummy_OrderedSPAMLabelDict
+    
+    #Modules
+    _sys.modules['pygsti.tools.basis'] = _basis
+    _sys.modules['pygsti.tools.dim'] = _dim
+    _sys.modules['pygsti.objects.verbosityprinter'] = _verbosityprinter
+    _sys.modules['pygsti.objects.protectedarray'] = _protectedarray
+    _sys.modules['pygsti.objects.profiler'] = _profiler
     _sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
     _sys.modules['pygsti.report.results'] = _sys.modules[__name__]

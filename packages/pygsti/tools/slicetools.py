@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import numpy as _np
+
 def length(s):
     """
     Returns the length (the number of indices) contained in a slice.
@@ -19,6 +21,7 @@ def length(s):
     -------
     int
     """
+    if not isinstance(s,slice): return len(s)
     if s.start is None or s.stop is None: 
         return 0
     if s.step is None: 
@@ -34,6 +37,9 @@ def shift(s, offset):
     ----------
     s : slice
       The slice to operate upon.
+
+    offset : int
+      The amount to shift the start and stop members of `s`.
 
     Returns
     -------
@@ -96,21 +102,86 @@ def indices(s):
         return list(range(s.start,s.stop))
     return list(range(s.start,s.stop,s.step))
 
-def list_to_slice(lst):
+def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """
-    Returns a slice corresponding to a given list of (integer) indices. If
-    the list of indices is not contiguous, an AssertionError is raised.
+    Returns a slice corresponding to a given list of (integer) indices,
+    if this is possible.  If not, `array_ok` determines the behavior.
 
     Parameters
     ----------
     lst : list
-      The list of integers to convert to a slice (must be contiguous).
+      The list of integers to convert to a slice (must be contiguous
+      if `require_contiguous == True`).
+
+    array_ok : bool, optional
+      If True, an integer array (of type `numpy.ndarray`) is returned
+      when `lst` does not correspond to a single slice.  Otherwise,
+      an AssertionError is raised.
+
+    require_contiguous : bool, optional
+      If True, then lst must correspond to a contiguous (step=1)
+      slice, or else an AssertionError is raised.
 
     Returns
     -------
-    slice
+    numpy.ndarray or slice
     """
-    if not lst: 
-        return slice(0,0)
-    assert lst == list(range(lst[0],lst[-1]+1))
-    return slice(lst[0],lst[-1]+1)
+    if isinstance(lst, slice):
+        if require_contiguous:
+            assert(lst.step is None or lst.step == 1), \
+                "Slice must be contiguous!"
+        return lst
+    if lst is None or len(lst) == 0: return slice(0,0)
+    start=lst[0]
+    
+    if len(lst) == 1: return slice(start,start+1)
+    step=lst[1]-lst[0]; stop = start + step*len(lst)
+    if require_contiguous:
+        assert(step == 1), "Slice must be contiguous!"
+
+    if list(lst) == list(range(start,stop,step)):
+        if step == 1: step = None
+        return slice(start,stop,step) 
+
+    if array_ok: return _np.array(lst,'i')
+    else: assert(False),"List does not correspond to a slice!"
+
+def as_array(slcOrListLike):
+    """ 
+    Returns `slcOrListLike` as an index array (an integer numpy.ndarray).
+    """
+    if isinstance(slcOrListLike, slice):
+        return _np.array(indices(slcOrListLike), 'i')
+    else:
+        return _np.array(slcOrListLike, 'i')
+
+
+def divide(slc, maxLen):
+    """
+    Divides a slice into sub-slices based on a maximum length (for each
+    sub-slice).
+
+    For example:
+    `divide(slice(0,10,2), 2) == [slice(0,4,2), slice(4,8,2), slice(8,10,2)]`
+
+    Parameters
+    ----------
+    slc : slice
+        The slice to divide
+
+    maxLen : int
+        The maximum length (i.e. number of indices) allowed in a sub-slice.
+
+    Returns
+    -------
+    list of slices
+    """
+    sub_slices = []
+    sub_start = slc.start
+    step = 1 if (slc.step is None) else slc.step
+    while sub_start < slc.stop:
+        # Note: len(range(start,stop,step)) == stop-start+(step-1) // step
+        sub_slices.append( slice(sub_start, min(sub_start+maxLen*step,slc.stop),
+                                 slc.step) )
+        sub_start += maxLen*step
+    return sub_slices

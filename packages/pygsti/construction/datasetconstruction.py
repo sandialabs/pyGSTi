@@ -94,17 +94,15 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
     TOL = 1e-10
     
     if isinstance(gatesetOrDataset, _ds.DataSet):
-        dsGen = gatesetOrDataset #dataset
+        dsGen = gatesetOrDataset
         gsGen = None
-        dataset = _ds.DataSet( spamLabels=dsGen.get_spam_labels(),
-                               collisionAction=collisionAction,
-                               measurementGates=measurementGates)
+        dataset = _ds.DataSet( collisionAction=collisionAction )
+        # OLD measurementGates=measurementGates)
     else:
-        gsGen = gatesetOrDataset #dataset
+        gsGen = gatesetOrDataset
         dsGen = None
-        dataset = _ds.DataSet( spamLabels=gsGen.get_spam_labels(),
-                               collisionAction=collisionAction,
-                               measurementGates=measurementGates)
+        dataset = _ds.DataSet( collisionAction=collisionAction )
+        #OLD measurementGates=measurementGates)
 
     if sampleError in ("binomial","multinomial"):
         if randState is None:
@@ -124,19 +122,19 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
 
                 if sampleError in ("binomial","multinomial"):
                     #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for sl in ps: 
-                        if ps[sl] < 0:
-                            if ps[sl] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                            ps[sl] = 0.0
-                        elif ps[sl] > 1: 
-                            if ps[sl] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
-                            ps[sl] = 1.0
+                    for ol in ps: 
+                        if ps[ol] < 0:
+                            if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                            ps[ol] = 0.0
+                        elif ps[ol] > 1: 
+                            if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                            ps[ol] = 1.0
             else:
-                ps = { sl: dsGen[trans_s].fraction(sl) 
-                       for sl in dsGen.get_spam_labels() }
+                counts = dsGen[trans_s].counts
+                ps = { ol:frac for ol,frac in dsGen[trans_s].fractions.items()}
                 
-            for sl in sorted(list(ps.keys())):
-                all_ps[(s,sl)] = ps[sl] #add to all_ps
+            for ol in sorted(list(ps.keys())):
+                all_ps[(s,ol)] = ps[ol] #add to all_ps
 
         if gsGen and sampleError in ("binomial","multinomial"):
             #Check that sum ~= 1 (and nudge if needed) since binomial and
@@ -224,17 +222,17 @@ def merge_outcomes(dataset,label_merge_dict):
         The DataSet with outcomes merged according to the rules given in label_merge_dict.
     """
 
-    new_effects = label_merge_dict.keys()
-    merged_dataset = _ds.DataSet(spamLabels=new_effects)
-    if sorted([effect for sublist in label_merge_dict.values() for effect in sublist]) != sorted(dataset.get_spam_labels()):
-        print('Warning: There is a mismatch between original effects in label_merge_dict and original effects in original dataset.')
+    new_outcomes = label_merge_dict.keys()
+    merged_dataset = _ds.DataSet(outcomeLabels=new_outcomes)
+    if sorted([outcome for sublist in label_merge_dict.values() for outcome in sublist]) != sorted(dataset.get_outcome_labels()):
+        print('Warning: There is a mismatch between original outcomes in label_merge_dict and outcomes in original dataset.')
     for key in dataset.keys():
         dataline = dataset[key]
         count_dict = {}
-        for new_effect in new_effects:
-            count_dict[new_effect] = 0
-            for old_effect in label_merge_dict[new_effect]:
-                count_dict[new_effect] += dataline[old_effect]
+        for new_outcome in new_outcomes:
+            count_dict[new_outcome] = 0
+            for old_outcome in label_merge_dict[new_outcome]:
+                count_dict[new_outcome] += dataline[old_outcome]
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset

@@ -399,7 +399,7 @@ def write_empty_rb_files(filename, m_list, K_m, group_or_gateset,
 
 def do_randomized_benchmarking(dataset, gatestrings,
                                fit = 'standard',
-                               success_spamlabel = 'plus',
+                               success_outcomelabel = 'plus',
                                fit_parameters_dict = None,
                                dim = 2, 
                                weight_data = False,
@@ -430,8 +430,8 @@ def do_randomized_benchmarking(dataset, gatestrings,
     one_freq_adjust : bool, optional
         TODO: argument description
 
-    success_spamlabel : str, optional
-        The spam label which denotes the *expected* outcome of preparing,
+    success_outcomelabel : str, optional
+        The outcome label which denotes the *expected* outcome of preparing,
         doing nothing (or the identity), and measuring.  In the ideal case
         of perfect gates, the probability of seeing this outcome when just
         preparing and measuring (no intervening gates) is 100%.
@@ -516,11 +516,11 @@ def do_randomized_benchmarking(dataset, gatestrings,
 #        alias_maps['primitive'] = clifford_to_primitive
 
     return do_rb_base(dataset, gatestrings, fit, fit_parameters_dict,
-                      success_spamlabel, dim, weight_data, 
+                      success_outcomelabel, dim, weight_data, 
                       pre_avg, infinite_data, one_freq_adjust)
 
 def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None, 
-               success_spamlabel = 'plus', dim = 2, weight_data=False,pre_avg=True,
+               success_outcomelabel = 'plus', dim = 2, weight_data=False,pre_avg=True,
                infinite_data=False, one_freq_adjust=False):
     """
     Core Randomized Benchmarking compute function.
@@ -549,8 +549,8 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
     one_freq_adjust : bool, optional
         TODO: argument description
 
-    success_spamlabel : str, optional
-        The spam label which denotes the *expected* outcome of preparing,
+    success_outcomelabel : str, optional
+        The outcome label which denotes the *expected* outcome of preparing,
         doing nothing (or the identity), and measuring.  In the ideal case
         of perfect gates, the probability of seeing this outcome when just
         preparing and measuring (no intervening gates) is 100%.
@@ -868,7 +868,7 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
     occ_indices = _tools.compute_occurrence_indices(gatestrings)
     Ns = [ dataset.get_row(seq,k).total() 
            for seq,k in zip(gatestrings,occ_indices) ]
-    successes = [ dataset.get_row(seq,k).fraction(success_spamlabel) 
+    successes = [ dataset.get_row(seq,k).fraction(success_outcomelabel) 
                   for seq,k in zip(gatestrings,occ_indices) ] 
 
     if pre_avg:
@@ -881,7 +881,7 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
                 use_frequencies = True
             else:
                 use_frequencies = False
-            summary_dict = _rbutils.dataset_to_summary_dict(dataset,gatestrings,success_spamlabel,use_frequencies)
+            summary_dict = _rbutils.dataset_to_summary_dict(dataset,gatestrings,success_outcomelabel,use_frequencies)
 #           weight_dict = _rbutils.mkn_dict_to_delta_f1_squared_dict(mkn_dict)
             weight_dict = _rbutils.summary_dict_to_delta_f1_squared_dict(summary_dict, infinite_data)
             weights = _np.array(map(lambda x : weight_dict[x],base_lengths))
@@ -926,7 +926,7 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
 #                              'counts': gstyp_Ns })
 #        result_dicts[gstyp] = gstyp_results
 
-    results = _rbobjs.RBResults(dataset, results=results, fit=fit, success_spamlabel=success_spamlabel,
+    results = _rbobjs.RBResults(dataset, results=results, fit=fit, success_outcomelabel=success_outcomelabel,
                                 fit_parameters_dict=fit_parameters_dict, dim=dim, 
                                 weight_data=weight_data, pre_avg=pre_avg, 
                                 infinite_data=infinite_data, one_freq_adjust=one_freq_adjust)

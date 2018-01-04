@@ -466,10 +466,13 @@ def render_as_latex(qtys, render_options, verbosity):
         rendered as strings.
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
+    from .workspace import Switchboard as _Switchboard
     
     #render quantities as Latex
     qtys_latex = _collections.defaultdict(lambda x=0: "OMITTED")
     for key,val in qtys.items():
+        if isinstance(val, _Switchboard):
+            continue # silently don't render switchboards in latex
         if _compat.isstr(val):
             qtys_latex[key] = val
         else:
@@ -832,5 +835,54 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
         _webbrowser.open(url)
 
 
-    
+def to_pdfinfo(list_of_keyval_tuples):
+    """ 
+    Convert a list of (key,value) pairs to a string in the format expected
+    for a latex document's "pdfinfo" directive (for setting PDF file meta
+    information).
+
+    Parameters
+    ----------
+    list_of_keyval_tuples : list
+        A list of (key,value) tuples.
+
+    Returns
+    -------
+    str
+    """
+    def sanitize(val):
+        if type(val) in (list,tuple):
+            sanitized_val = "[" + ", ".join([sanitize(el)
+                                             for el in val]) + "]"
+        elif type(val) in (dict,_collections.OrderedDict):
+            sanitized_val = "Dict[" + \
+                ", ".join([ "%s: %s" % (sanitize(k),sanitize(v)) for k,v
+                            in val.items()]) + "]"
+        else:
+            sanitized_val = sanitize_str( str(val) )
+        return sanitized_val
+
+    def sanitize_str(s):
+        ret = s.replace("^","")
+        ret = ret.replace("(","[")
+        ret = ret.replace(")","]")
+        return ret
+
+    def sanitize_key(s):
+        #More stringent string replacement for keys
+        ret = s.replace(" ","_")
+        ret = ret.replace("^","")
+        ret = ret.replace(",","_")
+        ret = ret.replace("(","[")
+        ret = ret.replace(")","]")
+        return ret
+
+
+    sanitized_list = []
+    for key,val in list_of_keyval_tuples:
+        sanitized_key = sanitize_key(key)
+        sanitized_val = sanitize(val)
+        sanitized_list.append( (sanitized_key, sanitized_val) )
+
+    return ",\n".join( ["%s={%s}" % (key,val) for key,val in sanitized_list] )    
 
