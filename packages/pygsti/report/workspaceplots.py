@@ -562,11 +562,13 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
         else:
             def hoverLabelFn(val,iy,ix,iiy,iix):
                 """ Standard hover labels """
+                #Note: in this case, we need to "flip" the iiy index because
+                # the matrices being plotted are flipped within generate_boxplot(...)
                 if _np.isnan(val): return ""
 
                 N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy] # FLIP
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
@@ -687,9 +689,8 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                 """ Standard hover labels """
                 if _np.isnan(val): return ""
 
-                N = len(inner_yvals)
                 L,germ = xvals[ix],yvals[iy]
-                rhofid,efid = inner_xvals[iix], inner_yvals[N-1-iiy]
+                rhofid,efid = inner_xvals[iix], inner_yvals[iiy]
                 baseStr = g.get_plaquette(L,germ,False).base
                 reps = (len(baseStr) // len(germ)) if len(germ)>0 else 1
                 guess = germ * reps
@@ -704,26 +705,28 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
                           % (str(L),str(germ),str(rhofid),str(efid))
                 txt += ("<br>value: %g" % val)
                 for lbl,addl_subMxs in addl_hover_subMxs.items():
-                    N = len(addl_subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
-                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][N-1-iiy][iix]))
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
                 return txt
 
         hoverInfo = hoverLabelFn #generate_boxplot can handle this
 
     xs = []; ys = []; texts = []
+    gstrs = set() # to eliminate duplicate strings
     for ix,x in enumerate(g.used_xvals()):
         for iy,y in enumerate(g.used_yvals()):
             plaq = g.get_plaquette(x,y)
-            N = len(subMxs[iy][ix]) # flip so original [0,0] el is at top-left (FLIP)
             #TODO: if sumUp then need to sum before appending...
             for iiy,iix,gstr in plaq:
+                if gstr in gstrs: continue #skip duplicates
                 xs.append( len(gstr))
-                ys.append( subMxs[iy][ix][N-1-iiy][iix] )
+                ys.append( subMxs[iy][ix][iiy][iix] )
+                assert(not _np.isnan(subMxs[iy][ix][iiy][iix])), "Error on gstr %s" % str(gstr) #DEBUG
+                gstrs.add(gstr)
                 if hoverInfo:
                     if callable(hoverInfo):
-                        texts.append(hoverInfo(subMxs[iy][ix][N-1-iiy][iix],iy,ix,iiy,iix))
+                        texts.append( hoverInfo(subMxs[iy][ix][iiy][iix],iy,ix,iiy,iix) )
                     else:
-                        texts.append(str(subMxs[iy][ix][N-1-iiy][iix]))
+                        texts.append(str(subMxs[iy][ix][iiy][iix]))
 
     trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
@@ -746,6 +749,7 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
         )
 
     layout = go.Layout(
+        #title="Sum = %.2f" % sum(ys), #DEBUG
         width=400*scale,
         height=400*scale,
         hovermode= 'closest',
@@ -795,14 +799,16 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
     """
     g = gatestring_structure
     
-    ys = [ ]; #artificially add minval so 
+    ys = [ ]; #artificially add minval so
+    gstrs = set() # to eliminate duplicate strings
     for ix,x in enumerate(g.used_xvals()):
         for iy,y in enumerate(g.used_yvals()):
             plaq = g.get_plaquette(x,y)
-            N = len(subMxs[iy][ix])
             #TODO: if sumUp then need to sum before appending...
-            for iiy,iix,_ in plaq:
-                ys.append( subMxs[iy][ix][N-1-iiy][iix] )
+            for iiy,iix,gstr in plaq:
+                if gstr in gstrs: continue # skip duplicates
+                ys.append( subMxs[iy][ix][iiy][iix] )
+                gstrs.add(gstr)
 
     minval = 0
     maxval = max(minval+1e-3,_np.max(ys)) #don't let minval==maxval
@@ -858,6 +864,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
         minlog, maxlog = -3,0 #defaults to (1e-3,1) when there's no data
     
     layout = go.Layout(
+            #title="Sum = %.2f" % sum(ys), #DEBUG
             width=500*scale,
             height=350*scale,
             font=dict(size=10),
@@ -1378,7 +1385,7 @@ class ColorBoxPlot(WorkspacePlot):
     
         Parameters
         ----------
-        plottype : {"chi2","logl","blank","errorrate","directchi2","directlogl","dscmp"}
+        plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp"}
             Specifies the type of plot. "errorate", "directchi2" and
             "directlogl" require that `directGSTgatesets` be set.
 
@@ -1545,6 +1552,20 @@ class ColorBoxPlot(WorkspacePlot):
                 addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
                 #DEBUG: addl_hover_info_fns['chk'] = _addl_mx_fn_chk
 
+            elif ptyp == "tvd":
+                precomp=True
+                colormapType = "blueseq"
+                ytitle="Total Variational Distance (TVD)"
+                
+                def _mx_fn(plaq,x,y):
+                    return _ph.tvd_matrix( plaq, dataset, gateset,
+                                           probs_precomp_dict)
+
+                addl_hover_info_fns['outcomes'] = _addl_mx_fn_sl
+                addl_hover_info_fns['p'] = _addl_mx_fn_p
+                addl_hover_info_fns['f'] = _addl_mx_fn_f
+                addl_hover_info_fns['total counts'] = _addl_mx_fn_cnt
+
             elif ptyp == "blank":
                 precomp=False
                 colormapType = "trivial"
@@ -1656,12 +1677,15 @@ class ColorBoxPlot(WorkspacePlot):
             elif colormapType == "trivial":
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
 
-            elif colormapType in ("seq","revseq"):
+            elif colormapType in ("seq","revseq","blueseq","redseq"):
                 max_abs = max([ _np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
                                 for ix in range(len(gss.used_xvals()))
                                 for iy in range(len(gss.used_yvals())) ])
                 if max_abs == 0: max_abs = 1e-6 # pick a nonzero value if all entries are zero or nan
-                color = "whiteToBlack" if colormapType == "seq" else "blackToWhite"
+                if colormapType == "seq": color = "whiteToBlack"
+                elif colormapType == "revseq": color = "blackToWhite"
+                elif colormapType == "blueseq": color = "whiteToBlue"
+                elif colormapType == "redseq": color = "whiteToRed"
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
                 
             else: assert(False) #invalid colormapType was set above

@@ -370,6 +370,52 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
     return ret
 
 
+@smart_cached
+def tvd_matrix(gsplaq, dataset, gateset, probs_precomp_dict=None):
+    """
+    Computes the total-variational distance matrix of `0.5 * |p-f|`
+    values for a base gatestring.
+
+    Parameters
+    ----------
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
+
+    dataset : DataSet
+        The data used to specify frequencies and counts
+
+    gateset : GateSet
+        The gate set used to specify the probabilities and SPAM labels
+
+    probs_precomp_dict : dict, optional
+        A dictionary of precomputed probabilities.  Keys are gate strings
+        and values are prob-dictionaries (as returned from GateSet.probs)
+        corresponding to each gate string.
+
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        logl values corresponding to gate sequences where
+        gateString is sandwiched between the each prep-fiducial,
+        effect-fiducial pair.
+    """
+    gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
+
+    probs = probability_matrices(gsplaq, gateset, 
+                                 probs_precomp_dict)
+    freqs = frequency_matrices(gsplaq_ds, dataset)
+    
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+        TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
+        ret[i,j] = sum(TVDs) # sum all elements for each (i,j) pair
+    return ret
+
+
 def small_eigval_err_rate(sigma, directGSTgatesets):
     """
     Compute per-gate error rate.

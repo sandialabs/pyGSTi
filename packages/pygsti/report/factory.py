@@ -253,6 +253,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
     switchBd.add("gsTarget",(0,1))
     switchBd.add("params",(0,1))
     switchBd.add("objective",(0,1))
+    switchBd.add("objective_tvd_tuple",(0,1))
     switchBd.add("objective_modvi",(0,1))
     switchBd.add("mpc",(0,1))
     switchBd.add("mpc_modvi",(0,1))
@@ -310,6 +311,7 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
 
             switchBd.params[d,i] = est.parameters
             switchBd.objective[d,i] = est.parameters['objective']
+            switchBd.objective_tvd_tuple[d,i] = (est.parameters['objective'],'tvd')
             switchBd.objective_modvi[d,i] = est_modvi.parameters['objective']
             if est.parameters['objective'] == "logl":
                 switchBd.mpc[d,i] = est.parameters['minProbClip']
@@ -874,11 +876,16 @@ def create_standard_report(results, filename, title="auto",
         addqty(A,'finalFitComparePlot', ws.FitComparisonBarPlot, 
                est_lbls_mt, gssGrid, gsGrid, dsGrid, grid_objective, 'Estimate')
 
-    addqty(1,'bestEstimateColorBoxPlotPages', ws.ColorBoxPlot,
+    addqty(1,'bestEstimateColorBoxPlot', ws.ColorBoxPlot,
            switchBd.objective, gss, modvi_ds, gsL_modvi,
            linlg_pcntle=float(linlogPercentile) / 100,
            minProbClipForWeighting=switchBd.mpc_modvi)
-    if brevity < 1: qtys['bestEstimateColorBoxPlotPages'].set_render_options(
+    if brevity < 1: qtys['bestEstimateColorBoxPlot'].set_render_options(
+            click_to_display=False, valign='bottom')
+
+    addqty(1,'bestEstimateTVDColorBoxPlot', ws.ColorBoxPlot,
+           'tvd', gss, modvi_ds, gsL_modvi)
+    if brevity < 1: qtys['bestEstimateTVDColorBoxPlot'].set_render_options(
             click_to_display=False, valign='bottom')
 
     addqty(1,'bestEstimateColorScatterPlot', ws.ColorBoxPlot,
@@ -908,11 +915,11 @@ def create_standard_report(results, filename, title="auto",
                Ls, gssAllL, switchBd.gsAllL, eff_ds, switchBd.objective, 'L') # robust-scaled version
 
         #Not pagniated currently... just set to same full plot
-        addqty(1,'bestEstimateColorBoxPlotPages_scl', ws.ColorBoxPlot,
+        addqty(1,'bestEstimateColorBoxPlot_scl', ws.ColorBoxPlot,
             switchBd.objective, gss, eff_ds, gsL,
             linlg_pcntle=float(linlogPercentile) / 100,
             minProbClipForWeighting=switchBd.mpc)
-        if brevity < 1: qtys['bestEstimateColorBoxPlotPages_scl'].set_render_options(
+        if brevity < 1: qtys['bestEstimateColorBoxPlot_scl'].set_render_options(
                 click_to_display=False, valign='bottom')
 
         addqty(1,'bestEstimateColorScatterPlot_scl', ws.ColorBoxPlot,
