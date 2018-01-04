@@ -1573,7 +1573,13 @@ class FitComparisonTable(WorkspaceTable):
             raise ValueError("Invalid `objective` argument: %s" % objective)
 
         if NpByX is None:
-            NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            try:
+                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            except _np.LinAlgError:
+                _warnings.warn(("LinAlgError when trying to compute the number"
+                                " of non-gauge parameters.  Using total"
+                                " parameters instead."))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
