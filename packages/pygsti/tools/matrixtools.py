@@ -207,8 +207,32 @@ def nullspace_qr(m, tol=1e-7):
 
 def matrix_sign(M):
     """ The "sign" matrix of `M` """
-    U,_,Vt = _np.linalg.svd(M)
-    return _np.dot(U,Vt)
+    #Using the extremely numerically stable (but expensive) Schur method
+    # see http://www.maths.manchester.ac.uk/~higham/fm/OT104HighamChapter5.pdf
+    N = M.shape[0];  assert(M.shape == (N,N)), "M must be square!"
+    T,Z = _spl.schur(M,'complex') # M = Z T Z^H where Z is unitary and T is upper-triangular
+    U = _np.zeros(T.shape,'complex') # will be sign(T), which is easy to compute
+      # (U is also upper triangular), and then sign(M) = Z U Z^H
+
+    # diagonals are easy
+    U[ _np.diag_indices_from(U) ] = _np.sign(_np.diagonal(T))
+
+    #Off diagonals: use U^2 = I or TU = UT
+    # FUTURE: speed this up by using np.dot instead of sums below
+    for j in range(1,N):
+        for i in range(j-1,-1,-1):
+            S = U[i,i]+U[j,j]
+            if _np.isclose(S,0): # then use TU = UT
+                U[i,j] = T[i,j]*(U[i,i]-U[j,j])/(T[i,i]-T[j,j]) + \
+                         sum([U[i,k]*T[k,j]-T[i,k]*U[k,j] for k in range(i+1,j)]) \
+                         / (T[i,i]-T[j,j])
+            else: # use U^2 = I
+                U[i,j] = - sum([U[i,k]*U[k,j] for k in range(i+1,j)]) / S
+    return _np.dot(Z, _np.dot(U, _np.conjugate(Z.T)))
+
+    #OLD quick & dirty - not always stable
+    #U,_,Vt = _np.linalg.svd(M)
+    #return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):
     """
