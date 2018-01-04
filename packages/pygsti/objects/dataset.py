@@ -26,7 +26,8 @@ from . import labeldicts as _ld
 
 Oindex_type = _np.uint8
 Time_type = _np.float64
-Repcount_type = _np.uint16
+Repcount_type = _np.float32
+ # thought: _np.uint16 but doesn't play well with rescaling
 
 class DataSet_KeyValIterator(object):
     """ Iterator class for gate_string,DataSetRow pairs of a DataSet """
@@ -434,7 +435,7 @@ class DataSet(object):
         
         # self.ol :  Ordered dictionary where keys = integer indices, values = outcome
         #            labels (strings or tuples) -- just the reverse of self.olIndex
-        self.ol = _OrderedDict( [(i,sl) for (sl,i) in self.olIndex.items()] )
+        self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
         
         # sanity checks that indices are >= 0
         if not bStatic: #otherwise values() below are slices
@@ -1325,19 +1326,45 @@ class DataSet(object):
 
     def __setstate__(self, state_dict):
         gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
-        self.gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
-        self.olIndex = state_dict['olIndex']
-        self.ol = state_dict['ol']
-        self.bStatic = state_dict['bStatic']
-        self.oliData  = state_dict['oliData']
-        self.timeData = state_dict['timeData']
-        self.repData  = state_dict['repData']
-        self.oliType  = state_dict['oliType']
-        self.timeType = state_dict['timeType']
-        self.repType  = state_dict['repType']
+        gsIndex = _OrderedDict( list(zip( gsIndexKeys, state_dict['gsIndexVals'])) )
+        bStatic = state_dict['bStatic']
+
+        if "slIndex" in state_dict:
+            #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
+            #Turn spam labels into outcome labels
+            self.gsIndex = _OrderedDict()
+            self.olIndex = _OrderedDict( [ ((str(sl),),i) for sl,i in state_dict['slIndex'].items() ] )
+            self.ol = _OrderedDict( [(i,ol) for (ol,i) in self.olIndex.items()] )
+            self.oliData = []
+            self.timeData = []
+            self.repData = []
+            
+            self.oliType  = Oindex_type
+            self.timeType = Time_type
+            self.repType  = Repcount_type
+
+            self.bStatic = False # for adding data
+            for gstr, indx in gsIndex.items():
+                count_row = state_dict['counts'][indx]
+                count_dict = _OrderedDict( [(ol,count_row[i]) for ol,i in self.olIndex.items()] )
+                self.add_count_dict(gstr, count_dict)
+            if not self.bStatic: self.done_adding_data()
+                    
+        else:  #Normal case
+            self.bStatic = bStatic
+            self.gsIndex = gsIndex
+            self.olIndex = state_dict['olIndex']
+            self.ol = state_dict['ol']
+            self.oliData  = state_dict['oliData']
+            self.timeData = state_dict['timeData']
+            self.repData  = state_dict['repData']
+            self.oliType  = state_dict['oliType']
+            self.timeType = state_dict['timeType']
+            self.repType  = state_dict['repType']
+            
         self.collisionAction = state_dict['collisionAction']
         self.uuid = state_dict['uuid']
-
+        
 
 
     def save(self, fileOrFilename):

@@ -73,7 +73,7 @@ class GateSet(object):
             the GateSet to determine what type of object a key corresponds to.
         """
         assert(default_param in ('full','TP','static'))
-        default_e_param = "full" if default_param == "TP" else default_param
+        #default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
         self._dim = None
@@ -401,7 +401,44 @@ class GateSet(object):
     #    #Returns self.__dict__ by default, which is fine
 
     def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+        if "effects" in stateDict:
+            #unpickling an OLD-version GateSet - like a re-__init__
+            #print("DB: UNPICKLING AN OLD GATESET"); print("Keys = ",stateDict.keys())
+            default_param = "full"
+            self.preps = _ld.OrderedMemberDict(self, default_param, "rho", "spamvec")
+            self.povms = _ld.OrderedMemberDict(self, default_param, "M", "povm")
+            self.effects_prefix = 'E'
+            self.gates = _ld.OrderedMemberDict(self, default_param, "G", "gate")
+            self.instruments = _ld.OrderedMemberDict(self, default_param, "I", "instrument")
+            self._paramvec = _np.zeros(0, 'd')
+            self._rebuild_paramvec()
+            
+            self._dim = stateDict['_dim']
+            self._calcClass = stateDict['_calcClass']
+            self._default_gauge_group = stateDict['_default_gauge_group']
+            self.basis = stateDict['basis']
+
+            assert(len(stateDict['preps']) <= 1), "Cannot convert GateSets with multiple preps!"
+            for lbl,gate in stateDict['gates'].items(): self.gates[lbl] = gate
+            for lbl,vec in stateDict['preps'].items(): self.preps[lbl] = vec
+            
+            effect_vecs = []; remL = stateDict['_remainderlabel']
+            comp_lbl = None
+            for sl,(prepLbl,ELbl) in stateDict['spamdefs'].items():
+                assert((prepLbl,ELbl) != (remL,remL)), "Cannot convert sum-to-one spamlabel!"
+                if ELbl == remL:  comp_lbl = str(sl)
+                else: effect_vecs.append( (str(sl), stateDict['effects'][ELbl]) )
+            if comp_lbl is not None:
+                comp_vec = stateDict['_povm_identity'] - sum([v for sl,v in effect_vecs])
+                effect_vecs.append( (comp_lbl, comp_vec) )
+                self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
+            else:
+                self.povms['Mdefault'] = _povm.POVM(effect_vecs)
+            
+
+        else:
+            self.__dict__.update(stateDict)
+            
         #Additionally, must re-connect this gateset as the parent
         # of relevant OrderedDict-derived classes, which *don't*
         # preserve this information upon pickling so as to avoid

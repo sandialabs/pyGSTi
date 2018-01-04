@@ -648,7 +648,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       gaugeOptSuite=('toggleValidSpam','unreliable2Q'),
+                       gaugeOptSuite=('single','unreliable2Q'),
                        gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
                        advancedOptions=None, output_pkl=None, verbosity=2):
 
