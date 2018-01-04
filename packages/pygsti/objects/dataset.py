@@ -114,6 +114,7 @@ class DataSetRow(object):
         if self.reps is not None:
             ol = []
             for oli, _, nreps in zip(self.oli,self.time,self.reps):
+                nreps = _round_int_repcnt(nreps)
                 ol.extend( [self.dataset.ol[oli]]*nreps )
             return ol
         else: return self.outcomes
@@ -126,6 +127,7 @@ class DataSetRow(object):
         if self.reps is not None:
             inds = []
             for oli, _, nreps in zip(self.oli,self.time,self.reps):
+                nreps = _round_int_repcnt(nreps)
                 inds.extend( [oli]*nreps )
             return _np.array(inds, dtype=self.dataset.oliType)
         else: return self.oli.copy()
@@ -138,6 +140,7 @@ class DataSetRow(object):
         if self.reps is not None:
             times = []
             for _, time, nreps in zip(self.oli,self.time,self.reps):
+                nreps = _round_int_repcnt(nreps)
                 times.extend( [time]*nreps )
             return _np.array(times, dtype=self.dataset.timeType)
         else: return self.time.copy()
@@ -297,6 +300,15 @@ class DataSetRow(object):
 
     def __len__(self):
         return len(self.oli)
+
+def _round_int_repcnt(nreps):
+    """ Helper function to localize warning message """
+    if float(nreps).is_integer():
+        return int(nreps)
+    else:
+        _warnings.warn("Rounding fractional repetition count to next lowest whole number!")
+        return int(round(nreps))
+
 
   
 
