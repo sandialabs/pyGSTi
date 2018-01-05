@@ -42,6 +42,7 @@ class BasicDriftResults(object):
                 
         self.individual_modes = None
         self.individual_power_spectrum = None
+        self.individual_drift_frequencies = None
         self.individual_max_powers = None
         self.individual_max_power_pvalues = None
         self.individual_max_power_threshold = None
@@ -131,13 +132,24 @@ def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,
     max_power_pvalues = _np.zeros((num_sequences,num_qubits),float)
     drift_detected = _np.zeros((num_sequences,num_qubits),bool)
     
+    individual_drift_frequencies = {}
+    
     raw_estimated_modes = modes.copy()
     probability_estimates = _np.zeros(data_shape,float)
     null = _np.zeros(data_shape,float)
     for s in range(0,num_sequences):
         for q in range(0,num_qubits):
             max_powers[s,q] = _np.max(power_spectrum[s,q,:])
-            max_power_pvalues[s,q] = (1 - _chi2.sf(max_powers[s,q],1))**num_timesteps
+            # Todo: check that this makes sense
+            max_power_pvalues[s,q] = 1 - (1 - _chi2.sf(max_powers[s,q],1))**num_timesteps
+            
+            # Find the significant frequencies using the standard thresholding
+            individual_drift_frequencies[s,q] = frequencies.copy()
+            drift_frequencies_indices = _np.zeros((num_timesteps),bool)
+            drift_frequencies_indices[power_spectrum[s,q,:] > max_power_threshold] = True 
+            individual_drift_frequencies[s,q] = individual_drift_frequencies[s,q][drift_frequencies_indices]
+            
+            # Create the reconstructions, using the standard single-pass Fourier filter
             null[s,q,:] = _np.mean(data[s,q,:])*_np.ones(num_timesteps,float)/counts
             
             if max_powers[s,q] > max_power_threshold:
@@ -202,6 +214,7 @@ def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,
     
     results.individual_modes = modes
     results.individual_power_spectrum = power_spectrum
+    results.individual_drift_frequencies = individual_drift_frequencies
     results.individual_max_powers = max_powers
     results.individual_max_power_pvalues = max_power_pvalues
     results.individual_max_power_threshold = max_power_threshold
