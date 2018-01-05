@@ -456,8 +456,9 @@ class MultiDataSet(object):
     def copy(self):
         """ Make a copy of this MultiDataSet """
         return MultiDataSet(self.oliDict, self.timeDict, self.repDict,
-                            gateStringIndices=self.gsIndex, outcomeLabelIndices=self.olIndex,
-                            collisionActions=self.collisionActions, comments=self.comments,
+                            gateStringIndices=_copy.deepcopy(self.gsIndex) if (self.gsIndex is not None) else None,
+                            outcomeLabelIndices=_copy.deepcopy(self.olIndex) if (self.olIndex is not None) else None,
+                            collisionActions=self.collisionActions, comments=_copy.deepcopy(self.comments),
                             comment=(self.comment + " copy") if self.comment else None )
 
 

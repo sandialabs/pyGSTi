@@ -121,7 +121,7 @@ class EvalTree(list):
         newTree.eval_order = self.eval_order[:]
         newTree.num_final_strs = self.num_final_strs
         newTree.num_final_els = self.num_final_els
-        newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap
+        newTree.myFinalToParentFinalMap = self.myFinalToParentFinalMap # a slice
         newTree.myFinalElsToParentFinalElsMap = self.myFinalElsToParentFinalElsMap.copy() \
                             if (self.myFinalElsToParentFinalElsMap is not None) else None
         newTree.parentIndexMap = self.parentIndexMap[:] \

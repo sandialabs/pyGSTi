@@ -14,6 +14,7 @@ import uuid as _uuid
 #from scipy.integrate import quad as _quad
 #from scipy.interpolate import interp1d as _interp1d
 import pickle as _pickle
+import copy as _copy
 import warnings as _warnings
 from collections import OrderedDict as _OrderedDict
 
@@ -1045,7 +1046,7 @@ class DataSet(object):
         else:
             copyOfMe = DataSet(outcomeLabels=self.get_outcome_labels(),
                                collisionAction=self.collisionAction)
-            copyOfMe.gsIndex = self.gsIndex.copy()
+            copyOfMe.gsIndex = _copy.deepcopy(self.gsIndex)
             copyOfMe.oliData = [ el.copy() for el in self.oliData ]
             copyOfMe.timeData = [ el.copy() for el in self.timeData ]
             if self.repData is not None:

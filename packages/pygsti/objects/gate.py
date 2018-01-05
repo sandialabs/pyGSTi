@@ -1405,7 +1405,7 @@ class LinearlyParameterizedElementTerm(object):
 
     def copy(self, parent=None):
         """ Copy this term. """
-        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
+        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
 
 
 class LinearlyParameterizedGate(GateMatrix):
@@ -1626,8 +1626,8 @@ class LinearlyParameterizedGate(GateMatrix):
             A copy of this gate.
         """
         #Construct new gate with no intial elementExpressions
-        newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray,
-                                            {}, self.leftTrans, self.rightTrans,
+        newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray.copy(),
+                                            {}, self.leftTrans.copy(), self.rightTrans.copy(),
                                             self.enforceReal)
 
         #Deep copy elementExpressions into new gate
@@ -3111,10 +3111,10 @@ class LindbladParameterizedGate(GateMatrix):
             A copy of this gate.
         """
         #Construct new gate with dummy identity mx
-        newGate = LindbladParameterizedGate(None,self.unitary_postfactor,
-                                            self.ham_basis, self.other_basis,
+        newGate = LindbladParameterizedGate(None,self.unitary_postfactor.copy(),
+                                            self.ham_basis.copy(), self.other_basis.copy(),
                                             self.cptp,self.nonham_diagonal_only,
-                                            True, self.matrix_basis)
+                                            True, self.matrix_basis.copy())
         
         #Deep copy data
         newGate.paramvals = self.paramvals.copy()
@@ -3565,6 +3565,7 @@ class TPInstrumentGate(GateMatrix):
         """
         assert(parent is None),"TPInstrumentGate set's it's own parent, so `parent` arg of copy must be None"
         return self._copy_gpindices( TPInstrumentGate(self.param_gates,self.index), parent)
+          #Note: this doesn't deep-copy self.param_gates, since the TPInstrumentGate doesn't really own these.
 
     def __str__(self):
         s = "TPInstrumentGate with shape %s\n" % str(self.base.shape)

@@ -69,7 +69,7 @@ class GateMatrixCalc(GateCalc):
             dim, gates, preps, effects, paramvec)
 
     def copy(self):
-        """ Return a copy of this GateMatrixCalc """
+        """ Return a shallow copy of this GateMatrixCalc """
         return GateMatrixCalc(self.dim, self.gates, self.preps,
                               self.effects, self.paramvec)
         

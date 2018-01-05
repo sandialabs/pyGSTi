@@ -2697,7 +2697,7 @@ class GateSet(object):
         
         #newGateset.spamdefs = self.spamdefs.copy()
         newGateset._dim = self._dim
-        newGateset._default_gauge_group = self._default_gauge_group
+        newGateset._default_gauge_group = self._default_gauge_group #Note: SHALLOW copy
 
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
@@ -2705,7 +2705,7 @@ class GateSet(object):
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
-        newGateset.basis = self.basis
+        newGateset.basis = self.basis.copy()
         if GateSet._pcheck: self._check_paramvec()
         
         return newGateset

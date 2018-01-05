@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 import collections as _collections
 import numpy as _np
+import copy as _copy
 import warnings as _warnings
 
 from . import spamvec as _sv
@@ -252,7 +253,8 @@ class OutcomeLabelDict(_collections.OrderedDict):
 
     def copy(self):
         """ Return a copy of this OutcomeLabelDict. """
-        return OutcomeLabelDict([(lbl,val) for lbl,val in self.items()])
+        return OutcomeLabelDict([(lbl,_copy.deepcopy(val))
+                                 for lbl,val in self.items()])
 
     def __pygsti_reduce__(self):
         items = [(k,v) for k,v in self.items()]

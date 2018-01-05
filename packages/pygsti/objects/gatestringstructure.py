@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import copy as _copy
 import itertools as _itertools
 from ..tools import listtools as _lt
 
@@ -41,7 +42,7 @@ class GatestringPlaquette(object):
         self.base = base
         self.rows = rows
         self.cols = cols
-        self.elements = elements
+        self.elements = elements[:]
         self.aliases = aliases
 
         #After compiling:
@@ -122,9 +123,11 @@ class GatestringPlaquette(object):
     def copy(self):
         """
         Returns a copy of this `GatestringPlaquette`.
-        """
+        """        
+        aliases = _copy.deepcopy(self.aliases) if (self.aliases is not None) \
+                  else None
         return GatestringPlaquette(self.base, self.rows, self.cols,
-                                   self.elements, self.aliases)
+                                   self.elements[:], aliases)
 
     
 class GatestringStructure(object):
@@ -475,5 +478,5 @@ class LsGermsStructure(GatestringStructure):
         cpy.allstrs = self.allstrs[:]
         cpy._plaquettes = { k: v.copy() for k,v in self._plaquettes.items() }
         cpy._firsts = self._firsts[:]
-        cpy._baseStrToGerm = self._baseStrToLGerm.copy()
+        cpy._baseStrToGerm = _copy.deepcopy(self._baseStrToLGerm.copy())
         return cpy
