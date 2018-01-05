@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import pickle as _pickle
+import copy as _copy
 from collections import OrderedDict as _OrderedDict
 
 from ..tools import compattools as _compat

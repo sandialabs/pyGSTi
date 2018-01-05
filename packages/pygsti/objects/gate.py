@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy.linalg as _spl
 import functools as _functools
+import copy as _copy
+
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
@@ -3112,7 +3114,8 @@ class LindbladParameterizedGate(GateMatrix):
         """
         #Construct new gate with dummy identity mx
         newGate = LindbladParameterizedGate(None,self.unitary_postfactor.copy(),
-                                            self.ham_basis.copy(), self.other_basis.copy(),
+                                            _copy.deepcopy(self.ham_basis),
+                                            _copy.deepcopy(self.other_basis),
                                             self.cptp,self.nonham_diagonal_only,
                                             True, self.matrix_basis.copy())
         

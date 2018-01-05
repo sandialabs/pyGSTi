@@ -218,7 +218,7 @@ class ConfidenceRegionFactory(object):
 
         #Expand gate label aliases used in DataSet lookups
         ds_gatestring_list = _tools.find_replace_tuple_list(
-            gatestrings_list, aliases)
+            gatestring_list, aliases)
 
         nGateStrings = len(gatestring_list)
         nModelParams = gateset.num_nongauge_params()        
