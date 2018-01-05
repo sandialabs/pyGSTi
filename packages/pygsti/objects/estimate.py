@@ -497,8 +497,10 @@ class Estimate(object):
             logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
-            
-        Ns  = ds.get_degrees_of_freedom(gss.allstrs)  #number of independent parameters in dataset
+
+        ds_allstrs = _tools.find_replace_tuple_list(
+            gss.allstrs, gss.aliases)
+        Ns  = ds.get_degrees_of_freedom(ds_allstrs)  #number of independent parameters in dataset
         Np = gs.num_nongauge_params() if use_accurate_Np else gs.num_params()
         k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))

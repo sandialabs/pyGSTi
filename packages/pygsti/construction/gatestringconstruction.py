@@ -414,6 +414,7 @@ def list_random_gatestrings_onelen(gateLabels, length, count, seed=None):
     """
     ret = [ ]
     rndm = _rndm.RandomState(seed) # ok if seed is None
+    gateLabels = list(gateLabels) # b/c we need to index it below
     for i in range(count): #pylint: disable=unused-variable
         r = rndm.random_sample(length) * len(gateLabels)
         ret.append( _gs.GateString( [gateLabels[int(k)] for k in r]) )

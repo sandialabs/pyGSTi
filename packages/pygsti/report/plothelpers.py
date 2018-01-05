@@ -815,8 +815,10 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
+    ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
+    
     if Np is None: Np = gateset.num_nongauge_params()
-    Ns = dataset.get_degrees_of_freedom(gstrs) #number of independent parameters
+    Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters
       #OLD Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
     k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty-k)/_np.sqrt(2*k)

@@ -369,6 +369,8 @@ def digest(obj, custom_digests=None):
                         for k in sorted(keys):
                             add(md5,k)
                             add(md5,v[k])
+                    elif type(v).__module__ == 'mpi4py.MPI': # don't import mpi4py (not always available)
+                        pass #don't hash comm objects
                     else:
                         for custom_digest in custom_digests:
                             try:

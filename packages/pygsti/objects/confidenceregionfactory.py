@@ -216,9 +216,13 @@ class ConfidenceRegionFactory(object):
         assert(spam_penalty_factor == 0), 'spam_penalty_factor unsupported in hessian computation'
         assert(useFreqWt == False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
+        #Expand gate label aliases used in DataSet lookups
+        ds_gatestring_list = _tools.find_replace_tuple_list(
+            gatestrings_list, aliases)
+
         nGateStrings = len(gatestring_list)
-        nModelParams = gateset.num_nongauge_params()
-        nDataParams  = dataset.get_degrees_of_freedom(gatestring_list)
+        nModelParams = gateset.num_nongauge_params()        
+        nDataParams  = dataset.get_degrees_of_freedom(ds_gatestring_list)
           #number of independent parameters in dataset (max. model # of params)
 
         #OLD nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
