@@ -13,10 +13,32 @@ from scipy.stats import chi2 as _chi2
 from scipy.optimize import leastsq as _leastsq
 from scipy import convolve
 
-from . import fourier_utils as _utils
+from . import drifttools as _dtls
 
-def global_bootstrap(num_spectra,N,num_outcomes,probs=None,bootstraps=500):
+
+#def singlesequence_bootstrap(p,timesteps,counts,bootstraps=10000):
+#    
+#    
+#    #
+#    # Todo: write this function.
+#    #
+#    return 0
     
+#def multisequence_bootstrap(return_all=True):
+#    #
+#    # Todo: write this function.
+#    #
+#    return 0
+
+    #
+#
+# Todo: delete this function and replace with the function above, with an option for whether all bootstraps or
+# just the average power spectrum is returned.
+#
+def global_bootstrap(num_spectra,N,num_outcomes,probs=None,bootstraps=500):
+    """
+    TODO: docstring
+    """
     largest_power = _np.zeros(bootstraps)
     
     if probs is None:
@@ -214,7 +236,7 @@ def one_to_k_sparse_unadjusted_thresholds(null_hypothesis, n, k, confidence=0.95
 
         test_statistic = _np.zeros((n,bootstraps),float)
         for i in range (0,bootstraps):
-            test_statistic[:,i] = _np.cumsum(_np.flip(_np.sort(_utils.DCT(bs[:,i],null_hypothesis=null_hypothesis)**2),axis=0))
+            test_statistic[:,i] = _np.cumsum(_np.flip(_np.sort(_dtls.DCT(bs[:,i],null_hypothesis=null_hypothesis)**2),axis=0))
             
 
         if method == 'basic':
@@ -312,7 +334,7 @@ def bartlett_spectrum_one_to_k_sparse_thresholds(null_hypothesis, n, k, num_spec
 
         test_statistic = _np.zeros((frac,bootstraps),float)
         for i in range (0,bootstraps):
-            spectra_bart = _utils.bartlett_DCT_spectrum(bs[:,i],n,num_spectra,null_hypothesis=null_hypothesis)
+            spectra_bart = _dtls.bartlett_DCT_spectrum(bs[:,i],n,num_spectra,null_hypothesis=null_hypothesis)
             test_statistic[:,i] = _np.cumsum(_np.flip(_np.sort(spectra_bart),axis=0))
             
 

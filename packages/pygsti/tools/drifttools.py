@@ -11,45 +11,51 @@ from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
 from scipy.stats import chi2 as _chi2
 from scipy.optimize import leastsq as _leastsq
-from scipy import convolve
+from scipy import convolve as _convolve
 
 # -------------------------------------------------------- #
 # ---------- Spectrum and Fourier transform tools -------- #
 # -------------------------------------------------------- #
 
-def DCT_multicount_data(x,number_of_counts):
-    """
-    This function is a horrible hack, and the normalization doesn't have 
-    any statistical justification.
+#def DCT_multicount_data(x,number_of_counts):
+#    """
+#    This function is a horrible hack, and the normalization doesn't have 
+#    any statistical justification.#
+#
+#    """
+#
+#    
+#    if _np.mean(x) == 0 or _np.mean(x) == number_of_counts:
+#        return _np.zeros(len(x))
+#    
+#    mean_number_of_ones = _np.mean(x)
+#    estimated_coin_bias = mean_number_of_ones / number_of_counts
+#    return _dct((x - mean_number_of_ones)/_np.sqrt(number_of_counts*estimated_coin_bias*(1-estimated_coin_bias)),norm='ortho')
 
+def DCT(x,counts=1,null_hypothesis=None):
     """
-
+    Returns the Type-II discrete cosine transform of y, with an orthogonal normalization, where
+    y is an array with elements related to the x array by
     
-    if _np.mean(x) == 0 or _np.mean(x) == number_of_counts:
-        return _np.zeros(len(x))
+    y[k] = (x[k] - null_hypothesis[k])/normalizer;
+    normalizer = sqrt(counts*null_hypothesis[k]*(1-null_hypothesis[k])).
     
-    mean_number_of_ones = _np.mean(x)
-    estimated_coin_bias = mean_number_of_ones / number_of_counts
-    return _dct((x - mean_number_of_ones)/_np.sqrt(number_of_counts*estimated_coin_bias*(1-estimated_coin_bias)),norm='ortho')
-
-def DCT(x,null_hypothesis=None):
-    """
-    Returns the Type-II orthogonal discrete cosine transform of y where 
-    
-    y[k] = (x[k] - null_hypothesis[k])/sqrt(null_hypothesis[k]*(1-null_hypothesis[k])).
-    
-    If null_hypothesis is None, then null_hypothesis[k] is mean(x), for all k. This is
-    with the exception that when mean(x) = 0 or 1 (when the above y[k] is ill-defined),
+    If null_hypothesis is None, then null_hypothesis[k] is mean(x)/counts, for all k. This is
+    with the exception that when mean(x)/counts = 0 or 1 (when the above y[k] is ill-defined),
     in which case the zero vector is returned.
     
     Parameters
     ----------
     x : array
-        Bit string, on which the normalization and discrete cosine transformation is performed.
+        Data string, on which the normalization and discrete cosine transformation is performed. If
+        counts is not specified, this must be a bit string.
         
     null_hypothesis : array, optional
         If not None, an array to use in the normalization before the DCT. If None, it is
         taken to be an array in which every element is the mean of x.
+        
+    counts : int, optional
+        TODO
                 
     Returns
     -------
@@ -58,18 +64,25 @@ def DCT(x,null_hypothesis=None):
 
 
     """
-    if null_hypothesis is None:
-        null_hypothesis = _np.mean(x)
-        if null_hypothesis<=0 or null_hypothesis>=1:
-            return _np.zeros(len(x))
-        
+    x_mean = _np.mean(x)
+    N = len(x)
+    
+    assert(min(counts*_np.ones(N) - x) >= 0), "The number of counts must be >= to the maximum of the data array!"
+    assert(min(x) >= 0), "The elements of the data array must be >= 0"
+    
+    # If the null hypothesis is not specified, we take our null hypothesis to be a constant bias
+    # coin, with the bias given by the mean of the data / number of counts.
+    if null_hypothesis is None:    
+        null_hypothesis = x_mean/counts
+        if null_hypothesis <= 0 or null_hypothesis >= 1:
+            return _np.zeros(N)
     else:
-        if min(null_hypothesis)<=0 or max(null_hypothesis)>=1:
-            raise ValueError("All element of null_hypothesis should be in (0,1)")
+        assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
+        assert(len(null_hypothesis) == N), "The null hypothesis array must be the same length as the data array!"
+    
+    return _dct((x - counts*null_hypothesis)/_np.sqrt(counts*null_hypothesis * (1 - null_hypothesis)),norm='ortho')
 
-    return _dct((x - null_hypothesis)/_np.sqrt(null_hypothesis * (1 - null_hypothesis)),norm='ortho')
-
-def IDCT(modes,null_hypothesis):
+def IDCT(modes,null_hypothesis,counts=1):
     """
     Inverts the DCT function.
     
@@ -82,34 +95,42 @@ def IDCT(modes,null_hypothesis):
         The null_hypothesis vector. For the IDCT it is not optional, and all
         elements of this array must be in (0,1).
         
+    counts : int, optional
+        TODO
+        
     Returns
     -------
     array
         Inverse of the DCT function
         
     """
-    if min(null_hypothesis)<=0 or max(null_hypothesis)>=1:
-            raise ValueError("All element of null_hypothesis should be in (0,1)")
+    assert(min(null_hypothesis)>0 and max(null_hypothesis)<1), "All element of null_hypothesis must be in (0,1)!"
+    assert(len(null_hypothesis) == len(modes)), "The null hypothesis array must be the same length as the data array!"
     
-    return  _idct(modes,norm='ortho')*_np.sqrt(null_hypothesis * (1 - null_hypothesis)) + null_hypothesis
+    return  _idct(modes,norm='ortho')*_np.sqrt(counts*null_hypothesis * (1 - null_hypothesis)) + counts*null_hypothesis
 
 
-def bartlett_DCT_spectrum(x,N,num_spectra=10,null_hypothesis=None):
+def bartlett_spectrum(x,num_spectra,counts=1,null_hypothesis=None):
     """
     If N/num_spectra is not an integer, then 
     not all of the data points are used.
+    
+    TODO: docstring
+    TODO: Make this work with multicount data.
     """
     
+    N = len(x)
     length = int(_np.floor(N/num_spectra))
     
     if null_hypothesis is None:
-        null_hypothesis = _np.mean(x)*_np.ones(N)
+        null_hypothesis = _np.mean(x)*_np.ones(N)/counts
     
     spectra = _np.zeros((num_spectra,length))
     bartlett_spectrum = _np.zeros(length)
     
     for i in range(0,num_spectra):
-        spectra[i,:] = DCT(x[i*length:((i+1)*length)],null_hypothesis=null_hypothesis[i*length:((i+1)*length)])**2
+        spectra[i,:] = DCT(x[i*length:((i+1)*length)],counts=counts,
+                           null_hypothesis=null_hypothesis[i*length:((i+1)*length)])**2
         
     bartlett_spectrum = _np.mean(spectra,axis=0)
                 
@@ -119,33 +140,40 @@ def bartlett_DCT_spectrum(x,N,num_spectra=10,null_hypothesis=None):
 # ---------- Signal tools -------- #
 # -------------------------------- #
 
-
 def hoyer_sparsity_measure(p):
+    """
+    TODO: docstring
+    """
     n = len(p)
     return (_np.sqrt(n) - _np.linalg.norm(p,1)/_np.linalg.norm(p,2))/(_np.sqrt(n)-1)
 
 
 
 def renormalizer(p,method='logistic'):
-    
+    """
+    TODO: docstring
+    """
     if method == 'logistic':
     
         mean = _np.mean(p)
         nu = min([1-mean ,mean ]) 
-        p = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
+        out = mean - nu + (2*nu)/(1 + _np.exp(-2*(p - mean)/nu))
      
     elif method == 'sharp':
-        p[p>1] = 1.
-        p[p<0] = 0.
+        out = p.copy()
+        out[p>1] = 1.
+        out[p<0] = 0.
     
     else:
         raise ValueError("method should be 'logistic' or 'sharp'")
         
-    return p
+    return out
 
 
 def low_pass_filter(data,max_freq = None):
-    
+    """
+    TODO: docstring
+    """
     n = len(data) 
     
     if max_freq is None:
@@ -159,9 +187,12 @@ def low_pass_filter(data,max_freq = None):
     return _idct(modes,norm='ortho')
 
 def moving_average(sequence, width=100):
+    """
+    TODO: docstring
+    """
     seq_length = len(sequence)
-    base = convolve(_np.ones(seq_length), _np.ones((int(width),))/float(width), mode='same')
-    signal = convolve(sequence, _np.ones((int(width),))/float(width), mode='same')
+    base = _convolve(_np.ones(seq_length), _np.ones((int(width),))/float(width), mode='same')
+    signal = _convolve(sequence, _np.ones((int(width),))/float(width), mode='same')
     return signal/base 
 
 # -------------------------------- #
@@ -169,8 +200,10 @@ def moving_average(sequence, width=100):
 # -------------------------------- #
 
 def signal_with_mininum_fourier_sparsity(power, num_modes, n, max_freq=None, base = 0.5, 
-                                      renormalizer_method='sharp'):
-    
+                                      renormalizer_method='sharp'):   
+    """
+    TODO: docstring
+    """    
     if max_freq is None:
         max_freq = n-1
         
@@ -192,7 +225,9 @@ def signal_with_mininum_fourier_sparsity(power, num_modes, n, max_freq=None, bas
 
 
 def signal_with_gaussian_power_distribution(power,center,spread,N,base=0.5,renormalizer_method='sharp'):
-
+    """
+    TODO: docstring
+    """
     modes = _np.zeros(N)
     modes[0] = 0.
     modes[1:] = _np.exp(-1*(_np.arange(1,N)-center)**2/(2*spread**2))
