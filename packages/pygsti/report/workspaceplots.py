@@ -1468,6 +1468,10 @@ class ColorBoxPlot(WorkspacePlot):
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
 
+        def outcome_to_str(x): #same function as in writers.py
+            if _tools.isstr(x): return x
+            else: return ":".join([str(i) for i in x])
+
         # Begin "Additional sub-matrix" functions for adding more info to hover text
         def _separate_outcomes_matrix(plaq, elements, fmt="%.3g"):
             list_mx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
@@ -1479,7 +1483,7 @@ class ColorBoxPlot(WorkspacePlot):
         def _addl_mx_fn_sl(plaq,x,y):
             slmx = _np.empty( (plaq.rows,plaq.cols), dtype=_np.object)
             for i,j,gstr,elIndices,outcomes in plaq.iter_compiled():
-                slmx[i,j] = ", ".join(list(map(str,outcomes)))
+                slmx[i,j] = ", ".join([ outcome_to_str(ol) for ol in outcomes ])
             return slmx
 
         def _addl_mx_fn_p(plaq,x,y):
