@@ -207,6 +207,9 @@ def nullspace_qr(m, tol=1e-7):
 
 def matrix_sign(M):
     """ The "sign" matrix of `M` """
+    #Notes: sign(M) defined s.t. eigvecs of sign(M) are evecs of M
+    # and evals of sign(M) are +/-1 or 0 based on sign of eigenvalues of M
+    
     #Using the extremely numerically stable (but expensive) Schur method
     # see http://www.maths.manchester.ac.uk/~higham/fm/OT104HighamChapter5.pdf
     N = M.shape[0];  assert(M.shape == (N,N)), "M must be square!"
@@ -218,14 +221,19 @@ def matrix_sign(M):
     U[ _np.diag_indices_from(U) ] = _np.sign(_np.diagonal(T))
 
     #Off diagonals: use U^2 = I or TU = UT
+    # Note: Tij = Uij = 0 when i > j and i==j easy so just consider i<j case
+    # 0 = sum_k Uik Ukj =  (i!=j b/c off-diag) 
     # FUTURE: speed this up by using np.dot instead of sums below
     for j in range(1,N):
         for i in range(j-1,-1,-1):
             S = U[i,i]+U[j,j]
             if _np.isclose(S,0): # then use TU = UT
-                U[i,j] = T[i,j]*(U[i,i]-U[j,j])/(T[i,i]-T[j,j]) + \
-                         sum([U[i,k]*T[k,j]-T[i,k]*U[k,j] for k in range(i+1,j)]) \
-                         / (T[i,i]-T[j,j])
+                if _np.isclose(T[i,i]-T[j,j],0): # then just set to zero
+                    U[i,j] = 0.0 # TODO: check correctness of this case
+                else:
+                    U[i,j] = T[i,j]*(U[i,i]-U[j,j])/(T[i,i]-T[j,j]) + \
+                             sum([U[i,k]*T[k,j]-T[i,k]*U[k,j] for k in range(i+1,j)]) \
+                             / (T[i,i]-T[j,j])
             else: # use U^2 = I
                 U[i,j] = - sum([U[i,k]*U[k,j] for k in range(i+1,j)]) / S
     return _np.dot(Z, _np.dot(U, _np.conjugate(Z.T)))

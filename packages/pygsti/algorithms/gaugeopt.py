@@ -697,6 +697,9 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
             "denMx should be Hermitian!"
         
         sgndm = _tools.matrix_sign(denMx)
+        if _np.linalg.norm(sgndm - sgndm.T.conjugate()) >= 1e-4:
+            _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...")
+            sgndm = (sgndm + sgndm.T.conjugate())/2.0
         assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
             "sgndm should be Hermitian!"
 
@@ -734,6 +737,9 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
                 "denMx should be Hermitian!"
     
             sgnE = _tools.matrix_sign(EMx)
+            if(_np.linalg.norm(sgnE - sgnE.T.conjugate()) >= 1e-4):
+                _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...")
+                sgnE = (sgnE + sgnE.T.conjugate())/2.0
             assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
                 "sgnE should be Hermitian!"
     
