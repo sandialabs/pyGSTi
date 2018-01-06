@@ -3117,7 +3117,7 @@ class LindbladParameterizedGate(GateMatrix):
                                             _copy.deepcopy(self.ham_basis),
                                             _copy.deepcopy(self.other_basis),
                                             self.cptp,self.nonham_diagonal_only,
-                                            True, self.matrix_basis.copy())
+                                            True, _copy.deepcopy(self.matrix_basis))
         
         #Deep copy data
         newGate.paramvals = self.paramvals.copy()
