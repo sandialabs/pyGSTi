@@ -504,7 +504,7 @@ def test_MPI_fills(comm):
             assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF2[tstLookup[k]]) < 1e-6)
 
 
-@mpitest(1)
+@mpitest(4)
 def test_MPI_by_block(comm):
 
     #Create some gateset
