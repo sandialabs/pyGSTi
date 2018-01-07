@@ -8,11 +8,24 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import numpy.linalg as _nla
+import collections as _collections
+import itertools as _itertools
 
 from ..tools import compattools as _compat
+from ..tools import slicetools as _slct
+from ..tools import basistools as _bt
+from ..tools import matrixtools as _mt
 from ..baseobjs import DummyProfiler as _DummyProfiler
+from . import spamvec as _sv
 
 _dummy_profiler = _DummyProfiler()
+
+# Tolerace for matrix_rank when finding rank of a *normalized* projection
+# matrix.  This is a legitimate tolerace since a normalized projection matrix
+# should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
+# well.
+P_RANK_TOL = 1e-7
+
 
 class GateCalc(object):
     """
@@ -25,8 +38,7 @@ class GateCalc(object):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel):
+    def __init__(self, dim, gates, preps, effects, paramvec):
         """
         Construct a new GateCalc object.
 
@@ -41,96 +53,436 @@ class GateCalc(object):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        povm_identity : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamdefs
-            contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the
-            effect vectors in effects.
-
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
-            special case when eith both or just the effect label is set
-            to "remainder").
+            special case when both are set to "remainder").
 
-        remainderLabel : string
-            A string that may appear in the values of spamdefs to designate
-            special behavior.
-
-        identityLabel : string
-            The string used to designate the identity POVM vector.
+        paramvec : ndarray
+            The parameter vector of the GateSet.
         """
-        self._remainderLabel = remainderLabel
-        self._identityLabel = identityLabel
         self.dim = dim
         self.gates = gates
         self.preps = preps
         self.effects = effects
-        self.povm_identity = povm_identity
-        self.spamdefs = spamdefs
-        self.assumeSumToOne = bool( (self._remainderLabel,self._remainderLabel) in list(spamdefs.values()))
+        #OLD self.assumeSumToOne = False #OLD: bool( ("remainder","remainder") in list(spamdefs.values()))
           #Whether spamdefs contains the value ("remainder", "remainder"),
           #  which specifies a spam label that generates probabilities such that
           #  all SPAM label probabilities sum exactly to 1.0.
 
-        self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
-        self.num_e_params = [v.num_params() for v in list(self.effects.values())]
-        self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
-        self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
-        self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
-        self.tot_rho_params = sum(self.num_rho_params)
-        self.tot_e_params = sum(self.num_e_params)
-        self.tot_gate_params = sum(self.num_gate_params)
-        self.tot_spam_params = self.tot_rho_params + self.tot_e_params
-        self.tot_params = self.tot_spam_params + self.tot_gate_params
+        #OLD
+        # self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
+        # self.num_e_params = [v.num_params() for v in list(self.effects.values())]
+        # self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
+        # self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
+        # self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
+        # self.tot_rho_params = sum(self.num_rho_params)
+        # self.tot_e_params = sum(self.num_e_params)
+        # self.tot_gate_params = sum(self.num_gate_params)
+        # self.tot_spam_params = self.tot_rho_params + self.tot_e_params
+        # self.tot_params = self.tot_spam_params + self.tot_gate_params
+        self.paramvec = paramvec
+        self.Np = len(paramvec)
 
 
-
-    def _is_remainder_spamlabel(self, label):
+    def to_vector(self):
         """
-        Returns whether or not the given SPAM label is the
-        special "remainder" SPAM label which generates
-        probabilities such that all SPAM label probabilities
-        sum exactly to 1.0.
-        """
-        if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
-        return bool(self.spamdefs[label] == (self._remainderLabel, self._remainderLabel))
-
-    def _get_remainder_row_index(self, spam_label_rows):
-        """ 
-        Returns the index within the spam_label_rows dictionary
-        of the remainder label, or None if the remainder label
-        is not present.
-        """
-        remainder_row_index = None
-        for spamLabel,rowIndex in spam_label_rows.items():
-            if self._is_remainder_spamlabel(spamLabel):
-                assert(self.assumeSumToOne) # ensure the remainder label is allowed
-                assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-                remainder_row_index = rowIndex
-        return remainder_row_index
-
-
-    def _get_evec(self, elabel):
-        """
-        Get a POVM effect vector by label.
-
-        Parameters
-        ----------
-        elabel : string
-            the label of the POVM effect vector to return.
+        Returns the elements of the parent GateSet vectorized as a 1D array.
+        Used for computing finite-difference derivatives.
 
         Returns
         -------
         numpy array
-            an effect vector of shape (dim, 1).
+            The vectorized gateset parameters.
         """
-        if elabel == self._remainderLabel:
-            return self.povm_identity - sum(self.effects.values())
+        return self.paramvec
+
+
+    def from_vector(self, v):
+        """
+        The inverse of to_vector.  Initializes the GateSet-like members of this
+        calculator based on `v`. Used for computing finite-difference derivatives.
+        """
+        #Note: this *will* initialize the parent GateSet's objects too,
+        # since only references to preps, effects, and gates are held
+        # by the calculator class.  ORDER is important, as elements of
+        # POVMs and Instruments rely on a fixed from_vector ordering
+        # of their compiled effects/gates.
+        self.paramvec = v.copy()
+        for _,obj in self.iter_objs():
+            obj.from_vector( v[obj.gpindices] )
+
+            
+    def iter_objs(self):
+        for lbl,obj in _itertools.chain(self.preps.items(),
+                                        self.effects.items(),
+                                        self.gates.items()):
+            yield (lbl,obj)
+
+
+    def deriv_wrt_params(self):
+        """
+        Construct a matrix whose columns are the vectorized derivatives of all
+        the gateset's raw matrix and vector *elements* (placed in a vector)
+        with respect to each single gateset parameter.
+        
+        Returns
+        -------
+        numpy array
+            2D array of derivatives.
+        """
+        num_els = sum([obj.size for _,obj in self.iter_objs()])
+        num_params = self.Np
+        deriv = _np.zeros( (num_els,num_params), 'd' )
+
+        eo = 0 # element offset
+        for lbl,obj in self.iter_objs():
+            #Note: no overlaps possible b/c of independent *elements*
+            deriv[eo:eo+obj.size,obj.gpindices] = obj.deriv_wrt_params()
+            eo += obj.size
+              
+        return deriv
+
+
+    def _buildup_dPG(self):
+        """ 
+        Helper function for building gauge/non-gauge projectors and 
+          for computing the number of gauge/non-gauge elements.
+        Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
+        whose nullspace gives the gauge directions in parameter space.
+        """
+
+        # ** See comments at the beginning of get_nongauge_projector for explanation **
+
+        bSkipEcs = True #Whether we should artificially skip complement-type
+         # effect vecs, which is historically what we've done, even though
+         # this seems somewhat wrong.  Not skipping them will alter the
+         # number of "gauge params" since a complement Evec has a *fixed*
+         # identity from the perspective of the GateSet params (which 
+         # *varied* in gauge optimization, even though it's not a SPAMVec
+         # param, creating a weird inconsistency...) SKIP
+        if bSkipEcs:
+            newSelf = self.copy()
+            for effectlbl,EVec in self.effects.items():
+                if isinstance(EVec, _sv.ComplementSPAMVec):
+                    del newSelf.effects[effectlbl]
+            self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
+
+            #OLD: using POVMs in GateSet
+            #for povmlbl,povm in self.povms.items():
+            #    if isinstance(povm, _povm.TPPOVM):
+            #        effects_wout_comp = [ (lbl,E) for lbl,E in povm.items() if lbl != povm.complement_label ]
+            #        newSelf.povms[povmlbl] = _povm.POVM( effects_wout_comp )
+
+        
+        #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        dim = self.dim #OLD self._dim
+        nParams = self.Np #OLD self.num_params()
+        nElements = sum([obj.size for _,obj in self.iter_objs()]) #OLD self.num_elements()
+
+        #This was considered as optional behavior, but better to just delete qtys from GateSet
+        ##whether elements of the raw gateset matrices/SPAM vectors that are not
+        ## parameterized at all should be ignored.   By ignoring changes to such
+        ## elements, they are treated as not being a part of the "gateset"
+        #bIgnoreUnparameterizedEls = True
+
+        #Note: gateset object (gsDeriv) must have all elements of gate
+        # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
+        # order to match deriv_wrt_params call, which gives derivatives wrt
+        # *all* elements of a gate set.
+
+        #OLD
+        #gsDeriv = GateSet("full", self.preps._prefix, self.effects_prefix,
+        #                  self.gates._prefix, self.povms._prefix, self.instruments._prefix)
+        #for gateLabel in self.gates:
+        #    gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
+        #for prepLabel in self.preps:
+        #    gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
+        #for povmLabel,povm in self.povms.items():
+        #    gsDeriv.povms[povmLabel] = _povm.POVM(
+        #        [ (eLbl, _np.zeros((dim,1),'d')) for eLbl in povm.keys()] )
+
+        gsDeriv_gates = _collections.OrderedDict(
+            [(label,_np.zeros((dim,dim),'d')) for label in self.gates])
+        gsDeriv_preps = _collections.OrderedDict(
+            [(label,_np.zeros((dim,1),'d')) for label in self.preps])
+        gsDeriv_effects = _collections.OrderedDict(
+            [(label,_np.zeros((dim,1),'d')) for label in self.effects])
+        
+        dPG = _np.empty( (nElements, nParams + dim**2), 'd' )
+        for i in range(dim):      # always range over all rows: this is the
+            for j in range(dim):  # *generator* mx, not gauge mx itself
+                unitMx = _bt.mut(i,j,dim)
+                for lbl,rhoVec in self.preps.items():
+                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
+                for lbl,EVec in self.effects.items():
+                    gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
+                #OLD
+                #for lbl,povm in self.povms.items():
+                #    gsDeriv.povms[lbl] = _povm.POVM(
+                #        [(l,-_np.dot(EVec.T, unitMx).T) for l,EVec in povm.items()])
+                for lbl,gate in self.gates.items():
+                    gsDeriv_gates[lbl] = _np.dot(unitMx,gate) - \
+                                         _np.dot(gate,unitMx)
+
+                #Note: vectorize all the parameters in this full-
+                # parameterization object, which gives a vector of length
+                # equal to the number of gateset *elements*.
+                to_vector = _np.concatenate(
+                    [obj.flatten() for obj in _itertools.chain(
+                        gsDeriv_preps.values(), gsDeriv_effects.values(),
+                        gsDeriv_gates.values())], axis=0 )
+                dPG[:,nParams + i*dim+j] = to_vector
+
+        dPG[:, 0:nParams] = self.deriv_wrt_params()
+        return dPG
+
+    def get_nongauge_projector(self, itemWeights=None, nonGaugeMixMx=None):
+        """
+        Construct a projector onto the non-gauge parameter space, useful for
+        isolating the gauge degrees of freedom from the non-gauge degrees of
+        freedom.
+
+        Parameters
+        ----------
+        itemWeights : dict, optional
+            Dictionary of weighting factors for individual gates and spam operators.
+            Keys can be gate, state preparation, POVM effect, spam labels, or the 
+            special strings "gates" or "spam" whic represent the entire set of gate
+            or SPAM operators, respectively.  Values are floating point numbers.
+            These weights define the metric used to compute the non-gauge space,
+            *orthogonal* the gauge space, that is projected onto.
+
+        nonGaugeMixMx : numpy array, optional
+            An array of shape (nNonGaugeParams,nGaugeParams) specifying how to
+            mix the non-gauge degrees of freedom into the gauge degrees of
+            freedom that are projected out by the returned object.  This argument
+            essentially sets the off-diagonal block of the metric used for 
+            orthogonality in the "gauge + non-gauge" space.  It is for advanced
+            usage and typically left as None (the default).
+.
+
+        Returns
+        -------
+        numpy array
+           The projection operator as a N x N matrix, where N is the number
+           of parameters (obtained via num_params()).  This projector acts on
+           parameter-space, and has rank equal to the number of non-gauge
+           degrees of freedom.
+        """
+
+        # We want to divide the GateSet-space H (a Hilbert space, 56-dimensional in the 1Q, 3-gate, 2-vec case)
+        # into the direct sum of gauge and non-gauge spaces, and find projectors onto each
+        # sub-space (the non-gauge space in particular).
+        #
+        # Within the GateSet H-space lies a gauge-manifold of maximum chi2 (16-dimensional in 1Q case),
+        #  where the gauge-invariant chi2 function is constant.  At a single point (GateSet) P on this manifold,
+        #  chosen by (somewhat arbitrarily) fixing the gauge, we can talk about the tangent space
+        #  at that point.  This tangent space is spanned by some basis (~16 elements for the 1Q case),
+        #  which associate with the infinitesimal gauge transform ?generators? on the full space.
+        #  The subspace of H spanned by the derivatives w.r.t gauge transformations at P (a GateSet) spans
+        #  the gauge space, and the complement of this (in H) is the non-gauge space.
+        #
+        #  An element of the gauge group can be written gg = exp(-K), where K is a n x n matrix.  If K is
+        #   hermitian then gg is unitary, but this need not be the case.  A gauge transform acts on a
+        #   gatset via Gateset => gg^-1 G gg, i.e. G => exp(K) G exp(-K).  We care about the action of
+        #   infinitesimal gauge tranformations (b/c the *derivative* vectors span the tangent space),
+        #   which act as:
+        #    G => (I+K) G (I-K) = G + [K,G] + ignored(K^2), where [K,G] := KG-GK
+        #
+        # To produce a projector onto the gauge-space, we compute the *column* vectors
+        #  dG_ij = [K_ij,G], where K_ij is the i,j-th matrix unit (56x1 in the 1Q case, 16 such column vectors)
+        #  and then form a projector in the standard way.
+        #  (to project onto |v1>, |v2>, etc., form P = sum_i |v_i><v_i|)
+        #
+        #Typically nGateParams < len(dG_ij) and linear system is overconstrained
+        #   and no solution is expected.  If no solution exists, simply ignore
+        #
+        # So we form P = sum_ij dG_ij * transpose(dG_ij) (56x56 in 1Q case)
+        #              = dG * transpose(dG)              where dG_ij form the *columns* of dG (56x16 in 1Q case)
+        # But dG_ij are not orthonormal, so really we need a slight modification,
+        #  otherwise P'P' != P' as must be the case for a projector:
+        #
+        # P' = dG * (transpose(dG) * dG)^-1 * transpose(dG) (see wikipedia on projectors)
+        #
+        #    or equivalently (I think)
+        #
+        # P' = pseudo-inv(P)*P
+        #
+        #  since the pseudo-inv is defined by P*pseudo-inv(P) = I and so P'P' == P'
+        #  and P' is our gauge-projector!
+
+        # Note: In the general case of parameterized gates (i.e. non-fully parameterized gates), there are fewer
+        #   gate parameters than the size of dG_ij ( < 56 in 1Q case).  In this general case, we want to know
+        #   what (if any) change in gate parameters produces the change dG_ij of the gate matrix elements.
+        #   That is, we solve dG_ij = derivWRTParams * dParams_ij for dParams_ij, where derivWRTParams is
+        #   the derivative of the gate matrix elements with respect to the gate parameters (derivWRTParams
+        #   is 56x(nGateParams) and dParams_ij is (nGateParams)x1 in the 1Q case) -- then substitute dG_ij
+        #   with dParams_ij above to arrive at a (nGateParams)x(nGateParams) projector (compatible with
+        #   hessian computed by gateset).
+        #
+        #   Actually, we want to know if what changes gate parameters
+        #   produce changes in the span of all the dG_ij, so really we want the intersection of the space
+        #   defined by the columns of derivWRTParams (the "gate-parameter range" space) and the dG_ij vectors.
+        #
+        #   This intersection is determined by nullspace( derivWRTParams | dG ), where the pipe denotes
+        #     concatenating the matrices together.  Then, if x is a basis vector of the nullspace
+        #     x[0:nGateParams] is the basis vector for the intersection space within the gate parameter space,
+        #     that is, the analogue of dParams_ij in the single-dG_ij introduction above.
+        #
+        #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
+        #   above to get the general case projector.
+
+        nParams = self.Np
+        dPG = self._buildup_dPG()
+
+        #print("DB: shapes = ",dP.shape,dG.shape)
+        #OLD: M = _np.concatenate( (dP,dG), axis=1 )
+        #OLD: nullsp = _mt.nullspace(dPG) #columns are nullspace basis vectors
+        nullsp = _mt.nullspace_qr(dPG) #columns are nullspace basis vectors
+        gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
+                                     # of subspace intersection in gate-parameter space
+        #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
+        #  (below) is (nParams)x(nParams) as desired.
+
+        #DEBUG
+        #nElements = self.num_elements()
+        #for iRow in range(nElements):
+        #    pNorm = _np.linalg.norm(dP[iRow])
+        #    if pNorm < 1e-6:
+        #        print "Row %d of dP is zero" % iRow
+        #
+        #print "------------------------------"
+        #print "nParams = ",nParams
+        #print "nElements = ",nElements
+        #print " shape(M) = ",M.shape
+        #print " shape(dG) = ",dG.shape
+        #print " shape(dP) = ",dP.shape
+        #print " shape(gen_dG) = ",gen_dG.shape
+        #print " shape(nullsp) = ",nullsp.shape
+        #print " rank(dG) = ",_np.linalg.matrix_rank(dG)
+        #print " rank(dP) = ",_np.linalg.matrix_rank(dP)
+        #print "------------------------------"
+        #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
+
+        if nonGaugeMixMx is not None:
+            msg = "You've set both nonGaugeMixMx and itemWeights, both of which"\
+                + " set the gauge metric... You probably don't want to do this."
+            assert(itemWeights is None), msg
+
+            # BEGIN GAUGE MIX ----------------------------------------
+            # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
+            #OLD: nonGaugeDirections = _mt.nullspace(gen_dG.T) #columns are non-gauge directions *orthogonal* to the gauge directions
+            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T) #columns are the non-gauge directions *orthogonal* to the gauge directions
+
+            #for each column of gen_dG, which is a gauge direction in gateset parameter space,
+            # we add some amount of non-gauge direction, given by coefficients of the
+            # numNonGaugeParams non-gauge directions.
+            gen_dG = gen_dG + _np.dot( nonGaugeDirections, nonGaugeMixMx) #add non-gauge direction components in
+             # dims: (nParams,nGaugeParams) + (nParams,nNonGaugeParams) * (nNonGaugeParams,nGaugeParams)
+             # nonGaugeMixMx is a (nNonGaugeParams,nGaugeParams) matrix whose i-th column specifies the
+             #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
+             #  direction to project out (i.e. what were the pure gauge directions).
+
+            #DEBUG
+            #print "gen_dG shape = ",gen_dG.shape
+            #print "NGD shape = ",nonGaugeDirections.shape
+            #print "NGD rank = ",_np.linalg.matrix_rank(nonGaugeDirections, P_RANK_TOL)
+            #END GAUGE MIX ----------------------------------------
+
+        # Build final non-gauge projector by getting a mx of column vectors 
+        # orthogonal to the cols fo gen_dG:
+        #     gen_dG^T * gen_ndG = 0 => nullspace(gen_dG^T)
+        # or for a general metric W:
+        #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
+        # (This is instead of construction as I - gaugeSpaceProjector)
+
+        if itemWeights is not None:
+            metric_diag = _np.ones(self.Np, 'd')
+            gateWeight = itemWeights.get('gates', 1.0)
+            spamWeight = itemWeights.get('spam', 1.0)
+            for lbl,gate in self.gates.items():
+                metric_diag[gate.gpindices] = itemWeights.get(lbl, gateWeight)
+            for lbl,vec in _itertools.chain(iter(self.preps.items()),
+                                            iter(self.effects.items())):
+                metric_diag[vec.gpindices] = itemWeights.get(lbl, spamWeight)
+            metric = _np.diag(metric_diag)
+            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T,metric))
         else:
-            return self.effects[elabel]
+            #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
+            gen_ndG = _mt.nullspace_qr(gen_dG.T) #cols are non-gauge directions
+            #print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
+                
+
+        # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
+        #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below
+        P = _np.dot(gen_ndG, _np.transpose(gen_ndG)) # almost a projector, but cols of dG are not orthonormal
+        Pp = _np.dot( _np.linalg.pinv(P, rcond=1e-7), P ) # make P into a true projector (onto gauge space)
+
+        # ALT WAY: use inverse of dG^T*dG to normalize projector (see wikipedia on projectors, dG => A)
+        #  This *should* give the same thing as above, but numerical differences indicate the pinv method
+        #  is prefereable (so long as rcond=1e-7 is ok in general...)
+        #  Check: P'*P' = (dG (dGT dG)^1 dGT)(dG (dGT dG)^-1 dGT) = (dG (dGT dG)^1 dGT) = P'
+        #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_ndG), gen_ndG))
+        #Pp_alt = _np.dot(gen_ndG, _np.dot(invGG, _np.transpose(gen_ndG))) # a true projector (onto gauge space)
+        #print "Pp - Pp_alt norm diff = ", _np.linalg.norm(Pp_alt - Pp)
+
+        #OLD: ret = _np.identity(nParams,'d') - Pp 
+        # Check ranks to make sure everything is consistent.  If either of these assertions fail,
+        #  then pinv's rcond or some other numerical tolerances probably need adjustment.
+        #print "Rank P = ",_np.linalg.matrix_rank(P)
+        #print "Rank Pp = ",_np.linalg.matrix_rank(Pp, P_RANK_TOL)
+        #print "Rank 1-Pp = ",_np.linalg.matrix_rank(_np.identity(nParams,'d') - Pp, P_RANK_TOL)
+        #print " Evals(1-Pp) = \n","\n".join([ "%d: %g" % (i,ev) \
+        #       for i,ev in enumerate(_np.sort(_np.linalg.eigvals(_np.identity(nParams,'d') - Pp))) ])
+        
+        try:
+            rank_P = _np.linalg.matrix_rank(P, P_RANK_TOL) # original un-normalized projector
+            
+            # Note: use P_RANK_TOL here even though projector is *un-normalized* since sometimes P will
+            #  have eigenvalues 1e-17 and one or two 1e-11 that should still be "zero" but aren't when
+            #  no tolerance is given.  Perhaps a more custom tolerance based on the singular values of P
+            #  but different from numpy's default tolerance would be appropriate here.
+
+            assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
+            #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
+        except(_np.linalg.linalg.LinAlgError):
+            _warnings.warn("Linear algebra error (probably a non-convergent" +
+                           "SVD) ignored during matric rank checks in " +
+                           "GateSet.get_nongauge_projector(...) ")
+            
+        return Pp 
+        #OLD: return ret
+
+
+#OLD
+#    def _is_remainder_spamlabel(self, label):
+#        """
+#        Returns whether or not the given SPAM label is the
+#        special "remainder" SPAM label which generates
+#        probabilities such that all SPAM label probabilities
+#        sum exactly to 1.0.
+#        """
+#        if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
+#        return bool(self.spamdefs[label] == ("remainder","remainder"))
+
+#OLD
+#    def _get_remainder_row_index(self, spam_label_rows):
+#        """ 
+#        Returns the index within the spam_label_rows dictionary
+#        of the remainder label, or None if the remainder label
+#        is not present.
+#        """
+#        remainder_row_index = None
+#        for spamLabel,rowIndex in spam_label_rows.items():
+#            if self._is_remainder_spamlabel(spamLabel):
+#                assert(self.assumeSumToOne) # ensure the remainder label is allowed
+#                assert(remainder_row_index is None) # ensure there is at most one dummy spam label
+#                remainder_row_index = rowIndex
+#        return remainder_row_index
 
         
     def product(self, gatestring, bScale=False):
@@ -248,159 +600,159 @@ class GateCalc(object):
         raise NotImplementedError("hproduct(...) is not implemented!")
 
 
-    def pr(self, spamLabel, gatestring, clipTo=None, bUseScaling=True):
-        """
-        Compute the probability of the given gate sequence, where initialization
-        & measurement operations are together specified by spamLabel.
+#    def pr(self, spamLabel, gatestring, clipTo=None, bUseScaling=True):
+#        """
+#        Compute the probability of the given gate sequence, where initialization
+#        & measurement operations are together specified by spamLabel.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        gatestring : GateString or tuple of gate labels
+#          The sequence of gate labels specifying the gate string.
+#
+#        clipTo : 2-tuple, optional
+#          (min,max) to clip return value if not None.
+#
+#        bUseScaling : bool, optional
+#          Whether to use a post-scaled product internally.  If False, this
+#          routine will run slightly faster, but with a chance that the
+#          product will overflow and the subsequent trace operation will
+#          yield nan as the returned probability.
+#
+#        Returns
+#        -------
+#        float
+#        """
+#        if self._is_remainder_spamlabel(spamLabel):
+#            #then compute 1.0 - (all other spam label probabilities)
+#            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+#            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+#            return 1.0 - sum( [self._pr_nr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamdefs] )
+#        else:
+#            return self._pr_nr(spamLabel, gatestring, clipTo, bUseScaling)
+#
+#    def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
+#        """ non-remainder version of pr(...) overridden by derived clases """
+#        raise NotImplementedError("_pr_nr must be implemented by the derived class") 
+#
+#
+#    def dpr(self, spamLabel, gatestring, returnPr=False,clipTo=None):
+#        """
+#        Compute the derivative of a probability generated by a gate string and
+#        spam label as a 1 x M numpy array, where M is the number of gateset
+#        parameters.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        gatestring : GateString or tuple of gate labels
+#          The sequence of gate labels specifying the gate string.
+#
+#        returnPr : bool, optional
+#          when set to True, additionally return the probability itself.
+#
+#        clipTo : 2-tuple, optional
+#           (min,max) to clip returned probability to if not None.
+#           Only relevant when returnPr == True.
+#
+#        Returns
+#        -------
+#        derivative : numpy array
+#            a 1 x M numpy array of derivatives of the probability w.r.t.
+#            each gateset parameter (M is the length of the vectorized gateset).
+#
+#        probability : float
+#            only returned if returnPr == True.
+#        """
+#
+#        if self._is_remainder_spamlabel(spamLabel):
+#            #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
+#            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+#            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+#            otherResults = [self._dpr_nr(sl, gatestring, returnPr, clipTo) for sl in otherSpamdefs]
+#            if returnPr:
+#                return -1.0 * sum([dpr for dpr,p in otherResults]), 1.0 - sum([p for dpr,p in otherResults])
+#            else:
+#                return -1.0 * sum(otherResults)
+#        else:
+#            return self._dpr_nr(spamLabel, gatestring, returnPr, clipTo)
+#
+#        
+#    def _dpr_nr(self, spamLabel, gatestring, returnPr, clipTo):
+#        """ non-remainder version of dpr(...) overridden by derived clases """
+#        raise NotImplementedError("_dpr_nr must be implemented by the derived class") 
+#
+#
+#    def hpr(self, spamLabel, gatestring, returnPr=False, returnDeriv=False,clipTo=None):
+#        """
+#        Compute the Hessian of a probability generated by a gate string and
+#        spam label as a 1 x M x M array, where M is the number of gateset
+#        parameters.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        gatestring : GateString or tuple of gate labels
+#          The sequence of gate labels specifying the gate string.
+#
+#        returnPr : bool, optional
+#          when set to True, additionally return the probability itself.
+#
+#        returnDeriv : bool, optional
+#          when set to True, additionally return the derivative of the
+#          probability.
+#
+#        clipTo : 2-tuple, optional
+#           (min,max) to clip returned probability to if not None.
+#           Only relevant when returnPr == True.
+#
+#        Returns
+#        -------
+#        hessian : numpy array
+#            a 1 x M x M array, where M is the number of gateset parameters.
+#            hessian[0,j,k] is the derivative of the probability w.r.t. the
+#            k-th then the j-th gateset parameter.
+#
+#        derivative : numpy array
+#            only returned if returnDeriv == True. A 1 x M numpy array of
+#            derivatives of the probability w.r.t. each gateset parameter.
+#
+#        probability : float
+#            only returned if returnPr == True.
+#        """
+#
+#        if self._is_remainder_spamlabel(spamLabel):
+#            #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
+#            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
+#            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
+#            otherResults = [self._hpr_nr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
+#            if returnDeriv:
+#                if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
+#                                      -1.0 * sum([dpr for hpr,dpr,p in otherResults]),
+#                                       1.0 - sum([p   for hpr,dpr,p in otherResults])   )
+#                else:        return ( -1.0 * sum([hpr for hpr,dpr in otherResults]),
+#                                      -1.0 * sum([dpr for hpr,dpr in otherResults])     )
+#            else:
+#                if returnPr: return ( -1.0 * sum([hpr for hpr,p in otherResults]),
+#                                       1.0 - sum([p   for hpr,p in otherResults])   )
+#                else:        return   -1.0 * sum(otherResults)
+#        else:
+#            return self._hpr_nr(spamLabel, gatestring, returnPr, returnDeriv, clipTo)
+#
+#            
+#    def _hpr_nr(self, spamLabel, gatestring, returnPr, returnDeriv, clipTo):
+#        """ non-remainder version of hpr(...) overridden by derived clases """
+#        raise NotImplementedError("_hpr_nr must be implemented by the derived class") 
 
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
 
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
-
-        clipTo : 2-tuple, optional
-          (min,max) to clip return value if not None.
-
-        bUseScaling : bool, optional
-          Whether to use a post-scaled product internally.  If False, this
-          routine will run slightly faster, but with a chance that the
-          product will overflow and the subsequent trace operation will
-          yield nan as the returned probability.
-
-        Returns
-        -------
-        float
-        """
-        if self._is_remainder_spamlabel(spamLabel):
-            #then compute 1.0 - (all other spam label probabilities)
-            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-            return 1.0 - sum( [self._pr_nr(sl, gatestring, clipTo, bUseScaling) for sl in otherSpamdefs] )
-        else:
-            return self._pr_nr(spamLabel, gatestring, clipTo, bUseScaling)
-
-    def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
-        """ non-remainder version of pr(...) overridden by derived clases """
-        raise NotImplementedError("_pr_nr must be implemented by the derived class") 
-
-
-    def dpr(self, spamLabel, gatestring, returnPr=False,clipTo=None):
-        """
-        Compute the derivative of a probability generated by a gate string and
-        spam label as a 1 x M numpy array, where M is the number of gateset
-        parameters.
-
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
-
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probability itself.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
-
-        Returns
-        -------
-        derivative : numpy array
-            a 1 x M numpy array of derivatives of the probability w.r.t.
-            each gateset parameter (M is the length of the vectorized gateset).
-
-        probability : float
-            only returned if returnPr == True.
-        """
-
-        if self._is_remainder_spamlabel(spamLabel):
-            #then compute Deriv[ 1.0 - (all other spam label probabilities) ]
-            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-            otherResults = [self._dpr_nr(sl, gatestring, returnPr, clipTo) for sl in otherSpamdefs]
-            if returnPr:
-                return -1.0 * sum([dpr for dpr,p in otherResults]), 1.0 - sum([p for dpr,p in otherResults])
-            else:
-                return -1.0 * sum(otherResults)
-        else:
-            return self._dpr_nr(spamLabel, gatestring, returnPr, clipTo)
-
-        
-    def _dpr_nr(self, spamLabel, gatestring, returnPr, clipTo):
-        """ non-remainder version of dpr(...) overridden by derived clases """
-        raise NotImplementedError("_dpr_nr must be implemented by the derived class") 
-
-
-    def hpr(self, spamLabel, gatestring, returnPr=False, returnDeriv=False,clipTo=None):
-        """
-        Compute the Hessian of a probability generated by a gate string and
-        spam label as a 1 x M x M array, where M is the number of gateset
-        parameters.
-
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
-
-        gatestring : GateString or tuple of gate labels
-          The sequence of gate labels specifying the gate string.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probability itself.
-
-        returnDeriv : bool, optional
-          when set to True, additionally return the derivative of the
-          probability.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
-
-        Returns
-        -------
-        hessian : numpy array
-            a 1 x M x M array, where M is the number of gateset parameters.
-            hessian[0,j,k] is the derivative of the probability w.r.t. the
-            k-th then the j-th gateset parameter.
-
-        derivative : numpy array
-            only returned if returnDeriv == True. A 1 x M numpy array of
-            derivatives of the probability w.r.t. each gateset parameter.
-
-        probability : float
-            only returned if returnPr == True.
-        """
-
-        if self._is_remainder_spamlabel(spamLabel):
-            #then compute Hessian[ 1.0 - (all other spam label probabilities) ]
-            otherSpamdefs = list(self.spamdefs.keys())[:]; del otherSpamdefs[ otherSpamdefs.index(spamLabel) ]
-            assert( not any([ self._is_remainder_spamlabel(sl) for sl in otherSpamdefs]) )
-            otherResults = [self._hpr_nr(sl, gatestring, returnPr, returnDeriv, clipTo) for sl in otherSpamdefs]
-            if returnDeriv:
-                if returnPr: return ( -1.0 * sum([hpr for hpr,dpr,p in otherResults]),
-                                      -1.0 * sum([dpr for hpr,dpr,p in otherResults]),
-                                       1.0 - sum([p   for hpr,dpr,p in otherResults])   )
-                else:        return ( -1.0 * sum([hpr for hpr,dpr in otherResults]),
-                                      -1.0 * sum([dpr for hpr,dpr in otherResults])     )
-            else:
-                if returnPr: return ( -1.0 * sum([hpr for hpr,p in otherResults]),
-                                       1.0 - sum([p   for hpr,p in otherResults])   )
-                else:        return   -1.0 * sum(otherResults)
-        else:
-            return self._hpr_nr(spamLabel, gatestring, returnPr, returnDeriv, clipTo)
-
-            
-    def _hpr_nr(self, spamLabel, gatestring, returnPr, returnDeriv, clipTo):
-        """ non-remainder version of hpr(...) overridden by derived clases """
-        raise NotImplementedError("_hpr_nr must be implemented by the derived class") 
-
-
-    def probs(self, gatestring, clipTo=None):
+    def probs(self, compiled_gatestring, clipTo=None):
         """
         Construct a dictionary containing the probabilities of every spam label
         given a gate string.
@@ -421,23 +773,17 @@ class GateCalc(object):
             for each spam label (string) SL.
         """
         probs = { }
-        if not self.assumeSumToOne:
-            for spamLabel in self.spamdefs:
-                probs[spamLabel] = self.pr(spamLabel, gatestring, clipTo)
-        else:
-            s = 0; lastLabel = None
-            for spamLabel in self.spamdefs:
-                if self._is_remainder_spamlabel(spamLabel):
-                    assert(lastLabel is None) # ensure there is at most one "remainder" spam label
-                    lastLabel = spamLabel; continue
-                probs[spamLabel] = self.pr(spamLabel, gatestring, clipTo)
-                s += probs[spamLabel]
-            if lastLabel is not None:
-                probs[lastLabel] = 1.0 - s  #last spam label is computed so sum == 1
+        raw_dict, outcomeLbls = compiled_gatestring
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                probs[outcomeLbls[iOut]] = self.pr(
+                    spamTuple, raw_gatestring, clipTo, False)
+                iOut += 1
         return probs
 
 
-    def dprobs(self, gatestring, returnPr=False,clipTo=None):
+    def dprobs(self, compiled_gatestring, returnPr=False,clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given gate string.
@@ -462,28 +808,18 @@ class GateCalc(object):
             for each spam label (string) SL.
         """
         dprobs = { }
-        if not self.assumeSumToOne:
-            for spamLabel in self.spamdefs:
-                dprobs[spamLabel] = self.dpr(spamLabel, gatestring, returnPr,clipTo)
-        else:
-            ds = None; s=0; lastLabel = None
-            for spamLabel in self.spamdefs:
-                if self._is_remainder_spamlabel(spamLabel):
-                    assert(lastLabel is None) # ensure there is at most one dummy spam label
-                    lastLabel = spamLabel; continue
-                dprobs[spamLabel] = self.dpr(spamLabel, gatestring, returnPr,clipTo)
-                if returnPr:
-                    ds = dprobs[spamLabel][0] if ds is None else ds + dprobs[spamLabel][0]
-                    s += dprobs[spamLabel][1]
-                else:
-                    ds = dprobs[spamLabel] if ds is None else ds + dprobs[spamLabel]
-            if lastLabel is not None:
-                dprobs[lastLabel] = (-ds,1.0-s) if returnPr else -ds
+        raw_dict, outcomeLbls = compiled_gatestring
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                dprobs[outcomeLbls[iOut]] = self.dpr(
+                    spamTuple, raw_gatestring, returnPr, clipTo)
+                iOut += 1
         return dprobs
 
 
 
-    def hprobs(self, gatestring, returnPr=False, returnDeriv=False, clipTo=None):
+    def hprobs(self, compiled_gatestring, returnPr=False, returnDeriv=False, clipTo=None):
         """
         Construct a dictionary containing the probability derivatives of every
         spam label for a given gate string.
@@ -512,39 +848,13 @@ class GateCalc(object):
             for each spam label (string) SL.
         """
         hprobs = { }
-        if not self.assumeSumToOne:
-            for spamLabel in self.spamdefs:
-                hprobs[spamLabel] = self.hpr(spamLabel, gatestring, returnPr,
-                                             returnDeriv,clipTo)
-        else:
-            hs = None; ds=None; s=0; lastLabel = None
-            for spamLabel in self.spamdefs:
-                if self._is_remainder_spamlabel(spamLabel):
-                    assert(lastLabel is None) # ensure there is at most one dummy spam label
-                    lastLabel = spamLabel; continue
-                hprobs[spamLabel] = self.hpr(spamLabel, gatestring, returnPr,
-                                             returnDeriv,clipTo)
-                if returnPr:
-                    if returnDeriv:
-                        hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-                        ds = hprobs[spamLabel][1] if ds is None else ds + hprobs[spamLabel][1]
-                        s += hprobs[spamLabel][2]
-                    else:
-                        hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-                        s += hprobs[spamLabel][1]
-                else:
-                    if returnDeriv:
-                        hs = hprobs[spamLabel][0] if hs is None else hs + hprobs[spamLabel][0]
-                        ds = hprobs[spamLabel][1] if ds is None else ds + hprobs[spamLabel][1]
-                    else:
-                        hs = hprobs[spamLabel] if hs is None else hs + hprobs[spamLabel]
-
-            if lastLabel is not None:
-                if returnPr:
-                    hprobs[lastLabel] = (-hs,-ds,1.0-s) if returnDeriv else (-hs,1.0-s)
-                else:
-                    hprobs[lastLabel] = (-hs,-ds) if returnDeriv else -hs
-
+        raw_dict, outcomeLbls = compiled_gatestring
+        iOut = 0 #outcome index
+        for raw_gatestring, spamTuples in raw_dict.items():
+            for spamTuple in spamTuples:
+                hprobs[outcomeLbls[iOut]] = self.hpr(
+                    spamTuple, raw_gatestring, returnPr,returnDeriv,clipTo)
+                iOut += 1
         return hprobs
 
     def construct_evaltree(self):
@@ -756,7 +1066,7 @@ class GateCalc(object):
         raise NotImplementedError("bulk_hproduct(...) is not implemented!")
     
 
-    def _fill_result_tuple(self, result_tup, spam_label_rows, tree_slice,
+    def _fill_result_tuple(self, result_tup, evalTree,
                            param_slice1, param_slice2, calc_and_fill_fn):
         """ 
         This function takes a "calc-and-fill" function, which computes
@@ -772,62 +1082,22 @@ class GateCalc(object):
         spam label.
         """
         
-        fslc = tree_slice
         pslc1 = param_slice1
         pslc2 = param_slice2
         remainder_index = None
-        for spamLabel,rowIndex in spam_label_rows.items():
-            if self._is_remainder_spamlabel(spamLabel):
-                remainder_index = rowIndex; continue
-            calc_and_fill_fn(spamLabel,rowIndex,fslc,pslc1,pslc2,False)
-
-        #compute remainder label
-        if remainder_index is not None:
-            # nps[k] == num of param slices in result_tup[k] index (assume
-            #           the first two dims are spamLabel and a gatestring indx.
-            nps = { k: (el.ndim-2) 
-                    for k,el in enumerate(result_tup) if el is not None }
-                
-            def mkindx(iSpam,k): 
-                """ Constructs multi-index appropriate for result_tup[k]
-                    (Note that pslc1,pslc2 alwsys act on *final* dimension2)   """
-                if nps[k] > 1: addl = [slice(None)]*(nps[k]-2)+[pslc1,pslc2]
-                elif nps[k] == 1: addl = [pslc1]
-                else: addl = []
-                return [ iSpam,fslc ] + addl
-
-            non_none_result_indices = [ i for i in range(len(result_tup)) \
-                                           if result_tup[i] is not None ]
-
-            for i in non_none_result_indices: #zero out for ensuing sum
-                result_tup[i][mkindx(remainder_index,i)] = 0
-
-            for spamLabel in self.spamdefs: #loop over ALL spam labels
-                if self._is_remainder_spamlabel(spamLabel): 
-                    continue # ...except remainder label
-
-                rowIndex = spam_label_rows.get(spamLabel,None)
-                if rowIndex is not None:
-                    for i in non_none_result_indices:                        
-                        result_tup[i][mkindx(remainder_index,i)] += \
-                            result_tup[i][mkindx(rowIndex,i)]
-                else:
-                    calc_and_fill_fn(spamLabel,remainder_index,fslc,
-                                     pslc1,pslc2,sumInto=True)
-
-            #At this point, result_tup[i][remainder_index,fslc,...] contains the 
-            # sum of the results from all other spam labels.
-            for i in non_none_result_indices:
-                mi = mkindx(remainder_index,i)
-                result_tup[i][mi] *= -1.0
-                if nps[i] == 0: # special case: when there are no param slices,
-                    result_tup[i][mi] += 1.0 # result == 1.0-sum (not just -sum)
+        for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
+            # fInds = "final indices" = the "element" indices in the final
+            #          filled quantity combining both spam and gate-sequence indices
+            # gInds  = "gate sequence indices" = indices into the (tree-) list of
+            #          all of the raw gate sequences which need to be computed
+            #          for the current spamTuple (this list has the SAME length as fInds).            
+            calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False)
                     
         return
 
 
-    def bulk_fill_probs(self, mxToFill, spam_label_rows,
-                        evalTree, clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mxToFill, evalTree,
+                        clipTo=None, check=False, comm=None):
 
         """
         Identical to bulk_probs(...) except results are
@@ -874,7 +1144,7 @@ class GateCalc(object):
         raise NotImplementedError("bulk_fill_probs(...) is not implemented!")
 
 
-    def bulk_fill_dprobs(self, mxToFill, spam_label_rows, evalTree,
+    def bulk_fill_dprobs(self, mxToFill, evalTree,
                          prMxToFill=None,clipTo=None,check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
@@ -957,7 +1227,7 @@ class GateCalc(object):
         raise NotImplementedError("bulk_fill_dprobs(...) is not implemented!")
 
 
-    def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
+    def bulk_fill_hprobs(self, mxToFill, evalTree,
                          prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
                          clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
@@ -1045,49 +1315,50 @@ class GateCalc(object):
         raise NotImplementedError("bulk_fill_hprobs(...) is not implemented!")        
 
 
-    def bulk_pr(self, spamLabel, evalTree, clipTo=None,
-                check=False, comm=None):
-        """
-        Compute the probabilities of the gate sequences given by evalTree,
-        where initialization & measurement operations are always the same
-        and are together specified by spamLabel.
+    #def bulk_pr(self, spamLabel, evalTree, clipTo=None,
+    #            check=False, comm=None):
+    #    """
+    #    Compute the probabilities of the gate sequences given by evalTree,
+    #    where initialization & measurement operations are always the same
+    #    and are together specified by spamLabel.
+    #
+    #    Parameters
+    #    ----------
+    #    spamLabel : string
+    #       the label specifying the state prep and measure operations
+    #
+    #    evalTree : EvalTree
+    #       given by a prior call to bulk_evaltree.  Specifies the gate strings
+    #       to compute the bulk operation on.
+    #
+    #    clipTo : 2-tuple, optional
+    #       (min,max) to clip return value if not None.
+    #
+    #    check : boolean, optional
+    #      If True, perform extra checks within code to verify correctness,
+    #      generating warnings when checks fail.  Used for testing, and runs
+    #      much slower when True.
+    #
+    #    comm : mpi4py.MPI.Comm, optional
+    #       When not None, an MPI communicator for distributing the computation
+    #       across multiple processors.  Distribution is performed over
+    #       subtrees of evalTree (if it is split).
+    #
+    #
+    #    Returns
+    #    -------
+    #    numpy array
+    #      An array of length equal to the number of gate strings containing
+    #      the (float) probabilities.
+    #    """
+    #    vp = _np.empty( (1,evalTree.num_final_strings()), 'd' )
+    #    self.bulk_fill_probs(vp, { spamLabel: 0}, evalTree,
+    #                         clipTo, check, comm)
+    #    return vp[0]
 
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
 
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip return value if not None.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is performed over
-           subtrees of evalTree (if it is split).
-
-
-        Returns
-        -------
-        numpy array
-          An array of length equal to the number of gate strings containing
-          the (float) probabilities.
-        """
-        vp = _np.empty( (1,evalTree.num_final_strings()), 'd' )
-        self.bulk_fill_probs(vp, { spamLabel: 0}, evalTree,
-                             clipTo, check, comm)
-        return vp[0]
-
-
-    def bulk_probs(self, evalTree, clipTo=None, check=False, comm=None):
+    def bulk_probs(self, gatestrings, evalTree, elIndices, outcomes,
+                   clipTo=None, check=False, comm=None):
         """
         Construct a dictionary containing the bulk-probabilities
         for every spam label (each possible initialization &
@@ -1096,9 +1367,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -1120,95 +1400,98 @@ class GateCalc(object):
             probs[SL] = bulk_pr(SL,evalTree,clipTo,check)
             for each spam label (string) SL.
         """
-        spam_label_rows = \
-            { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
-        vp = _np.empty((len(self.spamdefs),evalTree.num_final_strings()),'d')
-        self.bulk_fill_probs(vp, spam_label_rows, evalTree,
-                             clipTo, check, comm)
-        return { spamLabel: vp[i] \
-                     for (i,spamLabel) in enumerate(self.spamdefs) }
+        vp = _np.empty(evalTree.num_final_elements(),'d')
+        self.bulk_fill_probs(vp, evalTree, clipTo, check, comm)
+
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
+            ret[gstr] = _collections.OrderedDict(
+                [(outLbl,vp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+        return ret
 
 
-    def bulk_dpr(self, spamLabel, evalTree,
-                 returnPr=False,clipTo=None,check=False,
-                 comm=None, wrtFilter=None, wrtBlockSize=None):
-        """
-        Compute the derivatives of the probabilities generated by a each gate
-        sequence given by evalTree, where initialization
-        & measurement operations are always the same and are
-        together specified by spamLabel.
+#    def bulk_dpr(self, spamLabel, evalTree,
+#                 returnPr=False,clipTo=None,check=False,
+#                 comm=None, wrtFilter=None, wrtBlockSize=None):
+#        """
+#        Compute the derivatives of the probabilities generated by a each gate
+#        sequence given by evalTree, where initialization
+#        & measurement operations are always the same and are
+#        together specified by spamLabel.
+#
+#        Parameters
+#        ----------
+#        spamLabel : string
+#           the label specifying the state prep and measure operations
+#
+#        evalTree : EvalTree
+#           given by a prior call to bulk_evaltree.  Specifies the gate strings
+#           to compute the bulk operation on.
+#
+#        returnPr : bool, optional
+#          when set to True, additionally return the probabilities.
+#
+#        clipTo : 2-tuple, optional
+#           (min,max) to clip returned probability to if not None.
+#           Only relevant when returnPr == True.
+#
+#        check : boolean, optional
+#          If True, perform extra checks within code to verify correctness,
+#          generating warnings when checks fail.  Used for testing, and runs
+#          much slower when True.
+#
+#        comm : mpi4py.MPI.Comm, optional
+#           When not None, an MPI communicator for distributing the computation
+#           across multiple processors.  Distribution is first performed over
+#           subtrees of evalTree (if it is split), and then over blocks (subsets)
+#           of the parameters being differentiated with respect to (see
+#           wrtBlockSize).
+#
+#        wrtFilter : list of ints, optional
+#          If not None, a list of integers specifying which parameters
+#          to include in the derivative dimension. This argument is used
+#          internally for distributing calculations across multiple
+#          processors and to control memory usage.  Cannot be specified
+#          in conjuction with wrtBlockSize.
+#
+#        wrtBlockSize : int or float, optional
+#          The maximum average number of derivative columns to compute *products*
+#          for simultaneously.  None means compute all requested columns
+#          at once.  The  minimum of wrtBlockSize and the size that makes
+#          maximal use of available processors is used as the final block size.
+#          This argument must be None if wrtFilter is not None.  Set this to
+#          non-None to reduce amount of intermediate memory required.
+#
+#        Returns
+#        -------
+#        dprobs : numpy array
+#            An array of shape S x M, where
+#
+#            - S == the number of gate strings
+#            - M == the length of the vectorized gateset
+#
+#            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
+#            the j-th gateset parameter.
+#
+#        probs : numpy array
+#            Only returned when returnPr == True. An array of shape S containing
+#            the probabilities of each gate string.
+#        """
+#        nGateStrings = evalTree.num_final_strings()
+#        nDerivCols = self.Np
+#
+#        vdp = _np.empty( (1,nGateStrings,nDerivCols), 'd' )
+#        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
+#
+#        self.bulk_fill_dprobs(vdp, {spamLabel: 0}, evalTree,
+#                              vp, clipTo, check, comm,
+#                              wrtFilter, wrtBlockSize)
+#        return (vdp[0], vp[0]) if returnPr else vdp[0]
 
-        Parameters
-        ----------
-        spamLabel : string
-           the label specifying the state prep and measure operations
 
-        evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
-
-        clipTo : 2-tuple, optional
-           (min,max) to clip returned probability to if not None.
-           Only relevant when returnPr == True.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrtBlockSize).
-
-        wrtFilter : list of ints, optional
-          If not None, a list of integers specifying which parameters
-          to include in the derivative dimension. This argument is used
-          internally for distributing calculations across multiple
-          processors and to control memory usage.  Cannot be specified
-          in conjuction with wrtBlockSize.
-
-        wrtBlockSize : int or float, optional
-          The maximum average number of derivative columns to compute *products*
-          for simultaneously.  None means compute all requested columns
-          at once.  The  minimum of wrtBlockSize and the size that makes
-          maximal use of available processors is used as the final block size.
-          This argument must be None if wrtFilter is not None.  Set this to
-          non-None to reduce amount of intermediate memory required.
-
-        Returns
-        -------
-        dprobs : numpy array
-            An array of shape S x M, where
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and dprobs[i,j] holds the derivative of the i-th probability w.r.t.
-            the j-th gateset parameter.
-
-        probs : numpy array
-            Only returned when returnPr == True. An array of shape S containing
-            the probabilities of each gate string.
-        """
-        nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
-
-        vdp = _np.empty( (1,nGateStrings,nDerivCols), 'd' )
-        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
-
-        self.bulk_fill_dprobs(vdp, {spamLabel: 0}, evalTree,
-                              vp, clipTo, check, comm,
-                              wrtFilter, wrtBlockSize)
-        return (vdp[0], vp[0]) if returnPr else vdp[0]
-
-
-    def bulk_dprobs(self, evalTree,
+    def bulk_dprobs(self, gatestrings, evalTree, elIndices, outcomes,
                     returnPr=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter=None, wrtBlockSize=None):
@@ -1221,9 +1504,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1267,137 +1559,135 @@ class GateCalc(object):
             ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
             for each spam label (string) SL.
         """
-        spam_label_rows = \
-            { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
-        nGateStrings = evalTree.num_final_strings()
-        nDerivCols = self.tot_params
-        nSpamLabels = len(self.spamdefs)
+        nElements = evalTree.num_final_elements()
+        nDerivCols = self.Np
 
-        vdp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols), 'd' )
-        vp = _np.empty( (nSpamLabels,nGateStrings), 'd' ) if returnPr else None
+        vdp = _np.empty( (nElements,nDerivCols), 'd' )
+        vp = _np.empty( nElements, 'd' ) if returnPr else None
 
-        self.bulk_fill_dprobs(vdp, spam_label_rows, evalTree,
+        self.bulk_fill_dprobs(vdp, evalTree,
                               vp, clipTo, check, comm,
                               wrtFilter, wrtBlockSize)
 
-        if returnPr:
-            return { spamLabel: (vdp[i],vp[i]) \
-                     for (i,spamLabel) in enumerate(self.spamdefs) }
-        else:
-            return { spamLabel: vdp[i] \
-                     for (i,spamLabel) in enumerate(self.spamdefs) }
-
-
-
-
-
-    def bulk_hpr(self, spamLabel, evalTree,
-                 returnPr=False,returnDeriv=False,
-                 clipTo=None,check=False,comm=None,
-                 wrtFilter1=None, wrtFilter2=None,
-                 wrtBlockSize1=None, wrtBlockSize2=None):
-
-        """
-        Compute the 2nd derivatives of the probabilities generated by a each gate
-        sequence given by evalTree, where initialization & measurement
-        operations are always the same and are together specified by spamLabel.
-
-        Parameters
-        ----------
-        spamLabel : string
-          the label specifying the state prep and measure operations
-
-        evalTree : EvalTree
-          given by a prior call to bulk_evaltree.  Specifies the gate strings
-          to compute the bulk operation on.
-
-        returnPr : bool, optional
-          when set to True, additionally return the probabilities.
-
-        returnDeriv : bool, optional
-          when set to True, additionally return the probability derivatives.
-
-        clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when returnPr == True.
-
-        check : boolean, optional
-          If True, perform extra checks within code to verify correctness,
-          generating warnings when checks fail.  Used for testing, and runs
-          much slower when True.
-
-        comm : mpi4py.MPI.Comm, optional
-           When not None, an MPI communicator for distributing the computation
-           across multiple processors.  Distribution is first performed over
-           subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being differentiated with respect to (see
-           wrtBlockSize).
-
-        wrtFilter1, wrtFilter2 : list of ints, optional
-          If not None, a list of integers specifying which gate set parameters
-          to differentiate with respect to in the first (row) and second (col)
-          derivative operations, respectively.
-
-        wrtBlockSize2, wrtBlockSize2 : int or float, optional
-          The maximum number of 1st (row) and 2nd (col) derivatives to compute
-          *products* for simultaneously.  None means compute all requested
-          rows or columns at once.  The  minimum of wrtBlockSize and the size
-          that makes maximal use of available processors is used as the final
-          block size.  These arguments must be None if the corresponding
-          wrtFilter is not None.  Set this to non-None to reduce amount of
-          intermediate memory required.
-
-
-        Returns
-        -------
-        hessians : numpy array
-            a S x M x M array, where
-
-            - S == the number of gate strings
-            - M == the length of the vectorized gateset
-
-            and hessians[i,j,k] is the derivative of the i-th probability
-            w.r.t. the k-th then the j-th gateset parameter.
-
-        derivs1, derivs2 : numpy array
-            only returned if returnDeriv == True. Two S x M arrays where
-            derivsX[i,j] holds the derivative of the i-th probability
-            w.r.t. the j-th gateset parameter, where j is taken from the
-            first and second sets of filtered parameters (i.e. by
-            wrtFilter1 and wrtFilter2).  If `wrtFilter1 == wrtFilter2`,
-            then derivs2 is not returned (to save memory, since it's the
-            same as derivs1).
-
-        probabilities : numpy array
-            only returned if returnPr == True.  A length-S array
-            containing the probabilities for each gate string.
-        """
-        nGateStrings = evalTree.num_final_strings()
-        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
-                           else len(wrtFilter1)
-        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
-                           else len(wrtFilter2)
-
-        vhp = _np.empty( (1,nGateStrings,nDerivCols1,nDerivCols2), 'd' )
-        vdp1 = _np.empty( (1,nGateStrings,self.tot_params), 'd' ) \
-            if returnDeriv else None
-        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
-        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
-
-        self.bulk_fill_hprobs(vhp, {spamLabel: 0}, evalTree,
-                              vp, vdp1, vdp2, clipTo, check, comm,
-                              wrtFilter1,wrtFilter2,wrtBlockSize1,wrtBlockSize2)
-        if returnDeriv:
-            if vdp2 is None:
-                return (vhp[0], vdp1[0], vp[0]) if returnPr else (vhp[0],vdp1[0])
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
+            if returnPr:
+                ret[gstr] = _collections.OrderedDict(
+                    [(outLbl,(vdp[ei],vp[ei])) for ei, outLbl in zip(elInds, outcomes[i])])
             else:
-                return (vhp[0], vdp1[0], vdp2[0], vp[0]) if returnPr else (vhp[0],vdp1[0],vdp2[0])
-        else:
-            return (vhp[0], vp[0]) if returnPr else vhp[0]
+                ret[gstr] = _collections.OrderedDict(
+                    [(outLbl,vdp[ei]) for ei, outLbl in zip(elInds, outcomes[i])])
+        return ret
 
 
+#    def bulk_hpr(self, spamLabel, evalTree,
+#                 returnPr=False,returnDeriv=False,
+#                 clipTo=None,check=False,comm=None,
+#                 wrtFilter1=None, wrtFilter2=None,
+#                 wrtBlockSize1=None, wrtBlockSize2=None):
+#    
+#        """
+#        Compute the 2nd derivatives of the probabilities generated by a each gate
+#        sequence given by evalTree, where initialization & measurement
+#        operations are always the same and are together specified by spamLabel.
+#    
+#        Parameters
+#        ----------
+#        spamLabel : string
+#          the label specifying the state prep and measure operations
+#    
+#        evalTree : EvalTree
+#          given by a prior call to bulk_evaltree.  Specifies the gate strings
+#          to compute the bulk operation on.
+#    
+#        returnPr : bool, optional
+#          when set to True, additionally return the probabilities.
+#    
+#        returnDeriv : bool, optional
+#          when set to True, additionally return the probability derivatives.
+#    
+#        clipTo : 2-tuple, optional
+#          (min,max) to clip returned probability to if not None.
+#          Only relevant when returnPr == True.
+#    
+#        check : boolean, optional
+#          If True, perform extra checks within code to verify correctness,
+#          generating warnings when checks fail.  Used for testing, and runs
+#          much slower when True.
+#    
+#        comm : mpi4py.MPI.Comm, optional
+#           When not None, an MPI communicator for distributing the computation
+#           across multiple processors.  Distribution is first performed over
+#           subtrees of evalTree (if it is split), and then over blocks (subsets)
+#           of the parameters being differentiated with respect to (see
+#           wrtBlockSize).
+#    
+#        wrtFilter1, wrtFilter2 : list of ints, optional
+#          If not None, a list of integers specifying which gate set parameters
+#          to differentiate with respect to in the first (row) and second (col)
+#          derivative operations, respectively.
+#    
+#        wrtBlockSize2, wrtBlockSize2 : int or float, optional
+#          The maximum number of 1st (row) and 2nd (col) derivatives to compute
+#          *products* for simultaneously.  None means compute all requested
+#          rows or columns at once.  The  minimum of wrtBlockSize and the size
+#          that makes maximal use of available processors is used as the final
+#          block size.  These arguments must be None if the corresponding
+#          wrtFilter is not None.  Set this to non-None to reduce amount of
+#          intermediate memory required.
+#    
+#    
+#        Returns
+#        -------
+#        hessians : numpy array
+#            a S x M x M array, where
+#    
+#            - S == the number of gate strings
+#            - M == the length of the vectorized gateset
+#    
+#            and hessians[i,j,k] is the derivative of the i-th probability
+#            w.r.t. the k-th then the j-th gateset parameter.
+#    
+#        derivs1, derivs2 : numpy array
+#            only returned if returnDeriv == True. Two S x M arrays where
+#            derivsX[i,j] holds the derivative of the i-th probability
+#            w.r.t. the j-th gateset parameter, where j is taken from the
+#            first and second sets of filtered parameters (i.e. by
+#            wrtFilter1 and wrtFilter2).  If `wrtFilter1 == wrtFilter2`,
+#            then derivs2 is not returned (to save memory, since it's the
+#            same as derivs1).
+#    
+#        probabilities : numpy array
+#            only returned if returnPr == True.  A length-S array
+#            containing the probabilities for each gate string.
+#        """
+#        nGateStrings = evalTree.num_final_strings()
+#        nDerivCols1 = self.Np if (wrtFilter1 is None) \
+#                           else len(wrtFilter1)
+#        nDerivCols2 = self.Np if (wrtFilter2 is None) \
+#                           else len(wrtFilter2)
+#    
+#        vhp = _np.empty( (1,nGateStrings,nDerivCols1,nDerivCols2), 'd' )
+#        vdp1 = _np.empty( (1,nGateStrings,self.Np), 'd' ) \
+#            if returnDeriv else None
+#        vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
+#        vp = _np.empty( (1,nGateStrings), 'd' ) if returnPr else None
+#    
+#        self.bulk_fill_hprobs(vhp, {spamLabel: 0}, evalTree,
+#                              vp, vdp1, vdp2, clipTo, check, comm,
+#                              wrtFilter1,wrtFilter2,wrtBlockSize1,wrtBlockSize2)
+#        if returnDeriv:
+#            if vdp2 is None:
+#                return (vhp[0], vdp1[0], vp[0]) if returnPr else (vhp[0],vdp1[0])
+#            else:
+#                return (vhp[0], vdp1[0], vdp2[0], vp[0]) if returnPr else (vhp[0],vdp1[0],vdp2[0])
+#        else:
+#            return (vhp[0], vp[0]) if returnPr else vhp[0]
 
-    def bulk_hprobs(self, evalTree,
+
+    def bulk_hprobs(self, gatestrings, evalTree, elIndices, outcomes,
                     returnPr=False,returnDeriv=False,clipTo=None,
                     check=False,comm=None,
                     wrtFilter1=None, wrtFilter2=None,
@@ -1411,9 +1701,18 @@ class GateCalc(object):
 
         Parameters
         ----------
+        gatestrings : list of GateStrings
+            The list of (uncompiled) original gate strings.
+
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+            An evalution tree corresponding to `gatestrings`.
+
+        elIndices : dict
+            A dictionary of indices for each original gate string.
+
+        outcomes : dict
+            A dictionary of outcome labels (string or tuple) for each original
+            gate string.
 
         returnPr : bool, optional
           when set to True, additionally return the probabilities.
@@ -1459,49 +1758,45 @@ class GateCalc(object):
             ``hprobs[SL] = bulk_hpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,returnDeriv,clipTo,check)``
             for each spam label (string) SL.
         """
-        spam_label_rows = \
-            { spamLabel: i for (i,spamLabel) in enumerate(self.spamdefs) }
-        nGateStrings = evalTree.num_final_strings()
-        nDerivCols1 = self.tot_params if (wrtFilter1 is None) \
+        nElements = evalTree.num_final_elements()
+        nDerivCols1 = self.Np if (wrtFilter1 is None) \
                            else len(wrtFilter1)
-        nDerivCols2 = self.tot_params if (wrtFilter2 is None) \
+        nDerivCols2 = self.Np if (wrtFilter2 is None) \
                            else len(wrtFilter2)
-        nSpamLabels = len(self.spamdefs)
 
-        vhp = _np.empty( (nSpamLabels,nGateStrings,nDerivCols1,nDerivCols2),'d')
-        vdp1 = _np.empty( (nSpamLabels,nGateStrings,self.tot_params), 'd' ) \
+        vhp = _np.empty( (nElements,nDerivCols1,nDerivCols2),'d')
+        vdp1 = _np.empty( (nElements,self.Np), 'd' ) \
             if returnDeriv else None
         vdp2 = vdp1.copy() if (returnDeriv and wrtFilter1!=wrtFilter2) else None
-        vp = _np.empty( (nSpamLabels,nGateStrings), 'd' ) if returnPr else None
+        vp = _np.empty( nElements, 'd' ) if returnPr else None
 
-        self.bulk_fill_hprobs(vhp, spam_label_rows, evalTree,
+        self.bulk_fill_hprobs(vhp, evalTree,
                               vp, vdp1, vdp2, clipTo, check, comm,
                               wrtFilter1,wrtFilter1,wrtBlockSize1,wrtBlockSize2)
-        if returnDeriv:
-            if vdp2 is None:
-                if returnPr:
-                    return { spamLabel: (vhp[i],vdp1[i],vp[i]) \
-                             for (i,spamLabel) in enumerate(self.spamdefs) }
+
+        ret = _collections.OrderedDict()
+        for i, gstr in enumerate(gatestrings):
+            elInds = _slct.indices(elIndices[i]) \
+                     if isinstance(elIndices[i],slice) else elIndices[i]
+            outcomeQtys = _collections.OrderedDict()
+            for ei, outLbl in zip(elInds, outcomes[i]):
+                if returnDeriv:
+                    if vdp2 is None:
+                        if returnPr: t = (vhp[ei],vdp1[ei],vp[ei])
+                        else:        t = (vhp[ei],vdp1[ei])
+                    else:
+                        if returnPr: t = (vhp[ei],vdp1[ei],vdp2[ei],vp[ei])
+                        else:        t = (vhp[ei],vdp1[ei],vdp2[ei])
                 else:
-                    return { spamLabel: (vhp[i],vdp1[i]) \
-                             for (i,spamLabel) in enumerate(self.spamdefs) }
-            else:
-                if returnPr:
-                    return { spamLabel: (vhp[i],vdp1[i],vdp2[i],vp[i]) \
-                             for (i,spamLabel) in enumerate(self.spamdefs) }
-                else:
-                    return { spamLabel: (vhp[i],vdp1[i],vdp2[i]) \
-                             for (i,spamLabel) in enumerate(self.spamdefs) }
-        else:
-            if returnPr:
-                return { spamLabel: (vhp[i],vp[i]) \
-                         for (i,spamLabel) in enumerate(self.spamdefs) }
-            else:
-                return { spamLabel: vhp[i] \
-                         for (i,spamLabel) in enumerate(self.spamdefs) }
+                    if returnPr: t = (vhp[ei],vp[ei])
+                    else:        t = vhp[ei]
+                outcomeQtys[outLbl] = t
+            ret[gstr] = outcomeQtys
+            
+        return ret
 
 
-    def bulk_hprobs_by_block(self, spam_label_rows, evalTree, wrtSlicesList,
+    def bulk_hprobs_by_block(self, evalTree, wrtSlicesList,
                              bReturnDProbs12=False, comm=None):
                              
         """
@@ -1640,12 +1935,6 @@ class GateCalc(object):
                                               'effect', T, Ti)
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += wt * self.povm_identity.dim
-
         else:
             for gateLabel,gate in self.gates.items():
                 wt = itemWeights.get(gateLabel, gateWeight)
@@ -1661,13 +1950,6 @@ class GateCalc(object):
                 wt = itemWeights.get(lbl, spamWeight)
                 d += wt * Evec.frobeniusdist2(otherCalc.effects[lbl],'effect')
                 nSummands += wt * Evec.dim
-
-            if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
-                wt = itemWeights.get(self._identityLabel, spamWeight)
-                d += wt * self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += wt * self.povm_identity.dim
 
         #Temporary: check that this function can be computed by
         # calling residuals - replace with this later.
@@ -1748,12 +2030,6 @@ class GateCalc(object):
 
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None:
-                wt = sqrt_itemWeights.get(self._identityLabel, spamWeight)
-                resids.append(
-                    wt * self.povm_identity.residuals(
-                    otherCalc.povm_identity, 'effect', T, Ti))
-                nSummands += wt * self.povm_identity.dim
         else:
             for gateLabel,gate in self.gates.items():
                 wt = sqrt_itemWeights.get(gateLabel, gateWeight)
@@ -1773,13 +2049,6 @@ class GateCalc(object):
                     wt * Evec.residuals(otherCalc.effects[lbl],'effect'))
                 nSummands += wt * Evec.dim
 
-            if self.povm_identity is not None and \
-               otherCalc.povm_identity is not None:
-                wt = sqrt_itemWeights.get(self._identityLabel, spamWeight)
-                resids.append(
-                    wt * self.povm_identity.residuals(
-                    otherCalc.povm_identity, 'effect'))
-                nSummands += wt * self.povm_identity.dim
         resids = [r.flatten() for r in resids]
         resids = _np.concatenate(resids)
         return resids, nSummands
@@ -1826,11 +2095,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect', T, Ti)
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += self.povm_identity.dim
                 
         else:
             dists = [ gate.jtracedist(otherCalc.gates[lbl])
@@ -1847,11 +2111,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect')
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal
@@ -1900,11 +2159,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect', T, Ti)
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect', T, Ti)
-                nSummands += self.povm_identity.dim
                 
         else:
             dists = [ gate.diamonddist(otherCalc.gates[lbl])
@@ -1921,11 +2175,6 @@ class GateCalc(object):
                 d += Evec.frobeniusdist2(otherCalc.effects[lbl],
                                          'effect')
                 nSummands += Evec.dim
-
-            if self.povm_identity is not None:
-                d += self.povm_identity.frobeniusdist2(
-                    otherCalc.povm_identity, 'effect')
-                nSummands += self.povm_identity.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
         return max(dists) + spamVal

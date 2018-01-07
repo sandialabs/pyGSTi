@@ -490,15 +490,17 @@ class Estimate(object):
         ds = self.get_effective_dataset()
         
         if obj == "chi2":
-            fitQty = _tools.chi2( ds, gs, gss.allstrs,
+            fitQty = _tools.chi2( gs, ds, gss.allstrs,
                                   minProbClipForWeighting=mpc,
                                   gateLabelAliases=gss.aliases)
         elif obj == "logl":
-            logL_upperbound = _tools.logl_max(ds, gss.allstrs, gateLabelAliases=gss.aliases)
+            logL_upperbound = _tools.logl_max(gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             logl = _tools.logl( gs, ds, gss.allstrs, gateLabelAliases=gss.aliases)
             fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
-            
-        Ns = len(gss.allstrs)*(len(ds.get_spam_labels())-1) #number of independent parameters in dataset
+
+        ds_allstrs = _tools.find_replace_tuple_list(
+            gss.allstrs, gss.aliases)
+        Ns  = ds.get_degrees_of_freedom(ds_allstrs)  #number of independent parameters in dataset
         Np = gs.num_nongauge_params() if use_accurate_Np else gs.num_params()
         k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
         if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))

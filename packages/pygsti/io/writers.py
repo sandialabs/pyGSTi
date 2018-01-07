@@ -6,6 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import warnings as _warnings
+
 # from . import stdinput as _stdinput
 from .. import tools as _tools
 from .. import objects as _objs
@@ -54,7 +56,7 @@ def write_empty_dataset(filename, gatestring_list,
             output.write(gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "") + '\n')
 
 
-def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
+def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=None):
     """
     Write a text-formatted dataset file.
 
@@ -70,8 +72,8 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
         The list of gate strings to include in the written dataset.
         If None, all gate strings are output.
 
-    spamLabelOrder : list, optional
-        A list of the SPAM labels in dataset which specifies
+    outcomeLabelOrder : list, optional
+        A list of the outcome labels in dataset which specifies
         the column order in the output file.
     """
     if gatestring_list is not None:
@@ -80,12 +82,20 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
     else:
         gatestring_list = list(dataset.keys())
 
-    spamLabels = dataset.get_spam_labels()
-    if spamLabelOrder is not None:
-        assert(len(spamLabelOrder) == len(spamLabels))
-        assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
-        assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
-        spamLabels = spamLabelOrder
+    def outcome_to_str(x):
+        if _tools.isstr(x): return x
+        else: return ":".join([str(i) for i in x])
+
+    if outcomeLabelOrder is not None: #convert to tuples if needed
+        outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
+                              for ol in outcomeLabelOrder ]
+        
+    outcomeLabels = dataset.get_outcome_labels()
+    if outcomeLabelOrder is not None:
+        assert(len(outcomeLabelOrder) == len(outcomeLabels))
+        assert(all( [ol in outcomeLabels for ol in outcomeLabelOrder] ))
+        assert(all( [ol in outcomeLabelOrder for ol in outcomeLabels] ))
+        outcomeLabels = outcomeLabelOrder
 
     headerString = ""
     if hasattr(dataset,'comment') and dataset.comment is not None:
@@ -94,16 +104,21 @@ def write_dataset(filename, dataset, gatestring_list=None, spamLabelOrder=None):
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s count" % sl for sl in spamLabels ])
+    headerString += '## Columns = ' + ", ".join( [ "%s count" % outcome_to_str(ol)
+                                                   for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
             dataRow = dataset[gateString.tup]
-            output.write(gateString.str + "  " + "  ".join( [("%g" % dataRow[sl]) for sl in spamLabels] ) + '\n')
+            counts = dataRow.counts
 
-def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOrder=None):
+            #output '--' for outcome labels that aren't present in this row
+            output.write(gateString.str + "  " + "  ".join( [("%g" % counts.get(ol,'--'))
+                                                            for ol in outcomeLabels] ) + '\n')
+
+def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabelOrder=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -119,7 +134,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
         The list of gate strings to include in the written dataset.
         If None, all gate strings are output.
 
-    spamLabelOrder : list, optional
+    outcomeLabelOrder : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
     """
@@ -130,12 +145,20 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
     else:
         gatestring_list = list(multidataset.gsIndex.keys()) #TODO: make access function for gatestrings?
 
-    spamLabels = multidataset.get_spam_labels()
-    if spamLabelOrder is not None:
-        assert(len(spamLabelOrder) == len(spamLabels))
-        assert(all( [sl in spamLabels for sl in spamLabelOrder] ))
-        assert(all( [sl in spamLabelOrder for sl in spamLabels] ))
-        spamLabels = spamLabelOrder
+    def outcome_to_str(x):
+        if _tools.isstr(x): return x
+        else: return ":".join([str(i) for i in x])
+
+    if outcomeLabelOrder is not None: #convert to tuples if needed
+        outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
+                              for ol in outcomeLabelOrder ]
+
+    outcomeLabels = multidataset.get_outcome_labels()
+    if outcomeLabelOrder is not None:
+        assert(len(outcomeLabelOrder) == len(outcomeLabels))
+        assert(all( [ol in outcomeLabels for ol in outcomeLabelOrder] ))
+        assert(all( [ol in outcomeLabelOrder for ol in outcomeLabels] ))
+        outcomeLabels = outcomeLabelOrder
 
     dsLabels = list(multidataset.keys())
 
@@ -146,17 +169,17 @@ def write_multidataset(filename, multidataset, gatestring_list=None, spamLabelOr
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,sl)
+    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,outcome_to_str(ol))
                                                    for dsl in dsLabels
-                                                   for sl in spamLabels ])
+                                                   for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()
 
     with open(filename, 'w') as output:
         output.write(headerString + '\n')
         for gateString in gatestring_list: #gateString should be a GateString object here
             gs = gateString.tup #gatestring tuple
-            output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs][sl])
-                                                            for dsl in dsLabels for sl in spamLabels] ) + '\n')
+            output.write(gateString.str + "  " + "  ".join( [("%g" % multidataset[dsl][gs].counts.get(ol,'--'))
+                                                            for dsl in dsLabels for ol in outcomeLabels] ) + '\n')
 
 def write_gatestring_list(filename, gatestring_list, header=None):
     """
@@ -210,37 +233,104 @@ def write_gateset(gs,filename,title=None):
             output.write("# %s" % title + '\n')
         output.write('\n')
 
-        for (prepLabel,rhoVec) in gs.preps.items():
-            output.write("%s\n" % prepLabel)
-            output.write("PauliVec\n")
+        for prepLabel,rhoVec in gs.preps.items():
+            if isinstance(rhoVec, _objs.FullyParameterizedSPAMVec): typ = "PREP"
+            elif isinstance(rhoVec, _objs.TPParameterizedSPAMVec): typ = "TP-PREP"
+            elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
+            else:
+                _warnings.warn(
+                    ("Non-standard prep of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "fully parameterized spam vector").format(typ=str(type(rhoVec))))
+                typ = "PREP"
+            output.write("%s: %s\n" % (typ,prepLabel))
+            output.write("LiouvilleVec\n")
             output.write(" ".join( "%.8g" % el for el in rhoVec ) + '\n')
             output.write("\n")
 
-        for (ELabel,EVec) in gs.effects.items():
-            output.write("%s\n" % ELabel)
-            output.write("PauliVec\n")
-            output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
-            output.write("\n")
+        for povmLabel,povm in gs.povms.items():
+            if isinstance(povm, _objs.POVM): povmType = "POVM"
+            elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
+            else:
+                _warnings.warn(
+                    ("Non-standard POVM of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "standard POVM").format(typ=str(type(povm))))
+                typ = "POVM"
+                
+            output.write("%s: %s\n\n" % (povmType,povmLabel))
+                
+            for ELabel,EVec in povm.items():
+                if isinstance(EVec, _objs.FullyParameterizedSPAMVec): typ = "EFFECT"
+                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT" # ok
+                elif isinstance(EVec, _objs.TPParameterizedSPAMVec): typ = "TP-EFFECT"
+                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                else:
+                    _warnings.warn(
+                        ("Non-standard effect of type {typ} cannot be described by"
+                         "text format gate set files.  It will be read in as a"
+                         "fully parameterized spam vector").format(typ=str(type(EVec))))
+                    typ = "EFFECT"
+                output.write("%s: %s\n" % (typ,ELabel))
+                output.write("LiouvilleVec\n")
+                output.write(" ".join( "%.8g" % el for el in EVec ) + '\n')
+                output.write("\n")
 
-        for (label,gate) in gs.gates.items():
-            output.write(label + '\n')
-            output.write("PauliMx\n")
+            output.write("END POVM\n\n")
+
+        for label,gate in gs.gates.items():
+            if isinstance(gate, _objs.FullyParameterizedGate): typ = "GATE"
+            elif isinstance(gate, _objs.TPParameterizedGate): typ = "TP-GATE"
+            elif isinstance(gate, _objs.LindbladParameterizedGate): typ = "CPTP-GATE"
+            else:
+                _warnings.warn(
+                    ("Non-standard gate of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "fully parameterized gate").format(typ=str(type(gate))))
+                typ = "GATE"
+            output.write(typ + ": " + label + '\n')
+            output.write("LiouvilleMx\n")
             output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
             output.write("\n")
 
-        if gs.povm_identity is not None:
-            output.write("IDENTITYVEC " + " ".join( "%.8g" % el for el in gs.povm_identity ) + '\n')
-        else:
-            output.write("IDENTITYVEC None\n")
+        for instLabel,inst in gs.instruments.items():
+            if isinstance(inst, _objs.Instrument): typ = "Instrument" 
+            elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
+            else:
+                _warnings.warn(
+                    ("Non-standard Instrument of type {typ} cannot be described by"
+                     "text format gate set files.  It will be read in as a"
+                     "standard Instrument").format(typ=str(type(inst))))
+                typ = "Instrument"
+            output.write(typ + ": " + instLabel + '\n\n')
 
-        for sl,(prepLabel,ELabel) in gs.spamdefs.items():
-            output.write("SPAMLABEL %s = %s %s\n" % (sl, prepLabel, ELabel))
+            for label,gate in inst.items():
+                if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
+                elif isinstance(gate, _objs.TPInstrumentGate): typ = "IGATE" #ok
+                else:
+                    _warnings.warn(
+                        ("Non-standard gate of type {typ} cannot be described by"
+                         "text format gate set files.  It will be read in as a"
+                         "fully parameterized gate").format(typ=str(type(gate))))
+                    typ = "IGATE"
+                output.write(typ + ": " + label + '\n')
+                output.write("LiouvilleMx\n")
+                output.write(_tools.mx_to_string(gate, width=16, prec=8) + '\n')
+                output.write("\n")
+            output.write("END Instrument\n\n")
 
         dims = gs.basis.dim.blockDims
         if dims is None:
-            output.write("BASIS %s\n" % gs.basis.name)
+            output.write("BASIS: %s\n" % gs.basis.name)
         else:
             if type(dims) != int:
                 dimStr = ",".join(map(str,dims))
             else: dimStr = str(dims)
-            output.write("BASIS %s %s\n" % (gs.basis.name, dimStr))
+            output.write("BASIS: %s %s\n" % (gs.basis.name, dimStr))
+
+        if isinstance(gs.default_gauge_group, _objs.FullGaugeGroup):
+            output.write("GAUGEGROUP: Full\n")
+        elif isinstance(gs.default_gauge_group, _objs.TPGaugeGroup):
+            output.write("GAUGEGROUP: TP\n")
+        elif isinstance(gs.default_gauge_group, _objs.UnitaryGaugeGroup):
+            output.write("GAUGEGROUP: Unitary\n")

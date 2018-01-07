@@ -14,6 +14,7 @@ import numpy.linalg as _nla
 from .. import objects as _objs
 from .. import construction as _constr
 from ..tools import mpitools as _mpit
+from ..tools import slicetools as _slct
 from . import grasp as _grasp
 from . import scoring as _scoring
 
@@ -464,6 +465,7 @@ def calc_bulk_twirled_DDD(gateset, germsList, eps=1e-6, check=False,
     """
     if germLengths is None:
         germLengths = _np.array([len(germ) for germ in germsList])
+        
     twirledDeriv = bulk_twirled_deriv(gateset, germsList, eps, check, comm) / germLengths[:, None, None]
 
     #OLD: slow, I think because conjugate *copies* a large tensor, causing a memory bottleneck
@@ -610,8 +612,8 @@ def removeSPAMVectors(gateset):
     reducedGateset = gateset.copy()
     for prepLabel in list(reducedGateset.preps.keys()):
         del reducedGateset.preps[prepLabel]
-    for effectLabel in list(reducedGateset.effects.keys()):
-        del reducedGateset.effects[effectLabel]
+    for povmLabel in list(reducedGateset.povms.keys()):
+        del reducedGateset.povms[povmLabel]
     return reducedGateset
 
 
@@ -765,21 +767,34 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
     Returns
     -------
     numpy array
-        An array of shape (num_gate_strings, gate_dim^2, num_gateset_params)
+        An array of shape (num_compiled_gate_strings, gate_dim^2, num_gateset_params)
     """
-    evalTree = gateset.bulk_evaltree(gatestrings)
+    if len(gateset.preps) > 0 or len(gateset.povms) > 0:
+        gateset = removeSPAMVectors(gateset)
+        # This function assumes gateset has no spam elements so `lookup` below
+        #  gives indexes into products computed by evalTree.
+
+    evalTree,lookup,_ = gateset.bulk_evaltree(gatestrings)
     dProds, prods = gateset.bulk_dproduct(evalTree, flat=True, bReturnProds=True, comm=comm)
     gate_dim = gateset.get_dimension()
     fd = gate_dim**2 # flattened gate dimension
 
-    ret = _np.empty((len(gatestrings), fd, dProds.shape[1]), 'complex')
-    for i in range(len(gatestrings)):
+    nOrigStrs = len(gatestrings)
+    nCompiledStrs = evalTree.num_final_strings()
 
+    ret = _np.empty( (nOrigStrs, fd, dProds.shape[1]), 'complex')
+    for iOrig in range(nOrigStrs):
+        iArray = _slct.as_array(lookup[iOrig])
+        assert(iArray.size == 1),("Compiled lookup table should have length-1"
+                                  " element slices!  Maybe you're using a"
+                                  " GateSet without SPAM elements removed?")
+        i = iArray[0] # get evalTree-final index (within dProds or prods)
+        
         # flattened_gate_dim x flattened_gate_dim
         twirler = _SuperOpForPerfectTwirl(prods[i], eps)
 
         # flattened_gate_dim x vec_gateset_dim
-        ret[i] = _np.dot(twirler, dProds[i*fd:(i+1)*fd])
+        ret[iOrig] = _np.dot(twirler, dProds[i*fd:(i+1)*fd])
 
     if check:
         for i, gatestring in enumerate(gatestrings):
@@ -790,7 +805,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
                                % (_nla.norm(ret[i]), _nla.norm(chk_ret),
                                   _nla.norm(ret[i] - chk_ret)))
 
-    return ret # nGateStrings x flattened_gate_dim x vec_gateset_dim
+    return ret # nCompiledGateStrings x flattened_gate_dim x vec_gateset_dim
 
 
 
@@ -836,14 +851,19 @@ def test_germ_list_finitel(gateset, germsToTest, L, weights=None,
     germToPowL = [germ*L for germ in germsToTest]
 
     gate_dim = gateset.get_dimension()
-    evt = gateset.bulk_evaltree(germToPowL)
+    evt,lookup,_ = gateset.bulk_evaltree(germToPowL)
 
     # shape (nGerms*flattened_gate_dim, vec_gateset_dim)
     dprods = gateset.bulk_dproduct(evt, flat=True)
-
-    # shape (nGerms, flattened_gate_dim, vec_gateset_dim
-    dprods = _np.reshape(dprods, (nGerms, gate_dim**2, dprods.shape[1]))
-
+    dprods.shape = (evt.num_final_strings(), gate_dim**2, dprods.shape[1])
+    prod_inds = [ _slct.as_array(lookup[i]) for i in range(nGerms) ]
+    assert( all([len(x)==1 for x in prod_inds])), \
+        ("Compiled lookup table should have length-1"
+         " element slices!  Maybe you're using a"
+         " GateSet without SPAM elements removed?")
+    dprods = _np.take( dprods, _np.concatenate(prod_inds), axis=0)
+      # shape (nGerms, flattened_gate_dim, vec_gateset_dim
+    
     germLengths = _np.array([len(germ) for germ in germsToTest], 'd')
 
     normalizedDeriv = dprods / (L * germLengths[:, None, None])
@@ -1123,7 +1143,7 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
     
     dim = gatesetList[0].dim
     #Np = gatesetList[0].num_params() #wrong:? includes spam...
-    Np = sum([gate.num_params() for gate in gatesetList[0].gates.values()])
+    Np = gatesetList[0].num_params()
     #print("DB Np = %d, Ng = %d" % (Np,Ng))
     assert(all([(gs.dim == dim) for gs in gatesetList])), \
         "All gate sets must have the same dimension!"

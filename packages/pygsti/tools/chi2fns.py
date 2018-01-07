@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from . import listtools as _lt
 
-def chi2_terms(dataset, gateset, gateStrings=None,
+def chi2_terms(gateset, dataset, gateStrings=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
                memLimit=None, gateLabelAliases=None):
@@ -29,71 +29,62 @@ def chi2_terms(dataset, gateset, gateStrings=None,
     Returns
     -------
     chi2 : numpy.ndarray
-        Array of shape (nSpamLabels, nGateStrings) where 
-        `nSpamLabels = gateset.get_spam_labels()` and 
-        `nGateStrings = len(gatestring_list)` or `len(dataset.keys())`.
-        Values are the chi2 contributions of the corresponding SPAM
-        label and gate string.
+        Array of length either `len(gatestring_list)` or `len(dataset.keys())`.
+        Values are the chi2 contributions of the corresponding gate
+        string aggregated over outcomes.
     """
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
-    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
-    spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
-
     if gateStrings is None:
         gateStrings = list(dataset.keys())
 
-    dsGateStrings = _lt.find_replace_tuple_list(
-            gateStrings, gateLabelAliases)
-
-    nSpamLabels = len(spamLabels)
-    nGateStrings = len(gateStrings)
-
-    evTree = gateset.bulk_evaltree(gateStrings)
+    evTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
+        gateset.bulk_evaltree_from_resources(
+            gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'])
 
     #Memory allocation
-    ns = nSpamLabels; ng = nGateStrings
+    nEls = evTree.num_final_elements()
+    ng = evTree.num_final_strings()
     gd = gateset.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (ng*(1 + 2*ns)) # in bytes
+    persistentMem = 8*(3*nEls) # in bytes
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
     #  Allocate peristent memory
-    N      = _np.empty( nGateStrings )
-    f      = _np.empty( (nSpamLabels, nGateStrings) )
-    probs  = _np.empty( (nSpamLabels, nGateStrings) )
+    N      = _np.empty( nEls , 'd')
+    f      = _np.empty( nEls , 'd')
+    probs  = _np.empty( nEls , 'd')
 
-    #  Estimate & check intermediate memory
-    #    - maybe make GateSet methods get intermediate estimates?
-    intermedMem = 8*ng*gd**2 # ~ bulk_product
-    if memLimit is not None and memLimit < intermedMem:
-        reductionFactor = float(intermedMem) / float(memLimit)
-        maxEvalSubTreeSize = int(ng / reductionFactor)
-    else:
-        maxEvalSubTreeSize = None
-
-    if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
-
+    dsGateStrings = _lt.find_replace_tuple_list(
+            gateStrings, gateLabelAliases)
     for (i,gateStr) in enumerate(dsGateStrings):
-        N[i] = float(dataset[gateStr].total())
-        for k,sl in enumerate(spamLabels):
-            f[k,i] = dataset[gateStr].fraction(sl)
+        N[ lookup[i] ] = dataset[gateStr].total()
+        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
-    gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree,
-                            clipTo, check)
+    gateset.bulk_fill_probs(probs, evTree, clipTo, check)
 
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    return N[None,:] * ((probs - f)**2/cprobs)
+    v = N * ((probs - f)**2/cprobs)
+
+    #Aggregate over outcomes:
+    # v[iElement] contains all chi2 contributions - now aggregate over outcomes
+    # terms[iGateString] wiil contain chi2 contributions for each original gate
+    # string (aggregated over outcomes)    
+    nGateStrings = len(gateStrings)
+    terms = _np.empty(nGateStrings , 'd')
+    for i in range(nGateStrings):
+        terms[i] = _np.sum( v[lookup[i]], axis=0 )
+    return terms
+    
 
 
-def chi2(dataset, gateset, gateStrings=None,
+def chi2(gateset, dataset, gateStrings=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
@@ -108,11 +99,11 @@ def chi2(dataset, gateset, gateStrings=None,
 
     Parameters
     ----------
-    dataset : DataSet
-        The data used to specify frequencies and counts
-
     gateset : GateSet
         The gate set used to specify the probabilities and SPAM labels
+
+    dataset : DataSet
+        The data used to specify frequencies and counts
 
     gateStrings : list of GateStrings or tuples, optional
         List of gate strings whose terms will be included in chi^2 sum.
@@ -169,44 +160,37 @@ def chi2(dataset, gateset, gateStrings=None,
     if useFreqWeightedChiSq:
         raise ValueError("frequency weighted chi2 is not implemented yet.")
 
-    spamLabels = gateset.get_spam_labels() #this list fixes the ordering of the spam labels
-    spam_lbl_rows = { sl:i for (i,sl) in enumerate(spamLabels) }
     vec_gs_len = gateset.num_params()
 
     if gateStrings is None:
         gateStrings = list(dataset.keys())
 
-    dsGateStrings = _lt.find_replace_tuple_list(
-            gateStrings, gateLabelAliases)
-
-    nSpamLabels = len(spamLabels)
-    nGateStrings = len(gateStrings)
-
-    evTree = gateset.bulk_evaltree(gateStrings)
+    evTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gateStrings)
 
     #Memory allocation
-    ns = nSpamLabels; ng = nGateStrings
+    nEls = evTree.num_final_elements()
+    ng = evTree.num_final_strings()
     ne = gateset.num_params(); gd = gateset.get_dimension()
     C = 1.0/1024.0**3
 
     #  Estimate & check persistent memory (from allocs directly below)
-    persistentMem = 8* (ng*(1 + 2*ns)) # in bytes
-    if returnGradient or returnHessian: persistentMem += 8*ng*ns*ne
-    if returnHessian: persistentMem += 8*ng*ns*ne**2
+    persistentMem = 8* (3*nEls) # in bytes
+    if returnGradient or returnHessian: persistentMem += 8*nEls*ne
+    if returnHessian: persistentMem += 8*nEls*ne**2
     if memLimit is not None and memLimit < persistentMem:
         raise MemoryError("Chi2 Memory limit (%g GB) is " % (memLimit*C) +
                           "< memory required to hold final results (%g GB)"
                           % (persistentMem*C))
 
     #  Allocate peristent memory
-    N      = _np.empty( nGateStrings )
-    f      = _np.empty( (nSpamLabels, nGateStrings) )
-    probs  = _np.empty( (nSpamLabels, nGateStrings) )
+    N      = _np.empty( nEls, 'd')
+    f      = _np.empty( nEls, 'd')
+    probs  = _np.empty( nEls, 'd')
 
     if returnGradient or returnHessian:
-        dprobs = _np.empty( (nSpamLabels, nGateStrings,vec_gs_len) )
+        dprobs = _np.empty( (nEls,vec_gs_len), 'd')
     if returnHessian:
-        hprobs = _np.empty( (nSpamLabels, nGateStrings,vec_gs_len,vec_gs_len) )
+        hprobs = _np.empty( (nEls,vec_gs_len,vec_gs_len), 'd')
 
     #  Estimate & check intermediate memory
     #    - maybe make GateSet methods get intermediate estimates?
@@ -220,7 +204,7 @@ def chi2(dataset, gateset, gateStrings=None,
         maxEvalSubTreeSize = None
 
     if maxEvalSubTreeSize is not None:
-        evTree.split(maxEvalSubTreeSize, None)
+        lookup = evTree.split(lookup,maxEvalSubTreeSize, None)
 
     #DEBUG - no verbosity passed in to just leave commented out
     #if memLimit is not None:
@@ -235,40 +219,40 @@ def chi2(dataset, gateset, gateStrings=None,
     #  evTree.print_analysis()
 
 
+    dsGateStrings = _lt.find_replace_tuple_list(
+        gateStrings, gateLabelAliases)
     for (i,gateStr) in enumerate(dsGateStrings):
-        N[i] = float(dataset[gateStr].total())
-        for k,sl in enumerate(spamLabels):
-            f[k,i] = dataset[gateStr].fraction(sl)
-
+        N[ lookup[i] ] = dataset[gateStr].total()
+        f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
     if returnHessian:
-        gateset.bulk_fill_hprobs(hprobs, spam_lbl_rows, evTree,
+        gateset.bulk_fill_hprobs(hprobs, evTree,
                                 probs, dprobs, clipTo, check)
     elif returnGradient:
-        gateset.bulk_fill_dprobs(dprobs, spam_lbl_rows, evTree,
+        gateset.bulk_fill_dprobs(dprobs, evTree,
                                 probs, clipTo, check)
     else:
-        gateset.bulk_fill_probs(probs, spam_lbl_rows, evTree,
+        gateset.bulk_fill_probs(probs, evTree,
                                 clipTo, check)
 
 
     #cprobs = _np.clip(probs,minProbClipForWeighting,1-minProbClipForWeighting) #clipped probabilities (also clip derivs to 0?)
     cprobs = _np.clip(probs,minProbClipForWeighting,1e10) #effectively no upper bound
-    chi2 = _np.sum( N[None,:] * ((probs - f)**2/cprobs), axis=(0,1) ) # Note (0,1) are all axes in this case
+    chi2 = _np.sum( N * ((probs - f)**2/cprobs), axis=0) # Note 0 is only axis in this case
     #TODO: try to replace final N[...] multiplication with dot or einsum, or do summing sooner to reduce memory
 
     if returnGradient:
-        t = ((probs - f)/cprobs)[:,:,None] # (iSpamLabel, iGateString, 0) = (K,M,1)
-        dchi2 = N[None,:,None] * t * (2 - t) * dprobs  # (1,M,1) * (K,M,1) * (K,M,N)  (K=#spam, M=#strings, N=#vec_gs)
-        dchi2 = _np.sum( dchi2, axis=(0,1) ) # sum over gate strings and spam labels => (N)
+        t = ((probs - f)/cprobs)[:,None] # (iElement, 0) = (KM,1)
+        dchi2 = N[:,None] * t * (2 - t) * dprobs  # (KM,1) * (KM,1) * (KM,N)  (K=#spam, M=#strings, N=#vec_gs)
+        dchi2 = _np.sum( dchi2, axis=0 ) # sum over gate strings and spam labels => (N)
 
     if returnHessian:
-        dprobs_p = dprobs[:,:,None,:] # (K,M,1,N)
-        t = ((probs - f)/cprobs)[:,:,None,None] # (iSpamLabel, iGateString, 0,0) = (K,M,1,1)
-        dt = ((1.0/cprobs - (probs-f)/cprobs**2)[:,:,None] * dprobs)[:,:,:,None] # (K,M,1) * (K,M,N) = (K,M,N) => (K,M,N,1)
-        d2chi2 = N[None,:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
-        d2chi2 = _np.sum( d2chi2, axis=(0,1) ) # sum over gate strings and spam labels => (N1,N2)
-        # (1,M,1,1) * ( (K,M,N1,1) * (K,M,1,1) * (K,M,1,N2) + (K,M,1,1) * (K,M,N1,1) * (K,M,1,N2) + (K,M,1,1) * (K,M,1,1) * (K,M,N1,N2) )
+        dprobs_p = dprobs[:,None,:] # (KM,1,N)
+        t = ((probs - f)/cprobs)[:,None,None] # (iElement, 0,0) = (KM,1,1)
+        dt = ((1.0/cprobs - (probs-f)/cprobs**2)[:,None] * dprobs)[:,:,None] # (KM,1) * (KM,N) = (KM,N) => (KM,N,1)
+        d2chi2 = N[:,None,None] * (dt * (2 - t) * dprobs_p - t * dt * dprobs_p + t * (2 - t) * hprobs)
+        d2chi2 = _np.sum( d2chi2, axis=0 ) # sum over gate strings and spam labels => (N1,N2)
+        # (KM,1,1) * ( (KM,N1,1) * (KM,1,1) * (KM,1,N2) + (KM,1,1) * (KM,N1,1) * (KM,1,N2) + (KM,1,1) * (KM,1,1) * (KM,N1,N2) )
 
     if returnGradient:
         return (chi2, dchi2, d2chi2) if returnHessian else (chi2, dchi2)
@@ -292,53 +276,54 @@ def chi2(dataset, gateset, gateStrings=None,
 #        #return sum( [ chi2fn_2outcome( dsRow.total(),
 #        #                     gateset.pr('plus', gatestring),
 #        #                     dsRow.fraction('plus'),
-#        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.iteritems() ] )
+#        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.items() ] )
 #    else:
 #        return sum( [ gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq,
 #                                       minProbClipForWeighting) for gatestring in gateStrings] )
 #
 
-def gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq=False,
-                     minProbClipForWeighting=1e-4):
-    """
-    Computes the chi-squared term for a single gate string.
-
-    The sum of the chi-squared terms for each of the possible
-    outcomes (the SPAM labels in gateset).
-
-    Parameters
-    ----------
-    gatestring : GateString or tuple
-        The gate string to compute chi-squared for.
-
-    dataset : Dataset
-        The object from which frequencies are extracted.
-
-    gateset : GateSet
-        The object from which probabilities and SPAM labels are extracted.
-
-    useFreqWeightedChiSq : bool, optional
-        Whether or not frequencies (instead of probabilities) should be used
-        in statistical weight factors.
-
-    minProbClipForWeighting : float, optional
-        If useFreqWeightedChiSq == False, defines the clipping interval
-        for the statistical weight (see chi2fn).
-
-    Returns
-    -------
-    float
-        The sum of chi^2 terms for corresponding to gatestring
-        (one term per SPAM label).
-    """
-
-    chiSqFn  = chi2fn_wfreqs if useFreqWeightedChiSq else chi2fn
-    rowData  = dataset[gatestring]
-    clip = minProbClipForWeighting
-
-    N = rowData.total()
-    p = gateset.probs(gatestring)
-    return sum( [ chiSqFn(N, p[sl], rowData[sl]/N, clip) for sl in gateset.get_spam_labels() ] )
+#OLD
+#def gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq=False,
+#                     minProbClipForWeighting=1e-4):
+#    """
+#    Computes the chi-squared term for a single gate string.
+#
+#    The sum of the chi-squared terms for each of the possible
+#    outcomes (the SPAM labels in gateset).
+#
+#    Parameters
+#    ----------
+#    gatestring : GateString or tuple
+#        The gate string to compute chi-squared for.
+#
+#    dataset : Dataset
+#        The object from which frequencies are extracted.
+#
+#    gateset : GateSet
+#        The object from which probabilities and SPAM labels are extracted.
+#
+#    useFreqWeightedChiSq : bool, optional
+#        Whether or not frequencies (instead of probabilities) should be used
+#        in statistical weight factors.
+#
+#    minProbClipForWeighting : float, optional
+#        If useFreqWeightedChiSq == False, defines the clipping interval
+#        for the statistical weight (see chi2fn).
+#
+#    Returns
+#    -------
+#    float
+#        The sum of chi^2 terms for corresponding to gatestring
+#        (one term per SPAM label).
+#    """
+#
+#    chiSqFn  = chi2fn_wfreqs if useFreqWeightedChiSq else chi2fn
+#    rowData  = dataset[gatestring]
+#    clip = minProbClipForWeighting
+#
+#    N = rowData.total()
+#    p = gateset.probs(gatestring)
+#    return sum( [ chiSqFn(N, p[sl], rowData[sl]/N, clip) for sl in gateset.get_spam_labels() ] )
 
 
 def chi2fn_2outcome( N, p, f, minProbClipForWeighting=1e-4 ):

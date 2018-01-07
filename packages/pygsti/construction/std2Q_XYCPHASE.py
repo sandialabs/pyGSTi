@@ -199,37 +199,14 @@ legacy_germs = _strc.gatestring_list(
 gs_target = _setc.build_gateset(
     [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CPHASE(Q0,Q1)" ],
-    prepLabels=['rho0'], prepExpressions=["0"],
-    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
-    spamdefs={'00': ('rho0','E0'), '01': ('rho0','E1'),
-              '10': ('rho0','E2'), '11': ('rho0','remainder') }, basis="pp")
+    effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
-specs16x10 = _spamc.build_spam_specs(
-    prepStrs=prepStrs,
-    effectStrs=effectStrs,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs16 = _spamc.build_spam_specs(
-    fiducials16,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs36 = _spamc.build_spam_specs(
-    fiducials36,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs = specs16x10 #use smallest specs set as "default"
 
 #Wrong CPHASE (bad 1Q phase factor)
 legacy_gs_target = _setc.build_gateset(
     [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcphase'],
     [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CZ(pi,Q0,Q1)" ],
-    prepLabels=['rho0'], prepExpressions=["0"],
-    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
-    spamdefs={'00': ('rho0','E0'), '01': ('rho0','E1'),
-              '10': ('rho0','E2'), '11': ('rho0','remainder') }, basis="pp")
+    effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
 
 global_fidPairs =  [

@@ -40,7 +40,7 @@
 
 
 	<figure id="bestEstimateColorBoxPlot_scl">
-	  %(bestEstimateColorBoxPlotPages_scl)s
+	  %(bestEstimateColorBoxPlot_scl)s
 	  <figcaption><span class="captiontitle">SCALED Per-sequence model violation box plot.</span><span class="captiondetail"> This plot shows the <span class="math">2\Delta\log(\mathcal{L})</span> contribution for each individual circuit in the dataset.  Each box represents a single gate sequence, and its color indicates whether GST was able to fit the corresponding frequency well.  Shades of white/gray indicate typical (within the expected) values. Red squares represent statistically significant evidence for model violation (non-Markovianity), and the probabilty that <i>any</i> red squares appear is %(linlg_pcntle)s%% when the data really are Markovian. Each square block of pixels (<q>plaquette</q>) corresponds to a particular germ-power "base sequence", and each pixel within a block corresponds to a specific "fiducial pair" -- i.e., choice of pre- and post-fiducial sequences.  The base sequences are arranged by germ (varying from row to row), and by power/length (varying from column to column).  Hovering over a colored box will pop up the exact circuit to which it corresponds, the observed frequencies, and the corresponding probabilities predicted by the GST estimate of the gateset.  The slider below the figure permits switching between different estimates, labeled by <span class="math">L</span>, which were obtained from subsets of the data that included only base sequences of length up to <span class="math">L</span>. </span></figcaption>
 	</figure>
 

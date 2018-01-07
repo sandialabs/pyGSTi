@@ -35,11 +35,7 @@ legacy_germs = _strc.gatestring_list(
 
 #Construct a target gateset: Identity, X(pi/2), Y(pi/2)
 gs_target = _setc.build_gateset([2],[('Q0',)], ['Gi','Gx','Gy'],
-                                [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                 prepLabels=["rho0"], prepExpressions=["0"],
-                                 effectLabels=["E0"], effectExpressions=["0"],
-                                 spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') },
-                                 basis='pp')
+                                [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
 clifford_compilation = _OrderedDict()
 clifford_compilation["Gc0"] = ['Gi',]

@@ -8,26 +8,37 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import pickle as _pickle
+import copy as _copy
 from collections import OrderedDict as _OrderedDict
+
+from ..tools import compattools as _compat
 
 from .dataset import DataSet as _DataSet
 from . import gatestring as _gs
+
 
 
 class MultiDataSet_KeyValIterator(object):
     """ Iterator class for datasetName,DataSet pairs of a MultiDataSet """
     def __init__(self, multidataset):
         self.multidataset = multidataset
-        self.countsDictIter = multidataset.countsDict.__iter__()
+        self.oliDictIter = multidataset.oliDict.__iter__()
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        datasetName = next(self.countsDictIter)
-        return datasetName, _DataSet(self.multidataset.countsDict[datasetName], 
+        datasetName = next(self.oliDictIter)
+        oliData = self.multidataset.oliDict[datasetName]
+        timeData = self.multidataset.timeDict[datasetName]
+        if self.multidataset.repDict:
+            repData = self.multidataset.repDict[datasetName]
+        else:
+            repData = None
+
+        return datasetName, _DataSet(oliData, timeData, repData,
                                      gateStringIndices=self.multidataset.gsIndex,
-                                     spamLabelIndices=self.multidataset.slIndex,
+                                     outcomeLabelIndices=self.multidataset.olIndex,
                                      collisionAction=self.multidataset.collisionActions[datasetName],
                                      bStatic=True)
 
@@ -38,64 +49,80 @@ class MultiDataSet_ValIterator(object):
     """ Iterator class for DataSets of a MultiDataSet """
     def __init__(self, multidataset):
         self.multidataset = multidataset
-        self.countsDictIter = multidataset.countsDict.__iter__()
+        self.oliDictIter = multidataset.oliDict.__iter__()
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        datasetName = next(self.countsDictIter)
-        return _DataSet(self.multidataset.countsDict[datasetName],
+        datasetName = next(self.oliDictIter)
+        oliData = self.multidataset.oliDict[datasetName]
+        timeData = self.multidataset.timeDict[datasetName]
+        if self.multidataset.repDict:
+            repData = self.multidataset.repDict[datasetName]
+        else:
+            repData = None
+
+        return _DataSet(oliData, timeData, repData,
                         gateStringIndices=self.multidataset.gsIndex,
-                        spamLabelIndices=self.multidataset.slIndex, bStatic=True,
-                        collisionAction=self.multidataset.collisionActions[datasetName],)
+                        outcomeLabelIndices=self.multidataset.olIndex,
+                        collisionAction=self.multidataset.collisionActions[datasetName],
+                        bStatic=True)
 
     next = __next__
 
+    
 class MultiDataSet(object):
     """
     The MultiDataSet class allows for the combined access and storage of
-    several static DataSets that contain the same gate strings (in the same order).
-    It is designed to behave similarly to a dictionary of DataSets, so that
-    a DataSet is obtained by (Note that datasetName may be a tuple):
+    several static DataSets that contain the same gate strings (in the same
+    order) AND the same time-dependence structure (if applicable).
 
-    dataset = multiDataset[datasetName]
+    It is designed to behave similarly to a dictionary of DataSets, so that
+    a DataSet is obtained by:
+
+    `dataset = multiDataset[datasetName]`
+
+    where `datasetName` may be a string OR a tuple.
     """
 
-    def __init__(self, countsDict=None,
-                 gateStrings=None, gateStringIndices=None,
-                 spamLabels=None, spamLabelIndices=None,
+    def __init__(self, oliDict=None, timeDict=None, repDict=None,
+                 gateStringIndices=None,
+                 outcomeLabels=None, outcomeLabelIndices=None,
                  fileToLoadFrom=None, collisionActions=None,
-                 comment=None):
+                 comment=None, comments=None):
         """
         Initialize a MultiDataSet.
 
         Parameters
         ----------
-        countsDict : ordered dictionary, optional
-          Keys specify dataset names.  Values are 2D numpy arrays which specify counts. Rows of the arrays
-          correspond to gate strings and columns to spam labels.
+        oliDict : ordered dictionary, optional
+          Keys specify dataset names.  Values are 1D numpy arrays which specify
+          outcome label indices.  Each value is indexed by the values of
+          `gateStringIndices`.
 
-        gateStrings : list of (tuples or GateStrings), optional
-          Each element is a tuple of gate labels or a GateString object.  Indices for these strings
-          are assumed to ascend from 0.  These indices must correspond to rows/elements of counts (above).
-          Only specify this argument OR gateStringIndices, not both.
+        timeDict : ordered dictionary, optional
+          Same format as `oliDict` except stores arrays of floating-point time
+          stamp data.
+
+        repDict :  ordered dictionary, optional
+          Same format as `oliDict` except stores arrays of integer repetition
+          counts (can be `None` if there are no repetitions)
 
         gateStringIndices : ordered dictionary, optional
           An OrderedDict with keys equal to gate strings (tuples of gate labels) and values equal to
-          integer indices associating a row/element of counts with the gate string.  Only
-          specify this argument OR gateStrings, not both.
+          integer indices associating a row/element of counts with the gate string.
 
-        spamLabels : list of strings, optional
+        outcomeLabels : list of strings
           Specifies the set of spam labels for the DataSet.  Indices for the spam labels
           are assumed to ascend from 0, starting with the first element of this list.  These
-          indices will index columns of the counts array/list.  Only specify this argument
-          OR spamLabelIndices, not both.
-
-        spamLabelIndices : ordered dictionary, optional
-          An OrderedDict with keys equal to spam labels (strings) and value  equal to
-          integer indices associating a spam label with a column of counts.  Only
-          specify this argument OR spamLabels, not both.
+          indices will associate each elememtn of `timeseries` with a spam label.  Only
+          specify this argument OR outcomeLabelIndices, not both.
+        
+        outcomeLabelIndices : ordered dictionary
+          An OrderedDict with keys equal to spam labels (strings) and value equal to 
+          integer indices associating a spam label with given index.  Only 
+          specify this argument OR outcomeLabels, not both.
 
         fileToLoadFrom : string or file object, optional
           Specify this argument and no others to create a MultiDataSet by loading
@@ -103,14 +130,19 @@ class MultiDataSet(object):
 
         collisionActions : dictionary, optional
             Specifies how duplicate gate sequences should be handled for the data
-            sets specified by `countsDict`.  Keys must match those of `countsDict`
-            and values are "aggregate" or "keepseparate".  See documentation for
-            `DataSet`.  If None, then "aggregate" is used for all sets by default.
+            sets.  Keys must match those of `oliDict` and values are "aggregate"
+            or "keepseparate".  See documentation for :class:`DataSet`.  If None,
+            then "aggregate" is used for all sets by default.
 
         comment : string, optional
             A user-specified comment string that gets carried around with the 
-            data.  A common use for this field is to attache to the data details
+            data.  A common use for this field is to attach to the data details
             regarding its collection.
+
+        comments : dict, optional
+            A user-specified dictionary of comments, one per dataset.  Keys 
+            are dataset names (same as `oliDict` keys).
+
 
         Returns
         -------
@@ -120,139 +152,217 @@ class MultiDataSet(object):
 
         #Optionally load from a file
         if fileToLoadFrom is not None:
-            assert(countsDict is None and gateStrings is None and gateStringIndices is None and spamLabels is None and spamLabelIndices is None)
+            assert(oliDict is None and timeDict is None and repDict is None and
+                   gateStringIndices is None and outcomeLabels is None and outcomeLabelIndices is None)
             self.load(fileToLoadFrom)
             return
 
         # self.gsIndex  :  Ordered dictionary where keys = gate strings (tuples), values = integer indices into counts
         if gateStringIndices is not None:
             self.gsIndex = gateStringIndices
-        elif gateStrings is not None:
-            dictData = [ (gs if isinstance(gs,_gs.GateString) else _gs.GateString(gs),i) \
-                           for (i,gs) in enumerate(gateStrings) ] #convert to GateStrings if necessary
-            self.gsIndex = _OrderedDict( dictData )
         else:
             self.gsIndex = None
 
-        # self.slIndex  :  Ordered dictionary where keys = spam labels (strings), values = integer indices into counts
-        if spamLabelIndices is not None:
-            self.slIndex = spamLabelIndices
-        elif spamLabels is not None:
-            self.slIndex = _OrderedDict( [(sl,i) for (i,sl) in enumerate(spamLabels) ] )
+
+                # self.olIndex  :  Ordered dictionary where
+        #                  keys = outcome labels (strings or tuples),
+        #                  values = integer indices mapping oliData (integers) onto
+        #                           the outcome labels.
+        if outcomeLabelIndices is not None:
+            self.olIndex = outcomeLabelIndices
+        elif outcomeLabels is not None:
+            tup_outcomeLabels = [ ((ol,) if _compat.isstr(ol) else ol)
+                                  for ol in outcomeLabels] #strings -> tuple outcome labels
+            self.olIndex = _OrderedDict( [(ol,i) for (i,ol) in enumerate(tup_outcomeLabels) ] )
         else:
-            self.slIndex = None
+            self.olIndex = None
 
-        if self.gsIndex:  #Note: tests if not none and nonempty
-            assert( min(self.gsIndex.values()) >= 0)
-        if self.slIndex:  #Note: tests if not none and nonempty
-            assert( min(self.slIndex.values()) >= 0)
+        #if self.gsIndex:  #Note: tests if not none and nonempty
+        #    assert( min(self.gsIndex.values()) >= 0) # values are *slices* so can't test like this
+        if self.olIndex:  #Note: tests if not none and nonempty
+            assert( min(self.olIndex.values()) >= 0)
 
-        # self.countsDict : a dictionary of 2D numpy arrays, each corresponding to a DataSet.  Rows = gate strings, Cols = spam labels
-        #                   ( keys = dataset names, values = 2D counts array of corresponding dataset )
-        if countsDict is not None:
-            self.countsDict = _OrderedDict( [ (name,counts) for name,counts in countsDict.items() ] ) #copy OrderedDict but share counts arrays
+        # self.*Dict : dictionaries of 1D numpy arrays, each corresponding to a DataSet.        
+        if oliDict is not None:
+            self.oliDict = _OrderedDict()
+            self.timeDict = _OrderedDict()
+            self.repDict = _OrderedDict() if repDict else None
+
+            assert(timeDict is not None), "Must specify `timeDict` also!"
+        
+            for name,outcomeInds in oliDict.items():
+                assert(name in timeDict), "`timeDict` arg is missing %s key!" % name
+                self.oliDict[name] = outcomeInds  #copy OrderedDict but share arrays
+                self.timeDict[name] = timeDict[name]
+                if repDict: self.repDict[name] = repDict[name]
+
             if collisionActions is None: collisionActions = {} #allow None to function as an empty dict
             self.collisionActions = _OrderedDict( [ (name,collisionActions.get(name,"aggregate"))
-                                                    for name in self.countsDict.keys() ] )
+                                                    for name in self.oliDict.keys() ] )
 
-            if self.gsIndex:  #Note: tests if not none and nonempty
-                #minIndex = min(self.gsIndex.values())
-                maxIndex = max(self.gsIndex.values())
-                for _,counts in self.countsDict.items():
-                    assert( counts.shape[0] > maxIndex and counts.shape[1] == len(self.slIndex) )
+            if comments is None: comments = {} #allow None to function as an empty dict
+            self.comments = _OrderedDict( [ (name,comments.get(name,None))
+                                            for name in self.oliDict.keys() ] )
+
+            if self.olIndex:  #Note: tests if not none and nonempty
+                maxOlIndex = max(self.olIndex.values())
+                for outcomeInds in self.oliDict.values():
+                    assert( _np.amax(outcomeInds) <= maxOlIndex )
         else:
-            self.countsDict = _OrderedDict()
+            assert(timeDict is None), "Must specify `oliDict` also!"
+            assert(repDict is None), "Must specify `oliDict` also!"
+            self.oliDict = _OrderedDict()
+            self.timeDict = _OrderedDict()
+            self.repDict = None
             self.collisionActions = _OrderedDict()
+            self.comments = _OrderedDict()            
 
         # comment
         self.comment = comment
 
+        #data types - should stay in sync with DataSet
+        self.oliType = _np.uint8
+        self.timeType = _np.float64
+        self.repType = _np.uint16
 
-    def get_spam_labels(self):
-        """
-        Get the spam labels of this MultiDataSet.
 
+
+    def get_outcome_labels(self):
+        """ 
+        Get a list of *all* the outcome labels contained in this MultiDataSet.
+        
         Returns
         -------
-        list of strings
-          A list where each element is a spam label.
-          Returns None when the MultiDataSet is not
-          yet initialized with any data or spam labels.
+        list of strings or tuples
+          A list where each element is an outcome label (which can 
+          be a string or a tuple of strings).
         """
-        if self.slIndex is not None:
-            return list(self.slIndex.keys())
+        if self.olIndex is not None:
+            return list(self.olIndex.keys())
         else: return None
 
-
     def __iter__(self):
-        return self.countsDict.__iter__() #iterator over dataset names
+        return self.oliDict.__iter__() #iterator over dataset names
 
     def __len__(self):
-        return len(self.countsDict)
+        return len(self.oliDict)
 
     def __getitem__(self, datasetName):  #return a static DataSet
-        return _DataSet(self.countsDict[datasetName],
+        repData = self.repDict[datasetName] if self.repDict else None
+        return _DataSet(self.oliDict[datasetName],
+                        self.timeDict[datasetName], repData, 
                         gateStringIndices=self.gsIndex,
-                        spamLabelIndices=self.slIndex, bStatic=True,
+                        outcomeLabelIndices=self.olIndex, bStatic=True,
                         collisionAction=self.collisionActions[datasetName])
 
     def __setitem__(self, datasetName, dataset):
         self.add_dataset(datasetName, dataset)
 
     def __contains__(self, datasetName):
-        return datasetName in self.countsDict
+        return datasetName in self.oliDict
 
     def keys(self):
         """ Returns a list of the keys (dataset names) of this MultiDataSet """
-        return list(self.countsDict.keys())
+        return list(self.oliDict.keys())
 
     def has_key(self, datasetName):
         """ Test whether this MultiDataSet contains a given dataset name """
-        return datasetName in self.countsDict
+        return datasetName in self.oliDict
 
-    def iteritems(self):
+    def items(self):
         """ Iterator over (dataset name, DataSet) pairs """
         return MultiDataSet_KeyValIterator(self)
 
-    def itervalues(self):
+    def values(self):
         """ Iterator over DataSets corresponding to each dataset name """
         return MultiDataSet_ValIterator(self)
 
-    def get_datasets_sum(self, *datasetNames):
+    def get_datasets_aggregate(self, *datasetNames):
         """
-        Generate a new DataSet by combining the counts of multiple member Datasets.
-
+        Generate a new DataSet by combining the outcome counts of multiple
+        member Datasets.  Data with the same time-stamp and outcome are 
+        merged into a single "bin" in the returned :class:`DataSet`.
+    
         Parameters
         ----------
         datasetNames : one or more dataset names.
-
+    
         Returns
         -------
         DataSet
             a single DataSet containing the summed counts of each of the datasets
             named by the parameters.
         """
-        summedCounts = None
+
         if len(datasetNames) == 0: raise ValueError("Must specify at least one dataset name")
         for datasetName in datasetNames:
             if datasetName not in self:
                 raise ValueError("No dataset with the name '%s' exists" % datasetName)
-
-            if summedCounts is None:
-                summedCounts = self.countsDict[datasetName].copy()
+            
+        #add data for each gate sequence to build up aggregate lists
+        gstrSlices = _OrderedDict()
+        agg_oli = []; agg_time = []; agg_rep = []; slc_i = 0
+        for gstr, slc in self.gsIndex.items():
+            concat_oli = _np.concatenate( [ self.oliDict[datasetName][slc]
+                                            for datasetName in datasetNames ], axis=0 )
+            concat_time = _np.concatenate( [ self.timeDict[datasetName][slc]
+                                            for datasetName in datasetNames ], axis=0 )
+            if self.repDict:
+                concat_rep = _np.concatenate( [ self.repDict[datasetName][slc]
+                                                for datasetName in datasetNames ], axis=0 )
             else:
-                summedCounts += self.countsDict[datasetName]
+                concat_rep = None
 
-        return _DataSet(summedCounts, gateStringIndices=self.gsIndex,
-                        spamLabelIndices=self.slIndex, bStatic=True)
+            # Merge same-timestamp, same-outcome data
+            sortedInds = [i for i,el in sorted(enumerate(concat_time),key=lambda x:x[1])]
+            sorted_oli = []; sorted_time = []; sorted_rep = []
+            last_time =concat_time[sortedInds[0]]; cur_reps = {}
+            for i in sortedInds:
+                if concat_time[i] != last_time:
+                    # dump cur_reps at last_time and reset
+                    for oli,reps in cur_reps.items():
+                        sorted_time.append( last_time )
+                        sorted_oli.append( oli )
+                        sorted_rep.append( reps )
+                    last_time = concat_time[i]; cur_reps = {}
+                    
+                #add i-th element data to cur_reps
+                reps = concat_rep[i] if (concat_rep is not None) else 1
+                if concat_oli[i] in cur_reps:
+                    cur_reps[ concat_oli[i] ] += reps
+                else:
+                    cur_reps[ concat_oli[i] ] = reps
+                    
+            # dump cur_reps at last_time
+            for oli,reps in cur_reps.items():
+                sorted_time.append( last_time )
+                sorted_oli.append( oli )
+                sorted_rep.append( reps )
+
+            agg_oli.extend( sorted_oli )
+            agg_time.extend( sorted_time )
+            agg_rep.extend( sorted_rep )
+
+            gstrSlices[gstr] = slice(slc_i, slc_i+len(sorted_oli))
+            slc_i += len(sorted_oli)
+
+        agg_oli = _np.array(agg_oli, self.oliType)
+        agg_time = _np.array(agg_time, self.timeType)
+        agg_rep = _np.array(agg_rep, self.repType)
+        if _np.max(agg_rep) == 1: agg_rep = None #don't store trivial reps
+
+        return _DataSet(agg_oli, agg_time, agg_rep,
+                        gateStringIndices=gstrSlices,
+                        outcomeLabelIndices=self.olIndex, bStatic=True)
                         #leave collisionAction as default "aggregate"
 
+                        
     def add_dataset(self, datasetName, dataset):
         """
         Add a DataSet to this MultiDataSet.  The dataset
-        must be static and conform with the gate strings passed
-        upon construction or those inherited from the first
-        dataset added.
+        must be static and conform with the gate strings and
+        time-dependent structure passed upon construction or
+        those inherited from the first dataset added.
 
         Parameters
         ----------
@@ -269,60 +379,76 @@ class MultiDataSet(object):
             raise ValueError("Cannot add dataset: only static DataSets can be added to a MultiDataSet")
         if self.gsIndex is not None and dataset.gsIndex != self.gsIndex:
             raise ValueError("Cannot add dataset: gate strings and/or their indices do not match")
-        if self.slIndex is not None and dataset.slIndex != self.slIndex:
-            raise ValueError("Cannot add dataset: spam labels and/or their indices do not match")
+        if self.olIndex is not None and dataset.olIndex != self.olIndex:
+            print("DB: other = ",dataset.olIndex)
+            print("DB: self = ",self.olIndex)
+            raise ValueError("Cannot add dataset: outcome labels and/or their indices do not match")
 
-        if self.gsIndex:  #Note: tests if not none and nonempty
-            maxIndex = max(self.gsIndex.values())
-            assert( dataset.counts.shape[0] > maxIndex and dataset.counts.shape[1] == len(self.slIndex) )
+        #if self.gsIndex:  #Note: tests if not none and nonempty
+        #    maxIndex = max(self.gsIndex.values())
+        #    assert( dataset.counts.shape[0] > maxIndex and dataset.counts.shape[1] == len(self.slIndex) )
+        if len(self.oliDict) > 0:
+            firstKey =  list(self.oliDict.keys())[0]
+            dataLen = len(self.oliDict[firstKey])
+            assert( len(dataset.oliData) == dataLen ), "Incompatible data sizes!"
 
-        self.countsDict[datasetName] = dataset.counts
+            if (dataset.repData is not None) and self.repDict is None:
+                # buildup trivial repDatas for all existing datasets
+                self.repDict = _OrderedDict(
+                    [ (nm,_np.ones(dataLen, self.repType)) for nm in self])
+                
+        elif dataset.repData is not None:
+            self.repDict = _OrderedDict()
+                
+        self.oliDict[datasetName] = dataset.oliData
+        self.timeDict[datasetName] = dataset.timeData
+        if dataset.repData is not None:
+            self.repDict[datasetName] = dataset.repData
+            
         self.collisionActions[datasetName] = dataset.collisionAction
+        self.comments[datasetName] = dataset.comment
 
         if self.gsIndex is None:
             self.gsIndex = dataset.gsIndex
-            if len(self.gsIndex) > 0:
-                assert( min(self.gsIndex.values()) >= 0)
 
-        if self.slIndex is None:
-            self.slIndex = dataset.slIndex
-            if len(self.slIndex) > 0:
-                assert( min(self.slIndex.values()) >= 0)
+        if self.olIndex is None:
+            self.olIndex = dataset.olIndex
 
 
-    def add_dataset_counts(self, datasetName, datasetCounts,
-                           collisionAction="aggregate"):
-        """
-        Directly add a full set of counts for a specified dataset.
-
-        Parameters
-        ----------
-        datasetName : string
-            Counts are added for this data set.  This can be a new name, in
-            which case this method adds a new data set to the MultiDataSet.
-
-        datasetCounts: numpy array
-            A 2D array with rows = gate strings and cols = spam labels, to this
-            MultiDataSet.  The shape of dataSetCounts is checked for compatibility.
-
-        collisionAction : {"aggregate", "keepseparate"}
-            Specifies how duplicate gate sequences should be handled for this
-            data set.  This is applicable only if and when the dataset is copied
-            to a non-static one.  "aggregate" adds duplicate-sequence counts,
-            whereas "keepseparate" tags duplicate-sequence data with by appending
-            a final "#<number>" gate label to the duplicated gate sequence.
-        """
-
-        if self.gsIndex:  #Note: tests if not none and nonempty
-            maxIndex = max(self.gsIndex.values())
-            assert( datasetCounts.shape[0] > maxIndex and datasetCounts.shape[1] == len(self.slIndex) )
-        self.countsDict[datasetName] = datasetCounts
-        self.collisionActions[datasetName] = collisionAction
+    #REMOVE FOR NOW - Maybe revive later
+    #def add_dataset_counts(self, datasetName, datasetCounts,
+    #                       collisionAction="aggregate"):
+    #    """
+    #    Directly add a full set of counts for a specified dataset.
+    #
+    #    Parameters
+    #    ----------
+    #    datasetName : string
+    #        Counts are added for this data set.  This can be a new name, in
+    #        which case this method adds a new data set to the MultiDataSet.
+    #
+    #    datasetCounts: numpy array
+    #        A 2D array with rows = gate strings and cols = spam labels, to this
+    #        MultiDataSet.  The shape of dataSetCounts is checked for compatibility.
+    #
+    #    collisionAction : {"aggregate", "keepseparate"}
+    #        Specifies how duplicate gate sequences should be handled for this
+    #        data set.  This is applicable only if and when the dataset is copied
+    #        to a non-static one.  "aggregate" adds duplicate-sequence counts,
+    #        whereas "keepseparate" tags duplicate-sequence data with by appending
+    #        a final "#<number>" gate label to the duplicated gate sequence.
+    #    """
+    #
+    #    if self.gsIndex:  #Note: tests if not none and nonempty
+    #        maxIndex = max(self.gsIndex.values())
+    #        assert( datasetCounts.shape[0] > maxIndex and datasetCounts.shape[1] == len(self.slIndex) )
+    #    self.countsDict[datasetName] = datasetCounts
+    #    self.collisionActions[datasetName] = collisionAction
 
     def __str__(self):
         s  = "MultiDataSet containing: %d datasets, each with %d strings\n" % (len(self), len(self.gsIndex) if self.gsIndex is not None else 0)
         s += " Dataset names = " + ", ".join(list(self.keys())) + "\n"
-        s += " SPAM labels = " + ", ".join(list(self.slIndex.keys()) if self.slIndex is not None else [])
+        s += " Outcome labels = " + ", ".join(map(str,self.olIndex.keys()) if self.olIndex is not None else [])
         if self.gsIndex is not None:
             s += "\nGate strings: \n" + "\n".join( map(str,list(self.gsIndex.keys())) )
         return s + "\n"
@@ -330,24 +456,35 @@ class MultiDataSet(object):
 
     def copy(self):
         """ Make a copy of this MultiDataSet """
-        return MultiDataSet(self.countsDict, gateStringIndices=self.gsIndex, spamLabelIndices=self.slIndex,
-                            collisionActions=self.collisionActions)
+        return MultiDataSet(self.oliDict, self.timeDict, self.repDict,
+                            gateStringIndices=_copy.deepcopy(self.gsIndex) if (self.gsIndex is not None) else None,
+                            outcomeLabelIndices=_copy.deepcopy(self.olIndex) if (self.olIndex is not None) else None,
+                            collisionActions=self.collisionActions, comments=_copy.deepcopy(self.comments),
+                            comment=(self.comment + " copy") if self.comment else None )
 
 
     def __getstate__(self):
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
-                     'slIndex': self.slIndex,
-                     'countsDict': self.countsDict,
-                     'collisionActions': self.collisionActions }
+                     'olIndex': self.olIndex,
+                     'oliDict': self.oliDict,
+                     'timeDict': self.timeDict,
+                     'repDict': self.repDict,
+                     'collisionActions': self.collisionActions,
+                     'comments': self.comments,
+                     'comment': self.comment }
         return toPickle
 
     def __setstate__(self, state_dict):
         gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
-        self.slIndex = state_dict['slIndex']
-        self.countsDict = state_dict['countsDict']
+        self.olIndex = state_dict['olIndex']
+        self.oliDict = state_dict['oliDict']
+        self.timeDict = state_dict['timeDict']
+        self.repDict = state_dict['repDict']
         self.collisionActions = state_dict['collisionActions']
+        self.comments = state_dict['comments']
+        self.comment = state_dict['comment']
 
     def save(self, fileOrFilename):
         """
@@ -362,10 +499,13 @@ class MultiDataSet(object):
 
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, list(self.gsIndex.keys()))) if self.gsIndex else [],
                      'gsIndexVals': list(self.gsIndex.values()) if self.gsIndex else [],
-                     'slIndex': self.slIndex,
-                     'countsKeys': list(self.countsDict.keys()),
+                     'olIndex': self.olIndex,
+                     'oliKeys': list(self.oliDict.keys()),
+                     'timeKeys': list(self.timeDict.keys()),
+                     'repKeys': list(self.repDict.keys()) if self.repDict else None,
                      'collisionActions' : self.collisionActions,
-                     'comment': self.comment }  #Don't pickle countsDict numpy data b/c it's inefficient
+                     'comments': self.comments,
+                     'comment': self.comment }  #Don't pickle *Dict numpy data b/c it's inefficient
         # Compatability for unicode-literal filenames
         bOpen = not (hasattr(fileOrFilename, 'write'))
         if bOpen:
@@ -378,8 +518,16 @@ class MultiDataSet(object):
             f = fileOrFilename
 
         _pickle.dump(toPickle,f)
-        for _,data in self.countsDict.items():
+        for _,data in self.oliDict.items():
             _np.save(f, data)
+            
+        for _,data in self.timeDict.items():
+            _np.save(f, data)
+            
+        if self.repDict:
+            for _,data in self.repDict.items():
+                _np.save(f, data)
+
         if bOpen: f.close()
 
 
@@ -417,10 +565,24 @@ class MultiDataSet(object):
 
         #gsIndexKeys = [ cgs.expand() for cgs in state_dict['gsIndexKeys'] ]
         self.gsIndex = _OrderedDict( list(zip(gsIndexKeys, state_dict['gsIndexVals'])) )
-        self.slIndex = state_dict['slIndex']
+        self.olIndex = state_dict['olIndex']
         self.collisionActions = state_dict['collisionActions']
+        self.comments = state_dict["comments"]
         self.comment = state_dict["comment"]
-        self.countsDict = _OrderedDict()
-        for key in state_dict['countsKeys']:
-            self.countsDict[key] = _np.lib.format.read_array(f) #np.load(f) doesn't play nice with gzip
+        
+        self.oliDict = _OrderedDict()
+        for key in state_dict['oliKeys']:
+            self.oliDict[key] = _np.lib.format.read_array(f) #np.load(f) doesn't play nice with gzip
+
+        self.timeDict = _OrderedDict()
+        for key in state_dict['timeKeys']:
+            self.timeDict[key] = _np.lib.format.read_array(f)
+
+        if state_dict['repKeys']:
+            self.repDict = _OrderedDict()
+            for key in state_dict['repKeys']:
+                self.repDict[key] = _np.lib.format.read_array(f)
+        else:
+            self.repDict = None
+                
         if bOpen: f.close()

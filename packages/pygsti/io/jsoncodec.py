@@ -137,6 +137,10 @@ def encode_std_obj(py_obj, binary):
         return {'__list__': [encode_obj(v,binary) for v in py_obj]}
     elif isinstance(py_obj, set):
         return {'__set__': [encode_obj(v,binary) for v in py_obj]}
+    elif isinstance(py_obj, slice):
+        return {'__slice__': [encode_obj(py_obj.start,binary),
+                              encode_obj(py_obj.stop,binary),
+                              encode_obj(py_obj.step,binary)] }
     elif isinstance(py_obj, range_type):
         if _sys.version_info >= (3, 0):
             return {'__range__': (py_obj.start, py_obj.stop, py_obj.step) }
@@ -159,6 +163,7 @@ def encode_std_obj(py_obj, binary):
         return {'__bytes__': tostr(_base64.b64encode(py_obj)) }
     elif binary and isinstance(py_obj, str):
         return {'__string__': tobin(py_obj) }
+
         
     #Numpy encoding
     elif isinstance(py_obj, _np.ndarray):
@@ -296,6 +301,8 @@ def decode_std_base(json_obj,start,binary):
         assert(False), "No support for sub-classing complex"
     elif B('__counter__') in json_obj:
         assert(False), "No support for sub-classing Counter"
+    elif B('__slice__') in json_obj:
+        assert(False), "No support for sub-classing slice"
         
 def decode_std_obj(json_obj, binary):
     """
@@ -309,6 +316,10 @@ def decode_std_obj(json_obj, binary):
         return list([decode_obj(v,binary) for v in json_obj[B('__list__')]])
     elif B('__set__') in json_obj:
         return set([decode_obj(v,binary) for v in json_obj[B('__set__')]])
+    elif B('__slice__') in json_obj:
+        v = json_obj[B('__slice__')]
+        return slice(decode_obj(v[0],binary),decode_obj(v[1],binary),
+                     decode_obj(v[2],binary))
     elif B('__range__') in json_obj:
         start,stop,step = json_obj[B('__range__')]
         if _sys.version_info >= (3, 0):

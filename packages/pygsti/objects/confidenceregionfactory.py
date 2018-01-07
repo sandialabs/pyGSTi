@@ -14,7 +14,7 @@ import collections as _collections
 from .. import optimize as _opt
 from .. import tools as _tools
 
-from .gateset import P_RANK_TOL
+from .gatecalc import P_RANK_TOL
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 # NON-MARKOVIAN ERROR BARS
@@ -216,10 +216,17 @@ class ConfidenceRegionFactory(object):
         assert(spam_penalty_factor == 0), 'spam_penalty_factor unsupported in hessian computation'
         assert(useFreqWt == False), 'useFreqWeightedChiSq unsupported in hessian computation'
 
+        #Expand gate label aliases used in DataSet lookups
+        ds_gatestring_list = _tools.find_replace_tuple_list(
+            gatestring_list, aliases)
+
         nGateStrings = len(gatestring_list)
-        nModelParams = gateset.num_nongauge_params()
-        nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
+        nModelParams = gateset.num_nongauge_params()        
+        nDataParams  = dataset.get_degrees_of_freedom(ds_gatestring_list)
           #number of independent parameters in dataset (max. model # of params)
+
+        #OLD nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
+
         
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
 
@@ -229,13 +236,13 @@ class ConfidenceRegionFactory(object):
                                           comm=comm, memLimit=memLimit, verbosity=vb,
                                           gateLabelAliases=aliases)
 
-            nonMarkRadiusSq = max( 2*(_tools.logl_max(dataset)
+            nonMarkRadiusSq = max( 2*(_tools.logl_max(gateset, dataset)
                                       - _tools.logl(gateset, dataset,
                                                     gateLabelAliases=aliases)) \
                                    - (nDataParams-nModelParams), MIN_NON_MARK_RADIUS )
 
         elif obj == 'chi2':
-            chi2, hessian = _tools.chi2(dataset, gateset, gatestring_list,
+            chi2, hessian = _tools.chi2(gateset, dataset, gatestring_list,
                                 False, True, minProbClipForWeighting,
                                 probClipInterval, memLimit=memLimit,
                                 gateLabelAliases=aliases)
@@ -529,7 +536,7 @@ class ConfidenceRegionFactory(object):
         crfv = sub_crf.view(level)
         spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
                                          for sl in _itertools.chain(iter(gateset.preps),
-                                                                    iter(gateset.effects))] )
+                                                                    iter(gateset.povms))] )
         spam_intrinsic_err = _np.sqrt( _np.mean(spamCIs**2) )
     
         ratio = gate_intrinsic_err / spam_intrinsic_err
@@ -547,7 +554,7 @@ class ConfidenceRegionFactory(object):
                                              for gl in gateset.gates] )
             spamCIs = _np.concatenate( [ crfv.get_profile_likelihood_confidence_intervals(sl).flatten()
                                              for sl in _itertools.chain(iter(gateset.preps),
-                                                                        iter(gateset.effects))] )
+                                                                        iter(gateset.povms))] )
             gate_err = _np.sqrt( _np.mean(gateCIs**2) )
             spam_err = _np.sqrt( _np.mean(spamCIs**2) )
             printer.log('Resulting intrinsic errors: %g (gates), %g (spam)' %
@@ -672,9 +679,6 @@ class ConfidenceRegionFactoryView(object):
                            " cannot be interpreted as standard error bars." +
                            " Proceed with caution!")
 
-        #Store params and offsets of gateset for future use
-        self.gateset_offsets = gateset.get_vector_offsets()
-
         #Store list of profile-likelihood confidence intervals
         #  which == sqrt(diagonal els) of invRegionQuadcForm
         if self.invRegionQuadcForm is not None:
@@ -739,20 +743,14 @@ class ConfidenceRegionFactoryView(object):
         if label is None:
             return self.profLCI
         
-        elif label in self.gateset_offsets:
-            start,end = self.gateset_offsets[label]
-            return self.profLCI[start:end]
-        
-        elif label == self.gateset._remainderlabel:
-            ELbls = self.gateset.get_effect_labels(False)
-            start,end = self.gateset_offsets[ELbls[0]]; n = end-start
-            ret = self.profLCI[start:end]
-            for lbl in ELbls[1:]:
-                start,end = self.gateset_offsets[lbl]
-                assert(n == end-start),"Effects must have identical parameterizations" \
-                    + " to compute profile likelihood confidence intervals for remainder effect"
-                ret += self.profLCI[start:end]
-            return ret
+        elif label in self.gateset.gates:
+            return self.profLCI[self.gateset.gates[label].gpindices]
+
+        elif label in self.gateset.preps:
+            return self.profLCI[self.gateset.preps[label].gpindices]
+
+        elif label in self.gateset.povms:
+            return self.profLCI[self.gateset.povms[label].gpindices]
 
         else:
             raise ValueError(("Invalid item label (%s) for computing" % label)
@@ -808,52 +806,42 @@ class ConfidenceRegionFactoryView(object):
         if 'all' in fn_dependencies:
             fn_dependencies = ['all'] #no need to do anything else
         if 'spam' in fn_dependencies:
-            fn_dependencies = ["prep:%s"%l for l in self.gateset.get_prep_labels()] + \
-                              ["effect:%s"%l for l in self.gateset.get_effect_labels(False)]
-
-        # If fn depends on special "remainder" effect, replace this dependency
-        #  with dependency on all other effect vectors (since Ec = 1 - sum(other_Es) )
-        EcLbl = 'effect:%s' % self.gateset._remainderlabel
-        if EcLbl in fn_dependencies: 
-            del fn_dependencies[fn_dependencies.index(EcLbl)]
-            for l in self.gateset.get_effect_labels(False):
-                lbl = 'effect:%s' % l
-                if lbl not in fn_dependencies: fn_dependencies.append(lbl)
-
+            fn_dependencies = ["prep:%s"%l for l in self.gateset.preps.keys()] + \
+                              ["povm:%s"%l for l in self.gateset.povms.keys()]
 
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
+        all_gpindices = []
         for dependency in fn_dependencies:
             gs = self.gateset.copy() #copy that will contain the "+eps" gate set
             
             if dependency == 'all':
-                gatesetObj = gs #the entire gateset
-                gpo = 0 # offset == 0 b/c *all* parameters
+                all_gpindices.extend( range(gs.num_params()) )
             else:
                 # copy objects because we add eps to them below
                 typ,lbl = dependency.split(":")
                 if typ == "gate":     gatesetObj = gs.gates[lbl]
                 elif typ == "prep":   gatesetObj = gs.preps[lbl]
-                elif typ == "effect": gatesetObj = gs.effects[lbl]
-                else: raise ValueError("Invalid dependency type: %s" % typ)                
-                gpo = self.gateset_offsets[lbl][0] # starting parameter offset
+                elif typ == "povm":   gatesetObj = gs.povms[lbl]
+                elif typ == "instrument": gatesetObj = gs.instruments[lbl]
+                else: raise ValueError("Invalid dependency type: %s" % typ)
+                all_gpindices.extend( gatesetObj.gpindices_as_array() )
 
-            nDependencyParams = gatesetObj.num_params()
-            vec0 = gatesetObj.to_vector()
-
-            for i in range(nDependencyParams):
-                vec = vec0.copy(); vec[i] += eps;
-                gatesetObj.from_vector(vec) #incorporates +eps into  'gs'
-                  # because gatesetObj refs an element of gs or gs itself.
-
-                gs.basis = self.gateset.basis #we're still in the same basis (maybe needed by fnObj)
-                f = fnObj.evaluate_nearby( gs )
-                if isinstance(f0, dict): #special behavior for dict: process each item separately
-                    for ky in gradF:
-                        gradF[ky][gpo + i] = ( f[ky] - f0[ky] ) / eps
-                else:
-                    assert( _np.linalg.norm(_np.imag(f-f0)) < 1e-12 or _np.iscomplexobj(gradF) ), "gradF seems to be the wrong type!"
-                    gradF[gpo + i] = _np.real_if_close( f - f0 ) / eps
+        vec0 = gs.to_vector()
+        all_gpindices = sorted(list(set(all_gpindices))) #remove duplicates
+        
+        for igp in all_gpindices: #iterate over "global" GateSet-parameter indices
+            vec = vec0.copy(); vec[igp] += eps;
+            gs.from_vector(vec)
+            gs.basis = self.gateset.basis #we're still in the same basis (maybe needed by fnObj)
+            
+            f = fnObj.evaluate_nearby( gs )
+            if isinstance(f0, dict): #special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][igp] = ( f[ky] - f0[ky] ) / eps
+            else:
+                assert( _np.linalg.norm(_np.imag(f-f0)) < 1e-12 or _np.iscomplexobj(gradF) ), "gradF seems to be the wrong type!"
+                gradF[igp] = _np.real_if_close( f - f0 ) / eps
 
         return self._compute_return_from_gradF(gradF, f0, returnFnVal, verbosity)
 

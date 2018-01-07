@@ -29,6 +29,9 @@ class BaseTestCase(unittest.TestCase):
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
 
+        #enable extra paramter-vector integrity checking
+        pygsti.objects.GateSet._pcheck = True
+
         try:
             basestring #Only defined in Python 2
             self.versionsuffix = "" #Python 2
@@ -86,5 +89,5 @@ class BaseTestCase(unittest.TestCase):
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
-            self.assertAlmostEqual( ds1[gatestring]['0'], ds2[gatestring]['0'], places=3 )
-            self.assertAlmostEqual( ds1[gatestring]['1'], ds2[gatestring]['1'], places=3 )
+            for ol,cnt in ds1[gatestring].counts.items():
+                self.assertAlmostEqual( cnt, ds2[gatestring].counts[ol], places=3 )

@@ -223,29 +223,9 @@ gs_target = _setc.build_gateset(
     [ "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)",
       "Y(pi/2,Q0):I(Q1)", "X(pi/2,Q0):X(pi/2,Q1)", "Y(pi/2,Q0):Y(pi/2,Q1)",
       "X(pi/2,Q0):Y(pi/2,Q1)", "Y(pi/2,Q0):X(pi/2,Q1)" ],
-    prepLabels=['rho0'], prepExpressions=["0"],
-    effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
-    spamdefs={'00': ('rho0','E0'), '01': ('rho0','E1'),
-              '10': ('rho0','E2'), '11': ('rho0','remainder') }, basis="pp")
+    effectLabels=['00','01','10','11'], effectExpressions=["0","1","2","3"])
 
 
-specs16x10 = _spamc.build_spam_specs(
-    prepStrs=prepStrs,
-    effectStrs=effectStrs,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs16 = _spamc.build_spam_specs(
-    fiducials16,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs36 = _spamc.build_spam_specs(
-    fiducials36,
-    prep_labels=gs_target.get_prep_labels(),
-    effect_labels=gs_target.get_effect_labels() )
-
-specs = specs16x10 #use smallest specs set as "default"
 
 clifford_compilation = _OrderedDict()
 clifford_compilation['Gc0c0'] = ['Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii', 'Gii']   

@@ -9,10 +9,12 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import warnings as _warnings
 import numpy as _np
 import time as _time
+import itertools as _itertools
 
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
+from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
@@ -33,8 +35,7 @@ class GateMapCalc(GateCalc):
     fundamental operations.
     """
 
-    def __init__(self, dim, gates, preps, effects, povm_identity, spamdefs,
-                 remainderLabel, identityLabel):
+    def __init__(self, dim, gates, preps, effects, paramvec):
         """
         Construct a new GateMapCalc object.
 
@@ -49,42 +50,36 @@ class GateMapCalc(GateCalc):
             respectively.  Must be *ordered* dictionaries to specify a
             well-defined column ordering when taking derivatives.
 
-        povm_identity : SPAMVec
-            Identity vector (shape must be dim x 1) used when spamdefs
-            contains the value (<rho_label>,"remainder"), which specifies
-            a POVM effect that is the identity minus the sum of all the
-            effect vectors in effects.
-
         spamdefs : OrderedDict
             A dictionary whose keys are the allowed SPAM labels, and whose
             values are 2-tuples comprised of a state preparation label
             followed by a POVM effect label (both of which are strings,
             and keys of preps and effects, respectively, except for the
-            special case when eith both or just the effect label is set
-            to "remainder").
+            special case when both are set to "remainder").
 
-        remainderLabel : string
-            A string that may appear in the values of spamdefs to designate
-            special behavior.
-
-        identityLabel : string
-            The string used to designate the identity POVM vector.
+        paramvec : ndarray
+            The parameter vector of the GateSet.
         """
         super(GateMapCalc, self).__init__(
-            dim, gates, preps, effects, povm_identity, spamdefs,
-            remainderLabel, identityLabel)
+            dim, gates, preps, effects, paramvec)
 
+        
+    def copy(self):
+        """ Return a shallow copy of this GateMatrixCalc """
+        return GateMapCalc(self.dim, self.gates, self.preps,
+                              self.effects, self.paramvec)
 
+        
     #Same as GateMatrixCalc, but not general enough to be in base class
-    def _rhoE_from_spamLabel(self, spamLabel):
-        if _compat.isstr(spamLabel):
-            (rholabel,elabel) = self.spamdefs[spamLabel]
+    def _rhoE_from_spamTuple(self, spamTuple):
+        if len(spamTuple) == 2:
+            rholabel,elabel = spamTuple
             rho = self.preps[rholabel]
-            E   = _np.conjugate(_np.transpose(self._get_evec(elabel)))
+            E   = _np.conjugate(_np.transpose(self.effects[elabel]))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
-            rho, Eraw = spamLabel
+            rho, Eraw = spamTuple
             E   = _np.conjugate(_np.transpose(Eraw))
         return rho,E
 
@@ -111,9 +106,36 @@ class GateMapCalc(GateCalc):
             rho = self.gates[lbl].acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
-    def _pr_nr(self, spamLabel, gatestring, clipTo, bUseScaling):
-        """ non-remainder version of pr(...) overridden by derived clases """
-        rho,E = self._rhoE_from_spamLabel(spamLabel)
+
+    def pr(self, spamTuple, gatestring, clipTo, bUseScaling=False):
+        """
+        Compute probability of a single "outcome" (spam-tuple) for a single
+        gate string.
+
+        Parameters
+        ----------
+        spamTuple : (rho_label, compiled_effect_label)
+            Specifies the prep and POVM effect used to compute the probability.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        clipTo : 2-tuple
+          (min,max) to clip returned probability to if not None.
+          Only relevant when prMxToFill is not None.
+
+        bUseScaling : bool, optional
+          Whether to use a post-scaled product internally.  If False, this
+          routine will run slightly faster, but with a chance that the
+          product will overflow and the subsequent trace operation will
+          yield nan as the returned probability.
+
+        Returns
+        -------
+        probability: float
+        """
+        rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
         p = _np.dot(E,rho)
 
@@ -129,32 +151,49 @@ class GateMapCalc(GateCalc):
         else: return p
 
         
-    def _dpr_nr(self, spamLabel, gatestring, returnPr, clipTo):
-        """ non-remainder version of dpr(...) overridden by derived clases """
+    def dpr(self, spamTuple, gatestring, returnPr, clipTo):
+        """
+        Compute the derivative of a probability generated by a gate string and
+        spam tuple as a 1 x M numpy array, where M is the number of gateset
+        parameters.
+
+        Parameters
+        ----------
+        spamTuple : (rho_label, compiled_effect_label)
+            Specifies the prep and POVM effect used to compute the probability.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        returnPr : bool
+          when set to True, additionally return the probability itself.
+
+        clipTo : 2-tuple
+          (min,max) to clip returned probability to if not None.
+          Only relevant when prMxToFill is not None.
+
+        Returns
+        -------
+        derivative : numpy array
+            a 1 x M numpy array of derivatives of the probability w.r.t.
+            each gateset parameter (M is the length of the vectorized gateset).
+
+        probability : float
+            only returned if returnPr == True.
+        """
         
         #Finite difference derivative
         eps = 1e-7 #hardcoded?
-        p = self.pr(spamLabel, gatestring, clipTo)
-        dp = _np.empty( (1,self.tot_params), 'd' )
-        k = 0
+        p = self.pr(spamTuple, gatestring, clipTo)
+        dp = _np.empty( (1,self.Np), 'd' )
 
-        def fd_deriv(dct, kk):
-            """ Fill dp[0,kk:kk+nParams] with the concatenated finite-difference
-                derivatives of all the values of dct.  Returns kk+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    vec = orig_vec.copy(); vec[i] += eps
-                    dct[lbl].from_vector(vec)
-                    dp[0,kk] = (self.pr(spamLabel, gatestring, clipTo)-p)/eps
-                    kk += 1
-                dct[lbl].from_vector(orig_vec)
-            return kk
-        
-        k = fd_deriv(self.preps,k) #prep derivs
-        k = fd_deriv(self.effects,k) #effect derivs
-        k = fd_deriv(self.gates,k) #gate derivs
+        orig_vec = self.to_vector().copy()
+        for i in range(self.Np):
+            vec = orig_vec.copy(); vec[i] += eps
+            self.from_vector(vec)
+            dp[0,i] = (self.pr(spamTuple, gatestring, clipTo)-p)/eps
+        self.from_vector(orig_vec)
                 
         if returnPr:
             if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -162,35 +201,61 @@ class GateMapCalc(GateCalc):
         else: return dp
 
 
-    def _hpr_nr(self, spamLabel, gatestring, returnPr, returnDeriv, clipTo):
-        """ non-remainder version of hpr(...) overridden by derived clases """
+    def hpr(self, spamTuple, gatestring, returnPr, returnDeriv, clipTo):
+        """
+        Compute the Hessian of a probability generated by a gate string and
+        spam tuple as a 1 x M x M array, where M is the number of gateset
+        parameters.
+
+        Parameters
+        ----------
+        spamTuple : (rho_label, compiled_effect_label)
+            Specifies the prep and POVM effect used to compute the probability.
+
+        gatestring : GateString or tuple
+            A tuple-like object of *compiled* gates (e.g. may include
+            instrument elements like 'Imyinst_0')
+
+        returnPr : bool
+          when set to True, additionally return the probability itself.
+
+        returnDeriv : bool
+          when set to True, additionally return the derivative of the
+          probability.
+
+        clipTo : 2-tuple
+          (min,max) to clip returned probability to if not None.
+          Only relevant when prMxToFill is not None.
+
+        Returns
+        -------
+        hessian : numpy array
+            a 1 x M x M array, where M is the number of gateset parameters.
+            hessian[0,j,k] is the derivative of the probability w.r.t. the
+            k-th then the j-th gateset parameter.
+
+        derivative : numpy array
+            only returned if returnDeriv == True. A 1 x M numpy array of
+            derivatives of the probability w.r.t. each gateset parameter.
+
+        probability : float
+            only returned if returnPr == True.
+        """
         
         #Finite difference hessian
         eps = 1e-4 #hardcoded?
         if returnPr:
-            dp,p = self.dpr(spamLabel, gatestring, returnPr, clipTo)
+            dp,p = self.dpr(spamTuple, gatestring, returnPr, clipTo)
         else:
-            dp = self.dpr(spamLabel, gatestring, returnPr, clipTo)
-        hp = _np.empty( (1,self.tot_params, self.tot_params), 'd' )
-        k = 0
+            dp = self.dpr(spamTuple, gatestring, returnPr, clipTo)
+        hp = _np.empty( (1,self.Np, self.Np), 'd' )
 
-        def fd_hessian(dct, kk):
-            """ Fill hp[0,kk:kk+nParams,:] with the concatenated finite-difference
-                hessians of all the values of dct.  Returns kk+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    vec = orig_vec.copy(); vec[i] += eps
-                    dct[lbl].from_vector(vec)
-                    hp[0,kk,:] = (self.dpr(spamLabel, gatestring, False, clipTo)-dp)/eps
-                    kk += 1
-                dct[lbl].from_vector(orig_vec)
-            return kk
-        
-        k = fd_hessian(self.preps,k) #prep derivs
-        k = fd_hessian(self.effects,k) #effect derivs
-        k = fd_hessian(self.gates,k) #gate derivs
+        orig_vec = self.to_vector().copy()
+        for i in range(self.Np):
+            vec = orig_vec.copy(); vec[i] += eps
+            self.from_vector(vec)
+            hp[0,i,:] = (self.dpr(spamTuple, gatestring, False, clipTo)-dp)/eps
+        self.from_vector(orig_vec)
                 
         if returnPr and clipTo is not None:
             p = _np.clip( p, clipTo[0], clipTo[1] )
@@ -203,10 +268,10 @@ class GateMapCalc(GateCalc):
             else:        return hp
 
 
-    def _compute_pr_cache(self, spamLabel, evalTree, comm, scratch=None):
+    def _compute_pr_cache(self, spamTuple, evalTree, comm, scratch=None):
         dim = self.dim
         cacheSize = len(evalTree)
-        rho,E = self._rhoE_from_spamLabel(spamLabel)
+        rho,E = self._rhoE_from_spamTuple(spamTuple)
         
         if scratch is None:
             rho_cache = _np.zeros((cacheSize, dim), 'd')
@@ -226,10 +291,10 @@ class GateMapCalc(GateCalc):
         pCache = _np.dot(E,rho_cache.T) # (1,cacheSize)
         return _np.squeeze(pCache, axis=0) # shape (cacheSize,)
     
-    def _compute_dpr_cache(self, spamLabel, evalTree, wrtSlice, comm, scratch=None):
+    def _compute_dpr_cache(self, spamTuple, evalTree, wrtSlice, comm, scratch=None):
         #Compute finite difference derivatives, one parameter at a time.
 
-        param_indices = range(self.tot_params) if (wrtSlice is None) else _slct.indices(wrtSlice)
+        param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
         dim = self.dim
@@ -243,7 +308,7 @@ class GateMapCalc(GateCalc):
             dpr_cache  = scratch[:,0:nDerivCols]
             
         eps = 1e-7 #hardcoded?
-        pCache = self._compute_pr_cache(spamLabel,evalTree,comm,rho_cache)
+        pCache = self._compute_pr_cache(spamTuple,evalTree,comm,rho_cache)
 
         all_slices, my_slice, owners, subComm = \
                 _mpit.distribute_slice(slice(0,len(param_indices)), comm)
@@ -255,41 +320,28 @@ class GateMapCalc(GateCalc):
         #Get a map from global parameter indices to the desired
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-        
-        def fd_deriv(dct, ip):
-            """ Fill dpr_cache[:,iParamToFinal[ip->ip+nParams]] with the
-                concatenated finite-difference derivatives of all the values
-                of dct.  Returns ip+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    if ip in iParamToFinal:
-                        iFinal = iParamToFinal[ip]
-                        vec = orig_vec.copy(); vec[i] += eps
-                        dct[lbl].from_vector(vec)
-                        dpr_cache[:,iFinal] = ( self._compute_pr_cache(
-                            spamLabel,evalTree,subComm,rho_cache) - pCache)/eps
-                    ip += 1 #global parameter index
-                dct[lbl].from_vector(orig_vec)
-            return ip
 
-        iParam = 0
-        iParam = fd_deriv(self.preps,iParam) #prep derivs
-        iParam = fd_deriv(self.effects,iParam) #effect derivs
-        iParam = fd_deriv(self.gates,iParam) #gate derivs
+        orig_vec = self.to_vector().copy()
+        for i in range(self.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.from_vector(vec)
+                dpr_cache[:,iFinal] = ( self._compute_pr_cache(
+                            spamTuple,evalTree,subComm,rho_cache) - pCache)/eps
+        self.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
-        _mpit.gather_slices(all_slices, owners, dpr_cache, axes=1, comm=comm)
+        _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=1, comm=comm)
 
         return dpr_cache
 
-    def _compute_hpr_cache(self, spamLabel, evalTree, wrtSlice1, wrtSlice2, comm):
+    def _compute_hpr_cache(self, spamTuple, evalTree, wrtSlice1, wrtSlice2, comm):
         #Compute finite difference hessians, one parameter at a time.
 
-        param_indices1 = range(self.tot_params) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
-        param_indices2 = range(self.tot_params) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
+        param_indices1 = range(self.Np) if (wrtSlice1 is None) else _slct.indices(wrtSlice1)
+        param_indices2 = range(self.Np) if (wrtSlice2 is None) else _slct.indices(wrtSlice2)
         nDerivCols1 = len(param_indices1) # *all*, not just locally computed ones
         nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
         
@@ -299,7 +351,7 @@ class GateMapCalc(GateCalc):
         hpr_cache  = _np.zeros((cacheSize, nDerivCols1, nDerivCols2),'d')
             
         eps = 1e-4 #hardcoded?
-        dpCache = self._compute_dpr_cache(spamLabel,evalTree,wrtSlice2,comm,
+        dpCache = self._compute_dpr_cache(spamTuple,evalTree,wrtSlice2,comm,
                                           dpr_scratch).copy()
            #need copy here b/c scratch space is used by sub-calls to
            # _compute_dpr_cache below in finite difference computation.
@@ -314,33 +366,20 @@ class GateMapCalc(GateCalc):
         #Get a map from global parameter indices to the desired
         # final index within dpr_cache
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
-        
-        def fd_hessian(dct, ip):
-            """ Fill hpr_cache[:,iParamToFinal[ip->ip+nParams],:] with the
-                concatenated finite-difference hessians of all the values
-                of dct.  Returns ip+nParams. """
-            for lbl in dct.keys():
-                orig_vec = dct[lbl].to_vector()
-                Np = dct[lbl].num_params()
-                for i in range(Np):
-                    if ip in iParamToFinal:
-                        iFinal = iParamToFinal[ip]
-                        vec = orig_vec.copy(); vec[i] += eps
-                        dct[lbl].from_vector(vec)
-                        hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
-                            spamLabel,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
-                    ip += 1 #global parameter index
-                dct[lbl].from_vector(orig_vec)
-            return ip
 
-        iParam = 0
-        iParam = fd_hessian(self.preps,iParam) #prep derivs
-        iParam = fd_hessian(self.effects,iParam) #effect derivs
-        iParam = fd_hessian(self.gates,iParam) #gate derivs
+        orig_vec = self.to_vector().copy()
+        for i in range(self.Np):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.from_vector(vec)
+                hpr_cache[:,iFinal,:] = ( self._compute_dpr_cache(
+                    spamTuple,evalTree,wrtSlice2,subComm,dpr_scratch) - dpCache)/eps
+        self.from_vector(orig_vec)
 
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
-        _mpit.gather_slices(all_slices, owners, hpr_cache, axes=1, comm=comm)
+        _mpit.gather_slices(all_slices, owners, hpr_cache,[], axes=1, comm=comm)
 
         return hpr_cache
 
@@ -393,8 +432,8 @@ class GateMapCalc(GateCalc):
         FLOATSIZE = 8 # in bytes: TODO: a better way
 
         dim = self.dim
-        wrtLen1 = (self.tot_params+np1-1) // np1 # ceiling(num_params / np1)
-        wrtLen2 = (self.tot_params+np2-1) // np2 # ceiling(num_params / np2)
+        wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
+        wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
 
         mem = 0
         for fnName in subcalls:
@@ -421,8 +460,8 @@ class GateMapCalc(GateCalc):
 
 
     
-    def bulk_fill_probs(self, mxToFill, spam_label_rows,
-                        evalTree, clipTo=None, check=False, comm=None):
+    def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
+                        comm=None):
 
         """
         Identical to bulk_probs(...) except results are
@@ -473,29 +512,24 @@ class GateMapCalc(GateCalc):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            fslc = evalSubTree.final_slice(evalTree)
 
-            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+            def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 #Fill cache info
-                prCache = self._compute_pr_cache(spamLabel, evalSubTree, mySubComm)
+                prCache = self._compute_pr_cache(spamTuple, evalSubTree, mySubComm)
 
                 #use cached data to final values
                 ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
+                _fas(mxToFill, [fInds], ps[gInds], add=sumInto)
 
-                if sumInto:
-                    mxToFill[isp,fslc] += ps
-                else:
-                    mxToFill[isp,fslc] = ps
-
-            self._fill_result_tuple( (mxToFill,), spam_label_rows,
-                                     fslc, slice(None), slice(None), calc_and_fill )
+            self._fill_result_tuple( (mxToFill,), evalSubTree,
+                                     slice(None), slice(None), calc_and_fill )
 
         #collect/gather results
-        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
-        _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
-                            1, comm) 
-        #note: pass mxToFill, dim=(K,S), so gather mxToFill[:,fslc] (axis=1)
+        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill,[], 0, comm)
+        #note: pass mxToFill, dim=(KS,), so gather mxToFill[felInds] (axis=0)
 
         if clipTo is not None:
             _np.clip( mxToFill, clipTo[0], clipTo[1], out=mxToFill ) # in-place clip
@@ -505,7 +539,7 @@ class GateMapCalc(GateCalc):
 #            self._check(evalTree, spam_label_rows, mxToFill, clipTo=clipTo)
 
 
-    def bulk_fill_dprobs(self, mxToFill, spam_label_rows, evalTree,
+    def bulk_fill_dprobs(self, mxToFill, evalTree,
                          prMxToFill=None,clipTo=None,check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
@@ -591,7 +625,7 @@ class GateMapCalc(GateCalc):
 
         if wrtFilter is not None:
             assert(wrtBlockSize is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice = _slct.list_to_slice(wrtFilter) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice = _slct.list_to_slice(wrtFilter) #for now, require the filter specify a slice
         else:
             wrtSlice = None
 
@@ -605,32 +639,25 @@ class GateMapCalc(GateCalc):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            fslc = evalSubTree.final_slice(evalTree)
+            felInds = evalSubTree.final_element_indices(evalTree)
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice = slice(None)
             fillComm = mySubComm #comm used by calc_and_fill
 
-            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+            def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 tm = _time.time()
                 
                 if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(spamLabel, evalSubTree, fillComm)
+                    prCache = self._compute_pr_cache(spamTuple, evalSubTree, fillComm)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
-                    if sumInto:
-                        prMxToFill[isp,fslc] += ps
-                    else:
-                        prMxToFill[isp,fslc] = ps
+                    _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
                 #Fill cache info
-                dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice, fillComm)
+                dprCache = self._compute_dpr_cache(spamTuple, evalSubTree, paramSlice, fillComm)
                 dps = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
-
-                if sumInto:
-                    mxToFill[isp,fslc,pslc1] += dps
-                else:
-                    mxToFill[isp,fslc,pslc1] = dps
+                _fas(mxToFill, [fInds, pslc1], dps[gInds], add=sumInto)
                 profiler.add_time("bulk_fill_dprobs: calc_and_fill", tm)
 
                 
@@ -638,7 +665,7 @@ class GateMapCalc(GateCalc):
             if wrtFilter is None:
                 blkSize = wrtBlockSize #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
+                    comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize = comm_blkSize if (blkSize is None) \
                         else min(comm_blkSize, blkSize) #override with smaller comm_blkSize
             else:
@@ -650,51 +677,51 @@ class GateMapCalc(GateCalc):
                 paramSlice = wrtSlice #specifies which deriv cols calc_and_fill computes
                 
                 #Compute all requested derivative columns at once
-                self._fill_result_tuple( (prMxToFill, mxToFill), spam_label_rows,
-                                         fslc, slice(None), slice(None), calc_and_fill )
+                self._fill_result_tuple( (prMxToFill, mxToFill), evalSubTree,
+                                         slice(None), slice(None), calc_and_fill )
                 profiler.mem_check("bulk_fill_dprobs: post fill")
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter is None) #cannot specify both wrtFilter and blkSize
-                nBlks = int(_np.ceil(self.tot_params / blkSize))
+                nBlks = int(_np.ceil(self.Np / blkSize))
                   # num blocks required to achieve desired average size == blkSize
-                blocks = _mpit.slice_up_range(self.tot_params, nBlks)
+                blocks = _mpit.slice_up_range(self.Np, nBlks)
 
                 #distribute derivative computation across blocks
                 myBlkIndices, blkOwners, blkComm = \
                     _mpit.distribute_indices(list(range(nBlks)), mySubComm)
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than derivative columns(%d)!" % self.tot_gate_params 
+                       +" than derivative columns(%d)!" % self.Np
                        +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
                 fillComm = blkComm #comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
                     paramSlice = blocks[iBlk] #specifies which deriv cols calc_and_fill computes
                     self._fill_result_tuple( 
-                        (mxToFill,), spam_label_rows, fslc, 
+                        (mxToFill,), evalSubTree,
                         blocks[iBlk], slice(None), calc_and_fill )
                     profiler.mem_check("bulk_fill_dprobs: post fill blk")
 
                 #gather results
                 tm = _time.time()
-                _mpit.gather_slices(blocks, blkOwners, mxToFill[:,fslc],
-                                    2, mySubComm, gatherMemLimit)
-                #note: gathering axis 2 of mxToFill[:,fslc], dim=(K,s,M)
+                _mpit.gather_slices(blocks, blkOwners, mxToFill,[felInds],
+                                    1, mySubComm, gatherMemLimit)
+                #note: gathering axis 1 of mxToFill[:,fslc], dim=(ks,M)
                 profiler.add_time("MPI IPC", tm)
                 profiler.mem_check("bulk_fill_dprobs: post gather blocks")
 
         #collect/gather results
         tm = _time.time()
-        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
-        _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, mxToFill,
-                            1, comm, gatherMemLimit) 
-        #note: pass mxToFill, dim=(K,S,M), so gather mxToFill[:,fslc] (axis=1)
+        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill,[], 0, comm, gatherMemLimit)
+        #note: pass mxToFill, dim=(KS,M), so gather mxToFill[felInds] (axis=0)
 
         if prMxToFill is not None:
-            _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, prMxToFill,
-                                1, comm) 
-        #note: pass prMxToFill, dim=(K,S), so gather prMxToFill[:,fslc] (axis=1)
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             prMxToFill,[], 0, comm)
+            #note: pass prMxToFill, dim=(KS,), so gather prMxToFill[felInds] (axis=0)
 
         profiler.add_time("MPI IPC", tm)
         profiler.mem_check("bulk_fill_dprobs: post gather subtrees")
@@ -712,7 +739,7 @@ class GateMapCalc(GateCalc):
 
 
 
-    def bulk_fill_hprobs(self, mxToFill, spam_label_rows, evalTree,
+    def bulk_fill_hprobs(self, mxToFill, evalTree,
                          prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
                          clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
@@ -799,13 +826,13 @@ class GateMapCalc(GateCalc):
         """
         if wrtFilter1 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice
         else:
             wrtSlice1 = None
 
         if wrtFilter2 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
-            wrtSlice2 = _slct.list_to_slice(wrtFilter2) #for now, require the filter specify a slice (could break up into contiguous parts later?)
+            wrtSlice2 = _slct.list_to_slice(wrtFilter2) #for now, require the filter specify a slice
         else:
             wrtSlice2 = None
 
@@ -816,52 +843,40 @@ class GateMapCalc(GateCalc):
         #eval on each local subtree
         for iSubTree in mySubTreeIndices:
             evalSubTree = subtrees[iSubTree]
-            fslc = evalSubTree.final_slice(evalTree)
+            felInds = evalSubTree.final_element_indices(evalTree)
             fillComm = mySubComm
 
             #Free memory from previous subtree iteration before computing caches
             paramSlice1 = slice(None)
             paramSlice2 = slice(None)
 
-            def calc_and_fill(spamLabel, isp, fslc, pslc1, pslc2, sumInto):
+            def calc_and_fill(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                 """ Compute and fill result quantities for given arguments """
                 
                 if prMxToFill is not None:
-                    prCache = self._compute_pr_cache(spamLabel, evalSubTree, fillComm)
+                    prCache = self._compute_pr_cache(spamTuple, evalSubTree, fillComm)
                     ps = evalSubTree.final_view( prCache, axis=0) # ( nGateStrings, )
-                    if sumInto:
-                        prMxToFill[isp,fslc] += ps
-                    else:
-                        prMxToFill[isp,fslc] = ps
+                    _fas(prMxToFill, [fInds], ps[gInds], add=sumInto)
 
                 if deriv1MxToFill is not None:
-                    dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice1, fillComm)
+                    dprCache = self._compute_dpr_cache(spamTuple, evalSubTree, paramSlice1, fillComm)
                     dps1 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
-                    if sumInto:
-                        deriv1MxToFill[isp,fslc,pslc1] += dps1
-                    else:
-                        deriv1MxToFill[isp,fslc,pslc1] = dps1
+                    _fas(deriv1MxToFill, [fInds,pslc1], dps1[gInds], add=sumInto)
 
                 if deriv2MxToFill is not None:
                     if deriv1MxToFill is not None and paramSlice1 == paramSlice2:
                         dps2 = dps1
                     else:
-                        dprCache = self._compute_dpr_cache(spamLabel, evalSubTree, paramSlice2, fillComm)
+                        dprCache = self._compute_dpr_cache(spamTuple, evalSubTree, paramSlice2, fillComm)
                         dps2 = evalSubTree.final_view( dprCache, axis=0) # ( nGateStrings, )
-                        
-                    if sumInto:
-                        deriv2MxToFill[isp,fslc,pslc2] += dps2
-                    else:
-                        deriv2MxToFill[isp,fslc,pslc2] = dps2
+
+                    _fas(deriv2MxToFill, [fInds,pslc2], dps2[gInds], add=sumInto)
 
                 #Fill cache info
-                hprCache = self._compute_hpr_cache(spamLabel, evalSubTree, paramSlice1, paramSlice2, fillComm)
+                hprCache = self._compute_hpr_cache(spamTuple, evalSubTree, paramSlice1, paramSlice2, fillComm)
                 hps = evalSubTree.final_view( hprCache, axis=0) # ( nGateStrings, )
-
-                if sumInto:
-                    mxToFill[isp,fslc,pslc1,pslc2] += hps
-                else:
-                    mxToFill[isp,fslc,pslc1,pslc2]  = hps
+                
+                _fas(mxToFill, [fInds,pslc1,pslc2], hps[gInds], add=sumInto)
 
 
             #Set wrtBlockSize to use available processors if it isn't specified
@@ -869,7 +884,7 @@ class GateMapCalc(GateCalc):
                 blkSize1 = wrtBlockSize1 #could be None
                 blkSize2 = wrtBlockSize2 #could be None
                 if (mySubComm is not None) and (mySubComm.Get_size() > 1):
-                    comm_blkSize = self.tot_gate_params / mySubComm.Get_size()
+                    comm_blkSize = self.Np / mySubComm.Get_size()
                     blkSize1 = comm_blkSize if (blkSize1 is None) \
                         else min(comm_blkSize, blkSize1) #override with smaller comm_blkSize
                     blkSize2 = comm_blkSize if (blkSize2 is None) \
@@ -885,16 +900,15 @@ class GateMapCalc(GateCalc):
 
                 #Compute all requested derivative columns at once
                 self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                                        spam_label_rows, fslc, slice(None),
-                                        slice(None), calc_and_fill)
+                                        evalSubTree, slice(None), slice(None), calc_and_fill)
 
             else: # Divide columns into blocks of at most blkSize
                 assert(wrtFilter1 is None and wrtFilter2 is None) #cannot specify both wrtFilter and blkSize
-                nBlks1 = int(_np.ceil(self.tot_params / blkSize1))
-                nBlks2 = int(_np.ceil(self.tot_params / blkSize2))
+                nBlks1 = int(_np.ceil(self.Np / blkSize1))
+                nBlks2 = int(_np.ceil(self.Np / blkSize2))
                   # num blocks required to achieve desired average size == blkSize1 or blkSize2
-                blocks1 = _mpit.slice_up_range(self.tot_params, nBlks1)
-                blocks2 = _mpit.slice_up_range(self.tot_params, nBlks2)
+                blocks1 = _mpit.slice_up_range(self.Np, nBlks1)
+                blocks2 = _mpit.slice_up_range(self.Np, nBlks2)
 
                 #distribute derivative computation across blocks
                 myBlk1Indices, blk1Owners, blk1Comm = \
@@ -905,7 +919,7 @@ class GateMapCalc(GateCalc):
 
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
-                       +" than hessian elements(%d)!" % (self.tot_gate_params**2)
+                       +" than hessian elements(%d)!" % (self.Np**2)
                        +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2))
                 fillComm = blk2Comm #comm used by calc_and_fill
 
@@ -915,39 +929,38 @@ class GateMapCalc(GateCalc):
                     for iBlk2 in myBlk2Indices:
                         paramSlice2 = blocks2[iBlk2]
                         self._fill_result_tuple((prMxToFill, deriv1MxToFill, deriv2MxToFill, mxToFill),
-                                                spam_label_rows, fslc, blocks1[iBlk1], blocks2[iBlk2],
-                                                calc_and_fill)
+                                                evalSubTree, blocks1[iBlk1], blocks2[iBlk2], calc_and_fill)
     
-                    #gather column results: gather axis 3 of mxToFill[:,fslc,blocks1[iBlk1]], dim=(K,s,blk1,M)
-                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill[:,fslc,blocks1[iBlk1]],
-                                        3, blk1Comm, gatherMemLimit)
+                    #gather column results: gather axis 2 of mxToFill[felInds,blocks1[iBlk1]], dim=(ks,blk1,M)
+                    _mpit.gather_slices(blocks2, blk2Owners, mxToFill,[felInds,blocks1[iBlk1]],
+                                        2, blk1Comm, gatherMemLimit)
 
-                #gather row results; gather axis 2 of mxToFill[:,fslc], dim=(K,s,M,M)
-                _mpit.gather_slices(blocks1, blk1Owners, mxToFill[:,fslc],
-                                    2, mySubComm, gatherMemLimit)
+                #gather row results; gather axis 1 of mxToFill[felInds], dim=(ks,M,M)
+                _mpit.gather_slices(blocks1, blk1Owners, mxToFill,[felInds],
+                                    1, mySubComm, gatherMemLimit)
                 if deriv1MxToFill is not None:
-                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill[:,fslc],
-                                        2, mySubComm, gatherMemLimit)
+                    _mpit.gather_slices(blocks1, blk1Owners, deriv1MxToFill,[felInds],
+                                        1, mySubComm, gatherMemLimit)
                 if deriv2MxToFill is not None:
-                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill[:,fslc],
-                                        2, blk1Comm, gatherMemLimit) 
+                    _mpit.gather_slices(blocks2, blk2Owners, deriv2MxToFill,[felInds],
+                                        1, blk1Comm, gatherMemLimit) 
                    #Note: deriv2MxToFill gets computed on every inner loop completion
                    # (to save mem) but isn't gathered until now (but using blk1Comm).
                    # (just as prMxToFill is computed fully on each inner loop *iteration*!)
             
         #collect/gather results
-        subtreeFinalSlices = [ t.final_slice(evalTree) for t in subtrees]
-        _mpit.gather_slices(subtreeFinalSlices, subTreeOwners, 
-                            mxToFill, 1, comm, gatherMemLimit) 
+        subtreeElementIndices = [ t.final_element_indices(evalTree) for t in subtrees]
+        _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                             mxToFill,[], 0, comm, gatherMemLimit)
         if deriv1MxToFill is not None:
-            _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
-                                deriv1MxToFill, 1, comm, gatherMemLimit) 
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 deriv1MxToFill,[], 0, comm, gatherMemLimit)
         if deriv2MxToFill is not None:
-            _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
-                                deriv2MxToFill, 1, comm, gatherMemLimit) 
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 deriv2MxToFill,[], 0, comm, gatherMemLimit)
         if prMxToFill is not None:
-            _mpit.gather_slices(subtreeFinalSlices, subTreeOwners,
-                                prMxToFill, 1, comm) 
+            _mpit.gather_indices(subtreeElementIndices, subTreeOwners,
+                                 prMxToFill,[], 0, comm)
 
 
         if clipTo is not None and prMxToFill is not None:

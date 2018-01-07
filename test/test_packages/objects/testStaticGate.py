@@ -15,14 +15,14 @@ class StaticGateTestCase(BaseTestCase):
     def test_bad(self):
         gate = self.gate.copy()
         with self.assertRaises(ValueError):
-            gate.set_matrix([])
-        gate.set_matrix([[1, 2],[1, 2]])
+            gate.set_value([])
+        gate.set_value([[1, 2],[1, 2]])
 
         gate.dim = 'adfadsflkj'
         with self.assertRaises(TypeError):
-            gate.set_matrix([[1, 2],[1, 2]])
+            gate.set_value([[1, 2],[1, 2]])
         with self.assertRaises(ValueError):
-            gate.set_matrix([[[1, 2]],[], []])
+            gate.set_value([[[1, 2]],[], []])
 
         self.assertEqual(gate.num_params(), 0)
         self.assertArraysAlmostEqual(gate.to_vector(), np.array([], 'd'))

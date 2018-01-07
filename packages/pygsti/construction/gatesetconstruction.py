@@ -15,7 +15,10 @@ import warnings as _warnings
 
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
+from ..tools import compattools as _compat
 from ..objects import gate as _gate
+from ..objects import spamvec as _spamvec
+from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..baseobjs import Basis as _Basis
@@ -851,11 +854,11 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     return basis_build_gate(stateSpaceLabels, gateExpr, _Basis(basis, stateSpaceDims), parameterization, unitaryEmbedding)
 
 
-def basis_build_gateset(stateSpaceLabels,
-                  gateLabels, gateExpressions,
-                  prepLabels, prepExpressions,
-                  effectLabels, effectExpressions,
-                  spamdefs, basis, parameterization="full"):
+def basis_build_gateset(stateSpaceLabels, basis,
+                        gateLabels, gateExpressions,
+                        prepLabels=('rho0',), prepExpressions=('0',),
+                        effectLabels='standard', effectExpressions='labels',
+                        povmLabels='Mdefault', parameterization="full"):
     """
     Build a new GateSet given lists of gate labels and expressions.
 
@@ -869,6 +872,11 @@ def basis_build_gateset(stateSpaceLabels,
         d-dimensional state space corresponding to a d x d block as a tensor
         product between qubit and single level systems.
 
+    basis : Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
     gateLabels : list of strings
        A list of labels for each created gate in the final gateset.  To
         conform with text file parsing conventions these names should begin
@@ -880,40 +888,34 @@ def basis_build_gateset(stateSpaceLabels,
         gateLabels, which determine what operation each gate performs (see
         documentation for :meth:`build_gate`).
 
-    prepLabels : list of string
+    prepLabels : list of string, optional
         A list of labels for each created state preparation in the final
         gateset.  To conform with conventions these labels should begin with
         "rho".
 
-    prepExpressions : list of strings
+    prepExpressions : list of strings, optional
         A list of vector expressions for each state preparation vector (see
         documentation for :meth:`build_vector`).
 
-    effectLabels : list of string
-        A list of labels for each created and *parameterized* POVM effect in
-        the final gateset.  To conform with conventions these labels should
-        begin with "E".
+    effectLabels : list, optional
+        If `povmLabels` is a string, then this is just a list of the effect
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        then `effectLabels` must be a list of lists of effect labels, each
+        list corresponding to a POVM.  If set to the special string `"standard"`
+        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space.
 
-    effectExpressions : list of strings
-        A list of vector expressions for each POVM effect vector (see
-        documentation for :meth:`build_vector`).
+    effectExpressions : list, optional
+        A list or list-of-lists of (string) vector expressions for each POVM
+        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        correspond to labels in `effectLabels`.  If set to the special string
+        `"labels"`, then the values of `effectLabels` are also used as 
+        expressions (which works well for integer-as-a-string labels).
 
-    spamdefs : dict
-       A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples
-        associating a particular state preparation and effect vector with a
-        label.  prepLabel and ELabel must be contained in prepLabels and
-        effectLabels respectively except for two special cases:
-
-        1.  ELabel can be set to "remainder" to mean an effect vector that is
-            the identity - (other effect vectors)
-        2.  ELabel and prepLabel can both be "remainder" to mean a spam label
-            that generates probabilities that are 1.0 - (sum of probabilities
-            from all other spam labels).
-
-    basis : Basis object
-        The source and destination basis, respectively.  Allowed
-        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-        and Qutrit (qt) (or a custom basis object).
+    povmLabels : list or string, optional
+        A list of POVM labels, or a single (string) label.  In the latter case,
+        only a single POVM is created and the format of `effectLabels` and
+        `effectExpressions` is simplified (see above).
 
     parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
@@ -924,31 +926,35 @@ def basis_build_gateset(stateSpaceLabels,
     GateSet
         The created gate set.
     """
-    _, _, blockDims = basis.dim
+    dmDim, _, blockDims = basis.dim #don't need gateDim
     defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
     ret = _gateset.GateSet(default_param=defP)
-                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 #remainder_label="remainder", identity_label="identity")
+                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
 
     for label,rhoExpr in zip(prepLabels, prepExpressions):
         ret.preps[label] = basis_build_vector(rhoExpr, basis)
-    for label,EExpr in zip(effectLabels,effectExpressions):
-        ret.effects[label] = basis_build_vector(EExpr, basis)
 
-    ret.povm_identity = basis_build_identity_vec(basis)
+    if _compat.isstr(povmLabels):
+        povmLabels = [ povmLabels ]
+        effectLabels = [ effectLabels ]
+        effectExpressions = [ effectExpressions ]
 
-    #Note: since a GateSet's spamdefs are an *ordered* dictionary (for correspondence
-    #  to row indices in some bulk_ operations), we need to set the spamdefs in a
-    #  deterministic order -- e.g. we *cannot* iterate over the keys in a standard
-    #  dictionary.  So, unless we're given an ordered dict, add the keys (spam labels)
-    #  in alphabetical order.
-    if isinstance(spamdefs, _collections.OrderedDict):
-        for spamlabel,(rhoLbl,ELbl) in spamdefs.items():
-            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
-    else:
-        for spamlabel in sorted(list(spamdefs.keys())):
-            (rhoLbl,ELbl) = spamdefs[spamlabel]
-            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
+    for povmLbl, ELbls, EExprs in zip(povmLabels,
+                                      effectLabels, effectExpressions):
+        effects = []
+        
+        if ELbls == "standard":
+            ELbls = list(map(str,range(dmDim))) #standard labels
+        if EExprs == "labels":
+            EExprs = ELbls #use labels as expressions
+
+        for label,EExpr in zip(ELbls,EExprs):
+            effects.append( (label,basis_build_vector(EExpr, basis)) )
+
+        if defP == "TP":
+            ret.povms[povmLbl] = _povm.TPPOVM(effects)
+        else:
+            ret.povms[povmLbl] = _povm.POVM(effects)
 
     for (gateLabel,gateExpr) in zip(gateLabels, gateExpressions):
         ret.gates[gateLabel] = basis_build_gate(stateSpaceLabels,
@@ -972,11 +978,11 @@ def basis_build_gateset(stateSpaceLabels,
 
 def build_gateset(stateSpaceDims, stateSpaceLabels,
                   gateLabels, gateExpressions,
-                  prepLabels, prepExpressions,
-                  effectLabels, effectExpressions,
-                  spamdefs, basis="auto", parameterization="full"):
+                  prepLabels=('rho0',), prepExpressions=('0',),
+                  effectLabels='standard', effectExpressions='labels',
+                  povmLabels='Mdefault', basis="auto", parameterization="full"):
     """
-    Build a new GateSet given lists of gate labels and expressions.
+    Build a new GateSet given lists of labels and expressions.
 
     Parameters
     ----------
@@ -1014,28 +1020,27 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         A list of vector expressions for each state preparation vector (see
         documentation for :meth:`build_vector`).
 
-    effectLabels : list of string
-        A list of labels for each created and *parameterized* POVM effect in
-        the final gateset.  To conform with conventions these labels should
-        begin with "E".
+    effectLabels : list, optional
+        If `povmLabels` is a string, then this is just a list of the effect
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        then `effectLabels` must be a list of lists of effect labels, each
+        list corresponding to a POVM.  If set to the special string `"standard"`
+        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space.
 
-    effectExpressions : list of strings
-        A list of vector expressions for each POVM effect vector (see
-        documentation for :meth:`build_vector`).
+    effectExpressions : list, optional
+        A list or list-of-lists of (string) vector expressions for each POVM
+        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        correspond to labels in `effectLabels`.  If set to the special string
+        `"labels"`, then the values of `effectLabels` are also used as 
+        expressions (which works well for integer-as-a-string labels).
 
-    spamdefs : dict
-       A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples
-        associating a particular state preparation and effect vector with a
-        label.  prepLabel and ELabel must be contained in prepLabels and
-        effectLabels respectively except for two special cases:
+    povmLabels : list or string, optional
+        A list of POVM labels, or a single (string) label.  In the latter case,
+        only a single POVM is created and the format of `effectLabels` and
+        `effectExpressions` is simplified (see above).
 
-        1.  ELabel can be set to "remainder" to mean an effect vector that is
-            the identity - (other effect vectors)
-        2.  ELabel and prepLabel can both be "remainder" to mean a spam label
-            that generates probabilities that are 1.0 - (sum of probabilities
-            from all other spam labels).
-
-    basis : {'gm','pp','std','qt'}, optional
+    basis : {'gm','pp','std','qt','auto'}, optional
         the basis of the matrices in the returned GateSet
 
         - "std" = gate matrix operates on density mx expressed as sum of matrix
@@ -1046,6 +1051,8 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
           tensor-product of Pauli matrices
         - "qt"  = gate matrix operates on density mx expressed as sum of
           Qutrit basis matrices
+        - "auto" = "pp" if possible (integer num of qubits), "qt" if density
+          matrix dim == 3, and "gm" otherwise.
 
     parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
@@ -1061,13 +1068,16 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
            _np.isclose(_np.log2(stateSpaceDims[0]),
                        round(_np.log2(stateSpaceDims[0]))):
             basis = "pp"
+        elif len(stateSpaceDims) == 1 and stateSpaceDims[0] == 3:
+            basis = "qt"
         else: basis = "gm"
 
     return basis_build_gateset(stateSpaceLabels,
+                  _Basis(basis, stateSpaceDims),
                   gateLabels, gateExpressions,
                   prepLabels, prepExpressions,
                   effectLabels, effectExpressions,
-                  spamdefs, _Basis(basis, stateSpaceDims), parameterization=parameterization)
+                  povmLabels, parameterization=parameterization)
 
 def build_alias_gateset(gs_primitives, alias_dict):
     """

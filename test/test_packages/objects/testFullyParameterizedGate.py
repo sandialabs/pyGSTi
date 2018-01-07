@@ -16,14 +16,14 @@ class FullyParameterizedGateTestCase(BaseTestCase):
     def test_bad(self):
         gate = self.gate.copy()
         with self.assertRaises(ValueError):
-            gate.set_matrix([])
-        gate.set_matrix([[1, 2],[1, 2]])
+            gate.set_value([])
+        gate.set_value([[1, 2],[1, 2]])
 
         gate.dim = 'adfadsflkj'
         with self.assertRaises(TypeError):
-            gate.set_matrix([[1, 2],[1, 2]])
+            gate.set_value([[1, 2],[1, 2]])
         with self.assertRaises(ValueError):
-            gate.set_matrix([[[1, 2]],[], []])
+            gate.set_value([[[1, 2]],[], []])
 
 
     def test_derive_wrt_params(self):

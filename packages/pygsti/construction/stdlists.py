@@ -147,10 +147,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
         gateLabels = list(gateLabelSrc.gates.keys())
     else: gateLabels = gateLabelSrc
 
-    lgst_list = _gsc.list_lgst_gatestrings(
-        _ssc.build_spam_specs(prepStrs = prepStrs,
-                              effectStrs = effectStrs),
-        gateLabels)
+    lgst_list = _gsc.list_lgst_gatestrings(prepStrs, effectStrs, gateLabels)
 
     if keepFraction < 1.0:
         rndm = _rndm.RandomState(keepSeed) # ok if seed is None
@@ -390,10 +387,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         gateLabels = list(gateLabelSrc.gates.keys())
     else: gateLabels = gateLabelSrc
 
-    lgst_list = _gsc.list_lgst_gatestrings(
-        _ssc.build_spam_specs(prepStrs = prepStrs,
-                              effectStrs = effectStrs),
-        gateLabels)
+    lgst_list = _gsc.list_lgst_gatestrings(prepStrs, effectStrs, gateLabels)
 
     allPossiblePairs = list(_itertools.product(range(len(prepStrs)),
                                                range(len(effectStrs))))

@@ -262,16 +262,16 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ '1 count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
-            spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
+            else: colLabels = [ '1 count', 'count total' ] #  outcomeLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
+            outcomeLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
-                                comment="\n".join(preamble_comments),
-                                measurementGates=measurementGates)
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels,collisionAction=collisionAction,
+                                comment="\n".join(preamble_comments))
+                                #OLD: measurementGates=measurementGates)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -303,55 +303,59 @@ class StdInputParser(object):
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
+        outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
+
+        def str_to_outcome(x): #always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+        
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
-                spamLabel = colLabel[:-len(' count')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                countCols.append( (spamLabel,i) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                countCols.append( (outcomeLabel,i) )
 
             elif colLabel.endswith(' frequency'):
                 if 'count total' not in colLabels:
                     raise ValueError("Frequency columns specified without count total")
                 else: iTotal = colLabels.index( 'count total' )
-                spamLabel = colLabel[:-len(' frequency')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                freqCols.append( (spamLabel,i,iTotal) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                freqCols.append( (outcomeLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if '1' in spamLabels and '0' not in spamLabels:
-                spamLabels.append('0')
-                impliedCountTotCol1Q = '0', colLabels.index( 'count total' )
-            elif '0' in spamLabels and '1' not in spamLabels:
-                spamLabels.append('1')
+            if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+                outcomeLabels.append( ('0',) )
+                impliedCountTotCol1Q = ('0',), colLabels.index( 'count total' )
+            elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+                outcomeLabels.append( ('1',) )
                 impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
-        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-        return spamLabels, fillInfo
+        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)        
+        return outcomeLabels, fillInfo
 
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
         countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
-        for spamLabel,iCol in countCols:
+        for outcomeLabel,iCol in countCols:
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
-            countDict[spamLabel] = colValues[iCol]
+            countDict[outcomeLabel] = colValues[iCol]
 
-        for spamLabel,iCol,iTotCol in freqCols:
+        for outcomeLabel,iCol,iTotCol in freqCols:
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
-            countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
+            countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
         if impliedCountTotCol1Q[1] >= 0:
-            impliedSpamLabel, impliedCountTotCol = impliedCountTotCol1Q
-            if impliedSpamLabel == '0':
-                countDict['0'] = colValues[impliedCountTotCol] - countDict['1']
+            impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
+            if impliedOutcomeLabel == ('0',):
+                countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
             else:
-                countDict['1'] = colValues[impliedCountTotCol] - countDict['0']
+                countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
         #TODO - add standard count completion for 2Qubit case?
         return countDict
 
@@ -407,19 +411,19 @@ class StdInputParser(object):
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
             else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
-            dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
+            dsOutcomeLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         datasets = _OrderedDict()
-        for dsLabel,spamLabels in dsSpamLabels.items():
-            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels,
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
+            datasets[dsLabel] = _objs.DataSet(outcomeLabels=outcomeLabels,
                                               collisionAction=collisionAction)
 
         dsCountDicts = _OrderedDict()
-        for dsLabel in dsSpamLabels: dsCountDicts[dsLabel] = {}
+        for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
 
         nLines = 0
         with open(filename, 'r') as datafile:
@@ -451,72 +455,72 @@ class StdInputParser(object):
         return mds
 
 
-    #Note: spam labels must not contain spaces since we use spaces to separate
-    # the spam label from the dataset label
+    #Note: outcome labels must not contain spaces since we use spaces to separate
+    # the outcome label from the dataset label
     def _extractLabelsFromMultiDataColLabels(self, colLabels):
-        dsSpamLabels = _OrderedDict()
+        dsOutcomeLabels = _OrderedDict()
         countCols = []; freqCols = []; impliedCounts1Q = []
         for i,colLabel in enumerate(colLabels):
             wordsInColLabel = colLabel.split() #split on whitespace into words
             if len(wordsInColLabel) < 3: continue #allow other columns we don't recognize
 
             if wordsInColLabel[-1] == 'count':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                countCols.append( (dsLabel,spamLabel,i) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                countCols.append( (dsLabel,outcomeLabel,i) )
 
             elif wordsInColLabel[-1] == 'frequency':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:
                     raise ValueError("Frequency columns specified without" +
                                      "count total for dataset '%s'" % dsLabel)
                 else: iTotal = colLabels.index( '%s count total' % dsLabel )
 
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                freqCols.append( (dsLabel,spamLabel,i,iTotal) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                freqCols.append( (dsLabel,outcomeLabel,i,iTotal) )
 
-        for dsLabel,spamLabels in dsSpamLabels.items():
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if '1' in spamLabels and '0' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('0')
+                if '1' in outcomeLabels and '0' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, '0', iTotal) )
-                if '0' in spamLabels and '1' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('1')
+                if '0' in outcomeLabels and '1' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('1')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
                     impliedCounts1Q.append( (dsLabel, '1', iTotal) )
 
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
-        return dsSpamLabels, fillInfo
+        return dsOutcomeLabels, fillInfo
 
 
     def _fillMultiDataCountDicts(self, countDicts, fillInfo, colValues):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
-        for dsLabel,spamLabel,iCol in countCols:
+        for dsLabel,outcomeLabel,iCol in countCols:
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
-        for dsLabel,spamLabel,iCol,iTotCol in freqCols:
+        for dsLabel,outcomeLabel,iCol,iTotCol in freqCols:
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,spamLabel,iTotCol in impliedCounts1Q:
-            if spamLabel == '0':
+        for dsLabel,outcomeLabel,iTotCol in impliedCounts1Q:
+            if outcomeLabel == '0':
                 countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
-            elif spamLabel == '1':
+            elif outcomeLabel == '1':
                 countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
 
         #TODO - add standard count completion for 2Qubit case?
@@ -561,14 +565,14 @@ class StdInputParser(object):
         finally:
             _os.chdir(orig_cwd)
 
-        spamLabelAbbrevs = _OrderedDict()
+        outcomeLabelAbbrevs = _OrderedDict()
         for key,val in preamble_directives.items():
             if key == "Lookup": continue 
-            spamLabelAbbrevs[key] = val
-        spamLabels = spamLabelAbbrevs.values()
+            outcomeLabelAbbrevs[key] = val
+        outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.TDDataSet(spamLabels=spamLabels)
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
         nLines = sum(1 for line in open(filename,'r'))
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
@@ -590,7 +594,7 @@ class StdInputParser(object):
             except ValueError as e:
                 raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-            seriesList = [ spamLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
+            seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
             timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
             dataset.add_series_data(gateString, seriesList, timesList)
                 
@@ -621,102 +625,195 @@ def read_gateset(filename):
     -------
     GateSet
     """
+    basis = 'pp' #default basis to load as
+    
+    def add_current():
+        """ Adds the current object, described by lots of cur_* variables """
 
-    def _add_current_label():
+        qty = None
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                stdmx = _tools.state_to_stdmx(ar[0,:])
+                qty = _tools.stdmx_to_vec(stdmx, basis)
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                qty = _tools.stdmx_to_vec(ar, basis)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
-        elif cur_format == "PauliVec":
-            spam_vecs[cur_label] = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleVec":
+            qty = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
 
         elif cur_format == "UnitaryMx":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate(ar))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate(ar))
-            else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate( _expm(-1j * ar) ))
-            else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
 
-        elif cur_format == "PauliMx":
-            gs.gates[cur_label] = _objs.FullyParameterizedGate( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleMx":
+            qty = _evalRowList( cur_rows, bComplex=False )
+
+        assert(qty is not None), "Invalid format: %s" % cur_format
+
+        if cur_typ == "PREP":
+            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(qty)
+        elif cur_typ == "TP-PREP":
+            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(qty)
+        elif cur_typ == "STATIC-PREP":
+            gs.preps[cur_label] = _objs.StaticSPAMVec(qty)
+
+        elif cur_typ in ("EFFECT","TP-EFFECT","STATIC-EFFECT"):
+            if cur_typ == "EFFECT": qty = _objs.FullyParameterizedSPAMVec(qty)
+            elif cur_typ == "TP-EFFECT": qty = _objs.TPParameterizedSPAMVec(qty)
+            elif cur_typ == "STATIC-EFFECT": qty = _objs.StaticSPAMVec(qty)
+            if "effects" in cur_group_info:
+                cur_group_info['effects'].append( (cur_label,qty) )
+            else:  cur_group_info['effects'] = [ (cur_label,qty) ]            
+                
+        elif cur_typ == "GATE":
+            gs.gates[cur_label] = _objs.FullyParameterizedGate(qty)
+        elif cur_typ == "TP-GATE":
+            gs.gates[cur_label] = _objs.TPParameterizedGate(qty)
+        elif cur_typ == "CPTP-GATE":
+            #Similar to gate.convert(...) method
+            J = _tools.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
+            RANK_TOL = 1e-6
+            if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+                unitary_post = qty # when 'gate' is unitary
+            else: unitary_post = None
+
+            nQubits = _np.log2(qty.shape[0])/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            ham_basis = proj_basis
+            nonham_basis = proj_basis
+            nonham_diagonal_only = False; cptp = True; truncate=True
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
+                                                                  nonham_basis, cptp, nonham_diagonal_only,
+                                                                  truncate, basis)
+
+        elif cur_typ in ("IGATE",):
+            #just add numpy array `qty` to matrices list
+            if "matrices" in cur_group_info:
+                cur_group_info['matrices'].append( (cur_label,qty) )
+            else:  cur_group_info['matrices'] = [ (cur_label,qty) ]
+        else:
+            raise ValueError("Unknown type: %s!" % cur_typ)
+
+
+    def add_current_group():
+        """ 
+        Adds the current "group" - either a POVM or Instrument - which contains
+        multiple objects.
+        """
+        if cur_group_typ == "POVM":
+            gs.povms[cur_group] = _objs.POVM( cur_group_info['effects'] )
+        elif cur_group_typ == "TP-POVM":
+            assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
+            gs.povms[cur_group] = _objs.TPPOVM( cur_group_info['effects'] )
+        elif cur_group_typ == "Instrument":
+            gs.instruments[cur_group] = _objs.Instrument( cur_group_info['matrices'] )
+        elif cur_group_typ == "TP-Instrument":
+            gs.instruments[cur_group] = _objs.TPInstrument( cur_group_info['matrices'] )
+        else:
+            raise ValueError("Unknown group type: %s!" % cur_group_typ)
 
 
     gs = _objs.GateSet()
-    spam_vecs = _OrderedDict(); spam_labels = _OrderedDict(); remainder_spam_label = ""
+    spam_vecs = _OrderedDict();
+    spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
     basis_dims = None
+    gaugegroup_name = None
 
-    state = "look for label"
-    cur_label = ""; cur_format = ""; cur_rows = []
+    #First try to find basis:
     with open(filename) as inputfile:
         for line in inputfile:
             line = line.strip()
 
-            if len(line) == 0:
+            if line.startswith("BASIS:"):
+                parts = line[len("BASIS:"):].split()
+                basis_abbrev = parts[0]
+                if len(parts) > 1:
+                    basis_dims = list(map(int, "".join(parts[1:]).split(",")))
+                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                elif gs.get_dimension() is not None:
+                    basis_dims = int(round(_np.sqrt(gs.get_dimension())))
+                elif len(spam_vecs) > 0:
+                    basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
+                else:
+                    basis_dims = None
+            elif line.startswith("GAUGEGROUP:"):
+                gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
+                if gaugegroup_name not in ("Full","TP","Unitary"):
+                    _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
+                                    "group will be set to None") % gaugegroup_name)
+
+    if basis_dims is not None:
+        # then specfy a dimensionful basis at the outset
+        basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        # otherwise we'll try to infer one at the end (and add_current routine
+        # uses basis in a way that can infer a dimension)
+        basis = basis_abbrev
+
+    state = "look for label"
+    cur_label = ""; cur_typ = ""
+    cur_group = ""; cur_group_typ = ""
+    cur_format = ""; cur_rows = []; cur_group_info = {}
+    with open(filename) as inputfile:
+        for line in inputfile:
+            line = line.strip()
+
+            if len(line) == 0 or line.startswith("END"):
+                #Blank lines or "END..." statements trigger the end of objects
                 state = "look for label"
                 if len(cur_label) > 0:
-                    _add_current_label()
+                    add_current()
                     cur_label = ""; cur_rows = []
-                continue
 
-            if line[0] == "#":
-                continue
+                #END... ends the current group
+                if line.startswith("END"):
+                    if len(cur_group) > 0:
+                        add_current_group()
+                        cur_group = ""; cur_group_info = {}
 
-            if state == "look for label":
-                if line.startswith("SPAMLABEL "):
-                    eqParts = line[len("SPAMLABEL "):].split('=')
-                    if len(eqParts) != 2: raise ValueError("Invalid spam label line: ", line)
-                    if eqParts[1].strip() == "remainder":
-                        remainder_spam_label = eqParts[0].strip()
-                    else:
-                        spam_labels[ eqParts[0].strip() ] = [ s.strip() for s in eqParts[1].split() ]
+            elif line[0] == "#":
+                pass # skip comments
 
-                elif line.startswith("IDENTITYVEC "):  #Vectorized form of identity density matrix in whatever basis is used
-                    if line != "IDENTITYVEC None":  #special case for designating no identity vector, so default is not used
-                        identity_vec  = _np.transpose( _evalRowList( [ line[len("IDENTITYVEC "):].split() ], bComplex=False ) )
+            elif state == "look for label":
+                parts = line.split(':')
+                assert(len(parts) == 2), "Invalid '<type>: <label>' line: %s" % line
+                typ = parts[0].strip()
+                label = parts[1].strip()
 
-                elif line.startswith("BASIS "): # Line of form "BASIS <abbrev> [<dims>]", where optional <dims> is comma-separated integers
-                    parts = line[len("BASIS "):].split()
-                    basis_abbrev = parts[0]
-                    if len(parts) > 1:
-                        basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                        if len(basis_dims) == 1: basis_dims = basis_dims[0]
-                    elif gs.get_dimension() is not None:
-                        basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-                    elif len(spam_vecs) > 0:
-                        basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-                    else:
-                        raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
+                if typ in ("BASIS","GAUGEGROUP"):
+                    pass #handled above
+                
+                elif typ in ("POVM","TP-POVM","Instrument","TP-Instrument"):
+                    # if this is a group type, just record this and continue looking
+                    #  for the next labeled object
+                    cur_group = label
+                    cur_group_typ = typ
                 else:
-                    cur_label = line
-                    state = "expect format"
-
+                    #All other "types" should be objects with formatted data
+                    # associated with them: set cur_label and cur_typ to hold 
+                    # the object label and type - next read it in.
+                    cur_label = label
+                    cur_typ = typ
+                    state = "expect format" # the default next action
+                    
             elif state == "expect format":
                 cur_format = line
-                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "PauliVec", "PauliMx"]:
+                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "LiouvilleVec", "LiouvilleMx"]:
                     raise ValueError("Expected object format for label %s and got line: %s -- must specify a valid object format" % (cur_label,line))
                 state = "read object"
 
@@ -724,7 +821,9 @@ def read_gateset(filename):
                 cur_rows.append( line.split() )
 
     if len(cur_label) > 0:
-        _add_current_label()
+        add_current()
+    if len(cur_group) > 0:
+        add_current_group()
 
     #Try to infer basis dimension if none is given
     if basis_dims is None:
@@ -733,47 +832,23 @@ def read_gateset(filename):
         elif len(spam_vecs) > 0:
             basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
         else:
+            #OLD raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
             raise ValueError("Cannot infer basis dimension!")
 
-    #Set basis
-    gs.basis = _objs.Basis(basis_abbrev, basis_dims)
-
-    #Default SPAMLABEL directive if none are give and rho and E vectors are:
-    if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['1'] = [ 'rho', 'E' ]
-        spam_labels['0'] = [ 'rho', 'remainder' ] #NEW default behavior
-        # OLD default behavior: remainder_spam_label = 'minus'
-    if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
-
-    #Make SPAMs
-     #get unique rho and E names
-    rho_names = list(_OrderedDict.fromkeys( [ rho for (rho,E) in list(spam_labels.values()) ] ) ) #if this fails, may be due to malformatted
-    E_names   = list(_OrderedDict.fromkeys( [ E   for (rho,E) in list(spam_labels.values()) ] ) ) #  SPAMLABEL line (not 2 items to right of = sign)
-    if "remainder" in rho_names:
-        del rho_names[ rho_names.index("remainder") ]
-    if "remainder" in E_names:
-        del E_names[ E_names.index("remainder") ]
-
-    #Order E_names and rho_names using spam_vecs ordering
-    #rho_names = sorted(rho_names, key=spam_vecs.keys().index)
-    #E_names = sorted(E_names, key=spam_vecs.keys().index)
-
-     #add vectors to gateset
-    for rho_nm in rho_names: gs.preps[rho_nm] = spam_vecs[rho_nm]
-    for E_nm   in E_names:   gs.effects[E_nm] = spam_vecs[E_nm]
-
-    gs.povm_identity = identity_vec
-
-     #add spam labels to gateset
-    for spam_label in spam_labels:
-        (rho_nm,E_nm) = spam_labels[spam_label]
-        gs.spamdefs[spam_label] = (rho_nm , E_nm)
-
-    if len(remainder_spam_label) > 0:
-        gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
+        #Set basis (only needed if we didn't set it above)
+        gs.basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        gs.basis = basis # already created a Basis obj above
 
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
-    gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
-
+    if gaugegroup_name == "Full":
+        gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
+    elif gaugegroup_name == "TP":
+        gs.default_gauge_group = _objs.TPGaugeGroup(gs.dim)
+    elif gaugegroup_name == "Unitary":
+        gs.default_gauge_group = _objs.UnitaryGaugeGroup(gs.dim, gs.basis)
+    else:
+        gs.default_gauge_group = None
+        
     return gs

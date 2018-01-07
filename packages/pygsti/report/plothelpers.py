@@ -152,14 +152,22 @@ def total_count_matrix(gsplaq, dataset):
         between the specified set of N prep-fiducial and M effect-fiducial
         gate strings.
     """
-    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    for i,j,gstr in gsplaq:
-        ret[i,j] = dataset[ gstr ].total()
+    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
+    for i,j,gstr,elIndices,outcomes in gsplaq.iter_compiled():
+        ret[elIndices] = dataset[ gstr ].total()
+          # OR should it sum only over outcomes, i.e.
+          # = sum([dataset[gstr][ol] for ol in outcomes])
     return ret
 
+    #OLD
+    #ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    #for i,j,gstr in gsplaq:
+    #    ret[i,j] = dataset[ gstr ].total()
+    #return ret
 
 
-def count_matrices(gsplaq, dataset, spamlabels):
+
+def count_matrices(gsplaq, dataset):
     """
     Computes spamLabel's count matrix for a base gatestring.
 
@@ -183,14 +191,14 @@ def count_matrices(gsplaq, dataset, spamlabels):
         where gateString is sandwiched between the each prep-fiducial and
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones( (len(spamlabels),gsplaq.rows,gsplaq.cols), 'd')
-    for i,j,gstr in gsplaq:
+    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
+    for i,j,gstr,elIndices,outcomes in gsplaq.iter_compiled():
         datarow = dataset[ gstr ]
-        ret[:,i,j] = [datarow[sl] for sl in spamlabels]
+        ret[elIndices] = [datarow[ol] for ol in outcomes]
     return ret
 
 
-def frequency_matrices(gsplaq, dataset, spamlabels):
+def frequency_matrices(gsplaq, dataset):
     """
     Computes spamLabel's frequency matrix for a base gatestring.
 
@@ -215,12 +223,12 @@ def frequency_matrices(gsplaq, dataset, spamlabels):
         where gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    return count_matrices(gsplaq, dataset, spamlabels) \
-           / total_count_matrix( gsplaq, dataset)[None,:,:]
+    return count_matrices(gsplaq, dataset) \
+           / total_count_matrix( gsplaq, dataset)
 
 
 
-def probability_matrices(gsplaq, gateset, spamlabels,
+def probability_matrices(gsplaq, gateset,
                          probs_precomp_dict=None):
     """
     Computes spamLabel's probability matrix for a base gatestring.
@@ -250,16 +258,15 @@ def probability_matrices(gsplaq, gateset, spamlabels,
         where gateString is sandwiched between the each prep-fiducial, 
         effect-fiducial pair.
     """
-    ret = _np.nan * _np.ones( (len(spamlabels),gsplaq.rows,gsplaq.cols), 'd')
+    ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
     if probs_precomp_dict is None:
         if gateset is not None:
-            for i,j,gstr in gsplaq:
+            for i,j,gstr,elIndices,outcomes in gsplaq.iter_compiled():
                 probs = gateset.probs(gstr)
-                ret[:,i,j] = [probs[sl] for sl in spamlabels]
+                ret[elIndices] = [probs[ol] for ol in outcomes]
     else:
-        for i,j,gstr in gsplaq:
-            probs = probs_precomp_dict[gstr]
-            ret[:,i,j] = [probs[sl] for sl in spamlabels]
+        for i,j,gstr,elIndices,_ in gsplaq.iter_compiled():
+            ret[elIndices] =  probs_precomp_dict[gstr] #precomp is already in element-array form
     return ret
 
 @smart_cached
@@ -296,15 +303,19 @@ def chi2_matrix(gsplaq, dataset, gateset, minProbClipForWeighting=1e-4,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    gsplaq_ds = gsplaq.expand_aliases(dataset)
-    spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(gsplaq_ds, dataset)[None,:,:]
-    probMxs = probability_matrices(gsplaq, gateset, spamlabels,
-                                    probs_precomp_dict)
-    freqMxs = frequency_matrices(gsplaq_ds, dataset, spamlabels)
-    chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
-                                     minProbClipForWeighting)
-    return chiSqMxs.sum(axis=0) # sum over spam labels
+    gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
+    cnts = total_count_matrix(gsplaq_ds, dataset)
+    probs = probability_matrices(gsplaq, gateset, 
+                                 probs_precomp_dict)
+    freqs = frequency_matrices(gsplaq_ds, dataset)
+
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+        chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
+                               freqs[elIndices_ds], minProbClipForWeighting)
+        ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair 
+    return ret
 
 
 @smart_cached
@@ -343,16 +354,66 @@ def logl_matrix(gsplaq, dataset, gateset, minProbClip=1e-6,
         gateString is sandwiched between the each prep-fiducial,
         effect-fiducial pair.
     """
-    gsplaq_ds = gsplaq.expand_aliases(dataset)
-    
-    spamlabels = gateset.get_spam_labels()
-    cntMxs  = total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
-    probMxs = probability_matrices( gsplaq, gateset, spamlabels,
-                                    probs_precomp_dict)
-    freqMxs = frequency_matrices(   gsplaq_ds, dataset, spamlabels)
-    logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
-    return logLMxs.sum(axis=0) # sum over spam labels
+    gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
 
+    cnts = total_count_matrix(gsplaq_ds, dataset)
+    probs = probability_matrices(gsplaq, gateset, 
+                                 probs_precomp_dict)
+    freqs = frequency_matrices(gsplaq_ds, dataset)
+    
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+        logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
+                                         freqs[elIndices_ds], minProbClip)
+        ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair
+    return ret
+
+
+@smart_cached
+def tvd_matrix(gsplaq, dataset, gateset, probs_precomp_dict=None):
+    """
+    Computes the total-variational distance matrix of `0.5 * |p-f|`
+    values for a base gatestring.
+
+    Parameters
+    ----------
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
+
+    dataset : DataSet
+        The data used to specify frequencies and counts
+
+    gateset : GateSet
+        The gate set used to specify the probabilities and SPAM labels
+
+    probs_precomp_dict : dict, optional
+        A dictionary of precomputed probabilities.  Keys are gate strings
+        and values are prob-dictionaries (as returned from GateSet.probs)
+        corresponding to each gate string.
+
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        logl values corresponding to gate sequences where
+        gateString is sandwiched between the each prep-fiducial,
+        effect-fiducial pair.
+    """
+    gsplaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=gateset)
+
+    probs = probability_matrices(gsplaq, gateset, 
+                                 probs_precomp_dict)
+    freqs = frequency_matrices(gsplaq_ds, dataset)
+    
+    ret = _np.nan*_np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+            gsplaq.iter_compiled(),gsplaq_ds.iter_compiled()) :
+        TVDs = 0.5 * _np.abs(probs[elIndices] - freqs[elIndices_ds])
+        ret[i,j] = sum(TVDs) # sum all elements for each (i,j) pair
+    return ret
 
 
 def small_eigval_err_rate(sigma, directGSTgatesets):
@@ -514,17 +575,20 @@ def _computeProbabilities(gss, gateset, dataset):
     gatestringList = gss.allstrs
 
     #compute probabilities
-    spamLabels = dataset.get_spam_labels()
-    evt = gateset.bulk_evaltree(gatestringList)
-    bulk_probs = gateset.bulk_probs(evt) # LATER use comm?
+    evt,lookup,_ = gateset.bulk_evaltree(gatestringList)
+    bulk_probs = _np.empty(evt.num_final_elements(), 'd')
+    gateset.bulk_fill_probs(bulk_probs, evt) # LATER use comm?
+      # bulk_probs indexed by [element_index]
+      
     probs_dict = \
-        { gatestringList[i]: {sl: bulk_probs[sl][i] for sl in spamLabels}
+        { gatestringList[i]: bulk_probs.take(_tools.as_array(lookup[i])) 
           for i in range(len(gatestringList)) }
     return probs_dict
 
     
 #@smart_cached
-def _computeSubMxs(gss, subMxCreationFn):
+def _computeSubMxs(gss, gateset, subMxCreationFn):
+    if gateset is not None: gss.compile_plaquettes(gateset)
     subMxs = [ [ subMxCreationFn(gss.get_plaquette(x,y),x,y)
                  for x in gss.used_xvals() ] for y in gss.used_yvals()]
     #Note: subMxs[y-index][x-index] is proper usage
@@ -571,16 +635,26 @@ def direct_chi2_matrix(gsplaq, gss, dataset, directGateset,
         Direct-X chi^2 values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
-    spamlabels = dataset.get_spam_labels()
-    plaq_ds = gsplaq.expand_aliases(dataset)
-    plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
-    
-    cntMxs = total_count_matrix(plaq_ds, dataset)[None,:,:]
-    probMxs = probability_matrices( plaq_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
-    chiSqMxs= _tools.chi2fn( cntMxs, probMxs, freqMxs,
-                                     minProbClipForWeighting)
-    return chiSqMxs.sum(axis=0) # sum over spam labels
+    if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
+        plaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=directGateset)
+        plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
+        plaq_pr.compile_gatestrings(directGateset)
+        
+        cnts = total_count_matrix(plaq_ds, dataset)
+        probs = probability_matrices( plaq_pr, directGateset) # no probs_precomp_dict
+        freqs = frequency_matrices( plaq_ds, dataset)
+        
+        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')    
+        for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+                plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
+            chiSqs= _tools.chi2fn( cnts[elIndices_ds], probs[elIndices],
+                                   freqs[elIndices_ds], minProbClipForWeighting)
+            ret[i,j] = sum(chiSqs) # sum all elements for each (i,j) pair
+            
+        return ret
+    else:
+        return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+
 
 
 
@@ -624,15 +698,25 @@ def direct_logl_matrix(gsplaq, gss, dataset, directGateset,
         Direct-X logL values corresponding to gate sequences where
         gateString is sandwiched between the each (effectStr,prepStr) pair.
     """
-    spamlabels = dataset.get_spam_labels()
-    plaq_ds = gsplaq.expand_aliases(dataset)
-    plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
+    if len(gsplaq.get_all_strs()) > 0: #skip cases with no strings
+        plaq_ds = gsplaq.expand_aliases(dataset, gatestring_compiler=directGateset)
+        plaq_pr = gss.create_plaquette( _objs.GateString( ("GsigmaLbl",) ) )
+        plaq_pr.compile_gatestrings(directGateset)
+    
+        cnts = total_count_matrix(plaq_ds, dataset)
+        probs = probability_matrices( plaq_pr, directGateset) # no probs_precomp_dict
+        freqs = frequency_matrices( plaq_ds, dataset)
+    
+        ret = _np.empty( (plaq_ds.rows,plaq_ds.cols), 'd')
+        for (i,j,gstr,elIndices,_),(_,_,_,elIndices_ds,_) in zip(
+                plaq_pr.iter_compiled(),plaq_ds.iter_compiled()) :
+            logLs = _tools.two_delta_loglfn( cnts[elIndices_ds], probs[elIndices],
+                                                  freqs[elIndices_ds], minProbClip)
+            ret[i,j] = sum(logLs) # sum all elements for each (i,j) pair 
+        return ret
+    else:
+        return _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
 
-    cntMxs = total_count_matrix(plaq_ds, dataset)[None,:,:]
-    probMxs = probability_matrices( plaq_pr, directGateset, spamlabels ) # no probs_precomp_dict
-    freqMxs = frequency_matrices( plaq_ds, dataset, spamlabels)
-    logLMxs = _tools.two_delta_loglfn( cntMxs, probMxs, freqMxs, minProbClip)
-    return logLMxs.sum(axis=0) # sum over spam labels
 
 
 
@@ -721,18 +805,21 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     """
     gstrs = gss.allstrs
     if objective == "chi2":
-        fitQty = _tools.chi2( dataset, gateset, gstrs,
+        fitQty = _tools.chi2( gateset, dataset, gstrs,
                               minProbClipForWeighting=1e-4,
                               gateLabelAliases=gss.aliases )
     elif objective == "logl":
-        logL_upperbound = _tools.logl_max(dataset, gstrs, gateLabelAliases=gss.aliases)
+        logL_upperbound = _tools.logl_max(gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
         logl = _tools.logl( gateset, dataset, gstrs, gateLabelAliases=gss.aliases)
         fitQty = 2*(logL_upperbound - logl) # twoDeltaLogL
         if(logL_upperbound < logl):
             raise ValueError("LogL upper bound = %g but logl = %g!!" % (logL_upperbound, logl))
 
+    ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
+    
     if Np is None: Np = gateset.num_nongauge_params()
-    Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+    Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters
+      #OLD Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
     k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty-k)/_np.sqrt(2*k)
     if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))

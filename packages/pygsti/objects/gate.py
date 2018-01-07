@@ -9,12 +9,16 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy.linalg as _spl
 import functools as _functools
+import copy as _copy
+
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
+from ..tools import slicetools as _slct
 from . import gaugegroup as _gaugegroup
+from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
@@ -50,7 +54,7 @@ def optimize_gate(gateToOptimize, targetGate):
     if isinstance(gateToOptimize, FullyParameterizedGate):
         if(targetGate.dim != gateToOptimize.dim): #special case: gates can have different overall dimension
             gateToOptimize.dim = targetGate.dim   #  this is a HACK to allow model selection code to work correctly
-        gateToOptimize.set_matrix(targetGate)     #just copy entire overall matrix since fully parameterized
+        gateToOptimize.set_value(targetGate)     #just copy entire overall matrix since fully parameterized
         return
 
     assert(targetGate.dim == gateToOptimize.dim) #gates must have the same overall dimension
@@ -310,17 +314,38 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
                          _np.linalg.norm(fd_deriv - deriv_to_check))
 
 
-class Gate(object):
+#Note on initialization sequence of Gates within a GateSet:
+# 1) a GateSet is constructed (empty)
+# 2) a Gate is constructed - apart from a GateSet if it's locally parameterized,
+#    otherwise with explicit reference to an existing GateSet's labels/indices.
+#    All gates (GateSetMember objs in general) have a "gpindices" member which
+#    can either be initialized upon construction or set to None, which signals
+#    that the GateSet must initialize it.
+# 3) the Gate is assigned/added to a dict within the GateSet.  As a part of this
+#    process, the Gate's 'gpindices' member is set, if it isn't already, and the
+#    GateSet's "global" parameter vector (and number of params) is updated as
+#    needed to accomodate new parameters.
+#
+# Note: gpindices may be None (before initialization) or any valid index
+#  into a 1D numpy array (e.g. a slice or integer array).  It may NOT have
+#  any repeated elements.
+#
+# When a Gate is removed from the GateSet, parameters only used by it can be
+# removed from the GateSet, and the gpindices members of existing gates
+# adjusted as needed.
+#
+# When derivatives are taken wrt. a gateset parameter (1 col of a jacobian)
+# derivatives wrt each gate that includes that parameter in its gpindices
+# must be processed.
+
+
+class Gate(_gatesetmember.GateSetMember):
     """ Base class for all gate representations """
     
     def __init__(self, dim):
         """ Initialize a new Gate """
-        self.dim = dim
+        super(Gate, self).__init__(dim)
         
-    def get_dimension(self):
-        """ Return the dimension of the gate. """
-        return self.dim
-
     def acton(self, state):
         """ Act this gate map on an input state """
         raise NotImplementedError("acton(...) not implemented!")
@@ -369,53 +394,10 @@ class Gate(object):
         """
         raise NotImplementedError("diamonddist(...) not implemented!")
 
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-        """
-        raise NotImplementedError("num_params not implemented!")
-
-
-    def to_vector(self):
-        """
-        Get the gate parameters as an array of values.
-        """
-        raise NotImplementedError("to_vector not implemented!")
-
-    
-    def from_vector(self, v):
-        """
-        Initialize the gate using a vector of parameters.
-
-        Parameters
-        ----------
-        v : numpy array
-            The 1D vector of gate parameters.  Length
-            must == num_params()
-
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError("from_vector not implemented!")
-
-
-    def copy(self):
-        """
-        Copy this gate.
-
-        Returns
-        -------
-        Gate
-            A copy of this gate.
-        """
-        raise NotImplementedError("copy not implemented!")
-
 
     #Pickle plumbing
     def __setstate__(self, state):
         self.__dict__.update(state)
-
 
 
 #class GateMap(Gate):
@@ -534,7 +516,7 @@ class GateMatrix(Gate):
 
     def hessian_wrt_params(self, wrtFilter1=None, wrtFilter2=None):
         """
-        Construct the Hessian of this gate with respect to it's parameters.
+        Construct the Hessian of this gate with respect to its parameters.
 
         This function returns a tensor whose first axis corresponds to the
         flattened gate matrix and whose 2nd and 3rd axes correspond to the
@@ -563,12 +545,15 @@ class GateMatrix(Gate):
 
     #Access to underlying ndarray
     def __getitem__( self, key ):
+        self.dirty = True
         return self.base.__getitem__(key)
 
     def __getslice__(self, i,j):
+        self.dirty = True
         return self.__getitem__(slice(i,j)) #Called for A[:]
 
     def __setitem__(self, key, val):
+        self.dirty = True
         return self.base.__setitem__(key,val)
 
     def __getattr__(self, attr):
@@ -576,6 +561,7 @@ class GateMatrix(Gate):
         ret = getattr(self.__dict__['base'],attr)
         if(self.base.shape != (self.dim,self.dim)):
             raise ValueError("Cannot change shape of Gate")
+        self.dirty = True
         return ret
 
 
@@ -666,7 +652,7 @@ class StaticGate(GateMatrix):
         GateMatrix.__init__(self, GateMatrix.convert_to_matrix(M))
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -686,6 +672,7 @@ class StaticGate(GateMatrix):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
         self.base[:,:] = _np.array(mx)
+        self.dirty = True
 
 
     def num_params(self):
@@ -764,7 +751,7 @@ class StaticGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -773,7 +760,7 @@ class StaticGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return StaticGate(self.base)
+        return self._copy_gpindices( StaticGate(self.base), parent)
 
 
     def transform(self, S):
@@ -796,7 +783,7 @@ class StaticGate(GateMatrix):
             (and it's inverse) used in the above similarity transform.
         """
         raise ValueError("Cannot transform a StaticGate - it has no parameters!")
-        #self.set_matrix(_np.dot(Si,_np.dot(self.base, S)))
+        #self.set_value(_np.dot(Si,_np.dot(self.base, S)))
 
     def depolarize(self, amount):
         """
@@ -891,11 +878,6 @@ class StaticGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        return (StaticGate, (_np.identity(self.dim,'d'),), self.__dict__)
-
-
-
 
 
 class FullyParameterizedGate(GateMatrix):
@@ -917,7 +899,7 @@ class FullyParameterizedGate(GateMatrix):
         M2 = GateMatrix.convert_to_matrix(M)
         GateMatrix.__init__(self,M2)
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -937,6 +919,7 @@ class FullyParameterizedGate(GateMatrix):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim,self.dim))
         self.base[:,:] = _np.array(mx)
+        self.dirty = True
 
 
     def num_params(self):
@@ -979,6 +962,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[:,:] = v.reshape( (self.dim,self.dim) )
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1013,7 +997,7 @@ class FullyParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1022,7 +1006,7 @@ class FullyParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return FullyParameterizedGate(self.base)
+        return self._copy_gpindices( FullyParameterizedGate(self.base), parent )
 
 
     def transform(self, S):
@@ -1045,7 +1029,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def depolarize(self, amount):
@@ -1078,7 +1062,7 @@ class FullyParameterizedGate(GateMatrix):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_matrix(_np.dot(D,self))
+        self.set_value(_np.dot(D,self))
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -1110,7 +1094,7 @@ class FullyParameterizedGate(GateMatrix):
         None
         """
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_matrix(_np.dot(rotnMx,self))
+        self.set_value(_np.dot(rotnMx,self))
 
 
     def __str__(self):
@@ -1138,12 +1122,7 @@ class FullyParameterizedGate(GateMatrix):
         """
         assert( isinstance(otherGate, FullyParameterizedGate) )
         return FullyParameterizedGate( _np.dot( self.base, otherGate.base) )
-
-
-    def __reduce__(self):
-        return (FullyParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)
-
-
+    
 
 class TPParameterizedGate(GateMatrix):
     """
@@ -1173,7 +1152,7 @@ class TPParameterizedGate(GateMatrix):
                        indicesToProtect=(0, slice(None,None,None))))
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -1197,6 +1176,7 @@ class TPParameterizedGate(GateMatrix):
                              "invalid form for 1st row!" )
             #For further debugging:  + "\n".join([str(e) for e in mx[0,:]])
         self.base[1:,:] = mx[1:,:]
+        self.dirty = True
 
 
     def num_params(self):
@@ -1239,6 +1219,7 @@ class TPParameterizedGate(GateMatrix):
         """
         assert(self.base.shape == (self.dim, self.dim))
         self.base[1:,:] = v.reshape((self.dim-1,self.dim))
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1275,7 +1256,7 @@ class TPParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1284,7 +1265,7 @@ class TPParameterizedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return TPParameterizedGate(self.base)
+        return self._copy_gpindices( TPParameterizedGate(self.base), parent )
 
 
     def transform(self, S):
@@ -1308,7 +1289,7 @@ class TPParameterizedGate(GateMatrix):
         """
         Smx = S.get_transform_matrix()
         Si  = S.get_transform_matrix_inverse()
-        self.set_matrix(_np.dot(Si,_np.dot(self.base, Smx)))
+        self.set_value(_np.dot(Si,_np.dot(self.base, Smx)))
 
 
     def depolarize(self, amount):
@@ -1341,7 +1322,7 @@ class TPParameterizedGate(GateMatrix):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        self.set_matrix(_np.dot(D,self))
+        self.set_value(_np.dot(D,self))
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -1373,7 +1354,7 @@ class TPParameterizedGate(GateMatrix):
         None
         """
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        self.set_matrix(_np.dot(rotnMx,self))
+        self.set_value(_np.dot(rotnMx,self))
 
 
     def compose(self, otherGate):
@@ -1403,11 +1384,6 @@ class TPParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
-    def __reduce__(self):
-        """ Reduce for pickling as an element of an :class:`OrderedDict` """
-        return (TPParameterizedGate, (_np.identity(self.dim,'d'),), self.__dict__)
-
-
 
 class LinearlyParameterizedElementTerm(object):
     """
@@ -1429,9 +1405,9 @@ class LinearlyParameterizedElementTerm(object):
         self.coeff = coeff
         self.paramIndices = paramIndices
 
-    def copy(self):
+    def copy(self, parent=None):
         """ Copy this term. """
-        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices)
+        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
 
 
 class LinearlyParameterizedGate(GateMatrix):
@@ -1529,7 +1505,7 @@ class LinearlyParameterizedGate(GateMatrix):
         self.base.flags.writeable = False
 
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -1592,6 +1568,7 @@ class LinearlyParameterizedGate(GateMatrix):
         """
         self.parameterArray = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -1641,7 +1618,7 @@ class LinearlyParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -1651,8 +1628,8 @@ class LinearlyParameterizedGate(GateMatrix):
             A copy of this gate.
         """
         #Construct new gate with no intial elementExpressions
-        newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray,
-                                            {}, self.leftTrans, self.rightTrans,
+        newGate = LinearlyParameterizedGate(self.baseMatrix, self.parameterArray.copy(),
+                                            {}, self.leftTrans.copy(), self.rightTrans.copy(),
                                             self.enforceReal)
 
         #Deep copy elementExpressions into new gate
@@ -1660,7 +1637,7 @@ class LinearlyParameterizedGate(GateMatrix):
             newGate.elementExpressions[tup] = [ term.copy() for term in termList ]
         newGate._construct_matrix()
 
-        return newGate
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -1848,12 +1825,6 @@ class LinearlyParameterizedGate(GateMatrix):
                                 for term in terms] )
             s += "Gate[%d,%d] = %s\n" % (i,j,tStr)
         return s
-
-    def __reduce__(self):
-        return (LinearlyParameterizedGate,
-                (self.baseMatrix, _np.array([]), {}, None, None, self.enforceReal),
-                self.__dict__)
-
 
 
 #Or CommutantParameterizedGate(Gate): ?
@@ -2116,7 +2087,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         self.base = matrix.real
         self.base.flags.writeable = False
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -2179,6 +2150,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -2232,7 +2204,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         return False
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -2253,7 +2225,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         newGate.options = self.options.copy()
         newGate._construct_matrix()
 
-        return newGate
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -2374,9 +2346,6 @@ class EigenvalueParameterizedGate(GateMatrix):
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
 
-    def __reduce__(self):
-        return (EigenvalueParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self.__dict__)
 
 
 class LindbladParameterizedGate(GateMatrix):
@@ -2494,7 +2463,7 @@ class LindbladParameterizedGate(GateMatrix):
 
     def _set_params_from_errgen(self, errgen, truncate):
         d2 = self.unitary_postfactor.shape[0]
-        
+
         hamC, otherC, self.hamGens, self.otherGens = \
             _gt.lindblad_errgen_projections(
                 errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
@@ -2699,7 +2668,7 @@ class LindbladParameterizedGate(GateMatrix):
         #    assert(False)
         
 
-    def set_matrix(self, M):
+    def set_value(self, M):
         """
         Attempts to modify gate parameters so that the specified raw
         gate matrix becomes mx.  Will raise ValueError if this operation
@@ -2762,6 +2731,7 @@ class LindbladParameterizedGate(GateMatrix):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_matrix()
+        self.dirty = True
 
 
     def old_deriv_wrt_params(self, wrtFilter=None):
@@ -3133,7 +3103,7 @@ class LindbladParameterizedGate(GateMatrix):
                                  wrtFilter2, axis=2 )
 
 
-    def copy(self):
+    def copy(self, parent=None):
         """
         Copy this gate.
 
@@ -3143,16 +3113,17 @@ class LindbladParameterizedGate(GateMatrix):
             A copy of this gate.
         """
         #Construct new gate with dummy identity mx
-        newGate = LindbladParameterizedGate(None,self.unitary_postfactor,
-                                            self.ham_basis, self.other_basis,
+        newGate = LindbladParameterizedGate(None,self.unitary_postfactor.copy(),
+                                            _copy.deepcopy(self.ham_basis),
+                                            _copy.deepcopy(self.other_basis),
                                             self.cptp,self.nonham_diagonal_only,
-                                            True, self.matrix_basis)
+                                            True, _copy.deepcopy(self.matrix_basis))
         
         #Deep copy data
         newGate.paramvals = self.paramvals.copy()
         newGate._construct_matrix()
 
-        return newGate
+        return self._copy_gpindices( newGate, parent )
 
 
     def transform(self, S):
@@ -3180,6 +3151,7 @@ class LindbladParameterizedGate(GateMatrix):
             self.err_gen = _np.dot(Uinv,_np.dot(self.err_gen, U))
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_matrix()
+            self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
             ## checked when truncate == False.  I'm not sure why this occurs,
@@ -3236,6 +3208,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
+        self.dirty = True
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -3275,6 +3248,7 @@ class LindbladParameterizedGate(GateMatrix):
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
         self._construct_matrix()
+        self.dirty = True
 
 
     def compose(self, otherGate):
@@ -3310,10 +3284,6 @@ class LindbladParameterizedGate(GateMatrix):
             (str(self.base.shape), self.num_params())
         s += _mt.mx_to_string(self.base, width=5, prec=1)
         return s
-
-    def __reduce__(self):
-        return (LindbladParameterizedGate, 
-                (_np.identity(self.dim,'d'),), self.__dict__)
 
 
 
@@ -3423,53 +3393,185 @@ def _dexpX(X,dX,expX=None,postfactor=None):
 
 
 
-#SCRATCH: TO REMOVE
+class TPInstrumentGate(GateMatrix):
+    """
+    A partial implementation of :class:`Gate` which encapsulates an element of a
+    :class:`TPInstrument`.  Instances rely on their parent being a 
+    `TPInstrument`.
+    """
+
+    def __init__(self, param_gates, index):
+        """
+        Initialize a TPInstrumentGate object.
+
+        Parameters
+        ----------
+        param_gates : list of Gate objects
+            A list of the underlying gate objects which constitute a simple
+            parameterization of a :class:`TPInstrument`.  Namely, this is
+            the list of [MT,D1,D2,...Dn] gates which parameterize *all* of the
+            `TPInstrument`'s elements.
+
+        index : int
+            The index indicating which element of the `TPInstrument` the
+            constructed object is.  Must be in the range 
+            `[0,len(param_gates)-1]`.
+        """
+        self.param_gates = param_gates
+        self.index = index
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d'))
+        self._construct_matrix()
+
+        #Set our own parent and gpindices based on param_gates
+        # (this breaks the usual paradigm of having the parent object set these,
+        #  but the exception is justified b/c the parent has set these members
+        #  of the underlying 'param_gates' gates)
+        self.dependents = [0,index+1] if index < len(param_gates)-1 \
+                          else list(range(len(param_gates)))
+          #indices into self.param_gates of the gates this gate depends on
+        self.set_gpindices(_slct.list_to_slice(
+            _np.concatenate( [ param_gates[i].gpindices_as_array()
+                               for i in self.dependents ], axis=0),True,False),
+                           param_gates[0].parent) #use parent of first param gate
+                                                  # (they should all be the same)
+
+
+    def _construct_matrix(self):
+        """
+        Mi = Di + MT for i = 1...(n-1)
+           = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
+        """
+        nEls = len(self.param_gates)
+        if self.index < nEls-1:
+            self.base = _np.asarray( self.param_gates[self.index+1]
+                                     + self.param_gates[0] )
+        else:
+            assert(self.index == nEls-1), \
+                "Invalid index %d > %d" % (self.index,nEls-1)
+            self.base = _np.asarray( -sum(self.param_gates)
+                                     -(nEls-3)*self.param_gates[0] )
+        
+        assert(self.base.shape == (self.dim,self.dim))
+        self.base.flags.writeable = False
+
+        
+
+    def set_value(self, M):
+        """
+        Attempts to modify gate parameters so that the specified raw
+        gate matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        M : array_like or Gate
+            An array of shape (dim, dim) or Gate representing the gate action.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a TPInstrumentGate directly!")
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the vectorized
+        derivatives of the flattened gate matrix with respect to a
+        single gate parameter.  Thus, each column is of length
+        gate_dim^2 and there is one column per gate parameter. An
+        empty 2D array in the StaticGate case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives with shape (dimension^2, num_params)
+        """
+        Np = len(self.gpindices_as_array())
+        derivMx = _np.zeros((self.dim**2,Np),'d')
+        Nels = len(self.param_gates)
+
+        off = 0
+        if self.index < Nels-1: # matrix = Di + MT = param_gates[index+1] + param_gates[0]
+            for i in [self.index+1, 0]:
+                Np = self.param_gates[i].num_params()
+                derivMx[:,off:off+Np] = self.param_gates[i].deriv_wrt_params()
+                off += Np
+
+        else: # matrix = -(nEls-1)*MT-sum(Di)
+            Np = self.param_gates[0].num_params()
+            derivMx[:,off:off+Np] = -(Nels-1)*self.param_gates[0].deriv_wrt_params()
+            off += Np
+
+            for i in range(1,Nels):
+                Np = self.param_gates[i].num_params()
+                derivMx[:,off:off+Np] = -self.param_gates[i].deriv_wrt_params()
+                off += Np
+        
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
+
+        
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this gate has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
 
 
 
-#    def __getattr__(self, attr):
-#        print "GATE ATTR",attr
-#        ret = getattr(self.__dict__['base'],attr) #use __dict__ so no chance for recursive __getattr__
-#        if(self.base.shape != (self.dim,self.dim)):
-#           raise ValueError("Cannot change shape of Gate")
-#        if isinstance(ret, _ProtectedArray):
-#            print "PA RET"
-#            if ret.base is self.base:
-#                print "SAME MEM.  Writeable = ",ret.flags.writeable
-#                print " Dict = ",ret.__dict__
-#                if ret.flags.writeable == True and ret.indicesToProtect is None:
-#                    print "SETTING READ-ONLY"
-#                    ret.flags.writeable = False
-#        #if getattr(ret,'base',None) is not self.base: #if doesn't share memory with parent
-#        #    if hasattr(ret,'flags'):
-#        #        print "ALLOWING WRITE"
-#        #        ret.flags.writeable = True           # don't preserve read-only
-#        return ret
+    def from_vector(self, v):
+        """
+        Initialize this partially-implemented gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of parameters.
+
+        Returns
+        -------
+        None
+        """
+        #Rely on the Instrument ordering of it's elements: if we're being called
+        # to init from v then this is within the context of a TPInstrument's gates
+        # having been compiled and now being initialized from a vector (within a
+        # calculator).  We rely on the Instrument elements having their
+        # from_vector() methods called in self.index order.
+        
+        if self.index < len(self.param_gates)-1: #final element doesn't need to init any param gates
+            for i in self.dependents: #re-init all my dependents (may be redundant)
+                if i == 0 and self.index > 0: continue # 0th param-gate already init by index==0 element
+                pgate_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, param_gates[i].gpindices)
+                param_gates[i].from_vector( v[pgate_local_inds] )
+                
+        self._construct_matrix()
 
 
+    def copy(self, parent=None):
+        """
+        Copy this gate.
 
-    #def __reduce__(self):
-    #    """ Pickle plumbing. """
-    #    createFn, args, state = _np.ndarray.__reduce__(self)
-    #    new_state = state + (self.__dict__,)
-    #    return (createFn, args, new_state)
-    #
-    #def __setstate__(self, state):
-    #    """ Pickle plumbing. """
-    #    _np.ndarray.__setstate__(self,state[0:-1])
-    #    self.__dict__.update(state[-1])
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        assert(parent is None),"TPInstrumentGate set's it's own parent, so `parent` arg of copy must be None"
+        return self._copy_gpindices( TPInstrumentGate(self.param_gates,self.index), parent)
+          #Note: this doesn't deep-copy self.param_gates, since the TPInstrumentGate doesn't really own these.
 
+    def __str__(self):
+        s = "TPInstrumentGate with shape %s\n" % str(self.base.shape)
+        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        return s
 
-#    def __lt__(self,x):
-#
-#
-#    def __gt__(self,x):
-#
-#
-#    def __hash__(self):
-#
-#
-#    def __copy__(self):
-#
-#
-#    def __deepcopy__(self):

@@ -475,6 +475,10 @@ class SequentialColormap(Colormap):
             rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.0,0.0,0.0)] ]
         elif color == "blackToWhite":
             rgb_colors = [ [0, (0.0,0.0,0.0)], [1.0, (1.,1.,1.)] ]
+        elif color == "whiteToBlue":
+            rgb_colors = [ [0, (1.,1.,1.)], [1.0, (0.,0.,1.)] ]
+        elif color == "whiteToRed":
+            rgb_colors = [ [0, (1.,1.,1.)], [1.0, (1.,0.,0.)] ]
         else:
             raise ValueError("Unknown color: %s" % color)
 

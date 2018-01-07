@@ -82,7 +82,52 @@ class SPAMVecTestCase(BaseTestCase):
             #print(r, "->", evs)
         print("OK2")
 
+    #TODO
+    def test_complement_spamvec(self):
+        gateset = pygsti.construction.build_gateset(
+            [2], [('Q0',)],['Gi','Gx','Gy'],
+            [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
 
+        E0 = gateset.povms['Mdefault']['0']
+        E1 = gateset.povms['Mdefault']['1']
+        Ec = pygsti.obj.ComplementSPAMVec(
+            pygsti.construction.build_identity_vec([2],"pp"),
+            [E0])
+        print(Ec.gpindices)
+
+        #Test TPPOVM which uses a complement evec
+        gateset.povms['Mtest'] = pygsti.obj.TPPOVM( [('+',E0),('-',E1)] )
+        E0 = gateset.povms['Mtest']['+']
+        Ec = gateset.povms['Mtest']['-']
+        
+        v = gateset.to_vector()
+        gateset.from_vector(v)
+
+        #print(Ec.num_params()) #not implemented for complement vecs - only for POVM
+        identity = np.array([[np.sqrt(2)], [0], [0], [0]],'d')
+        print("TEST1")
+        print(E0)
+        print(Ec)
+        print(E0 + Ec)
+        self.assertArraysAlmostEqual(E0+Ec, identity)
+
+        #TODO: add back if/when we can set parts of a POVM directly...
+        #print("TEST2")
+        #gateset.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
+        #print(gateset.effects['E0'])
+        #print(gateset.effects['E1'])
+        #print(gateset.effects['E0'] + gateset.effects['E1'])
+        #self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+        #
+        #print("TEST3")
+        #gateset.effects['E0'][0,0] = 1.0 #uses dirty processing
+        #gateset._update_paramvec(gateset.effects['E0'])
+        #print(gateset.effects['E0'])
+        #print(gateset.effects['E1'])
+        #print(gateset.effects['E0'] + gateset.effects['E1'])
+        #self.assertArraysAlmostEqual(gateset.effects['E0'] + gateset.effects['E1'], identity)
+
+        
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

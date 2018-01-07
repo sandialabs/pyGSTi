@@ -506,12 +506,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     if startingPt == "LGST":
         assert(isinstance(lsgstLists[0], _objs.LsGermsStructure)), \
                "Cannot run LGST: fiducials not specified!"
-        specs = _construction.build_spam_specs(prepStrs=lsgstLists[0].prepStrs,
-                                               effectStrs=lsgstLists[0].effectStrs,
-                                               prep_labels=gs_target.get_prep_labels(),
-                                               effect_labels=gs_target.get_effect_labels())
         gateLabels = advancedOptions.get('gateLabels', list(gs_target.gates.keys()))
-        gs_start = _alg.do_lgst(ds, specs, gs_target, gateLabels, svdTruncateTo=gate_dim,
+        gs_start = _alg.do_lgst(ds, lsgstLists[0].prepStrs, lsgstLists[0].effectStrs, gs_target,
+                                gateLabels, svdTruncateTo=gate_dim,
                                 gateLabelAliases=lsgstLists[0].aliases,
                                 verbosity=printer) # returns a gateset with the *same*
                                                    # parameterizations as gs_target
@@ -522,10 +519,15 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
           #Note: use *default* gauge-opt params when optimizing
 
-        # Also reset the POVM identity to that of the target.  Essentially,
-        # we declare that this basis (gauge) has the same identity as the
-        # target (typically the first basis element).
-        gs_start.povm_identity = gs_target.povm_identity.copy()
+        #OLD  -- this should be unnecessary since identity shouldn't be changed for TP gatesets...
+        ## Also reset the POVM identity to that of the target.  Essentially,
+        ## we declare that this basis (gauge) has the same identity as the
+        ## target (typically the first basis element).
+        #for lbl,Evec in gs_start.effects.items():
+        #    if isinstance(Evec, _objs.ComplementSPAMVec):
+        #        Evec.identity = gs_target.effects[lbl].identity.copy()
+        #        Evec._construct_vector() #rebuild after setting identity TODO: make identity a *property* of Evec
+        #        gs_start._update_paramvec(Evec) #TODO: better way to tell GateSet?
 
     elif startingPt == "target":
         gs_start = gs_target.copy()
@@ -646,7 +648,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
 def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                        prepStrsListOrFilename, effectStrsListOrFilename,
                        germsListOrFilename, maxLengths, modes="TP,CPTP,Target",
-                       gaugeOptSuite=('toggleValidSpam','unreliable2Q'),
+                       gaugeOptSuite=('single','unreliable2Q'),
                        gaugeOptTarget=None, modelsToTest=None, comm=None, memLimit=None,
                        advancedOptions=None, output_pkl=None, verbosity=2):
 
@@ -1192,13 +1194,13 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
             
             # Get by-sequence goodness of fit
             if objective == "chi2":
-                fitQty = _tools.chi2_terms(ds, gs_lsgst_list[-1], rawLists[-1],
+                fitQty = _tools.chi2_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                            advancedOptions.get('minProbClipForWeighting',1e-4),
                                            advancedOptions.get('probClipInterval',(-1e6,1e6)),
                                            False, False, memLimit,
                                            advancedOptions.get('gateLabelAliases',None))
             else:
-                maxLogL = _tools.logl_max_terms(ds, rawLists[-1],
+                maxLogL = _tools.logl_max_terms(gs_lsgst_list[-1], ds, rawLists[-1],
                                                 gateLabelAliases=advancedOptions.get(
                                                     'gateLabelAliases',None))
                 
@@ -1208,9 +1210,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                                          advancedOptions.get('radius',1e-4),
                                          gateLabelAliases=advancedOptions.get('gateLabelAliases',None))
                 fitQty = 2*(maxLogL - logL)
-            fitQty = _np.sum(fitQty, axis=0) # sum over spam labels to get just "by-sequence"
 
-            expected = (len(ds.get_spam_labels())-1) # == "k"
+            #Note: fitQty[iGateString] gives fit quantity for a single gate
+            # string, aggregated over outcomes.
+            expected = (len(ds.get_outcome_labels())-1) # == "k"
             dof_per_box = expected; nboxes = len(rawLists[-1])
             pc = 0.95 #hardcoded confidence level for now -- make into advanced option w/default
 

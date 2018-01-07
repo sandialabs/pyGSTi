@@ -10,6 +10,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
+import itertools as _itertools
 
 from .basistools import change_basis
 
@@ -206,8 +207,40 @@ def nullspace_qr(m, tol=1e-7):
 
 def matrix_sign(M):
     """ The "sign" matrix of `M` """
-    U,_,Vt = _np.linalg.svd(M)
-    return _np.dot(U,Vt)
+    #Notes: sign(M) defined s.t. eigvecs of sign(M) are evecs of M
+    # and evals of sign(M) are +/-1 or 0 based on sign of eigenvalues of M
+    
+    #Using the extremely numerically stable (but expensive) Schur method
+    # see http://www.maths.manchester.ac.uk/~higham/fm/OT104HighamChapter5.pdf
+    N = M.shape[0];  assert(M.shape == (N,N)), "M must be square!"
+    T,Z = _spl.schur(M,'complex') # M = Z T Z^H where Z is unitary and T is upper-triangular
+    U = _np.zeros(T.shape,'complex') # will be sign(T), which is easy to compute
+      # (U is also upper triangular), and then sign(M) = Z U Z^H
+
+    # diagonals are easy
+    U[ _np.diag_indices_from(U) ] = _np.sign(_np.diagonal(T))
+
+    #Off diagonals: use U^2 = I or TU = UT
+    # Note: Tij = Uij = 0 when i > j and i==j easy so just consider i<j case
+    # 0 = sum_k Uik Ukj =  (i!=j b/c off-diag) 
+    # FUTURE: speed this up by using np.dot instead of sums below
+    for j in range(1,N):
+        for i in range(j-1,-1,-1):
+            S = U[i,i]+U[j,j]
+            if _np.isclose(S,0): # then use TU = UT
+                if _np.isclose(T[i,i]-T[j,j],0): # then just set to zero
+                    U[i,j] = 0.0 # TODO: check correctness of this case
+                else:
+                    U[i,j] = T[i,j]*(U[i,i]-U[j,j])/(T[i,i]-T[j,j]) + \
+                             sum([U[i,k]*T[k,j]-T[i,k]*U[k,j] for k in range(i+1,j)]) \
+                             / (T[i,i]-T[j,j])
+            else: # use U^2 = I
+                U[i,j] = - sum([U[i,k]*U[k,j] for k in range(i+1,j)]) / S
+    return _np.dot(Z, _np.dot(U, _np.conjugate(Z.T)))
+
+    #OLD quick & dirty - not always stable
+    #U,_,Vt = _np.linalg.svd(M)
+    #return _np.dot(U,Vt)
 
 def print_mx(mx, width=9, prec=4):
     """
@@ -615,4 +648,97 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights, matched_pairs
     else:
         return min_weights
-           
+
+                
+def _fas(a, inds, rhs, add=False):
+    """ 
+    Fancy Assignment, equivalent to `a[*inds] = rhs` but with
+    the elements of inds (allowed to be integers, slices, or 
+    integer arrays) always specifing a generalize-slice along
+    the given dimension.  This avoids some weird numpy indexing
+    rules that make using square brackets a pain.
+    """
+    inds = tuple([slice(None) if (i is None) else i for i in inds])
+    
+    #Mixes of ints and tuples are fine, and a single
+    # index-list index is fine too.  The case we need to
+    # deal with is indexing a multi-dimensional array with
+    # one or more index-lists
+    if all([isinstance(i,(int,slice)) for i in inds]) or len(inds) == 1:
+        if add:
+            a[inds] += rhs #all integers or slices behave nicely
+        else:
+            a[inds] = rhs #all integers or slices behave nicely
+    else:
+        #convert each dimension's index to a list, take a product of
+        # these lists, and flatten the right hand side to get the
+        # proper assignment:
+        b = []
+        for ii,i in enumerate(inds):
+            if isinstance(i,int): b.append([i])
+            elif isinstance(i,slice):
+                b.append( list(range(*i.indices(a.shape[ii]))) )
+            else:
+                b.append( list(i) )
+
+        indx_tups = list(_itertools.product(*b))
+        if len(indx_tups) > 0: # b/c a[()] just returns the entire array!
+            inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
+            if add:
+                a[inds] += rhs.flatten()
+            else:
+                a[inds] = rhs.flatten()
+                
+    return a
+
+def _findx_shape(a, inds):
+    """ Returns the shape of a fancy-indexed array (`a[*inds].shape`) """
+    shape = []
+    for ii,N in enumerate(a.shape):
+        indx = inds[ii] if ii<len(inds) else None
+        if indx is None: shape.append(N)
+        elif isinstance(indx,slice):
+            shape.append( len(range(*indx.indices(N))) )
+        else: #assume indx is an index list or array
+            shape.append( len(indx) )
+    return shape
+
+
+def _findx(a, inds, always_copy=False):
+    """ 
+    Fancy Indexing, equivalent to `a[*inds].copy()` but with
+    the elements of inds (allowed to be integers, slices, or 
+    integer arrays) always specifing a generalize-slice along
+    the given dimension.  This avoids some weird numpy indexing
+    rules that make using square brackets a pain.
+    """
+    inds = tuple([slice(None) if (i is None) else i for i in inds])
+    
+    #Mixes of ints and tuples are fine, and a single
+    # index-list index is fine too.  The case we need to
+    # deal with is indexing a multi-dimensional array with
+    # one or more index-lists
+    if all([isinstance(i,(int,slice)) for i in inds]) or len(inds) == 1:
+        return a[inds].copy() if always_copy else a[inds] #all integers or slices behave nicely
+    
+    else:        
+        #Need to copy to a new array
+        b = []; squeeze = []
+        for ii,i in enumerate(inds):
+            if isinstance(i,int):
+                b.append([i]); squeeze.append(ii) #squeeze ii-th dimension at end
+            elif isinstance(i,slice):
+                b.append( list(range(*i.indices(a.shape[ii]))) )
+            else:
+                b.append( list(i) )
+
+        a_inds_shape = [len(x) for x in b]
+        indx_tups = list(_itertools.product(*b))
+        if len(indx_tups) > 0: # b/c a[()] just returns the entire array!
+            inds = tuple(zip(*indx_tups)) # un-zips to one list per dim
+            a_inds = a[inds].copy() # a 1D array of flattened "fancy" a[inds]
+            a_inds.shape = a_inds_shape #reshape
+        else:
+            a_inds = _np.zeros( a_inds_shape, a.dtype ) #has zero elements
+            asssert(a_inds.size == 0)
+        return a_inds

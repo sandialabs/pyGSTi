@@ -13,17 +13,15 @@ class TestDataSetMethods(BaseTestCase):
 
     def test_from_scratch(self):
         # Create a dataset from scratch
-        ds = pygsti.objects.DataSet(spamLabels=['0','1'])
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds[ ('Gx',) ] = {'0': 10, '1': 90}
         ds[ ('Gx',) ]['0'] = 10
         ds[ ('Gx',) ]['1'] = 90
-        ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
-        ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
-        with self.assertRaises(ValueError):
-            ds.add_count_dict( ('Gx',), {'FooBar': 10, '1': 90 }) #bad spam label
-        with self.assertRaises(ValueError):
-            ds.add_count_dict( ('Gx',), {'1': 90 }) # not all spam labels
+        #OLD ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
+        #OLD ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
+        ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
+        ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
         ds.done_adding_data()
 
         dsWritable = ds.copy_nonstatic()
@@ -36,10 +34,12 @@ class TestDataSetMethods(BaseTestCase):
 
         with self.assertRaises(ValueError):
             ds.add_count_dict( ('Gx',), {'0': 10, '1': 90 }) # done adding data
-        with self.assertRaises(ValueError):
-            ds.add_counts_1q( ('Gx',), 40,60) # done adding data
+        #OLD with self.assertRaises(ValueError):
+        #    ds.add_counts_1q( ('Gx',), 40,60) # done adding data
 
         self.assertEqual(ds[('Gx',)]['0'], 10)
+        self.assertEqual(ds[('Gx',)]['1'], 90)
+        print(ds)
         self.assertAlmostEqual(ds[('Gx',)].fraction('0'), 0.1)
 
         #Pickle and unpickle
@@ -55,17 +55,29 @@ class TestDataSetMethods(BaseTestCase):
         # Invoke the DataSet constructor other ways
         gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
         gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
-        slInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
-        cnts_static = np.ones( (3,2), 'd' ) # 3 gate strings, 2 spam labels
-        cnts_nonstc = [ np.ones(2,'d'), np.ones(2,'d'), np.ones(2,'d') ]
+        gstrInds_static = collections.OrderedDict( [ (pygsti.obj.GateString(('Gx',)),slice(0,2)),
+                                                     (pygsti.obj.GateString(('Gx','Gy')),slice(2,4)),
+                                                     (pygsti.obj.GateString(('Gy',)),slice(4,6)) ] )
+        olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
-        ds2 = pygsti.objects.DataSet(cnts_nonstc, gateStrings=gstrs, spamLabels=['0','1'])
-        ds3 = pygsti.objects.DataSet(cnts_nonstc, gateStringIndices=gstrInds, spamLabelIndices=slInds)
-        ds4 = pygsti.objects.DataSet(cnts_static, gateStrings=gstrs,
-                                     spamLabels=['0','1'], bStatic=True)
-        ds5 = pygsti.objects.DataSet(cnts_nonstc, gateStrings=gstrs,
-                                     spamLabels=['0','1'], bStatic=False)
-        ds6 = pygsti.objects.DataSet(spamLabels=['0','1'])
+        oli = np.array([0,1],'i')
+        oli_static = np.array( [0,1]*3, 'd' ) # 3 gate strings * 2 outcome labels each
+        time_static = np.zeros( (6,), 'd' )
+        reps_static = 10*np.ones( (6,), 'd' )
+
+        oli_nonstc = [ oli, oli, oli ] # each item has num_outcomes elements
+        time_nonstc = [ np.zeros(2,'d'), np.zeros(2,'d'), np.zeros(2,'d') ]
+        reps_nonstc = [ 10*np.ones(2,'i'), 10*np.ones(2,'i'), 10*np.ones(2,'i') ]
+
+        ds2 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc,
+                                     gateStrings=gstrs, outcomeLabels=['0','1'])
+        ds3 = pygsti.objects.DataSet(oli_nonstc[:], time_nonstc[:], reps_nonstc[:],
+                                     gateStringIndices=gstrInds, outcomeLabelIndices=olInds)
+        ds4 = pygsti.objects.DataSet(oli_static, time_static, reps_static,
+                                     gateStringIndices=gstrInds_static, outcomeLabels=['0','1'], bStatic=True)
+        ds5 = pygsti.objects.DataSet(oli_nonstc, time_nonstc, reps_nonstc, gateStrings=gstrs,
+                                     outcomeLabels=['0','1'], bStatic=False)
+        ds6 = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds6.done_adding_data() #ds6 = empty dataset
 
         ds2.add_counts_from_dataset(ds)
@@ -73,18 +85,19 @@ class TestDataSetMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             ds4.add_counts_from_dataset(ds) #can't add to static DataSet
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             pygsti.objects.DataSet(gateStrings=gstrs) #no spam labels specified
         with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(cnts_static, spamLabels=['0','1'], bStatic=True)
+            pygsti.objects.DataSet(oli_static, time_static, reps_static,
+                                   outcomeLabels=['0','1'], bStatic=True)
               #must specify gateLabels (or indices) when creating static DataSet
         with self.assertRaises(ValueError):
-            pygsti.objects.DataSet(gateStrings=gstrs, spamLabels=['0','1'], bStatic=True)
+            pygsti.objects.DataSet(gateStrings=gstrs, outcomeLabels=['0','1'], bStatic=True)
               #must specify counts when creating static DataSet
 
         #Test has_key methods
         self.assertTrue( ds2.has_key(('Gx',)) )
-        self.assertTrue(ds2[('Gx',)].has_key('0'))
+        self.assertTrue( ds2[('Gx',)].has_key('0'))
 
         #Test indexing methods
         cnt = 0
@@ -97,15 +110,16 @@ class TestDataSetMethods(BaseTestCase):
                     pass
 
             dsRow = ds[gstr]
-            allLabels = list(dsRow.keys())
-            for spamLabel in dsRow:
-                if spamLabel in dsRow: #we know to be true
-                    cnt = dsRow[spamLabel]
-                if spamLabel in dsRow:
-                    cnt = dsRow[spamLabel]
+            allLabels = list(dsRow.counts.keys())
+            counts = dsRow.counts
+            for spamLabel in counts:
+                if spamLabel in counts: #we know to be true
+                    cnt = counts[spamLabel]
+                if spamLabel in counts:
+                    cnt = counts[spamLabel]
 
-        for dsRow in ds.itervalues():
-            for spamLabel,count in dsRow.iteritems():
+        for dsRow in ds.values():
+            for spamLabel,count in dsRow.counts.items():
                 cnt += count
 
         #Test truncation
@@ -154,7 +168,7 @@ class TestDataSetMethods(BaseTestCase):
         
 
         #Test loading a deprecated dataset file
-        dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
+        #dsDeprecated = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/deprecated.dataset")
 
 
 
@@ -170,8 +184,8 @@ Gx^4 20 80
         with open(temp_files + "/TinyDataset.txt","w") as output:
             output.write(dataset_txt)
         ds = pygsti.io.load_dataset(temp_files + "/TinyDataset.txt")
-        self.assertEqual(ds[()]['0'], 0)
-        self.assertEqual(ds[('Gx','Gy')]['1'], 60)
+        self.assertEqual(ds[()][('0',)], 0)
+        self.assertEqual(ds[('Gx','Gy')][('1',)], 60)
 
         dataset_txt2 = \
 """## Columns = 0 frequency, count total
@@ -189,11 +203,7 @@ Gx^4 0.2 100
     def test_generate_fake_data(self):
 
         gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy','Gz'],
-                                                     [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"],
-                                                     prepLabels=['rho0'], prepExpressions=["0"],
-                                                     effectLabels=['E0'], effectExpressions=["0"],
-                                                     spamdefs={'0': ('rho0','E0'),
-                                                               '1': ('rho0','remainder') })
+                                                     [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)", "Z(pi/2,Q0)"])
 
         depol_gateset = gateset.depolarize(gate_noise=0.1,spam_noise=0)
 
@@ -240,6 +250,8 @@ Gx^4 0.2 100
 
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_none.txt", cache=True)
+        #print("SAVED = ",saved_ds)
+        #print("NONE = ",ds_none)
         self.assertEqualDatasets(ds_none, saved_ds)
 
         saved_ds = pygsti.io.load_dataset(compare_files + "/Fake_Dataset_round.txt")
@@ -253,17 +265,19 @@ Gx^4 0.2 100
 
 
     def test_gram(self):
-        ds = pygsti.objects.DataSet(spamLabels=['0','1'])
-        ds.add_count_dict( ('Gx','Gx'), {'0': 40, '1': 60} )
-        ds.add_count_dict( ('Gx','Gy'), {'0': 40, '1': 60} )
-        ds.add_count_dict( ('Gy','Gx'), {'0': 40, '1': 60} )
-        ds.add_count_dict( ('Gy','Gy'), {'0': 40, '1': 60} )
+        ds = pygsti.objects.DataSet(outcomeLabels=[('0',),('1',)])
+        ds.add_count_dict( ('Gx','Gx'), {('0',): 40, ('1',): 60} )
+        ds.add_count_dict( ('Gx','Gy'), {('0',): 40, ('1',): 60} )
+        ds.add_count_dict( ('Gy','Gx'), {('0',): 40, ('1',): 60} )
+        ds.add_count_dict( ('Gy','Gy'), {('0',): 40, ('1',): 60} )
         ds.done_adding_data()
 
         basis = pygsti.get_max_gram_basis( ('Gx','Gy'), ds)
         self.assertEqual(basis, [ ('Gx',), ('Gy',) ] )
 
-        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds)
+        gateset = pygsti.construction.build_gateset( [2], [('Q0',)],['Gx','Gy'],
+                                                     [ "X(pi/4,Q0)", "Y(pi/4,Q0)"])
+        rank, evals, tgt_evals = pygsti.max_gram_rank_and_evals(ds, gateset)
         self.assertEqual(rank, 1)
 
 
@@ -291,41 +305,53 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             pygsti.io.load_multidataset(temp_files + "/BadTinyMultiDataset.txt")
 
-        gstrs = [ ('Gx',), ('Gx','Gy'), ('Gy',) ]
-        gstrInds = collections.OrderedDict( [ (('Gx',),0),  (('Gx','Gy'),1), (('Gy',),2) ] )
-        slInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
-        ds1_cnts = np.ones( (3,2), 'd' ) # 3 gate strings, 2 spam labels
-        ds2_cnts = 10*np.ones( (3,2), 'd' ) # 3 gate strings, 2 spam labels
-        cnts = collections.OrderedDict( [ ('ds1', ds1_cnts), ('ds2', ds2_cnts) ] )
+        gstrInds = collections.OrderedDict( [ (pygsti.obj.GateString(('Gx',)),slice(0,2)),
+                                              (pygsti.obj.GateString(('Gx','Gy')),slice(2,4)),
+                                              (pygsti.obj.GateString(('Gy',)),slice(4,6)) ] )
+        olInds = collections.OrderedDict( [ ('0',0),  ('1',1) ] )
 
-        mds2 = pygsti.objects.MultiDataSet(cnts, gateStrings=gstrs, spamLabels=['0','1'])
-        mds3 = pygsti.objects.MultiDataSet(cnts, gateStringIndices=gstrInds, spamLabelIndices=slInds)
-        mds4 = pygsti.objects.MultiDataSet(spamLabels=['0','1'])
+        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds1_time = np.zeros(6,'d')
+        ds1_rep = 10*np.ones(6,'i')
+
+        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds2_time = np.zeros(6,'d')
+        ds2_rep = 5*np.ones(6,'i')
+
+        mds_oli = collections.OrderedDict( [ ('ds1', ds1_oli), ('ds2', ds2_oli) ] )
+        mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
+        mds_rep = collections.OrderedDict( [ ('ds1', ds1_rep), ('ds2', ds2_rep) ] )
+
+        mds2 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, gateStringIndices=gstrInds,
+                                           outcomeLabels=['0','1'])
+        mds3 = pygsti.objects.MultiDataSet(mds_oli, mds_time, mds_rep, gateStringIndices=gstrInds,
+                                           outcomeLabelIndices=olInds)
+        mds4 = pygsti.objects.MultiDataSet(outcomeLabels=['0','1'])
         mds5 = pygsti.objects.MultiDataSet()
 
-        mds2.add_dataset_counts("new_ds1", ds1_cnts)
-        sl_none = mds5.get_spam_labels()
+        #mds2.add_dataset_counts("new_ds1", ds1_cnts)
+        sl_none = mds5.get_outcome_labels()
 
         #Create some datasets to test adding datasets to multidataset
-        ds = pygsti.objects.DataSet(spamLabels=['0','1'])
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_count_dict( (), {'0': 10, '1': 90} )
         ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
-        ds.add_counts_1q( ('Gx','Gy'), 20, 80 )
-        ds.add_counts_1q( ('Gx','Gx','Gx','Gx'), 20, 80 )
+        ds.add_count_dict( ('Gx','Gy'), {'0': 20, '1':80} )
+        ds.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 20, '1':80} )
         ds.done_adding_data()
 
-        ds2 = pygsti.objects.DataSet(spamLabels=['0','foobar']) #different spam labels than multids
+        ds2 = pygsti.objects.DataSet(outcomeLabels=['0','foobar']) #different spam labels than multids
         ds2.add_count_dict( (), {'0': 10, 'foobar': 90} )
         ds2.add_count_dict( ('Gx',), {'0': 10, 'foobar': 90} )
-        ds2.add_count_dict( ('Gx','Gy'), {'0': 10, 'foobar': 90} )
-        ds2.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 10, 'foobar': 90} )
+        ds2.add_count_dict( ('Gx','Gy'), {'0': 10, 'foobar':90} )
+        ds2.add_count_dict( ('Gx','Gx','Gx','Gx'), {'0': 10, 'foobar':90} )
         ds2.done_adding_data()
 
-        ds3 = pygsti.objects.DataSet(spamLabels=['0','1']) #different gate strings
+        ds3 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #different gate strings
         ds3.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
         ds3.done_adding_data()
 
-        ds4 = pygsti.objects.DataSet(spamLabels=['0','1']) #non-static dataset
+        ds4 = pygsti.objects.DataSet(outcomeLabels=['0','1']) #non-static dataset
         ds4.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
 
         multiDS['myDS'] = ds
@@ -344,21 +370,19 @@ Gx^4 20 80 0.2 100
             DS = multiDS[label]
             if label in multiDS:
                 pass
-            if label in multiDS:
-                pass
 
-        for DS in multiDS.itervalues():
+        for DS in multiDS.values():
             pass
 
-        for label,DS in multiDS.iteritems():
+        for label,DS in multiDS.items():
             pass
 
-        sumDS = multiDS.get_datasets_sum('DS0','DS1')
+        sumDS = multiDS.get_datasets_aggregate('DS0','DS1')
         multiDS_str = str(multiDS)
         multiDS_copy = multiDS.copy()
 
         with self.assertRaises(ValueError):
-            sumDS = multiDS.get_datasets_sum('DS0','foobar') #bad dataset name
+            sumDS = multiDS.get_datasets_aggregate('DS0','foobar') #bad dataset name
 
 
         #Pickle and unpickle
@@ -382,10 +406,10 @@ Gx^4 20 80 0.2 100
         multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom=temp_files + "/multidataset.saved")
 
     def test_collisionAction(self):
-        ds = pygsti.objects.DataSet(spamLabels=['0','1'], collisionAction="keepseparate")
-        ds.add_count_list( ('Gx','Gx'), [10,90] )
-        ds.add_count_list( ('Gx','Gy'), [20,80] )
-        ds.add_count_list( ('Gx','Gx'), [30,70] ) # a duplicate
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'], collisionAction="keepseparate")
+        ds.add_count_dict( ('Gx','Gx'), {'0':10, '1':90} )
+        ds.add_count_dict( ('Gx','Gy'), {'0':20, '1':80} )
+        ds.add_count_dict( ('Gx','Gx'), {'0':30, '1':70} ) # a duplicate
         self.assertEqual( ds.keys(), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx','#1') ] )
         self.assertEqual( ds.keys(stripOccurrenceTags=True), [ ('Gx','Gx'), ('Gx','Gy'), ('Gx','Gx') ] )
 
@@ -396,18 +420,18 @@ Gx^4 20 80 0.2 100
 
         #Create an empty dataset
         #(Tests done_adding_data without adding any data)
-        dsEmpty = pygsti.objects.TDDataSet(spamLabels=['0','1'])
+        dsEmpty = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         dsEmpty.done_adding_data()
         
         #Create an empty dataset and add data
-        ds = pygsti.objects.TDDataSet(spamLabels=['0','1'])
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_series_data( ('Gx',), #gate sequence
                             ['0','0','1','0','1','0','1','1','1','0'], #spam labels
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], #time stamps
                             None) #no repeats
 
-        sli = collections.OrderedDict([('0',0), ('1',1)])
-        ds2 = pygsti.objects.TDDataSet(spamLabelIndices=sli)
+        oli = collections.OrderedDict([('0',0), ('1',1)])
+        ds2 = pygsti.objects.DataSet(outcomeLabelIndices=oli)
         ds2.add_series_data( ('Gy',),  #gate sequence
                              ['0','1'], #spam labels
                              [0.0, 1.0], #time stamps
@@ -417,52 +441,52 @@ Gx^4 20 80 0.2 100
         #Create a non-static already initialized dataset
         gatestrings = pygsti.construction.gatestring_list([('Gx',), ('Gy','Gx')])
         gatestringIndices = collections.OrderedDict([ (gs,i) for i,gs in enumerate(gatestrings)])
-        sliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
+        oliData = [ np.array([0,1,0]), np.array([1,1,0]) ]
         timeData = [ np.array([1.0,2.0,3.0]), np.array([4.0,5.0,6.0]) ]
         repData = [ np.array([1,1,1]), np.array([2,2,2]) ]
-        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, gatestrings, None,
+        ds = pygsti.objects.DataSet(oliData, timeData, repData, gatestrings, None,
                                       ['0','1'], None,  bStatic=False)
-        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
-                                      None, sli, bStatic=False) #provide gate string & spam label index dicts instead of lists
-        ds = pygsti.objects.TDDataSet(sliData, timeData, None, None, gatestringIndices,
-                                      None, sli) #no rep data is OK - just assumes 1; bStatic=False is default
+        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
+                                      None, oli, bStatic=False) #provide gate string & spam label index dicts instead of lists
+        ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
+                                      None, oli) #no rep data is OK - just assumes 1; bStatic=False is default
 
         #Test loading a non-static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
-        ds3 = pygsti.objects.TDDataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.objects.DataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
 
 
         #Create an static already initialized dataset
-        ds = pygsti.objects.TDDataSet(spamLabels=['0','1'])
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         GS = pygsti.objects.GateString #no auto-convert to GateStrings when using gateStringIndices
         gatestringIndices = collections.OrderedDict([ #always need this when creating a static dataset
             ( GS(('Gx',)) , slice(0,3) ),                 # (now a dict of *slices* into flattened 1D 
             ( GS(('Gy','Gx')), slice(3,6) ) ])            #  data arrays)
-        sliData = np.array([0,1,0,1,1,0])
+        oliData = np.array([0,1,0,1,1,0])
         timeData = np.array([1.0,2.0,3.0,4.0,5.0,6.0]) 
         repData = np.array([1,1,1,2,2,2])
-        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
+        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
                                       ['0','1'], None,  bStatic=True)
-        ds = pygsti.objects.TDDataSet(sliData, timeData, repData, None, gatestringIndices,
-                                      None, sli, bStatic=True) #provide spam label index dict instead of list
-        ds = pygsti.objects.TDDataSet(sliData, timeData, None, None, gatestringIndices,
-                                      None, sli, bStatic=True) #no rep data is OK - just assumes 1
+        ds = pygsti.objects.DataSet(oliData, timeData, repData, None, gatestringIndices,
+                                      None, oli, bStatic=True) #provide spam label index dict instead of list
+        ds = pygsti.objects.DataSet(oliData, timeData, None, None, gatestringIndices,
+                                      None, oli, bStatic=True) #no rep data is OK - just assumes 1
 
         with self.assertRaises(ValueError):
-            pygsti.objects.TDDataSet(sliData, timeData, repData, gatestrings, None,
+            pygsti.objects.DataSet(oliData, timeData, repData, gatestrings, None,
                                      ['0','1'], None,  bStatic=True) # NEEDS gatestringIndices b/c static
 
         with self.assertRaises(ValueError):
-            pygsti.objects.TDDataSet(gateStringIndices=gatestringIndices,
-                                     spamLabelIndices=sli, bStatic=True) #must specify data when creating a static dataset
+            pygsti.objects.DataSet(gateStringIndices=gatestringIndices,
+                                     outcomeLabelIndices=oli, bStatic=True) #must specify data when creating a static dataset
             
-        with self.assertRaises(ValueError):
-            pygsti.objects.TDDataSet() #need at least spamLabels or spamLabelIndices
+        #with self.assertRaises(ValueError):
+        pygsti.objects.DataSet() #OK now: no longer need at least outcomeLabels or outcomeLabelIndices
         
         
         #Test loading a static set from a saved file
         ds.save(temp_files + "/test_tddataset.saved")
-        ds3 = pygsti.objects.TDDataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
+        ds3 = pygsti.objects.DataSet(fileToLoadFrom=temp_files + "/test_tddataset.saved")
         
     def test_tddataset_methods(self):
         # Create a dataset from scratch
@@ -470,19 +494,20 @@ Gx^4 20 80 0.2 100
         def printInfo(ds, gstr):
             print( "%s info" % str(gstr))
             print( ds[gstr] )
-            print( ds[gstr].sli )
+            print( ds[gstr].oli )
             print( ds[gstr].time )
             print( ds[gstr].reps )
-            print( ds[gstr].get_sl() )
-            print( ds[gstr].get_expanded_sl() )
-            print( ds[gstr].get_expanded_sli() )
+            print( ds[gstr].outcomes )
+            print( ds[gstr].get_expanded_ol() )
+            print( ds[gstr].get_expanded_oli() )
             print( ds[gstr].get_expanded_times() )
-            print( ds[gstr].get_counts() )
+            print( ds[gstr].counts )
+            print( ds[gstr].fractions )
             print( ds[gstr].total() )
             print( ds[gstr].fraction('0') )
             print( len(ds[gstr]) )
         
-        ds = pygsti.objects.TDDataSet(spamLabels=['0','1'])
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
         ds.add_series_data( ('Gx',),
                             ['0','0','1','0','1','0','1','1','1','0'],
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
@@ -523,26 +548,26 @@ Gx^4 20 80 0.2 100
         self.assertTrue( ('Gx',) in ds)
         self.assertTrue( ('Gx',) in ds.keys())
         self.assertTrue( ds.has_key(('Gx',)) )
-        self.assertEqual( list(ds.get_spam_labels()), ['0','1'] )
+        self.assertEqual( list(ds.get_outcome_labels()), [('0',),('1',)] )
         self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
 
         #test iteration
-        for gstr,dsRow in ds.iteritems():
+        for gstr,dsRow in ds.items():
             print(gstr, dsRow)
             dsRow2 = ds[gstr]
             spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
             for spamLblIndex, timestamp, reps in dsRow: # or iterate over
                 print(spamLblIndex, timestamp, reps)
-        for dsRow in ds.itervalues():
+        for dsRow in ds.values():
             print(dsRow)
 
-        for gstr,dsRow in dsNoReps.iteritems():
+        for gstr,dsRow in dsNoReps.items():
             print(gstr, dsRow)
             dsRow2 = dsNoReps[gstr]
             spamLblIndex, timestamp, reps = dsRow[0] #can index as 3-array
             for spamLblIndex, timestamp, reps in dsRow: # or iterate over
                 print(spamLblIndex, timestamp, reps)                
-        for dsRow in dsNoReps.itervalues():
+        for dsRow in dsNoReps.values():
             print(dsRow)
 
             
@@ -630,46 +655,47 @@ Gy 11001100
         self.assertEqual(ds[('Gx',)].total(), 9)
 
 
-    def test_intermediate_measurements(self):
-        gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
-        E = gs.effects['E0']
-        Erem = gs.effects['remainder']
-        gs.gates['Gmz_0'] = np.dot(E,E.T)
-        gs.gates['Gmz_1'] = np.dot(Erem,Erem.T)
-        #print(gs['Gmz_0'] + gs['Gmz_1'])
-
-        gatestring_list = pygsti.construction.gatestring_list([ 
-            (),
-            ('Zmeas',),
-            ('Gx','Zmeas') 
-        ])
-        
-        ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
-                                                        sampleError="multinomial", seed=0,
-                                                        measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
-        #Test copy operations
-        ds_gen2 = ds_gen.copy()
-        ds_gen3 = ds_gen.copy_nonstatic()
-
-        #create manually so no randomness
-        ds = pygsti.objects.DataSet(spamLabels=['0','1'],
-                                    measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
-        ds.add_count_list( (), [10,90] )
-        ds.add_count_list( ('Gmz_0',), [9,1] )
-        ds.add_count_list( ('Gmz_1',), [9,81] )
-        ds.add_count_list( ('Gx','Gmz_0'), [37,4] )
-        ds.add_count_list( ('Gx','Gmz_1'), [5,54] )
-        ds.done_adding_data()
-        
-        self.assertAlmostEqual( ds[('Gmz_0',)].fraction('0'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
-        self.assertAlmostEqual( ds[('Gx','Gmz_1')].fraction('1'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
-
-        ds[('Gmz_0',)]['0'] = 20
-        self.assertEqual(ds[('Gmz_0',)]['0'], 20)
-        self.assertEqual(ds[('Gmz_0',)].total(), (20.0 + 1.0 + 9.0 + 81.0) )
-        ds[('Gmz_0',)].scale(0.5)
-        self.assertEqual(ds[('Gmz_0',)]['0'], 10)
-        self.assertEqual(ds[('Gmz_0',)].total(), (10.0 + 0.5 + 9.0 + 81.0) )
+#OLD
+#    def test_intermediate_measurements(self):
+#        gs = std.gs_target.depolarize(gate_noise=0.05, spam_noise=0.1)
+#        E = gs.povms['Mdefault']['0']
+#        Erem = gs.povms['Mdefault']['1']
+#        gs.gates['Gmz_0'] = np.dot(E,E.T)
+#        gs.gates['Gmz_1'] = np.dot(Erem,Erem.T)
+#        #print(gs['Gmz_0'] + gs['Gmz_1'])
+#
+#        gatestring_list = pygsti.construction.gatestring_list([ 
+#            (),
+#            ('Zmeas',),
+#            ('Gx','Zmeas') 
+#        ])
+#        
+#        ds_gen = pygsti.construction.generate_fake_data(gs, gatestring_list, nSamples=100,
+#                                                        sampleError="multinomial", seed=0,
+#                                                        measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
+#        #Test copy operations
+#        ds_gen2 = ds_gen.copy()
+#        ds_gen3 = ds_gen.copy_nonstatic()
+#
+#        #create manually so no randomness
+#        ds = pygsti.objects.DataSet(outcomeLabels=['0','1'],
+#                                    measurementGates={'Zmeas': ['Gmz_0', 'Gmz_1']})
+#        ds.add_count_list( (), [10,90] )
+#        ds.add_count_list( ('Gmz_0',), [9,1] )
+#        ds.add_count_list( ('Gmz_1',), [9,81] )
+#        ds.add_count_list( ('Gx','Gmz_0'), [37,4] )
+#        ds.add_count_list( ('Gx','Gmz_1'), [5,54] )
+#        ds.done_adding_data()
+#        
+#        self.assertAlmostEqual( ds[('Gmz_0',)].fraction('0'), 9.0 / (9.0 + 1.0 + 9.0 + 81.0) )
+#        self.assertAlmostEqual( ds[('Gx','Gmz_1')].fraction('1'), 54.0 / (37.0 + 4.0 + 5.0 + 54.0) )
+#
+#        ds[('Gmz_0',)]['0'] = 20
+#        self.assertEqual(ds[('Gmz_0',)]['0'], 20)
+#        self.assertEqual(ds[('Gmz_0',)].total(), (20.0 + 1.0 + 9.0 + 81.0) )
+#        ds[('Gmz_0',)].scale(0.5)
+#        self.assertEqual(ds[('Gmz_0',)]['0'], 10)
+#        self.assertEqual(ds[('Gmz_0',)].total(), (10.0 + 0.5 + 9.0 + 81.0) )
 
         
 

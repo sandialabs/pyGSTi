@@ -10,6 +10,7 @@ from functools    import partial
 from functools   import wraps
 from itertools    import product
 
+import copy as _copy
 import numbers as _numbers
 import collections as _collections
 
@@ -396,7 +397,7 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
     '''
     if isinstance(name, Basis):
         basis         = name
-        blockMatrices = basis._blockMatrices
+        blockMatrices = _copy.deepcopy(basis._blockMatrices)
         name          = basis.name
     elif isinstance(name, list):
         basis = _build_composite_basis(name)

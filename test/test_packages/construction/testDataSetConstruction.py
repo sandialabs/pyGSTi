@@ -10,15 +10,12 @@ class DataSetConstructionTestCase(BaseTestCase):
     def setUp(self):
         super(DataSetConstructionTestCase, self).setUp()
         self.gateset = pc.build_gateset( [2], [('Q0',)],
-                                         ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                         prepLabels = ['rho0'], prepExpressions=["0"],
-                                         effectLabels = ['E0'], effectExpressions=["0"],
-                                         spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') })
+                                         ['Gi','Gx','Gy'], [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
         self.depolGateset = self.gateset.depolarize(gate_noise=0.1)
 
         def make_lsgst_lists(gateLabels, fiducialList, germList, maxLengthList):
             singleGates = pc.gatestring_list([(g,) for g in gateLabels])
-            lgstStrings = pc.list_lgst_gatestrings(pc.build_spam_specs(fiducialList), gateLabels)
+            lgstStrings = pc.list_lgst_gatestrings(fiducialList, fiducialList, gateLabels)
             lsgst_list  = pc.gatestring_list([ () ]) #running list of all strings so far
 
             if maxLengthList[0] == 0:
@@ -57,9 +54,9 @@ class DataSetConstructionTestCase(BaseTestCase):
 
 
     def test_merge_outcomes(self):
-        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_spam_label': ['0', '1']})
-        for dsRow in merged_dataset.itervalues():
-            self.assertEqual( dsRow.total(), dsRow['merged_spam_label'] )
+        merged_dataset = pc.merge_outcomes(self.dataset, {'merged_outcome_label': [('0',), ('1',)]})
+        for dsRow in merged_dataset.values():
+            self.assertEqual( dsRow.total(), dsRow['merged_outcome_label'] )
 
 
 if __name__ == '__main__':

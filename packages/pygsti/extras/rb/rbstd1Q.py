@@ -14,10 +14,7 @@ from collections import OrderedDict as _OrderedDict
 gs_clifford_generators = _cnst.build_gateset(
     [2],[('Q0',)], ['Gi','Gxp2','Gxp','Gxmp2','Gyp2','Gyp','Gymp2'], 
     [ "I(Q0)","X(pi/2,Q0)", "X(pi,Q0)", "X(-pi/2,Q0)",
-      "Y(pi/2,Q0)", "Y(pi,Q0)", "Y(-pi/2,Q0)"],
-    prepLabels=["rho0"], prepExpressions=["0"],
-    effectLabels=["E0"], effectExpressions=["0"], 
-    spamdefs={'0': ('rho0','E0'), '1': ('rho0','remainder') } )
+      "Y(pi/2,Q0)", "Y(pi,Q0)", "Y(-pi/2,Q0)"])
 
 # Mapping of all 1Q cliffords onto the generating set given above.
 # This uses the compilations in arXiv:1508.06676v1

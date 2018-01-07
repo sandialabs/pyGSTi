@@ -182,18 +182,14 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
     E2final = change_basis(_np.reshape(E2,(9,1)), "std", basis)
 
     qutritGS = _objs.GateSet()
-    qutritGS['rho0'] = rho0final
-    qutritGS['E0'] = E0final
-    qutritGS['E1'] = E1final
-    qutritGS['E2'] = E2final
-    qutritGS['identity'] = identity3final
-    qutritGS.spamdefs['0bright'] = ('rho0','E0')
-    qutritGS.spamdefs['1bright'] = ('rho0','E1')
-    qutritGS.spamdefs['2bright'] = ('rho0','E2')
-    qutritGS['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOfinal))
-    qutritGS['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
-    qutritGS['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
-    qutritGS['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
+    qutritGS.preps['rho0'] = rho0final
+    qutritGS.povms['Mdefault'] = _objs.POVM( [('0bright',E0final),
+                                              ('1bright',E1final),
+                                              ('2bright',E2final)] )
+    qutritGS.gates['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOfinal))
+    qutritGS.gates['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
+    qutritGS.gates['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))
+    qutritGS.gates['Gm'] = _objs.FullyParameterizedGate(arrType(gateMSOfinal))
     qutritGS.basis = Basis(basis,3)
     qutritGS.default_gauge_group = _objs.gaugegroup.FullGaugeGroup(qutritGS.dim)
     

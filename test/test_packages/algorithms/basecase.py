@@ -18,10 +18,10 @@ class AlgorithmsBase(BaseTestCase):
 
         self.fiducials = std.fiducials
         self.germs = std.germs
-        self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
+        #OLD self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.gateLabels = list(self.gateset.gates.keys()) # also == std.gates
-        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.specs, self.gateLabels)
+        self.lgstStrings = pygsti.construction.list_lgst_gatestrings(self.fiducials, self.fiducials, self.gateLabels)
 
         self.maxLengthList = [0,1,2,4,8]
 
