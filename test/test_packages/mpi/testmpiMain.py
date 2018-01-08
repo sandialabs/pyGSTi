@@ -737,7 +737,7 @@ def test_run1Q_end2end(comm):
     ds = pygsti.construction.generate_fake_data(gs_datagen, listOfExperiments,
                                                 nSamples=1000,
                                                 sampleError="binomial",
-                                                seed=1234)
+                                                seed=1234, comm=comm)
     
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
