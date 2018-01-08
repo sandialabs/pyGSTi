@@ -9,7 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy as _scipy
 from scipy import stats as _stats
-
+import collections
 from .multidataset import MultiDataSet as _MultiDataSet
 
 
@@ -63,6 +63,15 @@ def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
 
 def find_thresh(confidence_level,strings,dof):
     return _scipy.stats.chi2.isf((1-confidence_level)/strings,dof)
+
+def tvd(gatestring, ds0, ds1):
+    assert set(ds0.slIndex.keys()) == set(ds1.slIndex.keys())
+    outcomes = ds0.slIndex.keys()
+    line0 = ds0[gatestring]
+    line1 = ds1[gatestring]
+    N0 = line0.total()
+    N1 = line1.total()
+    return 0.5 * _np.sum(_np.abs(line0[outcome]/N0 - line1[outcome]/N1) for outcome in outcomes)
 
 #Define the data_comparator class.  This object will store the p-values and log-likelihood ratio values for a pair
 #of datasets.  It also contains methods for plotting both p-value histograms and log-likelihood ratio box plots.
@@ -162,15 +171,17 @@ class DataComparator():
         assert aggregate_weight >= 0.
         single_weight = 1. - aggregate_weight
         if single_weight == 0:
-            single_string_thresh = np.inf
+            single_string_thresh = _np.inf
         else:
             single_string_thresh = find_thresh(confidence_level,self.num_strs / single_weight,self.dof)
         if aggregate_weight == 0:
-            composite_thresh = np.inf
+            composite_thresh = _np.inf
         else:
             composite_thresh = find_thresh(confidence_level,1. / aggregate_weight,self.num_strs*self.dof)
         number_of_single_thresh_violators = _np.sum(_np.where(self.llrVals>single_string_thresh,1,0))
         composite_score = _np.sum(self.llrVals)
+        N_sigma = self.get_composite_nsigma()
+
 
         if verbosity > 0:
         
@@ -190,11 +201,31 @@ class DataComparator():
             else:
                 print("As measured by sum of gatestring scores, data sets are CONSISTENT at the {0}% confidence level.".format(confidence_level*100))
             print("Total loglikelihood is {0}".format(composite_score))
+            print("Total number of standard deviations (N_sigma) of model violation is {0}.".format(N_sigma))
         
         self.single_string_thresh = single_string_thresh
         self.number_of_single_thresh_violators = number_of_single_thresh_violators
         self.composite_thresh = composite_thresh
         self.composite_score = composite_score
+        self.N_sigma = N_sigma
+    
+    def compute_stat_sig_TVDs(self,verbosity=1):
+        try:
+            assert len(self.dataset_list_or_multidataset) == 2
+        except:
+            raise ValueError("Can only compute TVD between two datasets.")    
+        self.llrVals_and_strings_dict = dict(self.llrVals_and_strings)
+        self.tvd_dict = collections.OrderedDict({})
+        self.llrVals_and_strings_dict = dict(self.llrVals_and_strings)
+        for key in self.llrVals_and_strings_dict.keys():
+            if self.llrVals_and_strings_dict[key] > self.single_string_thresh:
+                tvd_val = tvd(key,self.dataset_list_or_multidataset[0],self.dataset_list_or_multidataset[1])
+                self.tvd_dict[key] = [len(key),tvd_val]
+            else:
+                self.tvd_dict[key] = [len(key),0]
+        if verbosity >= 1:
+            print("Finished computing TVDs.")
+        
         
     def rectify_datasets(self,confidence_level=0.95,target_score='dof'):
         if target_score == 'dof':
