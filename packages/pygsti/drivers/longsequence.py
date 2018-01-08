@@ -944,7 +944,6 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                 
                 stages = [ ] #multi-stage gauge opt
                 gg = gs_target.default_gauge_group
-                print("DB gg = ",gg) #HERE
                 if isinstance(gg, _objs.TrivialGaugeGroup):
                     #just do a single-stage "trivial" gauge opts using default group
                     gaugeOptSuite_dict['single'] =  { 'verbosity': printer }
