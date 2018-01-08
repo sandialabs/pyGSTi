@@ -4,24 +4,25 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for Fourier analysis of equally spaced time-series data"""
+"""Core integrated routines for detecting and characterizing drift with time-stamped data"""
 
 from . import signal as _sig
 from . import objects as _obj
-
+from . import hypothesis as _hyp
+from . import statistics as _stat
+#from scipy.stats import chi2 as _chi2
 import numpy as _np
-#from scipy.fftpack import dct as _dct
-#from scipy.fftpack import idct as _idct
-from scipy.stats import chi2 as _chi2
-#from scipy.optimize import leastsq as _leastsq
 
-
-def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,verbosity=2):
+def do_basic_drift_characterization(indata, counts, timestep=None, confidence=0.95, verbosity=2):
     """
     
     """
     # data shape should be, except when 
     #(number of sequences x num_qubits x timesteps)
+    
+    # ---------------- #
+    # Format the input #
+    # ---------------- #
     
     data_shape = _np.shape(indata)
     
@@ -36,7 +37,7 @@ def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,
     else:
         data = indata.copy()
     
-    # Extract the number of sequences, num_qubits and timesteps from the shape of the input
+    # Extract the number of sequences, qubits, and timesteps from the shape of the input
     data_shape = _np.shape(data)    
     num_sequences = data_shape[0]
     num_qubits = data_shape[1]
@@ -51,107 +52,184 @@ def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,
             string +=  "\n"
             print(string)
                     
-    # If the timestep is not provided, frequencies are given as integers between 0 and 1 - number of timesteps
+    # Find the full set of frequencies.
     if timestep is None:
-        frequencies = _np.arange(0,num_timesteps)
-        
-    # If the timestep is provided, frequencies are given in Hertz.
+        # If the timestep is not provided, frequencies are given as integers in [0,1,..,1 - number of timesteps]
+        frequencies = _np.arange(0,num_timesteps)         
     else:
+        # If the timestep is provided (assumed in seconds), frequencies are given in Hertz.
         frequencies = _np.zeros(num_timesteps,float)
-        frequencies = _sig.frequencies_sigrom_timestep(timestep,num_timesteps)
-        
-    # A bool to flag up if any drift has been detected
-    was_drift_detected = False
-    global_detected = False
+        frequencies = _sig.frequencies_from_timestep(timestep,num_timesteps)
     
-    # Calculate the power spectra for all the sequencies
-    modes = _np.zeros(data_shape,float)
-    power_spectrum = _np.zeros(data_shape,float)
+    # ------------------------------- #
+    # Per-qubit per-sequence analysis #
+    # ------------------------------- #
+       
+    # Calculate the power spectra for all the sequencies and qubits
+    pspq_modes = _np.zeros(data_shape,float)
+    pspq_power_spectrum = _np.zeros(data_shape,float)
     
     for s in range(0,num_sequences):
         for q in range(0,num_qubits):               
-            modes[s,q,:] = _sig.DCT(data[s,q,:],counts=counts)
+            pspq_modes[s,q,:] = _sig.DCT(data[s,q,:],counts=counts)
             
-    power_spectrum = modes**2
+    pspq_power_spectrum = pspq_modes**2
+              
+    # The significance threshold for the max power in each power spectrum. This is NOT adjusted
+    # to take account of the fact that we are testing multiple sequences on multiple qubits.
+    pspq_significance_threshold = _stat.maxpower_threshold_chi2(confidence,num_timesteps,1)
     
-    # Calculate the power spectrum averaged over sequencies.
-    average_power_spectrum = _np.mean(power_spectrum,axis=0)
+    # Initialize arrays for the per-sequence per-qubit results
+    pspq_max_power = _np.zeros((num_sequences,num_qubits),float)
+    pspq_pvalue = _np.zeros((num_sequences,num_qubits),float)
+    pspq_drift_detected = _np.zeros((num_sequences,num_qubits),bool)       
+    pspq_drift_frequencies = {}   
+    pspq_reconstruction = _np.zeros(data_shape,float)    
+    pspq_reconstruction_power_spectrum = _np.zeros(data_shape,float)
     
-    # Analyze the average power spectrum, and find significant frequencies.
-    threshold = _chi2.isf(1-confidence**(1/num_timesteps),num_sequences)/num_sequences
-    drift_sigrequencies_indices = _np.zeros((num_qubits,num_timesteps),bool)
-    drift_sigrequencies_indices[average_power_spectrum > threshold] = True 
+    # An array that is not returned, storing the "raw" estimate of the power spectrum, pre 
+    # renormalization.
+    pspq_raw_estimated_modes = pspq_modes.copy()
+    # To store the no-drift estimate of the probability for each sequence. Is not returned.
+    pspq_null = _np.zeros(data_shape,float)
 
-    drift_sigrequencies = _np.zeros((num_qubits,num_timesteps),float)
-    for q in range(0,num_qubits):
-        drift_sigrequencies[q,:] = frequencies.copy()
-    drift_sigrequencies = drift_sigrequencies[drift_sigrequencies_indices]
-    
-    # Record if the averaged power spectrum detects drift.
-    if len(drift_sigrequencies) > 0:
-        was_drift_detected = True
-        global_detected = True
-        
-    # Analyze the individual sequences.
-    max_power_threshold = _chi2.isf(1-confidence**(1/num_timesteps),1)
-    max_powers = _np.zeros((num_sequences,num_qubits),float)
-    max_power_pvalues = _np.zeros((num_sequences,num_qubits),float)
-    drift_detected = _np.zeros((num_sequences,num_qubits),bool)
-    
-    individual_drift_sigrequencies = {}
-    
-    raw_estimated_modes = modes.copy()
-    probability_estimates = _np.zeros(data_shape,float)
-    null = _np.zeros(data_shape,float)
     for s in range(0,num_sequences):
         for q in range(0,num_qubits):
-            max_powers[s,q] = _np.max(power_spectrum[s,q,:])
+            pspq_max_power[s,q] = _np.max(pspq_power_spectrum[s,q,:])
             # Todo: check that this makes sense
-            max_power_pvalues[s,q] = 1 - (1 - _chi2.sf(max_powers[s,q],1))**num_timesteps
+            pspq_pvalue[s,q] = _stat.maxpower_pvalue_chi2(pspq_max_power[s,q],num_timesteps,1)
             
             # Find the significant frequencies using the standard thresholding
-            individual_drift_sigrequencies[s,q] = frequencies.copy()
-            drift_sigrequencies_indices = _np.zeros((num_timesteps),bool)
-            drift_sigrequencies_indices[power_spectrum[s,q,:] > max_power_threshold] = True 
-            individual_drift_sigrequencies[s,q] = individual_drift_sigrequencies[s,q][drift_sigrequencies_indices]
+            pspq_drift_frequencies[s,q] = frequencies.copy()
+            indices = _np.zeros((num_timesteps),bool)
+            indices[pspq_power_spectrum[s,q,:] > pspq_significance_threshold] = True 
+            pspq_drift_frequencies[s,q] = pspq_drift_frequencies[s,q][indices]
             
             # Create the reconstructions, using the standard single-pass Fourier filter
-            null[s,q,:] = _np.mean(data[s,q,:])*_np.ones(num_timesteps,float)/counts
+            pspq_null[s,q,:] = _np.mean(data[s,q,:])*_np.ones(num_timesteps,float)/counts
             
-            if max_powers[s,q] > max_power_threshold:
-                was_drift_detected = True
-                drift_detected[s,q] = True
-                raw_estimated_modes[power_spectrum<max_power_threshold] = 0.
+            if pspq_max_power[s,q] > pspq_significance_threshold:
+                pspq_drift_detected[s,q] = True
+                pspq_raw_estimated_modes[pspq_power_spectrum < pspq_significance_threshold] = 0.
                 
                 # Here divide by counts, as when we invert the DCT we would -- in the noise-free case -- get something
                 # between 0 and counts, rather than 0 and 1
-                probability_estimates[s,q,:] = _sig.IDCT(raw_estimated_modes[s,q,:], null_hypothesis=null[s,q,:], 
-                                                          counts=counts)/counts
-                probability_estimates[s,q,:] = _sig.renormalizer(probability_estimates[s,q,:],method='logistic')
+                pspq_reconstruction[s,q,:] = _sig.IDCT(pspq_raw_estimated_modes[s,q,:], null_hypothesis=pspq_null[s,q,:],
+                                                       counts=counts)/counts
+                pspq_reconstruction[s,q,:] = _sig.renormalizer(pspq_reconstruction[s,q,:],method='logistic')
+                pspq_reconstruction_power_spectrum[s,q,:] =  _sig.DCT(pspq_reconstruction[s,q,:], 
+                                                                      null_hypothesis=pspq_null[s,q,:],
+                                                                      counts=counts)
             else:
-                probability_estimates[s,q,:] = null[s,q,:]
-                
-    reconstruction_power_per_time = _np.sum((probability_estimates-null)**2,axis=2)/num_timesteps
+                pspq_reconstruction[s,q,:] = pspq_null[s,q,:]                
+                pspq_reconstruction_power_spectrum[s,q,:] = _np.zeros(num_timesteps,float)
     
-    #if num_qubits == 1:
-    #    if len(data_shape) == 2:
-    #
-    #        drift_sigrequencies = drift_sigrequencies[0,:]
-    #        average_power_spectrum =  average_power_spectrum[0,:]  
-    #    
-    #        max_powers = max_powers[:,0]
-    #        max_power_pvalues = max_power_pvalues[:,0]
-    #        max_power_threshold = max_power_threshold
-    #        drift_detected = drift_detected[:,0]
-    #        power_spectrum = power_spectrum[:,0,:]
-    #        probability_estimates = probability_estimates[:,0,:]
-    #        reconstruction_power_per_time = reconstruction_power_per_time[:,0]
+    # Store the power per timestep in the reconstruction, as this is amount-of-data independent metric for the 
+    #detected drift power.
+    pspq_reconstruction_powerpertimestep = _np.sum((pspq_reconstruction-pspq_null)**2,axis=2)/num_timesteps
+   
+    # ------------------------------------ #
+    # Per-qubit sequence-averaged analysis #
+    # ------------------------------------ #
+    
+    
+    
+    # Calculate the power spectrum averaged over sequencies, but not qubits
+    pq_power_spectrum = _np.mean(pspq_power_spectrum,axis=0)      
+    pq_reconstruction_power_spectrum = _np.mean(pspq_reconstruction_power_spectrum,axis=0)
+    
+    pq_max_power = _np.zeros((num_qubits),float)
+    pq_pvalue = _np.zeros((num_qubits),float)
+    pq_drift_detected = _np.zeros((num_qubits),bool)       
+    pq_drift_frequencies = {}
+    
+    # Analyze the per-qubit average power spectrum, and find significant frequencies.
+    # Todo: check this
+    pq_significance_threshold = _stat.maxpower_threshold_chi2(confidence,num_timesteps,num_sequences)
+    
+    # Loop over qubits, and analysis the per-qubit spectra
+    for q in range(0,num_qubits):
         
+        # Find the max power and the related pvalue.
+        pq_max_power[q] = _np.max(pq_power_spectrum[q,:])
+         # Todo: check that this makes sense
+        pq_pvalue[q] = _stat.maxpower_pvalue_chi2(pq_max_power[q],num_timesteps,num_sequences)
+        
+        # Find the drift frequencies
+        pq_drift_frequencies[q] = frequencies.copy()
+        indices = _np.zeros((num_timesteps),bool)
+        indices[pq_power_spectrum[q,:] > pq_significance_threshold] = True 
+        pq_drift_frequencies[q] = pq_drift_frequencies[q][indices]
+        
+        if pq_max_power[q] > pq_significance_threshold:
+            pq_drift_detected[q] = True 
+    
+    # ------------------------------------ #
+    # qubit and sequence averaged analysis #
+    # ------------------------------------ #
+    
+    # Calculate the power spectrum averaged over sequencies and qubits
+    global_power_spectrum = _np.mean(pq_power_spectrum,axis=0)   
+    global_reconstruction_power_spectrum = _np.mean(pq_reconstruction_power_spectrum,axis=0)
+    
+    # Analyze the global power spectrum, and find significant frequencies.
+    #
+    # Todo: check this
+    global_significance_threshold = _stat.maxpower_threshold_chi2(confidence,num_timesteps,num_sequences*num_qubits)
+    
+    # Find the drift frequencies
+    global_drift_frequencies = frequencies.copy()
+    indices = _np.zeros((num_timesteps),bool)
+    indices[global_power_spectrum > global_significance_threshold] = True 
+    global_drift_frequencies = global_drift_frequencies[indices]
+    
+    #
+    global_max_power = _np.max(global_power_spectrum)
+    # Todo: check that this makes sense
+    global_pvalue = _stat.maxpower_pvalue_chi2(global_max_power,num_timesteps,num_sequences*num_qubits)
+        
+    global_drift_detected = False
+    if global_max_power > global_drift_detected:
+        global_drift_detected = True
+
+    # ------------------------------------------------------------------------- #
+    # Check whether drift is detected with composite test at the set confidence #
+    # ------------------------------------------------------------------------- #
+    
+    if num_qubits == 1 and num_sequences > 1:
+        weights = [1/2.,0.,1/2.]  
+    
+    elif num_qubits > 1 and num_sequences == 1:
+             weights = [1/2.,1/2.,0.]
+            
+    elif num_qubits == 1 and num_sequences == 1:
+             weights = [1.,0.,0.]      
+            
+    else:
+        weights = [1/3.,1/3.,1/3.]
+        
+    numtests = [1,num_qubits,num_qubits*num_sequences]
+    composite_confidence = _hyp.generalized_bonferoni_correction(confidence,weights,numtests=numtests)
+    
+    pspq_minimum_pvalue = _np.min(pspq_pvalue)
+    pq_minimum_pvalue = _np.min(pq_pvalue)
+    
+    drift_detected = False
+    if global_pvalue < 1-composite_confidence[0]:
+        drift_detected = True
+    if pq_minimum_pvalue < 1-composite_confidence[1]:
+        drift_detected = True
+    if pspq_minimum_pvalue < 1-composite_confidence[2]:
+        drift_detected = True
+    
+    # ------------------ #
+    # Record the results #
+    # ------------------ #
     
     # Initialize an empty results object.
     results = _obj.BasicDriftResults()
     
-    # Record input information, and things fairly trivially derived from it
+    # Records input information, and things fairly trivially derived from it
     results.data = data
     results.number_of_sequences = num_sequences
     results.number_of_timesteps = num_timesteps
@@ -162,28 +240,33 @@ def do_basic_drift_characterization(indata,counts,timestep=None,confidence=0.95,
     results.confidence = confidence
     results.frequencies = frequencies.copy()
     
-    # Record flag
-    results.all_detected = was_drift_detected
+    results.drift_detected = drift_detected 
     
-    results.global_power_spectrum = average_power_spectrum
-    results.global_significance_threshold = threshold           
-    results.global_detected = global_detected
-    results.global_drift_sigrequencies = drift_sigrequencies
+    results.pspq_modes = pspq_modes
+    results.pspq_power_spectrum = pspq_power_spectrum
+    results.pspq_drift_frequencies = pspq_drift_frequencies
+    results.pspq_max_power = pspq_max_power
+    results.pspq_pvalue = pspq_pvalue
+    results.pspq_significance_threshold = pspq_significance_threshold
+    results.pspq_drift_detected = pspq_drift_detected
+    results.pspq_reconstruction = pspq_reconstruction
+    results.pspq_reconstruction_power_spectrum = pspq_reconstruction_power_spectrum
+    results.pspq_reconstruction_powerpertimestep = pspq_reconstruction_powerpertimestep
     
-    results.individual_modes = modes
-    results.individual_power_spectrum = power_spectrum
-    results.individual_drift_sigrequencies = individual_drift_sigrequencies
-    results.individual_max_powers = max_powers
-    results.individual_max_power_pvalues = max_power_pvalues
-    results.individual_max_power_threshold = max_power_threshold
-    results.individual_drift_detected = drift_detected
-    results.individual_reconstruction = probability_estimates
-    results.individual_reconstruction_power_per_time = reconstruction_power_per_time
+    results.pq_power_spectrum = pq_power_spectrum
+    results.pq_significance_threshold = pq_significance_threshold  
+    results.pq_max_power = pq_max_power
+    results.pq_pvalue = pq_pvalue
+    results.pq_drift_detected = pq_drift_detected
+    results.pq_drift_frequencies = pq_drift_frequencies
+    results.pq_reconstruction_power_spectrum = pq_reconstruction_power_spectrum
     
-    #if verbosity > 1:
-    #    if was_drift_detected:
-    #        print("Drift has been detected!")
-    #    else:
-    #        print("Drift has NOT been detected!")
+    results.global_power_spectrum = global_power_spectrum
+    results.global_max_power = global_max_power
+    results.global_pvalue = global_pvalue
+    results.global_significance_threshold = global_significance_threshold           
+    results.global_drift_detected = global_drift_detected
+    results.global_drift_frequencies = global_drift_frequencies
+    results.global_reconstruction_power_spectrum = global_reconstruction_power_spectrum
     
     return results

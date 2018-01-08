@@ -11,5 +11,5 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .core import *
 from .signal import *
 from .simulate import *
-
+from .hypothesis import *
 

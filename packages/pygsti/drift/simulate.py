@@ -32,17 +32,21 @@ def generate_drifting_data(probs,sample_times,coursegrain=1):
     coursegrained_simdata = _np.zeros((S,Q,T),float)
     coursegrained_times = _np.zeros((S,T),float)
     
+    prob_array = _np.zeros((S,Q,times),float)
+    
     for s in range(0,S):
         for q in range(0,Q):
             for t in range(0,times):
-                raw_simdata[s,q,t] = _rnd.binomial(1,probs[s,q](t))
-    
-            for t in range(0,T):
-                x = coursegrain*t
-                coursegrained_simdata[s,q,t] = _np.sum(raw_simdata[s,q,x:x+coursegrain])
-                coursegrained_times[s,t] =  _np.mean(sample_times[s,x:x+coursegrain])
+                prob_array[s,q,t] = probs[s,q](sample_times[s,t])
                 
-    return coursegrained_simdata, coursegrained_times
+    raw_simdata = _rnd.binomial(1,prob_array)
+     
+    for t in range(0,T):
+        x = coursegrain*t
+        coursegrained_simdata[:,:,t] = _np.sum(raw_simdata[:,:,x:x+coursegrain],axis=2)
+        coursegrained_times[:,t] =  _np.mean(sample_times[:,x:x+coursegrain],axis=1)
+                
+    return coursegrained_simdata, coursegrained_times, prob_array
 
 #def generate_drifting_data(prob,counts):
 #    """
