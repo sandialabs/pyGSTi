@@ -151,7 +151,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         else:
             nWeightedSamples = N
 
-        counts = _collections.OrderedDict()
+        counts = {} #don't use an ordered dict here - add_count_dict will sort keys
         labels = list(ps.keys()) # "outcome labels"
         if sampleError == "binomial":
             assert(len(labels) == 2)

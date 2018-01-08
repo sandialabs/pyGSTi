@@ -1081,7 +1081,7 @@ def _load_dataset(dataFilenameOrSet, comm, verbosity):
                 with open(dataFilenameOrSet,'rb') as pklfile:
                     ds = _pickle.load(pklfile)
             else:
-                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", None, printer)
+                ds = _io.load_dataset(dataFilenameOrSet, True, "aggregate", printer)
             if comm is not None: comm.bcast(ds, root=0)
         else:
             ds = comm.bcast(None, root=0)
