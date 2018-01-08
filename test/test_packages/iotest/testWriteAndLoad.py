@@ -46,6 +46,33 @@ class TestWriteAndLoad(BaseTestCase):
         with self.assertRaises(ValueError):
             pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
 
+    def test_sparse_dataset_files(self):
+        ds = pygsti.objects.DataSet()
+
+        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
+        ds[ ('Gy',) ] = {'0': 20, '1': 80}
+        ds[ ('Gx','Gy') ] = {('0','0'): 30, ('1','1'): 70}
+        
+        ds.done_adding_data()
+        print("ORIG DS:"); print(ds)
+
+        ordering = [('0',), ('1',), ('0','0'), ('1','1')]
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset1.txt", ds, outcomeLabelOrder=None, fixedColumnMode=True)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset2.txt", ds, outcomeLabelOrder=None, fixedColumnMode=False)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset1.txt", ds, outcomeLabelOrder=ordering, fixedColumnMode=True)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset2.txt", ds, outcomeLabelOrder=ordering, fixedColumnMode=False)
+
+        ds1 = pygsti.io.load_dataset(temp_files + "/sparse_dataset1.txt")
+        ds2 = pygsti.io.load_dataset(temp_files + "/sparse_dataset2.txt")
+
+        print("\nDS1:"); print(ds1)
+        print("\nDS2:"); print(ds2)
+
+        for s in ds:
+            self.assertEqual(ds[s].counts,ds1[s].counts)
+            self.assertEqual(ds[s].counts,ds2[s].counts)
+
+            
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_empty_dataset(temp_files + "/emptyMultiDataset.txt", strList,

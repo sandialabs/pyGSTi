@@ -380,8 +380,6 @@ class MultiDataSet(object):
         if self.gsIndex is not None and dataset.gsIndex != self.gsIndex:
             raise ValueError("Cannot add dataset: gate strings and/or their indices do not match")
         if self.olIndex is not None and dataset.olIndex != self.olIndex:
-            print("DB: other = ",dataset.olIndex)
-            print("DB: self = ",self.olIndex)
             raise ValueError("Cannot add dataset: outcome labels and/or their indices do not match")
 
         #if self.gsIndex:  #Note: tests if not none and nonempty

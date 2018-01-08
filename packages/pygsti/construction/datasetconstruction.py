@@ -18,8 +18,7 @@ from . import gatestringconstruction as _gstrc
 
 def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
                        sampleError="none", seed=None, randState=None,
-                       aliasDict=None, collisionAction="aggregate",
-                       measurementGates=None):
+                       aliasDict=None, collisionAction="aggregate"):
     """Creates a DataSet using the probabilities obtained from a gateset.
 
     Parameters
@@ -77,14 +76,6 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         Determines how duplicate gate sequences are handled by the resulting
         `DataSet`.  Please see the constructor documentation for `DataSet`.
 
-    measurementGates : dict, optional
-        If not None, a dictrionary whose keys are user-defined "measurement
-        labels" and whose values are lists of gate labels.  The gate labels 
-        in each list define the set of gates which describe the the operation
-        that is performed contingent on a *specific outcome* of the measurement
-        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
-
-
     Returns
     -------
     DataSet
@@ -97,12 +88,10 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         dsGen = gatesetOrDataset
         gsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
-        # OLD measurementGates=measurementGates)
     else:
         gsGen = gatesetOrDataset
         dsGen = None
         dataset = _ds.DataSet( collisionAction=collisionAction )
-        #OLD measurementGates=measurementGates)
 
     if sampleError in ("binomial","multinomial"):
         if randState is None:
@@ -111,49 +100,44 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             rndm = randState
 
 
-    for k,s0 in enumerate(gatestring_list):
+    for k,s in enumerate(gatestring_list):
 
-        all_ps = _collections.OrderedDict() #holds probs for *all* intermediate measuement branches
-        for s in expand_intermediate_measurements(s0, measurementGates):
-            trans_s = _gstrc.translate_gatestring(s, aliasDict)
-            if gsGen:
-                ps = gsGen.probs(trans_s) 
-                  # a dictionary of probabilities; keys = spam labels
+        trans_s = _gstrc.translate_gatestring(s, aliasDict)
+        if gsGen:
+            ps = gsGen.probs(trans_s) 
+              # a dictionary of probabilities; keys = outcome labels
+              # (will include all possible intermediate measurements)
 
-                if sampleError in ("binomial","multinomial"):
-                    #Adjust to probabilities if needed (and warn if not close to in-bounds)
-                    for ol in ps: 
-                        if ps[ol] < 0:
-                            if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
-                            ps[ol] = 0.0
-                        elif ps[ol] > 1: 
-                            if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
-                            ps[ol] = 1.0
-            else:
-                counts = dsGen[trans_s].counts
-                ps = { ol:frac for ol,frac in dsGen[trans_s].fractions.items()}
-                
-            for ol in sorted(list(ps.keys())):
-                all_ps[(s,ol)] = ps[ol] #add to all_ps
-
+            if sampleError in ("binomial","multinomial"):
+                #Adjust to probabilities if needed (and warn if not close to in-bounds)
+                for ol in ps: 
+                    if ps[ol] < 0:
+                        if ps[ol] < -TOL: _warnings.warn("Clipping probs < 0 to 0")
+                        ps[ol] = 0.0
+                    elif ps[ol] > 1: 
+                        if ps[ol] > (1+TOL): _warnings.warn("Clipping probs > 1 to 1")
+                        ps[ol] = 1.0
+        else:
+            ps = _collections.OrderedDict([ (ol,frac) for ol,frac
+                                            in dsGen[trans_s].fractions.items()])
+                        
         if gsGen and sampleError in ("binomial","multinomial"):
             #Check that sum ~= 1 (and nudge if needed) since binomial and
             #  multinomial random calls assume this.
-            psum = sum(all_ps.values())
+            psum = sum(ps.values())
             if psum > 1:
                 if psum > 1+TOL: _warnings.warn("Adjusting sum(probs) > 1 to 1")
                 extra_p = (psum-1.0) * (1.000000001) # to sum < 1+eps (numerical prec insurance)
-                for lbl in all_ps:
+                for lbl in ps:
                     if extra_p > 0:
-                        x = min(all_ps[lbl],extra_p)
-                        all_ps[lbl] -= x; extra_p -= x
+                        x = min(ps[lbl],extra_p)
+                        ps[lbl] -= x; extra_p -= x
                     else: break
             #TODO: add adjustment if psum < 1?
-            assert(1.-TOL <= sum(all_ps.values()) <= 1.+TOL)
+            assert(1.-TOL <= sum(ps.values()) <= 1.+TOL)
                 
         if nSamples is None and dsGen is not None:
-            trans_s0 = _gstrc.translate_gatestring(s0, aliasDict)
-            N = dsGen[trans_s0].total() #use the number of samples from the generating dataset
+            N = dsGen[trans_s].total() #use the number of samples from the generating dataset
              #Note: total() accounts for other intermediate-measurment branches automatically
         else:
             try:
@@ -167,32 +151,30 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         else:
             nWeightedSamples = N
 
-        counts = _collections.defaultdict(dict)
-        labels = list(all_ps.keys()) # "label" == (gatestring, spamLabel)
+        counts = {} #don't use an ordered dict here - add_count_dict will sort keys
+        labels = list(ps.keys()) # "outcome labels"
         if sampleError == "binomial":
             assert(len(labels) == 2)
-            gstr0,sl0 = labels[0]
-            gstr1,sl1 = labels[1]
-            counts[gstr0][sl0] = rndm.binomial(nWeightedSamples, all_ps[labels[0]])
-            counts[gstr1][sl1] = nWeightedSamples - counts[gstr0][sl0]
+            ol0,ol1 = labels[0], labels[1]
+            counts[ol0] = rndm.binomial(nWeightedSamples, ps[ol0])
+            counts[ol1] = nWeightedSamples - counts[ol0]
             
         elif sampleError == "multinomial":
             countsArray = rndm.multinomial(nWeightedSamples,
-                    list(all_ps.values()), size=1)
-            for i,(gstr,sl) in enumerate(labels):
-                counts[gstr][sl] = countsArray[0,i]
+                    list(ps.values()), size=1)
+            for i,ol in enumerate(labels):
+                counts[ol] = countsArray[0,i]
                 
         else:
-            for (gstr,spamLabel),p in all_ps.items():
+            for outcomeLabel,p in ps.items():
                 pc = _np.clip(p,0,1)
                 if sampleError == "none":
-                    counts[gstr][spamLabel] = float(nWeightedSamples * pc)
+                    counts[outcomeLabel] = float(nWeightedSamples * pc)
                 elif sampleError == "round":
-                    counts[gstr][spamLabel] = int(round(nWeightedSamples*pc))
+                    counts[outcomeLabel] = int(round(nWeightedSamples*pc))
                 else: raise ValueError("Invalid sample error parameter: '%s'  Valid options are 'none', 'round', 'binomial', or 'multinomial'" % sampleError)
-
-        for s in expand_intermediate_measurements(s0, measurementGates):
-            dataset.add_count_dict(s, counts[s])
+                
+        dataset.add_count_dict(s, counts)
     dataset.done_adding_data()
     return dataset
 
@@ -237,48 +219,3 @@ def merge_outcomes(dataset,label_merge_dict):
     merged_dataset.done_adding_data()
     return merged_dataset
 
-
-
-
-def expand_intermediate_measurements(gatestring, measurementGates):
-    """
-    Gets an iterator over the intermediate-measurement branches of `gatestring`.
-
-    When `gatestring` contains "measurement labels" (given by the keys of 
-    `measurementGates`) there exist multiple "intermediate-measurement
-    branches", each defined/constructed by replacing every measurement
-    label by one of its "measurement gates" (given by one of the elements
-    of the list-valued values of `measurementGates`).  The returned iterator
-    loops over all such branches.  
-
-    If `gatestring` does *not* contain any measurement labels, or if
-    `measurementGates` is None, then the iterator just loops over the single
-    string, `gatestring`.
-
-    Parameters
-    ----------
-    gatestring : GateString
-        The "base" gate sequence which may or may not contain measurement
-        labels.
-
-    measurementGates : dict
-        If not None, a dictrionary whose keys are user-defined "measurement
-        labels" and whose values are lists of "measurement gate" labels.  The
-        labels in each list define the set of gates which describe the the
-        operation that is performed contingent on a *specific outcome* of the
-        measurement labelled by the key.  
-        For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
-
-    Returns
-    -------
-    iterator
-    """
-    if measurementGates is None or len(gatestring) == 0:
-        yield gatestring
-        return
-    
-    gateLabelsByPos = [ measurementGates.get(lbl,[lbl]) for lbl in gatestring ]
-    for gatelabels in _itertools.product(*gateLabelsByPos):
-        yield _gs.GateString(tuple(gatelabels))
-
-    

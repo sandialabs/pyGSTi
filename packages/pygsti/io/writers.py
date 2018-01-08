@@ -55,8 +55,14 @@ def write_empty_dataset(filename, gatestring_list,
         for gateString in gatestring_list: #gateString should be a GateString object here
             output.write(gateString.str + "  " + zeroCols + (("  %f" % gateString.weight) if appendWeightsColumn else "") + '\n')
 
+            
+def _outcome_to_str(x):
+    if _tools.isstr(x): return x
+    else: return ":".join([str(i) for i in x])
 
-def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=None):
+    
+def write_dataset(filename, dataset, gatestring_list=None,
+                  outcomeLabelOrder=None, fixedColumnMode=True):
     """
     Write a text-formatted dataset file.
 
@@ -75,16 +81,19 @@ def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=Non
     outcomeLabelOrder : list, optional
         A list of the outcome labels in dataset which specifies
         the column order in the output file.
+
+    fixedColumnMode : bool, optional
+        When `True`, a file is written with column headers indicating which
+        outcome each column of counts corresponds to.  If a row doesn't have
+        any counts for an outcome, `'--'` is used in its place.  When `False`,
+        each row's counts are written in an expanded form that includes the
+        outcome labels (each "count" has the format <outcomeLabel>:<count>).
     """
     if gatestring_list is not None:
         if len(gatestring_list) > 0 and not isinstance(gatestring_list[0], _objs.GateString):
             raise ValueError("Argument gatestring_list must be a list of GateString objects!")
     else:
         gatestring_list = list(dataset.keys())
-
-    def outcome_to_str(x):
-        if _tools.isstr(x): return x
-        else: return ":".join([str(i) for i in x])
 
     if outcomeLabelOrder is not None: #convert to tuples if needed
         outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
@@ -104,19 +113,27 @@ def write_dataset(filename, dataset, gatestring_list=None, outcomeLabelOrder=Non
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s count" % outcome_to_str(ol)
-                                                   for ol in outcomeLabels ])
-    # parser = _stdinput.StdInputParser()
 
+    if fixedColumnMode:
+        headerString += '## Columns = ' + ", ".join( [ "%s count" % _outcome_to_str(ol)
+                                                       for ol in outcomeLabels ]) + '\n'
     with open(filename, 'w') as output:
-        output.write(headerString + '\n')
+        output.write(headerString)
         for gateString in gatestring_list: #gateString should be a GateString object here
             dataRow = dataset[gateString.tup]
             counts = dataRow.counts
 
-            #output '--' for outcome labels that aren't present in this row
-            output.write(gateString.str + "  " + "  ".join( [("%g" % counts.get(ol,'--'))
-                                                            for ol in outcomeLabels] ) + '\n')
+            if fixedColumnMode:
+                #output '--' for outcome labels that aren't present in this row
+                output.write(gateString.str + "  " +
+                             "  ".join( [(("%g" % counts[ol]) if (ol in counts) else '--')
+                                         for ol in outcomeLabels] ) + '\n')
+            else: # use expanded label:count format
+                output.write(
+                    gateString.str + "  " +
+                    "  ".join( [("%s:%g" % (_outcome_to_str(ol),counts[ol]))
+                                for ol in outcomeLabels if ol in counts] )+'\n')
+                
 
 def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabelOrder=None):
     """
@@ -145,10 +162,6 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
     else:
         gatestring_list = list(multidataset.gsIndex.keys()) #TODO: make access function for gatestrings?
 
-    def outcome_to_str(x):
-        if _tools.isstr(x): return x
-        else: return ":".join([str(i) for i in x])
-
     if outcomeLabelOrder is not None: #convert to tuples if needed
         outcomeLabelOrder = [ (ol,) if _tools.isstr(ol) else ol
                               for ol in outcomeLabelOrder ]
@@ -169,7 +182,7 @@ def write_multidataset(filename, multidataset, gatestring_list=None, outcomeLabe
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
-    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,outcome_to_str(ol))
+    headerString += '## Columns = ' + ", ".join( [ "%s %s count" % (dsl,_outcome_to_str(ol))
                                                    for dsl in dsLabels
                                                    for ol in outcomeLabels ])
     # parser = _stdinput.StdInputParser()

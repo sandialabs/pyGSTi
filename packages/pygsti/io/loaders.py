@@ -12,7 +12,7 @@ from . import stdinput as _stdinput
 from .. import objects as _objs
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
-                 measurementGates=None, verbosity=1):
+                 verbosity=1):
     """
     Load a DataSet from a file.  First tries to load file as a
     saved DataSet object, then as a standard text-formatted DataSet.
@@ -34,13 +34,6 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
         adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
         sequence data with by appending a final "#<number>" gate label to the
         duplicated gate sequence.
-
-    measurementGates : dict, optional
-        If not None, a dictrionary whose keys are user-defined "measurement
-        labels" and whose values are lists if gate labels.  The gate labels 
-        in each list define the set of gates which describe the the operation
-        that is performed contingent on a *specific outcome* of the measurement
-        labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
     verbosity : int, optional
         If zero, no output is shown.  If greater than zero,
@@ -78,8 +71,7 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction,
-                                       measurementGates=measurementGates)
+                                       collisionAction=collisionAction)
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
@@ -88,8 +80,7 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
             ds = parser.parse_datafile(filename, bToStdout,
-                                       collisionAction=collisionAction,
-                                       measurementGates=measurementGates)
+                                       collisionAction=collisionAction)
         return ds
 
 

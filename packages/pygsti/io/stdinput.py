@@ -114,11 +114,21 @@ class StdInputParser(object):
         parts = s.split();
         counts = []
         for p in reversed(parts):
-            try:
+            if p == '--':
+                counts.append('--') #special blank symbol
+                continue
+            try: #single float/int format
                 f = float(p)
+                counts.append(f)
             except:
-                break
-            counts.append(f)
+                try: # "expanded" ColonContainingLabels:count
+                    t = p.split(':')
+                    assert(len(t) > 1)
+                    f = float(t[-1])
+                    counts.append( (tuple(t[0:-1]),f) )
+                except:
+                    break
+
         counts.reverse()  # because we appended them in reversed order
         totalCounts = len(counts)  # in case expectedCounts is less
         if len(counts) > expectedCounts >= 0:
@@ -207,8 +217,7 @@ class StdInputParser(object):
         return lookupDict
 
     def parse_datafile(self, filename, showProgress=True,
-                       collisionAction="aggregate",
-                       measurementGates=None):
+                       collisionAction="aggregate"):
         """
         Parse a data set file into a DataSet object.
 
@@ -225,13 +234,6 @@ class StdInputParser(object):
             adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
             sequence data with by appending a final "#<number>" gate label to the
             duplicated gate sequence.
-
-        measurementGates : dict, optional
-            If not None, a dictrionary whose keys are user-defined "measurement
-            labels" and whose values are lists if gate labels.  The gate labels 
-            in each list define the set of gates which describe the the operation
-            that is performed contingent on a *specific outcome* of the measurement
-            labelled by the key.  For example, `{ 'Zmeasure': ['Gmz_0','Gmz_1'] }`.
 
         Returns
         -------
@@ -262,16 +264,23 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ '1 count', 'count total' ] #  outcomeLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
-            outcomeLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
-            nDataCols = len(colLabels)
+                outcomeLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
+                nDataCols = len(colLabels)
+            else:
+                outcomeLabels = fillInfo = None
+                nDataCols = -1 # no column count check
+
+            # "default" case when we have no columns and no "expanded-form" counts
+            default_colLabels = [ '1 count', 'count total' ] #  outcomeLabel (' frequency' | ' count') | 'count total'
+            _,default_fillInfo = self._extractLabelsFromColLabels(default_colLabels)
+
+
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         dataset = _objs.DataSet(outcomeLabels=outcomeLabels,collisionAction=collisionAction,
                                 comment="\n".join(preamble_comments))
-                                #OLD: measurementGates=measurementGates)
         nLines  = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
@@ -280,7 +289,6 @@ class StdInputParser(object):
 
         display_progress = get_display_progress_fn(showProgress)
 
-        countDict = {}
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
@@ -292,6 +300,14 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
+                if (len(dataset) == 0) and (fillInfo is None) and \
+                   (len(valueList) > 0) and (not isinstance(valueList[0],tuple)):
+                    #In order to preserve backward compatibility, if the first
+                    # data-line is not in expanded form and there was no column
+                    # header, then use "default" column label info.
+                    fillInfo = default_fillInfo
+
+                countDict = _OrderedDict()
                 self._fillDataCountDict( countDict, fillInfo, valueList )
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
@@ -336,27 +352,41 @@ class StdInputParser(object):
 
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
-        countCols, freqCols, impliedCountTotCol1Q = fillInfo
+        if fillInfo is not None:
+            countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
-        for outcomeLabel,iCol in countCols:
-            if colValues[iCol] > 0 and colValues[iCol] < 1:
-                raise ValueError("Count column (%d) contains value(s) " % iCol +
-                                 "between 0 and 1 - could this be a frequency?")
-            countDict[outcomeLabel] = colValues[iCol]
+            for outcomeLabel,iCol in countCols:
+                if colValues[iCol] == '--': continue #skip blank sentinels
+                if colValues[iCol] > 0 and colValues[iCol] < 1:
+                    raise ValueError("Count column (%d) contains value(s) " % iCol +
+                                     "between 0 and 1 - could this be a frequency?")
+                assert(not isinstance(colValues[iCol],tuple)), \
+                    "Expanded-format count not allowed with column-key header"
+                countDict[outcomeLabel] = colValues[iCol]
+    
+            for outcomeLabel,iCol,iTotCol in freqCols:
+                if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue #skip blank sentinels
+                if colValues[iCol] < 0 or colValues[iCol] > 1.0:
+                    raise ValueError("Frequency column (%d) contains value(s) " % iCol +
+                                     "outside of [0,1.0] interval - could this be a count?")
+                assert(not isinstance(colValues[iTotCol],tuple)), \
+                    "Expanded-format count not allowed with column-key header"
+                countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
+    
+            if impliedCountTotCol1Q[1] >= 0:
+                impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
+                if impliedOutcomeLabel == ('0',):
+                    countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
+                else:
+                    countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
 
-        for outcomeLabel,iCol,iTotCol in freqCols:
-            if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                raise ValueError("Frequency column (%d) contains value(s) " % iCol +
-                                 "outside of [0,1.0] interval - could this be a count?")
-            countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
-
-        if impliedCountTotCol1Q[1] >= 0:
-            impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
-            if impliedOutcomeLabel == ('0',):
-                countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
-            else:
-                countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
-        #TODO - add standard count completion for 2Qubit case?
+        else: #assume colValues is a list of (outcomeLabel, count) tuples
+            for tup in colValues:
+                assert(isinstance(tup,tuple)), \
+                    ("Outcome labels must be specified with"
+                     "count data when there's no column-key header")
+                assert(len(tup) == 2),"Invalid count! (parsed to %s)" % str(tup)
+                countDict[ tup[0] ] = tup[1]
         return countDict
 
 
