@@ -9,28 +9,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import idct as _idct
-from scipy.stats import chi2 as _chi2
-from scipy.optimize import leastsq as _leastsq
-from scipy import convolve as _convolve
+#from scipy.stats import chi2 as _chi2
+#from scipy.optimize import leastsq as _leastsq
+#from scipy import convolve as _convolve
 
-# -------------------------------------------------------- #
-# ---------- Spectrum and Fourier transform tools -------- #
-# -------------------------------------------------------- #
-
-#def DCT_multicount_data(x,number_of_counts):
-#    """
-#    This function is a horrible hack, and the normalization doesn't have 
-#    any statistical justification.#
-#
-#    """
-#
-#    
-#    if _np.mean(x) == 0 or _np.mean(x) == number_of_counts:
-#        return _np.zeros(len(x))
-#    
-#    mean_number_of_ones = _np.mean(x)
-#    estimated_coin_bias = mean_number_of_ones / number_of_counts
-#    return _dct((x - mean_number_of_ones)/_np.sqrt(number_of_counts*estimated_coin_bias*(1-estimated_coin_bias)),norm='ortho')
 
 def DCT(x,counts=1,null_hypothesis=None):
     """
@@ -136,6 +118,10 @@ def bartlett_spectrum(x,num_spectra,counts=1,null_hypothesis=None):
                 
     return bartlett_spectrum
 
+def frequencies_from_timestep(timestep,T):
+     
+    return _np.arange(0,T)/(2*timestep*T)
+
 # -------------------------------- #
 # ---------- Signal tools -------- #
 # -------------------------------- #
@@ -194,49 +180,3 @@ def moving_average(sequence, width=100):
     base = _convolve(_np.ones(seq_length), _np.ones((int(width),))/float(width), mode='same')
     signal = _convolve(sequence, _np.ones((int(width),))/float(width), mode='same')
     return signal/base 
-
-# -------------------------------- #
-# ------- Signal generators ------ #
-# -------------------------------- #
-
-def signal_with_mininum_fourier_sparsity(power, num_modes, n, max_freq=None, base = 0.5, 
-                                      renormalizer_method='sharp'):   
-    """
-    TODO: docstring
-    """    
-    if max_freq is None:
-        max_freq = n-1
-        
-    amplitude_per_mode = _np.sqrt(power/num_modes)
-    possible_frequencies = _np.arange(1,max_freq+1)
-    sampled_frequencies = _np.random.choice(possible_frequencies, size=num_modes, replace=False, p=None)
-    
-    modes = _np.zeros(n,float)
-    random_phases = _np.random.binomial(1,0.5,size=num_modes)
-    for i in range (0,num_modes):
-        modes[sampled_frequencies[i]] = amplitude_per_mode*(-1)**random_phases[i]
-        
-    p =  IDCT(modes,base*_np.ones(n))    
-
-    if renormalizer_method is not None:
-        p = renormalizer(p,method=renormalizer_method)
-        
-    return p
-
-
-def signal_with_gaussian_power_distribution(power,center,spread,N,base=0.5,renormalizer_method='sharp'):
-    """
-    TODO: docstring
-    """
-    modes = _np.zeros(N)
-    modes[0] = 0.
-    modes[1:] = _np.exp(-1*(_np.arange(1,N)-center)**2/(2*spread**2))
-    modes = modes*(-1)**_np.random.binomial(1,0.5,size=N)
-    modes = _np.sqrt(power)*modes/_np.sqrt(sum(modes**2))
-    
-    p = IDCT(modes,base*_np.ones(N))
-    
-    if renormalizer_method is not None:
-        p = renormalizer(p,method=renormalizer_method)
-    
-    return p
