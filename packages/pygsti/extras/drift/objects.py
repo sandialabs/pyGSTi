@@ -7,8 +7,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 """Functions for Fourier analysis of equally spaced time-series data"""
 
 import numpy as _np
-import matplotlib.pyplot as _plt
-
 
 class BasicDriftResults(object):
 
@@ -58,7 +56,11 @@ class BasicDriftResults(object):
 
     def plot_power_spectrum(self, sequence='averaged', qubit='averaged', threshold=True, figsize=(15,3),
                            fix_ymax = False):
-        
+
+        try:
+            import matplotlib.pyplot as _plt
+        except ImportError:
+            raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
         _plt.figure(figsize=figsize)
         
         if sequence == 'averaged' and qubit == 'averaged':       
@@ -109,7 +111,12 @@ class BasicDriftResults(object):
         _plt.show()
    
     def plot_estimated_probability(self,sequence,qubit,plot_data=True,pt=None,figsize=(15,3)):
-        
+
+        try:
+            import matplotlib.pyplot as _plt
+        except ImportError:
+            raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
+
         _plt.figure(figsize=figsize)
         
         if self.timestep is not None:
