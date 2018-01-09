@@ -10,7 +10,22 @@ import numpy as _np
 
 def bonferoni_correction(confidence,numtests):
     """
-    Todo: docstring
+    Calculates the standard Bonferoni correction, for raising the 
+    confidence level of statistical tests when implementing more
+    than a single test. This is as described on wiki.
+    
+    Parameters
+    ----------
+    confidence : float
+        The desired overall confidence of the composite tests.
+        
+    numtests : int
+        
+                
+    Returns
+    -------
+    array
+        Todo.....
     
     """
     adjusted_confidence = 1 - (1 - confidence) / numtests

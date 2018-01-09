@@ -56,7 +56,8 @@ class BasicDriftResults(object):
         self.global_drift_frequencies = None
         self.global_reconstruction_power_spectrum = None
 
-    def plot_power_spectrum(self,sequence='averaged',qubit='averaged',threshold=True,figsize=(15,3)):
+    def plot_power_spectrum(self, sequence='averaged', qubit='averaged', threshold=True, figsize=(15,3),
+                           fix_ymax = False):
         
         _plt.figure(figsize=figsize)
         
@@ -81,47 +82,54 @@ class BasicDriftResults(object):
         _plt.plot(self.frequencies,_np.ones(self.number_of_timesteps),'k--',label='Mean noise level')
         _plt.plot(self.frequencies,threshold*_np.ones(self.number_of_timesteps),'--', 
                   label=str(self.confidence)+' Significance threshold')
-
+        
+        if fix_ymax:
+            a = _np.max(self.pspq_power_spectrum)
+            b = _np.max(self.pq_power_spectrum)
+            c = _np.max(self.global_power_spectrum)
+            max_power = _np.max(_np.array([a,b,c]))
+            a = self.pspq_significance_threshold
+            b = self.pq_significance_threshold
+            c = self.global_significance_threshold
+            max_threshold = _np.max(_np.array([a,b,c]))
+            
+            if max_power > max_threshold:                
+                ylim = [0,max_power]
+                
+            else:
+                ylim = [0,max_threshold+1.]
+        
+            _plt.ylim(ylim)
+            
         _plt.legend()
         _plt.xlim(0,_np.max(self.frequencies))
         _plt.title("Power spectrum",fontsize=17)
         _plt.xlabel(xlabel,fontsize=15)
         _plt.ylabel("Power",fontsize=15)
         _plt.show()
-
-    def plot_pvalues(self,sequence='averaged',qubit='averaged',threshold=True,figsize=(15,3)):
+   
+    def plot_estimated_probability(self,sequence,qubit,plot_data=True,pt=None,figsize=(15,3)):
         
         _plt.figure(figsize=figsize)
         
-        if sequence == 'averaged' and qubit == 'averaged':       
-            spectrum = self.global_power_spectrum
-            threshold = self.global_significance_threshold
-            title = 'Global power spectrum'
-            
-        elif sequence == 'averaged' and qubit != 'averaged':       
-            spectrum = self.pq_power_spectrum[qubit,:]
-            threshold = self.pq_significance_threshold
-            title = 'Sequence-averaged power spectrum for qubit '+str(qubit)
-            
-        elif sequence != 'averaged' and qubit != 'averaged':       
-            spectrum = self.pspq_power_spectrum[sequence,qubit,:]
-            threshold = self.pspq_significance_threshold    
-            title = 'Power spectrum for qubit ' +str(qubit)+ ' and sequence ' +str(sequence)
-            
         if self.timestep is not None:
-            xlabel = "Frequence (Hertz)"
+            times = self.timestep*_np.arange(0,self.number_of_timesteps)
+            xlabel = 'Time (seconds)'
         else:
-            xlabel = "Frequence"
+            times = _np.arange(0,self.number_of_timesteps)
+            xlabel = 'Time (timesteps)'
+            
+        if plot_data:
+            _plt.plot(times,self.data[sequence,qubit,:]/self.number_of_counts,'b.',label='Data power spectrum')
         
-        _plt.plot(self.frequencies,spectrum,'b.-',label='Data power spectrum')
-        _plt.plot(self.frequencies,_np.ones(self.number_of_timesteps),'k--',label='Mean noise level')
-        _plt.plot(self.frequencies,threshold*_np.ones(self.number_of_timesteps),'--', 
-                  label=str(self.confidence)+' Significance threshold')
-
+        _plt.plot(times,self.pspq_reconstruction[sequence,qubit,:],'r-',label='Estimated p(t)')
+        
+        if pt is not None:
+            _plt.plot(times,pt,'c--',label='True p(t)')
+                
         _plt.legend()
-        _plt.xlim(0,_np.max(self.frequencies))
-        _plt.title(title,fontsize=17)
+        _plt.xlim(0,_np.max(times))
+        _plt.title("Estimated drifting probability",fontsize=17)
         _plt.xlabel(xlabel,fontsize=15)
-        _plt.ylabel("Power",fontsize=15)
+        _plt.ylabel("Probability",fontsize=15)
         _plt.show()
-
