@@ -258,10 +258,26 @@ class DataSetRow(object):
         """ Returns a dictionary of counts at a particular time """
         return self._get_counts(timestamp)
 
-    def timeseries(self, outcomelabel):
+    def timeseries(self, outcomelabel, timestamps=None):
         """ 
-        Returns (times_array, counts_array) for a single outcome label
+        Returns timestamps and counts for a single outcome label
         or for aggregated counts if `outcomelabel == "all"`.
+
+        Parameters
+        ----------
+        outcomelabel : str or tuple
+            The outcome label to extract a series for.  If the special value
+            `"all"` is used, total (aggregated over all outcomes) counts are 
+            returned.
+
+        timestamps : list or array, optional
+            If not None, an array of time stamps to extract counts for,
+            which will also be returned as `times`.  Times at which
+            there is no data will be returned as zero-counts.
+
+        Returns
+        -------
+        times, counts : numpy.ndarray
         """
         if outcomelabel == 'all':
             olis = list(self.dataset.olIndex.values())
@@ -272,24 +288,30 @@ class DataSetRow(object):
             
         times = []
         counts = []
-        last_t = -1e100
-        
-        if self.reps is None:            
-            for i,(t,oli) in enumerate(zip(self.time,self.oli)):
-                if oli in olis:
-                    if not _np.isclose(t,last_t):
-                       times.append(t)
-                       counts.append(0)
-                       last_t = t
-                    counts[-1] += 1
-        else:
-            for i,(t,oli,nreps) in enumerate(zip(self.time,self.oli,self.reps)):
-                if oli in olis:
-                    if not _np.isclose(t,last_t):
-                       times.append(t)
-                       counts.append(0)
-                       last_t = t
-                    counts[-1] += nreps
+        last_t = -1e100            
+        tsIndx = 0
+        for i,(t,oli) in enumerate(zip(self.time,self.oli)):
+
+            if timestamps is not None:
+                while tsIndx < len(timestamps) and t > timestamps[tsIndx] \
+                      and not _np.isclose(t,timestamps[tsIndx]):
+                    times.append(timestamps[tsIndx])
+                    counts.append(0)
+                    tsIndx += 1
+                
+            if oli in olis and (timestamps is None or _np.isclose(t,timestamps[tsIndx])):
+                if not _np.isclose(t,last_t):
+                    times.append(t); tsIndx += 1
+                    counts.append(0)
+                    last_t = t
+                counts[-1] += 1 if (self.reps is None) else self.reps[i]
+
+        if timestamps is not None:
+            while tsIndx < len(timestamps):
+                times.append(timestamps[tsIndx])
+                counts.append(0)
+                tsIndx += 1
+
         return _np.array(times, self.dataset.timeType), \
             _np.array(counts, self.dataset.repType)
 

@@ -510,8 +510,11 @@ Gx^4 20 80 0.2 100
             print( "['0'] (str) = ",ds[gstr]['0'] ) # outcome-label index
             print( "[('0',)] (tuple) = ",ds[gstr][('0',)] ) # outcome-label index            
             print( "at time 0 = ", ds[gstr].counts_at_time(0.0) )
+            all_times, _ = ds[gstr].timeseries('all')
             print( "series('all') = ", ds[gstr].timeseries('all') )
-            print( "series('0') = ",ds[gstr].timeseries('0') )            
+            print( "series('0') = ",ds[gstr].timeseries('0') )
+            print( "series('1') = ",ds[gstr].timeseries('1') )            
+            print( "series('0',alltimes) = ",ds[gstr].timeseries('0', all_times) )
             print( len(ds[gstr]) )
             print("\n")
         
@@ -526,7 +529,8 @@ Gx^4 20 80 0.2 100
         dsNoReps = ds.copy() #tests copy() before any rep-data is added
 
         ds.add_raw_series_data( ('Gy',),['0','1'],[0.0, 1.0], [3,7]) #using repetitions
-        ds.add_series_data( ('Gy','Gy'), [ {'0': 2, '1': 8}, {'0': 6, '1': 4} ], [0.0, 1.2])
+        ds.add_series_data( ('Gy','Gy'), [ {'0': 2, '1': 8}, {'0': 6, '1': 4}, {'1': 10} ],
+                            [0.0, 1.2, 2.4])
         ds[('Gx','Gx')] = (['0','1'], [0.0, 1.0], [10,10]) #add via spam-labels, times, reps
         ds[('Gx','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times *after* we've added rep data
 
