@@ -157,12 +157,14 @@ class DataSetRow(object):
         return outcomeLabel in self.counts
         
     def __getitem__(self,indexOrOutcomeLabel):
-        if isinstance(indexOrOutcomeLabel, _numbers.Integral):
+        if isinstance(indexOrOutcomeLabel, _numbers.Integral): #raw index
             i = indexOrOutcomeLabel
             if self.reps is not None:
                 return ( self.dataset.ol[ self.oli[i] ], self.time[i], self.reps[i] )
             else:
                 return ( self.dataset.ol[ self.oli[i] ], self.time[i], 1 )
+        elif isinstance(indexOrOutcomeLabel, _numbers.Real): #timestamp
+            return self.counts_at_time(indexOrOutcomeLabel)
         else:
             return self.counts[indexOrOutcomeLabel]
             
@@ -193,7 +195,7 @@ class DataSetRow(object):
             else: # need to add a new label
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
                     
-    def _get_counts(self, all_outcomes=False):
+    def _get_counts(self, timestamp=None, all_outcomes=False):
         """ 
         Returns this row's sequence of "repetition counts", that is, the number of
         repetitions of each outcome label in the `outcomes` list, or
@@ -203,15 +205,19 @@ class DataSetRow(object):
         # aren't present for any of this row's elements (i.e. the #summed
         # is zero)
         cntDict = _ld.OutcomeLabelDict()
+        if timestamp is not None:
+            tslc = _np.where(_np.isclose(self.time,timestamp))[0]
+        else: tslc = slice(None)
+        
         if self.reps is None:
             for ol,i in self.dataset.olIndex.items():
-                cnt = float(_np.count_nonzero( _np.equal(self.oli,i) ))
+                cnt = float(_np.count_nonzero( _np.equal(self.oli[tslc],i) ))
                 if all_outcomes or cnt > 0: cntDict[ol] = cnt
         else:
             for ol,i in self.dataset.olIndex.items():
-                inds = _np.nonzero(_np.equal(self.oli,i))[0]
+                inds = _np.nonzero(_np.equal(self.oli[tslc],i))[0]
                 if all_outcomes or len(inds) > 0:
-                    cntDict[ol] = float( sum(self.reps[inds]))
+                    cntDict[ol] = float( sum(self.reps[tslc][inds]))
         return cntDict
 
     @property
@@ -233,7 +239,7 @@ class DataSetRow(object):
         total = sum(cnts.values())
         return _OrderedDict( [(k,cnt/total) for k,cnt in cnts.items()] )
 
-    #TODO: make into a property?
+    @property
     def total(self):
         """ Returns the total number of counts contained in this row."""
         if self.reps is None:
@@ -247,6 +253,46 @@ class DataSetRow(object):
         d = self.counts
         total = sum(d.values())
         return d[outcomelabel]/total
+
+    def counts_at_time(self, timestamp):
+        """ Returns a dictionary of counts at a particular time """
+        return self._get_counts(timestamp)
+
+    def timeseries(self, outcomelabel):
+        """ 
+        Returns (times_array, counts_array) for a single outcome label
+        or for aggregated counts if `outcomelabel == "all"`.
+        """
+        if outcomelabel == 'all':
+            olis = list(self.dataset.olIndex.values())
+        else:
+            outcomelabel = (outcomelabel,) if _compat.isstr(outcomelabel) \
+                           else tuple(outcomelabel)
+            olis = [self.dataset.olIndex[outcomelabel]]
+            
+        times = []
+        counts = []
+        last_t = -1e100
+        
+        if self.reps is None:            
+            for i,(t,oli) in enumerate(zip(self.time,self.oli)):
+                if oli in olis:
+                    if not _np.isclose(t,last_t):
+                       times.append(t)
+                       counts.append(0)
+                       last_t = t
+                    counts[-1] += 1
+        else:
+            for i,(t,oli,nreps) in enumerate(zip(self.time,self.oli,self.reps)):
+                if oli in olis:
+                    if not _np.isclose(t,last_t):
+                       times.append(t)
+                       counts.append(0)
+                       last_t = t
+                    counts[-1] += nreps
+        return _np.array(times, self.dataset.timeType), \
+            _np.array(counts, self.dataset.repType)
+
 
     def scale(self, factor):
         """ Scales all the counts of this row by the given factor """
@@ -594,7 +640,7 @@ class DataSet(object):
         else: # a tuple of lists
             assert(len(outcomeDictOrSeries) >= 2), \
                 "Must minimally set with (outcome-label-list, time-stamp-list)"
-            self.add_series_data(gatestring, *outcomeDictOrSeries)
+            self.add_raw_series_data(gatestring, *outcomeDictOrSeries)
             
 
     def keys(self, stripOccurrenceTags=False):
@@ -805,12 +851,12 @@ class DataSet(object):
         else:
             timeStampList = [0]*len(countList)
 
-        self.add_series_data(gateString, outcomeLabelList, timeStampList,
+        self.add_raw_series_data(gateString, outcomeLabelList, timeStampList,
                              countList, overwriteExisting)
 
 
-    def add_series_data(self, gateString, outcomeLabelList, timeStampList, repCountList=None,
-                        overwriteExisting=True):
+    def add_raw_series_data(self, gateString, outcomeLabelList, timeStampList,
+                            repCountList=None, overwriteExisting=True):
         """ 
         Add a single gate string's counts to this DataSet
         
@@ -885,6 +931,42 @@ class DataSet(object):
             self.gsIndex[ gateString ] = gateStringIndx
 
 
+    def add_series_data(self, gateString, countDictList, timeStampList,
+                        overwriteExisting=True):
+        """ 
+        Add a single gate string's counts to this DataSet
+        
+        Parameters
+        ----------
+        gateString : tuple or GateString
+            A tuple of gate labels specifying the gate string or a GateString object
+
+        countDictList : list
+            A list of dictionaries holding the outcome-label:count pairs for each 
+            time step (times given by `timeStampList`.
+
+        TODO: docstring
+
+        Returns
+        -------
+        None
+        """
+        expanded_outcomeList = []
+        expanded_timeList = []
+        expanded_repList = []
+
+        for (cntDict, t) in zip(countDictList, timeStampList):
+            if not isinstance(cntDict, _OrderedDict):
+                ols = sorted(list(cntDict.keys()))
+            else: ols = list(cntDict.keys())
+            for ol in ols: # loop over outcome labels
+                expanded_outcomeList.append(ol)
+                expanded_timeList.append(t)
+                expanded_repList.append(cntDict[ol]) #could do this only for counts > 1
+        return self.add_raw_series_data(gateString, expanded_outcomeList,
+                                        expanded_timeList, expanded_repList)
+
+
     def add_counts_from_dataset(self, otherDataSet):
         """
         Append another DataSet's data to this DataSet
@@ -916,7 +998,7 @@ class DataSet(object):
         """
         if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
         for gateString,dsRow in otherDataSet.items():
-            self.add_series_data(gateString, dsRow.outcomes, dsRow.time, dsRow.reps, False)
+            self.add_raw_series_data(gateString, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 
       
     def __str__(self):
@@ -1006,7 +1088,7 @@ class DataSet(object):
                 if gateString in self.gsIndex:
                     gateStringIndx = self.gsIndex[gateString]
                     repData = self.repData[ gateStringIndx ].copy() if (self.repData is not None) else None
-                    trunc_dataset.add_series_data( gateString, [ self.ol[i] for i in self.oliData[ gateStringIndx ] ],
+                    trunc_dataset.add_raw_series_data( gateString, [ self.ol[i] for i in self.oliData[ gateStringIndx ] ],
                                                    self.timeData[ gateStringIndx ].copy(), repData) #Copy operation so truncated dataset can be modified
                 elif bThrowErrorIfStringIsMissing:
                     raise ValueError("Gate string %s was not found in dataset begin truncated and bThrowErrorIfStringIsMissing == True" % str(gateString))
@@ -1264,7 +1346,7 @@ class DataSet(object):
     #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
     #  for gateStr,i in self.gsIndex.items():
     #    ff_data_dict = self.ffdata[gateStr]
-    #    nTimeSteps = self[gateStr].total()
+    #    nTimeSteps = self[gateStr].total
     #    avgKept = _np.average( [ff_data_dict[sl][4] for sl in self.olIndex ] )
     #    N = int(round(float(nTimeSteps)/avgKept)) # ~ clicks per fourier mode
     #

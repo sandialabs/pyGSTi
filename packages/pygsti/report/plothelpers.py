@@ -154,7 +154,7 @@ def total_count_matrix(gsplaq, dataset):
     """
     ret = _np.nan * _np.ones(gsplaq.num_compiled_elements, 'd')
     for i,j,gstr,elIndices,outcomes in gsplaq.iter_compiled():
-        ret[elIndices] = dataset[ gstr ].total()
+        ret[elIndices] = dataset[ gstr ].total
           # OR should it sum only over outcomes, i.e.
           # = sum([dataset[gstr][ol] for ol in outcomes])
     return ret
@@ -162,7 +162,7 @@ def total_count_matrix(gsplaq, dataset):
     #OLD
     #ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     #for i,j,gstr in gsplaq:
-    #    ret[i,j] = dataset[ gstr ].total()
+    #    ret[i,j] = dataset[ gstr ].total
     #return ret
 
 

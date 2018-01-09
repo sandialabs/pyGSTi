@@ -82,7 +82,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
                          collisionAction=inputDataSet.collisionAction)
     gatestring_list = list(inputDataSet.keys())
     for s in gatestring_list:
-        nSamples = inputDataSet[s].total()
+        nSamples = inputDataSet[s].total
         if generationMethod == 'parametric':
             ps = inputGateSet.probs(s)
         elif generationMethod == 'nonparametric':

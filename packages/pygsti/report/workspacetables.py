@@ -1486,8 +1486,8 @@ class DataSetOverviewTable(WorkspaceTable):
     
         table = _ReportTable(colHeadings, formatters)
     
-        minN = round(min([ row.total() for row in dataset.values()]))
-        maxN = round(max([ row.total() for row in dataset.values()]))
+        minN = round(min([ row.total for row in dataset.values()]))
+        maxN = round(max([ row.total for row in dataset.values()]))
         cntStr = "[%d,%d]" % (minN,maxN) if (minN != maxN) else "%d" % round(minN)
     
         table.addrow(("Number of strings", str(len(dataset))), (None,None))

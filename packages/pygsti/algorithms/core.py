@@ -1177,12 +1177,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     #                         = 1/(p*(1-p)) * (p - f)^2
 
     for (i,gateStr) in enumerate(dsGateStringsToUse):
-        N[ lookup[i] ] = dataset[gateStr].total()
+        N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
         if useFreqWeightedChiSq:
             wts = []
             for x in outcomes_lookup[i]:
-                Nx = dataset[gateStr].total()
+                Nx = dataset[gateStr].total
                 f1 = dataset[gateStr].fraction(x); f2 = (f1+1)/(Nx+2)
                 wts.append( _np.sqrt( Nx / (f2*(1-f2)) ) )
             fweights[ lookup[i] ] = wts
@@ -2378,7 +2378,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     cntVecMx = _np.empty(KM, 'd' )
     totalCntVec = _np.empty(KM, 'd' )
     for (i,gateStr) in enumerate(dsGateStringsToUse):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total()
+        totalCntVec[ lookup[i] ] = dataset[gateStr].total
         cntVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     logL_upperbound = _tools.logl_max(gs, dataset, dsGateStringsToUse,
