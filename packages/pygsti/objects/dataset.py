@@ -1457,8 +1457,8 @@ class DataSet(object):
             self.timeType = state_dict['timeType']
             self.repType  = state_dict['repType']
             
-        self.collisionAction = state_dict['collisionAction']
-        self.uuid = state_dict['uuid']
+        self.collisionAction = state_dict.get('collisionAction','aggregate')
+        self.uuid = state_dict.get('uuid',None)
         
 
 
