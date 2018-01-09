@@ -795,9 +795,10 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             if mode == "Target":
                 est_label = mode
                 tgt = gs_target.copy() #no parameterization change
+                tgt.default_gauge_group = _objs.TrivialGaugeGroup(tgt.dim) #so no gauge opt is done
                 advanced.update( {'appendTo': ret, 'estimateLabel': est_label,
                                   'onBadFit': []} )
-                ret = do_model_test(gs_target, ds, tgt, prepStrs,
+                ret = do_model_test(gs_target, ds, tgt, prepStrs, 
                                     effectStrs, germs, maxLengths, False, advanced,
                                     comm, memLimit, None, printer-1)
                 
@@ -811,6 +812,7 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             elif mode in modelsToTest:
                 est_label = mode
                 tgt = gs_target.copy() #no parameterization change
+                tgt.default_gauge_group = _objs.TrivialGaugeGroup(tgt.dim) #so no gauge opt is done
                 advanced.update( {'appendTo': ret, 'estimateLabel': est_label } )
                 ret = do_model_test(modelsToTest[mode], ds, tgt, prepStrs,
                                     effectStrs, germs, maxLengths, False, advanced,
@@ -942,8 +944,13 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                 
                 stages = [ ] #multi-stage gauge opt
                 gg = gs_target.default_gauge_group
-                
-                if gg is not None:
+                if isinstance(gg, _objs.TrivialGaugeGroup):
+                    #just do a single-stage "trivial" gauge opts using default group
+                    gaugeOptSuite_dict['single'] =  { 'verbosity': printer }
+                    if "unreliable2Q" in gaugeOptSuites and gs_target.dim == 16:
+                        gaugeOptSuite_dict['single-2QUR'] = { 'verbosity': printer }
+                    
+                elif gg is not None:
 
                     #Stage 1: plain vanilla gauge opt to get into "right ballpark"
                     if gg.name in ("Full", "TP"):
@@ -990,7 +997,6 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
                             iStage2 = 1 if gg.name in ("Full", "TP") else 0
                             stages_2QUR[iStage2]['itemWeights'] = stage2_item_weights
                             gaugeOptSuite_dict['single-2QUR'] = stages_2QUR #add additional gauge opt
-    
         
             elif suiteName in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam"):
         
