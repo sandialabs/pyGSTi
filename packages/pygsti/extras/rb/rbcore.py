@@ -866,7 +866,7 @@ def do_rb_base(dataset, gatestrings, fit = 'standard',fit_parameters_dict = None
     #Note: assumes dataset contains gate strings which use *base* labels
     base_lengths = list(map(len,gatestrings))
     occ_indices = _tools.compute_occurrence_indices(gatestrings)
-    Ns = [ dataset.get_row(seq,k).total() 
+    Ns = [ dataset.get_row(seq,k).total
            for seq,k in zip(gatestrings,occ_indices) ]
     successes = [ dataset.get_row(seq,k).fraction(success_outcomelabel) 
                   for seq,k in zip(gatestrings,occ_indices) ] 
@@ -956,7 +956,7 @@ def generate_sim_rb_data(gateset, expRBdataset, seed=None):
     DataSet
     """
     gateStrings = list(expRBdataset.keys(stripOccurrenceTags=True))
-    Ns = [ expRBdataset[s].total() for s in gateStrings ]
+    Ns = [ expRBdataset[s].total for s in gateStrings ]
     return _cnst.generate_fake_data(gateset,gateStrings,Ns,sampleError='multinomial',
                                     collisionAction=expRBdataset.collisionAction,
                                     seed=seed)

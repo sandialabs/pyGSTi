@@ -56,7 +56,7 @@ class DataSetConstructionTestCase(BaseTestCase):
     def test_merge_outcomes(self):
         merged_dataset = pc.merge_outcomes(self.dataset, {'merged_outcome_label': [('0',), ('1',)]})
         for dsRow in merged_dataset.values():
-            self.assertEqual( dsRow.total(), dsRow['merged_outcome_label'] )
+            self.assertEqual( dsRow.total, dsRow['merged_outcome_label'] )
 
 
 if __name__ == '__main__':
