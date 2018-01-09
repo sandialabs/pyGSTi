@@ -207,7 +207,7 @@ def logl_terms(gateset, dataset, gatestring_list=None,
     countVecMx = _np.empty(nEls, 'd' )
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(ds_gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total()
+        totalCntVec[ lookup[i] ] = dataset[gateStr].total
         countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     #OLD
@@ -397,7 +397,7 @@ def logl_jacobian(gateset, dataset, gatestring_list=None,
     countVecMx = _np.empty(nEls, 'd' )
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(ds_gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total()
+        totalCntVec[ lookup[i] ] = dataset[gateStr].total
         countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     #OLD
@@ -650,7 +650,7 @@ def logl_hessian(gateset, dataset, gatestring_list=None, minProbClip=1e-6,
     ds_subtree_gatestring_list = _lt.find_replace_tuple_list(
         gatestring_list, gateLabelAliases)
     for (i,gateStr) in enumerate(ds_subtree_gatestring_list):
-        totalCntVec_all[ lookup[i] ] = dataset[gateStr].total()
+        totalCntVec_all[ lookup[i] ] = dataset[gateStr].total
         cntVecMx_all[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
 
     tStart = _time.time()
@@ -781,7 +781,7 @@ def logl_max(gateset, dataset, gatestring_list=None, poissonPicture=True,
         L = 0
         for gateString in gatestring_list:
             dsRow = dataset[gateString]
-            N = dsRow.total() #sum of counts for all outcomes (all spam labels)
+            N = dsRow.total #sum of counts for all outcomes (all spam labels)
             for n in dsRow.counts.values():
                 f = n / N
                 if f < TOL and n == 0: continue # 0 * log(0) == 0
@@ -827,7 +827,7 @@ def logl_max_terms(gateset, dataset, gatestring_list=None,
     countVecMx = _np.empty(nEls, 'd' )
     totalCntVec = _np.empty(nEls, 'd' )
     for (i,gateStr) in enumerate(gatestring_list):
-        totalCntVec[ lookup[i] ] = dataset[gateStr].total()
+        totalCntVec[ lookup[i] ] = dataset[gateStr].total
         countVecMx[ lookup[i] ] = [ dataset[gateStr][x] for x in outcomes_lookup[i] ]
         
     freqs = countVecMx / totalCntVec
@@ -883,7 +883,7 @@ def forbidden_prob(gateset, dataset):
                 if round(dsRow[spamLabel]) == 0: continue #contributes zero to the sum
                 else: forbidden_prob += abs(TOL-p) + TOL
             elif p > 1-TOL:
-                if round(dsRow[spamLabel]) == dsRow.total(): continue #contributes zero to the sum
+                if round(dsRow[spamLabel]) == dsRow.total: continue #contributes zero to the sum
                 else: forbidden_prob += abs(p-(1-TOL)) + TOL
 
 

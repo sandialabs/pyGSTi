@@ -64,7 +64,7 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     dsGateStrings = _lt.find_replace_tuple_list(
             gateStrings, gateLabelAliases)
     for (i,gateStr) in enumerate(dsGateStrings):
-        N[ lookup[i] ] = dataset[gateStr].total()
+        N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
     gateset.bulk_fill_probs(probs, evTree, clipTo, check)
@@ -222,7 +222,7 @@ def chi2(gateset, dataset, gateStrings=None,
     dsGateStrings = _lt.find_replace_tuple_list(
         gateStrings, gateLabelAliases)
     for (i,gateStr) in enumerate(dsGateStrings):
-        N[ lookup[i] ] = dataset[gateStr].total()
+        N[ lookup[i] ] = dataset[gateStr].total
         f[ lookup[i] ] = [ dataset[gateStr].fraction(x) for x in outcomes_lookup[i] ]
 
     if returnHessian:
@@ -273,7 +273,7 @@ def chi2(gateset, dataset, gateStrings=None,
 #    if gateStrings is None:
 #        return sum( [ gate_string_chi2( gatestring, dataset, gateset, useFreqWeightedChiSq,
 #                                       minProbClipForWeighting) for gatestring in dataset] )
-#        #return sum( [ chi2fn_2outcome( dsRow.total(),
+#        #return sum( [ chi2fn_2outcome( dsRow.total,
 #        #                     gateset.pr('plus', gatestring),
 #        #                     dsRow.fraction('plus'),
 #        #                     minProbClipForWeighting ) for gatestring,dsRow in dataset.items() ] )
@@ -321,7 +321,7 @@ def chi2(gateset, dataset, gateStrings=None,
 #    rowData  = dataset[gatestring]
 #    clip = minProbClipForWeighting
 #
-#    N = rowData.total()
+#    N = rowData.total
 #    p = gateset.probs(gatestring)
 #    return sum( [ chiSqFn(N, p[sl], rowData[sl]/N, clip) for sl in gateset.get_spam_labels() ] )
 

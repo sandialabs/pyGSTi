@@ -626,7 +626,7 @@ class StdInputParser(object):
 
             seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
             timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
-            dataset.add_series_data(gateString, seriesList, timesList)
+            dataset.add_raw_series_data(gateString, seriesList, timesList)
                 
         dataset.done_adding_data()
         return dataset

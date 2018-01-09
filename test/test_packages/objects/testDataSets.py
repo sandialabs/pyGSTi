@@ -425,14 +425,14 @@ Gx^4 20 80 0.2 100
         
         #Create an empty dataset and add data
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        ds.add_series_data( ('Gx',), #gate sequence
+        ds.add_raw_series_data( ('Gx',), #gate sequence
                             ['0','0','1','0','1','0','1','1','1','0'], #spam labels
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], #time stamps
                             None) #no repeats
 
         oli = collections.OrderedDict([('0',0), ('1',1)])
         ds2 = pygsti.objects.DataSet(outcomeLabelIndices=oli)
-        ds2.add_series_data( ('Gy',),  #gate sequence
+        ds2.add_raw_series_data( ('Gy',),  #gate sequence
                              ['0','1'], #spam labels
                              [0.0, 1.0], #time stamps
                              [3,7]) #repeats
@@ -492,7 +492,7 @@ Gx^4 20 80 0.2 100
         # Create a dataset from scratch
 
         def printInfo(ds, gstr):
-            print( "%s info" % str(gstr))
+            print( "*** %s info ***" % str(gstr))
             print( ds[gstr] )
             print( ds[gstr].oli )
             print( ds[gstr].time )
@@ -503,27 +503,42 @@ Gx^4 20 80 0.2 100
             print( ds[gstr].get_expanded_times() )
             print( ds[gstr].counts )
             print( ds[gstr].fractions )
-            print( ds[gstr].total() )
+            print( ds[gstr].total )
             print( ds[gstr].fraction('0') )
+            print( "[0] (int) = ",ds[gstr][0] ) # integer index
+            print( "[0.0] (float) = ",ds[gstr][0.0] ) # time index
+            print( "['0'] (str) = ",ds[gstr]['0'] ) # outcome-label index
+            print( "[('0',)] (tuple) = ",ds[gstr][('0',)] ) # outcome-label index            
+            print( "at time 0 = ", ds[gstr].counts_at_time(0.0) )
+            all_times, _ = ds[gstr].timeseries('all')
+            print( "series('all') = ", ds[gstr].timeseries('all') )
+            print( "series('0') = ",ds[gstr].timeseries('0') )
+            print( "series('1') = ",ds[gstr].timeseries('1') )            
+            print( "series('0',alltimes) = ",ds[gstr].timeseries('0', all_times) )
             print( len(ds[gstr]) )
+            print("\n")
         
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'])
-        ds.add_series_data( ('Gx',),
+        ds.add_raw_series_data( ('Gx',),
                             ['0','0','1','0','1','0','1','1','1','0'],
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
+
         printInfo(ds, ('Gx',) )
 
         ds[('Gy','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times
         dsNoReps = ds.copy() #tests copy() before any rep-data is added
 
-        ds.add_series_data( ('Gy',),['0','1'],[0.0, 1.0], [3,7]) #using repetitions
+        ds.add_raw_series_data( ('Gy',),['0','1'],[0.0, 1.0], [3,7]) #using repetitions
+        ds.add_series_data( ('Gy','Gy'), [ {'0': 2, '1': 8}, {'0': 6, '1': 4}, {'1': 10} ],
+                            [0.0, 1.2, 2.4])
         ds[('Gx','Gx')] = (['0','1'], [0.0, 1.0], [10,10]) #add via spam-labels, times, reps
         ds[('Gx','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times *after* we've added rep data
 
         printInfo(ds, ('Gy',) )
+        printInfo(ds, ('Gy','Gy') )
 
-        ds.add_series_data( ('Gx','Gx'),['0','1'],[0.0, 1.0], [6,14], overwriteExisting=True) #the default
-        ds.add_series_data( ('Gx','Gx'),['0','1'],[1.0, 2.0], [5,10], overwriteExisting=False)
+        ds.add_raw_series_data( ('Gx','Gx'),['0','1'],[0.0, 1.0], [6,14], overwriteExisting=True) #the default
+        ds.add_raw_series_data( ('Gx','Gx'),['0','1'],[1.0, 2.0], [5,10], overwriteExisting=False)
 
         #Setting (spamlabel,time,count) data
         ds[('Gx',)][0] = ('1',0.1,1)
@@ -540,7 +555,7 @@ Gx^4 20 80 0.2 100
         #with self.assertRaises(ValueError):
         #    ds[('Gx',)][0] = ('1',0.1,1) #this is OK b/c doesn't add data...
         with self.assertRaises(ValueError):
-            ds.add_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
+            ds.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
         with self.assertRaises(ValueError):
             ds.add_series_from_dataset(ds) #can't add to a static dataset
 
@@ -578,7 +593,7 @@ Gx^4 20 80 0.2 100
 
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gx',)][0] = ('1',0.1,1)
-        dsWritable.add_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
+        dsWritable.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
         dsWritable.add_series_from_dataset(ds)
         
         
@@ -652,7 +667,7 @@ Gy 11001100
         ds = pygsti.io.load_tddataset(temp_files + "/TDDataset.txt")
         self.assertEqual(ds[()].fraction('1'), 0.5)
         self.assertEqual(ds[('Gy',)].fraction('1'), 0.5)
-        self.assertEqual(ds[('Gx',)].total(), 9)
+        self.assertEqual(ds[('Gx',)].total, 9)
 
 
 #OLD
@@ -692,10 +707,10 @@ Gy 11001100
 #
 #        ds[('Gmz_0',)]['0'] = 20
 #        self.assertEqual(ds[('Gmz_0',)]['0'], 20)
-#        self.assertEqual(ds[('Gmz_0',)].total(), (20.0 + 1.0 + 9.0 + 81.0) )
+#        self.assertEqual(ds[('Gmz_0',)].total, (20.0 + 1.0 + 9.0 + 81.0) )
 #        ds[('Gmz_0',)].scale(0.5)
 #        self.assertEqual(ds[('Gmz_0',)]['0'], 10)
-#        self.assertEqual(ds[('Gmz_0',)].total(), (10.0 + 0.5 + 9.0 + 81.0) )
+#        self.assertEqual(ds[('Gmz_0',)].total, (10.0 + 0.5 + 9.0 + 81.0) )
 
         
 
