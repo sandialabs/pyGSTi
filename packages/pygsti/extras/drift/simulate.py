@@ -6,14 +6,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
-# Todo: check all of this.
 import numpy as _np
 import numpy.random as _rnd
-#from scipy.fftpack import dct as _dct
-#from scipy.fftpack import idct as _idct
-#from scipy.stats import chi2 as _chi2
-#from scipy.optimize import leastsq as _leastsq
-#from scipy import convolve as _convolve
 
 from . import signal as _sig
 

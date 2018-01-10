@@ -749,6 +749,41 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
         ret[i,j] = llrVals_and_strings_dict[gstr]
     return ret
 
+@smart_cached
+def drift_pvalue_matrices(gsplaq, driftresults):
+    """
+    Todo:docstring
+    """
+    pvalues_and_strings_dict = {}
+    for s in range(0,driftresults.number_of_sequences):
+        pvalues_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_pvalue[s]
+    
+    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for i,j,gstr in gsplaq:
+        #print(gstr)
+        if gstr in driftresults.indices_to_sequences:
+        #    print(1)
+            ret[i,j] = 1/pvalues_and_strings_dict[gstr]
+        #else:
+        #    print(0)
+            
+    return ret
+
+@smart_cached
+def drift_maxpower_matrices(gsplaq, driftresults):
+    """
+    Todo:docstring
+    """
+    maxpowers_and_strings_dict = {}
+    for s in range(0,driftresults.number_of_sequences): 
+        maxpowers_and_strings_dict[driftresults.indices_to_sequences[s]] = driftresults.ps_max_power[s]
+
+    ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
+    for i,j,gstr in gsplaq:
+        if gstr in driftresults.indices_to_sequences:
+            ret[i,j] = maxpowers_and_strings_dict[gstr]
+    return ret
+
 
 def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     """ 
