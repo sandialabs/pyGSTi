@@ -619,6 +619,16 @@ Gx^4 20 80 0.2 100
         with self.assertRaises(ValueError):
             ds.truncate( [('Gx',),('Gy',),('Gz',)], bThrowErrorIfStringIsMissing=True ) #Gz is missing
 
+        #Test time slicing
+        print("Before [1,2) time slice")
+        print(ds)
+        ds_slice = ds.time_slice(1.0,2.0)
+        print("Time slice:")
+        print(ds_slice)
+        ds_slice = ds.time_slice(1.0,2.0,aggregateToTime=0.0)
+        print("Time slice (aggregated to t=0):")
+        print(ds_slice)
+        
         #test copy
         dsWritable_copy = dsWritable.copy() #non-static
         ds_copy = ds.copy() #static

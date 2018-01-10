@@ -1117,6 +1117,63 @@ class DataSet(object):
     
         return trunc_dataset
 
+
+    def time_slice(self, startTime, endTime, aggregateToTime=None):
+        """ 
+        Creates a DataSet by aggregating the counts within the
+        [`startTime`,`endTime`) interval.
+      
+        Parameters
+        ----------
+        startTime, endTime : float or int
+            The time-stamps to use for the beginning (inclusive) and end
+            (exclusive) of the time interval.
+      
+        aggregateToTime : float, optional
+            If not None, a single timestamp to give all the data in
+            the specified range, resulting in time-independent 
+            `DataSet`.  If None, then the original timestamps are
+            preserved.
+  
+        Returns
+        -------
+        DataSet
+        """
+        tot = 0
+        ds = DataSet(outcomeLabelIndices=self.olIndex)
+        for gateStr,dsRow in self.items():
+            
+            if dsRow.reps is None:
+                reps = _np.ones(dsRow.oli.shape, self.repType)
+            else: reps = dsRow.reps
+        
+            count_dict = {ol: 0 for ol in self.olIndex.keys()}
+            times = []; ols = []; repCnts = []
+            for oli, t, rep in zip(dsRow.oli, dsRow.time, reps):
+                
+                ol = self.ol[oli] # index -> outcome label
+                if startTime <= t < endTime:
+                    if aggregateToTime is not None:
+                        count_dict[ol] += rep
+                    else:
+                        times.append(t)
+                        ols.append(ol)
+                        repCnts.append(rep)
+                    tot += rep
+
+            if aggregateToTime is not None:
+                ols = [ k for k in count_dict.keys() if count_dict[k] > 0 ]
+                repCnts = [ count_dict[k] for k in ols ]
+                times = [ aggregateToTime ]*len(repCnts)
+                
+            ds.add_raw_series_data(gateStr, ols, times, repCnts)
+    
+        if tot == 0:
+            _warnings.warn("No counts in the requested time range: empty DataSet created")
+        ds.done_adding_data()                                                                                                         
+        return ds         
+
+
     def process_gate_strings(self, processor_fn):
         """ 
         Manipulate this DataSet's gate sequences according to `processor_fn`.
@@ -1387,43 +1444,6 @@ class DataSet(object):
     #  return ds
     #
     #
-    #def create_dataset_from_time_range(self, startTime, endTime):
-    #  """ 
-    #  Creates a DataSet by aggregating the counts within the
-    #  [`startTime`,`endTime`) interval.
-    #
-    #  Parameters
-    #  ----------
-    #  startTime, endTime : float or int
-    #      The time-stamps to use for the beginning (inclusive) and end
-    #      (exclusive) of the time interval.
-    #
-    #  Returns
-    #  -------
-    #  DataSet
-    #  """
-    #  tot = 0
-    #  ds = _ds.DataSet(outcomeLabelIndices=self.olIndex)
-    #  for gateStr,dsRow in self.iteritems():
-    #
-    #    if dsRow.reps is None:
-    #      reps = _np.ones(dsRow.oli.shape, self.repType)
-    #    else: reps = dsRow.reps
-    #
-    #    count_dict = {i: 0 for i in self.olIndex.values()}
-    #    for spamIndx, t, rep in zip(dsRow.oli, dsRow.time, reps):
-    #      if startTime <= t < endTime:
-    #        count_dict[spamIndx] += rep
-    #        tot += rep
-    #
-    #    ds.add_count_dict(gateStr,
-    #                      {self.sl[i]: cnt for i,cnt in count_dict.items()})
-    #
-    #  if tot == 0:
-    #    _warnings.warn("No counts in the requested time range: empty DataSet created")
-    #  ds.done_adding_data()                                                                                                           
-    #  return ds         
-
 
     def __getstate__(self):
         toPickle = { 'gsIndexKeys': list(map(_gs.CompressedGateString, self.gsIndex.keys())),
