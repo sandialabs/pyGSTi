@@ -750,9 +750,31 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     return ret
 
 @smart_cached
-def drift_pvalue_matrices(gsplaq, driftresults):
+def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     """
-    Todo:docstring
+    Computes matrix of 1 / pvalues for testing the 
+    "no drift" null hypothesis in each sequence, using the 
+    "max power in spectra" test. These are the pvalues associated
+    with the quantities returned by `drift_maxpower_matrices`.
+
+    Parameters
+    ----------
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
+
+    driftresults : BasicDriftResults
+        The drift analysis results.
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        1 / pvalues for testing the "no drift" null hypothesis, using the "max power in
+        spectra" test, on the relevant sequences. This gate sequences correspond to the 
+        gate sequences where a base gateString is sandwiched between the each prep-fiducial
+        and effect-fiducial pair.
+        
     """
     pvalues_and_strings_dict = {}
     for s in range(0,driftresults.number_of_sequences):
@@ -760,19 +782,43 @@ def drift_pvalue_matrices(gsplaq, driftresults):
     
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
-        #print(gstr)
         if gstr in driftresults.indices_to_sequences:
-        #    print(1)
-            ret[i,j] = 1/pvalues_and_strings_dict[gstr]
-        #else:
-        #    print(0)
-            
+            # If the pvalue is infinite (which, because of how the pvalues are calculated, can happen
+            # when the true pvalue is well within the range of a float), we map it to twice the maximum
+            # non-infinity pvalue. The true pvalue must be greater than this value, but might not be as
+            # large as twice this value. It is rounded, as this will help identify cases where this
+            # fairly arbitrary procedure has been implemented.
+            if 1./pvalues_and_strings_dict[gstr]  == _np.inf:
+                oneoverpvls = 1./driftresults.ps_pvalue.copy()
+                oneoverpvls = oneoverpvls[_np.isfinite(oneoverpvls)]
+                ret[i,j] = 2*_np.round(_np.max(oneoverpvls))
+            else:
+                ret[i,j] = 1./pvalues_and_strings_dict[gstr]    
     return ret
 
 @smart_cached
 def drift_maxpower_matrices(gsplaq, driftresults):
     """
-    Todo:docstring
+    Computes matrix of max powers in the time-series power spectra. This
+    value is a reasonable proxy for how "drifty" the sequence appears
+    to be.
+    
+    Parameters
+    ----------
+    gsplaq : GatestringPlaquette
+        Obtained via :method:`GatestringStructure.get_plaquette`, this object
+        specifies which matrix indices should be computed and which gate strings
+        they correspond to.
+
+    driftresults : BasicDriftResults
+        The drift analysis results.
+
+    Returns
+    -------
+    numpy array of shape ( len(effectStrs), len(prepStrs) )
+        Matrix of max powers in the time-series power spectra forthe gate sequences where a 
+        base gateString is sandwiched between the each prep-fiducial and effect-fiducial pair.
+        
     """
     maxpowers_and_strings_dict = {}
     for s in range(0,driftresults.number_of_sequences): 
