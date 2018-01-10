@@ -1640,7 +1640,7 @@ class ColorBoxPlot(WorkspacePlot):
                     "Must specify `driftresults` argument to create `driftpv` plot!"
                 
                 def _mx_fn(plaq,x,y):
-                    return _ph.drift_pvalue_matrices(plaq, driftresults)
+                    return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
                 
                 # The threshold value, above which it should be colored and log-spaced
                 # is:

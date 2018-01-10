@@ -750,7 +750,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     return ret
 
 @smart_cached
-def drift_pvalue_matrices(gsplaq, driftresults):
+def drift_oneoverpvalue_matrices(gsplaq, driftresults):
     """
     Todo:docstring
     """
@@ -760,13 +760,10 @@ def drift_pvalue_matrices(gsplaq, driftresults):
     
     ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
     for i,j,gstr in gsplaq:
-        #print(gstr)
         if gstr in driftresults.indices_to_sequences:
-        #    print(1)
-            ret[i,j] = 1/pvalues_and_strings_dict[gstr]
-        #else:
-        #    print(0)
-            
+            if 1./pvalues_and_strings_dict[gstr]  != _np.inf:
+                ret[i,j] = 1./pvalues_and_strings_dict[gstr]    
+    print(ret)
     return ret
 
 @smart_cached
