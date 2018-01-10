@@ -1374,8 +1374,8 @@ class ColorBoxPlot(WorkspacePlot):
     def __init__(self, ws, plottype, gss, dataset, gateset,
                  sumUp=False, boxLabels=False, hoverInfo=True, invert=False,
                  prec='compact', linlg_pcntle=.05, minProbClipForWeighting=1e-4,
-                 directGSTgatesets=None, dscomparator=None, submatrices=None,
-                 typ="boxes", scale=1.0):
+                 directGSTgatesets=None, dscomparator=None, driftresults=None,
+                 submatrices=None, typ="boxes", scale=1.0):
         """
         Create a plot displaying the value of per-gatestring quantities.
 
@@ -1384,7 +1384,8 @@ class ColorBoxPlot(WorkspacePlot):
     
         Parameters
         ----------
-        plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp"}
+        plottype : {"chi2","logl","tvd","blank","errorrate","directchi2","directlogl","dscmp",
+                    "driftpv","driftpwr"}
             Specifies the type of plot. "errorate", "directchi2" and
             "directlogl" require that `directGSTgatesets` be set.
 
@@ -1408,7 +1409,7 @@ class ColorBoxPlot(WorkspacePlot):
             generate the figure when this is set to True.
 
         hoverInfo : bool, optional
-            Whether to incude interactive hover labels.
+            Whether to include interactive hover labels.
 
         invert : bool, optional
             If True, invert the nesting order of the color box plot (applicable
@@ -1454,13 +1455,13 @@ class ColorBoxPlot(WorkspacePlot):
         super(ColorBoxPlot,self).__init__(ws, self._create, plottype, gss, dataset, gateset,
                                           prec, sumUp, boxLabels, hoverInfo,
                                           invert, linlg_pcntle, minProbClipForWeighting,
-                                          directGSTgatesets, dscomparator, submatrices,
-                                          typ, scale)
+                                          directGSTgatesets, dscomparator, driftresults, 
+                                          submatrices, typ, scale)
 
     def _create(self, plottypes, gss, dataset, gateset,
                 prec, sumUp, boxLabels, hoverInfo,
                 invert, linlg_pcntle, minProbClipForWeighting,
-                directGSTgatesets, dscomparator, submatrices,
+                directGSTgatesets, dscomparator, driftresults, submatrices,
                 typ, scale):
 
         #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
@@ -1630,6 +1631,36 @@ class ColorBoxPlot(WorkspacePlot):
                 def _mx_fn(plaq,x,y):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
+            elif ptyp == "driftpv":
+                precomp=False
+                colormapType = "linlog"
+                linlog_color = "green"
+                ytitle="1 / pvalue"
+                assert(driftresults is not None), \
+                    "Must specify `driftresults` argument to create `driftpv` plot!"
+                
+                def _mx_fn(plaq,x,y):
+                    return _ph.drift_pvalue_matrices(plaq, driftresults)
+                
+                # The threshold value, above which it should be colored and log-spaced
+                # is:
+                # 1/(1-driftresults.confidence)
+            
+            elif ptyp == "driftpwr":
+                precomp=False
+                colormapType = "linlog"
+                linlog_color = "green"
+                ytitle="Maximum power in spectrum"
+                assert(driftresults is not None), \
+                    "Must specify `driftresults` argument to create `driftpwr` plot!"
+                
+                def _mx_fn(plaq,x,y):
+                    return _ph.drift_maxpower_matrices(plaq, driftresults)
+                
+                # The threshold value, above which it should be colored and log-spaced
+                # is:
+                # driftresults.ps_significance_threshold
+            
             elif (submatrices is not None) and ptyp in submatrices:
                 precomp = False; ytitle = ptyp
                 if ptyp + ".colormap" in submatrices:
