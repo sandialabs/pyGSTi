@@ -96,7 +96,7 @@ class GateSetMember(GateSetChild):
         self._parent = parent
         self._gpindices = gpindices
              
-    def gpindices_as_array(self, asarray=False):
+    def gpindices_as_array(self):
         """ 
         Returns gpindices as a `numpy.ndarray` of integers (gpindices itself
         can be None, a slice, or an integer array).  If gpindices is None, an
