@@ -1436,7 +1436,11 @@ class ColorBoxPlot(WorkspacePlot):
 
         dscomparator : DataComparator, optional
             The data set comparator used to produce the "dscmp" plot type.
-
+        
+        driftresults : BasicDriftResults, optional
+            The results of a drift analysis, used to produce the "driftpv" and
+            "driftpw" boxplots.
+        
         submatrices : dict, optional
             A dictionary whose keys correspond to other potential plot
             types and whose values are each a list-of-lists of the sub
@@ -1638,11 +1642,13 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle="1 / pvalue"
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
-                
+                assert(driftresults.indices_to_sequences is not None), \
+                    "The `driftresults` must contain the mapping between indices and GateStrings!"
+                    
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
                 
-                # The threshold value, above which it should be colored and log-spaced
+                # Erik: The threshold value, above which it should be colored and log-spaced
                 # is:
                 # 1/(1-driftresults.confidence)
             
@@ -1652,12 +1658,14 @@ class ColorBoxPlot(WorkspacePlot):
                 linlog_color = "green"
                 ytitle="Maximum power in spectrum"
                 assert(driftresults is not None), \
-                    "Must specify `driftresults` argument to create `driftpwr` plot!"
+                    "Must specify `driftresults` argument to create `driftpv` plot!"
+                assert(driftresults.indices_to_sequences is not None), \
+                    "The `driftresults` must contain the mapping between indices and GateStrings!"
                 
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_maxpower_matrices(plaq, driftresults)
                 
-                # The threshold value, above which it should be colored and log-spaced
+                # Erik: The threshold value, above which it should be colored and log-spaced
                 # is:
                 # driftresults.ps_significance_threshold
             

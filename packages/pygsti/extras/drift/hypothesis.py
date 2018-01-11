@@ -32,7 +32,16 @@ def bonferoni_correction(confidence,numtests):
       
     return adjusted_confidence
 
-def generalized_bonferoni_correction(confidence,weights,numtests=None):
+def sidak_correction(confidence,numtests):
+    """
+    Todo: docstring
+    """
+    adjusted_confidence = 1 - (1 - confidence)**(1/numtests)
+      
+    return adjusted_confidence
+
+def generalized_bonferoni_correction(confidence, weights, numtests=None,
+                                     nested_method='bonferoni'):
     """
     Todo: docstring
     
@@ -41,15 +50,19 @@ def generalized_bonferoni_correction(confidence,weights,numtests=None):
     assert(_np.sum(weights) == 1.), "Invalid weighting! The weights must add up to 1."
     
     adjusted_confidence = _np.zeros(len(weights),float)
-    adjusted_confidence = 1 - (1 - confidence)/weights
+    adjusted_confidence = 1 - (1 - confidence)*weights
 
     if numtests is not None:
         
         assert(len(numtests) == len(weights)), "The number of tests must be specified for each weight!"
         for i in range(0,len(weights)):
             
-            adjusted_confidence[i] = bonferoni_correction(adjusted_confidence[i],numtests[i])
-            
+            if nested_method == 'bonferoni':
+                adjusted_confidence[i] = bonferoni_correction(adjusted_confidence[i],numtests[i])
+                
+            if nested_method == 'sidak':
+                adjusted_confidence[i] = sidak_correction(adjusted_confidence[i],numtests[i])
+                
     return adjusted_confidence
     
-            
+#Todo: add generalized sidak correction.          
