@@ -108,7 +108,17 @@ class DriftResults(object):
         self.global_drift_frequencies = None
         self.global_reconstruction_power_spectrum = None
         self.global_reconstruction_powerpertimestep = None
+    
+    def any_drift_detect(self):
         
+        if self.drift_detected:
+            print("Statistical tests set at a global confidence level of: " + str(self.confidence)) 
+            print("Result: The 'no drift' hypothesis *is* rejected.")
+        else:
+            print("Statistical tests set at a global confidence level of: " + str(self.confidence))
+            print("Result: The 'no drift' hypothesis is *not* rejected.")
+    
+    
     def plot_power_spectrum(self, sequence_index='averaged', entity_index='averaged', 
                             outcome_index='averaged', threshold='default', figsize=(15,3), 
                             fix_ymax = False, savepath=None):
@@ -151,8 +161,10 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged
         if sequence == 'averaged' and entity == 'averaged':       
             spectrum = self.global_power_spectrum
-            threshold1test = self.global_significance_threshold
+            threshold1test = self.global_significance_threshold_1test
             thresholdclass = self.global_significance_threshold_classcompensation
+            # Compensates for any noise-free spectra that have been averaged into the global spectrum.
+            noiselevel = self.global_dof/(self.global_dof+self.global_dof_reduction)
             if threshold == 'default':
                 threshold='1test'
             title = 'Global power spectrum' + name_in_title2
@@ -161,8 +173,9 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged   
         elif sequence == 'averaged' and entity != 'averaged':       
             spectrum = self.pe_power_spectrum[entity,:]
-            threshold1test = self.pe_significance_threshold
+            threshold1test = self.pe_significance_threshold_1test
             thresholdclass = self.pe_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
             if self.number_of_sequences > 1:
@@ -179,8 +192,9 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged   
         elif sequence != 'averaged' and entity == 'averaged':       
             spectrum = self.ps_power_spectrum[sequence,:]
-            threshold1test = self.ps_significance_threshold
+            threshold1test = self.ps_significance_threshold_1test
             thresholdclass = self.ps_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -199,8 +213,9 @@ class DriftResults(object):
         # outcome value is not ignored
         elif sequence != 'averaged' and entity != 'averaged' and outcome == 'averaged':       
             spectrum = self.pspe_power_spectrum[sequence,entity,:]
-            threshold1test = self.pspe_significance_threshold
+            threshold1test = self.pspe_significance_threshold_1test
             thresholdclass = self.pspe_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -214,8 +229,9 @@ class DriftResults(object):
         # outcome value is not ignored    
         elif sequence != 'averaged' and entity != 'averaged' and outcome != 'averaged':       
             spectrum = self.pspepo_power_spectrum[sequence,entity,outcome,:]
-            threshold1test = self.pspepo_significance_threshold
+            threshold1test = self.pspepo_significance_threshold_1test
             thresholdclass = self.pspepo_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -229,16 +245,18 @@ class DriftResults(object):
             xlabel = "Frequence (Hertz)"
         else:
             xlabel = "Frequence"
+            
+         
         
         _plt.plot(self.frequencies,spectrum,'b.-',label='Data power spectrum')
-        _plt.plot(self.frequencies,_np.ones(self.number_of_timesteps),'k--',label='Mean noise level')
+        _plt.plot(self.frequencies,noiselevel*_np.ones(self.number_of_timesteps),'c--',label='Mean noise level')
         
         if threshold == '1test' or threshold == 'all':  
-            _plt.plot(self.frequencies,threshold1test*_np.ones(self.number_of_timesteps),'c--', 
+            _plt.plot(self.frequencies,threshold1test*_np.ones(self.number_of_timesteps),'k--', 
                   label=str(self.confidence)+' confidence single-test significance threshold')
         
         if threshold == 'class' or threshold == 'all':  
-            _plt.plot(self.frequencies,thresholdclass*_np.ones(self.number_of_timesteps),'g--', 
+            _plt.plot(self.frequencies,thresholdclass*_np.ones(self.number_of_timesteps),'r--', 
                   label=str(self.confidence)+' confidence multi-test significance threshold')
         
         if fix_ymax:
@@ -269,6 +287,22 @@ class DriftResults(object):
             _plt.savefig(savepath)
         else:
             _plt.show()
+            
+    def plot_most_drifty_probability(self, plot_data=True, pt=None, figsize=(15,3), savepath=None):
+        
+        if self.multitest_compensation == 'none':
+            ws = "Warning: multi-tests compensation is 'none'. This means that if there are many sequences it is likely"
+            ws += " that some of them will have non-trivial estimates for the time-dependent probability!"
+            print(ws)
+        
+        # Find the (sequence,entity,outcome) index with the most power in the reconstruction. This is
+        # not necessarily the index with the largest max power in the data spectrum.
+        most_drift_index = _np.unravel_index(_np.argmax(self.pspepo_reconstruction_powerpertimestep), 
+                                             _np.shape(self.pspepo_reconstruction_powerpertimestep))
+        
+        self.plot_estimated_probability(most_drift_index[0], most_drift_index[1], most_drift_index[2], 
+                                        plot_data=plot_data, pt=pt, figsize=figsize, savepath=savepath)
+        
    
     def plot_estimated_probability(self, sequence_index, entity_index=0, outcome_index=0, plot_data=True, 
                                    pt=None, figsize=(15,3), savepath=None):
