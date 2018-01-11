@@ -22,7 +22,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     
     
     multitest_compensation:
-        'none', 'class', or 'all'
+        'none', 'class'
     """
     
     assert(type(ds) == _np.array or type(ds) == _objs.dataset.DataSet), \
@@ -32,6 +32,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     # Format the input #
     # ---------------- #
     
+    # This converts an input array into a standard shape (there are 3 different shape arrays that are
+    # permisable input), and extracts basic information about the input data.
     if type(ds) == _np.array:
         
         data_shape = _np.shape(ds)
@@ -64,9 +66,10 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         num_entities = data_shape[1]
         num_outcomes = data_shape[2]
         num_timesteps = data_shape[3] 
-    
-    
-    
+        
+    # This converts a DataSet to an array, as the code below uses arrays (for a good reason - as there is
+    # lots of averaging over different dimensions of the array). This bit of the code seems to be by far
+    # the slowest, so todo: improve this code, or the speed of access to a DataSet object.
     if type(ds) == _objs.dataset.DataSet:
         
         if verbosity > 0:
@@ -100,14 +103,13 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         counts = counts[0]
         num_timesteps = num_timesteps[0]
 
-        #
-        # todo: allow for marginalization
-        #
         assert(marginalize == 'none' or  marginalize == 'std' or marginalize == 'usr')
         if marginalize == 'usr':   
                 assert(marginalize_dict is not None)
                 assert(outcomes is not None)
-                
+        
+        # If we are not marginalizing, we can create the array slightly more efficiently, so we have a
+        # seperate code for this case. 
         if marginalize == 'none':
             
             if outcomes != None:
@@ -127,8 +129,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
                     for o in range(0,num_outcomes):
                         junk, data[s,e,o,:] = _np.array(ds[indices_to_sequences[s]].timeseries(outcomes[o],timestamps[s,:]))
         
+        # Go into this section if we are marginalizing the data.
         else:
-
             full_outcomes = ds.get_outcome_labels()
       
             if marginalize == 'std':            
@@ -263,11 +265,15 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     pe_dof = num_sequences*(num_outcomes-1)
     global_dof = num_sequences*num_entities*(num_outcomes-1)
     
-    #
-    # todo: adjust dofs down for determinstic sequences, for pe_dof and global_dof
-    #
     
-    
+    global_dof_reduction = 0
+    for s in range(0,num_sequences):
+        if _np.sum(ps_power_spectrum[s,:]) < 1.:
+            global_dof_reduction+= 1
+            
+    global_dof = global_dof - global_dof_reduction
+    # Todo at some point: add a dof reduction for pspe, ps and pe analyses.
+
     pspepo_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, pspepo_dof)
     pspe_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, pspe_dof)
     ps_significance_threshold_1test = _stat.maxpower_threshold_chi2(confidence, num_timesteps, ps_dof)
@@ -458,6 +464,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.pspepo_reconstruction = pspepo_reconstruction
     results.pspepo_reconstruction_power_spectrum = pspepo_reconstruction_power_spectrum
     results.pspepo_reconstruction_powerpertimestep = pspepo_reconstruction_powerpertimestep
+    results.pspepo_dof = pspepo_dof
     
     # Write the results for this analysis into the results object.
     results.pspe_power_spectrum = pspe_power_spectrum
@@ -471,7 +478,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.pspe_drift_detected = pspe_drift_detected
     results.pspe_reconstruction_power_spectrum = pspe_reconstruction_power_spectrum
     results.pspe_reconstruction_powerpertimestep = pspe_reconstruction_powerpertimestep
-
+    results.pspe_dof = pspe_dof
+    
     # Write the results for this analysis into the results object.
     results.ps_power_spectrum = ps_power_spectrum
     results.ps_drift_frequencies = ps_drift_frequencies
@@ -484,6 +492,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.ps_drift_detected = ps_drift_detected
     results.ps_reconstruction_power_spectrum = ps_reconstruction_power_spectrum
     results.ps_reconstruction_powerpertimestep = ps_reconstruction_powerpertimestep
+    results.ps_dof = ps_dof
     
     # Write the results for this analysis into the results object.
     results.global_power_spectrum = global_power_spectrum
@@ -497,7 +506,9 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.global_drift_detected = global_drift_detected
     results.global_reconstruction_power_spectrum = global_reconstruction_power_spectrum
     results.global_reconstruction_powerpertimestep = global_reconstruction_powerpertimestep
-
+    results.global_dof = global_dof
+    results.global_dof_reduction = global_dof_reduction
+    
     # ------------------------------------ #
     #         Per-entity analysis          #
     # ------------------------------------ #
@@ -541,7 +552,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.pe_drift_frequencies = pe_drift_frequencies
     results.pe_reconstruction_power_spectrum = pe_reconstruction_power_spectrum
     results.pe_reconstruction_powerpertimestep = pe_reconstruction_powerpertimestep
-
+    results.pe_dof = pe_dof
+    
     # --------------------------------------------------------------------------- #
     # Check whether drift is detected with a composite test at the set confidence #
     # --------------------------------------------------------------------------- #
