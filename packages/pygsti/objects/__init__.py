@@ -26,6 +26,8 @@ from .gate import LindbladParameterizedGate
 from .gate import TPInstrumentGate
 from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate
+from .gate import ComposedGateMap
+from .gate import ComposedGate
 from .spamvec import SPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
