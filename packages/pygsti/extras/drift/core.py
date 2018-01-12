@@ -25,8 +25,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         'none', 'class'
     """
     
-    assert(type(ds) == _np.array or type(ds) == _objs.dataset.DataSet), \
-        "Input data must be either a numpy array or a pygsti DataSet object!"
+    #assert(type(ds) == _np.array or type(ds) == _objs.dataset.DataSet), \
+    #    "Input data must be either a numpy array or a pygsti DataSet object!"
     
     # ---------------- #
     # Format the input #
@@ -34,25 +34,46 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     
     # This converts an input array into a standard shape (there are 3 different shape arrays that are
     # permisable input), and extracts basic information about the input data.
-    if type(ds) == _np.array:
-        
+    #if type(ds) == _np.array:
+    if type(ds) != _objs.dataset.DataSet:
+    
         data_shape = _np.shape(ds)
     
         # Check that the input data is consistent with being counts in an array of an appropriate dimension
         assert(len(data_shape) == 2 or len(data_shape) == 3 or len(data_shape) == 4), "Data format is incorrect!"
-    
+        
+        # todo: explain what is happening here
+        if len(data_shape) == 1:            
+            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
+            if verbosity > 0:
+                print("Due to input array format, analysis is defaulting to assuming:")
+                print("  - single-sequence data")
+                print("  - single entity data")
+                print("  - two-outcome measurements")
+               
+                print("")       
+            data = _np.zeros((1,1,2,data_shape[0]),float)
+            data[0,0,0,:] = ds.copy()
+            data[0,0,1,:] = counts - ds.copy()
+                
         # todo: explain what is happening here
         if len(data_shape) == 2:            
             assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
             if verbosity > 0:
-                print("Analysis is defaulting to assuming two-outcome measurements on a single entity.")       
+                print("Due to input array format, analysis is defaulting to assuming:")
+                print("  - single entity data")
+                print("  - two-outcome measurements")
+                print("")       
             data = _np.zeros((data_shape[0],1,2,data_shape[1]),float)
-            data[:,0,:] = ds.copy()
-     
+            data[:,0,0,:] = ds.copy()
+            data[:,0,1,:] = counts - ds.copy()
+            
         if len(data_shape) == 3:
             assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
             if verbosity > 0:
-                print("Analysis is defaulting to assuming two-outcome measurements.")        
+                print("Due to input array format, analysis is defaulting to assuming:")
+                print("  - two-outcome measurements")
+                print("")           
             data = _np.zeros((data_shape[0],data_shape[1],2,data_shape[2]),float)
             data[:,:,0,:] = ds.copy()
             data[:,:,1,:] = counts - ds.copy()
@@ -336,7 +357,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     pspepo_pvalue = _np.zeros((num_sequences,num_entities,num_outcomes),float)
     pspepo_drift_detected = _np.zeros((num_sequences,num_entities,num_outcomes),bool)       
     pspepo_drift_frequencies = {}   
-    pspepo_reconstruction = _np.zeros(data_shape,float)    
+    pspepo_reconstruction = _np.zeros(data_shape,float)  
+    pspepo_reconstruction_uncertainty = _np.zeros((num_sequences,num_entities,num_outcomes),float) 
     pspepo_reconstruction_power_spectrum = _np.zeros(data_shape,float)
     
     # Initialize arrays for the per-sequence, per-entity results
@@ -372,7 +394,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
                 indices = _np.zeros((num_timesteps),bool)
                 indices[pspepo_power_spectrum[s,q,o,:] > pspepo_significance_threshold] = True 
                 pspepo_drift_frequencies[s,q,o] = pspepo_drift_frequencies[s,q,o][indices]
-            
+                num_kept_modes = 1 + len(pspepo_drift_frequencies[s,q,o])
+                
                 # Create the reconstructions, using the standard single-pass Fourier filter
                 pspepo_null[s,q,o,:] = _np.mean(data[s,q,o,:])*_np.ones(num_timesteps,float)/counts
             
@@ -388,10 +411,12 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
                     pspepo_reconstruction[s,q,o,:] = _sig.renormalizer(pspepo_reconstruction[s,q,o,:],method='logistic')
                     pspepo_reconstruction_power_spectrum[s,q,o,:] =  _sig.DCT(pspepo_reconstruction[s,q,o,:], 
                                                                       null_hypothesis=pspepo_null[s,q,o,:],
-                                                                      counts=counts)
+                                                                      counts=counts)   
                 else:
                     pspepo_reconstruction[s,q,o,:] = pspepo_null[s,q,o,:]                
                     pspepo_reconstruction_power_spectrum[s,q,o,:] = _np.zeros(num_timesteps,float)
+                    
+                pspepo_reconstruction_uncertainty[s,q,o] = _np.sqrt(num_kept_modes/num_timesteps)
             
             # --- analysis at the per-sequence per-entity level --- #
                 
@@ -462,6 +487,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
     results.pspepo_significance_threshold_classcompensation = pspepo_significance_threshold_classcompensation
     results.pspepo_drift_detected = pspepo_drift_detected
     results.pspepo_reconstruction = pspepo_reconstruction
+    results.pspepo_reconstruction_uncertainty = pspepo_reconstruction_uncertainty
     results.pspepo_reconstruction_power_spectrum = pspepo_reconstruction_power_spectrum
     results.pspepo_reconstruction_powerpertimestep = pspepo_reconstruction_powerpertimestep
     results.pspepo_dof = pspepo_dof
