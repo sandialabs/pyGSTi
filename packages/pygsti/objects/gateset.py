@@ -622,12 +622,15 @@ class GateSet(object):
                 else:
                     obj.set_gpindices(gpindices+shift, self)  #works for integer arrays
 
-            if obj.gpindices is None:
+            if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
                 v = _np.insert(v, off, obj.to_vector())
-                obj.set_gpindices( slice(off, off+obj.num_params()), self )
-                shift += obj.num_params()
-                off += obj.num_params()
+                #obj.set_gpindices( slice(off, off+obj.num_params()), self )
+                #shift += obj.num_params()
+                #off += obj.num_params()
+                num_new_params = obj.allocate_gpindices( off, self )
+                shift += num_new_params
+                off += num_new_params
                 #print("DEBUG: %s: inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()

@@ -3618,6 +3618,75 @@ class ComposedGate(GateMatrix):
         GateMatrix.__init__(self, _np.identity(dim,'d'))
         self._construct_matrix()
 
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        #figure out how many parameters we need to allocate based on
+        # which factorgates still need to be "allocated" within the
+        # parent's parameter array:
+        tot_new_params = 0
+        all_gpindices = []
+        for gate in self.factorgates:
+            num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
+            startingIndex += num_new_params
+            tot_new_params += num_new_params
+            all_gpindices.extend( gate.gpindices_as_array() )
+
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, _slct.list_to_slice(all_gpindices array_ok=True), parent)
+        return tot_new_params
+
+    
+    def set_gpindices(self, gpindices, parent):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        #must set the gpindices of self.factorgates based on new
+        my_old_gpindices = old_gpindices
+        for gate in self.factorgates:
+            rel_gate_gpindices = _gatesetmember.decompose_gpindices(
+                my_old_gpindices, gate.gpindices)
+            new_gate_gpindices = _gatesetmember.compose_gpindices(
+                gpindices, rel_gate_gpindices)
+            gate.set_gpindices(new_gate_gpindices, parent)
+            
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+    
+
     def _construct_matrix(self):
         mx = self.factorgates[0]
         for gate in self.factorgates[1:]:
@@ -3648,8 +3717,11 @@ class ComposedGate(GateMatrix):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        #HERE
-        assert(False), "TODO?"
+        v = _np.empty(self.num_params(), 'd')
+        for gate in self.factorgates:
+            factorgate_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, gate.gpindices)
+            v[factorgate_local_inds] = gate.to_vector()
 
 
     def from_vector(self, v):
@@ -3669,7 +3741,7 @@ class ComposedGate(GateMatrix):
         for gate in self.factorgates:
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
-            gates.from_vector( v[factorgate_local_inds] )
+            gate.from_vector( v[factorgate_local_inds] )
         self.dirty = True
 
 
@@ -3687,6 +3759,7 @@ class ComposedGate(GateMatrix):
         """
         #Product rule to compute jacobian
         for i,gate in enumerate(self.factorgates): # loop over the gate we differentiate wrt
+            if gate.num_params() == 0: continue #no contribution
             deriv = gate.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
             deriv.shape = (self.dim,self.dim,self.num_params())
 
@@ -3866,6 +3939,75 @@ class ComposedGateMap(GateMap):
         GateMap.__init__(self, dim)
 
 
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        #figure out how many parameters we need to allocate based on
+        # which factorgates still need to be "allocated" within the
+        # parent's parameter array:
+        tot_new_params = 0
+        all_gpindices = []
+        for gate in self.factorgates:
+            num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
+            startingIndex += num_new_params
+            tot_new_params += num_new_params
+            all_gpindices.extend( gate.gpindices_as_array() )
+
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, _slct.list_to_slice(all_gpindices array_ok=True), parent)
+        return tot_new_params
+
+    
+    def set_gpindices(self, gpindices, parent):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        #must set the gpindices of self.factorgates based on new
+        my_old_gpindices = old_gpindices
+        for gate in self.factorgates:
+            rel_gate_gpindices = _gatesetmember.decompose_gpindices(
+                my_old_gpindices, gate.gpindices)
+            new_gate_gpindices = _gatesetmember.compose_gpindices(
+                gpindices, rel_gate_gpindices)
+            gate.set_gpindices(new_gate_gpindices, parent)
+            
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+
+
     def acton(self, state):
         """ Act this gate map on an input state """
         for gate in self.factorgates:
@@ -3907,8 +4049,11 @@ class ComposedGateMap(GateMap):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        #HERE
-        assert(False), "TODO?"
+        v = _np.empty(self.num_params(), 'd')
+        for gate in self.factorgates:
+            factorgate_local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, gate.gpindices)
+            v[factorgate_local_inds] = gate.to_vector()
 
 
     def from_vector(self, v):
@@ -3928,7 +4073,7 @@ class ComposedGateMap(GateMap):
         for gate in self.factorgates:
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
-            gates.from_vector( v[factorgate_local_inds] )
+            gate.from_vector( v[factorgate_local_inds] )
         self.dirty = True
 
 
@@ -4134,6 +4279,58 @@ class EmbeddedGateMap(GateMap):
     
         GateMap.__init__(self, gateDim)
 
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, self.embedded_gate.gpindices, parent)
+        return num_new_params
+
+    
+    def set_gpindices(self, gpindices, parent):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        #must set the gpindices of self.embedded_gate
+        self.embedded_gate.set_gpindices(gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+        
         
     def _decomp_gate_index(self, indx):
         """ Decompose index of a Pauli-product matrix into indices of each
@@ -4416,6 +4613,60 @@ class EmbeddedGate(GateMatrix):
         self.base = self.embedded_map.as_matrix()
         assert(self.base.shape == (self.dim,self.dim))
         self.base.flags.writeable = False
+
+        
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, self.embedded_gate.gpindices, parent)
+        return num_new_params
+
+    
+    def set_gpindices(self, gpindices, parent):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        #must set the gpindices of self.embedded_gate
+        self.embedded_gate.set_gpindices(gpindices, parent)
+        _gatesetmember.GateSetMember.set_gpindices(
+            self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+
 
     def num_params(self):
         """

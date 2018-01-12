@@ -87,7 +87,10 @@ class GateSetMember(GateSetChild):
         Parameters
         ----------
         gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
         parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
 
         Returns
         -------
@@ -95,7 +98,42 @@ class GateSetMember(GateSetChild):
         """
         self._parent = parent
         self._gpindices = gpindices
-             
+
+    def allocate_gpindices(self, startingIndex, parent):
+        """
+        Sets gpindices array for this object or any objects it
+        contains (i.e. depends upon).  Indices may be obtained
+        from contained objects which have already been initialized
+        (e.g. if a contained object is shared with other
+         top-level objects), or given new indices starting with
+        `startingIndex`.
+
+        Parameters
+        ----------
+        startingIndex : int
+            The starting index for un-allocated parameters.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        num_new: int
+            The number of *new* allocated parameters (so 
+            the parent should mark as allocated parameter
+            indices `startingIndex` to `startingIndex + new_new`).
+        """
+        if self.gpindices is None or parent is not self.parent:
+            #default behavior: assume num_params() works even with
+            # gpindices == None and allocate all our parameters as "new"
+            Np = self.num_params()
+            self.set_gpindices( slice(startingIndex,
+                                      startingIndex+Np), parent )
+            return Np
+        else: #assume gpindices is good & everything's allocated already
+            return 0
+
+        
     def gpindices_as_array(self):
         """ 
         Returns gpindices as a `numpy.ndarray` of integers (gpindices itself
