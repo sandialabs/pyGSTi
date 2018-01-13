@@ -21,6 +21,7 @@ from scipy.optimize import minimize as _minimize
 def create_random_gatestring(m, group_or_gateset, inverse = True,
                              interleaved = None, seed=None,
                              group_inverse_only = False,
+                             group_prep = False,
                              compilation = None,
                              generated_group = None,
                              gateset_to_group_labels = None,
@@ -57,7 +58,12 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
         If not None, then a gatelabel string. When a gatelabel string is provided,
         every random gate is followed by this gate. So the returned sequence is of
         length 2m+1 (2m) if inverse is True (False).
-            
+        
+    group_prep: bool, optional
+        If group_inverse_only is True and inverse is True, setting this to true
+        creates a "group pre-twirl". Does nothing otherwise (which should be changed
+        at some point).
+
     seed : int, optional
         Seed for random number generator; optional.
 
@@ -131,8 +137,18 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
                 interleaved_indices = interleaved_index*_np.ones((m,2),int)
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
-        random_string = [ gateset.gates.keys()[i] for i in rndm_indices ] 
+        # This bit of code is a quick hashed job. Needs to be checked at somepoint
+        if group_prep:
+            rndm_group_index = rndm.randint(0,len(generated_group))
+            prep_random_string = compilation[generated_group.labels[rndm_group_index]]
+            prep_random_string_group = [generated_group.labels[rndm_group_index],]
+
+        random_string = [ gateset.gates.keys()[i] for i in rndm_indices ]   
         random_string_group = [ gateset_to_group_labels[gateset.gates.keys()[i]] for i in rndm_indices ] 
+        # This bit of code is a quick hashed job. Needs to be checked at somepoint
+        if group_prep:
+            random_string = prep_random_string + random_string
+            random_string_group = prep_random_string_group + random_string_group
         #print(random_string)
         inversion_group_element = generated_group.get_inv(generated_group.product(random_string_group))
         inversion_sequence = compilation[inversion_group_element]
