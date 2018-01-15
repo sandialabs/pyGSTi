@@ -17,6 +17,7 @@ import warnings as _warnings
 
 from .. import tools as _tools
 from .. import algorithms as _alg
+from ..baseobjs import Basis as _Basis
 from ..objects.reportableqty import ReportableQty as _ReportableQty
 from ..objects import gatesetfunction as _gsf
 
@@ -875,17 +876,24 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
     nGates = len(gateLabels)
     
     error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}
+    error_labels = []
     for ptype in ("hamiltonian","stochastic","affine"):
         lindbladMxs = _tools.std_error_generators(gatesetA.dim, ptype,
                                                   mxBasis.name) # in std basis
+        lindbladMxBasis = _Basis(mxBasis.name, int(round(_np.sqrt(gatesetA.dim))))
+        
         lindbladMxs = lindbladMxs[1:] #skip [0] == Identity
+        lbls = lindbladMxBasis.labels[1:]
+        
         scaleFctr = _tools.std_scale_factor(gatesetA.dim, ptype)
         #if ptype == "hamiltonian": scaleFctr *= 2.0 #HACK (DEAL LATER)
         #if ptype == "affine": scaleFctr *= 0.5 #HACK
         ptype_counts[ptype] = len(lindbladMxs)
         ptype_scaleFctrs[ptype] = scaleFctr #UNUSED?
-        error_superops.extend( [ _tools.change_basis(eg,"std",mxBasis) for eg in lindbladMxs ] ) 
+        error_superops.extend( [ _tools.change_basis(eg,"std",mxBasis) for eg in lindbladMxs ] )
+        error_labels.extend( [ "%s(%s)" % (ptype[0],lbl) for lbl in lbls ] )
     nSuperOps = len(error_superops)
+    assert(len(error_labels) == nSuperOps)
 
     #DEBUG
     #print("DB: %d gates (%s)" % (nGates, str(gateLabels)))
@@ -902,24 +910,24 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
         proj = []
         for ptype in ("hamiltonian","stochastic","affine"):
             proj.append( _tools.std_errgen_projections( 
-                errgen,ptype,mxBasis.name,mxBasis) )
+                errgen,ptype,mxBasis.name,mxBasis)[1:] ) #skip [0] == Identity
         return _np.concatenate( proj )
 
-    def vec_to_projdict(vec):
-        ret = {}
-        off = 0 #current offset into vec
-        for gl in gatesetA.gates.keys():
-            ret['%s error generator' % gl] = _np.zeros((gatesetA.dim,gatesetA.dim),'d') # TODO: something here (just a placeholder now)
-            if gl in gateLabels: # a non-identity gate
-                for ptype in ("hamiltonian","stochastic","affine"):
-                    ret['%s %s projections' % (gl, ptype)] = vec[off:off+ptype_counts[ptype]]
-                    ret['%s %s projections power' % (gl, ptype)] = 0 # TODO - use scale factor... vec[off:off+ptype_counts[ptype]]
-            else: # an identity gate - just put in zeros of now
-                for ptype in ("hamiltonian","stochastic","affine"):
-                    ret['%s %s projections' % (gl, ptype)] = _np.zeros(ptype_counts[ptype], 'd')
-                    ret['%s %s projections power' % (gl, ptype)] = 0
-                
-        return ret
+    #def vec_to_projdict(vec):
+    #    ret = {}
+    #    off = 0 #current offset into vec
+    #    for gl in gatesetA.gates.keys():
+    #        ret['%s error generator' % gl] = _np.zeros((gatesetA.dim,gatesetA.dim),'d') # TODO: something here (just a placeholder now)
+    #        if gl in gateLabels: # a non-identity gate
+    #            for ptype in ("hamiltonian","stochastic","affine"):
+    #                ret['%s %s projections' % (gl, ptype)] = vec[off:off+ptype_counts[ptype]]
+    #                ret['%s %s projections power' % (gl, ptype)] = 0 # TODO - use scale factor... vec[off:off+ptype_counts[ptype]]
+    #        else: # an identity gate - just put in zeros of now
+    #            for ptype in ("hamiltonian","stochastic","affine"):
+    #                ret['%s %s projections' % (gl, ptype)] = _np.zeros(ptype_counts[ptype], 'd')
+    #                ret['%s %s projections power' % (gl, ptype)] = 0
+    #            
+    #    return ret
     
     def firstOrderNoise( gstr, errSupOp, glWithErr ):
         noise = _np.zeros((gatesetB.dim,gatesetB.dim), 'd')
@@ -970,15 +978,31 @@ def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
             
         rank = _np.linalg.matrix_rank(runningJac)
 
-        print("DB: Added synthetic idle %s => rank=%d <?> %d (shape=%s)" % (str(s),rank,nSuperOps*nGates,str(runningJac.shape)))
+        print("DB: Added synthetic idle %s => rank=%d <?> %d (shape=%s; %s)" % (str(s),rank,nSuperOps*nGates,str(runningJac.shape),str(runningY.shape)))
         
-        if rank >= nSuperOps*nGates: #then we can extract error terms for the gates
-            # J*vec_gateErrs = Y => vec_gateErrs = (J^T*J)^-1 J^T*Y (lin least squares)
-            J,JT = runningJac, runningJac.T
-            vec_gateErrs = _np.dot( _np.linalg.inv(_np.dot(JT,J)), _np.dot(JT,runningY))
-            return vec_to_projdict(vec_gateErrs)
-            
-    raise ValueError("Not enough synthetic idle sequences to extract gauge-robust error rates.")
+        #if rank >= nSuperOps*nGates: #then we can extract error terms for the gates
+        #    # J*vec_gateErrs = Y => vec_gateErrs = (J^T*J)^-1 J^T*Y (lin least squares)
+        #    J,JT = runningJac, runningJac.T
+        #    vec_gateErrs = _np.dot( _np.linalg.inv(_np.dot(JT,J)), _np.dot(JT,runningY))
+        #    return vec_to_projdict(vec_gateErrs)
+    #raise ValueError("Not enough synthetic idle sequences to extract gauge-robust error rates.")
+
+    # J*vec_gateErrs = Y => U*s*Vt * vecErrRates = Y  => Vt*vecErrRates = s^{-1}*U^-1*Y
+    # where shapes are: U = (M,K), s = (K,K), Vt = (K,N),
+    #   so Uinv*Y = (K,) and s^{-1}*Uinv*Y = (K,), and rows of Vt specify the linear combos
+    #   corresponding to values in s^{-1}*Uinv*Y that are != 0
+    ret = {}
+    RANK_TOL = 1e-8; COEFF_TOL = 1e-1
+    U,s,Vt = _np.linalg.svd(runningJac)
+    rank = _np.count_nonzero(s > RANK_TOL)
+    vals = _np.dot( _np.diag(1.0/s[0:rank]), _np.dot(U[:,0:rank].conj().T, runningY))
+    gate_error_labels = [ "%s.%s" % (gl,errLbl) for gl in gateLabels for errLbl in error_labels ]
+    assert(len(gate_error_labels) == runningJac.shape[1])
+    for combo,val in zip(Vt[0:rank,:],vals):
+        combo_str = " + ".join([ "%.1f*%s" % (c,errLbl) for c,errLbl in zip(combo,gate_error_labels) if abs(c) > COEFF_TOL ])
+        ret[combo_str] = val
+    return ret
+    
 
 Robust_LogGTi_and_projections = _gsf.gatesetfn_factory(robust_logGTi_and_projections)
 # init args == (gatesetA, gatesetB, syntheticIdleStrs)
