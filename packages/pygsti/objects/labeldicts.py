@@ -137,9 +137,13 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         self._check_dim(value)
 
         if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
-            if self.parent is not None and value.parent is not self.parent:
-                value = value.copy()
-                value.set_gpindices(None, self.parent) # indices don't apply to us
+            if self.parent is not None and value.parent is not None and \
+               value.parent is not self.parent: # value's indices belong to another parent, so 
+                value = value.copy()  # copy value (so we don't mess up other parent) and
+                value.set_gpindices(None, self.parent) # mark that indices don't apply to us
+                # Note: if value has parent == None, then *don't* copy, since value may not
+                #  have had it's gpindices allocated yet and so *might* have "latent" gpindices
+                #  that do belong to our parent (self.parent)
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...
@@ -168,6 +172,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict,self).__setitem__(key, obj)
 
+            
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))

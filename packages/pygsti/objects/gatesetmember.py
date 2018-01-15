@@ -123,14 +123,18 @@ class GateSetMember(GateSetChild):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
+        #DEBUG def pp(x): return id(x) if (x is not None) else x
+        #DEBUG print(" >>> DB DEFAULT %d ALLOCATING: " % id(self), self.gpindices, " parents:", pp(self.parent), pp(parent))
         if self.gpindices is None or parent is not self.parent:
             #default behavior: assume num_params() works even with
             # gpindices == None and allocate all our parameters as "new"
             Np = self.num_params()
             self.set_gpindices( slice(startingIndex,
                                       startingIndex+Np), parent )
+            #print(" -- allocated %d indices" % Np)
             return Np
         else: #assume gpindices is good & everything's allocated already
+            #print(" -- no need to allocate anything")
             return 0
 
         
@@ -196,9 +200,20 @@ class GateSetMember(GateSetChild):
         gpindices_copy = None
         if isinstance(self.gpindices, slice):
             gpindices_copy = self.gpindices #slices are immutable
-        elif gateObj.gpindices is not None:
+        elif self.gpindices is not None:
             gpindices_copy = self.gpindices.copy() #arrays are not
-        gateObj.set_gpindices(gpindices_copy, parent)
+
+        #Call base class implementation here because
+        # "advanced" implementations containing sub-members assume that the
+        # gpindices has already been set and is just being updated (so it compares
+        # the "old" (existing) gpindices with the value being set).  Here,
+        # we just want to copy any existing gpindices from "self" to gateObj
+        # and *not* cause gateObj to shift any underlying indices (they'll
+        # be copied separately. -- FUTURE: make separate "update_gpindices" and
+        # "copy_gpindices" functions?
+        GateSetMember.set_gpindices(gateObj, gpindices_copy, parent)
+        #gateObj.set_gpindices(gpindices_copy, parent) #don't do this
+        
         return gateObj
 
     def __getstate__(self):

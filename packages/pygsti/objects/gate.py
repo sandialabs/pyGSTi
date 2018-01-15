@@ -3647,11 +3647,14 @@ class ComposedGate(GateMatrix):
         # parent's parameter array:
         tot_new_params = 0
         all_gpindices = []
+        #print(">>> DB COMPOSEDGATE %d allocating: " % id(self), [id(g) for g in self.factorgates]) #remove enumerate below too!
         for gate in self.factorgates:
             num_new_params = gate.allocate_gpindices( startingIndex, parent ) # *same* parent as this ComposedGate
             startingIndex += num_new_params
             tot_new_params += num_new_params
             all_gpindices.extend( gate.gpindices_as_array() )
+            #print("  sub-gate%d: %d new params: indices = %s" % (i,num_new_params, str(gate.gpindices)))
+        #print("<<< DB COMPOSEDGATE done allocating")
 
         _gatesetmember.GateSetMember.set_gpindices(
             self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
@@ -3676,11 +3679,11 @@ class ComposedGate(GateMatrix):
         None
         """
         #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = old_gpindices
+        my_old_gpindices = self.gpindices
         for gate in self.factorgates:
-            rel_gate_gpindices = _gatesetmember.decompose_gpindices(
+            rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
-            new_gate_gpindices = _gatesetmember.compose_gpindices(
+            new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
             gate.set_gpindices(new_gate_gpindices, parent)
             
@@ -3722,6 +3725,7 @@ class ComposedGate(GateMatrix):
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
             v[factorgate_local_inds] = gate.to_vector()
+        return v
 
 
     def from_vector(self, v):
@@ -3738,6 +3742,7 @@ class ComposedGate(GateMatrix):
         -------
         None
         """
+        assert(len(v) == self.num_params())
         for gate in self.factorgates:
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
@@ -3809,7 +3814,7 @@ class ComposedGate(GateMatrix):
         Gate
             A copy of this gate.
         """
-        return self._copy_gpindices( ComposedGate([gate.copy() for gate in self.factorgates]), parent )
+        return self._copy_gpindices( ComposedGate([gate.copy(parent) for gate in self.factorgates]), parent )
 
 
     def transform(self, S):
@@ -3999,9 +4004,9 @@ class ComposedGateMap(GateMap):
         #must set the gpindices of self.factorgates based on new
         my_old_gpindices = old_gpindices
         for gate in self.factorgates:
-            rel_gate_gpindices = _gatesetmember.decompose_gpindices(
+            rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
-            new_gate_gpindices = _gatesetmember.compose_gpindices(
+            new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
             gate.set_gpindices(new_gate_gpindices, parent)
             
@@ -4270,7 +4275,7 @@ class EmbeddedGateMap(GateMap):
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
         self.multipliers = _np.flipud( _np.cumprod([1] + list(
-            reversed(map(len,basisInds[:-1])))) )
+            reversed(list(map(len,basisInds[:-1]))))) )
 
         self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
           # for inserting target-qubit basis indices into list of noop-qubit indices
@@ -4461,6 +4466,7 @@ class EmbeddedGateMap(GateMap):
         -------
         None
         """
+        assert(len(v) == self.num_params())
         self.embedded_gate.from_vector(v)
         self.dirty = True
 
@@ -4639,9 +4645,10 @@ class EmbeddedGate(GateMatrix):
             the parent should mark as allocated parameter
             indices `startingIndex` to `startingIndex + new_new`).
         """
-        num_new_params = self.embedded_gate.allocate_gpindices(startingIndex, parent)
+        #print(">>> DB EmbeddedGate %d allocating: " % id(self), id(self.embedded_map.embedded_gate))
+        num_new_params = self.embedded_map.allocate_gpindices(startingIndex, parent)
         _gatesetmember.GateSetMember.set_gpindices(
-            self, self.embedded_gate.gpindices, parent)
+            self, self.embedded_map.gpindices, parent)
         return num_new_params
 
     
@@ -4663,7 +4670,7 @@ class EmbeddedGate(GateMatrix):
         None
         """
         #must set the gpindices of self.embedded_gate
-        self.embedded_gate.set_gpindices(gpindices, parent)
+        self.embedded_map.set_gpindices(gpindices, parent)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
 
@@ -4706,6 +4713,7 @@ class EmbeddedGate(GateMatrix):
         -------
         None
         """
+        assert(len(v) == self.num_params())
         self.embedded_map.from_vector(v)
         self._construct_matrix()
         assert(self.base.shape == (self.dim, self.dim))
@@ -4760,7 +4768,7 @@ class EmbeddedGate(GateMatrix):
         -------
         Gate
             A copy of this gate.
-        """
+        """        
         return self._copy_gpindices( EmbeddedGate(
             self.embedded_map.stateSpaceLabels,
             self.embedded_map.targetLabels,
