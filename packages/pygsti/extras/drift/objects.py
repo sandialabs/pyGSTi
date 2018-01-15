@@ -54,6 +54,7 @@ class DriftResults(object):
         self.pspepo_significance_threshold_classcompensation = None
         self.pspepo_drift_detected = None
         self.pspepo_reconstruction = None
+        self.pspepo_reconstruction_uncertainty = None
         self.pspepo_reconstruction_power_spectrum = None
         self.pspepo_reconstruction_powerpertimestep = None
         
@@ -108,7 +109,17 @@ class DriftResults(object):
         self.global_drift_frequencies = None
         self.global_reconstruction_power_spectrum = None
         self.global_reconstruction_powerpertimestep = None
+    
+    def any_drift_detect(self):
         
+        if self.drift_detected:
+            print("Statistical tests set at a global confidence level of: " + str(self.confidence)) 
+            print("Result: The 'no drift' hypothesis *is* rejected.")
+        else:
+            print("Statistical tests set at a global confidence level of: " + str(self.confidence))
+            print("Result: The 'no drift' hypothesis is *not* rejected.")
+    
+    
     def plot_power_spectrum(self, sequence_index='averaged', entity_index='averaged', 
                             outcome_index='averaged', threshold='default', figsize=(15,3), 
                             fix_ymax = False, savepath=None):
@@ -151,8 +162,10 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged
         if sequence == 'averaged' and entity == 'averaged':       
             spectrum = self.global_power_spectrum
-            threshold1test = self.global_significance_threshold
+            threshold1test = self.global_significance_threshold_1test
             thresholdclass = self.global_significance_threshold_classcompensation
+            # Compensates for any noise-free spectra that have been averaged into the global spectrum.
+            noiselevel = self.global_dof/(self.global_dof+self.global_dof_reduction)
             if threshold == 'default':
                 threshold='1test'
             title = 'Global power spectrum' + name_in_title2
@@ -161,8 +174,9 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged   
         elif sequence == 'averaged' and entity != 'averaged':       
             spectrum = self.pe_power_spectrum[entity,:]
-            threshold1test = self.pe_significance_threshold
+            threshold1test = self.pe_significance_threshold_1test
             thresholdclass = self.pe_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
             if self.number_of_sequences > 1:
@@ -179,8 +193,9 @@ class DriftResults(object):
         # Here outcome value is ignored, as, if either S or E is averaged, must have outcome-averaged   
         elif sequence != 'averaged' and entity == 'averaged':       
             spectrum = self.ps_power_spectrum[sequence,:]
-            threshold1test = self.ps_significance_threshold
+            threshold1test = self.ps_significance_threshold_1test
             thresholdclass = self.ps_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -199,8 +214,9 @@ class DriftResults(object):
         # outcome value is not ignored
         elif sequence != 'averaged' and entity != 'averaged' and outcome == 'averaged':       
             spectrum = self.pspe_power_spectrum[sequence,entity,:]
-            threshold1test = self.pspe_significance_threshold
+            threshold1test = self.pspe_significance_threshold_1test
             thresholdclass = self.pspe_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -214,8 +230,9 @@ class DriftResults(object):
         # outcome value is not ignored    
         elif sequence != 'averaged' and entity != 'averaged' and outcome != 'averaged':       
             spectrum = self.pspepo_power_spectrum[sequence,entity,outcome,:]
-            threshold1test = self.pspepo_significance_threshold
+            threshold1test = self.pspepo_significance_threshold_1test
             thresholdclass = self.pspepo_significance_threshold_classcompensation
+            noiselevel = 1.
             if threshold == 'default':
                 threshold='all'
                 
@@ -229,16 +246,18 @@ class DriftResults(object):
             xlabel = "Frequence (Hertz)"
         else:
             xlabel = "Frequence"
+            
+         
         
         _plt.plot(self.frequencies,spectrum,'b.-',label='Data power spectrum')
-        _plt.plot(self.frequencies,_np.ones(self.number_of_timesteps),'k--',label='Mean noise level')
+        _plt.plot(self.frequencies,noiselevel*_np.ones(self.number_of_timesteps),'c--',label='Mean noise level')
         
         if threshold == '1test' or threshold == 'all':  
-            _plt.plot(self.frequencies,threshold1test*_np.ones(self.number_of_timesteps),'c--', 
+            _plt.plot(self.frequencies,threshold1test*_np.ones(self.number_of_timesteps),'k--', 
                   label=str(self.confidence)+' confidence single-test significance threshold')
         
         if threshold == 'class' or threshold == 'all':  
-            _plt.plot(self.frequencies,thresholdclass*_np.ones(self.number_of_timesteps),'g--', 
+            _plt.plot(self.frequencies,thresholdclass*_np.ones(self.number_of_timesteps),'r--', 
                   label=str(self.confidence)+' confidence multi-test significance threshold')
         
         if fix_ymax:
@@ -269,12 +288,31 @@ class DriftResults(object):
             _plt.savefig(savepath)
         else:
             _plt.show()
+            
+    def plot_most_drifty_probability(self, errorbars=True, plot_data=False, pt=None, figsize=(15,3), 
+                                     savepath=None, loc=None):
+        
+        if self.multitest_compensation == 'none':
+            ws = "Warning: multi-tests compensation is 'none'. This means that if there are many sequences it is likely"
+            ws += " that some of them will have non-trivial estimates for the time-dependent probability!"
+            print(ws)
+        
+        # Find the (sequence,entity,outcome) index with the most power in the reconstruction. This is
+        # not necessarily the index with the largest max power in the data spectrum.
+        most_drift_index = _np.unravel_index(_np.argmax(self.pspepo_reconstruction_powerpertimestep), 
+                                             _np.shape(self.pspepo_reconstruction_powerpertimestep))
+        
+        self.plot_estimated_probability(most_drift_index[0], most_drift_index[1], most_drift_index[2],
+                                        errorbars=errorbars,
+                                        plot_data=plot_data, target_value=None,pt=pt, figsize=figsize, 
+                                        savepath=savepath, loc=loc)
+        
    
-    def plot_estimated_probability(self, sequence_index, entity_index=0, outcome_index=0, plot_data=True, 
-                                   pt=None, figsize=(15,3), savepath=None):
+    def plot_estimated_probability(self, sequence_index, entity_index=0, outcome_index=0, errorbars=True,
+                                   plot_data=False, target_value=None, pt=None, figsize=(15,3), savepath=None, 
+                                   loc=None):
         
-        
-        sequence = sequence_index
+        sequence = sequence_index       
         entity = entity_index
         outcome = outcome_index
         
@@ -296,30 +334,138 @@ class DriftResults(object):
             sequence_label = str(self.indices_to_sequences[sequence])
         else:
             sequence_label = str(sequence)
- 
+
         if self.outcomes is not None:
             outcome_label = str(self.outcomes[outcome])
         else:
             outcome_label = str(outcome)
         
         if plot_data:
-            _plt.plot(times,self.data[sequence,entity,outcome,:]/self.number_of_counts,'b.',label='Data')
+            label = 'Data'
+            _plt.plot(times,self.data[sequence,entity,outcome,:]/self.number_of_counts,'.',label=label)
         
-        _plt.plot(times,self.pspepo_reconstruction[sequence,entity,outcome,:],'r-',label='Estimated $p(t)$')
+        p = self.pspepo_reconstruction[sequence,entity,outcome,:]
+        error = self.pspepo_reconstruction_uncertainty[sequence,entity,outcome]
+        upper = p+error
+        lower = p-error
+        upper[upper > 1.] = 1.
+        lower[lower < 0.] = 0.
+            
+        _plt.plot(times,p,'r-',label='Estimated $p(t)$')
+        
+        if errorbars:
+            _plt.fill_between(times, upper, lower, alpha=0.2, color='r')
         
         if pt is not None:
-            _plt.plot(times,pt,'c--',label='True p(t)')
-                
-        _plt.legend()
+            _plt.plot(times,pt,'c--',label='True $p(t)$')
+        
+        if target_value is not None:
+            _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',label='Target value')
+        
+        if loc is not None:
+            _plt.legend(loc=loc)
+        else:
+            _plt.legend()
+            
         _plt.xlim(0,_np.max(times))
         _plt.ylim(0,1)
         
         if self.number_of_entities > 1:
             title = "Estimated probability for sequence " + sequence_label + ", entity "
-            title += str(entity) + "and outcome " + outcome_label
+            title += str(entity) + " and outcome " + outcome_label
         else:
             title = "Estimated probability for sequence " + sequence_label + " and outcome " + outcome_label
+ 
+        _plt.title(title,fontsize=17)
+        _plt.xlabel(xlabel,fontsize=15)
+        _plt.ylabel("Probability",fontsize=15)
         
+        if savepath is not None:
+            _plt.savefig(savepath)
+        else:
+            _plt.show()
+
+            
+    def plot_multi_estimated_probabilities(self, sequence_index_list, entity_index=0, outcome_index=0, errorbars=True,
+                                   target_value=None, figsize=(15,3), savepath=None, 
+                                   loc=None, usr_labels=None, usr_title=None, xlim=None):
+                
+        entity = entity_index
+        outcome = outcome_index
+        
+        try:
+            import matplotlib.pyplot as _plt
+        except ImportError:
+            raise ValueError("plot_power_spectrum(...) requires you to install matplotlib")
+
+        _plt.figure(figsize=figsize)
+        
+        if self.timestep is not None:
+            times = self.timestep*_np.arange(0,self.number_of_timesteps)
+            xlabel = 'Time (seconds)'
+        else:
+            times = _np.arange(0,self.number_of_timesteps)
+            xlabel = 'Time (timesteps)'
+        
+        sequence_label = {}
+        for sequence in sequence_index_list:
+            if self.indices_to_sequences is not None:
+                sequence_label[sequence] = str(self.indices_to_sequences[sequence])
+            else:
+                sequence_label[sequence] = str(sequence)
+
+        if self.outcomes is not None:
+            outcome_label = str(self.outcomes[outcome])
+        else:
+            outcome_label = str(outcome)
+        
+        num_curves = len(sequence_index_list)
+        c = _np.linspace(0,1,num_curves)
+        i = 0
+        
+        for i in range(0,num_curves):
+            sequence = sequence_index_list[i]
+            p = self.pspepo_reconstruction[sequence,entity,outcome,:]
+            error = self.pspepo_reconstruction_uncertainty[sequence,entity,outcome]
+            upper = p+error
+            lower = p-error
+            upper[upper > 1.] = 1.
+            lower[lower < 0.] = 0.
+            
+            if errorbars:
+                _plt.fill_between(times, upper, lower, alpha=0.2, color=_plt.cm.RdYlBu(c[i]))
+                
+            label = 'Estimated $p(t)$ for sequence '+sequence_label[sequence]
+            if usr_labels is not None:
+                label = usr_labels[i]
+                
+            _plt.plot(times,p,'-',lw=2,label=label, color=_plt.cm.RdYlBu(c[i]))
+            
+        
+        if target_value is not None:
+            _plt.plot(times,target_value*_np.ones(self.number_of_timesteps),'k--',lw=2,label='Target value')
+        
+        if loc is not None:
+            _plt.legend(loc=loc)
+        else:
+            _plt.legend()
+        
+        if xlim == None:
+            _plt.xlim(0,_np.max(times))
+        else:
+            _plt.xlim(xlim)
+        _plt.ylim(0,1)
+        
+        if self.number_of_entities > 1:
+            title = "Estimated probability for entity "
+            title += str(entity) + " and outcome " + outcome_label
+
+        else:
+            title = "Estimated probability outcome " + outcome_label
+            
+        if usr_title is not None:
+            title = usr_title
+            
         _plt.title(title,fontsize=17)
         _plt.xlabel(xlabel,fontsize=15)
         _plt.ylabel("Probability",fontsize=15)
