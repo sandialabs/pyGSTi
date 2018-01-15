@@ -745,7 +745,7 @@ class ErrgenTable(WorkspaceTable):
         as their projections onto spaces of standard generators """
     def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
                  display=("errgen","H","S","A"), display_as="boxes",
-                 genType="logGTi"):
+                 genType="logGTi", gaugeRobust=False):
                  
         """
         Create a table listing the error generators obtained by
@@ -776,17 +776,24 @@ class ErrgenTable(WorkspaceTable):
             - "logG-logT" : errgen = log(gate) - log(target_gate)
             - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
             - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
+
+        gaugeRobust : bool, optional
+            Whether to use an experimental procedure for extracting
+            error generator projections using only "sythethic idle"
+            gates, which should be more robust to slight errors in
+            gauge choice.
         
+
         Returns
         -------
         ReportTable
         """
         super(ErrgenTable,self).__init__(ws, self._create, gateset,
                                          targetGateset, confidenceRegionInfo,
-                                         display, display_as, genType)
+                                         display, display_as, genType, gaugeRobust)
     
     def _create(self, gateset, targetGateset, 
-                confidenceRegionInfo, display, display_as, genType):
+                confidenceRegionInfo, display, display_as, genType, gaugeRobust):
     
         gateLabels  = list(gateset.gates.keys())  # gate labels
         basis = gateset.basis
@@ -835,20 +842,48 @@ class ErrgenTable(WorkspaceTable):
             M = max(M, ABS_THRESHOLD) 
             if not getMinMax(max_lst,M):
                 max_lst.append(M)
+
+        #Experimental "gauge-robust" method
+        if gaugeRobust:
+            assert(genType == "logGTi"), "Only `genType == \"logGTI\"` is supported when `gaugeRobust` is True"
+            syntheticIdleStrs = []
+            
+            ## Construct synthetic idles
+            maxPower = 10; maxLen = 6; Id = _np.identity(targetGateset.dim,'d')
+            #baseStrs = _cnst.list_all_gatestrings_without_powers_and_cycles(list(gateset.gates.keys()), maxLen)
+            baseStrs = gaugeRobust; gaugeRobust = True #DEBUG
+            for s in baseStrs:
+                for i in range(1,maxPower):
+                    if len(s**i) > 1 and _np.linalg.norm(targetGateset.product( s**i ) - Id) < 1e-6:
+                        syntheticIdleStrs.append( s**i ); break
+            #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+            print("Using synthetic idles: \n",'\n'.join([str(gstr) for gstr in syntheticIdleStrs]))
+
+            gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(
+                gateset, targetGateset, syntheticIdleStrs), confidenceRegionInfo)
+            
     
         #Do computation, so shared color scales can be computed
         for gl in gateLabels:
-            if genType == "logG-logT":
-                info = _ev(_reportables.LogGmlogT_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
-            elif genType == "logTiG":
-                info = _ev(_reportables.LogTiG_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
-            elif genType == "logGTi":
-                info = _ev(_reportables.LogGTi_and_projections(
-                    gateset, targetGateset, gl), confidenceRegionInfo)
-            else: raise ValueError("Invalid generator type: %s" % genType)
-            errgenAndProjs[gl] = info
+            if gaugeRobust == False:
+                if genType == "logG-logT":
+                    info = _ev(_reportables.LogGmlogT_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                elif genType == "logTiG":
+                    info = _ev(_reportables.LogTiG_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                elif genType == "logGTi":
+                    info = _ev(_reportables.LogGTi_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                else: raise ValueError("Invalid generator type: %s" % genType)
+                errgenAndProjs[gl] = info
+            else:
+                #Transfer from gaugeRobust_info
+                info = {'error generator': gaugeRobust_info['%s error generator' % gl]}
+                for ptype in ('hamiltonian','stochastic','affine'):
+                    info['%s projections' % ptype] = gaugeRobust_info['%s %s projections' % (gl,ptype)]
+                    info['%s projections power' % ptype] = gaugeRobust_info['%s %s projections power' % (gl,ptype)]
+                errgenAndProjs[gl] = info
             
             errgen = info['error generator'].get_value()
             absMax = _np.max(_np.abs(errgen))
@@ -933,7 +968,224 @@ class ErrgenTable(WorkspaceTable):
     
         table.finish()
         return table
+
+
+class GaugeRobustErrgenTable(WorkspaceTable):
+    """ Table displaying the first-order gauge invariant ("gauge robust") 
+        linear combinations of standard error generator coefficients for
+        the gates in a gate set.
+    """
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+                 genType="logGTi"):
+                 
+        """
+        Create a table listing the first-order gauge invariant ("gauge robust") 
+        linear combinations of standard error generator coefficients for
+        the gates in `gateset`.  This table identifies, through the use of
+        "synthetic idle tomography", which combinations of standard-error-
+        generator coefficients are robust (to first-order) to gauge variations.
     
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The gate sets to compare
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+    
+        genType : {"logG-logT", "logTiG", "logGTi"}
+            The type of error generator to compute.  Allowed values are:
+            
+            - "logG-logT" : errgen = log(gate) - log(target_gate)
+            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )        
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(ErrgenTable,self).__init__(ws, self._create, gateset,
+                                         targetGateset, confidenceRegionInfo,
+                                         display, display_as, genType, gaugeRobust)
+    
+    def _create(self, gateset, targetGateset, 
+                confidenceRegionInfo, display, display_as, genType, gaugeRobust):
+    
+        gateLabels  = list(gateset.gates.keys())  # gate labels
+        basis = gateset.basis
+        basisPrefix = ""
+        if basis.name == "pp": basisPrefix = "Pauli "
+        elif basis.name == "qt": basisPrefix = "Qutrit "
+        elif basis.name == "gm": basisPrefix = "GM "
+        elif basis.name == "std": basisPrefix = "Mx unit "
+        
+        colHeadings = ['Gate']
+
+        for disp in display:
+            if disp == "errgen":
+                colHeadings.append('Error Generator')
+            elif disp == "H":
+                colHeadings.append('%sHamiltonian Projections' % basisPrefix)
+            elif disp == "S":
+                colHeadings.append('%sStochastic Projections' % basisPrefix)
+            elif disp == "A":
+                colHeadings.append('%sAffine Projections' % basisPrefix)
+            else: raise ValueError("Invalid display element: %s" % disp)
+
+        assert(display_as == "boxes" or display_as == "numbers")
+        table = _ReportTable(colHeadings, (None,)*len(colHeadings),
+                             confidenceRegionInfo=confidenceRegionInfo)
+
+        errgenAndProjs = { }
+        errgensM = []
+        hamProjsM = []
+        stoProjsM = []
+        affProjsM = []
+
+        def getMinMax(max_lst, M):
+            """return a [min,max] already in list if there's one within an
+               order of magnitude"""
+            M = max(M, ABS_THRESHOLD) 
+            for mx in max_lst:
+                if (abs(M) >= 1e-6 and 0.9999 < mx/M < 10) or (abs(mx)<1e-6 and abs(M)<1e-6):
+                    return -mx,mx
+            return None
+
+        ABS_THRESHOLD = 1e-6 #don't let color scales run from 0 to 0: at least this much!
+        def addMax(max_lst, M):
+            """add `M` to a list of maximas if it's different enough from
+               existing elements"""
+            M = max(M, ABS_THRESHOLD) 
+            if not getMinMax(max_lst,M):
+                max_lst.append(M)
+
+        #Experimental "gauge-robust" method
+        if gaugeRobust:
+            assert(genType == "logGTi"), "Only `genType == \"logGTI\"` is supported when `gaugeRobust` is True"
+            syntheticIdleStrs = []
+            
+            ## Construct synthetic idles
+            maxPower = 10; maxLen = 6; Id = _np.identity(targetGateset.dim,'d')
+            #baseStrs = _cnst.list_all_gatestrings_without_powers_and_cycles(list(gateset.gates.keys()), maxLen)
+            baseStrs = gaugeRobust; gaugeRobust = True #DEBUG
+            for s in baseStrs:
+                for i in range(1,maxPower):
+                    if len(s**i) > 1 and _np.linalg.norm(targetGateset.product( s**i ) - Id) < 1e-6:
+                        syntheticIdleStrs.append( s**i ); break
+            #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+            print("Using synthetic idles: \n",'\n'.join([str(gstr) for gstr in syntheticIdleStrs]))
+
+            gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(
+                gateset, targetGateset, syntheticIdleStrs), confidenceRegionInfo)
+            
+    
+        #Do computation, so shared color scales can be computed
+        for gl in gateLabels:
+            if gaugeRobust == False:
+                if genType == "logG-logT":
+                    info = _ev(_reportables.LogGmlogT_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                elif genType == "logTiG":
+                    info = _ev(_reportables.LogTiG_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                elif genType == "logGTi":
+                    info = _ev(_reportables.LogGTi_and_projections(
+                        gateset, targetGateset, gl), confidenceRegionInfo)
+                else: raise ValueError("Invalid generator type: %s" % genType)
+                errgenAndProjs[gl] = info
+            else:
+                #Transfer from gaugeRobust_info
+                info = {'error generator': gaugeRobust_info['%s error generator' % gl]}
+                for ptype in ('hamiltonian','stochastic','affine'):
+                    info['%s projections' % ptype] = gaugeRobust_info['%s %s projections' % (gl,ptype)]
+                    info['%s projections power' % ptype] = gaugeRobust_info['%s %s projections power' % (gl,ptype)]
+                errgenAndProjs[gl] = info
+            
+            errgen = info['error generator'].get_value()
+            absMax = _np.max(_np.abs(errgen))
+            addMax(errgensM, absMax)
+
+            if "H" in display:
+                absMax = _np.max(_np.abs(info['hamiltonian projections'].get_value()))
+                addMax(hamProjsM, absMax)
+
+            if "S" in display:
+                absMax = _np.max(_np.abs(info['stochastic projections'].get_value()))
+                addMax(stoProjsM, absMax)
+
+            if "A" in display:
+                absMax = _np.max(_np.abs(info['affine projections'].get_value()))
+                addMax(affProjsM, absMax)
+
+                
+        #Do plotting
+        for gl in gateLabels:
+            row_data = [gl]
+            row_formatters = [None]
+            info = errgenAndProjs[gl]
+            
+            for disp in display:
+                if disp == "errgen":
+                    if display_as == "boxes":
+                        errgen, EB = info['error generator'].get_value_and_err_bar()
+                        m,M = getMinMax(errgensM, _np.max(_np.abs(errgen)))
+                        errgen_fig =  _wp.GateMatrixPlot(self.ws, errgen, m,M,
+                                                         basis, EBmatrix=EB)
+                        row_data.append(errgen_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(info['error generator'])
+                        row_formatters.append('Brackets')
+
+                elif disp == "H":
+                    if display_as == "boxes":
+                        T = "Power %.2g" % info['hamiltonian projection power'].get_value()
+                        hamProjs, EB = info['hamiltonian projections'].get_value_and_err_bar()
+                        m,M = getMinMax(hamProjsM,_np.max(_np.abs(hamProjs)))
+                        hamdecomp_fig = _wp.ProjectionsBoxPlot(
+                            self.ws, hamProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                        row_data.append(hamdecomp_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(info['hamiltonian projections'])
+                        row_formatters.append('Brackets')
+
+
+                elif disp == "S":
+                    if display_as == "boxes":
+                        T = "Power %.2g" % info['stochastic projection power'].get_value()
+                        stoProjs, EB = info['stochastic projections'].get_value_and_err_bar()
+                        m,M = getMinMax(stoProjsM,_np.max(_np.abs(stoProjs)))
+                        stodecomp_fig = _wp.ProjectionsBoxPlot(
+                            self.ws, stoProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                        row_data.append(stodecomp_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(info['stochastic projections'])
+                        row_formatters.append('Brackets')
+
+                elif disp == "A":
+                    if display_as == "boxes":
+                        T = "Power %.2g" % info['affine projection power'].get_value()
+                        affProjs, EB = info['affine projections'].get_value_and_err_bar()
+                        m,M = getMinMax(affProjsM,_np.max(_np.abs(affProjs)))
+                        affdecomp_fig = _wp.ProjectionsBoxPlot(
+                            self.ws, affProjs, basis.name, m, M,
+                            boxLabels=True, EBmatrix=EB, title=T) # basis.name because projector dim is not the same as gate dim
+                        row_data.append(affdecomp_fig)
+                        row_formatters.append('Figure')
+                    else:
+                        row_data.append(info['affine projections'])
+                        row_formatters.append('Brackets')
+
+            table.addrow(row_data, row_formatters)
+    
+        table.finish()
+        return table
+
     
     
 class old_RotationAxisVsTargetTable(WorkspaceTable):

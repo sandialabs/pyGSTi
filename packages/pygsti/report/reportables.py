@@ -859,6 +859,130 @@ def logGmlogT_and_projections(A, B, mxBasis):
 LogGmlogT_and_projections = _gsf.gatesfn_factory(logGmlogT_and_projections)
 # init args == (gateset1, gateset2, gateLabel)
 
+def robust_logGTi_and_projections(gatesetA, gatesetB, syntheticIdleStrs):
+    """
+    Projections of `log(A*B^{-1})` using a gauge-robust technique.
+    Returns a dictionary of quantities with keys '*G* error generator',
+    '*G* *X* projections', and '*G* *X* projection power',
+    where *G* is a gate label and *X* is 'hamiltonian', 'stochastic', and
+    'affine'.
+    """
+    ret = {}
+    mxBasis = gatesetB.basis #target gateset is more likely to have a valid basis
+    Id = _np.identity(gatesetA.dim, 'd')
+    gateLabels = [gl for gl,gate in gatesetB.gates.items() if not _np.allclose(gate, Id)]
+    idLabels = [gl for gl,gate in gatesetB.gates.items() if _np.allclose(gate, Id)]
+    nGates = len(gateLabels)
+    
+    error_superops = []; ptype_counts = {}; ptype_scaleFctrs = {}
+    for ptype in ("hamiltonian","stochastic","affine"):
+        lindbladMxs = _tools.std_error_generators(gatesetA.dim, ptype,
+                                                  mxBasis.name) # in std basis
+        lindbladMxs = lindbladMxs[1:] #skip [0] == Identity
+        scaleFctr = _tools.std_scale_factor(gatesetA.dim, ptype)
+        #if ptype == "hamiltonian": scaleFctr *= 2.0 #HACK (DEAL LATER)
+        #if ptype == "affine": scaleFctr *= 0.5 #HACK
+        ptype_counts[ptype] = len(lindbladMxs)
+        ptype_scaleFctrs[ptype] = scaleFctr #UNUSED?
+        error_superops.extend( [ _tools.change_basis(eg,"std",mxBasis) for eg in lindbladMxs ] ) 
+    nSuperOps = len(error_superops)
+
+    #DEBUG
+    #print("DB: %d gates (%s)" % (nGates, str(gateLabels)))
+    #print("DB: %d superops; counts = " % nSuperOps, ptype_counts)
+    #print("DB: factors = ",ptype_scaleFctrs)
+    #for i,x in enumerate(error_superops):
+    #    print("DB: Superop vec[%d] norm = %g" % (i,_np.linalg.norm(x)))
+    #    print("DB: Choi Superop[%d] = " % i)
+    #    _tools.print_mx(_tools.jamiolkowski_iso(x, mxBasis, mxBasis), width=4, prec=1)
+    #    print("")
+
+
+    def get_projection_vec(errgen):
+        proj = []
+        for ptype in ("hamiltonian","stochastic","affine"):
+            proj.append( _tools.std_errgen_projections( 
+                errgen,ptype,mxBasis.name,mxBasis) )
+        return _np.concatenate( proj )
+
+    def vec_to_projdict(vec):
+        ret = {}
+        off = 0 #current offset into vec
+        for gl in gatesetA.gates.keys():
+            ret['%s error generator' % gl] = _np.zeros((gatesetA.dim,gatesetA.dim),'d') # TODO: something here (just a placeholder now)
+            if gl in gateLabels: # a non-identity gate
+                for ptype in ("hamiltonian","stochastic","affine"):
+                    ret['%s %s projections' % (gl, ptype)] = vec[off:off+ptype_counts[ptype]]
+                    ret['%s %s projections power' % (gl, ptype)] = 0 # TODO - use scale factor... vec[off:off+ptype_counts[ptype]]
+            else: # an identity gate - just put in zeros of now
+                for ptype in ("hamiltonian","stochastic","affine"):
+                    ret['%s %s projections' % (gl, ptype)] = _np.zeros(ptype_counts[ptype], 'd')
+                    ret['%s %s projections power' % (gl, ptype)] = 0
+                
+        return ret
+    
+    def firstOrderNoise( gstr, errSupOp, glWithErr ):
+        noise = _np.zeros((gatesetB.dim,gatesetB.dim), 'd')
+        for n,gl in enumerate(gstr):
+            if gl == glWithErr:
+                noise += _np.dot( gatesetB.product(gstr[n+1:]),
+                                  _np.dot(errSupOp, gatesetB.product(gstr[:n+1])) )
+        #DEBUG
+        #print("first order noise (%s,%s) Choi superop : " % (str(gstr),glWithErr))
+        #_tools.print_mx( _tools.jamiolkowski_iso(noise, mxBasis, mxBasis) ,width=4,prec=1)
+        
+        return noise #_tools.jamiolkowski_iso(noise, mxBasis, mxBasis)
+
+    def errorGeneratorJacobian(gstr):
+        jac = _np.empty( (nSuperOps, nSuperOps*nGates), 'complex') #should be real, but we'll check
+
+        for i,gl in enumerate(gateLabels):
+            for k,errOnGate in enumerate(error_superops):
+                noise = firstOrderNoise( gstr, errOnGate, gl)
+                jac[:,i*nSuperOps+k] = [ _np.vdot(errOut.flatten(), noise.flatten()) for errOut in error_superops]
+
+                #DEBUG CHECK
+                check = [ _np.trace( _np.dot(
+                    _tools.jamiolkowski_iso(errOut, mxBasis, mxBasis).conj().T,
+                    _tools.jamiolkowski_iso(noise, mxBasis, mxBasis) ))*4 #for 1-qubit...
+                          for errOut in error_superops]
+                assert(_np.allclose( jac[:,i*nSuperOps+k], check))
+
+        assert( _np.linalg.norm(jac.imag) < 1e-6 ), "error generator jacobian should be real!"
+        return jac.real
+
+    runningJac = None; runningY = None
+    for s in syntheticIdleStrs:
+        Sa = gatesetA.product(s)
+        Sb = gatesetB.product(s)
+        assert( _np.linalg.norm(Sb - _np.identity(gatesetB.dim,'d')) < 1e-6), \
+            "Synthetic idle %s is not an idle!!" % str(s)
+        SIerrgen = _tools.error_generator(Sa, Sb, mxBasis, "logGTi")
+        SIproj = get_projection_vec(SIerrgen)
+        jacSI = errorGeneratorJacobian(s)
+        #print("DB jacobian for %s = \n" % str(s)); _tools.print_mx(jacSI, width=4, prec=1) #DEBUG
+        if runningJac is None:
+            runningJac = jacSI
+            runningY = SIproj
+        else:
+            runningJac = _np.concatenate((runningJac,jacSI), axis=0)
+            runningY = _np.concatenate( (runningY,SIproj), axis=0)
+            
+        rank = _np.linalg.matrix_rank(runningJac)
+
+        print("DB: Added synthetic idle %s => rank=%d <?> %d (shape=%s)" % (str(s),rank,nSuperOps*nGates,str(runningJac.shape)))
+        
+        if rank >= nSuperOps*nGates: #then we can extract error terms for the gates
+            # J*vec_gateErrs = Y => vec_gateErrs = (J^T*J)^-1 J^T*Y (lin least squares)
+            J,JT = runningJac, runningJac.T
+            vec_gateErrs = _np.dot( _np.linalg.inv(_np.dot(JT,J)), _np.dot(JT,runningY))
+            return vec_to_projdict(vec_gateErrs)
+            
+    raise ValueError("Not enough synthetic idle sequences to extract gauge-robust error rates.")
+
+Robust_LogGTi_and_projections = _gsf.gatesetfn_factory(robust_logGTi_and_projections)
+# init args == (gatesetA, gatesetB, syntheticIdleStrs)
+
 
 
 def general_decomposition(gatesetA, gatesetB):

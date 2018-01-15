@@ -3654,7 +3654,7 @@ class ComposedGate(GateMatrix):
             all_gpindices.extend( gate.gpindices_as_array() )
 
         _gatesetmember.GateSetMember.set_gpindices(
-            self, _slct.list_to_slice(all_gpindices array_ok=True), parent)
+            self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
         return tot_new_params
 
     
@@ -3975,7 +3975,7 @@ class ComposedGateMap(GateMap):
             all_gpindices.extend( gate.gpindices_as_array() )
 
         _gatesetmember.GateSetMember.set_gpindices(
-            self, _slct.list_to_slice(all_gpindices array_ok=True), parent)
+            self, _slct.list_to_slice(all_gpindices, array_ok=True), parent)
         return tot_new_params
 
     
