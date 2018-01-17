@@ -23,6 +23,7 @@ from ..tools import compattools as _compat
 from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 
+from . import gatesetmember as _gm
 from . import gate as _gate
 from . import spamvec as _sv
 from . import povm as _povm
@@ -585,15 +586,19 @@ class GateSet(object):
         v = self._paramvec; Np = self.num_params()
         off = 0; shift = 0
 
-        #ellist = ", ".join(list(self.preps.keys()) +list(self.effects.keys()) +list(self.gates.keys()))
+        #ellist = ", ".join(list(self.preps.keys()) +list(self.povms.keys()) +list(self.gates.keys()))
         #print("DEBUG: rebuilding... %s" % ellist)
         
         #Step 1: remove any unused indices from paramvec and shift accordingly
         used_gpindices = set()
         for _,obj in self.iter_objs():
-            assert(obj.parent is self), "Member's parent is not set correctly!"
             if obj.gpindices is not None:
+                assert(obj.parent is self), "Member's parent is not set correctly!"
                 used_gpindices.update( obj.gpindices_as_array() )
+            else:
+                assert(obj.parent is self or obj.parent is None)
+                #Note: ok for objects to have parent == None if their gpindices is also None
+
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
 
         if len(indices_to_remove) > 0:
@@ -622,17 +627,26 @@ class GateSet(object):
                 else:
                     obj.set_gpindices(gpindices+shift, self)  #works for integer arrays
 
-            if obj.gpindices is None:
+            if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
-                v = _np.insert(v, off, obj.to_vector())
-                obj.set_gpindices( slice(off, off+obj.num_params()), self )
-                shift += obj.num_params()
-                off += obj.num_params()
-                #print("DEBUG: %s: inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
+                num_new_params = obj.allocate_gpindices( off, self )
+                objvec = obj.to_vector() #may include more than "new" indices
+                new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
+                assert(len(objvec[new_local_inds]) == num_new_params)
+                v = _np.insert(v, off, objvec[new_local_inds])
+                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices," loc=",new_local_inds)
+                
+                #obj.set_gpindices( slice(off, off+obj.num_params()), self )
+                #shift += obj.num_params()
+                #off += obj.num_params()
+
+                shift += num_new_params
+                off += num_new_params
+                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " % (lbl,obj.num_params()), obj.gpindices, " off=",off)
             else:
                 inds = obj.gpindices_as_array()
                 M = max(inds) if len(inds)>0 else -1; L = len(v)
-                #print("DEBUG: %s: existing indices = " % (lbl), obj.gpindices, " M=",M)
+                #print("DEBUG: %s: existing indices = " % (lbl), obj.gpindices, " M=",M," L=",L)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
                     w = obj.to_vector()

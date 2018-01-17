@@ -137,9 +137,21 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         self._check_dim(value)
 
         if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
-            if self.parent is not None and value.parent is not self.parent:
-                value = value.copy()
-                value.set_gpindices(None, self.parent) # indices don't apply to us
+            #When self has a valid parent (as it usually does, except when first initializing)
+            # we copy and reset the gpindices & parent of GateSetMember values which either:
+            # 1) belong to a different parent (indices would be inapplicable if the exist)
+            # 2) have indices but no parent (indices are inapplicable to us)
+            # Note that we don't copy and reset the case when a value's parent and gpindices
+            #  are both None, as gpindices==None indicates that the value may not have had
+            #  its gpindices allocated yet and so *might* have "latent" gpindices that do
+            #  belong to our parent (self.parent) (and copying a value will reset all
+            #  the parents to None).
+            wrongParent = (value.parent is not None) and (value.parent is not self.parent)
+            inappInds = (value.parent is None) and (value.gpindices is not None)
+            
+            if self.parent is not None and (wrongParent or inappInds):
+                value = value.copy()  # copy value (so we don't mess up other parent) and
+                value.set_gpindices(None, self.parent) # erase gindices don't apply to us
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...
@@ -168,6 +180,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict,self).__setitem__(key, obj)
 
+            
         #rebuild GateSet's parameter vector (params may need to be added)
         if self.parent is not None:
             #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))

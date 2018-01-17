@@ -16,6 +16,8 @@ import collections as _collections
 
 from numpy.linalg import inv as _inv
 import numpy as _np
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 
 import math
 
@@ -61,7 +63,7 @@ class Basis(object):
     DefaultInfo = dict()
     CustomCount = 0 # The number of custom bases, used for serialized naming
 
-    def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, labels=None):
+    def __init__(self, name=None, dim=None, matrices=None, longname=None, real=None, labels=None, sparse=False):
         '''
         Initialize a basis object.
 
@@ -89,15 +91,20 @@ class Basis(object):
 
         labels : list of strings
             Labels for the basis matrices (i.e. I, X, Y, Z for the Pauli 2x2 basis)
+
+        sparse : bool, optional
+            Whether the basis matrices should be stored as SciPy CSR sparse matrices
+            or dense numpy arrays (the default).
         '''
-        self.name, self._blockMatrices = _build_block_matrices(name, dim, matrices)
+        self.name, self._blockMatrices, self.sparse = _build_block_matrices(name, dim, matrices, sparse)
         self._matrices = self.get_composite_matrices() # Equivalent to matrices for non-composite bases
 
-        for block in self._blockMatrices:
-            for mx in block:
+        if not self.sparse: # sparse matrices don't have a writeable flag
+            for block in self._blockMatrices:
+                for mx in block:
+                    mx.flags.writeable = False
+            for mx in self._matrices:
                 mx.flags.writeable = False
-        for mx in self._matrices:
-            mx.flags.writeable = False
 
         def get_info(attr, default):
             """ Shorthand for retrieving a default value from the
@@ -134,7 +141,7 @@ class Basis(object):
 
     def copy(self):
         """Make a copy of this Basis object."""
-        return Basis(self, longname=self.longname, real=self.real, labels=self.labels)
+        return Basis(self, longname=self.longname, real=self.real, labels=self.labels, sparse=self.sparse)
 
     def __str__(self):
         return '{} Basis : {}'.format(self.longname, ', '.join(self.labels))
@@ -146,10 +153,21 @@ class Basis(object):
         return len(self._matrices)
 
     def __eq__(self, other):
-        if isinstance(other, Basis):
-            return _np.array_equal(self._matrices, other._matrices)
+        otherIsBasis = isinstance(other, Basis)
+        if otherIsBasis and (self.sparse != other.sparse):
+            return False
+        
+        if self.sparse:
+            if otherIsBasis:
+                return any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
+            else:
+                return any([ (A!=B).nnz for A,B in zip(self._matrices, other)])
         else:
-            return _np.array_equal(self._matrices, other)
+            if otherIsBasis:
+                return _np.array_equal(self._matrices, other._matrices)
+            else:
+                return _np.array_equal(self._matrices, other)
+
 
     def __hash__(self):
         return hash((self.name, self.dim))
@@ -167,9 +185,20 @@ class Basis(object):
         -------
         matrix to transform from this basis to another
         '''
-        to_basis = Basis(to_basis, self.dim.blockDims)
-        return _np.dot(to_basis.get_from_std(), self.get_to_std())
+        #Note: construct to_basis as sparse this basis is sparse and
+        # if to_basis is not already a Basis object
+        to_basis = Basis(to_basis, self.dim.blockDims, sparse=self.sparse)
 
+        #Note same logic as matrixtools.safedot(...)
+        if to_basis.sparse: 
+            return to_basis.get_from_std().dot(self.get_to_std())
+        elif self.sparse:
+            #return _sps.csr_matrix(to_basis.get_from_std()).dot(self.get_to_std())
+            return _np.dot(to_basis.get_from_std(), self.get_to_std().toarray())
+        else:
+            return _np.dot(to_basis.get_from_std(), self.get_to_std())
+
+        
     def get_sub_basis_matrices(self, index):
         '''
         Retrieve a list of matrices by index 
@@ -212,19 +241,33 @@ class Basis(object):
 
         Returns
         -------
-        numpy array
-            array of matrices, shape == (nMatrices, d, d) where
-            d is the composite matrix dimension.
+        numpy array or list of SciPy CSR matrices
+            For a dense basis (`basis.sparse == False`), an array of matrices,
+            shape == (nMatrices, d, d) where d is the composite matrix
+            dimension.  For a sparse basis, a list of SciPy CSR matrices.
         '''
         nMxs = sum([len(mxs) for mxs in self._blockMatrices])
         length  = sum(mxs[0].shape[0] for mxs in self._blockMatrices)
-        compMxs = _np.zeros( (nMxs, length, length), 'complex')
+        if self.sparse:
+            compMxs = []
+        else:
+            compMxs = _np.zeros( (nMxs, length, length), 'complex')
         i, start   = 0, 0
 
         for mxs in self._blockMatrices:
             d = mxs[0].shape[0]
             for mx in mxs:
-                compMxs[i][start:start+d,start:start+d] = mx
+                assert(_sps.issparse(mx) == self.sparse),"Inconsistent sparsity!"
+                if self.sparse:
+                    diagBlks = []
+                    if start > 0:
+                        diagBlks.append( _sps.csr_matrix((start,start),dtype='complex') ) #zeros
+                    diagBlks.append(mx)
+                    if start+d < length:
+                        diagBlks.append( _sps.csr_matrix((length-(start+d),length-(start+d)),dtype='complex') ) #zeros
+                    compMxs.append( _sps.block_diag(diagBlks, "csr", 'complex') )
+                else:
+                    compMxs[i][start:start+d,start:start+d] = mx
                 i += 1
             start += d 
         assert(start == length and i == nMxs)
@@ -240,7 +283,7 @@ class Basis(object):
         numpy array
         '''
         # Dim: dmDim 5 gateDim 5 blockDims [1, 1, 1, 1, 1] embedDim 25
-
+        assert(not self.sparse), "get_expand_mx not implemented for sparse mode"
         x = sum(len(mxs) for mxs in self._blockMatrices)
         y = sum(mxs[0].shape[0] for mxs in self._blockMatrices) ** 2
         expandMx = _np.zeros((x, y), 'complex')
@@ -271,7 +314,11 @@ class Basis(object):
         -------
         numpy array
         '''
-        toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
+        if self.sparse:
+            toStd = _sps.lil_matrix((self.dim.gateDim, self.dim.gateDim), dtype='complex' )
+        else:
+            toStd = _np.zeros((self.dim.gateDim, self.dim.gateDim), 'complex' )
+            
         #Since a multi-block basis is just the direct sum of the individual block bases,
         # transform mx is just the transfrom matrices of the individual blocks along the
         # diagonal of the total basis transform matrix
@@ -280,9 +327,14 @@ class Basis(object):
         for mxs in self._blockMatrices:
             l = len(mxs)
             for j, mx in enumerate(mxs):
-                toStd[start:start+l,start+j] = mx.flatten()
+                if self.sparse:
+                    assert(_sps.issparse(mx)), "Expected sparse basis elements!"
+                    toStd[start:start+l,start+j] = mx.tolil().reshape((l,1)) #~flatten()
+                else:
+                    toStd[start:start+l,start+j] = mx.flatten()
             start += l 
         assert(start == self.dim.gateDim)
+        if self.sparse: toStd = toStd.tocsr()
         return toStd
 
     @cache_by_hashed_args
@@ -294,7 +346,10 @@ class Basis(object):
         -------
         numpy array
         '''
-        return _inv(self.get_to_std())
+        if self.sparse:
+            return _spsl.inv(self.get_to_std().tocsc()).tocsr()
+        else:
+            return _inv(self.get_to_std())
 
     def equivalent(self, otherName):
         """ 
@@ -310,7 +365,7 @@ class Basis(object):
         -------
         Basis
         """
-        return Basis(otherName, self.dim.blockDims)
+        return Basis(otherName, self.dim.blockDims, sparse=self.sparse)
 
     def expanded_equivalent(self, otherName=None):
         """ 
@@ -329,7 +384,7 @@ class Basis(object):
         """
         if otherName is None:
             otherName = self.name
-        return Basis(otherName, sum(self.dim.blockDims))
+        return Basis(otherName, sum(self.dim.blockDims), sparse=self.sparse)
 
     def std_equivalent(self):
         """ Convenience method identical to `.equivalent('std')` """
@@ -339,14 +394,16 @@ class Basis(object):
         """ Convenience method identical to `.expanded_equivalent('std')` """
         return self.expanded_equivalent('std')
 
-def _build_composite_basis(bases):
+def _build_composite_basis(bases, sparse=False):
     '''
-    Build a composite basis from a list of tuples or Basis objects 
+    Build a composite basis from a list of `(name,dim)` tuples or Basis objects
       (or a list of mixed tuples and Basis objects)
 
     Parameters
     ----------
     bases : list of tuples/Basis objects
+
+    sparse : bool, optional
 
     Returns
     -------
@@ -357,7 +414,7 @@ def _build_composite_basis(bases):
     basisObjs = []
     for item in bases:
         if isinstance(item, tuple):
-            basisObjs.append(Basis(name=item[0], dim=item[1]))
+            basisObjs.append(Basis(name=item[0], dim=item[1], sparse=sparse))
         else:
             basisObjs.append(item)
 
@@ -365,13 +422,17 @@ def _build_composite_basis(bases):
     name          = ','.join(basis.name     for basis in basisObjs)
     longname      = ','.join(basis.longname for basis in basisObjs)
     real          = all(basis.real          for basis in basisObjs)
+    sparseFlags  = [basis.sparse for basis in basisObjs]
+    assert(all([s == sparseFlags[0] for s in sparseFlags])), \
+        "All basis components must have same sparse flag"
 
-    composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real)
+    composite = Basis(matrices=blockMatrices, name=name, longname=longname, real=real,
+                      sparse=sparseFlags[0])
     return composite
 
 
 # Allow flexible basis building without cluttering the basis __init__ method with instance checking
-def _build_block_matrices(name=None, dim=None, matrices=None):
+def _build_block_matrices(name=None, dim=None, matrices=None, sparse=False):
     '''
     Build the block matrices for a basis object by flexible arguments
 
@@ -391,29 +452,49 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
         When a list of numpy arrays, creates a non composite basis
         When a list of lists of numpy arrays or list of other bases, creates a composite bases with each outer list element as a composite part.
 
+    sparse : bool, optional
+        Whether any built matrices should be SciPy CSR sparse matrices
+        or dense numpy arrays (the default).
+
+
     Returns
     -------
-    name, list of lists of numpy arrays
+    name : str
+    blockMatrices : list of lists of numpy arrays
+    sparse : bool
     '''
     if isinstance(name, Basis):
         basis         = name
         blockMatrices = _copy.deepcopy(basis._blockMatrices)
         name          = basis.name
+        sparse        = basis.sparse
     elif isinstance(name, list):
-        basis = _build_composite_basis(name)
-        blockMatrices = basis._blockMatrices
-        name          = basis.name
+        if len(name) == 0: #special case of empty list
+            blockMatrices = []
+            name          = "*Empty*"
+            sparse        = sparse
+        else:
+            basis = _build_composite_basis(name, sparse)
+            blockMatrices = basis._blockMatrices
+            name          = basis.name
+            sparse        = basis.sparse
     else:
         if matrices is None: # built by name and dim, ie Basis('pp', 4)
-            assert name is not None, \
-                    'If matrices is none, name must be supplied to Basis.__init__'
-            matrices = _build_default_block_matrices(name, dim)
+            #OLD: require either name or matrices
+            #assert name is not None, \
+            #        'If matrices is none, name must be supplied to Basis.__init__'
+            
+            if name is not None: 
+                matrices = _build_default_block_matrices(name, dim, sparse)
+            else: # if name and matrices are none -> "Empty" basis
+                name = "*Empty*"
+                matrices = []
 
         if len(matrices) > 0:
             first = matrices[0]
             if isinstance(first, tuple) or \
                     isinstance(first, Basis):
-                basis = _build_composite_basis(matrices) # really list of Bases or basis tuples
+                basis = _build_composite_basis(matrices, sparse) # really list of Bases or basis tuples
                 blockMatrices = basis._blockMatrices
                 name          = basis.name
             elif isinstance(first, list) or \
@@ -426,9 +507,9 @@ def _build_block_matrices(name=None, dim=None, matrices=None):
         if name is None:
             name = 'CustomBasis_{}'.format(Basis.CustomCount)
             Basis.CustomCount += 1
-    return name, blockMatrices
+    return name, blockMatrices, sparse
 
-def _build_default_block_matrices(name, dim):
+def _build_default_block_matrices(name, dim, sparse=False):
     '''
     Build the default block matrices for a basis object 
     (i.e. std, pp, gm, or qt basis matrices at time of writing)
@@ -440,9 +521,13 @@ def _build_default_block_matrices(name, dim):
 
     dim : int
         dimension of the basis to be created.
+
+    sparse : bool, optional
+        Whether to create sparse or dense matrices
+
     Returns
     -------
-    list of lists of numpy arrays
+    list of lists of numpy arrays (or SciPy sparse matrices)
     '''
     if name == 'unknown':
         return []
@@ -453,10 +538,15 @@ def _build_default_block_matrices(name, dim):
     blockMatrices = []
     dim = Dim(dim)
     for blockDim in dim.blockDims:
-        blockMatrices.append(f(blockDim))
+        subBasisMxs = f(blockDim) # a list of (dense) mxs
+        if not sparse:
+            blockMatrices.append(subBasisMxs)
+        else:
+            blockMatrices.append([_sps.csr_matrix(M) for M in subBasisMxs])
     return blockMatrices
 
-def basis_matrices(nameOrBasis, dim):
+
+def basis_matrices(nameOrBasis, dim, sparse=False):
     '''
     Get the elements of the specifed basis-type which
     spans the density-matrix space given by dim.
@@ -471,6 +561,10 @@ def basis_matrices(nameOrBasis, dim):
 
     dim : int 
         The dimension of the density-matrix space.
+
+    sparse : bool, optional
+        Whether any built matrices should be SciPy CSR sparse matrices
+        or dense numpy arrays (the default).
 
     Returns
     -------
@@ -492,9 +586,12 @@ def basis_matrices(nameOrBasis, dim):
         raise NotImplementedError('No instructions to create supposed \'default\' basis:  {} of dim {}'.format(
             name, dim))
     f = _basisConstructorDict[name].constructor
+    if not sparse:
+        return f(dim)
+    else:
+        return [_sps.csr_matrix(M) for M in f(dim)]
 
-    return f(dim)
-
+    
 def basis_longname(basis):
     """
     Get the "long name" for a particular basis,

@@ -254,6 +254,7 @@ class Workspace(object):
         self.GatesSingleMetricTable = makefactory(_wt.GatesSingleMetricTable)
         self.GateEigenvalueTable = makefactory(_wt.GateEigenvalueTable)
         self.ErrgenTable = makefactory(_wt.ErrgenTable)
+        self.GaugeRobustErrgenTable = makefactory(_wt.GaugeRobustErrgenTable)
         self.StandardErrgenTable = makefactory(_wt.StandardErrgenTable)
 
           # Specific to 1Q gates

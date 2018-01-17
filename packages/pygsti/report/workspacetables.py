@@ -776,7 +776,7 @@ class ErrgenTable(WorkspaceTable):
             - "logG-logT" : errgen = log(gate) - log(target_gate)
             - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
             - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )
-        
+
         Returns
         -------
         ReportTable
@@ -835,7 +835,7 @@ class ErrgenTable(WorkspaceTable):
             M = max(M, ABS_THRESHOLD) 
             if not getMinMax(max_lst,M):
                 max_lst.append(M)
-    
+
         #Do computation, so shared color scales can be computed
         for gl in gateLabels:
             if genType == "logG-logT":
@@ -933,7 +933,80 @@ class ErrgenTable(WorkspaceTable):
     
         table.finish()
         return table
+
+
+class GaugeRobustErrgenTable(WorkspaceTable):
+    """ Table displaying the first-order gauge invariant ("gauge robust") 
+        linear combinations of standard error generator coefficients for
+        the gates in a gate set.
+    """
+    def __init__(self, ws, gateset, targetGateset, confidenceRegionInfo=None,
+                 genType="logGTi"):
+                 
+        """
+        Create a table listing the first-order gauge invariant ("gauge robust") 
+        linear combinations of standard error generator coefficients for
+        the gates in `gateset`.  This table identifies, through the use of
+        "synthetic idle tomography", which combinations of standard-error-
+        generator coefficients are robust (to first-order) to gauge variations.
     
+        Parameters
+        ----------
+        gateset, targetGateset : GateSet
+            The gate sets to compare
+    
+        confidenceRegionInfo : ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals.
+    
+        genType : {"logG-logT", "logTiG", "logGTi"}
+            The type of error generator to compute.  Allowed values are:
+            
+            - "logG-logT" : errgen = log(gate) - log(target_gate)
+            - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+            - "logTiG" : errgen = log( dot(gate, inv(target_gate)) )        
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(GaugeRobustErrgenTable,self).__init__(ws, self._create, gateset,
+                                                    targetGateset, confidenceRegionInfo,
+                                                    genType)
+    
+    def _create(self, gateset, targetGateset, confidenceRegionInfo, genType):
+
+        gateLabels  = list(gateset.gates.keys())  # gate labels
+        colHeadings = ['Error rates', 'Value']
+
+        table = _ReportTable(colHeadings, (None,)*len(colHeadings),
+                             confidenceRegionInfo=confidenceRegionInfo)
+
+        assert(genType == "logGTi"), "Only `genType == \"logGTI\"` is supported when `gaugeRobust` is True"
+        syntheticIdleStrs = []
+            
+        ## Construct synthetic idles
+        maxPower = 4; maxLen = 6; Id = _np.identity(targetGateset.dim,'d')
+        baseStrs = _cnst.list_all_gatestrings_without_powers_and_cycles(list(gateset.gates.keys()), maxLen)
+        for s in baseStrs:
+            for i in range(1,maxPower):
+                if len(s**i) > 1 and _np.linalg.norm(targetGateset.product( s**i ) - Id) < 1e-6:
+                    syntheticIdleStrs.append( s**i ); break
+        #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
+        #syntheticIdleStrs = _cnst.gatestring_list([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
+        print("Using synthetic idles: \n",'\n'.join([str(gstr) for gstr in syntheticIdleStrs]))
+
+        gaugeRobust_info = _ev(_reportables.Robust_LogGTi_and_projections(
+            gateset, targetGateset, syntheticIdleStrs), confidenceRegionInfo)
+
+        for linear_combo_lbl, val in gaugeRobust_info.items():
+            row_data = [linear_combo_lbl, val]
+            row_formatters = [None, 'Normal']
+            table.addrow(row_data, row_formatters)
+    
+        table.finish()
+        return table
+
     
     
 class old_RotationAxisVsTargetTable(WorkspaceTable):
