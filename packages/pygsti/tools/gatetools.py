@@ -1419,14 +1419,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
     hamGens, otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
 
-    #DEBUG CHECK
-    #print("HDIM = ",ham_basis.name,ham_basis.dim.dmDim)
-    #print("ODIM = ",other_basis.name,other_basis.dim.dmDim)
-    #HBD = _basis_matrices(ham_basis.name, ham_basis.dim.dmDim, sparse=False)
-    #OBD = _basis_matrices(other_basis.name, other_basis.dim.dmDim, sparse=False)
-    #hamGens_dense, otherGens_dense = lindblad_error_generators(
-    #    HBD,OBD,normalize,other_diagonal_only) # in std basis
-
     if hamBasisMxs is not None:
         bsH = len(hamBasisMxs) #basis size (not necessarily d2)
     else: bsH = 0
@@ -1500,25 +1492,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
                 rows = [oGen.tolil().reshape((1,d2**2)) for oGen in otherGens]
                 O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
             else:
-                #DEBUG CHECK
-                #print("LENS = ",len(otherGens),[len(otherGenRow) for otherGenRow in otherGens])
-                #print("otherGens_dense.shape = ",otherGens_dense.shape)
-                #for i,oGenRow in enumerate(otherGens):
-                #    for j,oGen in enumerate(oGenRow):
-                #        oGen_dense = oGen.toarray()
-                #        diff = _np.linalg.norm(otherGens_dense[i,j] - oGen_dense)
-                #        if diff > 1e-6:
-                #            print("Diff gens[%d,%d] = %g" % (i,j,diff))
-                #            for ii in range(15):
-                #                for jj in range(15):
-                #                    if _np.linalg.norm(otherGens_dense[ii,jj] - oGen_dense) < 1e-6:
-                #                        print("  -- BUT MATCHES %d,%d!!!" % (ii,jj))
-                #
-                #Od = _np.concatenate( [ oGen.toarray().reshape(1,d2**2) for oGenRow in otherGens for oGen in oGenRow], axis=0).T
-                #Od_chk = otherGens_dense.reshape(((bsO-1)**2,d2**2)).T # other generators == columns                        
-                #print("OD SHAPE = ",Od.shape,Od_chk.shape)
-                #print("DIFF = ",_np.linalg.norm(Od-Od_chk))
-                #assert(_np.linalg.norm(Od-Od_chk) < 1e-6)
                 rows = [oGen.tolil().reshape((1,d2**2)) for oGenRow in otherGens for oGen in oGenRow]
                 O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
             Odag = O.copy().transpose().conjugate() #TODO: maybe conjugate copies data?
@@ -1528,15 +1501,6 @@ def lindblad_errgen_projections(errgen, ham_basis,
                 otherProjs = _np.zeros(bsO-1, 'd') if other_diagonal_only else \
                              _np.zeros((bsO-1,bsO-1), 'd')
             else:
-                #DEBUG CHECK
-                #Oddag = Od.T.conjugate()
-                #otherProjs_chk = _np.linalg.solve(_np.dot(Oddag,Od), _np.dot(Oddag,errgen_std_flat.toarray().flatten()))                
-                #lhs = Odag.dot(O)
-                #rhs = Odag.dot(errgen_std_flat)
-                #print("LHS = ",lhs.nnz,_mt.safenorm(lhs),lhs.shape)
-                #print("RHS = ",rhs.nnz,_mt.safenorm(rhs),rhs.shape)
-                #print("ERRGEN = ",errgen_std_flat.nnz,_mt.safenorm(errgen_std_flat),errgen_std_flat.shape)
-                
                 otherProjs = _spsl.spsolve(Odag.dot(O), Odag.dot(errgen_std_flat))
                 if _sps.issparse(otherProjs): otherProjs = otherProjs.toarray().flatten()
     

@@ -3,9 +3,12 @@ from __future__ import print_function
 import unittest
 import pygsti
 import numpy as np
-
+import scipy.sparse as sps
+        
 from pygsti.construction import std1Q_XYI
+from pygsti.construction import std2Q_XYICNOT
 from pygsti.objects import LindbladParameterizedGate, ComposedGate, EmbeddedGate, StaticGate
+from pygsti.objects import LindbladParameterizedGateMap
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -87,6 +90,60 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         print("Diff = %g (should be 0)" % gs_constructed.frobeniusdist(gs_constructed2))
         self.assertAlmostEqual(gs_constructed.frobeniusdist(gs_constructed2),0)
 
+    def test_sparse_lindblad_param(self):
+        #Test sparse bases and Lindblad gates
+
+        #To catch sparse warnings as error (for debugging)
+        #import warnings
+        #from scipy.sparse import SparseEfficiencyWarning
+        #warnings.resetwarnings()
+        #warnings.simplefilter('error',SparseEfficiencyWarning)
+        #warnings.simplefilter('error',DeprecationWarning)
+        
+        sparsePP = pygsti.objects.Basis("pp",4,sparse=True)
+        mxs = sparsePP.get_composite_matrices()
+        #for lbl,mx in zip(sparsePP.labels,mxs):
+        #    print(lbl,":",mx.shape,"matrix with",mx.nnz,"nonzero entries (of",
+        #          mx.shape[0]*mx.shape[1],"total)")
+        #    #print(mx.toarray())
+        print("%d basis elements" % len(sparsePP))
+        self.assertEqual(len(sparsePP), 16)
+        
+        M = np.ones((16,16),'d')
+        v = np.ones(16,'d')
+        S = sps.identity(16,'d','csr')
+
+        print("Test types after basis change by sparse basis:")
+        Mout = pygsti.tools.change_basis(M, sparsePP, 'std')
+        vout = pygsti.tools.change_basis(v, sparsePP, 'std')
+        Sout = pygsti.tools.change_basis(S, sparsePP, 'std')
+        print(type(M),"->",type(Mout))
+        print(type(v),"->",type(vout))
+        print(type(S),"->",type(Sout))
+        self.assertIsInstance(Mout, np.ndarray)
+        self.assertIsInstance(vout, np.ndarray)
+        self.assertIsInstance(Sout, sps.csr_matrix)
+        
+        print("\nGate Test:")
+        SparseId = sps.identity(4**2,'d','csr')
+        gate = LindbladParameterizedGate( np.identity(4**2,'d') )
+        print("gate Errgen type (should be dense):",type(gate.err_gen))
+        self.assertIsInstance(gate.err_gen, np.ndarray)
+        sparseGate = LindbladParameterizedGateMap( SparseId )
+        print("spareGate Errgen type (should be sparse):",type(sparseGate.err_gen))
+        self.assertIsInstance(sparseGate.err_gen, sps.csr_matrix)
+        self.assertArraysAlmostEqual(gate.err_gen,sparseGate.err_gen.toarray())
+        
+        perfectG = std2Q_XYICNOT.gs_target.gates['Gix'].copy()
+        noisyG = std2Q_XYICNOT.gs_target.gates['Gix'].copy()
+        noisyG.depolarize(0.9)
+        Sparse_noisyG = sps.csr_matrix(noisyG,dtype='d')
+        Sparse_perfectG = sps.csr_matrix(perfectG,dtype='d')
+        gate2 = LindbladParameterizedGate( noisyG, perfectG )
+        sparseGate2 = LindbladParameterizedGateMap( Sparse_noisyG, Sparse_perfectG )
+        print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.err_gen))
+        self.assertIsInstance(sparseGate2.err_gen, sps.csr_matrix)
+        self.assertArraysAlmostEqual(gate2.err_gen,sparseGate2.err_gen.toarray())
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
