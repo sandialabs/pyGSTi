@@ -7,9 +7,11 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import scipy.sparse as _sps
 from ..baseobjs.basis import basis_matrices
+from . import matrixtools as _mt
 
-def hamiltonian_to_lindbladian(hamiltonian):
+def hamiltonian_to_lindbladian(hamiltonian, sparse=False):
     """
     Construct the Lindbladian corresponding to a given Hamiltonian.
 
@@ -24,9 +26,12 @@ def hamiltonian_to_lindbladian(hamiltonian):
     hamiltonian : ndarray
       The hamiltonian matrix used to construct the Lindbladian.
 
+    sparse : bool, optional
+      Whether to construct a sparse or dense (the default) matrix.
+
     Returns
     -------
-    ndarray
+    ndarray or Scipy CSR matrix
     """
 
     #TODO: there's probably a fast & slick way to so this computation
@@ -34,18 +39,22 @@ def hamiltonian_to_lindbladian(hamiltonian):
     assert(len(hamiltonian.shape) == 2)
     assert(hamiltonian.shape[0] == hamiltonian.shape[1])
     d = hamiltonian.shape[0]
-    lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
+    if sparse:
+        lindbladian = _sps.lil_matrix( (d**2,d**2), dtype=hamiltonian.dtype )
+    else:
+        lindbladian = _np.empty( (d**2,d**2), dtype=hamiltonian.dtype )
 
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
-        rho1 = -1j*(_np.dot(hamiltonian,rho0) - _np.dot(rho0,hamiltonian))
-        lindbladian[:,i] = rho1.flatten()
+        rho1 = -1j*(_mt.safedot(hamiltonian,rho0) - _mt.safedot(rho0,hamiltonian))
+        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
           # vectorize rho1 & set as linbladian column
 
+    if sparse: lindbladian = lindbladian.tocsr()
     return lindbladian
 
 
 
-def stochastic_lindbladian(Q):
+def stochastic_lindbladian(Q, sparse=False):
     """
     Construct the Lindbladian corresponding to stochastic Q-errors.
 
@@ -60,9 +69,12 @@ def stochastic_lindbladian(Q):
     Q : ndarray
       The matrix used to construct the Lindbladian.
 
+    sparse : bool, optional
+      Whether to construct a sparse or dense (the default) matrix.
+
     Returns
     -------
-    ndarray
+    ndarray or Scipy CSR matrix
     """
 
     #TODO: there's probably a fast & slick way to so this computation
@@ -71,17 +83,21 @@ def stochastic_lindbladian(Q):
     assert(Q.shape[0] == Q.shape[1])
     Qdag = _np.conjugate(_np.transpose(Q))
     d = Q.shape[0]
-    lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
+    if sparse:
+        lindbladian = _sps.lil_matrix( (d**2,d**2), dtype=Q.dtype )
+    else:
+        lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
 
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
-        rho1 = _np.dot(Q,_np.dot(rho0,Qdag))
-        lindbladian[:,i] = rho1.flatten()
+        rho1 = _mt.safedot(Q,_mt.safedot(rho0,Qdag))
+        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
           # vectorize rho1 & set as linbladian column
 
+    if sparse: lindbladian = lindbladian.tocsr()
     return lindbladian
 
 
-def affine_lindbladian(Q):
+def affine_lindbladian(Q, sparse=False):
     """
     Construct the Lindbladian corresponding to affine Q-errors.
 
@@ -96,9 +112,12 @@ def affine_lindbladian(Q):
     Q : ndarray
       The matrix used to construct the Lindbladian.
 
+    sparse : bool, optional
+      Whether to construct a sparse or dense (the default) matrix.
+
     Returns
     -------
-    ndarray
+    ndarray or Scipy CSR matrix
     """
 
     #TODO: there's probably a fast & slick way to so this computation
@@ -107,17 +126,21 @@ def affine_lindbladian(Q):
     assert(Q.shape[0] == Q.shape[1])
     d = Q.shape[0]
     Id = _np.identity(d,'d').flatten()
-    lindbladian = _np.zeros( (d**2,d**2), dtype=Q.dtype )
-    
+    if sparse:
+        lindbladian = _sps.lil_matrix( (d**2,d**2), dtype=Q.dtype )
+    else:
+        lindbladian = _np.empty( (d**2,d**2), dtype=Q.dtype )
+
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
-        rho1 = Q * _np.dot(Id,rho0.flatten()) # get |Q>><Id|rho0
-        lindbladian[:,i] = rho1.flatten()
+        rho1 = Q * _mt.safedot(Id,rho0.flatten()) # get |Q>><Id|rho0
+        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
           # vectorize rho1 & set as linbladian column
 
+    if sparse: lindbladian = lindbladian.tocsr()
     return lindbladian
 
 
-def nonham_lindbladian(Lm,Ln):
+def nonham_lindbladian(Lm,Ln,sparse=False):
     """
     Construct the Lindbladian corresponding to generalized
     non-Hamiltonian (stochastic) errors.
@@ -136,9 +159,12 @@ def nonham_lindbladian(Lm,Ln):
     Lm, Ln : ndarray
       The matrices used to construct the Lindbladian.
 
+    sparse : bool, optional
+      Whether to construct a sparse or dense (the default) matrix.
+
     Returns
     -------
-    ndarray
+    ndarray or Scipy CSR matrix
     """
 
     #TODO: there's probably a fast & slick way to so this computation
@@ -147,19 +173,23 @@ def nonham_lindbladian(Lm,Ln):
     assert(Lm.shape[0] == Lm.shape[1])
     Lm_dag = _np.conjugate(_np.transpose(Lm))
     d = Lm.shape[0]
-    lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
-
+    if sparse:
+        lindbladian = _sps.lil_matrix( (d**2,d**2), dtype=Lm.dtype )
+    else:
+        lindbladian = _np.empty( (d**2,d**2), dtype=Lm.dtype )
+        
 #    print("BEGIN VERBOSE") #DEBUG!!!
     for i,rho0 in enumerate(basis_matrices('std',d)): #rho0 == input density mx
-        rho1 = _np.dot(Ln,_np.dot(rho0,Lm_dag)) - 0.5 * (
-            _np.dot(rho0,_np.dot(Lm_dag,Ln))+_np.dot(_np.dot(Lm_dag,Ln),rho0))
+        rho1 = _mt.safedot(Ln,_mt.safedot(rho0,Lm_dag)) - 0.5 * (
+            _mt.safedot(rho0,_mt.safedot(Lm_dag,Ln))+_mt.safedot(_mt.safedot(Lm_dag,Ln),rho0))
 #        print("rho0[%d] = \n" % i,rho0)
 #        print("rho1[%d] = \n" % i,rho1)
-        lindbladian[:,i] = rho1.flatten()
+        lindbladian[:,i] = rho1.flatten()[:,None] if sparse else rho1.flatten()
           # vectorize rho1 & set as linbladian column
 #    print("FINAL = \n",lindbladian)
 #    print("END VERBOSE\n")
 
+    if sparse: lindbladian = lindbladian.tocsr()
     return lindbladian
 
 

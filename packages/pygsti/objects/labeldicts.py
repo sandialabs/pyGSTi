@@ -137,13 +137,21 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         self._check_dim(value)
 
         if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
-            if self.parent is not None and value.parent is not None and \
-               value.parent is not self.parent: # value's indices belong to another parent, so 
+            #When self has a valid parent (as it usually does, except when first initializing)
+            # we copy and reset the gpindices & parent of GateSetMember values which either:
+            # 1) belong to a different parent (indices would be inapplicable if the exist)
+            # 2) have indices but no parent (indices are inapplicable to us)
+            # Note that we don't copy and reset the case when a value's parent and gpindices
+            #  are both None, as gpindices==None indicates that the value may not have had
+            #  its gpindices allocated yet and so *might* have "latent" gpindices that do
+            #  belong to our parent (self.parent) (and copying a value will reset all
+            #  the parents to None).
+            wrongParent = (value.parent is not None) and (value.parent is not self.parent)
+            inappInds = (value.parent is None) and (value.gpindices is not None)
+            
+            if self.parent is not None and (wrongParent or inappInds):
                 value = value.copy()  # copy value (so we don't mess up other parent) and
-                value.set_gpindices(None, self.parent) # mark that indices don't apply to us
-                # Note: if value has parent == None, then *don't* copy, since value may not
-                #  have had it's gpindices allocated yet and so *might* have "latent" gpindices
-                #  that do belong to our parent (self.parent)
+                value.set_gpindices(None, self.parent) # erase gindices don't apply to us
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...

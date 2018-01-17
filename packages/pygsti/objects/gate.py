@@ -8,7 +8,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
-import scipy.sparse as _sparse
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 import functools as _functools
 import itertools as _itertools
 import copy as _copy
@@ -19,9 +20,11 @@ from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
 from ..tools import slicetools as _slct
+from ..tools import compattools as _compat
 from . import gaugegroup as _gaugegroup
 from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
+from ..baseobjs import Basis as _Basis
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -2369,7 +2372,638 @@ class EigenvalueParameterizedGate(GateMatrix):
 
 
 
-class LindbladParameterizedGate(GateMatrix):
+#TODO: add "sparse" flag to LindbladParameterizedGate
+#  -- maybe add "sparse" basis (where mxs are sparse) to facilitate this
+#  -- use scipy.sparse.linalg.expm_multiply to perform sparse multiplies
+
+class LindbladBase(object):
+    """ Base class for Lindblad-parameterized gates """
+
+    def __init__(self, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
+                 nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+        """
+        Initialize a LindbladBase object.  Parameters are explained in 
+        derived-class doc strings.
+        """
+        self.cptp = cptp
+        self.nonham_diagonal_only = nonham_diagonal_only
+
+        d2 = errgen.shape[0]
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+
+        #Determine whether we're using sparse bases or not
+        self.sparse = None
+        if ham_basis is not None:
+            if isinstance(ham_basis, _Basis): self.sparse = ham_basis.sparse
+            elif _compat.isstr(ham_basis): self.sparse = _sps.issparse(errgen)
+            elif len(ham_basis) > 0: self.sparse = _sps.issparse(ham_basis[0])
+        if self.sparse is None and nonham_basis is not None:
+            if isinstance(nonham_basis, _Basis): self.sparse = nonham_basis.sparse
+            elif _compat.isstr(nonham_basis): self.sparse = _sps.issparse(errgen)
+            elif len(nonham_basis) > 0: self.sparse = _sps.issparse(nonham_basis[0])
+        if self.sparse is None: self.sparse = False #the default
+
+        self.dim = d2 #also set by GateMatrix and GateMap (but consistent, so OK)
+        self.ham_basis = _Basis(ham_basis,d,sparse=self.sparse)
+        self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
+        self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
+
+        self._set_params_from_errgen(errgen, truncate)
+          #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
+          # and self.ham_basis_size and self.other_basis_size
+
+        #initialize intermediate storage for matrix and for deriv computation
+        # (needed for _construct_errgen)
+        bsO = self.other_basis_size
+        if bsO > 0:
+            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
+        else: self.Lmx = None
+          
+        #Assumed gate was in the pauli-product basis initially.  I think
+        # everything should work fine in the current general case with any other
+        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
+        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
+        self.leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+                          else _np.linalg.inv(mxBasisToStd)
+        self.rightTrans = mxBasisToStd
+
+        #set self.err_gen (can't just use `errgen` b/c of truncation)
+        self._construct_errgen() 
+
+
+
+    def _set_params_from_errgen(self, errgen, truncate):
+        d2 = errgen.shape[0]
+
+        hamC, otherC, self.hamGens, self.otherGens = \
+            _gt.lindblad_errgen_projections(
+                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
+                return_generators=True, other_diagonal_only=self.nonham_diagonal_only,
+                sparse=self.sparse) # in std basis
+        # Note: lindblad_errgen_projections will return sparse generators when
+        #  given a sparse basis (or basis matrices)
+
+        if self.hamGens is not None:
+            bsH = len(self.hamGens)+1 #projection-basis size (not nec. == d2)
+            _gt._assert_shape(self.hamGens, (bsH-1,d2,d2), self.sparse)
+            
+            assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
+                "Hamiltoian coeffs are not all real!"
+            hamParams = hamC.real
+        else:
+            bsH = 0
+            hamParams = _np.empty(0,'d')
+            
+
+        if self.otherGens is not None:
+            bsO = len(self.otherGens)+1 #projection-basis size (not nec. == d2)
+
+            if self.nonham_diagonal_only:
+                _gt._assert_shape(self.otherGens, (bsO-1,d2,d2), self.sparse)
+                assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
+                #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
+    
+                if self.cptp: #otherParams is a 1D vector of the sqrts of diagonal els
+                    otherC = otherC.clip(1e-16,1e100) #must be positive
+                    otherParams = _np.sqrt(otherC.real) # shape (bs-1,)
+                else: #otherParams is a 1D vector of the real diagonal els of otherC
+                    otherParams = otherC.real # shape (bs-1,)
+    
+            else:
+                _gt._assert_shape(self.otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
+                assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
+                                   ,0)), "other coeff mx is not Hermitian!"
+    
+                otherParams = _np.empty((bsO-1,bsO-1),'d')
+    
+                if self.cptp: #otherParams mx stores Cholesky decomp
+    
+                    #push any slightly negative evals of otherC positive so that
+                    # the Cholesky decomp will work.
+                    evals,U = _np.linalg.eig(otherC)
+                    Ui = _np.linalg.inv(U)
+    
+                    assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+                        "gateMatrix must be CPTP (truncate == False)!"
+    
+                    pos_evals = evals.clip(1e-16,1e100)
+                    otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                    try:
+                        Lmx = _np.linalg.cholesky(otherC)
+                    except _np.linalg.LinAlgError: #Lmx not postitive definite?
+                        pos_evals = evals.clip(1e-12,1e100) #try again with 1e-12
+                        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                        Lmx = _np.linalg.cholesky(otherC)
+    
+                    for i in range(bsO-1):
+                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+                        otherParams[i,i] = Lmx[i,i].real
+                        for j in range(i):
+                            otherParams[i,j] = Lmx[i,j].real
+                            otherParams[j,i] = Lmx[i,j].imag
+    
+                else: #otherParams mx stores otherC (hermitian) directly
+                    for i in range(bsO-1):
+                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
+                        otherParams[i,i] = otherC[i,i].real
+                        for j in range(i):
+                            otherParams[i,j] = otherC[i,j].real
+                            otherParams[j,i] = otherC[i,j].imag
+        else:
+            bsO = 0
+            otherParams = _np.empty(0,'d')
+
+        self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
+        self.ham_basis_size = bsH
+        self.other_basis_size = bsO
+
+        #True unless bsH,bsO are zero
+        #if nonham_diagonal_only:
+        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1),))
+        #else:
+        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
+
+
+    def _construct_errgen(self):
+        """
+        Build the error generator matrix using the current parameters.
+        """
+        d2 = self.dim
+        bsH = self.ham_basis_size
+        bsO = self.other_basis_size
+
+        # self.paramvals = [hamCoeffs] + [otherParams]
+        #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
+        if bsH > 0:
+            hamCoeffs = self.paramvals[0:bsH-1]
+            nHam = bsH-1
+        else:
+            nHam = 0
+
+        #built up otherCoeffs based on self.cptp and self.nonham_diagonal_only
+        if bsO > 0:
+            if self.nonham_diagonal_only:
+                otherParams = self.paramvals[nHam:]
+                assert(otherParams.shape == (bsO-1,))
+    
+                if self.cptp:
+                    otherCoeffs = otherParams**2 #Analagous to L*L_dagger
+                else:
+                    otherCoeffs = otherParams
+            else:
+                otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
+    
+                if self.cptp:
+                    #  otherParams is an array of length (bs-1)*(bs-1) that
+                    #  encodes a lower-triangular matrix "Lmx" via:
+                    #  Lmx[i,i] = otherParams[i,i]
+                    #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
+                    for i in range(bsO-1):
+                        self.Lmx[i,i] = otherParams[i,i]
+                        for j in range(i):
+                            self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
+            
+                    #The matrix of (complex) "other"-coefficients is build by
+                    # assuming Lmx is its Cholesky decomp; means otherCoeffs
+                    # is pos-def.
+
+                    # NOTE that the Cholesky decomp with all positive real diagonal
+                    # elements is *unique* for a given positive-definite otherCoeffs
+                    # matrix, but we don't care about this uniqueness criteria and so
+                    # the diagonal els of Lmx can be negative and that's fine -
+                    # otherCoeffs will still be posdef.
+                    otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+    
+                    #DEBUG - test for pos-def
+                    #evals = _np.linalg.eigvalsh(otherCoeffs)
+                    #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
+                    #assert(all([ev >= -DEBUG_TOL for ev in evals]))
+    
+                else:
+                    #otherParams holds otherCoeff real and imaginary parts directly
+                    otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
+                    for i in range(bsO-1):
+                        otherCoeffs[i,i] = otherParams[i,i]
+                        for j in range(i):
+                            otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
+                            otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
+
+        #Finally, build gate matrix from generators and coefficients:
+        if self.sparse:        
+            if bsH > 0:
+                lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+            else:
+                lnd_error_gen = _sps.csr_matrix((d2,d2), dtype='complex')
+
+            if bsO > 0:
+                if self.nonham_diagonal_only:
+                    lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+                else:
+                    lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
+                                          for c,gen in zip(cRow,genRow)])
+                    
+            lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
+
+        else: #dense matrices
+            if bsH > 0:
+                lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
+            else:
+                lnd_error_gen = _np.zeros( (d2,d2), 'complex')
+
+            if bsO > 0:
+                if self.nonham_diagonal_only:
+                    lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
+                else:
+                    lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
+
+            lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
+                lnd_error_gen, self.rightTrans)) #basis chg
+
+        self.err_gen = lnd_error_gen
+
+        
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        self._construct_errgen()
+        self.dirty = True
+
+
+
+class LindbladParameterizedGateMap(LindbladBase, GateMap):
+
+    def __init__(self, gateMatrix, unitaryPostfactor=None,
+                 ham_basis="pp", nonham_basis="pp", cptp=True,
+                 nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+        """
+        Initialize a LindbladParameterizedGateMap object.
+
+        Parameters
+        ----------
+        gateMatrix : numpy array or SciPy sparse matrix
+            a square 2D array that gives the raw gate matrix, assumed to
+            be in the `mxBasis` basis, to parameterize.  The shape of this
+            array sets the dimension of the gate. If None, then it is assumed
+            equal to `unitaryPostfactor` (which cannot also be None). The
+            quantity `gateMatrix inv(unitaryPostfactor)` is parameterized via
+            projection onto the Lindblad terms.
+            
+        unitaryPostfactor : numpy array or SciPy sparse matrix, optional
+            a square 2D array of the same size of `gateMatrix` (if
+            not None).  This matrix specifies a part of the gate action 
+            to remove before parameterization via Lindblad projections.
+            Typically, this is a target (desired) gate operation such 
+            that only the erroneous part of the gate (i.e. the gate 
+            relative to the target), which should be close to the identity,
+            is parameterized.  If none, the identity is used by default.
+
+        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        other_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+            The basis is used to construct the Stochastic-type lindblad error
+            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+        cptp : bool, optional
+            Whether or not the new gate should be constrained to CPTP.
+            (if True, see behavior or `truncate`).
+
+        nonham_diagonal_only : boolean, optional
+            If True, only *diagonal* Stochastic (non-Hamiltonain) terms are
+            included in the parameterization.
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to preserve CPTP (when necessary).  If False, then an 
+            error is thrown when `cptp == True` and when Lindblad projections
+            result in a non-positive-definite matrix of non-Hamiltonian term
+            coefficients.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+        """
+        if gateMatrix is None:
+            assert(unitaryPostfactor is not None), "arguments cannot both be None"
+            gateMatrix = unitaryPostfactor
+            
+        self.unitary_postfactor = unitaryPostfactor #can be None
+        if unitaryPostfactor is None:
+            if _sps.issparse(gateMatrix):
+                unitaryPostfactor = _sps.identity(gateMatrix.shape[0],'d','csr')
+            else: unitaryPostfactor = _np.identity(gateMatrix.shape[0],'d')
+        
+        #Init base from error generator: sets basis members and ultimately
+        # the parameters in self.paramvals
+        if _sps.issparse(gateMatrix):
+            #Instead of making error_generator compatible with sparse matrices
+            # we require sparse matrices to have trivial initial error generators
+            # or we convert to dense:
+            if(_mt.safenorm(gateMatrix-unitaryPostfactor) < 1e-8):
+                errgen = _sps.csr_matrix( gateMatrix.shape, dtype='d' ) # all zeros
+            else:
+                errgen = _sps.csr_matrix(
+                    _gt.error_generator(
+                        gateMatrix.toarray(), unitaryPostfactor.toarray(),
+                        mxBasis, "logGTi"), dtype='d')
+        else:
+            errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
+            
+        GateMap.__init__(self, errgen.shape[0]) #sets self.dim
+        LindbladBase.__init__(self, errgen, ham_basis, nonham_basis, cptp,
+                              nonham_diagonal_only, truncate, mxBasis)
+          # initializes self.paramvals and self.err_gen among other things
+        
+        #Pre-compute the exponential of the error generator if dense matrices are used
+        self.exp_err_gen = _spl.expm(self.err_gen) if (not self.sparse) else None
+
+        
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        if self.unitary_postfactor is not None:
+            state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
+            
+        if self.sparse:
+            state = _spsl.expm_multiply( self.err_gen, state)
+        else:
+            state = _np.dot(self.exp_err_gen, state)
+        return state
+
+    
+    def as_sparse_matrix(self):
+        """ Return the gate as a sparse matrix """
+        if self.sparse:
+            exp_err_gen = _spsl.expm(self.err_gen)
+            if self.unitary_postfactor is not None:
+                return exp_err_gen.dot(self.unitary_postfactor)
+            else:
+                return exp_err_gen
+        else:
+            if self.unitary_postfactor is not None:
+                dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+            else:
+                dense = self.exp_err_gen
+            return _sps.csr_matrix( dense )
+
+    
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        self._construct_errgen()
+        if not self.sparse:
+            self.exp_err_gen = _spl.expm(self.err_gen) 
+        self.dirty = True
+
+
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        #Construct new gate with dummy identity mx
+        if self.unitary_postfactor is not None:
+            factor = unitary_postfactor.copy()
+        elif self.sparse:
+            factor = _sps.identity( self.err_gen.shape[0], 'd', 'csr' )
+        else:
+            factor = _np.identity( self.err_gen.shape[0], 'd' )
+        newGate = LindbladParameterizedGateMap(factor,factor,
+                                            _copy.deepcopy(self.ham_basis),
+                                            _copy.deepcopy(self.other_basis),
+                                            self.cptp,self.nonham_diagonal_only,
+                                            True, _copy.deepcopy(self.matrix_basis))
+        
+        #Deep copy data
+        newGate.paramvals = self.paramvals.copy()
+        newGate._construct_errgen()
+        if not newGate.sparse:
+            newGate.exp_err_gen = _spl.expm(newGate.err_gen) 
+
+        return self._copy_gpindices( newGate, parent )
+
+
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        if isinstance(S, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(S, _gaugegroup.TPSpamGaugeGroupElement):
+            U = S.get_transform_matrix()
+            Uinv = S.get_transform_matrix_inverse()
+
+            #just conjugate postfactor and Lindbladian exponent by U:
+            if self.unitary_postfactor is not None:
+                self.unitary_postfactor = _mt.safedot(Uinv,_mt.safedot(self.unitary_postfactor, U))
+            self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))                
+            self._set_params_from_errgen(self.err_gen, truncate=True)
+            self._construct_errgen() # unnecessary? (TODO)
+            self.dirty = True
+            #Note: truncate=True above because some unitary transforms seem to
+            ## modify eigenvalues to be negative beyond the tolerances
+            ## checked when truncate == False.  I'm not sure why this occurs,
+            ## since a true unitary should map CPTP -> CPTP...
+
+            #CHECK WITH OLD (passes) TODO move to unit tests?
+            #tMx = _np.dot(Uinv,_np.dot(self.base, U)) #Move above for checking
+            #tGate = LindbladParameterizedGate(tMx,self.unitary_postfactor,
+            #                                self.ham_basis, self.other_basis,
+            #                                self.cptp,self.nonham_diagonal_only,
+            #                                True, self.matrix_basis)
+            #assert(_np.linalg.norm(tGate.paramvals - self.paramvals) < 1e-6)
+        else:
+            raise ValueError("Invalid transform for this LindbladParameterizedGate: type %s"
+                             % str(type(S)))
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
+
+        Returns
+        -------
+        None
+        """
+        assert(not self.sparse), "depolarize() not implemented for sparse LindbladParameterizedGateMap objects"
+        if isinstance(amount,float):
+            D = _np.diag( [1]+[1-amount]*(self.dim-1) )
+        else:
+            assert(len(amount) == self.dim-1)
+            D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
+        mx = _np.dot(D,self.base)
+        tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
+                                          self.ham_basis, self.other_basis,
+                                          self.cptp,self.nonham_diagonal_only,
+                                          True, self.matrix_basis)
+
+        #Note: truncate=True to be safe
+        self.paramvals[:] = tGate.paramvals[:]
+        self._construct_matrix()
+        self.dirty = True
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        Returns
+        -------
+        None
+        """
+        assert(not self.sparse), "rotate() not implemented for sparse LindbladParameterizedGateMap objects"
+        rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
+        mx = _np.dot(rotnMx,self.base)
+        tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
+                                          self.ham_basis, self.other_basis,
+                                          self.cptp,self.nonham_diagonal_only,
+                                          True, self.matrix_basis)
+        #Note: truncate=True to be safe
+        self.paramvals[:] = tGate.paramvals[:]
+        self._construct_matrix()
+        self.dirty = True
+
+
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate, which *must be another 
+        LindbladParameterizedGate*.  (For more general compositions between
+        different types of gates, use the module-level compose function.)  The
+        returned gate's matrix is equal to dot(this, otherGate).
+
+        Parameters
+        ----------
+        otherGate : LindbladParameterizedGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        LindbladParameterizedGate
+        """
+        assert(not self.sparse), "compose() not implemented for sparse LindbladParameterizedGateMap objects"
+        assert( isinstance(otherGate, LindbladParameterizedGateMap) )
+        assert(self.cptp == otherGate.cptp)
+        assert(self.nonham_diagonal_only == otherGate.nonham_diagonal_only)
+
+        composed_mx = _np.dot(self, otherGate)
+        return LindbladParameterizedGateMap(composed_mx,self.unitary_postfactor,
+                                          self.ham_basis, self.other_basis,
+                                          self.cptp,self.nonham_diagonal_only,
+                                          True, self.matrix_basis)
+
+    def __str__(self):
+        s = "Lindblad Parameterized gate map with dim = %d, num params = %d\n" % \
+            (self.err_gen.shape[0], self.num_params())
+        return s
+
+
+class LindbladParameterizedGate(LindbladBase,GateMatrix):
     """
     Encapsulates a gate matrix that is parameterized by a Lindblad-form
     expression, such that each parameter multiplies a particular term in
@@ -2438,219 +3072,33 @@ class LindbladParameterizedGate(GateMatrix):
             gateMatrix = unitaryPostfactor
         if unitaryPostfactor is None:
             unitaryPostfactor = _np.identity(gateMatrix.shape[0],'d')
-
-        self.cptp = cptp
-        self.nonham_diagonal_only = nonham_diagonal_only
-        
-        d2 = gateMatrix.shape[0]
-        d = int(round(_np.sqrt(d2)))
-        assert(d*d == d2), "Gate dim must be a perfect square"
+            
         self.unitary_postfactor = unitaryPostfactor
-
-        self.ham_basis = ham_basis
-        self.other_basis = nonham_basis
-        self.matrix_basis = mxBasis
-
-        #For now, always use pauli-product basis (should be able to use
-        # gm also, but one thing at a time).
+        
+        #Init base from error generator: sets basis members and ultimately
+        # the parameters in self.paramvals
         errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
-        self._set_params_from_errgen(errgen, truncate)
-          #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
-          # and self.ham_basis_size and self.other_basis_size
+        GateMatrix.__init__(self, self.unitary_postfactor) #sets self.dim
+        LindbladBase.__init__(self, errgen, ham_basis, nonham_basis, cptp,
+                              nonham_diagonal_only, truncate, mxBasis)
 
+        assert(not self.sparse), "LindbladParameterizedGate cannot be sparse - use LindbladParameterizedGateMap"
         assert(not _np.array_equal(gateMatrix,unitaryPostfactor) or
                _np.allclose(self.paramvals,0.0,atol=1e-6))
 
-        #Assume gate in in the pauli-product basis for now, just for
-        # simplicity.  I think everything should work fine in any other
-        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _bt.transform_matrix(mxBasis, "std", d)
-        self.leftTrans  = _np.linalg.inv(mxBasisToStd)
-        self.rightTrans = mxBasisToStd
-
-        #initialize intermediate storage for matrix and for deriv computation
-        bsO = self.other_basis_size
-        if bsO > 0:
-            self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
-        else: self.Lmx = None
-
-        GateMatrix.__init__(self, self.unitary_postfactor)
         self._construct_matrix() # construct base from the parameters
 
         if not truncate:
             assert(not _np.array_equal(gateMatrix,self.base)), \
                    "Gate matrix must be truncated and truncate == False!"
 
-
-    def _set_params_from_errgen(self, errgen, truncate):
-        d2 = self.unitary_postfactor.shape[0]
-
-        hamC, otherC, self.hamGens, self.otherGens = \
-            _gt.lindblad_errgen_projections(
-                errgen, self.ham_basis, self.other_basis, self.matrix_basis, normalize=False,
-                return_generators=True, other_diagonal_only=self.nonham_diagonal_only) # in std basis
-
-        if self.hamGens is not None:
-            bsH = self.hamGens.shape[0]+1 #projection-basis size (not nec. == d2)
-            assert(self.hamGens.shape == (bsH-1,d2,d2))
             
-            assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
-                "Hamiltoian coeffs are not all real!"
-            hamParams = hamC.real
-        else:
-            bsH = 0
-            hamParams = _np.empty(0,'d')
-            
-
-        if self.otherGens is not None:
-            bsO = self.otherGens.shape[0]+1 #projection-basis size (not nec. == d2)
-
-            if self.nonham_diagonal_only:
-                assert(self.otherGens.shape == (bsO-1,d2,d2))
-                assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
-                #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
-    
-                if self.cptp: #otherParams is a 1D vector of the sqrts of diagonal els
-                    otherC = otherC.clip(1e-16,1e100) #must be positive
-                    otherParams = _np.sqrt(otherC.real) # shape (bs-1,)
-                else: #otherParams is a 1D vector of the real diagonal els of otherC
-                    otherParams = otherC.real # shape (bs-1,)
-    
-            else:
-                assert(self.otherGens.shape == (bsO-1,bsO-1,d2,d2))
-                assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
-                                   ,0)), "other coeff mx is not Hermitian!"
-    
-                otherParams = _np.empty((bsO-1,bsO-1),'d')
-    
-                if self.cptp: #otherParams mx stores Cholesky decomp
-    
-                    #push any slightly negative evals of otherC positive so that
-                    # the Cholesky decomp will work.
-                    evals,U = _np.linalg.eig(otherC)
-                    Ui = _np.linalg.inv(U)
-    
-                    assert(truncate or all([ev >= -1e-12 for ev in evals])), \
-                        "gateMatrix must be CPTP (truncate == False)!"
-    
-                    pos_evals = evals.clip(1e-16,1e100)
-                    otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
-                    try:
-                        Lmx = _np.linalg.cholesky(otherC)
-                    except _np.linalg.LinAlgError: #Lmx not postitive definite?
-                        pos_evals = evals.clip(1e-12,1e100) #try again with 1e-12
-                        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
-                        Lmx = _np.linalg.cholesky(otherC)
-    
-                    for i in range(bsO-1):
-                        assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
-                        otherParams[i,i] = Lmx[i,i].real
-                        for j in range(i):
-                            otherParams[i,j] = Lmx[i,j].real
-                            otherParams[j,i] = Lmx[i,j].imag
-    
-                else: #otherParams mx stores otherC (hermitian) directly
-                    for i in range(bsO-1):
-                        assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
-                        otherParams[i,i] = otherC[i,i].real
-                        for j in range(i):
-                            otherParams[i,j] = otherC[i,j].real
-                            otherParams[j,i] = otherC[i,j].imag
-        else:
-            bsO = 0
-            otherParams = _np.empty(0,'d')
-
-        self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
-        self.ham_basis_size = bsH
-        self.other_basis_size = bsO
-
-        #True unless bsH,bsO are zero
-        #if nonham_diagonal_only:
-        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1),))
-        #else:
-        #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
-
-
     def _construct_matrix(self):
         """
         Build the internal gate matrix using the current parameters.
         """
-        d2 = self.dim
-        bsH = self.ham_basis_size
-        bsO = self.other_basis_size
-
-        # self.paramvals = [hamCoeffs] + [otherParams]
-        #  where hamCoeffs are *real* and of length d2-1 (self.dim == d2)
-        if bsH > 0:
-            hamCoeffs = self.paramvals[0:bsH-1]
-            nHam = bsH-1
-        else:
-            nHam = 0
-
-        #built up otherCoeffs based on self.cptp and self.nonham_diagonal_only
-        if bsO > 0:
-            if self.nonham_diagonal_only:
-                otherParams = self.paramvals[nHam:]
-                assert(otherParams.shape == (bsO-1,))
-    
-                if self.cptp:
-                    otherCoeffs = otherParams**2 #Analagous to L*L_dagger
-                else:
-                    otherCoeffs = otherParams
-            else:
-                otherParams = self.paramvals[nHam:].reshape((bsO-1,bsO-1))
-    
-                if self.cptp:
-                    #  otherParams is an array of length (bs-1)*(bs-1) that
-                    #  encodes a lower-triangular matrix "Lmx" via:
-                    #  Lmx[i,i] = otherParams[i,i]
-                    #  Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i] (i > j)
-                    for i in range(bsO-1):
-                        self.Lmx[i,i] = otherParams[i,i]
-                        for j in range(i):
-                            self.Lmx[i,j] = otherParams[i,j] + 1j*otherParams[j,i]
-            
-                    #The matrix of (complex) "other"-coefficients is build by
-                    # assuming Lmx is its Cholesky decomp; means otherCoeffs
-                    # is pos-def.
-
-                    # NOTE that the Cholesky decomp with all positive real diagonal
-                    # elements is *unique* for a given positive-definite otherCoeffs
-                    # matrix, but we don't care about this uniqueness criteria and so
-                    # the diagonal els of Lmx can be negative and that's fine -
-                    # otherCoeffs will still be posdef.
-                    otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-    
-                    #DEBUG - test for pos-def
-                    #evals = _np.linalg.eigvalsh(otherCoeffs)
-                    #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-                    #assert(all([ev >= -DEBUG_TOL for ev in evals]))
-    
-                else:
-                    #otherParams holds otherCoeff real and imaginary parts directly
-                    otherCoeffs = _np.empty((bsO-1,bsO-1),'complex')
-                    for i in range(bsO-1):
-                        otherCoeffs[i,i] = otherParams[i,i]
-                        for j in range(i):
-                            otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
-                            otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-
-        #Finally, build gate matrix from generators and coefficients:
-        if bsH > 0:
-            lnd_error_gen = _np.einsum('i,ijk', hamCoeffs, self.hamGens)
-        else:
-            lnd_error_gen = _np.zeros( (d2,d2), 'complex')
-
-        if bsO > 0:
-            if self.nonham_diagonal_only:
-                lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
-            else:
-                lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
-
-        lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
-                lnd_error_gen, self.rightTrans)) #basis chg
-        self.err_gen = lnd_error_gen
-        self.exp_err_gen = _spl.expm(lnd_error_gen)
+        self._construct_errgen() # constructs self.err_gen
+        self.exp_err_gen = _spl.expm(self.err_gen)
         matrix = _np.dot(self.exp_err_gen, self.unitary_postfactor)
 
         #gen0_pp = hamGens_pp[0] #_np.dot(self.leftTrans, _np.dot(self.hamGens[0], self.rightTrans))
@@ -2711,30 +3159,7 @@ class LindbladParameterizedGate(GateMatrix):
                          " LindbladParameterizedGate object is not" +
                          " supported.  Please use the from_vector method.")
 
-    def num_params(self):
-        """
-        Get the number of independent parameters which specify this gate.
-
-        Returns
-        -------
-        int
-           the number of independent parameters.
-        """
-        return len(self.paramvals)
-
-
-    def to_vector(self):
-        """
-        Extract a vector of the underlying gate parameters from this gate.
-
-        Returns
-        -------
-        numpy array
-            a 1D numpy array with length == num_params().
-        """
-        return self.paramvals
-
-
+    
     def from_vector(self, v):
         """
         Initialize the gate using a vector of its parameters.
@@ -2755,121 +3180,121 @@ class LindbladParameterizedGate(GateMatrix):
         self.dirty = True
 
 
-    def old_deriv_wrt_params(self, wrtFilter=None):
-        """
-        Construct a matrix whose columns are the vectorized
-        derivatives of the flattened gate matrix with respect to a
-        single gate parameter.  Thus, each column is of length
-        gate_dim^2 and there is one column per gate parameter.
-
-        Returns
-        -------
-        numpy array
-            Array of derivatives, shape == (dimension^2, num_params)
-        """
-        if self.base_deriv is None:
-            d2 = self.dim
-            bsH = self.ham_basis_size
-            bsO = self.other_basis_size
-            TERM_TOL = 1e-12
-    
-            #Deriv wrt hamiltonian params
-            if bsH > 0:
-                dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-                series = last_commutant = term = dHdp; i=2
-                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-                    commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-                        _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-                    term = 1/_np.math.factorial(i) * commutant
-                    series += term #1/_np.math.factorial(i) * commutant
-                    last_commutant = commutant; i += 1
-                dH = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor)
-                dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
-                nHam = bsH-1
-            else:
-                dH = _np.empty( (d2**2,0), 'd') #so concat works below
-                nHam = 0
-    
-            #Deriv wrt other params
-            if bsO > 0:
-                if self.nonham_diagonal_only:
-                    otherParams = self.paramvals[nHam:]
-                
-                    # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
-                    if self.cptp:
-                        dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-                    else:
-                        dOdp  = _np.einsum('alj->lja', self.otherGens)
-                
-                    #apply basis transform
-                    dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-                
-                    #take d(matrix-exp) using series approximation
-                    series = last_commutant = term = dOdp; i=2
-                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-                        commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
-                            _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
-                        term = 1/_np.math.factorial(i) * commutant
-                        series += term #1/_np.math.factorial(i) * commutant
-                        last_commutant = commutant; i += 1
-                    dO = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1]
-                    dO = dO.reshape(d2**2,bsO-1)
-                
-                
-                else: #all lindblad terms included                
-                    if self.cptp:
-                        L,Lbar = self.Lmx,self.Lmx.conjugate()
-                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
-                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-                
-                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                        dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
-                        dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-                        dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
-                        dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
-                    else:
-                        F0 = _np.identity(bsO-1,'d')
-                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
-                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
-                
-                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
-                        dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                        dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                                _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                        dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                                _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-                
-                    #apply basis transform
-                    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
-                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-                
-                    #take d(matrix-exp) using series approximation
-                    series = last_commutant = term = dOdp; i=2
-                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
-                        commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
-                            _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
-                        term = 1/_np.math.factorial(i) * commutant
-                        series += term #1/_np.math.factorial(i) * commutant
-                        last_commutant = commutant; i += 1
-                    dO = _np.einsum('ikab,kl,lj->ijab', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1,bs-1]
-                    dO = dO.reshape(d2**2,(bsO-1)**2)
-            else:
-                dO = _np.empty( (d2**2,0), 'd') #so concat works below
-            
-            derivMx = _np.concatenate((dH,dO), axis=1)
-            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
-            derivMx = _np.real(derivMx)
-            self.base_deriv = derivMx
-
-            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
-            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
-            #derivMx = fd_deriv
-
-        if wrtFilter is None:
-            return self.base_deriv
-        else:
-            return _np.take( self.base_deriv, wrtFilter, axis=1 )
+#    def old_deriv_wrt_params(self, wrtFilter=None):
+#        """
+#        Construct a matrix whose columns are the vectorized
+#        derivatives of the flattened gate matrix with respect to a
+#        single gate parameter.  Thus, each column is of length
+#        gate_dim^2 and there is one column per gate parameter.
+#
+#        Returns
+#        -------
+#        numpy array
+#            Array of derivatives, shape == (dimension^2, num_params)
+#        """
+#        if self.base_deriv is None:
+#            d2 = self.dim
+#            bsH = self.ham_basis_size
+#            bsO = self.other_basis_size
+#            TERM_TOL = 1e-12
+#    
+#            #Deriv wrt hamiltonian params
+#            if bsH > 0:
+#                dHdp = _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+#                series = last_commutant = term = dHdp; i=2
+#                while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+#                    commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
+#                        _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
+#                    term = 1/_np.math.factorial(i) * commutant
+#                    series += term #1/_np.math.factorial(i) * commutant
+#                    last_commutant = commutant; i += 1
+#                dH = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor)
+#                dH = dH.reshape((d2**2,bsH-1)) # [iFlattenedGate,iHamParam]
+#                nHam = bsH-1
+#            else:
+#                dH = _np.empty( (d2**2,0), 'd') #so concat works below
+#                nHam = 0
+#    
+#            #Deriv wrt other params
+#            if bsO > 0:
+#                if self.nonham_diagonal_only:
+#                    otherParams = self.paramvals[nHam:]
+#                
+#                    # Derivative of exponent wrt other param; shape == [d2,d2,bs-1]
+#                    if self.cptp:
+#                        dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+#                    else:
+#                        dOdp  = _np.einsum('alj->lja', self.otherGens)
+#                
+#                    #apply basis transform
+#                    dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+#                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+#                
+#                    #take d(matrix-exp) using series approximation
+#                    series = last_commutant = term = dOdp; i=2
+#                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+#                        commutant = _np.einsum("ik,kja->ija",self.err_gen,last_commutant) - \
+#                            _np.einsum("ika,kj->ija",last_commutant,self.err_gen)
+#                        term = 1/_np.math.factorial(i) * commutant
+#                        series += term #1/_np.math.factorial(i) * commutant
+#                        last_commutant = commutant; i += 1
+#                    dO = _np.einsum('ika,kl,lj->ija', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1]
+#                    dO = dO.reshape(d2**2,bsO-1)
+#                
+#                
+#                else: #all lindblad terms included                
+#                    if self.cptp:
+#                        L,Lbar = self.Lmx,self.Lmx.conjugate()
+#                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'))
+#                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+#                
+#                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+#                        dOdp  = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1) #only a >= b nonzero (F1)
+#                        dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
+#                        dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2) #only b > a nonzero (F2)
+#                        dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate()) # ditto
+#                    else:
+#                        F0 = _np.identity(bsO-1,'d')
+#                        F1 = _np.tril(_np.ones((bsO-1,bsO-1),'d'),-1)
+#                        F2 = _np.triu(_np.ones((bsO-1,bsO-1),'d'),1) * 1j
+#                
+#                          # Derivative of exponent wrt other param; shape == [d2,d2,bs-1,bs-1]
+#                        dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
+#                        dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
+#                                _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+#                        dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
+#                                _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
+#                
+#                    #apply basis transform
+#                    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+#                    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+#                
+#                    #take d(matrix-exp) using series approximation
+#                    series = last_commutant = term = dOdp; i=2
+#                    while _np.amax(_np.abs(term)) > TERM_TOL: #_np.linalg.norm(term)
+#                        commutant = _np.einsum("ik,kjab->ijab",self.err_gen,last_commutant) - \
+#                            _np.einsum("ikab,kj->ijab",last_commutant,self.err_gen)
+#                        term = 1/_np.math.factorial(i) * commutant
+#                        series += term #1/_np.math.factorial(i) * commutant
+#                        last_commutant = commutant; i += 1
+#                    dO = _np.einsum('ikab,kl,lj->ijab', series, self.exp_err_gen, self.unitary_postfactor) # dim [d2,d2,bs-1,bs-1]
+#                    dO = dO.reshape(d2**2,(bsO-1)**2)
+#            else:
+#                dO = _np.empty( (d2**2,0), 'd') #so concat works below
+#            
+#            derivMx = _np.concatenate((dH,dO), axis=1)
+#            assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)
+#            derivMx = _np.real(derivMx)
+#            self.base_deriv = derivMx
+#
+#            #check_deriv_wrt_params(self, derivMx, eps=1e-7)
+#            #fd_deriv = finite_difference_deriv_wrt_params(self, eps=1e-7)
+#            #derivMx = fd_deriv
+#
+#        if wrtFilter is None:
+#            return self.base_deriv
+#        else:
+#            return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
     def _dHdp(self):
         return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
@@ -3597,9 +4022,7 @@ class TPInstrumentGate(GateMatrix):
         return s
 
 
-#TODO: add "sparse" flag to LindbladParameterizedGate
-#  -- maybe add "sparse" basis (where mxs are sparse) to facilitate this
-
+    
 class ComposedGate(GateMatrix):
     """
     TODO: docstring
@@ -4030,7 +4453,7 @@ class ComposedGateMap(GateMap):
     
     def as_matrix(self):
         """ Return the gate as a sparse matrix """
-        return self.as_sparse_matrix().todense()
+        return self.as_sparse_matrix().toarray()
 
     
     def num_params(self):
@@ -4405,7 +4828,7 @@ class EmbeddedGateMap(GateMap):
     def as_sparse_matrix(self):
         """ Return the gate as a sparse matrix """
         dmDim, gateDim, blockDims = self.basis.dim
-        finalGate = _sparse.identity( gateDim, 'd', format='lil' )
+        finalGate = _sps.identity( gateDim, 'd', format='lil' )
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)

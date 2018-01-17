@@ -9,6 +9,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 import warnings as _warnings
 import itertools as _itertools
 
@@ -742,3 +744,76 @@ def _findx(a, inds, always_copy=False):
             a_inds = _np.zeros( a_inds_shape, a.dtype ) #has zero elements
             asssert(a_inds.size == 0)
         return a_inds
+
+
+def safedot(A,B):
+    """ 
+    Performs dot(A,B) correctly when neither, either, or both arguments
+    are sparse matrices
+    """
+    if _sps.issparse(A):
+        return A.dot(B) # sparseMx.dot works for both sparse and dense args
+    elif _sps.issparse(B):
+        # to return a sparse mx even when A is dense (asymmetric behavior):
+        # --> return _sps.csr_matrix(A).dot(B) # numpyMx.dot can't handle sparse argument
+        return _np.dot(A,B.toarray()) 
+    else:
+        return _np.dot(A,B)
+
+
+def safereal(A):
+    """ 
+    Returns the real-part of `A` correctly when `A` is either a dense array or
+    a sparse matrix
+    """
+    if _sps.issparse(A):
+        if _sps.isspmatrix_csr(A):
+            ret = _sps.csr_matrix( (_np.real(A.data), A.indices, A.indptr), shape=A.shape)
+            ret.eliminate_zeros()
+        else:
+            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
+    else:
+        return _np.real(A)
+
+
+def safeimag(A):
+    """ 
+    Returns the imaginary-part of `A` correctly when `A` is either a dense array
+    or a sparse matrix
+    """
+    if _sps.issparse(A):
+        if _sps.isspmatrix_csr(A):
+            ret = _sps.csr_matrix( (_np.imag(A.data), A.indices, A.indptr), shape=A.shape)
+            ret.eliminate_zeros()
+        else:
+            raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
+    else:
+        return _np.imag(A)
+
+
+def safenorm(A, part=None):
+    """ 
+    Returns the frobenius norm of a matrix or vector, `A` when it is either
+    a dense array or a sparse matrix.
+
+    Parameters
+    ----------
+    A : ndarray or sparse matrix
+        The matrix or vector to take the norm of.
+
+    part : {None,'real','imag'}
+        If not None, return the norm of the real or imaginary
+        part of `A`.
+
+    Returns
+    -------
+    float
+    """
+    if part == 'real': A = safereal(A)
+    elif part == 'imag': A = safeimag(A)
+    if _sps.issparse(A):
+        return _spsl.norm(A)
+    else:
+        return _np.linalg.norm(A)
+
+    

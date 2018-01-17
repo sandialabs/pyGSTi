@@ -8,6 +8,8 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import scipy.linalg as _spl
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 import warnings as _warnings
 
 from . import jamiolkowski as _jam
@@ -1113,6 +1115,28 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     return ret[0] if len(ret)==1 else tuple(ret)
 
 
+def _assert_shape(ar, shape, sparse=False):
+    """ Asserts ar.shape == shape ; works with sparse matrices too """
+    if not sparse or len(shape) == 2:
+        assert(ar.shape == shape), \
+            "Shape mismatch: %s != %s!" % (str(ar.shape),str(shape))
+    else:
+        if len(shape) == 3: #first "dim" is a list
+            assert(len(ar) == shape[0]), \
+                "Leading dim mismatch: %d != %d!" % (len(ar),shape[0])
+            assert(shape[0] == 0 or ar[0].shape == (shape[1],shape[2])), \
+                "Shape mismatch: %s != %s!" % (str(ar[0].shape),str(shape[1:]))
+        elif len(shape) == 4: #first 2 dims are lists
+            assert(len(ar) == shape[0]), \
+                "Leading dim mismatch: %d != %d!" % (len(ar),shape[0])
+            assert(shape[0] == 0 or len(ar[0]) == shape[1]), \
+                "Second dim mismatch: %d != %d!" % (len(ar[0]),shape[1])
+            assert(shape[0] == 0 or shape[1] == 0 or ar[0][0].shape == (shape[2],shape[3])), \
+                "Shape mismatch: %s != %s!" % (str(ar[0][0].shape),str(shape[2:]))
+        else:
+            raise NotImplementedError("Number of dimensions must be <= 4!")
+
+
 def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
                               other_diagonal_only=False):
     """
@@ -1149,14 +1173,16 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
         element, for the returned Hamiltonian-type error generators.  This
         argument is easily obtained by call to  :func:`pp_matrices` or a
         similar function.  The matrices are expected to be in the standard
-        basis, and should be traceless except for the identity.
+        basis, and should be traceless except for the identity.  Matrices
+        should be NumPy arrays or SciPy CSR sparse matrices.
 
     dmbasis_other : list
         A list of basis matrices {B_i} *including* the identity as the first
         element, for the returned Stochastic-type error generators.  This
         argument is easily obtained by call to  :func:`pp_matrices` or a
         similar function.  The matrices are expected to be in the standard
-        basis, and should be traceless except for the identity.
+        basis, and should be traceless except for the identity.  Matrices
+        should be NumPy arrays or SciPy CSR sparse matrices.
 
     normalize : bool
         Whether or not generators should be normalized so that 
@@ -1170,13 +1196,17 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
     Returns
     -------
-    ham_generators : numpy.ndarray
-        An array of shape (d-1,d,d), where d is the size of the basis,
-        i.e. d == len(dmbasis).  `ham_generators[i]` gives the matrix for H_i.
+    ham_generators : numpy.ndarray or list of SciPy CSR matrices
+        If dense matrices where given, an array of shape (d-1,d,d), where d is
+        the size of the basis, i.e. d == len(dmbasis).  `ham_generators[i]`
+        gives the matrix for H_i.  If sparse matrices were given, a list
+        of shape (d,d) CSR matrices.
 
-    other_generators : numpy.ndarray
-        An array of shape (d-1,d-1,d,d), where d is the size of the basis.
-        `other_generators[i,j]` gives the matrix for O_ij.
+    other_generators : numpy.ndarray or list of lists of SciPy CSR matrices
+        If dense matrices where given, An array of shape (d-1,d-1,d,d), where d
+        is the size of the basis. `other_generators[i,j]` gives the matrix for
+        O_ij.  If sparse matrices were given, a list of lists of shape (d,d)
+        CSR matrices.
     """
     if dmbasis_ham is not None:
         ham_mxs = dmbasis_ham # list of basis matrices (assumed to be in std basis)
@@ -1192,63 +1222,72 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 
     if ham_nMxs > 0:
         d = ham_mxs[0].shape[0]
+        sparse = _sps.issparse(ham_mxs[0])
     elif other_nMxs > 0:
         d = other_mxs[0].shape[0]
+        sparse = _sps.issparse(other_mxs[0])
     else: 
         d = 0 #will end up returning no generators
+        sparse = False
     d2 = d**2
+    normfn = _spsl.norm if sparse else _np.linalg.norm
+    identityfn = (lambda d: _sps.identity(d,'d','csr')) if sparse else _np.identity
 
     if ham_nMxs > 0 and other_nMxs > 0:
         assert(other_mxs[0].shape[0] == ham_mxs[0].shape[0]), \
             "Bases must have the same dimension!"
 
     if ham_nMxs > 0:
-        assert(_np.isclose(_np.linalg.norm(ham_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
+        assert(_np.isclose(normfn(ham_mxs[0]-identityfn(d)/_np.sqrt(d)),0)),\
             "The first matrix in 'dmbasis_ham' must be the identity"
 
-        hamLindbladTerms = _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
+        hamLindbladTerms = [ None ] * (ham_nMxs-1) if sparse else \
+                           _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
+
         for i,B in enumerate(ham_mxs[1:]): #don't include identity
-            hamLindbladTerms[i] = _lt.hamiltonian_to_lindbladian(B) # in std basis
+            hamLindbladTerms[i] = _lt.hamiltonian_to_lindbladian(B,sparse) # in std basis
             if normalize:
-                norm = _np.linalg.norm(hamLindbladTerms[i].flat)
+                norm = normfn(hamLindbladTerms[i]) #same as norm(term.flat)
                 if not _np.isclose(norm,0):
                     hamLindbladTerms[i] /= norm #normalize projector
-                    assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
+                    assert(_np.isclose(normfn(hamLindbladTerms[i]),1.0))
     else:
         hamLindbladTerms = None
 
     if other_nMxs > 0:
-        assert(_np.isclose(_np.linalg.norm(other_mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
+        assert(_np.isclose(normfn(other_mxs[0]-identityfn(d)/_np.sqrt(d)),0)),\
             "The first matrix in 'dmbasis_other' must be the identity"
 
         if other_diagonal_only:
-            otherLindbladTerms = _np.empty( (other_nMxs-1,d2,d2), 'complex' )
+            otherLindbladTerms = [ None ] * (other_nMxs-1) if sparse else \
+                                 _np.empty( (other_nMxs-1,d2,d2), 'complex' )
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
-                otherLindbladTerms[i] = _lt.nonham_lindbladian(Lm,Lm)
+                otherLindbladTerms[i] = _lt.nonham_lindbladian(Lm,Lm,sparse)
                 if normalize:
-                    norm = _np.linalg.norm(otherLindbladTerms[i].flat)
+                    norm = normfn(otherLindbladTerms[i]) #same as norm(term.flat)
                     if not _np.isclose(norm,0):
                         otherLindbladTerms[i] /= norm #normalize projector
-                        assert(_np.isclose(_np.linalg.norm(
-                            otherLindbladTerms[i].flat),1.0))
+                        assert(_np.isclose(normfn(otherLindbladTerms[i]),1.0))
         
         else:
-            otherLindbladTerms = _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
+            otherLindbladTerms = \
+                [ [ None ] * (other_nMxs-1) for i in range(other_nMxs-1)] if sparse else \
+                _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
+
             for i,Lm in enumerate(other_mxs[1:]): #don't include identity
                 for j,Ln in enumerate(other_mxs[1:]): #don't include identity
                     #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
-                    otherLindbladTerms[i,j] = _lt.nonham_lindbladian(Lm,Ln)
+                    otherLindbladTerms[i][j] = _lt.nonham_lindbladian(Lm,Ln,sparse)
                     if normalize:
-                        norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
+                        norm = normfn(otherLindbladTerms[i][j]) #same as norm(term.flat)
                         if not _np.isclose(norm,0):
-                            otherLindbladTerms[i,j] /= norm #normalize projector
-                            assert(_np.isclose(_np.linalg.norm(
-                                        otherLindbladTerms[i,j].flat),1.0))
+                            otherLindbladTerms[i][j] /= norm #normalize projector
+                            assert(_np.isclose(normfn(otherLindbladTerms[i][j]),1.0))
                     #I don't think this is true in general, but appears to be true for "pp" basis (why?)
                     #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
                     #    assert(_np.isclose(_np.linalg.norm(
-                    #                otherLindbladTerms[i,j]-
-                    #                otherLindbladTerms[j,i].conjugate()),0))
+                    #                otherLindbladTerms[i][j]-
+                    #                otherLindbladTerms[j][i].conjugate()),0))
     else:
         otherLindbladTerms = None
 
@@ -1285,7 +1324,7 @@ def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
 def lindblad_errgen_projections(errgen, ham_basis,
                                 other_basis, mxBasis="gm",
                                 normalize=True, return_generators=False,
-                                other_diagonal_only=False):
+                                other_diagonal_only=False, sparse=False):
     """
     Compute the projections of a gate error generator onto generators
     for the Lindblad-term errors when expressed in the given 
@@ -1324,6 +1363,9 @@ def lindblad_errgen_projections(errgen, ham_basis,
       If True, then only projections onto the "diagonal" terms in the
       Lindblad expresssion are returned.
 
+    sparse : bool, optional
+      Whether to create sparse or dense basis matrices when strings
+      are given as `ham_basis` and `other_basis`
 
     Returns
     -------
@@ -1345,8 +1387,14 @@ def lindblad_errgen_projections(errgen, ham_basis,
       from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """
-
     errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    if _sps.issparse(errgen_std):
+        errgen_std_flat = errgen_std.tolil().reshape(
+            (errgen_std.shape[0]*errgen_std.shape[1],1) ).tocsr() # b/c lil's are only type that can reshape...
+    else:
+        errgen_std_flat = errgen_std.flatten()
+    errgen_std = None #ununsed below, and sparse reshape doesn't copy, so mark as None
+    
 
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
@@ -1357,19 +1405,27 @@ def lindblad_errgen_projections(errgen, ham_basis,
     if isinstance(ham_basis, _Basis):
         hamBasisMxs = ham_basis.get_composite_matrices()
     elif _compat.isstr(ham_basis):
-        hamBasisMxs = _basis_matrices(ham_basis, d)
+        hamBasisMxs = _basis_matrices(ham_basis, d, sparse=sparse)
     else: 
         hamBasisMxs = ham_basis
         
     if isinstance(other_basis, _Basis):
         otherBasisMxs = other_basis.get_composite_matrices()
     elif _compat.isstr(other_basis):
-        otherBasisMxs = _basis_matrices(other_basis, d)
+        otherBasisMxs = _basis_matrices(other_basis, d, sparse=sparse)
     else: 
         otherBasisMxs = other_basis
-    
+        
     hamGens, otherGens = lindblad_error_generators(
         hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
+
+    #DEBUG CHECK
+    #print("HDIM = ",ham_basis.name,ham_basis.dim.dmDim)
+    #print("ODIM = ",other_basis.name,other_basis.dim.dmDim)
+    #HBD = _basis_matrices(ham_basis.name, ham_basis.dim.dmDim, sparse=False)
+    #OBD = _basis_matrices(other_basis.name, other_basis.dim.dmDim, sparse=False)
+    #hamGens_dense, otherGens_dense = lindblad_error_generators(
+    #    HBD,OBD,normalize,other_diagonal_only) # in std basis
 
     if hamBasisMxs is not None:
         bsH = len(hamBasisMxs) #basis size (not necessarily d2)
@@ -1379,14 +1435,18 @@ def lindblad_errgen_projections(errgen, ham_basis,
         bsO = len(otherBasisMxs) #basis size (not necessarily d2)
     else: bsO = 0
 
+    if bsH > 0: sparse = _sps.issparse(hamBasisMxs[0])
+    elif bsO > 0: sparse = _sps.issparse(otherBasisMxs[0])
+    else: sparse = False # default?
+    
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
-    if bsH > 0: 
-        assert(hamGens.shape == (bsH-1,d2,d2))
+    if bsH > 0:
+        _assert_shape(hamGens, (bsH-1,d2,d2), sparse)
     if bsO > 0:
         if other_diagonal_only:
-            assert(otherGens.shape == (bsO-1,d2,d2))
+            _assert_shape(otherGens, (bsO-1,d2,d2), sparse)
         else:
-            assert(otherGens.shape == (bsO-1,bsO-1,d2,d2))
+            _assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), sparse)
 
     #Perform linear least squares solve to find "projections" onto each otherGens element - defined so that
     #  sum_i projection_i * otherGen_i = (errgen_std-ham_errgen) as well as possible.
@@ -1397,29 +1457,93 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #Do linear least squares soln to expressing errgen_std as a linear combo
     # of the lindblad generators
     if bsH > 0:
-        H = hamGens.reshape((bsH-1,d2**2)).T #ham generators == columns
-        Hdag = H.T.conjugate()
+        if not sparse:
+            H = hamGens.reshape((bsH-1,d2**2)).T #ham generators == columns
+            Hdag = H.T.conjugate()
 
-        #Do linear least squares: this is what takes the bulk of the time
-        hamProjs   = _np.linalg.solve(_np.dot(Hdag,H), _np.dot(Hdag,errgen_std.flatten()))
-        hamProjs.shape = (hamGens.shape[0],)
+            #Do linear least squares: this is what takes the bulk of the time
+            hamProjs   = _np.linalg.solve(_np.dot(Hdag,H), _np.dot(Hdag,errgen_std_flat))
+            hamProjs.shape = (hamGens.shape[0],)
+        else:
+            rows = [ hamGen.tolil().reshape((1,d2**2)) for hamGen in hamGens ]
+            H = _sps.vstack(rows, 'csr').transpose()
+            Hdag = H.copy().transpose().conjugate()
+
+            #Do linear least squares: this is what takes the bulk of the time
+            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS 
+                hamProjs = _np.zeros(bsH-1, 'd')
+            else:
+                hamProjs   = _spsl.spsolve(Hdag.dot(H), Hdag.dot(errgen_std_flat) )
+                if _sps.issparse(hamProjs): hamProjs = hamProjs.toarray().flatten()
+            hamProjs.shape = (bsH-1,)
     else:
         hamProjs = None
 
     if bsO > 0:
-        if other_diagonal_only:
-            O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
-        else:
-            O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
-        Odag = O.T.conjugate()
+        if not sparse:
+            if other_diagonal_only:
+                O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
+            else:
+                O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
+            Odag = O.T.conjugate()
+    
+            #Do linear least squares: this is what takes the bulk of the time
+            otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std_flat))
+    
+            if other_diagonal_only:
+                otherProjs.shape = (otherGens.shape[0],)
+            else:
+                otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
 
-        #Do linear least squares: this is what takes the bulk of the time
-        otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std.flatten()))
-
-        if other_diagonal_only:
-            otherProjs.shape = (otherGens.shape[0],)
         else:
-            otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
+            if other_diagonal_only:
+                rows = [oGen.tolil().reshape((1,d2**2)) for oGen in otherGens]
+                O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
+            else:
+                #DEBUG CHECK
+                #print("LENS = ",len(otherGens),[len(otherGenRow) for otherGenRow in otherGens])
+                #print("otherGens_dense.shape = ",otherGens_dense.shape)
+                #for i,oGenRow in enumerate(otherGens):
+                #    for j,oGen in enumerate(oGenRow):
+                #        oGen_dense = oGen.toarray()
+                #        diff = _np.linalg.norm(otherGens_dense[i,j] - oGen_dense)
+                #        if diff > 1e-6:
+                #            print("Diff gens[%d,%d] = %g" % (i,j,diff))
+                #            for ii in range(15):
+                #                for jj in range(15):
+                #                    if _np.linalg.norm(otherGens_dense[ii,jj] - oGen_dense) < 1e-6:
+                #                        print("  -- BUT MATCHES %d,%d!!!" % (ii,jj))
+                #
+                #Od = _np.concatenate( [ oGen.toarray().reshape(1,d2**2) for oGenRow in otherGens for oGen in oGenRow], axis=0).T
+                #Od_chk = otherGens_dense.reshape(((bsO-1)**2,d2**2)).T # other generators == columns                        
+                #print("OD SHAPE = ",Od.shape,Od_chk.shape)
+                #print("DIFF = ",_np.linalg.norm(Od-Od_chk))
+                #assert(_np.linalg.norm(Od-Od_chk) < 1e-6)
+                rows = [oGen.tolil().reshape((1,d2**2)) for oGenRow in otherGens for oGen in oGenRow]
+                O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
+            Odag = O.copy().transpose().conjugate() #TODO: maybe conjugate copies data?
+
+            #Do linear least squares: this is what takes the bulk of the time
+            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS 
+                otherProjs = _np.zeros(bsO-1, 'd') if other_diagonal_only else \
+                             _np.zeros((bsO-1,bsO-1), 'd')
+            else:
+                #DEBUG CHECK
+                #Oddag = Od.T.conjugate()
+                #otherProjs_chk = _np.linalg.solve(_np.dot(Oddag,Od), _np.dot(Oddag,errgen_std_flat.toarray().flatten()))                
+                #lhs = Odag.dot(O)
+                #rhs = Odag.dot(errgen_std_flat)
+                #print("LHS = ",lhs.nnz,_mt.safenorm(lhs),lhs.shape)
+                #print("RHS = ",rhs.nnz,_mt.safenorm(rhs),rhs.shape)
+                #print("ERRGEN = ",errgen_std_flat.nnz,_mt.safenorm(errgen_std_flat),errgen_std_flat.shape)
+                
+                otherProjs = _spsl.spsolve(Odag.dot(O), Odag.dot(errgen_std_flat))
+                if _sps.issparse(otherProjs): otherProjs = otherProjs.toarray().flatten()
+    
+            if other_diagonal_only:
+                otherProjs.shape = (bsO-1,)
+            else:
+                otherProjs.shape = (bsO-1,bsO-1)
     else:
         otherProjs = None
 
@@ -1432,7 +1556,7 @@ def lindblad_errgen_projections(errgen, ham_basis,
     #    assert(_np.linalg.matrix_rank(M,1e-7) == M.shape[1]) #check err gens are linearly independent
     #    Mdag = M.T.conjugate()
     #    print("DB D: %.1f" % (time.time()-t)); t = time.time()
-    #    projs = _np.linalg.solve(_np.dot(Mdag,M), _np.dot(Mdag,errgen_std.flatten()))        
+    #    projs = _np.linalg.solve(_np.dot(Mdag,M), _np.dot(Mdag,errgen_std_flat))        
     #    hamProjs_chk = projs[0:(bs-1)]
     #    otherProjs_chk = projs[(bs-1):]
     #    assert(_np.linalg.norm(hamProjs-hamProjs_chk) < 1e-6)

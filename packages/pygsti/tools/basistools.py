@@ -22,6 +22,13 @@ from ..baseobjs import Basis
 from ..baseobjs.basisconstructors import *
 from ..baseobjs.basis import basis_matrices, basis_longname, basis_element_labels
 
+def is_sparse_basis(nameOrBasis):
+    if isinstance(nameOrBasis, Basis):
+        return nameOrBasis.sparse
+    else: #assume everything else is not sparse
+          # (could test for a sparse matrix list in the FUTURE)
+        return False
+
 def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
     """
     Convert a gate matrix from one basis of a density matrix space
@@ -48,19 +55,22 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
         The given gate matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
-    if len(mx.shape) not in [1, 2]:
+    if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
     if dimOrBlockDims is None:
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
         #assert( dimOrBlockDims**2 == mx.shape[0] )
 
+    #if either basis is sparse, attempt to construct sparse bases
+    try_for_sparse = is_sparse_basis(from_basis) or is_sparse_basis(to_basis)
+        
     dim        = Dim(dimOrBlockDims)
-    from_basis = Basis(from_basis, dim)
-    to_basis   = Basis(to_basis, dim)
+    from_basis = Basis(from_basis, dim, sparse=try_for_sparse)
+    to_basis   = Basis(to_basis, dim, sparse=try_for_sparse)
     #TODO: check for 'unknown' basis here and display meaningful warning - otherwise just get 0-dimensional basis...
-
-    if from_basis.dim.gateDim != to_basis.dim.gateDim: 
+        
+    if from_basis.dim.gateDim != to_basis.dim.gateDim:
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
 
     if from_basis.name == to_basis.name:
@@ -68,22 +78,24 @@ def change_basis(mx, from_basis, to_basis, dimOrBlockDims=None, resize=None):
 
     toMx   = from_basis.transform_matrix(to_basis)
     fromMx = to_basis.transform_matrix(from_basis)
-
+    
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
-        ret = _np.dot(toMx, _np.dot(mx, fromMx))
+        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
+        # with some/all args being sparse:
+        ret = _mt.safedot(toMx, _mt.safedot(mx, fromMx))
     else: # isVec
-        ret = _np.dot(toMx, mx)
+        ret = _mt.safedot(toMx, mx)
 
     if not to_basis.real:
         return ret
 
-    if _np.linalg.norm(_np.imag(ret)) > 1e-8:
+    if _mt.safenorm(ret,'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
-                         (_np.linalg.norm(_np.imag(ret)), from_basis, to_basis, ret))
-    return _np.real(ret)
+                         (_mt.safenorm(ret,'imag'), from_basis, to_basis, ret))
+    return _mt.safereal(ret)
 
-def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
+def transform_matrix(from_basis, to_basis, dimOrBlockDims=None, sparse=False):
     '''
     Compute the transformation matrix between two bases
 
@@ -98,6 +110,11 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
     dimOrBlockDims : int or list of ints
         if strings provided as bases, the dimension of basis to use.
 
+    sparse : bool, optional
+        Whether to construct a sparse or dense transform matrix
+        when this isn't specified already by `from_basis` or
+        `to_basis` (e.g. when these are both strings).
+
     Returns
     -------
     Basis
@@ -106,7 +123,7 @@ def transform_matrix(from_basis, to_basis, dimOrBlockDims=None):
     if dimOrBlockDims is None:
         assert isinstance(from_basis, Basis)
     else:
-        from_basis = Basis(from_basis, dimOrBlockDims)
+        from_basis = Basis(from_basis, dimOrBlockDims, sparse=sparse)
     return from_basis.transform_matrix(to_basis)
 
 
@@ -138,7 +155,8 @@ def build_basis_pair(mx, from_basis, to_basis):
         to_basis = from_basis.equivalent(to_basis)
     elif isinstance(to_basis, Basis) and not isinstance(from_basis, Basis):
         from_basis = to_basis.equivalent(from_basis)
-    else:
+    else: # neither or both from_basis & to_basis are Basis objects - so
+          # no need to worry about setting sparse flag in construction
         dimOrBlockDims = int(round(_np.sqrt(mx.shape[0])))
         to_basis = Basis(to_basis, dimOrBlockDims)
         from_basis = Basis(from_basis, dimOrBlockDims)
@@ -275,6 +293,7 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     -------
     numpy.ndarray
     """
+    #FUTURE: add a sparse flag?
     if dimOrBlockDims is None:
         return mx
     if resize == 'expand':

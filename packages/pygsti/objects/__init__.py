@@ -23,6 +23,7 @@ from .gate import TPParameterizedGate
 from .gate import StaticGate
 from .gate import EigenvalueParameterizedGate
 from .gate import LindbladParameterizedGate
+from .gate import LindbladParameterizedGateMap
 from .gate import TPInstrumentGate
 from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate
