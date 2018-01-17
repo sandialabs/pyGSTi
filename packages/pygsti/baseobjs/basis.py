@@ -469,15 +469,26 @@ def _build_block_matrices(name=None, dim=None, matrices=None, sparse=False):
         name          = basis.name
         sparse        = basis.sparse
     elif isinstance(name, list):
-        basis = _build_composite_basis(name, sparse)
-        blockMatrices = basis._blockMatrices
-        name          = basis.name
-        sparse        = basis.sparse
+        if len(name) == 0: #special case of empty list
+            blockMatrices = []
+            name          = "*Empty*"
+            sparse        = sparse
+        else:
+            basis = _build_composite_basis(name, sparse)
+            blockMatrices = basis._blockMatrices
+            name          = basis.name
+            sparse        = basis.sparse
     else:
         if matrices is None: # built by name and dim, ie Basis('pp', 4)
-            assert name is not None, \
-                    'If matrices is none, name must be supplied to Basis.__init__'
-            matrices = _build_default_block_matrices(name, dim, sparse)
+            #OLD: require either name or matrices
+            #assert name is not None, \
+            #        'If matrices is none, name must be supplied to Basis.__init__'
+            
+            if name is not None: 
+                matrices = _build_default_block_matrices(name, dim, sparse)
+            else: # if name and matrices are none -> "Empty" basis
+                name = "*Empty*"
+                matrices = []
 
         if len(matrices) > 0:
             first = matrices[0]
