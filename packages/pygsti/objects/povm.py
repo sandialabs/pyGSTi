@@ -6,6 +6,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 import collections as _collections
+import itertools as _itertools
 import numpy as _np
 import warnings as _warnings
 
@@ -289,7 +290,7 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
             SmxT = _np.transpose(S.get_transform_matrix())
             assert(_np.linalg.norm(identityVec-_np.dot(SmxT,identityVec))<TOL),\
                 ("Cannot transform complement effect in a way that doesn't"
-                 " preservee the identity!")
+                 " preserve the identity!")
             self[self.complement_label]._construct_vector()
             
         self.dirty = True
@@ -454,3 +455,207 @@ class TPPOVM(BasePOVM):
         effects = [ (k,v.copy()) for k,v in self.items() if k != self.complement_label]
         effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
         return self._copy_gpindices(TPPOVM(effects), parent)
+
+
+class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
+    """ 
+    A POVM that is effectively the tensor product of several other
+    POVMs (which can be TP).
+    """
+    def __init__(self, factorPOVMs):
+        """
+        Creates a new TensorProdPOVM object.
+
+        Parameters
+        ----------
+        factorPOVMs : list of POVMs
+            POVMs that will be tensor-producted together.
+        """
+        dim = _np.product( [povm.dim for povm in factorPOVMs ] )
+        self._readonly = False #until init is done
+
+        # self.factorPOVMs
+        #  Copy each POVM and set it's parent and gpindices.
+        #  Assume each one's parameters are independent.
+        self.factorPOVMs = [povm.copy() for povm in factorPOVMs]
+        off = 0
+        for povm in self.factorPOVMs:
+            N = povm.num_params()
+            povm.set_gpindices(slice(off,off+N),self); off += N
+
+        items = []
+        effectLabelKeys = [ povm.keys() for povm in factorPOVMs ]
+        for el in _itertools.product(*effectLabelKeys):
+            effect = _sv.TensorProdSPAMVec(self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
+            items.append( ("".join(el), effect) )
+            
+        _collections.OrderedDict.__init__(self, items)
+        _gm.GateSetMember.__init__(self, dim)
+        self._readonly = True
+
+
+    #Move to BASE
+    def __setitem__(self, key, value):
+        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        else: return _collections.OrderedDict.__setitem__(self, key, value)
+
+
+    #Move to BASE
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        return (TensorProdPOVM, (self.factorPOVMs,),
+                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+
+    def compile_effects(self, prefix=""):
+        """
+        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        this POVM's gpindices.  Such effect vectors are used internally within
+        computations involving the parent `GateSet`.
+
+        Parameters
+        ----------
+        prefix : str
+            A string, usually identitying this POVM, which may be used
+            to prefix the compiled gate keys.
+
+        Returns
+        -------
+        OrderedDict of SPAMVecs
+        """
+        #Note: calling from_vector(...) on the compiled effect vectors (in
+        # order) - e.g. within the finite differencing in GateMapCalc -  must
+        # be able to properly initialize them, so need to set gpindices
+        # appropriately.
+
+        #Create a "compiled" (GateSet-referencing) set of factor POVMs
+        factorPOVMs_compiled = []
+        for p in self.factorPOVMs:
+            povm = p.copy()
+            povm.set_gpindices( _gm._compose_gpindices(self.gpindices,
+                                                       p.gpindices), self.parent)
+            factorPOVMs_compiled.append(comp)
+
+        # Create "compiled" effect vectors, which infer their parent and
+        # gpindices from the set of "factor-POVMs" they're constructed with.
+        if prefix: prefix += "_"
+        compiled = _collections.OrderedDict(
+            [ (prefix + k, _sv.TensorProdSPAMVec(factorPOVMs_compiled, Evec.elLbls))
+              for k,Evec in self.items() ] )
+        return compiled
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this POVM.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return sum( [povm.num_params() for povm in self.factorPOVMs ] )
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this POVM.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        v = _np.empty(self.num_params(),'d')
+        for povm in self.factorPOVMs:
+            v[povm.gpindices] = povm.to_vector()
+        return v
+
+
+    def from_vector(self, v):
+        for povm in self.factorPOVMs:
+            povm.from_vector( v[povm.gpindices] )
+        #TODO: REMOVE
+        #I don't think there's any need to do this (re-inits effect vector from factor POVMs)
+        #for effect in self.values():
+        #    effect.toarray()
+
+        
+    def transform(self, S):
+        """
+        Update each POVM effect E as S^T * E.
+
+        Note that this is equivalent to the *transpose* of the effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.            
+        """
+        raise ValueError("Cannot transform a TensorProdPOVM")
+        self.dirty = True
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this POVM by the given `amount`.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of each spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        for povm in self.factorPOVMs:
+            povm.depolarize(amount)
+
+        #No need to re-init effect vectors since they don't store a (dense)
+        # version of their vector - they just create it from factorPOVMs on demand
+        self.dirty = True
+
+
+    def num_elements(self):
+        """
+        Return the number of total spam vector elements in this povm.
+        This is in general different from the number of *parameters*,
+        which are the number of free variables used to generate all of
+        the vector *elements*.
+
+        Returns
+        -------
+        int
+        """
+        return sum([ E.dim for E in self.values() ])
+          #Note: Use .dim instead of .size b/c TensorProdSPAMVec's
+          # are not DenseSPAMVec-derived
+        
+    def copy(self, parent=None):
+        """
+        Copy this POVM.
+
+        Returns
+        -------
+        TensorProdPOVM
+            A copy of this POVM
+        """
+        #Note: factorPOVMs will get copied in constructor, so don't need to here
+        return self._copy_gpindices( TensorProdPOVM(self.factorPOVMs), parent )
+
+    def __str__(self):
+        s = "POVM with effect vectors:\n"
+        for lbl,effect in self.items():
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.toarray(), width=4, prec=2))
+        return s

@@ -4482,6 +4482,7 @@ class ComposedGateMap(GateMap):
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
             v[factorgate_local_inds] = gate.to_vector()
+        return v
 
 
     def from_vector(self, v):

@@ -5,7 +5,7 @@ import pickle
 
 from numpy.random import random,seed
 
-from  pygsti.objects import SPAMVec
+from  pygsti.objects import SPAMVec, DenseSPAMVec
 import pygsti.construction as pc
 
 from ..testutils import BaseTestCase, compare_files, temp_files
@@ -14,7 +14,7 @@ class SPAMVecTestCase(BaseTestCase):
 
     def setUp(self):
         super(SPAMVecTestCase, self).setUp()
-        self.spamvec = SPAMVec(np.array([1,0]))
+        self.spamvec = DenseSPAMVec(np.array([1,0]))
 
     def test_slice(self):
         self.spamvec[:]
