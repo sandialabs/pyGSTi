@@ -30,13 +30,16 @@ from .gate import EmbeddedGate
 from .gate import ComposedGateMap
 from .gate import ComposedGate
 from .spamvec import SPAMVec
+from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec
 from .spamvec import TPParameterizedSPAMVec
 from .spamvec import CPTPParameterizedSPAMVec
 from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
+from .spamvec import TensorProdSPAMVec
 from .povm import POVM
 from .povm import TPPOVM
+from .povm import TensorProdPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 

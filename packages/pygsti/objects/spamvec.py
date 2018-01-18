@@ -220,11 +220,13 @@ class SPAMVec(_gatesetmember.GateSetMember):
     parameterizations of a SPAM vector.
     """
 
-    def __init__(self, vec):
+    def __init__(self, dim):
         """ Initialize a new SPAM Vector """
-        self.base = vec
-        super(SPAMVec, self).__init__( len(vec) )
-                                   
+        super(SPAMVec, self).__init__( dim )
+
+    def toarray(self):
+        """ Return this SPAM vector as a (dense) numpy array """
+        raise NotImplementedError("Derived classes must implement toarray()!")
 
     def transform(self, S, typ):
         """
@@ -259,19 +261,21 @@ class SPAMVec(_gatesetmember.GateSetMember):
         -------
         float
         """
+        vec = self.toarray()
         if typ == 'prep':
             if inv_transform is None:
-                return _gt.frobeniusdist2(self.base,otherSpamVec)
+                return _gt.frobeniusdist2(vec,otherSpamVec.toarray())
             else:
-                return _gt.frobeniusdist2(_np.dot(inv_transform,self.base),
-                                          otherSpamVec)
+                return _gt.frobeniusdist2(_np.dot(inv_transform,vec),
+                                          otherSpamVec.toarray())
         elif typ == "effect":
             if transform is None:
-                return _gt.frobeniusdist2(self.base,otherSpamVec)
+                return _gt.frobeniusdist2(vec,otherSpamVec.toarray())
             else:
                 return _gt.frobeniusdist2(_np.dot(_np.transpose(transform),
-                                                  self.base), otherSpamVec)
+                                                  vec), otherSpamVec.toarray())
         else: raise ValueError("Invalid 'typ' argument: %s" % typ)
+        
 
     def residuals(self, otherSpamVec, typ, transform=None, inv_transform=None):
         """ 
@@ -294,18 +298,19 @@ class SPAMVec(_gatesetmember.GateSetMember):
         -------
         float
         """
+        vec = self.toarray()
         if typ == 'prep':
             if inv_transform is None:
-                return _gt.residuals(self.base,otherSpamVec)
+                return _gt.residuals(vec,otherSpamVec.toarray())
             else:
-                return _gt.residuals(_np.dot(inv_transform,self.base),
-                                          otherSpamVec)
+                return _gt.residuals(_np.dot(inv_transform,vec),
+                                          otherSpamVec.toarray())
         elif typ == "effect":
             if transform is None:
-                return _gt.residuals(self.base,otherSpamVec)
+                return _gt.residuals(vec,otherSpamVec.toarray())
             else:
                 return _gt.residuals(_np.dot(_np.transpose(transform),
-                                                  self.base), otherSpamVec)
+                                             vec), otherSpamVec.toarray())
 
     #Handled by derived classes
     #def __str__(self):
@@ -318,6 +323,64 @@ class SPAMVec(_gatesetmember.GateSetMember):
     def __setstate__(self, state):
         self.__dict__.update(state)
 
+    @staticmethod
+    def convert_to_vector(V):
+        """
+        Static method that converts a vector-like object to a 2D numpy
+        dim x 1 column array.
+
+        Parameters
+        ----------
+        V : array_like
+
+        Returns
+        -------
+        numpy array
+        """
+        if isinstance(V, SPAMVec):
+            vector = _np.asarray(V).copy()
+        else:
+            try:
+                dim = len(V) #pylint: disable=unused-variable
+            except:
+                raise ValueError("%s doesn't look like an array/list" % V)
+            try:
+                d2s = [ len(row) for row in V ]
+            except TypeError: # thrown if len(row) fails because no 2nd dim
+                d2s = None
+
+            if d2s is not None:
+                if any([len(row) != 1 for row in V]):
+                    raise ValueError("%s is 2-dimensional but 2nd dim != 1" % V)
+
+                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
+                try:
+                    vector = _np.array(V, typ) #vec is already a 2-D column vector
+                except TypeError:
+                    raise ValueError("%s doesn't look like an array/list" % V)
+            else:
+                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
+                vector = _np.array(V, typ)[:,None] # make into a 2-D column vec
+
+        return vector
+
+    
+class DenseSPAMVec(SPAMVec):
+    """
+    Excapulates a parameterization of a state preparation OR POVM effect
+    vector. This class is the  common base class for all specific
+    parameterizations of a SPAM vector.
+    """
+
+    def __init__(self, vec):
+        """ Initialize a new SPAM Vector """
+        self.base = vec
+        super(DenseSPAMVec, self).__init__( len(vec) )
+
+    def toarray(self):
+        """ Return this SPAM vector as a (dense) numpy array """
+        return self.base
+                                   
     #Access to underlying array
     def __getitem__( self, key ):
         self.dirty = True
@@ -363,50 +426,9 @@ class SPAMVec(_gatesetmember.GateSetMember):
     def __complex__(self):    return complex(self.base)
 
 
-    @staticmethod
-    def convert_to_vector(V):
-        """
-        Static method that converts a vector-like object to a 2D numpy
-        dim x 1 column array.
-
-        Parameters
-        ----------
-        V : array_like
-
-        Returns
-        -------
-        numpy array
-        """
-        if isinstance(V, SPAMVec):
-            vector = _np.asarray(V).copy()
-        else:
-            try:
-                dim = len(V) #pylint: disable=unused-variable
-            except:
-                raise ValueError("%s doesn't look like an array/list" % V)
-            try:
-                d2s = [ len(row) for row in V ]
-            except TypeError: # thrown if len(row) fails because no 2nd dim
-                d2s = None
-
-            if d2s is not None:
-                if any([len(row) != 1 for row in V]):
-                    raise ValueError("%s is 2-dimensional but 2nd dim != 1" % V)
-
-                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
-                try:
-                    vector = _np.array(V, typ) #vec is already a 2-D column vector
-                except TypeError:
-                    raise ValueError("%s doesn't look like an array/list" % V)
-            else:
-                typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
-                vector = _np.array(V, typ)[:,None] # make into a 2-D column vec
-
-        return vector
 
 
-
-class StaticSPAMVec(SPAMVec):
+class StaticSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is completely fixed, or "static", meaning
       that is contains no parameters.
@@ -422,7 +444,7 @@ class StaticSPAMVec(SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
+        DenseSPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
     def set_value(self, vec):
@@ -597,7 +619,7 @@ class StaticSPAMVec(SPAMVec):
 
 
 
-class FullyParameterizedSPAMVec(SPAMVec):
+class FullyParameterizedSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized, that is,
       each element of the SPAM vector is an independent parameter.
@@ -613,7 +635,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
             a 1D numpy array representing the SPAM operation.  The
             shape of this array sets the dimension of the SPAM op.
         """
-        SPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
+        DenseSPAMVec.__init__(self, SPAMVec.convert_to_vector(vec))
 
 
     def set_value(self, vec):
@@ -803,7 +825,7 @@ class FullyParameterizedSPAMVec(SPAMVec):
 #                off += eSize[i]; foff += full_vsize
 
 
-class TPParameterizedSPAMVec(SPAMVec):
+class TPParameterizedSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is fully parameterized except for the first
     element, which is frozen to be 1/(d**0.25).  This is so that, when the SPAM
@@ -843,8 +865,8 @@ class TPParameterizedSPAMVec(SPAMVec):
         if not _np.isclose(vector[0,0], firstEl):
             raise ValueError("Cannot create TPParameterizedSPAMVec: " +
                              "first element must equal %g!" % firstEl)
-        SPAMVec.__init__(self, _ProtectedArray(vector,
-                                indicesToProtect=(0,0)))
+        DenseSPAMVec.__init__(self, _ProtectedArray(vector,
+                                                    indicesToProtect=(0,0)))
 
 
     def set_value(self, vec):
@@ -1029,7 +1051,7 @@ class TPParameterizedSPAMVec(SPAMVec):
         return s
 
 
-class ComplementSPAMVec(SPAMVec):
+class ComplementSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is parameterized by 
     `I - sum(other_spam_vecs)` where `I` is a (static) identity element 
@@ -1065,7 +1087,7 @@ class ComplementSPAMVec(SPAMVec):
           # 2) set the gpindices of the elements of other_spamvecs so
           #    that they index into our local parameter vector.
             
-        SPAMVec.__init__(self, self.identity) # dummy
+        DenseSPAMVec.__init__(self, self.identity) # dummy
         self._construct_vector() #reset's self.base
         
     def _construct_vector(self):
@@ -1168,7 +1190,7 @@ class ComplementSPAMVec(SPAMVec):
         return s
 
 
-class CPTPParameterizedSPAMVec(SPAMVec):
+class CPTPParameterizedSPAMVec(DenseSPAMVec):
     """
     Encapsulates a SPAM vector that is parameterized through the Cholesky
     decomposition of it's standard-basis representation as a density matrix
@@ -1211,7 +1233,7 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         #scratch space
         self.Lmx = _np.zeros((self.dmDim,self.dmDim),'complex')
 
-        SPAMVec.__init__(self, vector)
+        DenseSPAMVec.__init__(self, vector)
 
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot( self.basis_mxs, vector )
@@ -1546,3 +1568,190 @@ class CPTPParameterizedSPAMVec(SPAMVec):
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
+
+
+class TensorProdSPAMVec(SPAMVec):
+    """
+    Encapsulates a SPAM vector that is a tensor-product of other SPAM vectors.
+    """
+
+    def __init__(self, factorPOVMs, elLbls):
+        """
+        Initialize a TensorProdSPAMVec object.
+
+        Parameters
+        ----------
+        factorPOVMs : list of POVMs
+            the list of "reference" POVMs into which `elLbls` indexes.
+
+        elLbls : array-like
+            the effect label of each factor POVM which is tensored together to
+            form this SPAM vector.
+        """
+        self.factorPOVMs = factorPOVMs #do *not* copy - needs to reference common objects
+        self.elLbls = _np.array(elLbls)
+
+        #Set our parent and gpindices based on those of factorPOVMs
+        # (for now say we depend on *all* the POVMs parameters (even though
+        #  we really only depend on one element of each POVM, which may allow
+        #  using just a subset of each factor POVMs indices - but this is tricky).
+        self.set_gpindices(_slct.list_to_slice(
+            _np.concatenate( [ povm.gpindices_as_array()
+                               for povm in factorPOVMs ], axis=0),True,False),
+                           factorPOVMs[0].parent) #use parent of first factorPOVM
+                                                  # (they should all be the same)
+        
+        SPAMVec.__init__(self, _np.product([povm.dim for povm in factorPOVMs]))
+
+    def toarray(self):
+        """ Return this SPAM vector as a (dense) numpy array """
+        if len(self.factorPOVMs) == 0: return _np.empty(0,'d')
+        ret = self.factorPOVMs[0][self.elLbls[0]].toarray()
+        for i in range(i,len(self.factorPOVMs)):
+            ret = _np.kron(ret, self.factorPOVMs[i][self.elLbls[i]].toarray())
+        return ret
+
+    
+    def set_value(self, vec):
+        """
+        Attempts to modify SPAMVec parameters so that the specified raw
+        SPAM vector becomes vec.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            A numpy array representing a SPAM vector, or a SPAMVec object.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a TensorProdSPAMVec directly!")
+        self.dirty = True
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this case, a ValueError is *always* raised, since a 
+        StaticSPAMVec has no parameters.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Invalid transform for TensorProdSPAMVec")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a TensorProdSPAMVec")
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        if all([self.elLbls[i] == list(povm.keys())[0]
+                for i,povm in enumerate(self.factorPOVMs)]):
+            #then this is the *first* vector in the larger TensorProdPOVM
+            # and we should initialize all of the factorPOVMs
+            for povm in self.factorPOVMs:
+                local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, povm.gpindices)
+                povm.from_vector( v[local_inds] )
+        #No need to construct anything - no dense matrices are stored
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
+        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        raise NotImplementedError("Analytic derivatives of a TensorProdSPAMVec are not implemented yet")
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return False
+
+
+    def copy(self, parent=None):
+        """
+        Copy this SPAM vector.
+
+        Returns
+        -------
+        StaticSPAMVec
+            A copy of this SPAM operation.
+        """
+        return self._copy_gpindices( TensorProdSPAMVec(self.factorPOVMs, self.elLbls), parent )
+
+
+    def __str__(self):
+        ar = self.toarray()
+        s = "Tensor product spam vector with length %d\n" % \
+            len(ar)
+        s += _mt.mx_to_string(ar, width=4, prec=2)
+        return s
