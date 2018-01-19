@@ -2620,7 +2620,9 @@ class LindbladBase(object):
             lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
                 lnd_error_gen, self.rightTrans)) #basis chg
 
-        self.err_gen = lnd_error_gen
+        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
+        self.err_gen = _mt.safereal(lnd_error_gen)
+
 
         
     def num_params(self):
@@ -3865,7 +3867,7 @@ class TPInstrumentGate(GateMatrix):
         """
         self.param_gates = param_gates
         self.index = index
-        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d'))
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d')) #Note: sets self.gpindices
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_gates
@@ -4084,7 +4086,7 @@ class ComposedGate(GateMatrix):
         return tot_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4101,14 +4103,19 @@ class ComposedGate(GateMatrix):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+        
         #must set the gpindices of self.factorgates based on new
         my_old_gpindices = self.gpindices
         for gate in self.factorgates:
+            if id(gate) in memo: continue # already processed
             rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
             new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent)
+            gate.set_gpindices(new_gate_gpindices, parent, memo)
             
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
     
@@ -4407,7 +4414,7 @@ class ComposedGateMap(GateMap):
         return tot_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4424,14 +4431,19 @@ class ComposedGateMap(GateMap):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = old_gpindices
+        my_old_gpindices = self.gpindices
         for gate in self.factorgates:
+            if id(gate) in memo: continue #already processed
             rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
             new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent)
+            gate.set_gpindices(new_gate_gpindices, parent, memo)
             
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
 
@@ -4705,6 +4717,7 @@ class EmbeddedGateMap(GateMap):
           # for inserting target-qubit basis indices into list of noop-qubit indices
 
         self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
+        #self.fast_iter_inds = list(self._iter_matrix_elements())
     
         GateMap.__init__(self, gateDim)
 
@@ -4738,7 +4751,7 @@ class EmbeddedGateMap(GateMap):
         return num_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4755,10 +4768,15 @@ class EmbeddedGateMap(GateMap):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.embedded_gate
-        self.embedded_gate.set_gpindices(gpindices, parent)
+        self.embedded_gate.set_gpindices(gpindices, parent, memo)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+        
         
         
     def _decomp_gate_index(self, indx):
@@ -4804,25 +4822,31 @@ class EmbeddedGateMap(GateMap):
                     in_vec_index  = _np.dot(self.multipliers, tuple(b_in))  # index of input dm basis el within vec(tensor block basis)
 
                     yield (out_vec_index+offset, in_vec_index+offset, gate_i, gate_j)
-    
+                    
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _np.zeros( len(state), 'd')
+        output_state = _np.zeros( state.shape, 'd')
+
+        try:
+            embedded_base = self.embedded_gate.base
+        except:
+            embedded_base = self.embedded_gate.as_sparse_matrix().tolil()
 
         #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
         for i,j,gi,gj in self._iter_matrix_elements():
-            output_state[i] += self.embedded_gate[gi,gj] * state[j]
+            output_state[i] += embedded_base[gi,gj] * state[j]
 
         #act on other blocks trivially:
         offset = 0
-        dmDim, gateDim, blockDims = basis.dim
+        dmDim, gateDim, blockDims = self.basis.dim
         for i,blockDim in enumerate(blockDims):
             blockSize = blockDim**2
             if i != self.iTensorProdBlk:
                 output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
             offset += blockSize
 
+        assert(output_state.shape == state.shape)
         return output_state
 
 
@@ -5076,7 +5100,7 @@ class EmbeddedGate(GateMatrix):
         return num_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -5093,8 +5117,12 @@ class EmbeddedGate(GateMatrix):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.embedded_gate
-        self.embedded_map.set_gpindices(gpindices, parent)
+        self.embedded_map.set_gpindices(gpindices, parent, memo)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
 

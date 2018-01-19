@@ -74,8 +74,8 @@ class GateMapCalc(GateCalc):
     def _rhoE_from_spamTuple(self, spamTuple):
         if len(spamTuple) == 2:
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel]
-            E   = _np.conjugate(_np.transpose(self.effects[elabel]))
+            rho = self.preps[rholabel].toarray()
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -137,7 +137,7 @@ class GateMapCalc(GateCalc):
         """
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
-        p = _np.dot(E,rho)
+        p = float(_np.dot(E,rho))
 
         if _np.isnan(p):
             if len(gatestring) < 10:

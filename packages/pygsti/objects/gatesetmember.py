@@ -79,7 +79,7 @@ class GateSetMember(GateSetChild):
                           " of a GateSetMember object"))
 
 
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -92,10 +92,19 @@ class GateSetMember(GateSetChild):
         parent : GateSet or GateSetMember
             The parent whose parameter array gpindices references.
 
+        memo : set, optional
+            A set keeping track of the object ids that have had their indices
+            set in a root `set_gpindices` call.  Used to prevent duplicate 
+            calls and self-referencing loops.  If `memo` contains an object's
+            id (`id(self)`) then this routine will exit immediately.
+
         Returns
         -------
         None
         """
+        if memo is not None:
+            if id(self) in memo: return
+            memo.add(id(self))
         self._parent = parent
         self._gpindices = gpindices
 

@@ -605,8 +605,10 @@ class GateSet(object):
             #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             v = _np.delete(v, indices_to_remove)
             get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
+            memo = set() #keep track of which object's gpindices have been set
             for _,obj in self.iter_objs():
                 if obj.gpindices is not None:
+                    if id(obj) in memo: continue #already processed
                     if isinstance(obj.gpindices, slice):
                         new_inds = _slct.shift(obj.gpindices,
                                                -get_shift(obj.gpindices.start))
@@ -615,17 +617,18 @@ class GateSet(object):
                         for i in obj.gpindices:
                             new_inds.append(i - get_shift(i))
                         new_inds = _np.array(new_inds,'i')
-                    obj.set_gpindices( new_inds, self )
+                    obj.set_gpindices( new_inds, self, memo)
                 
                 
         # Step 2: add parameters that don't exist yet
+        memo = set() #keep track of which object's gpindices have been set
         for _,obj in self.iter_objs():
 
             if shift > 0 and obj.gpindices is not None:
                 if isinstance(obj.gpindices, slice):
-                    obj.set_gpindices(_slct.shift(obj.gpindices, shift), self)
+                    obj.set_gpindices(_slct.shift(obj.gpindices, shift), self, memo)
                 else:
-                    obj.set_gpindices(gpindices+shift, self)  #works for integer arrays
+                    obj.set_gpindices(obj.gpindices+shift, self, memo)  #works for integer arrays
 
             if obj.gpindices is None or obj.parent is not self:
                 #Assume all parameters of obj are new independent parameters
