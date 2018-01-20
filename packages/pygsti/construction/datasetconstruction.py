@@ -106,18 +106,16 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             else:
                 rndm = randState
 
+        #FUTURE: speed this puppy up...
         #if gsGen:
-        #    print("BULK PROBS...")
         #    all_probs = gsGen.bulk_probs(gatestring_list)
-        #    print("DONE...")
                 
-    
         for k,s in enumerate(gatestring_list):
 
-            print("DB GEN %d of %d (len %d)" % (k,len(gatestring_list),len(s)))
+            #print("DB GEN %d of %d (len %d)" % (k,len(gatestring_list),len(s)))
             trans_s = _gstrc.translate_gatestring(s, aliasDict)
             if gsGen:
-                #ps = all_probs[s]
+                #ps = all_probs[s] #FUTURE
                 ps = gsGen.probs(trans_s) 
                   # an (un-ordered!) dictionary of probabilities; keys = outcome labels
                   # (will include all possible intermediate measurements)

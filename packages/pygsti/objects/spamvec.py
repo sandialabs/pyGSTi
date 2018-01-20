@@ -1601,6 +1601,7 @@ class TensorProdSPAMVec(SPAMVec):
             self.effectLbls = _np.array(povmEffectLbls)
         elif typ == "prep":
             assert(povmEffectLbls is None), '`povmEffectLbls` must be None when `typ != "effects"`'
+            self.effectLbls = None
         else: raise ValueError("Invalid `typ` argument: %s" % typ)
         
         SPAMVec.__init__(self, _np.product([fct.dim for fct in factors]))
@@ -1765,7 +1766,7 @@ class TensorProdSPAMVec(SPAMVec):
                 sv.from_vector( v[sv.gpindices] ) # factors hold local indices
                 
         elif all([self.effectLbls[i] == list(povm.keys())[0]
-                  for i,povm in enumerate(self.factorPOVMs)]):
+                  for i,povm in enumerate(self.factors)]):
             #then this is the *first* vector in the larger TensorProdPOVM
             # and we should initialize all of the factorPOVMs
             for povm in self.factors:

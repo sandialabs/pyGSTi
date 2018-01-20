@@ -28,6 +28,11 @@ from ..baseobjs import Basis as _Basis
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
+#Temporary while we develop fastcalc
+import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+from ..tools import fastcalc as _fastcalc
+
+
 def optimize_gate(gateToOptimize, targetGate):
     """
     Optimize the parameters of gateToOptimize so that the
@@ -2759,8 +2764,12 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
           # initializes self.paramvals and self.err_gen among other things
         
         #Pre-compute the exponential of the error generator if dense matrices are used
-        self.exp_err_gen = _spl.expm(self.err_gen) if (not self.sparse) else None
-
+        if self.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+            self.exp_err_gen = None
+        else:
+            self.err_gen_prep = None
+            self.exp_err_gen = _spl.expm(self.err_gen)            
         
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -2768,16 +2777,23 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
             
         if self.sparse:
-            state = _spsl.expm_multiply( self.err_gen, state)
+            #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state)
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
 
-    
+
+    #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def as_sparse_matrix(self):
-        """ Return the gate as a sparse matrix """
+        """
+        Return the gate as a sparse matrix.
+        """
+        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
+                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        " sparse matrix isn't generally sparse)!"))
         if self.sparse:
-            exp_err_gen = _spsl.expm(self.err_gen)
+            exp_err_gen = _spsl.expm(self.err_gen.tocsc()).tocsr()
             if self.unitary_postfactor is not None:
                 return exp_err_gen.dot(self.unitary_postfactor)
             else:
@@ -2807,8 +2823,10 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_errgen()
-        if not self.sparse:
-            self.exp_err_gen = _spl.expm(self.err_gen) 
+        if self.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+        else:
+            self.exp_err_gen = _spl.expm(self.err_gen)
         self.dirty = True
 
 
@@ -2869,6 +2887,10 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))                
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_errgen() # unnecessary? (TODO)
+            if self.sparse:
+                self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+            else:
+                self.exp_err_gen = _spl.expm(self.err_gen)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -4692,11 +4714,20 @@ class EmbeddedGateMap(GateMap):
 
         # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
         basisInds_noop = basisInds[:]
+        basisInds_noop_blankaction = basisInds[:]
         labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
         for labelIndex in sorted(labelIndices,reverse=True):
             del basisInds_noop[labelIndex]
+            basisInds_noop_blankaction[labelIndex] = [0]
+            
         #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
         self.basisInds_noop = basisInds_noop
+        self.basisInds_noop_blankaction = basisInds_noop_blankaction
+        self.actionInds = _np.array(labelIndices,'i')
+        self.basisInds_action = [ basisInds[i] for i in labelIndices ]
+        self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
+        self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
+        self.inds_scratch = _np.empty(_np.product(self.numBasisEls_action),'i')
         
         #offset into "active" tensor product block
         self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
@@ -4710,15 +4741,13 @@ class EmbeddedGateMap(GateMap):
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        self.multipliers = _np.flipud( _np.cumprod([1] + list(
-            reversed(list(map(len,basisInds[:-1]))))) )
+        self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
+            reversed(list(map(len,basisInds[:-1]))))) ), 'i')
 
         self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
           # for inserting target-qubit basis indices into list of noop-qubit indices
 
-        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
-        #self.fast_iter_inds = list(self._iter_matrix_elements())
-    
+        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one    
         GateMap.__init__(self, gateDim)
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4787,6 +4816,7 @@ class EmbeddedGateMap(GateMap):
             ret.append( indx // d )
             indx = indx % d
         return ret
+
     
     def _merge_gate_and_noop_bases(self, gate_b, noop_b):
         """
@@ -4804,10 +4834,10 @@ class EmbeddedGateMap(GateMap):
             ret.insert(li, gate_b[bi]) #... and insert gate parts at proper points
         return ret
 
+    
     def _iter_matrix_elements(self, relToBlock=False):
         """ Iterates of (gate_i,gate_j,embedded_gate_i,embedded_gate_j) tuples giving mapping
             between nonzero elements of gate matrix and elements of the embedded gate matrx """
-        #Construct map from gatemx
         offset = 0 if relToBlock else self.offset
         for gate_i in range(self.embedded_gate.dim):     # rows ~ "output" of the gate map
             for gate_j in range(self.embedded_gate.dim): # cols ~ "input"  of the gate map
@@ -4828,15 +4858,73 @@ class EmbeddedGateMap(GateMap):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
 
-        try:
-            embedded_base = self.embedded_gate.base
-        except:
-            embedded_base = self.embedded_gate.as_sparse_matrix().tolil()
+        #LATER: Maybe a faster way for dense mxs
+        #if isinstance(self.embedded_gate, GateMatrix):
+        #    embedded_base = self.embedded_gate.base
+        #
+        #    #SLOWEST
+        #    #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
+        #    for i,j,gi,gj in self._iter_matrix_elements():
+        #        output_state[i] += embedded_base[gi,gj] * state[j]
+        #
+        #else:
 
-        #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
-        for i,j,gi,gj in self._iter_matrix_elements():
-            output_state[i] += embedded_base[gi,gj] * state[j]
+        offset = 0
+ 
+        # SLOW (but in pure python)
+        #for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
+        #    vec_index_noop = _np.dot(self.multipliers, tuple(b))
+        #    inds = []
+        #    #for gate_i in range(self.embedded_gate.dim):
+        #    #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
+        #    for gate_b in _itertools.product(*self.basisInds_action):
+        #        vec_index = vec_index_noop
+        #        for i,bInd in zip(self.actionInds,gate_b):
+        #            #b[i] = bInd #don't need to do this; just update vec_index:
+        #            vec_index += self.multipliers[i]*bInd
+        #        inds.append(offset + vec_index)
+        #    output_state[ inds ] += self.embedded_gate.acton( state[inds] )
 
+            
+        # FAST (cython)
+        if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
+           self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
+            #Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
+            A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
+            if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+            _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
+                                                      mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
+                                                      output_state[:,0], state[:,0], offset,
+                                                      self.multipliers,
+                                                      self.numBasisEls_noop_blankaction,
+                                                      self.numBasisEls_action,
+                                                      self.actionInds,
+                                                      self.inds_scratch)
+        else:
+            # output_state2 = _np.zeros( state.shape, 'd') #for CHECK        
+            _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+                                                 output_state[:,0], state[:,0], offset,
+                                                 self.multipliers,
+                                                 self.numBasisEls_noop_blankaction,
+                                                 self.numBasisEls_action,
+                                                 self.actionInds,
+                                                 self.inds_scratch)
+            #assert(_np.linalg.norm(output_state-output_state2) < 1e-6) # for CHECK
+
+
+#OLD           
+#            #embedded_base = self.embedded_gate.as_sparse_matrix()
+#            #assert(_sps.isspmatrix_csr(embedded_base))
+#
+#            #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
+#            #for i,j,gi,gj in self._iter_matrix_elements():
+#            #    output_state[i] += embedded_base[gi,gj] * state[j]
+#            for gi in range(embedded_base.shape[0]):
+#                slc = slice(embedded_base.indptr[gi],embedded_base.indptr[gi+1])
+#                for gj,el in zip(embedded_base.indices[slc],embedded_base.data[slc]):
+#                    ar_i,ar_j = self.fast_iter_inds2[(gi,gj)]
+#                    output_state[ar_i] += el * state[ar_j]
+                                 
         #act on other blocks trivially:
         offset = 0
         dmDim, gateDim, blockDims = self.basis.dim

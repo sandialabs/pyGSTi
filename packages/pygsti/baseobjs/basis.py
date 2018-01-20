@@ -153,15 +153,17 @@ class Basis(object):
         return len(self._matrices)
 
     def __eq__(self, other):
+        if self.sparse: return False # to expensive to compare sparse matrices
+        
         otherIsBasis = isinstance(other, Basis)
         if otherIsBasis and (self.sparse != other.sparse):
             return False
         
         if self.sparse:
             if otherIsBasis:
-                return any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
+                return not any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
             else:
-                return any([ (A!=B).nnz for A,B in zip(self._matrices, other)])
+                return not any([ (A!=B).nnz for A,B in zip(self._matrices, other)])
         else:
             if otherIsBasis:
                 return _np.array_equal(self._matrices, other._matrices)
@@ -500,8 +502,9 @@ def _build_block_matrices(name=None, dim=None, matrices=None, sparse=False):
             elif isinstance(first, list) or \
                  (isinstance(first, _np.ndarray) and first.ndim == 3): # els of matrices are sub-bases, so
                 blockMatrices = matrices                              # set directly equal to blockMatrices
-            elif isinstance(first, _np.ndarray) and first.ndim ==2:  # matrices is a list of matrices 
-                blockMatrices = [matrices]                           # so set as the first (& only) sub-basis-block
+            elif (isinstance(first, _np.ndarray) or _sps.issparse(first)) \
+                 and first.ndim ==2:          # matrices is a list of matrices 
+                blockMatrices = [matrices]    # so set as the first (& only) sub-basis-block
         else:
             blockMatrices = []
         if name is None:

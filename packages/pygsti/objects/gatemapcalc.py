@@ -269,6 +269,7 @@ class GateMapCalc(GateCalc):
 
 
     def _compute_pr_cache(self, spamTuple, evalTree, comm, scratch=None):
+        #tStart = _time.time()
         dim = self.dim
         cacheSize = len(evalTree)
         rho,E = self._rhoE_from_spamTuple(spamTuple)
@@ -284,16 +285,18 @@ class GateMapCalc(GateCalc):
         
         for i in evalTree.get_evaluation_order():
             iStart,remainder = evalTree[i]
-            if iStart is None:  init_state = rho[:,0]
-            else:               init_state = rho_cache[iStart]
-            rho_cache[i] = self.propagate_state(init_state, remainder)
+            if iStart is None:  init_state = rho #[:,0]
+            else:               init_state = rho_cache[iStart][:,None]
+            rho_cache[i] = self.propagate_state(init_state, remainder)[:,0]
+            #HERE - need to decide on expected shape for acton...
 
         pCache = _np.dot(E,rho_cache.T) # (1,cacheSize)
+        #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return _np.squeeze(pCache, axis=0) # shape (cacheSize,)
     
     def _compute_dpr_cache(self, spamTuple, evalTree, wrtSlice, comm, scratch=None):
         #Compute finite difference derivatives, one parameter at a time.
-
+        tStart = _time.time() #DEBUG
         param_indices = range(self.Np) if (wrtSlice is None) else _slct.indices(wrtSlice)
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
@@ -334,6 +337,7 @@ class GateMapCalc(GateCalc):
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
         _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=1, comm=comm)
+        print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d) in %gs" % (self.Np, self.dim, cacheSize,_time.time()-tStart)) #DEBUG
 
         return dpr_cache
 
