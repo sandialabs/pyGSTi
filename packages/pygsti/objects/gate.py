@@ -2593,7 +2593,7 @@ class LindbladBase(object):
                         for j in range(i):
                             otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
                             otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-
+                            
         #Finally, build gate matrix from generators and coefficients:
         if self.sparse:        
             if bsH > 0:
@@ -2607,7 +2607,6 @@ class LindbladBase(object):
                 else:
                     lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
                                           for c,gen in zip(cRow,genRow)])
-                    
             lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
 
         else: #dense matrices
@@ -2626,6 +2625,7 @@ class LindbladBase(object):
                 lnd_error_gen, self.rightTrans)) #basis chg
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
+        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
         self.err_gen = _mt.safereal(lnd_error_gen)
 
 

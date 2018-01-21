@@ -31,7 +31,7 @@ class MapEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(MapEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1):
+    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
         """
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
@@ -94,25 +94,38 @@ class MapEvalTree(EvalTree):
         #DEBUG
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
+        curCacheSize = 0
+        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
+          # (store persistently as prefixes of other string -- this need not be all
+          #  of the strings in the tree)
+
         for k,(iStr,gateString) in enumerate(sorted_strs):
             L = len(gateString)
             
             #find longest existing prefix for gateString by working backwards
             # and finding the first string that *is* a prefix of this string
             # (this will necessarily be the longest prefix, given the sorting)
-            for i in range(k-1,-1,-1): #from k-1 -> 0
-                ic, candidate = sorted_strs[i]
+            for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
+                candidate = gatestring_list[ cacheIndices[i] ]
                 Lc = len(candidate)
                 if L >= Lc > 0 and gateString[0:Lc] == candidate: # ">=" allows for duplicates 
-                    iStart = ic
+                    iStart = i # NOTE: this is an index into the *cache*, not necessarily self
                     remaining = gateString[Lc:]
                     break
             else: #no break => no prefix
                 iStart = None
                 remaining = gateString[:]
 
+            # if/where this string should get stored in the cache
+            if maxCacheSize is None or curCacheSize < maxCacheSize:
+                cacheIndices.append(iStr)
+                iCache = curCacheSize
+                curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
+            else: #don't store in the cache
+                iCache = None
+
             #Add info for this string
-            self[iStr] = (iStart, remaining)
+            self[iStr] = (iStart, remaining, iCache)
             self.eval_order.append(iStr)
             
         #FUTURE: could perform a second pass, and if there is
@@ -122,7 +135,8 @@ class MapEvalTree(EvalTree):
         # (beyond the #gatestrings index) which computes
         # the shared prefix and insert this into the eval
         # order.
-                        
+
+        self.cachesize = curCacheSize
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
         self.parentIndexMap = None
@@ -131,6 +145,12 @@ class MapEvalTree(EvalTree):
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
 
+    def prefix_cache_size(self):
+        """ 
+        Returns the size of the persistent "cache" of partial results
+        used during the computation of all the strings in this tree.
+        """
+        return self.cachesize
 
     def generate_gatestring_list(self, permute=True):
         """
@@ -162,13 +182,18 @@ class MapEvalTree(EvalTree):
         """
         gateStrings = [None]*len(self)
 
+        cachedStrings = [None]*self.prefix_cache_size()
+        
         #Build rest of strings
         for i in self.get_evaluation_order():
-            iStart, remainingStr = self[i]
+            iStart, remainingStr, iCache = self[i]
             if iStart is None:
                 gateStrings[i] = remainingStr
             else:
-                gateStrings[i] = gateStrings[iStart] + remainingStr
+                gateStrings[i] = cachedStrings[iStart] + remainingStr
+                
+            if iCache is not None:
+                cachedStrings[iCache] = gateStrings[i]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
@@ -192,7 +217,7 @@ class MapEvalTree(EvalTree):
         int
         """
         ops = 0
-        for _,remainder in self:
+        for _,remainder,_ in self:
             ops += len(remainder)
         return ops
 
@@ -272,9 +297,13 @@ class MapEvalTree(EvalTree):
             curSubTree = set([evalOrder[0]])
             curTreeCost = cost_fn(self[evalOrder[0]][1]) #remainder length of 0th evaluant
             totalCost = 0
+            cacheIndices = [None]*self.prefix_cache_size()
             
             for k in evalOrder:
-                iStart,remainder = self[k]
+                iStart,remainder,iCache = self[k]
+
+                if iCache is not None:
+                    cacheIndices[iCache] = k
 
                 #compute the cost (additional #applies) which results from
                 # adding this element to the current tree.
@@ -284,11 +313,13 @@ class MapEvalTree(EvalTree):
                 if iStart is not None and iStart not in curSubTree:
                     #we need to add the tree elements traversed by
                     #following iStart
-                    j = iStart
+                    j = iStart #index into cache
                     while j is not None:
-                        inds.add(j)
-                        cost += cost_fn(self[j][1]) # remainder
-                        j = self[j][0] #iStart
+                        iStr = cacheIndices[j] # cacheIndices[ iStart ]
+                        inds.add(iStr)
+                        cost += cost_fn(self[iStr][1]) # remainder
+                        j = self[iStr][0] # iStart
+
                         
                 if curTreeCost + cost < maxCost:
                     #Just add current string to current tree
@@ -302,9 +333,10 @@ class MapEvalTree(EvalTree):
                     
                     cost = cost_fn(remainder); j = iStart
                     while j is not None: # always traverse back iStart
-                        curSubTree.add(j)
-                        cost += cost_fn(self[j][1]) #remainder
-                        j = self[j][0] #iStart
+                        iStr = cacheIndices[j]
+                        curSubTree.add(iStr)
+                        cost += cost_fn(self[iStr][1]) #remainder
+                        j = self[iStr][0] # iStart
                     totalCost += curTreeCost
                     curTreeCost = cost
                     #print("Added new tree w/initial cost %d" % (cost))
@@ -380,7 +412,8 @@ class MapEvalTree(EvalTree):
         def permute_parent_element(perm, el):
             """Applies a permutation to an element of the tree """
             # perm[oldIndex] = newIndex
-            return (perm[el[0]] if (el[0] is not None) else None, el[1])
+            #return (perm[el[0]] if (el[0] is not None) else None, el[1], el[2])
+            return (el[0], el[1], el[2]) # no need to permute the cache element ([0])
     
         def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
             """ 
@@ -400,7 +433,7 @@ class MapEvalTree(EvalTree):
                 the parent they map to.
 
             fullEvalOrder : list
-                A list of the integers between 0 and len(parentIndics)-1 which
+                A list of the integers between 0 and len(parentIndices)-1 which
                 gives the evaluation order of the subtree *including* evaluation
                 of any initial elements.
 
@@ -417,19 +450,29 @@ class MapEvalTree(EvalTree):
             subTree[:] = [None]*len(parentIndices)
 
             mapParentIndxToSubTreeIndx = { k: ik for ik,k in enumerate(parentIndices) }
+            curCacheSize = 0
+            subTreeCacheIndices = {}
     
             for ik in fullEvalOrder: #includes any initial indices
                 k = parentIndices[ik] #original tree index
 
-                (oStart,remainder) = self[k] #original tree data
+                oStart,remainder,oCache = self[k] #original tree data
+
+                if oCache is not None: # this element was in parent's cache, 
+                    subTreeCacheIndices[oCache] = curCacheSize #maps parent's cache indices to subtree's
+                    iCache = curCacheSize
+                    curCacheSize += 1
+                else:
+                    iCache = None
 
                 iStart  = None if (oStart is None) else \
-                          mapParentIndxToSubTreeIndx[ oStart ]
+                          subTreeCacheIndices[ oStart ]
                 subTree.eval_order.append(ik)
 
                 assert(subTree[ik] is None)
-                subTree[ik] = (iStart,remainder)
+                subTree[ik] = (iStart,remainder,iCache)
 
+            subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
             subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
@@ -458,4 +501,6 @@ class MapEvalTree(EvalTree):
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
-        return self._copyBase( MapEvalTree(self[:]) )
+        cpy = self._copyBase( MapEvalTree(self[:]) )
+        cpy.cachesize = self.cachesize # member specific to MapEvalTree
+        return cpy

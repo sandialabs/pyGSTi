@@ -58,7 +58,9 @@ class EvalTreeTestCase(BaseTestCase):
         #eval order
         evorder = t.get_evaluation_order()
         for i,k in enumerate(evorder):
-            iStart,rem = t[k]
+            #print("item %d = %s" % (i,t[k]))
+            assert(len(t[k]) in (2,3))
+            #iStart,rem,iCache = t[k]
             #print("%d: %d -> %s [%s]" % (i,evorder.index(iStart) if (iStart is not None) else -1,str(rem),str(strs[k])))
 
         print("Number of strings = ",len(strs))
@@ -70,7 +72,7 @@ class EvalTreeTestCase(BaseTestCase):
 
         if(TreeClass == pygsti.obj.MapEvalTree):
             ops = 0
-            for iStart, remainder in t:
+            for iStart, remainder, iCache in t:
                 ops += len(remainder)
             print("Number of apply ops = ", ops)
             self.assertEqual(ops, t.get_num_applies())

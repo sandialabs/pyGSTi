@@ -143,6 +143,8 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         sparseGate2 = LindbladParameterizedGateMap( Sparse_noisyG, Sparse_perfectG )
         print("spareGate2 Errgen type (should be sparse):",type(sparseGate2.err_gen))
         self.assertIsInstance(sparseGate2.err_gen, sps.csr_matrix)
+        #print("errgen = \n"); pygsti.tools.print_mx(gate2.err_gen,width=4,prec=1)
+        #print("sparse errgen = \n"); pygsti.tools.print_mx(sparseGate2.err_gen.toarray(),width=4,prec=1)
         self.assertArraysAlmostEqual(gate2.err_gen,sparseGate2.err_gen.toarray())
 
 if __name__ == '__main__':

@@ -768,14 +768,17 @@ def safedot(A,B):
         return _np.dot(A,B)
 
 
-def safereal(A):
+def safereal(A, inplace=False):
     """ 
     Returns the real-part of `A` correctly when `A` is either a dense array or
     a sparse matrix
     """
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
-            ret = _sps.csr_matrix( (_np.real(A.data), A.indices, A.indptr), shape=A.shape)
+            if inplace:
+                ret = _sps.csr_matrix( (_np.real(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+            else: #copy
+                ret = _sps.csr_matrix( (_np.real(A.data).copy(), A.indices.copy(), A.indptr.copy()), shape=A.shape, dtype='d')
             ret.eliminate_zeros()
             return ret
         else:
@@ -784,14 +787,17 @@ def safereal(A):
         return _np.real(A)
 
 
-def safeimag(A):
+def safeimag(A, inplace=False):
     """ 
     Returns the imaginary-part of `A` correctly when `A` is either a dense array
     or a sparse matrix
     """
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
-            ret = _sps.csr_matrix( (_np.imag(A.data), A.indices, A.indptr), shape=A.shape)
+            if inplace:
+                ret = _sps.csr_matrix( (_np.imag(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+            else: #copy
+                ret = _sps.csr_matrix( (_np.imag(A.data).copy(), A.indices.copy(), A.indptr.copy()), shape=A.shape, dtype='d')
             ret.eliminate_zeros()
             return ret
         else:
@@ -818,13 +824,16 @@ def safenorm(A, part=None):
     -------
     float
     """
-    if part == 'real': A = safereal(A)
-    elif part == 'imag': A = safeimag(A)
+    if part == 'real': takepart = _np.real
+    elif part == 'imag': takepart = _np.imag
+    else: takepart = lambda x: x
     if _sps.issparse(A):
-        return _spsl.norm(A)
+        assert(_sps.isspmatrix_csr(A)), "Non-CSR sparse formats not implemented"
+        return _np.linalg.norm(takepart(A.data))
     else:
-        return _np.linalg.norm(A)
-
+        return _np.linalg.norm(takepart(A))
+    # could also use _spsl.norm(A)
+    
     
 def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     """ 

@@ -1084,17 +1084,43 @@ class GateCalc(object):
         
         pslc1 = param_slice1
         pslc2 = param_slice2
-        remainder_index = None
         for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
             # fInds = "final indices" = the "element" indices in the final
             #          filled quantity combining both spam and gate-sequence indices
             # gInds  = "gate sequence indices" = indices into the (tree-) list of
             #          all of the raw gate sequences which need to be computed
             #          for the current spamTuple (this list has the SAME length as fInds).            
-            calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False)
+            calc_and_fill_fn(spamTuple,fInds,gInds,pslc1,pslc2,False) #TODO: remove SumInto == True cases
                     
         return
 
+    def _fill_result_tuple_collectrho(self, result_tup, evalTree,
+                           param_slice1, param_slice2, calc_and_fill_fn):
+        """ 
+        TODO docstring -- like above but collections common rho spamtuples together (for map evaluation)
+        """ 
+        
+        pslc1 = param_slice1
+        pslc2 = param_slice2
+        collected = _collections.OrderedDict() # keys are rho labels
+        for spamTuple, (fInds,gInds) in evalTree.spamtuple_indices.items():
+            # fInds = "final indices" = the "element" indices in the final
+            #          filled quantity combining both spam and gate-sequence indices
+            # gInds  = "gate sequence indices" = indices into the (tree-) list of
+            #          all of the raw gate sequences which need to be computed
+            #          for the current spamTuple (this list has the SAME length as fInds).
+            rholabel,elabel = spamTuple #this should always be the case... (no "custom" / "raw" labels)
+            if rholabel not in collected: collected[rholabel] = [list(),list(),list()]
+            collected[rholabel][0].append(elabel)
+            collected[rholabel][1].append(fInds)
+            collected[rholabel][2].append(gInds)
+            
+        for rholabel, (elabels, fIndsList, gIndsList) in collected.items():
+            calc_and_fill_fn(rholabel, elabels, fIndsList, gIndsList,pslc1,pslc2, False) 
+                    
+        return
+
+    
 
     def bulk_fill_probs(self, mxToFill, evalTree,
                         clipTo=None, check=False, comm=None):
