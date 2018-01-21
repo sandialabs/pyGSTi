@@ -73,7 +73,8 @@ setup(name='pyGSTi',
            'pickling report tables': ['pandas'],
            'generating PDFs of report figures': ['matplotlib'],
            'generating report notebooks': ['ipython','notebook'],
-           'read/write message pack format': ['msgpack-python']
+           'read/write message pack format': ['msgpack-python'],
+	   'extension modules': ['cython']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
