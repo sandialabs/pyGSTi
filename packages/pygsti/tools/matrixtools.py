@@ -17,9 +17,14 @@ import itertools as _itertools
 from .basistools import change_basis
 
 #Temporary while we develop fastcalc
-import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
-from . import fastcalc as _fastcalc
+try:
+    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _warnings.warn("Could not import Cython extension - falling back to slower pure-python routines")
+    _fastcalc = None
 
+    
 #EXPM_DEFAULT_TOL = 1e-7
 EXPM_DEFAULT_TOL = 2**-53 #Scipy default
 
@@ -862,13 +867,17 @@ def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     assert(_sps.isspmatrix_csr(A))
     return A, mu, m_star, s, eta
 
-def expm_multiply_fast(prepA,v,tol=EXPM_DEFAULT_TOL):
-    A, mu, m_star, s, eta = prepA
-    return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
-                                                      v, mu, m_star, s, tol, eta)
-    #return _custom_expm_multiply_simple_core(
-    #    A, v, mu, m_star, s, tol, eta) # t == 1.0 always, `balance` not implemented so removed
+if _fastcalc is None:
+    def expm_multiply_fast(prepA,v,tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prepA
+        return _custom_expm_multiply_simple_core(
+            A, v, mu, m_star, s, tol, eta) # t == 1.0 always, `balance` not implemented so removed
 
+else:
+    def expm_multiply_fast(prepA,v,tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prepA
+        return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
+                                                          v, mu, m_star, s, tol, eta)
 
 def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0 replaced below
     """

@@ -29,8 +29,11 @@ from ..baseobjs import Basis as _Basis
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
 #Temporary while we develop fastcalc
-import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
-from ..tools import fastcalc as _fastcalc
+try:
+    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
 
 
 def optimize_gate(gateToOptimize, targetGate):
@@ -4858,7 +4861,7 @@ class EmbeddedGateMap(GateMap):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
 
-        #LATER: Maybe a faster way for dense mxs
+        #LATER: Maybe a faster way for dense mxs based on this, which is very slow:
         #if isinstance(self.embedded_gate, GateMatrix):
         #    embedded_base = self.embedded_gate.base
         #
@@ -4869,61 +4872,48 @@ class EmbeddedGateMap(GateMap):
         #
         #else:
 
-        offset = 0
- 
-        # SLOW (but in pure python)
-        #for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
-        #    vec_index_noop = _np.dot(self.multipliers, tuple(b))
-        #    inds = []
-        #    #for gate_i in range(self.embedded_gate.dim):
-        #    #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
-        #    for gate_b in _itertools.product(*self.basisInds_action):
-        #        vec_index = vec_index_noop
-        #        for i,bInd in zip(self.actionInds,gate_b):
-        #            #b[i] = bInd #don't need to do this; just update vec_index:
-        #            vec_index += self.multipliers[i]*bInd
-        #        inds.append(offset + vec_index)
-        #    output_state[ inds ] += self.embedded_gate.acton( state[inds] )
+        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
 
-            
-        # FAST (cython)
-        if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
-           self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
-            #Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
-            A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
-            if A.nnz == 0: return state # embedded gate is identity, so entire gate is
-            _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
-                                                      mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-                                                      output_state[:,0], state[:,0], offset,
-                                                      self.multipliers,
-                                                      self.numBasisEls_noop_blankaction,
-                                                      self.numBasisEls_action,
-                                                      self.actionInds,
-                                                      self.inds_scratch)
+        if _fastcalc is None:
+            # SLOW (but in pure python)
+            for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
+                vec_index_noop = _np.dot(self.multipliers, tuple(b))
+                inds = []
+                #for gate_i in range(self.embedded_gate.dim):
+                #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
+                for gate_b in _itertools.product(*self.basisInds_action):
+                    vec_index = vec_index_noop
+                    for i,bInd in zip(self.actionInds,gate_b):
+                        #b[i] = bInd #don't need to do this; just update vec_index:
+                        vec_index += self.multipliers[i]*bInd
+                    inds.append(offset + vec_index)
+                output_state[ inds ] += self.embedded_gate.acton( state[inds] )
         else:
-            # output_state2 = _np.zeros( state.shape, 'd') #for CHECK        
-            _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
-                                                 output_state[:,0], state[:,0], offset,
-                                                 self.multipliers,
-                                                 self.numBasisEls_noop_blankaction,
-                                                 self.numBasisEls_action,
-                                                 self.actionInds,
-                                                 self.inds_scratch)
-            #assert(_np.linalg.norm(output_state-output_state2) < 1e-6) # for CHECK
-
-
-#OLD           
-#            #embedded_base = self.embedded_gate.as_sparse_matrix()
-#            #assert(_sps.isspmatrix_csr(embedded_base))
-#
-#            #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
-#            #for i,j,gi,gj in self._iter_matrix_elements():
-#            #    output_state[i] += embedded_base[gi,gj] * state[j]
-#            for gi in range(embedded_base.shape[0]):
-#                slc = slice(embedded_base.indptr[gi],embedded_base.indptr[gi+1])
-#                for gj,el in zip(embedded_base.indices[slc],embedded_base.data[slc]):
-#                    ar_i,ar_j = self.fast_iter_inds2[(gi,gj)]
-#                    output_state[ar_i] += el * state[ar_j]
+            
+            # FAST (cython)
+            if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
+               self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
+                #Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
+                A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
+                if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+                _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
+                                                          mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
+                                                          output_state[:,0], state[:,0], offset,
+                                                          self.multipliers,
+                                                          self.numBasisEls_noop_blankaction,
+                                                          self.numBasisEls_action,
+                                                          self.actionInds,
+                                                          self.inds_scratch)
+            else:
+                # output_state2 = _np.zeros( state.shape, 'd') #for CHECK        
+                _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+                                                     output_state[:,0], state[:,0], offset,
+                                                     self.multipliers,
+                                                     self.numBasisEls_noop_blankaction,
+                                                     self.numBasisEls_action,
+                                                     self.actionInds,
+                                                     self.inds_scratch)
+                #assert(_np.linalg.norm(output_state-output_state2) < 1e-6) # for CHECK
                                  
         #act on other blocks trivially:
         offset = 0
