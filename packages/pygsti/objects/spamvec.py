@@ -1575,40 +1575,75 @@ class TensorProdSPAMVec(SPAMVec):
     Encapsulates a SPAM vector that is a tensor-product of other SPAM vectors.
     """
 
-    def __init__(self, factorPOVMs, elLbls):
+    def __init__(self, typ, factors, povmEffectLbls=None):
         """
         Initialize a TensorProdSPAMVec object.
 
         Parameters
         ----------
-        factorPOVMs : list of POVMs
-            the list of "reference" POVMs into which `elLbls` indexes.
+        typ : {"prep","effect"}
+            The type of spam vector - either a product of preparation
+            vectors ("prep") or of POVM effect vectors ("effect") 
 
-        elLbls : array-like
-            the effect label of each factor POVM which is tensored together to
-            form this SPAM vector.
+        factors : list of SPAMVecs or POVMs
+            if `typ == "prep"`, a list of the component SPAMVecs; if 
+            `typ == "effect"`, a list of "reference" POVMs into which 
+            `povmEffectLbls` indexes.
+
+        povmEffectLbls : array-like
+            Only non-None when `typ == "effect"`.  The effect label of each
+            factor POVM which is tensored together to form this SPAM vector.
         """
-        self.factorPOVMs = factorPOVMs #do *not* copy - needs to reference common objects
-        self.elLbls = _np.array(elLbls)
-
-        #Set our parent and gpindices based on those of factorPOVMs
-        # (for now say we depend on *all* the POVMs parameters (even though
-        #  we really only depend on one element of each POVM, which may allow
-        #  using just a subset of each factor POVMs indices - but this is tricky).
-        self.set_gpindices(_slct.list_to_slice(
-            _np.concatenate( [ povm.gpindices_as_array()
-                               for povm in factorPOVMs ], axis=0),True,False),
-                           factorPOVMs[0].parent) #use parent of first factorPOVM
-                                                  # (they should all be the same)
+        self.typ = typ
+        self.factors = factors #do *not* copy - needs to reference common objects
+        self.Np = sum([fct.num_params() for fct in factors])
+        if typ == "effect":
+            self.effectLbls = _np.array(povmEffectLbls)
+        elif typ == "prep":
+            assert(povmEffectLbls is None), '`povmEffectLbls` must be None when `typ != "effects"`'
+            self.effectLbls = None
+        else: raise ValueError("Invalid `typ` argument: %s" % typ)
         
-        SPAMVec.__init__(self, _np.product([povm.dim for povm in factorPOVMs]))
+        SPAMVec.__init__(self, _np.product([fct.dim for fct in factors]))
+          #sets gpindices, so do before stuff below
+
+        if typ == "effect":
+            #Set our parent and gpindices based on those of factor-POVMs, which
+            # should all be owned by a TensorProdPOVM object.
+            # (for now say we depend on *all* the POVMs parameters (even though
+            #  we really only depend on one element of each POVM, which may allow
+            #  using just a subset of each factor POVMs indices - but this is tricky).
+            self.set_gpindices(_slct.list_to_slice(
+                _np.concatenate( [ fct.gpindices_as_array()
+                                   for fct in factors ], axis=0),True,False),
+                               factors[0].parent) #use parent of first factor
+                                                  # (they should all be the same)
+        else:
+            # don't init our own gpindices (prep case), since our parent
+            # is likely to be a GateSet and it will init them correctly.
+            #But do set the indices of self.factors, since they're now 
+            # considered "owned" by this product-prep-vec (different from
+            # the "effect" case when the factors are shared).
+            off = 0
+            for fct in factors:
+                assert(isinstance(fct,SPAMVec)),"Factors must be SPAMVec objects!"
+                N = fct.num_params()
+                fct.set_gpindices( slice(off,off+N), self ); off += N
+            assert(off == self.Np)
+
 
     def toarray(self):
         """ Return this SPAM vector as a (dense) numpy array """
-        if len(self.factorPOVMs) == 0: return _np.empty(0,'d')
-        ret = self.factorPOVMs[0][self.elLbls[0]].toarray()
-        for i in range(i,len(self.factorPOVMs)):
-            ret = _np.kron(ret, self.factorPOVMs[i][self.elLbls[i]].toarray())
+        if len(self.factors) == 0: return _np.empty(0,'d')
+        if self.typ == "prep":
+            ret = self.factors[0].toarray() # factors are just other SPAMVecs
+            for i in range(1,len(self.factors)):
+                ret = _np.kron(ret, self.factors[i].toarray())
+        else:
+            factorPOVMs = self.factors
+            ret = factorPOVMs[0][self.effectLbls[0]].toarray()
+            for i in range(1,len(factorPOVMs)):
+                ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].toarray())
         return ret
 
     
@@ -1683,6 +1718,34 @@ class TensorProdSPAMVec(SPAMVec):
         """
         raise ValueError("Cannot depolarize a TensorProdSPAMVec")
 
+    
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return self.Np
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        if self.typ == "prep":
+            return _np.concatenate( [fct.to_vector() for fct in self.factors], axis=0)
+        else:
+            raise ValueError(("'`to_vector` should not be called on effect-like"
+                              " TensorProdSPAMVecs (instead it should be called"
+                              " on the POVM)"))
 
     def from_vector(self, v):
         """
@@ -1698,14 +1761,19 @@ class TensorProdSPAMVec(SPAMVec):
         -------
         None
         """
-        if all([self.elLbls[i] == list(povm.keys())[0]
-                for i,povm in enumerate(self.factorPOVMs)]):
+        if self.typ == "prep":
+            for sv in self.factors:
+                sv.from_vector( v[sv.gpindices] ) # factors hold local indices
+                
+        elif all([self.effectLbls[i] == list(povm.keys())[0]
+                  for i,povm in enumerate(self.factors)]):
             #then this is the *first* vector in the larger TensorProdPOVM
             # and we should initialize all of the factorPOVMs
-            for povm in self.factorPOVMs:
+            for povm in self.factors:
                 local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
                 povm.from_vector( v[local_inds] )
+                
         #No need to construct anything - no dense matrices are stored
 
 
@@ -1746,12 +1814,11 @@ class TensorProdSPAMVec(SPAMVec):
         StaticSPAMVec
             A copy of this SPAM operation.
         """
-        return self._copy_gpindices( TensorProdSPAMVec(self.factorPOVMs, self.elLbls), parent )
+        return self._copy_gpindices( TensorProdSPAMVec(self.typ, self.factors, self.effectLbls), parent )
 
 
     def __str__(self):
         ar = self.toarray()
-        s = "Tensor product spam vector with length %d\n" % \
-            len(ar)
+        s = "Tensor product spam vector with length %d\n" % len(ar)
         s += _mt.mx_to_string(ar, width=4, prec=2)
         return s

@@ -16,6 +16,18 @@ import itertools as _itertools
 
 from .basistools import change_basis
 
+#Temporary while we develop fastcalc
+try:
+    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _warnings.warn("Could not import Cython extension - falling back to slower pure-python routines")
+    _fastcalc = None
+
+    
+#EXPM_DEFAULT_TOL = 1e-7
+EXPM_DEFAULT_TOL = 2**-53 #Scipy default
+
 def array_eq(a, b, tol=1e-8):
     """Test whether arrays `a` and `b` are equal, i.e. if `norm(a-b) < tol` """
     print(_np.linalg.norm(a-b))
@@ -761,30 +773,38 @@ def safedot(A,B):
         return _np.dot(A,B)
 
 
-def safereal(A):
+def safereal(A, inplace=False):
     """ 
     Returns the real-part of `A` correctly when `A` is either a dense array or
     a sparse matrix
     """
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
-            ret = _sps.csr_matrix( (_np.real(A.data), A.indices, A.indptr), shape=A.shape)
+            if inplace:
+                ret = _sps.csr_matrix( (_np.real(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+            else: #copy
+                ret = _sps.csr_matrix( (_np.real(A.data).copy(), A.indices.copy(), A.indptr.copy()), shape=A.shape, dtype='d')
             ret.eliminate_zeros()
+            return ret
         else:
             raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
     else:
         return _np.real(A)
 
 
-def safeimag(A):
+def safeimag(A, inplace=False):
     """ 
     Returns the imaginary-part of `A` correctly when `A` is either a dense array
     or a sparse matrix
     """
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
-            ret = _sps.csr_matrix( (_np.imag(A.data), A.indices, A.indptr), shape=A.shape)
+            if inplace:
+                ret = _sps.csr_matrix( (_np.imag(A.data), A.indices, A.indptr), shape=A.shape, dtype='d')
+            else: #copy
+                ret = _sps.csr_matrix( (_np.imag(A.data).copy(), A.indices.copy(), A.indptr.copy()), shape=A.shape, dtype='d')
             ret.eliminate_zeros()
+            return ret
         else:
             raise NotImplementedError("safereal() doesn't work with %s matrices yet" % str(type(A)))
     else:
@@ -809,11 +829,93 @@ def safenorm(A, part=None):
     -------
     float
     """
-    if part == 'real': A = safereal(A)
-    elif part == 'imag': A = safeimag(A)
+    if part == 'real': takepart = _np.real
+    elif part == 'imag': takepart = _np.imag
+    else: takepart = lambda x: x
     if _sps.issparse(A):
-        return _spsl.norm(A)
+        assert(_sps.isspmatrix_csr(A)), "Non-CSR sparse formats not implemented"
+        return _np.linalg.norm(takepart(A.data))
     else:
-        return _np.linalg.norm(A)
-
+        return _np.linalg.norm(takepart(A))
+    # could also use _spsl.norm(A)
     
+    
+def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
+    """ 
+    Returns "prepared" meta-info about matrix A,
+        including a shifted version of A, to be used
+        in `expm_multiply_fast` 
+    """
+    if len(A.shape) != 2 or A.shape[0] != A.shape[1]:
+        raise ValueError('expected A to be like a square matrix')
+    ident = _spsl._expm_multiply._ident_like(A)
+
+    n = A.shape[0]
+    n0=1 # always act exp(A) on *single* vectors
+    mu = _spsl._expm_multiply._trace(A) / float(n)
+    A = A - mu * ident
+    A_1_norm = _spsl._expm_multiply._exact_1_norm(A)
+    t = 1.0 # always
+    if t*A_1_norm == 0:
+        m_star, s = 0, 1
+    else:
+        ell = 2
+        norm_info = _spsl._expm_multiply.LazyOperatorNormInfo(t*A, A_1_norm=t*A_1_norm, ell=ell)
+        m_star, s = _spsl._expm_multiply._fragment_3_1(norm_info, n0, tol, ell=ell)
+
+    eta = _np.exp(t*mu / float(s))
+    assert(_sps.isspmatrix_csr(A))
+    return A, mu, m_star, s, eta
+
+if _fastcalc is None:
+    def expm_multiply_fast(prepA,v,tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prepA
+        return _custom_expm_multiply_simple_core(
+            A, v, mu, m_star, s, tol, eta) # t == 1.0 always, `balance` not implemented so removed
+
+else:
+    def expm_multiply_fast(prepA,v,tol=EXPM_DEFAULT_TOL):
+        A, mu, m_star, s, eta = prepA
+        return _fastcalc.custom_expm_multiply_simple_core(A.data, A.indptr, A.indices,
+                                                          v, mu, m_star, s, tol, eta)
+
+def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0 replaced below
+    """
+    A helper function.
+    """
+    #if balance:
+    #    raise NotImplementedError
+    F = B
+    for i in range(s):
+        #if m_star > 0: #added
+        #    c1 = _np.linalg.norm(B, _np.inf) #_exact_inf_norm(B)
+        for j in range(m_star):
+            coeff = 1.0 / float(s*(j+1)) # t == 1.0
+            B = coeff * A.dot(B)
+            F = F + B
+        #    if j % 3 == 0: #every == 3 #TODO: work on this
+        #        c2 = _np.linalg.norm(B, _np.inf) #_exact_inf_norm(B)
+        #        if c1 + c2 <= tol * _np.linalg.norm(F, _np.inf): #_exact_inf_norm(F)
+        #            break
+        #        c1 = c2
+        F = eta * F
+        B = F
+    return F
+
+
+#From SciPy source, as a reference - above we assume A is a sparse csr matrix
+# and B is a dense vector
+#def _exact_inf_norm(A):
+#    # A compatibility function which should eventually disappear.
+#    if scipy.sparse.isspmatrix(A):
+#        return max(abs(A).sum(axis=1).flat)
+#    else:
+#        return np.linalg.norm(A, np.inf)
+#
+#
+#def _exact_1_norm(A):
+#    # A compatibility function which should eventually disappear.
+#    if scipy.sparse.isspmatrix(A):
+#        return max(abs(A).sum(axis=0).flat)
+#    else:
+#        return np.linalg.norm(A, 1)

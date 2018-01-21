@@ -486,7 +486,7 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
         items = []
         effectLabelKeys = [ povm.keys() for povm in factorPOVMs ]
         for el in _itertools.product(*effectLabelKeys):
-            effect = _sv.TensorProdSPAMVec(self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
+            effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
             items.append( ("".join(el), effect) )
             
         _collections.OrderedDict.__init__(self, items)
@@ -538,13 +538,13 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
             povm = p.copy()
             povm.set_gpindices( _gm._compose_gpindices(self.gpindices,
                                                        p.gpindices), self.parent)
-            factorPOVMs_compiled.append(comp)
+            factorPOVMs_compiled.append(povm)
 
         # Create "compiled" effect vectors, which infer their parent and
         # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
         compiled = _collections.OrderedDict(
-            [ (prefix + k, _sv.TensorProdSPAMVec(factorPOVMs_compiled, Evec.elLbls))
+            [ (prefix + k, _sv.TensorProdSPAMVec('effect',factorPOVMs_compiled, Evec.effectLbls))
               for k,Evec in self.items() ] )
         return compiled
 
@@ -655,7 +655,9 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
         return self._copy_gpindices( TensorProdPOVM(self.factorPOVMs), parent )
 
     def __str__(self):
-        s = "POVM with effect vectors:\n"
-        for lbl,effect in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.toarray(), width=4, prec=2))
+        s = "POVM with effect labels:\n"
+        s += ", ".join(self.keys()) + "\n"
+        s += " Effects (one per column):\n"
+        s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
+                                           axis=1), width=6, prec=2)
         return s

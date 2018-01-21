@@ -614,6 +614,8 @@ class GateMatrixCalc(GateCalc):
 
         rholabel,elabel = spamTuple #can't deal w/"custom" spam label...
         rho,E = self._rhoE_from_spamTuple(spamTuple)
+        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
+        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
 
         #Derivs wrt Gates
         old_err = _np.seterr(over='ignore')
@@ -631,13 +633,13 @@ class GateMatrixCalc(GateCalc):
         derivWrtAnyRhovec = scale * _np.dot(E,prod)
         dpr_drhos = _np.zeros( (1, self.Np) )
         _fas(dpr_drhos, [0,self.preps[rholabel].gpindices],
-            _np.dot( derivWrtAnyRhovec, rho.deriv_wrt_params()))  #may overflow, but OK
+            _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
 
         dpr_dEs = _np.zeros( (1, self.Np) );
         derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
            # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
-        _fas(dpr_dEs, [0,self.effects[elabel].gpindices],
-               _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() ))
+        _fas(dpr_dEs, [0,EVec.gpindices],
+               _np.dot( derivWrtAnyEvec, EVec.deriv_wrt_params() ))
 
         _np.seterr(**old_err)
 
@@ -697,6 +699,8 @@ class GateMatrixCalc(GateCalc):
 
         rholabel,elabel = spamTuple
         rho,E = self._rhoE_from_spamTuple(spamTuple)
+        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
+        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
 
         d2prod_dGates = self.hproduct(gatestring)
         assert( d2prod_dGates.shape[0] == d2prod_dGates.shape[1] )
@@ -726,28 +730,28 @@ class GateMatrixCalc(GateCalc):
             dpr_drhos = _np.zeros( (1, self.Np) ) 
             derivWrtAnyRhovec = scale * _np.dot(E,prod)
             _fas(dpr_drhos, [0,self.preps[rholabel].gpindices],
-                _np.dot( derivWrtAnyRhovec, rho.deriv_wrt_params()))  #may overflow, but OK
+                _np.dot( derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  #may overflow, but OK
 
             dpr_dEs = _np.zeros( (1, self.Np) )
             derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod,rho)) # may overflow, but OK
-            _fas(dpr_dEs, [0,self.effects[elabel].gpindices],
-               _np.dot( derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params() ))
+            _fas(dpr_dEs, [0,EVec.gpindices],
+               _np.dot( derivWrtAnyEvec, EVec.deriv_wrt_params() ))
 
             dpr = dpr_drhos + dpr_dEs + dpr_dGates
 
         d2pr_drhos = _np.zeros( (1, self.Np, self.Np) )
         _fas(d2pr_drhos, [0,None, self.preps[rholabel].gpindices],
-             _np.dot( _np.dot(E,dprod_dGates), rho.deriv_wrt_params())[0]) # (= [0,:,:])
+             _np.dot( _np.dot(E,dprod_dGates), rhoVec.deriv_wrt_params())[0]) # (= [0,:,:])
 
         d2pr_dEs = _np.zeros( (1, self.Np, self.Np) )
         derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dGates,rho), axis=(2,))
-        _fas(d2pr_dEs,[0,None,self.effects[elabel].gpindices],
-             _np.dot(derivWrtAnyEvec, self.effects[elabel].deriv_wrt_params()))
+        _fas(d2pr_dEs,[0,None,EVec.gpindices],
+             _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
 
         d2pr_dErhos = _np.zeros( (1, self.Np, self.Np) )
-        derivWrtAnyEvec = scale * _np.dot(prod, rho.deriv_wrt_params()) #may generate overflow, but OK
-        _fas(d2pr_dErhos,[0,self.effects[elabel].gpindices,self.preps[rholabel].gpindices],
-             _np.dot( _np.transpose(self.effects[elabel].deriv_wrt_params()),derivWrtAnyEvec))
+        derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params()) #may generate overflow, but OK
+        _fas(d2pr_dErhos,[0,EVec.gpindices,self.preps[rholabel].gpindices],
+             _np.dot( _np.transpose(EVec.deriv_wrt_params()),derivWrtAnyEvec))
 
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
@@ -1572,8 +1576,8 @@ class GateMatrixCalc(GateCalc):
     def _rhoE_from_spamTuple(self, spamTuple):
         if len(spamTuple) == 2:
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel]
-            E   = _np.conjugate(_np.transpose(self.effects[elabel]))
+            rho = self.preps[rholabel].toarray()
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -1594,6 +1598,8 @@ class GateMatrixCalc(GateCalc):
 
     def _dprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs, scaleVals, wrtSlice=None):
         rholabel,elabel = spamTuple
+        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
+        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
         nGateStrings = Gs.shape[0]
         rho_wrtFilter, rho_gpindices = self._process_wrtFilter(wrtSlice, self.preps[rholabel])
         E_wrtFilter, E_gpindices = self._process_wrtFilter(wrtSlice, self.effects[elabel])
@@ -1626,7 +1632,7 @@ class GateMatrixCalc(GateCalc):
         dp_drhos = _np.zeros( (nGateStrings, nDerivCols ) )
         _fas(dp_drhos, [None,rho_gpindices],
              _np.squeeze(_np.dot(_np.dot(E, Gs),
-                                 rho.deriv_wrt_params(rho_wrtFilter)),
+                                 rhoVec.deriv_wrt_params(rho_wrtFilter)),
                          axis=(0,)) * scaleVals[:,None]) # may overflow, but OK
 
         # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),Gs[i],rho))
@@ -1638,7 +1644,7 @@ class GateMatrixCalc(GateCalc):
         dp_dEs = _np.zeros( (nGateStrings, nDerivCols) )
         dp_dAnyE = _np.squeeze(_np.dot(Gs, rho),axis=(2,)) * scaleVals[:,None] #may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
         _fas(dp_dEs, [None,E_gpindices],
-             _np.dot(dp_dAnyE, self.effects[elabel].deriv_wrt_params(E_wrtFilter)))
+             _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
         sub_vdp = dp_drhos + dp_dEs + dp_dGates
         return sub_vdp
@@ -1697,6 +1703,8 @@ class GateMatrixCalc(GateCalc):
     def _hprobs_from_rhoE(self, spamTuple, rho, E, Gs, dGs1, dGs2, hGs, scaleVals,
                           wrtSlice1=None, wrtSlice2=None):
         rholabel,elabel = spamTuple
+        rhoVec = self.preps[rholabel] #distinct from rho,E b/c rho,E are
+        EVec = self.effects[elabel]   # arrays, these are SPAMVecs
         nGateStrings = Gs.shape[0]
 
         rho_wrtFilter1, rho_gpindices1 = self._process_wrtFilter(wrtSlice1, self.preps[rholabel])
@@ -1737,7 +1745,7 @@ class GateMatrixCalc(GateCalc):
         # d2pr_drhos[i,j,J0+J] = sum_kl E[0,k] dGs[i,j,k,l] drhoP[l,J]
         # d2pr_drhos[i,j,J0+J] = dot(E, dGs, drhoP)[0,i,j,J]
         # d2pr_drhos[:,:,J0+J] = squeeze(dot(E, dGs, drhoP),axis=(0,))[:,:,J]
-        drho = rho.deriv_wrt_params(rho_wrtFilter2)
+        drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
         d2pr_drhos1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
         _fas(d2pr_drhos1,[None, None, rho_gpindices2],
              _np.squeeze( _np.dot(_np.dot(E,dGs1),drho), axis=(0,)) \
@@ -1748,7 +1756,7 @@ class GateMatrixCalc(GateCalc):
             assert(nDerivCols1 == nDerivCols2)
             d2pr_drhos2 = _np.transpose(d2pr_drhos1,(0,2,1))
         else:
-            drho = rho.deriv_wrt_params(rho_wrtFilter1)
+            drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
             d2pr_drhos2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
             _fas(d2pr_drhos2,[None,None,rho_gpindices1],
                  _np.squeeze( _np.dot(_np.dot(E,dGs2),drho), axis=(0,))
@@ -1763,7 +1771,7 @@ class GateMatrixCalc(GateCalc):
         # d2pr_dEs[:,:,J0+J] = dot( squeeze(dot(dGs, rho),axis=(3,)), dEP)[:,:,J]
         d2pr_dEs1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
         dp_dAnyE = _np.squeeze(_np.dot(dGs1,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
-        devec = self.effects[elabel].deriv_wrt_params(E_wrtFilter2)
+        devec = EVec.deriv_wrt_params(E_wrtFilter2)
         _fas(d2pr_dEs1,[None,None,E_gpindices2],
              _np.dot(dp_dAnyE, devec))
 
@@ -1774,7 +1782,7 @@ class GateMatrixCalc(GateCalc):
         else:
             d2pr_dEs2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
             dp_dAnyE = _np.squeeze(_np.dot(dGs2,rho), axis=(3,)) * scaleVals[:,None,None] #overflow OK
-            devec = self.effects[elabel].deriv_wrt_params(E_wrtFilter1)
+            devec = EVec.deriv_wrt_params(E_wrtFilter1)
             _fas(d2pr_dEs2,[None,None,E_gpindices1], _np.dot(dp_dAnyE, devec))
             d2pr_dEs2 = _np.transpose(d2pr_dEs2,(0,2,1))
 
@@ -1787,9 +1795,9 @@ class GateMatrixCalc(GateCalc):
         # d2pr_dErhos[i,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[i,J,K]
         # d2pr_dErhos[:,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[:,J,K]
         d2pr_dErhos1 = _np.zeros( (nGateStrings, nDerivCols1, nDerivCols2) )
-        drho = rho.deriv_wrt_params(rho_wrtFilter2)
+        drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
         dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
-        devec = self.effects[elabel].deriv_wrt_params(E_wrtFilter1)
+        devec = EVec.deriv_wrt_params(E_wrtFilter1)
         _fas(d2pr_dErhos1, (None, E_gpindices1, rho_gpindices2),
             _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1))
 
@@ -1798,9 +1806,9 @@ class GateMatrixCalc(GateCalc):
             d2pr_dErhos2 = _np.transpose(d2pr_dErhos1,(0,2,1))
         else:
             d2pr_dErhos2 = _np.zeros( (nGateStrings, nDerivCols2, nDerivCols1) )
-            drho = rho.deriv_wrt_params(rho_wrtFilter1)
+            drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
             dp_dAnyE = _np.dot(Gs, drho) * scaleVals[:,None,None] #overflow OK
-            devec = self.effects[elabel].deriv_wrt_params(E_wrtFilter2)
+            devec = EVec.deriv_wrt_params(E_wrtFilter2)
             _fas(d2pr_dErhos2, [None, E_gpindices2, rho_gpindices1],
                  _np.swapaxes( _np.dot(_np.transpose(devec), dp_dAnyE ), 0,1))
             d2pr_dErhos2 = _np.transpose(d2pr_dErhos2,(0,2,1))

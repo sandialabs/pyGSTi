@@ -8,3 +8,4 @@ matplotlib
 ipython
 notebook
 msgpack-python
+cython

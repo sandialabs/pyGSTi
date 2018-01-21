@@ -1,7 +1,9 @@
 """A python implementation of Gate Set Tomography"""
 
 from distutils.core import setup
-	
+from distutils.extension import Extension
+from Cython.Build import cythonize
+
 #execfile("packages/pygsti/_version.py")
 
 # 3.0 changes the way exec has to be called
@@ -9,6 +11,17 @@ with open("packages/pygsti/_version.py") as f:
     code = compile(f.read(), "packages/pygsti/_version.py", 'exec')
     exec(code)
 
+import numpy as np
+ext_modules = [
+    Extension("pygsti.tools.fastcalc",
+              sources=["packages/pygsti/tools/fastcalc.pyx"], # , "fastcalc.c
+              # Cython docs on NumPy usage should mention this!
+              #define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
+               #leave above commented, see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+              include_dirs=['.', np.get_include()]
+              #libraries=['m'] #math lib?
+              )
+    ]
 
 classifiers = """\
 Development Status :: 4 - Beta
@@ -60,11 +73,15 @@ setup(name='pyGSTi',
            'pickling report tables': ['pandas'],
            'generating PDFs of report figures': ['matplotlib'],
            'generating report notebooks': ['ipython','notebook'],
-           'read/write message pack format': ['msgpack-python']
+           'read/write message pack format': ['msgpack-python'],
+	   'extension modules': ['cython']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
       classifiers = filter(None, classifiers.split("\n")),
+      ext_modules=cythonize(ext_modules),
+
+      
      )

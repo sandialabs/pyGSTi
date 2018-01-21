@@ -28,6 +28,14 @@ from ..baseobjs import Basis as _Basis
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
+#Temporary while we develop fastcalc
+try:
+    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
+
+
 def optimize_gate(gateToOptimize, targetGate):
     """
     Optimize the parameters of gateToOptimize so that the
@@ -2588,7 +2596,7 @@ class LindbladBase(object):
                         for j in range(i):
                             otherCoeffs[i,j] = otherParams[i,j] +1j*otherParams[j,i]
                             otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
-
+                            
         #Finally, build gate matrix from generators and coefficients:
         if self.sparse:        
             if bsH > 0:
@@ -2602,7 +2610,6 @@ class LindbladBase(object):
                 else:
                     lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
                                           for c,gen in zip(cRow,genRow)])
-                    
             lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
 
         else: #dense matrices
@@ -2620,7 +2627,10 @@ class LindbladBase(object):
             lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
                 lnd_error_gen, self.rightTrans)) #basis chg
 
-        self.err_gen = lnd_error_gen
+        assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
+        #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
+        self.err_gen = _mt.safereal(lnd_error_gen)
+
 
         
     def num_params(self):
@@ -2757,8 +2767,12 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
           # initializes self.paramvals and self.err_gen among other things
         
         #Pre-compute the exponential of the error generator if dense matrices are used
-        self.exp_err_gen = _spl.expm(self.err_gen) if (not self.sparse) else None
-
+        if self.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+            self.exp_err_gen = None
+        else:
+            self.err_gen_prep = None
+            self.exp_err_gen = _spl.expm(self.err_gen)            
         
     def acton(self, state):
         """ Act this gate map on an input state """
@@ -2766,16 +2780,23 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             state = self.unitary_postfactor.dot(state) #works for sparse or dense matrices
             
         if self.sparse:
-            state = _spsl.expm_multiply( self.err_gen, state)
+            #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state)
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
 
-    
+
+    #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def as_sparse_matrix(self):
-        """ Return the gate as a sparse matrix """
+        """
+        Return the gate as a sparse matrix.
+        """
+        _warnings.warn(("Constructing the sparse matrix of a LindbladParameterizedGate."
+                        "  Usually this is *NOT* a sparse matrix (the exponential of a"
+                        " sparse matrix isn't generally sparse)!"))
         if self.sparse:
-            exp_err_gen = _spsl.expm(self.err_gen)
+            exp_err_gen = _spsl.expm(self.err_gen.tocsc()).tocsr()
             if self.unitary_postfactor is not None:
                 return exp_err_gen.dot(self.unitary_postfactor)
             else:
@@ -2805,8 +2826,10 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         assert(len(v) == self.num_params())
         self.paramvals = v
         self._construct_errgen()
-        if not self.sparse:
-            self.exp_err_gen = _spl.expm(self.err_gen) 
+        if self.sparse:
+            self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+        else:
+            self.exp_err_gen = _spl.expm(self.err_gen)
         self.dirty = True
 
 
@@ -2867,6 +2890,10 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))                
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_errgen() # unnecessary? (TODO)
+            if self.sparse:
+                self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
+            else:
+                self.exp_err_gen = _spl.expm(self.err_gen)
             self.dirty = True
             #Note: truncate=True above because some unitary transforms seem to
             ## modify eigenvalues to be negative beyond the tolerances
@@ -3865,7 +3892,7 @@ class TPInstrumentGate(GateMatrix):
         """
         self.param_gates = param_gates
         self.index = index
-        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d'))
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d')) #Note: sets self.gpindices
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_gates
@@ -4084,7 +4111,7 @@ class ComposedGate(GateMatrix):
         return tot_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4101,14 +4128,19 @@ class ComposedGate(GateMatrix):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+        
         #must set the gpindices of self.factorgates based on new
         my_old_gpindices = self.gpindices
         for gate in self.factorgates:
+            if id(gate) in memo: continue # already processed
             rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
             new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent)
+            gate.set_gpindices(new_gate_gpindices, parent, memo)
             
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
     
@@ -4407,7 +4439,7 @@ class ComposedGateMap(GateMap):
         return tot_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4424,14 +4456,19 @@ class ComposedGateMap(GateMap):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.factorgates based on new
-        my_old_gpindices = old_gpindices
+        my_old_gpindices = self.gpindices
         for gate in self.factorgates:
+            if id(gate) in memo: continue #already processed
             rel_gate_gpindices = _gatesetmember._decompose_gpindices(
                 my_old_gpindices, gate.gpindices)
             new_gate_gpindices = _gatesetmember._compose_gpindices(
                 gpindices, rel_gate_gpindices)
-            gate.set_gpindices(new_gate_gpindices, parent)
+            gate.set_gpindices(new_gate_gpindices, parent, memo)
             
         _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
 
@@ -4680,11 +4717,20 @@ class EmbeddedGateMap(GateMap):
 
         # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
         basisInds_noop = basisInds[:]
+        basisInds_noop_blankaction = basisInds[:]
         labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
         for labelIndex in sorted(labelIndices,reverse=True):
             del basisInds_noop[labelIndex]
+            basisInds_noop_blankaction[labelIndex] = [0]
+            
         #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
         self.basisInds_noop = basisInds_noop
+        self.basisInds_noop_blankaction = basisInds_noop_blankaction
+        self.actionInds = _np.array(labelIndices,'i')
+        self.basisInds_action = [ basisInds[i] for i in labelIndices ]
+        self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
+        self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
+        self.inds_scratch = _np.empty(_np.product(self.numBasisEls_action),'i')
         
         #offset into "active" tensor product block
         self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
@@ -4698,14 +4744,13 @@ class EmbeddedGateMap(GateMap):
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        self.multipliers = _np.flipud( _np.cumprod([1] + list(
-            reversed(list(map(len,basisInds[:-1]))))) )
+        self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
+            reversed(list(map(len,basisInds[:-1]))))) ), 'i')
 
         self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
           # for inserting target-qubit basis indices into list of noop-qubit indices
 
-        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
-    
+        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one    
         GateMap.__init__(self, gateDim)
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4738,7 +4783,7 @@ class EmbeddedGateMap(GateMap):
         return num_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -4755,10 +4800,15 @@ class EmbeddedGateMap(GateMap):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.embedded_gate
-        self.embedded_gate.set_gpindices(gpindices, parent)
+        self.embedded_gate.set_gpindices(gpindices, parent, memo)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
+        
         
         
     def _decomp_gate_index(self, indx):
@@ -4769,6 +4819,7 @@ class EmbeddedGateMap(GateMap):
             ret.append( indx // d )
             indx = indx % d
         return ret
+
     
     def _merge_gate_and_noop_bases(self, gate_b, noop_b):
         """
@@ -4786,10 +4837,10 @@ class EmbeddedGateMap(GateMap):
             ret.insert(li, gate_b[bi]) #... and insert gate parts at proper points
         return ret
 
+    
     def _iter_matrix_elements(self, relToBlock=False):
         """ Iterates of (gate_i,gate_j,embedded_gate_i,embedded_gate_j) tuples giving mapping
             between nonzero elements of gate matrix and elements of the embedded gate matrx """
-        #Construct map from gatemx
         offset = 0 if relToBlock else self.offset
         for gate_i in range(self.embedded_gate.dim):     # rows ~ "output" of the gate map
             for gate_j in range(self.embedded_gate.dim): # cols ~ "input"  of the gate map
@@ -4804,25 +4855,76 @@ class EmbeddedGateMap(GateMap):
                     in_vec_index  = _np.dot(self.multipliers, tuple(b_in))  # index of input dm basis el within vec(tensor block basis)
 
                     yield (out_vec_index+offset, in_vec_index+offset, gate_i, gate_j)
-    
+                    
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _np.zeros( len(state), 'd')
+        output_state = _np.zeros( state.shape, 'd')
 
-        #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
-        for i,j,gi,gj in self._iter_matrix_elements():
-            output_state[i] += self.embedded_gate[gi,gj] * state[j]
+        #LATER: Maybe a faster way for dense mxs based on this, which is very slow:
+        #if isinstance(self.embedded_gate, GateMatrix):
+        #    embedded_base = self.embedded_gate.base
+        #
+        #    #SLOWEST
+        #    #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
+        #    for i,j,gi,gj in self._iter_matrix_elements():
+        #        output_state[i] += embedded_base[gi,gj] * state[j]
+        #
+        #else:
 
+        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+
+        if _fastcalc is None:
+            # SLOW (but in pure python)
+            for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
+                vec_index_noop = _np.dot(self.multipliers, tuple(b))
+                inds = []
+                #for gate_i in range(self.embedded_gate.dim):
+                #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
+                for gate_b in _itertools.product(*self.basisInds_action):
+                    vec_index = vec_index_noop
+                    for i,bInd in zip(self.actionInds,gate_b):
+                        #b[i] = bInd #don't need to do this; just update vec_index:
+                        vec_index += self.multipliers[i]*bInd
+                    inds.append(offset + vec_index)
+                output_state[ inds ] += self.embedded_gate.acton( state[inds] )
+        else:
+            
+            # FAST (cython)
+            if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
+               self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
+                #Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
+                A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
+                if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+                _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
+                                                          mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
+                                                          output_state[:,0], state[:,0], offset,
+                                                          self.multipliers,
+                                                          self.numBasisEls_noop_blankaction,
+                                                          self.numBasisEls_action,
+                                                          self.actionInds,
+                                                          self.inds_scratch)
+            else:
+                # output_state2 = _np.zeros( state.shape, 'd') #for CHECK        
+                _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+                                                     output_state[:,0], state[:,0], offset,
+                                                     self.multipliers,
+                                                     self.numBasisEls_noop_blankaction,
+                                                     self.numBasisEls_action,
+                                                     self.actionInds,
+                                                     self.inds_scratch)
+                #assert(_np.linalg.norm(output_state-output_state2) < 1e-6) # for CHECK
+                                 
         #act on other blocks trivially:
         offset = 0
-        dmDim, gateDim, blockDims = basis.dim
+        dmDim, gateDim, blockDims = self.basis.dim
         for i,blockDim in enumerate(blockDims):
             blockSize = blockDim**2
             if i != self.iTensorProdBlk:
                 output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
             offset += blockSize
 
+        assert(output_state.shape == state.shape)
         return output_state
 
 
@@ -5076,7 +5178,7 @@ class EmbeddedGate(GateMatrix):
         return num_new_params
 
     
-    def set_gpindices(self, gpindices, parent):
+    def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that
         are used by this GateSetMember object.
@@ -5093,8 +5195,12 @@ class EmbeddedGate(GateMatrix):
         -------
         None
         """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
         #must set the gpindices of self.embedded_gate
-        self.embedded_map.set_gpindices(gpindices, parent)
+        self.embedded_map.set_gpindices(gpindices, parent, memo)
         _gatesetmember.GateSetMember.set_gpindices(
             self, gpindices, parent) #could have used self.embedded_gate.gpindices (same)
 
