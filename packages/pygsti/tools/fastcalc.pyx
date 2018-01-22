@@ -118,8 +118,8 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
 
 #SPECIAL CASE 1: embedded gate is Lindblad gate with no unitary postfactor -
 # so just pass the args to custom_expm_multiply_simple_core
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def embedded_fast_acton_sparse_spc1(
         np.ndarray[double, ndim=1, mode="c"] Adata not None,
         np.ndarray[int, ndim=1, mode="c"] Aindptr not None,
