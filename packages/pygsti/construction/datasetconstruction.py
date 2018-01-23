@@ -109,6 +109,7 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
         #FUTURE: speed this puppy up...
         #if gsGen:
         #    all_probs = gsGen.bulk_probs(gatestring_list)
+        #    all_dprobs = gsGen.bulk_dprobs(gatestring_list) #DEBUG!!!
                 
         for k,s in enumerate(gatestring_list):
 

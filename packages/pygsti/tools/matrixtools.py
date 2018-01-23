@@ -773,11 +773,15 @@ def safedot(A,B):
         return _np.dot(A,B)
 
 
-def safereal(A, inplace=False):
+def safereal(A, inplace=False, check=False):
     """ 
     Returns the real-part of `A` correctly when `A` is either a dense array or
     a sparse matrix
     """
+    if check:
+        #test =safenorm(A,'real'),safenorm(A,'imag')  #TODO REMOVE
+        #if test[1] >= 1e-6: print("safereal check failed (Re,Im) = ",test)
+        assert( safenorm(A,'imag') < 1e-6 ), "Check failed: taking real-part of matrix w/nonzero imaginary part"
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
             if inplace:
@@ -792,11 +796,13 @@ def safereal(A, inplace=False):
         return _np.real(A)
 
 
-def safeimag(A, inplace=False):
+def safeimag(A, inplace=False, check=False):
     """ 
     Returns the imaginary-part of `A` correctly when `A` is either a dense array
     or a sparse matrix
     """
+    if check:
+        assert( safenorm(A,'real') < 1e-6 ), "Check failed: taking imag-part of matrix w/nonzero real part"
     if _sps.issparse(A):
         if _sps.isspmatrix_csr(A):
             if inplace:
@@ -838,7 +844,7 @@ def safenorm(A, part=None):
     else:
         return _np.linalg.norm(takepart(A))
     # could also use _spsl.norm(A)
-    
+
     
 def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     """ 
@@ -848,13 +854,30 @@ def expm_multiply_prep(A, tol=EXPM_DEFAULT_TOL):
     """
     if len(A.shape) != 2 or A.shape[0] != A.shape[1]:
         raise ValueError('expected A to be like a square matrix')
-    ident = _spsl._expm_multiply._ident_like(A)
+    assert(_sps.isspmatrix_csr(A)) # assuming this allows faster computations
 
     n = A.shape[0]
     n0=1 # always act exp(A) on *single* vectors
     mu = _spsl._expm_multiply._trace(A) / float(n)
-    A = A - mu * ident
-    A_1_norm = _spsl._expm_multiply._exact_1_norm(A)
+
+    #ident = _spsl._expm_multiply._ident_like(A) #general case
+
+    if _fastcalc is None:
+        ident = _sps.identity(A.shape[0], dtype=A.dtype, format='csr') # CSR specific
+        A = A - mu * ident #SLOW!
+    else:
+        indptr = _np.empty(n+1, 'i')
+        indices = _np.empty(A.data.shape[0] + n, 'i') # pessimistic (assume no diags exist)
+        data = _np.empty(A.data.shape[0] + n,A.dtype) # pessimistic (assume no diags exist)
+        nxt = _fastcalc.csr_subtract_identity(A.data, A.indptr, A.indices,
+                                              data, indptr, indices, -mu, n)
+        A = _sps.csr_matrix( (data[0:nxt], indices[0:nxt], indptr), shape=(n,n) )    
+    #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); A = A1
+
+    #exact_1_norm specific for CSR
+    A_1_norm = max(_np.sum(A.data[_np.where(A.indices == iCol)]) for iCol in range(n))
+    #A_1_norm = _spsl._expm_multiply._exact_1_norm(A) # general case
+    
     t = 1.0 # always
     if t*A_1_norm == 0:
         m_star, s = 0, 1
