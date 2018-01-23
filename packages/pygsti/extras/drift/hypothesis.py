@@ -36,7 +36,7 @@ def sidak_correction(confidence,numtests):
     """
     Todo: docstring
     """
-    adjusted_confidence = 1 - (1 - confidence)**(1/numtests)
+    adjusted_confidence = confidence**(1/numtests)
       
     return adjusted_confidence
 

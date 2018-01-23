@@ -19,93 +19,203 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
                                     outcomes=None, confidence=0.95, indices_to_sequences=None, 
                                     multitest_compensation='class', verbosity=1, name=None):
     """
+    Implements a drift detection and characterization analysis on timeseries data.
     
+    Parameters
+    ----------
+    ds : pyGSTi DataSet or numpy array
+        The time series data to analyze. If this is a DataSet it should contain time series
+        data (rather than, e.g., a total counts per-outcome per-GateString). If this is a
+        numpy array, it must again contain time series data and it may be either 1, 2, 3
+        or 4 dimensional. 
+        
+        The 4D case: the input array `ds` has ds[s,e,o,t] is the number of counts for outcome 
+        with index o on entity e, at the tth time that sequence s is  implemented. The 
+        entity index stores data for different "entities" that will be analyzed both independent
+        and jointly. E.g., the sequences could be on Q qubits, and each entity could be a single 
+        qubit with possible measurement outcomes '0' or '1' (i.e., the data for one qubit has 
+        been obtained from hmarginalizing over the other qubits). Note that the same raw data can
+        generally be arranged by entity and outcome in a range of different ways.
+        
+        The 3D case: As the 4D case, except that two-outcome measurements are assumed, and it is
+        assumed that the, for input array `ds`, ds[s,e,t] is the counts associated with the first
+        of the two measurement outcomes (this convention is only internally relevant if `outcomes`
+        is specified), and that the number of outcomes for the two measurements sum to `counts`,
+        at all time steps.
+        
+        The 2D case: As the 3D case, except that single-entity data is assumed (dropping the 2nd
+        index in the array from the 3D case).
+        
+        The 1D case: As the 2D case, except that single-sequence data is assumsed. That is the 
+        input array `ds` is a 1D array of counts, for the second out of two measurement outcomes
+        at a set of different times, from a single gate sequence.
+        
+    counts : int, optional
+        The total number of counts per-timestep, per-sequence and per-entity (i.e., the number
+        of times any of the measurement outcomes is obtained per-timestep, per-sequence and 
+        per-entity, which must be a constant). If `ds` is a DataSet, or it is a 4D numpy array, 
+        this parameter is not used as it is extracted from the data. If `ds` is a 1D, 2D or 
+        3D numpy array then this parameter is required.
+        
+    timestep : float, optional
+        The time, in seconds, between consecutive repeats of each set of `counts` repeats of a
+        each sequence. If `ds` is a DataSet this parameter is not used, as the timestep is extracted
+        from the timestamps in the DataSet object (which should be in seconds to obtain frequencies
+        in Hertz). If `ds` is a numpy array then it is necessary to specify this, if the user wants
+        the output frequencies to be given in terms of Hertz. If `ds` is a numpy array and this is
+        not specified all output frequencies are in 1/timestep with timestep defaulting to 1.
+               
+    timestamps : numpy array, optional
+        An array of timestamps associated with the repeats of each circuit. If `ds` is a DataSet
+        this is overwritten by the timestamps inside the DataSet. If `ds` is a numpy array these
+        timestamps are not used for any analysis, and are simply written into the results output 
+        object.
+        
+        #todo: add the ability to extract the timestep from timestamps.
+        
+    marginalize : str, optional
     
-    multitest_compensation:
-        'none', 'class'
-    """
+    marginalize_dict : dict, optional
     
-    #assert(type(ds) == _np.array or type(ds) == _objs.dataset.DataSet), \
-    #    "Input data must be either a numpy array or a pygsti DataSet object!"
+    outcomes : list, optional 
     
+    confidence : float, optional
+    
+    indices_to_sequences : list, optional
+        
+    multitest_compensation : str, optional
+        Allowed values are 'none', 'class'.
+     
+    verbosity : int, optional
+    
+    name : str, optional
+    
+    Returns
+    -------
+    results : DriftResults object
+        The results of the drift analysis. This contains: power spectra, statistical test outcomes,
+        drift frequencies, reconstructions of drifting probabilities, all of the input information.
+
+    """    
     # ---------------- #
     # Format the input #
     # ---------------- #
     
-    # This converts an input array into a standard shape (there are 3 different shape arrays that are
-    # permisable input), and extracts basic information about the input data.
-    #if type(ds) == _np.array:
     if type(ds) != _objs.dataset.DataSet:
     
         data_shape = _np.shape(ds)
     
         # Check that the input data is consistent with being counts in an array of an appropriate dimension
-        assert(len(data_shape) == 1 or len(data_shape) == 2 or len(data_shape) == 3 or len(data_shape) == 4), "Data format is incorrect!"
+        check1 = len(data_shape) == 1
+        check2 = len(data_shape) == 2
+        check3 = len(data_shape) == 3
+        check4 = len(data_shape) == 4
+        assert(check1 or check2 or check3 or check4), \
+        "Input data format is incorrect!If the input is a numpy array it must be 1, 2, 3 or 4 dimensional."
         
-        # todo: explain what is happening here
-        if len(data_shape) == 1: 
+        # If the input is 1D, assume that it is single-sequence, single-entity, two-outcome data.
+        if len(data_shape) == 1:
+            
+            # There is no marginalizing possible for this data type (two-outcome data).
             assert (marginalize == 'none')
-            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
+            assert(counts is not None), \
+            "This data format requires specifying `counts`, the number of counts per timestep!" 
+            
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
                 print("  - single-sequence data")
                 print("  - single entity data")
-                print("  - two-outcome measurements")
-               
-                print("")       
+                print("  - two-outcome measurements")               
+                print("")
+            
+            # Turn the data into the standard 4D format for the analysis.
             data = _np.zeros((1,1,2,data_shape[0]),float)
             data[0,0,0,:] = ds.copy()
             data[0,0,1,:] = counts - ds.copy()
                 
-        # todo: explain what is happening here
-        if len(data_shape) == 2:   
+        # If the input is 2D, assume that it is multi-sequence, single-entity, two-outcome data.
+        if len(data_shape) == 2:
+            
+            # There is no marginalizing possible for this data type (two-outcome data).            
             assert (marginalize == 'none')
-            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
+            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!" 
+            
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
                 print("  - single entity data")
                 print("  - two-outcome measurements")
-                print("")       
+                print("")   
+                
+            # Turn the data into the standard 4D format for the analysis.    
             data = _np.zeros((data_shape[0],1,2,data_shape[1]),float)
             data[:,0,0,:] = ds.copy()
             data[:,0,1,:] = counts - ds.copy()
             
+        # If the input is 3D, assume that it is multi-sequence, multi-entity, two-outcome data.
+        # Todo: perhaps it should default to single-entity data with the option to marginalize.
         if len(data_shape) == 3:
+            
+            # There is no marginalizing possible for this data type (two-outcome data).                        
             assert (marginalize == 'none')
-            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
+            assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"
+            
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
                 print("  - two-outcome measurements")
-                print("")           
+                print("")
+                
+            # Turn the data into the standard 4D format for the analysis.
             data = _np.zeros((data_shape[0],data_shape[1],2,data_shape[2]),float)
             data[:,:,0,:] = ds.copy()
             data[:,:,1,:] = counts - ds.copy()
-        
+            
+        # If the input is 4D, assume nothing about the data type.  
         if len(data_shape) == 4:
+            
+            # Do not need to pad the input array, so just copy it.
             data = ds.copy()
-         
+            
+            # Check the total number of counts is independent of sequence, timestep and entity 
+            check_counts = _np.sum(data,axis=2)
+            assert(_np.std(check_counts) == 0.), \
+            "The total number of counts should be independent of sequence, timestep and entity"
+            
+            # Set the number of counts
+            counts = _np.sum(data[0,0,:,0])
+                     
+            # Currently only allows for standard or no marginalization
             assert (marginalize == 'none' or marginalize == 'std')
             
-            # Currently only allows for standard marginalization
+            # If standard marginalization, [0,1] data on qubits, with the measurement outcomes
+            # input as bitstring, assumed.
             if marginalize == 'std':
-            
+                
+                # The marginalized set of outcomes is ['0','1']
                 outcomes = ['0','1']
                 num_outcomes = 2
+                
+                # We extract the number of qubits from the number of raw outcomes.
                 num_entities = int(_np.log2(len(data[0,0,:,0]))/1)
+                
                 data_shape = _np.shape(data)    
                 num_sequences = data_shape[0]
                 num_timesteps = data_shape[3] 
                 
+                # This stores the marginalized data.
                 data_marg = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
 
                 for s in range(0,num_sequences):
                     for e in range(0,num_entities):
                         for raw_o in range(0,2**num_entities):
+                            
+                            # If the eth bit in the binary rep of the raw outcome is '0', then
+                            # the measurement outcome has the eth qubit in '0'.
                             if _np.binary_repr(raw_o,width=num_entities)[e] == '0':
                                 data_marg[s,e,0,:] += data[s,0,raw_o,:]
                             else:
                                 data_marg[s,e,1,:] += data[s,0,raw_o,:]
-                                
+                
+                # Replace the data with the marginalized version.
                 data = data_marg.copy()
     
         # Extract the number of sequences, entities, and timesteps from the shape of the data array
@@ -117,9 +227,10 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         
     # This converts a DataSet to an array, as the code below uses arrays (for a good reason - as there is
     # lots of averaging over different dimensions of the array). This bit of the code seems to be by far
-    # the slowest, so todo: improve this code, or the speed of access to a DataSet object.
+    # the slowest. Todo: improve this code, or the speed of access to a DataSet object.
     if type(ds) == _objs.dataset.DataSet:
         
+        # Warns the user if things have been specifed which are being overwritten.
         if verbosity > 0:
             if counts != None:
                 print("Warning: Input data is a pygsti DataSet, so `counts` is being overwritten!")
@@ -136,21 +247,26 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         counts = []
 
         for i in range(0,num_sequences):
+            # Find the set of all timestamps and total counts
             t, c = ds[indices_to_sequences[i]].timeseries('all')
+            # Record the number of timestamps for this sequence
             num_timesteps.append(len(t))
+            # Check that the number of clicks is constant over all timestamps
             c = _np.array(c)
             assert(_np.std(c) == 0), "Number of total clicks must be the same at every timestamp!"
+            # Record the counts-per-timestamp for this sequence
             counts.append(c[0])
     
+        # Check that the number of timesteps and counts is independent of sequence.
         num_timesteps = _np.array(num_timesteps)
         counts = _np.array(counts)
-
         assert(_np.std(counts) == 0.), "Number of counts must be the same for all sequences!"
         assert(_np.std(num_timesteps) == 0.), "Number of timestamps must be the same for all sequences!"
 
         counts = counts[0]
         num_timesteps = num_timesteps[0]
-
+        
+        # Check that the marginalize specification is ok.
         assert(marginalize == 'none' or  marginalize == 'std' or marginalize == 'usr')
         if marginalize == 'usr':   
                 assert(marginalize_dict is not None)
@@ -162,20 +278,26 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
             
             if outcomes != None:
                 print("Warning: Input data is a pygsti DataSet and marginalize == 'none', so `outcomes` is being overwritten!")
-        
+            
+            # The number of outcomes, outcomes list, and number of entities.
             num_outcomes = len(list(ds.get_outcome_labels()))
             outcomes = list(ds.get_outcome_labels())
             num_entities = 1
-
+            
+            # To store the data and timestamps arrays.
             data = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
             timestamps = _np.zeros((num_sequences,num_timesteps),float)
 
             for s in range(0,num_sequences):
+                
+                # Find the timestamps for the sequence
                 times_for_seq, junk = ds[indices_to_sequences[s]].timeseries('all')
+                # Write the timestamps into the timestamps array
                 timestamps[s,:] = _np.array(times_for_seq)
-                for e in range(0,num_entities):
-                    for o in range(0,num_outcomes):
-                        junk, data[s,e,o,:] = _np.array(ds[indices_to_sequences[s]].timeseries(outcomes[o],timestamps[s,:]))
+                
+                for o in range(0,num_outcomes):                        
+                    # Record the timeseries data for sequence s and outcome o.
+                    junk, data[s,0,o,:] = _np.array(ds[indices_to_sequences[s]].timeseries(outcomes[o],timestamps[s,:]))
         
         # Go into this section if we are marginalizing the data.
         else:
@@ -434,7 +556,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
                     pspepo_reconstruction[s,q,o,:] = _sig.IDCT(pspepo_raw_estimated_modes[s,q,o,:], 
                                                                null_hypothesis=pspepo_null[s,q,o,:],
                                                                counts=counts)/counts
-                    # Todo: check whether this renormalizer makes sense with multi-outcome data.
+                    # Todo: make this renormalizer makes sense with multi-outcome data. Currently
+                    # it does not, in so much as the summed probability does not add up to 1.
                     pspepo_reconstruction[s,q,o,:] = _sig.renormalizer(pspepo_reconstruction[s,q,o,:],method='logistic')
                     pspepo_reconstruction_power_spectrum[s,q,o,:] =  _sig.DCT(pspepo_reconstruction[s,q,o,:], 
                                                                       null_hypothesis=pspepo_null[s,q,o,:],
