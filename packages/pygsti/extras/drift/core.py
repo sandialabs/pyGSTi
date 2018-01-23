@@ -17,7 +17,7 @@ import numpy as _np
 def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=None,
                                     marginalize = 'none', marginalize_dict = None,
                                     outcomes=None, confidence=0.95, indices_to_sequences=None, 
-                                    multitest_compensation='class', verbosity=2, name=None):
+                                    multitest_compensation='class', verbosity=1, name=None):
     """
     
     
@@ -40,10 +40,11 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         data_shape = _np.shape(ds)
     
         # Check that the input data is consistent with being counts in an array of an appropriate dimension
-        assert(len(data_shape) == 2 or len(data_shape) == 3 or len(data_shape) == 4), "Data format is incorrect!"
+        assert(len(data_shape) == 1 or len(data_shape) == 2 or len(data_shape) == 3 or len(data_shape) == 4), "Data format is incorrect!"
         
         # todo: explain what is happening here
-        if len(data_shape) == 1:            
+        if len(data_shape) == 1: 
+            assert (marginalize == 'none')
             assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
@@ -57,7 +58,8 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
             data[0,0,1,:] = counts - ds.copy()
                 
         # todo: explain what is happening here
-        if len(data_shape) == 2:            
+        if len(data_shape) == 2:   
+            assert (marginalize == 'none')
             assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
@@ -69,6 +71,7 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
             data[:,0,1,:] = counts - ds.copy()
             
         if len(data_shape) == 3:
+            assert (marginalize == 'none')
             assert(counts is not None), "This data format requires specifying `counts`, the number of counts per timestep!"        
             if verbosity > 0:
                 print("Due to input array format, analysis is defaulting to assuming:")
@@ -80,6 +83,30 @@ def do_basic_drift_characterization(ds, counts=None, timestep=None, timestamps=N
         
         if len(data_shape) == 4:
             data = ds.copy()
+         
+            assert (marginalize == 'none' or marginalize == 'std')
+            
+            # Currently only allows for standard marginalization
+            if marginalize == 'std':
+            
+                outcomes = ['0','1']
+                num_outcomes = 2
+                num_entities = int(_np.log2(len(data[0,0,:,0]))/1)
+                data_shape = _np.shape(data)    
+                num_sequences = data_shape[0]
+                num_timesteps = data_shape[3] 
+                
+                data_marg = _np.zeros((num_sequences,num_entities,num_outcomes,num_timesteps),float)
+
+                for s in range(0,num_sequences):
+                    for e in range(0,num_entities):
+                        for raw_o in range(0,2**num_entities):
+                            if _np.binary_repr(raw_o,width=num_entities)[e] == '0':
+                                data_marg[s,e,0,:] += data[s,0,raw_o,:]
+                            else:
+                                data_marg[s,e,1,:] += data[s,0,raw_o,:]
+                                
+                data = data_marg.copy()
     
         # Extract the number of sequences, entities, and timesteps from the shape of the data array
         data_shape = _np.shape(data)    
