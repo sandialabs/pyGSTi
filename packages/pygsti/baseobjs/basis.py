@@ -307,7 +307,7 @@ class Basis(object):
         '''
         return self.get_expand_mx().T
 
-    #@cache_by_hashed_args
+    @cache_by_hashed_args
     def get_to_std(self):
         '''
         Retrieve the matrix that will convert from the current basis to the standard basis
@@ -339,7 +339,7 @@ class Basis(object):
         if self.sparse: toStd = toStd.tocsr()
         return toStd
 
-    #@cache_by_hashed_args
+    @cache_by_hashed_args
     def get_from_std(self):
         '''
         Retrieve the matrix that will convert from the standard basis to the current basis

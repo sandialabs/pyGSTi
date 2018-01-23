@@ -2417,9 +2417,19 @@ class LindbladBase(object):
         self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
+        #Assumed gate was in the pauli-product basis initially.  I think
+        # everything should work fine in the current general case with any other
+        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
+        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
+        self.leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+                          else _np.linalg.inv(mxBasisToStd)
+        self.rightTrans = mxBasisToStd            
+
+
         self._set_params_from_errgen(errgen, truncate)
           #also sets self.hamGens and self.otherGens as side effect (TODO FIX)
-          # and self.ham_basis_size and self.other_basis_size
+          # and self.ham_basis_size and self.other_basis_size.  Requires
+          # self.leftTrans and self.rightTrans be set already
 
         #initialize intermediate storage for matrix and for deriv computation
         # (needed for _construct_errgen)
@@ -2428,14 +2438,6 @@ class LindbladBase(object):
             self.Lmx = _np.zeros((bsO-1,bsO-1),'complex')
         else: self.Lmx = None
           
-        #Assumed gate was in the pauli-product basis initially.  I think
-        # everything should work fine in the current general case with any other
-        # basis with the same trace(BiBj) = delta_ij property (e.g. Gell-Mann)
-        mxBasisToStd = _bt.transform_matrix(self.matrix_basis, "std", d)
-        self.leftTrans  = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-                          else _np.linalg.inv(mxBasisToStd)
-        self.rightTrans = mxBasisToStd
-
         #set self.err_gen (can't just use `errgen` b/c of truncation)
         self._construct_errgen() 
 
@@ -2455,6 +2457,13 @@ class LindbladBase(object):
         if self.hamGens is not None:
             bsH = len(self.hamGens)+1 #projection-basis size (not nec. == d2)
             _gt._assert_shape(self.hamGens, (bsH-1,d2,d2), self.sparse)
+
+            if self.sparse:
+                # apply basis change now, so we don't need to do so repeatedly later
+                self.hamGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
+                                              inplace=True, check=True) for mx in self.hamGens ]
+                for mx in self.hamGens: mx.sort_indices()
+                # for faster addition ops in _construct_errgen
             
             assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
                 "Hamiltoian coeffs are not all real!"
@@ -2469,6 +2478,14 @@ class LindbladBase(object):
 
             if self.nonham_diagonal_only:
                 _gt._assert_shape(self.otherGens, (bsO-1,d2,d2), self.sparse)
+
+                if self.sparse:
+                    # apply basis change now, so we don't need to do so repeatedly later
+                    self.otherGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
+                                                    inplace=True, check=True) for mx in self.otherGens ]
+                    for mx in self.hamGens: mx.sort_indices()
+                    # for faster addition ops in _construct_errgen
+
                 assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
                 #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
     
@@ -2480,6 +2497,15 @@ class LindbladBase(object):
     
             else:
                 _gt._assert_shape(self.otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
+
+                # for faster addition ops in _construct_errgen:
+                if self.sparse:
+                    # apply basis change now, so we don't need to do so repeatedly later
+                    self.otherGens = [ [_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans))  #TO CHECK if complex OK...
+                                        for mx in mxRow ] for mxRow in self.otherGens ]
+                    for mxRow in self.otherGens:
+                        for mx in mxRow: mx.sort_indices()
+
                 assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
                                    ,0)), "other coeff mx is not Hermitian!"
     
@@ -2522,6 +2548,32 @@ class LindbladBase(object):
             bsO = 0
             otherParams = _np.empty(0,'d')
 
+        if self.sparse:
+            #Precompute for faster CSR sums in _construct_errgen
+            all_csr_matrices = []; nHam = 0; nOther = 0;
+            
+            if self.hamGens is not None:
+                all_csr_matrices.extend(self.hamGens)
+                nHam = len(self.hamGens)
+                
+            if self.otherGens is not None:
+                if self.nonham_diagonal_only:
+                    oList = self.otherGens
+                else:
+                    oList = [ mx for mxRow in self.otherGens for mx in mxRow ]
+                all_csr_matrices.extend(oList)
+
+            csr_sum_array, indptr, indices, N = \
+                    self.get_csr_sum_indices(all_csr_matrices)
+            self.hamCSRSumIndices = csr_sum_array[0:nHam]
+            self.otherCSRSumIndices = csr_sum_array[nHam:]
+            self.sparse_err_gen_template = (indptr, indices, N)
+        else:
+            #N/A if not sparse
+            self.hamCSRSumIndices = None
+            self.otherCSRSumIndices = None
+            self.sparse_err_gen_template = None            
+
         self.paramvals = _np.concatenate( (hamParams, otherParams.flat) )
         self.ham_basis_size = bsH
         self.other_basis_size = bsO
@@ -2532,6 +2584,48 @@ class LindbladBase(object):
         #else:
         #    assert(self.paramvals.shape == ((bsH-1)+(bsO-1)**2,))
 
+    def get_csr_sum_indices(self, csr_matrices):
+        """ 
+        Returns array of index-arrays needed for use in csr_sum, along with
+        indptr and indices arrays for "template" matrix.
+        """
+        if len(csr_matrices) == 0: return []
+        
+        N = csr_matrices[0].shape[0]
+        for mx in csr_matrices:
+            assert(mx.shape == (N,N)), "Matrices must have the same square shape!"
+            
+        indptr = [0]
+        indices = []
+        csr_sum_array = [ list() for mx in csr_matrices ]
+
+        #FUTURE sort column indices
+        
+        for iRow in range(N):
+            dataInds = {} #keys = column indices, values = data indices (for data in current row)
+                
+            for iMx,mx in enumerate(csr_matrices):
+                for i in range(mx.indptr[iRow],mx.indptr[iRow+1]):
+                    iCol = mx.indices[i]
+                    if iCol not in dataInds: #add a new element to final mx
+                        indices.append(iCol)
+                        dataInds[iCol] = len(indices)-1 #marks the final data index for this column
+                    csr_sum_array[iMx].append(dataInds[iCol])
+            indptr.append( len(indices) )
+
+        #convert lists -> arrays
+        csr_sum_array = [ _np.array(lst,'i') for lst in csr_sum_array ]
+        indptr = _np.array( indptr )
+        indices = _np.array( indices )
+
+        return csr_sum_array, indptr, indices, N
+    
+
+        
+    def csr_sum(self, data, coeffs, csr_mxs, csr_sum_indices):
+        """ TESTING TODO docstring """
+        for coeff,mx,inds in zip(coeffs, csr_mxs, csr_sum_indices):
+            data[inds] += coeff*mx.data        
 
     def _construct_errgen(self):
         """
@@ -2598,19 +2692,35 @@ class LindbladBase(object):
                             otherCoeffs[j,i] = otherParams[i,j] -1j*otherParams[j,i]
                             
         #Finally, build gate matrix from generators and coefficients:
-        if self.sparse:        
+        if self.sparse:
+            #FUTURE: could try to optimize the sum-scalar-mults ops below, as these take the
+            # bulk of from_vector time, which recurs frequently.
+            indptr, indices, N = self.sparse_err_gen_template # the CSR arrays giving
+               # the structure of a CSR matrix with 0-elements in all possible places
+            data = _np.zeros(len(indices),'complex') # data starts at zero
+            
             if bsH > 0:
-                lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+                #OLD lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+                self.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
             else:
-                lnd_error_gen = _sps.csr_matrix((d2,d2), dtype='complex')
+                #OLD lnd_error_gen = _sps.csr_matrix((d2,d2), dtype='complex')
+                pass
 
             if bsO > 0:
                 if self.nonham_diagonal_only:
-                    lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+                    #OLD lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+                    self.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
                 else:
-                    lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-                                          for c,gen in zip(cRow,genRow)])
-            lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
+                    #OLD lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
+                    #OLD                      for c,gen in zip(cRow,genRow)])
+                    self.csr_sum(data, otherCoeffs.flat,
+                                 [oGen for oGenRow in self.otherGens for oGen in oGenRow],
+                                 self.otherCSRSumIndices)
+            lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
+            #CHECK w/OLD assert(_spsl.norm(lnd_error_gen_chk - lnd_error_gen) < 1e-6) OK
+            
+            #OLD: lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
+            
 
         else: #dense matrices
             if bsH > 0:
@@ -2624,12 +2734,12 @@ class LindbladBase(object):
                 else:
                     lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
 
-            lnd_error_gen = _np.dot(self.leftTrans, _np.dot(
-                lnd_error_gen, self.rightTrans)) #basis chg
+            lnd_error_gen = _np.dot(self.leftTrans, _np.dot(   #REMOVE IF PRETRANS
+                lnd_error_gen, self.rightTrans)) #basis chg    #REMOVE IF PRETRANS
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
-        self.err_gen = _mt.safereal(lnd_error_gen)
+        self.err_gen = _mt.safereal(lnd_error_gen, inplace=True)
 
 
         
@@ -3324,6 +3434,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
 #            return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
     def _dHdp(self):
+        #return self.hamGens #PRETRANS
         return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
 
     def _dOdp(self):
@@ -3368,6 +3479,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         tr = len(dOdp.shape) #tensor rank
         assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
 
+        #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
         if tr == 3:
             dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
         elif tr == 4:
@@ -3430,6 +3542,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         tr = len(d2Odp2.shape) #tensor rank
         assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
 
+        #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
         if tr == 4:
             d2Odp2  = _np.einsum('lk,knaq,nj->ljaq', self.leftTrans, d2Odp2, self.rightTrans)
         elif tr == 6:
@@ -4750,7 +4863,19 @@ class EmbeddedGateMap(GateMap):
         self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
           # for inserting target-qubit basis indices into list of noop-qubit indices
 
-        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one    
+        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
+
+        #Members for speeding up time-critical function (e.g. acton)
+        self.nBasisBlocks = len(blockDims) #store this separately for faster
+                                           #shortcuts in common 1-block case
+        if _fastcalc is None:
+            self.acton = self._slow_acton
+        elif isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
+             self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
+            self.acton = self._fast_acton_sp1 # "special case #1"
+        else:
+            self.acton = self._fast_acton
+                                           
         GateMap.__init__(self, gateDim)
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4855,12 +4980,21 @@ class EmbeddedGateMap(GateMap):
                     in_vec_index  = _np.dot(self.multipliers, tuple(b_in))  # index of input dm basis el within vec(tensor block basis)
 
                     yield (out_vec_index+offset, in_vec_index+offset, gate_i, gate_j)
-                    
+
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, 'd')
+        raise NotImplementedError(
+            ("EmbeddedGateMap not intialized properly, as this acton(...) "
+             "method *should* have been replaced by an appropriate "
+             "implementation based on Cython availability"))
 
+    
+    def _slow_acton(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, 'd')
+        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        
         #LATER: Maybe a faster way for dense mxs based on this, which is very slow:
         #if isinstance(self.embedded_gate, GateMatrix):
         #    embedded_base = self.embedded_gate.base
@@ -4872,52 +5006,23 @@ class EmbeddedGateMap(GateMap):
         #
         #else:
 
-        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+        # SLOW (but in pure python)
+        for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
+            vec_index_noop = _np.dot(self.multipliers, tuple(b))
+            inds = []
+            #for gate_i in range(self.embedded_gate.dim):
+            #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
+            for gate_b in _itertools.product(*self.basisInds_action):
+                vec_index = vec_index_noop
+                for i,bInd in zip(self.actionInds,gate_b):
+                    #b[i] = bInd #don't need to do this; just update vec_index:
+                    vec_index += self.multipliers[i]*bInd
+                inds.append(offset + vec_index)
+            output_state[ inds ] += self.embedded_gate.acton( state[inds] )
 
-        if _fastcalc is None:
-            # SLOW (but in pure python)
-            for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
-                vec_index_noop = _np.dot(self.multipliers, tuple(b))
-                inds = []
-                #for gate_i in range(self.embedded_gate.dim):
-                #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
-                for gate_b in _itertools.product(*self.basisInds_action):
-                    vec_index = vec_index_noop
-                    for i,bInd in zip(self.actionInds,gate_b):
-                        #b[i] = bInd #don't need to do this; just update vec_index:
-                        vec_index += self.multipliers[i]*bInd
-                    inds.append(offset + vec_index)
-                output_state[ inds ] += self.embedded_gate.acton( state[inds] )
-        else:
-            
-            # FAST (cython)
-            if isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
-               self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
-                #Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
-                A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
-                if A.nnz == 0: return state # embedded gate is identity, so entire gate is
-                _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
-                                                          mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-                                                          output_state[:,0], state[:,0], offset,
-                                                          self.multipliers,
-                                                          self.numBasisEls_noop_blankaction,
-                                                          self.numBasisEls_action,
-                                                          self.actionInds,
-                                                          self.inds_scratch)
-            else:
-                # output_state2 = _np.zeros( state.shape, 'd') #for CHECK        
-                _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
-                                                     output_state[:,0], state[:,0], offset,
-                                                     self.multipliers,
-                                                     self.numBasisEls_noop_blankaction,
-                                                     self.numBasisEls_action,
-                                                     self.actionInds,
-                                                     self.inds_scratch)
-                #assert(_np.linalg.norm(output_state-output_state2) < 1e-6) # for CHECK
-                                 
         #act on other blocks trivially:
         offset = 0
-        dmDim, gateDim, blockDims = self.basis.dim
+        _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
             blockSize = blockDim**2
             if i != self.iTensorProdBlk:
@@ -4925,6 +5030,60 @@ class EmbeddedGateMap(GateMap):
             offset += blockSize
 
         assert(output_state.shape == state.shape)
+        return output_state
+
+
+    def _fast_acton_sp1(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, 'd')
+        offset = 0
+                
+        #FAST Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
+        A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
+        if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+        _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
+                                                  mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
+                                                  output_state[:,0], state[:,0], offset,
+                                                  self.multipliers,
+                                                  self.numBasisEls_noop_blankaction,
+                                                  self.numBasisEls_action,
+                                                  self.actionInds,
+                                                  self.inds_scratch)
+
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            offset = 0
+            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
+            for i,blockDim in enumerate(blockDims):
+                blockSize = blockDim**2
+                if i != self.iTensorProdBlk:
+                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
+                offset += blockSize
+        return output_state
+
+
+    def _fast_acton(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, 'd')
+        offset = 0
+
+        _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
+                                             output_state[:,0], state[:,0], offset,
+                                             self.multipliers,
+                                             self.numBasisEls_noop_blankaction,
+                                             self.numBasisEls_action,
+                                             self.actionInds,
+                                             self.inds_scratch)
+                                 
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            offset = 0
+            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
+            for i,blockDim in enumerate(blockDims):
+                blockSize = blockDim**2
+                if i != self.iTensorProdBlk:
+                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
+                offset += blockSize
         return output_state
 
 

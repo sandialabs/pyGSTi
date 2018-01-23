@@ -19,6 +19,14 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import gatesetmember as _gatesetmember
 
+#Temporary while we develop fastcalc
+try:
+    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    from ..tools import fastcalc as _fastcalc
+except ImportError:
+    _fastcalc = None
+
+
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
 def optimize_spamvec(vecToOptimize, targetVec):
@@ -377,8 +385,12 @@ class DenseSPAMVec(SPAMVec):
         self.base = vec
         super(DenseSPAMVec, self).__init__( len(vec) )
 
-    def toarray(self):
-        """ Return this SPAM vector as a (dense) numpy array """
+    def toarray(self, scratch=None):
+        """ 
+        Return this SPAM vector as a (dense) numpy array.  The memory
+        in `scratch` maybe used when it is not-None.
+        """
+        #don't use scratch since we already have memory allocated
         return self.base
                                    
     #Access to underlying array
@@ -1631,10 +1643,39 @@ class TensorProdSPAMVec(SPAMVec):
                 fct.set_gpindices( slice(off,off+N), self ); off += N
             assert(off == self.Np)
 
+        #Memory for speeding up kron product in toarray()
+        max_factor_dim = max(fct.dim for fct in factors)
+        self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), 'd')
+        self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
+        self._fill_fast_kron()
 
-    def toarray(self):
-        """ Return this SPAM vector as a (dense) numpy array """
+        
+    def _fill_fast_kron(self):
+        """ Fills in self._fast_kron_array based on current self.factors """
+        if self.typ == "prep":
+            for i,factor_dim in enumerate(self._fast_kron_factordims):
+                self._fast_kron_array[i][0:factor_dim] = self.factors[i].toarray()[:,0]
+        else:
+            factorPOVMs = self.factors
+            for i,(factor_dim,Elbl) in enumerate(zip(self._fast_kron_factordims,self.effectLbls)):
+                self._fast_kron_array[i][0:factor_dim] = factorPOVMs[i][Elbl].toarray()[:,0]
+
+
+    def toarray(self, scratch=None):
+        """
+        Return this SPAM vector as a (dense) numpy array.  The memory
+        in `scratch` maybe used when it is not-None.
+        """
         if len(self.factors) == 0: return _np.empty(0,'d')
+        if scratch is not None:
+            assert(scratch.shape[0] == self.dim)
+            # use faster kron that avoids memory allocation.
+            # Note: this uses more memory b/c all self.factors.toarray() results
+            #  are present in memory at the *same* time - could add a flag to
+            #  disable fast-kron-array when memory is extra tight(?).
+            _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
+            return scratch[:,None] if scratch.ndim == 1 else scratch
+            
         if self.typ == "prep":
             ret = self.factors[0].toarray() # factors are just other SPAMVecs
             for i in range(1,len(self.factors)):
@@ -1644,6 +1685,10 @@ class TensorProdSPAMVec(SPAMVec):
             ret = factorPOVMs[0][self.effectLbls[0]].toarray()
             for i in range(1,len(factorPOVMs)):
                 ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].toarray())
+
+        # DEBUG: initial test that fast_kron works...
+        #if scratch is not None: assert(_np.linalg.norm(ret - scratch[:,None]) < 1e-6)
+        
         return ret
 
     
@@ -1773,8 +1818,10 @@ class TensorProdSPAMVec(SPAMVec):
                 local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, povm.gpindices)
                 povm.from_vector( v[local_inds] )
-                
-        #No need to construct anything - no dense matrices are stored
+
+        #No need to construct anything except fast-kron array, as
+        # - no dense matrices are stored
+        self._fill_fast_kron()
 
 
     def deriv_wrt_params(self, wrtFilter=None):

@@ -118,8 +118,8 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
 
 #SPECIAL CASE 1: embedded gate is Lindblad gate with no unitary postfactor -
 # so just pass the args to custom_expm_multiply_simple_core
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
 def embedded_fast_acton_sparse_spc1(
         np.ndarray[double, ndim=1, mode="c"] Adata not None,
         np.ndarray[int, ndim=1, mode="c"] Aindptr not None,
@@ -202,6 +202,56 @@ def embedded_fast_acton_sparse_spc1(
     return output_state
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
+              np.ndarray[double, ndim=2, mode="c"] fastArray not None,
+              np.ndarray[int, ndim=1, mode="c"] fastArraySizes not None):
+    
+    cdef int mi[100] # multi-index holding
+    cdef int multipliers[100]
+    cdef double preprods[101] # +1 from other static dims
+    cdef int nFactors = fastArray.shape[0]
+    cdef int i
+    cdef int k
+    
+    if nFactors > 100:
+        assert(False) # need to increase static dimensions above
+
+    #set indices to zero
+    k=0
+    for i in range(nFactors): mi[i] = 0 
+
+    # preprods[i] = prod_{k<i}( fastArray[k,m[k]] ) i.e. the product of the first i-1 factors
+    # this means that preprods[nFactors] == prod, the final product to assign to outvec
+    preprods[0] = 1.0
+    for i in range(nFactors):
+        preprods[i+1] = preprods[i] * fastArray[i,0] # 0 b/c m[i] == 0
+
+    #multipliers[i] gives multiplicative factor for i-th element of mi
+    # when computing the total index 'k'
+    multipliers[nFactors-1] = 1
+    for i in range(nFactors-2,-1,-1):
+        multipliers[i] = multipliers[i+1]*fastArraySizes[i+1] 
+
+    #loop over indices (incrementing mi & updating k and preprods as we go)
+    while True:
+        outvec[k] = preprods[nFactors]
+
+        #increment mi as a multindex
+        for i in range(nFactors-1,-1,-1):
+            if mi[i]+1 < fastArraySizes[i]:
+                mi[i] += 1; k += multipliers[i]
+                preprods[i+1] = preprods[i]*fastArray[i,mi[i]] #ok even if i+1 == nFactors
+                for p in range(i+1,nFactors): #all other factors have index=0
+                    preprods[p+1] = preprods[p]*fastArray[p,0]
+                break
+            else: #can't increment, so set index back to zero
+                k -= mi[i]*multipliers[i]; mi[i] = 0
+        else:
+            break # can't increment anything - break while(True) loop
+
+
 #Manually inline to avoid overhead of argument passing
 #@cython.boundscheck(False) # turn off bounds-checking for entire function
 #@cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -237,6 +287,10 @@ def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
                                        mu, m_star, s, tol, eta,
                                        &F[0], &scratch[0])
     return F
+
+
+
+
 
 
 cdef custom_expm_multiply_simple_core_c(double* Adata, int* Aindptr,
@@ -306,3 +360,36 @@ cdef custom_expm_multiply_simple_core_c(double* Adata, int* Aindptr,
             B[k] = F[k]
 
     #return F # updates passed-in memory, so don't need this
+
+# Implements B = A - lmb*I; returns used length of Bindices/Bdata
+def csr_subtract_identity(np.ndarray[double, ndim=1] Adata,
+                          np.ndarray[int, ndim=1] Aindptr,
+                          np.ndarray[int, ndim=1] Aindices,
+                          np.ndarray[double, ndim=1] Bdata,
+                          np.ndarray[int, ndim=1] Bindptr,
+                          np.ndarray[int, ndim=1] Bindices,
+                          double lmb, int n):
+
+    cdef int nxt = 0
+    cdef int iRow = 0
+    cdef int i = 0
+    cdef int bFound = 0
+    Bindptr[0] = 0
+    
+    for iRow in range(n):
+        bFound = 0
+        for i in range(Aindptr[iRow],Aindptr[iRow+1]):
+            Bindices[nxt] = Aindices[i]
+            if Aindices[i] == iRow:
+                Bdata[nxt] = Adata[i] + lmb
+                bFound = 1
+            else:
+                Bdata[nxt] = Adata[i]
+            nxt += 1
+        if not bFound: #insert new diagonal element
+            Bindices[nxt] = iRow
+            Bdata[nxt] = lmb
+            nxt += 1
+        Bindptr[iRow+1] = nxt
+        
+    return nxt
