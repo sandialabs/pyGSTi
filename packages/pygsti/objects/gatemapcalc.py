@@ -302,7 +302,9 @@ class GateMapCalc(GateCalc):
             if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
 
             for j,E in enumerate(EVecs):
-                ret[i,j] = _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
+                ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
+                #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
+
                 # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
                 
             #HERE - need to decide on expected shape for acton(...)
@@ -348,8 +350,8 @@ class GateMapCalc(GateCalc):
         iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 
         orig_vec = self.to_vector().copy()
-        for i in range(self.Np): #HERE range(20)
-            print("dprobs cache %d of %d" % (i,self.Np))
+        for i in range(self.Np): #HERE range(20): #
+            #print("dprobs cache %d of %d" % (i,self.Np))
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps

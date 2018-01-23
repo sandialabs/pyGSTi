@@ -25,6 +25,7 @@ try:
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
+#from ..tools import fastcalc as _fastcalc
 
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero

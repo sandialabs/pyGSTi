@@ -1094,9 +1094,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6:
-            raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
+        try:
+            if gs.frobeniusdist(gs_cmp) > 1e-6:
+                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
                              " given to different processors!")
+        except NotImplementedError: # Some gates (maps) don't implement this
+            pass # OK
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
