@@ -44,7 +44,6 @@ def DCT(x,counts=1,null_hypothesis=None):
     array
         The DCT modes described above.
 
-
     """
     x_mean = _np.mean(x)
     N = len(x)
