@@ -94,6 +94,32 @@ class MapEvalTree(EvalTree):
         #DEBUG
         #print("SORTED"); print("\n".join(map(str,sorted_strs)))
 
+
+        #PASS1: figure out what's work keeping in the cache:
+        curCacheSize = 0
+        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
+        dummy_self = [None]*self.num_final_strs; cache_hits = {}
+        for k,(iStr,gateString) in enumerate(sorted_strs):
+            L = len(gateString)
+            for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
+                candidate = gatestring_list[ cacheIndices[i] ]
+                Lc = len(candidate)
+                if L >= Lc > 0 and gateString[0:Lc] == candidate:
+                    iStart = i
+                    remaining = gateString[Lc:]
+                    if iStr in cache_hits: cache_hits[iStr] += 1  #tally cache hit
+                    else: cache_hits[iStr] = 1  #TODO: use default dict?
+                    break
+            else: #no break => no prefix
+                iStart = None
+                remaining = gateString[:]
+
+            cacheIndices.append(iStr)
+            iCache = curCacheSize
+            curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
+            dummy_self[iStr] = (iStart, remaining, iCache)
+        
+        #PASS #2: for real this time: construct tree but only cache items w/hits
         curCacheSize = 0
         cacheIndices = [] #indices into gatestring_list/self of the strings to cache
           # (store persistently as prefixes of other string -- this need not be all
@@ -117,7 +143,7 @@ class MapEvalTree(EvalTree):
                 remaining = gateString[:]
 
             # if/where this string should get stored in the cache
-            if maxCacheSize is None or curCacheSize < maxCacheSize:
+            if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr) > 0:
                 cacheIndices.append(iStr)
                 iCache = curCacheSize
                 curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
@@ -144,6 +170,62 @@ class MapEvalTree(EvalTree):
         self.subTrees = [] #no subtrees yet
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
+
+    def squeeze(self, maxCacheSize):
+        """ 
+        Remove items from cache (if needed) so it contains less than or equal
+        to `maxCacheSize` elements.
+
+        Paramteters
+        -----------
+        maxCacheSize : int
+
+        Returns
+        -------
+        None
+        """
+        assert(maxCacheSize >= 0)
+        while self.prefix_cache_size() > maxCacheSize:
+
+            #Figure out what's in cache and # of times each one is hit
+            curCacheSize = self.prefix_cache_size()            
+            hits = [0]*curCacheSize
+            cacheinds = [None]*curCacheSize
+            for i in range(len(self)):
+                iStart, remainingStr, iCache = self[i]
+                if iStart is not None: hits[iStart] += 1
+                if iCache is not None: cacheinds[iCache] = i
+
+            #Find a min-cost item to remove
+            minCost = None; iMinTree = None; iMinCache = None
+            for i in range(curCacheSize):
+                cost = hits[i]*len(self[cacheInds[i]][1])
+                  # hits * len(remainder) ~= # more applies if we
+                  # remove i-th cache element.
+                if iMinTree is None or cost < minCost:
+                    minCost = cost; iMinTree = cacheInds[i]
+                    iMinCache = i # in cache
+
+            #Remove references to iMin element
+            minStart = self[iMinTree][0] # iStart of element to remove
+            minRemain = self[iMinTree][1] # Remaining string of element to remove
+            for i in range(len(self)):
+                iStart, remainingStr, iCache = self[i]
+                if iCache == iMinCache:
+                    assert(i == iMinTree)
+                    self[i] = (iStart, remainingStr, None) #not in cache anymore
+                    continue
+
+                if iCache is not None and iCache > iMinCache:
+                    iCache -= 1 #shift left all cache indices after one removed
+                if iStart == iMinCache:
+                    iStart = minStart
+                    remainingStr = minRemain + remainingStr
+                elif iStart is not None and iStart > iMinCache:
+                    iStart -= 1 #shift left all cache indices after one removed
+                self[i] = (iStart, remainingStr, iCache)
+            self.cachesize -= 1
+        
 
     def prefix_cache_size(self):
         """ 
