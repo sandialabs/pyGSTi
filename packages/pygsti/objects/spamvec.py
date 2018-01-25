@@ -1692,6 +1692,9 @@ class TensorProdSPAMVec(SPAMVec):
         
         return ret
 
+    @property
+    def size(self):
+        return self.dim
     
     def set_value(self, vec):
         """

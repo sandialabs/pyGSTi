@@ -418,8 +418,13 @@ class GateMap(Gate):
         """ Initialize a new Gate """
         super(GateMap, self).__init__(dim)
 
+    @property
+    def size(self):
+        return (self.dim)**2
+
     #Maybe add an as_sparse_mx function and compute
     # metrics using this?
+    #And perhaps a finite-difference deriv_wrt_params?
 
     
 class GateMatrix(Gate):
