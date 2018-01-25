@@ -23,6 +23,7 @@ try:
 except ImportError:
     _warnings.warn("Could not import Cython extension - falling back to slower pure-python routines")
     _fastcalc = None
+#from ..tools import fastcalc as _fastcalc
 
     
 #EXPM_DEFAULT_TOL = 1e-7

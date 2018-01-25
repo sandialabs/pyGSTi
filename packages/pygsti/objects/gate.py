@@ -34,6 +34,7 @@ try:
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
+#from ..tools import fastcalc as _fastcalc
 
 
 def optimize_gate(gateToOptimize, targetGate):
@@ -417,8 +418,13 @@ class GateMap(Gate):
         """ Initialize a new Gate """
         super(GateMap, self).__init__(dim)
 
+    @property
+    def size(self):
+        return (self.dim)**2
+
     #Maybe add an as_sparse_mx function and compute
     # metrics using this?
+    #And perhaps a finite-difference deriv_wrt_params?
 
     
 class GateMatrix(Gate):
@@ -4835,16 +4841,7 @@ class EmbeddedGateMap(GateMap):
         for labelIndex in sorted(labelIndices,reverse=True):
             del basisInds_noop[labelIndex]
             basisInds_noop_blankaction[labelIndex] = [0]
-            
-        #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
-        self.basisInds_noop = basisInds_noop
-        self.basisInds_noop_blankaction = basisInds_noop_blankaction
-        self.actionInds = _np.array(labelIndices,'i')
-        self.basisInds_action = [ basisInds[i] for i in labelIndices ]
-        self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
-        self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
-        self.inds_scratch = _np.empty(_np.product(self.numBasisEls_action),'i')
-        
+                    
         #offset into "active" tensor product block
         self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
 
@@ -4865,18 +4862,79 @@ class EmbeddedGateMap(GateMap):
 
         self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
 
-        #Members for speeding up time-critical function (e.g. acton)
+        #Members for speeding up time-critical functions (e.g. acton)
         self.nBasisBlocks = len(blockDims) #store this separately for faster
                                            #shortcuts in common 1-block case
+        #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
+        self.basisInds_noop = basisInds_noop
+        self.basisInds_noop_blankaction = basisInds_noop_blankaction
+        self.actionInds = _np.array(labelIndices,'i')
+        self.basisInds_action = [ basisInds[i] for i in labelIndices ]
+        self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
+        self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
+
+          # self.noop_incrementers[i] specifies how much the overall vector index
+          #  is incremented when the i-th "component" digit is advanced
+        nParts = len(basisInds) # number of components in "active" tensor block
+        self.noop_incrementers = _np.empty(nParts,'i'); dec = 0
+        for i in range(nParts-1,-1,-1):
+            self.noop_incrementers[i] = self.multipliers[i] - dec
+            dec += (self.numBasisEls_noop_blankaction[i]-1)*self.multipliers[i]
+
+          # self.baseinds specifies the contribution from the "active
+          #  component" digits to the overall vector index.
+        inds = []
+        for gate_b in _itertools.product(*self.basisInds_action):
+            vec_index = self.offset
+            for i,bInd in zip(self.actionInds,gate_b):
+                #b[i] = bInd #don't need to do this; just update vec_index:
+                vec_index += self.multipliers[i]*bInd
+            inds.append(vec_index)
+        self.baseinds = _np.array(inds,'i')
+
+
+        #DEBUG TO REMOVE
+        #print("self.numBasisEls_noop_blankaction = ",self.numBasisEls_noop_blankaction)
+        #print("numBasisEls_action = ",self.numBasisEls_action)
+        #print("multipliers = ",self.multipliers)
+        #print("noop incrementers = ",self.noop_incrementers," dim=",gateDim)
+        #print("baseinds = ",self.baseinds)
+        self._set_acton()
+            
+        GateMap.__init__(self, gateDim)
+
+    def _set_acton(self):
+        """ Set the self.acton() method """
+        #Set self.acton appropriately:
         if _fastcalc is None:
             self.acton = self._slow_acton
         elif isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
              self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
             self.acton = self._fast_acton_sp1 # "special case #1"
+        elif isinstance(self.embedded_gate, GateMatrix):
+            self.acton = self._fast_acton_sp2 # "special case #2"
         else:
+            #DEBUG TO REMOVE
+            #if not isinstance(self.embedded_gate, LindbladParameterizedGateMap):
+            #    print("Can't use special case b/c embedded gate = ",type(self.embedded_gate))
+            #elif not self.embedded_gate.sparse:
+            #    print("Can't use special case b/c embedded Lind. gate is not sparse")
+            #elif self.embedded_gate.unitary_postfactor is not None:
+            #    print("Can't use special case b/c embedded Lind. gate has postfactor")
+            #else:
+            #    print("Can't use special case for some other reason (????)")
             self.acton = self._fast_acton
-                                           
-        GateMap.__init__(self, gateDim)
+
+    def __getstate__(self):
+        # Don't pickle 'instancemethod'
+        d = self.__dict__.copy()
+        del d['acton']
+        return d
+    
+    def __setstate__(self, d):
+        self.__dict__.update(d)
+        self._set_acton()
+        
 
     def allocate_gpindices(self, startingIndex, parent):
         """
@@ -5036,19 +5094,40 @@ class EmbeddedGateMap(GateMap):
     def _fast_acton_sp1(self, state):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
-        offset = 0
                 
         #FAST Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
         A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
-        if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+        #More of a performance hit than a gain:
+        #  if A.nnz == 0: return state # embedded gate is identity, so entire gate is
         _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
                                                   mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-                                                  output_state[:,0], state[:,0], offset,
-                                                  self.multipliers,
+                                                  output_state[:,0], state[:,0],
+                                                  self.noop_incrementers,
                                                   self.numBasisEls_noop_blankaction,
-                                                  self.numBasisEls_action,
-                                                  self.actionInds,
-                                                  self.inds_scratch)
+                                                  self.baseinds)
+
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            offset = 0
+            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
+            for i,blockDim in enumerate(blockDims):
+                blockSize = blockDim**2
+                if i != self.iTensorProdBlk:
+                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
+                offset += blockSize
+        return output_state
+
+    
+    def _fast_acton_sp2(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, 'd')
+                
+        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
+        _fastcalc.embedded_fast_acton_sparse_spc2(self.embedded_gate.base,
+                                                  output_state[:,0], state[:,0],
+                                                  self.noop_incrementers,
+                                                  self.numBasisEls_noop_blankaction,
+                                                  self.baseinds)
 
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
@@ -5065,15 +5144,11 @@ class EmbeddedGateMap(GateMap):
     def _fast_acton(self, state):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
-        offset = 0
-
         _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
-                                             output_state[:,0], state[:,0], offset,
-                                             self.multipliers,
+                                             output_state[:,0], state[:,0],
+                                             self.noop_incrementers,
                                              self.numBasisEls_noop_blankaction,
-                                             self.numBasisEls_action,
-                                             self.actionInds,
-                                             self.inds_scratch)
+                                             self.baseinds)
                                  
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:

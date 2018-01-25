@@ -41,9 +41,9 @@ class TestGateSetMethods(GateSetTestCase):
         est = gateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
                                                  cache_size=100, num_subtrees=2, 
                                                  num_subtree_proc_groups=1, num_param1_groups=1, 
-                                                 num_param2_groups=1)
+                                                 num_param2_groups=1, num_final_strs=100)
 
         est = mgateset._calc().estimate_mem_usage(["bulk_fill_probs","bulk_fill_dprobs","bulk_fill_hprobs"],
                                                  cache_size=100, num_subtrees=2, 
                                                  num_subtree_proc_groups=1, num_param1_groups=1, 
-                                                 num_param2_groups=1)
+                                                  num_param2_groups=1, num_final_strs=100)

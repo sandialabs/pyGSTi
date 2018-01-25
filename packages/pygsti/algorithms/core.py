@@ -1094,9 +1094,12 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6:
-            raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
+        try:
+            if gs.frobeniusdist(gs_cmp) > 1e-6:
+                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
                              " given to different processors!")
+        except NotImplementedError: # Some gates (maps) don't implement this
+            pass # OK
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
@@ -1480,11 +1483,11 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
             * FLOATSIZE # see GateSet._buildup_dPG (this is mem for dPG)
         if memLimit is None or 0.1*memLimit < memForNumGaugeParams:
-            if 1: #try:
+            try:
                 nModelParams = gs.num_nongauge_params() #len(x0)
-            #except: #numpy can throw a LinAlgError
-            #    printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
-            #    nModelParams = gs.num_params()
+            except: #numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+                printer.warning("Could not obtain number of *non-gauge* parameters - using total params instead")
+                nModelParams = gs.num_params()
         else:
             printer.log("Finding num_nongauge_params is too expensive: using total params.")
             nModelParams = gs.num_params() #just use total number of params
@@ -2294,9 +2297,12 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     if comm is not None:
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
-        if gs.frobeniusdist(gs_cmp) > 1e-6:
-            raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
-                             " given to different processors!")
+        try:
+            if gs.frobeniusdist(gs_cmp) > 1e-6:
+                raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
+                                 " given to different processors!")
+        except NotImplementedError: # Some gates (maps) don't implement this
+            pass # OK
 
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)

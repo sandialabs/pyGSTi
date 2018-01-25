@@ -25,6 +25,7 @@ try:
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
+#from ..tools import fastcalc as _fastcalc
 
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
@@ -1691,6 +1692,9 @@ class TensorProdSPAMVec(SPAMVec):
         
         return ret
 
+    @property
+    def size(self):
+        return self.dim
     
     def set_value(self, vec):
         """

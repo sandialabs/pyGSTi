@@ -227,9 +227,12 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
 
     if comm is not None:
         gs_cmp = comm.bcast(gateset if (comm.Get_rank() == 0) else None, root=0)
-        if gateset.frobeniusdist(gs_cmp) > 1e-6:
-            raise ValueError("MPI ERROR in gaugeopt: *different* gatesets" +
-                             " given to different processors!")
+        try:
+            if gateset.frobeniusdist(gs_cmp) > 1e-6:
+                raise ValueError("MPI ERROR in gaugeopt: *different* gatesets" +
+                                 " given to different processors!")
+        except NotImplementedError: # Some gates (maps) don't implement this
+            pass # OK
 
     if gauge_group is None:
         gauge_group = gateset.default_gauge_group

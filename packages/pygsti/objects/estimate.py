@@ -102,7 +102,7 @@ class Estimate(object):
         return goparams_list[0].get('gateset',self.gatesets['final iteration estimate'])
 
                 
-    def add_gaugeoptimized(self, goparams, gateset=None, label=None, verbosity=None):
+    def add_gaugeoptimized(self, goparams, gateset=None, label=None, comm=None, verbosity=None):
         """
         Adds a gauge-optimized GateSet (computing it if needed) to this object.
 
@@ -133,6 +133,10 @@ class Estimate(object):
             If None, then the next available "go<X>", where <X> is a 
             non-negative integer, is used as the label.
 
+        comm : mpi4py.MPI.Comm, optional
+            A default MPI communicator to use when one is not specified
+            as the 'comm' element of/within `goparams`.
+
        verbosity : int, optional
             An integer specifying the level of detail printed to stdout
             during the calculations performed in this function.  If not
@@ -157,14 +161,14 @@ class Estimate(object):
 
 
         #Create a printer based on specified or maximum goparams
-        # verbosity and any existing comm.
-        comm = None
+        # verbosity and default or existing comm.
+        printer_comm = comm
         for gop in goparams_list:
             if gop.get('comm',None) is not None:
-                comm = gop['comm']; break
+                printer_comm = gop['comm']; break
         max_vb = verbosity if (verbosity is not None) else \
                  max( [ gop.get('verbosity',0) for gop in goparams_list ])
-        printer = _VerbosityPrinter.build_printer(max_vb, comm)
+        printer = _VerbosityPrinter.build_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
         
         for i,gop in enumerate(goparams_list):
@@ -178,6 +182,9 @@ class Estimate(object):
                 printer.log("Stage %d:" % i, 2)
                 if verbosity is not None:
                     gop['verbosity'] = printer-1 #use common printer
+
+                if comm is not None and 'comm' not in gop: 
+                    gop['comm'] = comm
 
                 if last_gs:
                     gop["gateset"] = last_gs
@@ -577,8 +584,25 @@ class Estimate(object):
         return s
     
     def __getstate__(self):
-        # don't pickle parent (will create circular reference)
+        #Don't pickle comms in goparameters
         to_pickle = self.__dict__.copy()
+        to_pickle['goparameters'] = _collections.OrderedDict()
+        for lbl,goparams in self.goparameters.items():            
+            if hasattr(goparams,"keys"):
+                if 'comm' in goparams:
+                    goparams = goparams.copy()
+                    goparams['comm'] = None
+                to_pickle['goparameters'][lbl] = goparams
+            else: #goparams is a list
+                new_goparams = [] #new list
+                for goparams_dict in goparams:
+                    if 'comm' in goparams_dict:
+                        goparams_dict = goparams_dict.copy()
+                        goparams_dict['comm'] = None
+                    new_goparams.append(goparams_dict)
+                to_pickle['goparameters'][lbl] = new_goparams
+
+        # don't pickle parent (will create circular reference)
         del to_pickle['parent'] 
         return  to_pickle
 

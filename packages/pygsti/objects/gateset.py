@@ -1315,7 +1315,7 @@ class GateSet(object):
 
 
     def bulk_evaltree_from_resources(self, gatestring_list, comm=None, memLimit=None,
-                                     distributeMethod="gatestrings", subcalls=[],
+                                     distributeMethod="default", subcalls=[],
                                      verbosity=0):
         """
         Create an evaluation tree based on available memory and CPUs.
@@ -1425,27 +1425,31 @@ class GateSet(object):
                 factors.append(n)
             return factors
 
-        def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0):
+        def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0,cacheSize=None):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
             
-            #Get cache size
-            if not fastCacheSz:
-                #Slower (but more accurate way)
-                if ng not in evt_cache:
-                    evt_cache[ng] = self.bulk_evaltree(
-                        gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
-                cacheSize = max([len(s) for s in evt_cache[ng][0].get_sub_trees()])
-            else:
-                #heuristic (but fast)
-                cacheSize = int( 1.3 * len(gatestring_list) / ng )
+            if cacheSize is None:
+                #Get cache size
+                if not fastCacheSz:
+                    #Slower (but more accurate way)
+                    if ng not in evt_cache:
+                        evt_cache[ng] = self.bulk_evaltree(
+                            gatestring_list, minSubtrees=ng, numSubtreeComms=Ng)
+                    cacheSize = max([s.cache_size() for s in evt_cache[ng][0].get_sub_trees()])
+                    nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
+                else:
+                    #heuristic (but fast)
+                    nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
+                    cacheSize = calc.estimate_cache_size(nFinalStrs)
+                    
 
-            mem = calc.estimate_mem_usage(subcalls,cacheSize,ng,Ng,np1,np2)
+            mem = calc.estimate_mem_usage(subcalls,cacheSize,ng,Ng,np1,np2,nFinalStrs)
             
             if verb == 1:
                 if (not fastCacheSz):
                     fast_estimate = calc.estimate_mem_usage(
-                        subcalls, cacheSize, ng, Ng, np1, np2)
+                        subcalls, cacheSize, ng, Ng, np1, np2, nFinalStrs)
                     fc_est_str = " (%.2fGB fc)" % (fast_estimate*C)
                 else: fc_est_str = ""
 
@@ -1466,14 +1470,28 @@ class GateSet(object):
 
             return mem
 
+        if distributeMethod == "default":
+            distributeMethod = calc.default_distribute_method()
 
         if distributeMethod == "gatestrings":
             np1 = 1; np2 = 1; Ng = nprocs
             ng = nprocs
+            Nstrs = len(gatestring_list)
             if memLimit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
                 # with fast cacheSize computation then switch to slow
-                while memEstimate(ng,np1,np2,Ng,True) > memLimit: ng += Ng
+                while memEstimate(ng,np1,np2,Ng,True) > memLimit:
+                    ng += Ng
+                    if ng >= Nstrs:
+                        # even "maximal" splitting (num trees == num strings)
+                        # won't help - see if we can squeeze "ng==nprocs" cached tree
+                        # to have zero cachesize
+                        if hasattr(evt_cache[nprocs],"squeeze") and \
+                           memEstimate(nprocs,np1,np2,nG,cacheSize=0) <= memLimit:
+                            evt_cache[nprocs].squeeze(0)
+                        else:
+                            raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
+                        
                 mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
                 while mem_estimate > memLimit:
                     ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)

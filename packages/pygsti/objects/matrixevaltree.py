@@ -196,6 +196,13 @@ class MatrixEvalTree(EvalTree):
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
 
+    def cache_size(self):
+        """ 
+        Returns the size of the persistent "cache" of partial results
+        used during the computation of all the strings in this tree.
+        """
+        return len(self)
+
 
     def generate_gatestring_list(self, permute=True):
         """

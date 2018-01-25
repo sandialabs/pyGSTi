@@ -17,6 +17,7 @@ from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
+from . import gate as _gate
 
 _dummy_profiler = _DummyProfiler()
 
@@ -156,6 +157,13 @@ class GateCalc(object):
 
         # ** See comments at the beginning of get_nongauge_projector for explanation **
 
+        if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates.values()]) or \
+           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
+           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
+            raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
+                                       "parameters for GateSets with sparse "
+                                       "member representations"))
+
         bSkipEcs = True #Whether we should artificially skip complement-type
          # effect vecs, which is historically what we've done, even though
          # this seems somewhat wrong.  Not skipping them will alter the
@@ -216,16 +224,29 @@ class GateCalc(object):
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bt.mut(i,j,dim)
                 for lbl,rhoVec in self.preps.items():
-                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
+                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.toarray())
                 for lbl,EVec in self.effects.items():
-                    gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
+                    gsDeriv_effects[lbl] = -_np.dot(EVec.toarray().T, unitMx).T
                 #OLD
                 #for lbl,povm in self.povms.items():
                 #    gsDeriv.povms[lbl] = _povm.POVM(
                 #        [(l,-_np.dot(EVec.T, unitMx).T) for l,EVec in povm.items()])
                 for lbl,gate in self.gates.items():
+                    #if isinstance(gate,_gate.GateMatrix):
                     gsDeriv_gates[lbl] = _np.dot(unitMx,gate) - \
                                          _np.dot(gate,unitMx)
+                    #else:
+                    #    #use acton... maybe throw error if dim is too large (maybe above?)
+                    #    deriv = _np.zeros((dim,dim),'d')
+                    #    uv = _np.zeros((dim,1),'d') # unit vec
+                    #    for k in range(dim): #FUTURE: could optimize this by bookeeping and pulling this loop outward
+                    #        uv[k] = 1.0; Guv = gate.acton(uv); uv[k] = 0.0 #get k-th col of gate matrix
+                    #        # termA_mn = sum( U_mk*Gkn ) so U locks m=i,k=j => termA_in = 1.0*Gjn
+                    #        # termB_mn = sum( Gmk*U_kn ) so U locks k=i,n=j => termB_mj = 1.0*Gmi
+                    #        deriv[i,k] += Guv[j,0] # termA contrib
+                    #        if k == i: # i-th col of gate matrix goes in deriv's j-th col
+                    #            deriv[:,j] -= Guv[:,0] # termB contrib
+                    #    gsDeriv_gates[lbl] = deriv
 
                 #Note: vectorize all the parameters in this full-
                 # parameterization object, which gives a vector of length
@@ -449,7 +470,7 @@ class GateCalc(object):
 
             assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
             #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
-        except(_np.linalg.linalg.LinAlgError):
+        except(_np.linalg.LinAlgError):
             _warnings.warn("Linear algebra error (probably a non-convergent" +
                            "SVD) ignored during matric rank checks in " +
                            "GateSet.get_nongauge_projector(...) ")
