@@ -171,6 +171,30 @@ class MapEvalTree(EvalTree):
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
 
+
+    def _remove_from_cache(self,indx):
+        """ Removes self[indx] from cache (if it's in it)"""
+        remStart, remRemain, remCache = self[indx]
+          # iStart, remaining string, and iCache of element to remove
+        if remCache is None: return # not in cache to begin with!
+
+        for i in range(len(self)):
+            iStart, remainingStr, iCache = self[i]
+            if iCache == remCache:
+                assert(i == indx)
+                self[i] = (iStart, remainingStr, None) #not in cache anymore
+                continue
+
+            if iCache is not None and iCache > remCache:
+                iCache -= 1 #shift left all cache indices after one removed
+            if iStart == remCache:
+                iStart = remStart
+                remainingStr = remRemain + remainingStr
+            elif iStart is not None and iStart > remCache:
+                iStart -= 1 #shift left all cache indices after one removed
+            self[i] = (iStart, remainingStr, iCache)
+        self.cachesize -= 1
+
         
     def squeeze(self, maxCacheSize):
         """ 
@@ -187,7 +211,7 @@ class MapEvalTree(EvalTree):
         """
         assert(maxCacheSize >= 0)
         
-        if maxCacheSize == 0: #special but relevant case
+        if maxCacheSize == 0: #special but common case
             curCacheSize = self.cache_size()            
             cacheinds = [None]*curCacheSize
             for i in self.get_evaluation_order():
@@ -221,28 +245,56 @@ class MapEvalTree(EvalTree):
                 if iMinTree is None or cost < minCost:
                     minCost = cost; iMinTree = cacheinds[i]
                     iMinCache = i # in cache
+            assert(self[iMinTree][2] == iMinCache) #sanity check
 
             #Remove references to iMin element
-            minStart = self[iMinTree][0] # iStart of element to remove
-            minRemain = self[iMinTree][1] # Remaining string of element to remove
-            for i in range(len(self)):
-                iStart, remainingStr, iCache = self[i]
-                if iCache == iMinCache:
-                    assert(i == iMinTree)
-                    self[i] = (iStart, remainingStr, None) #not in cache anymore
-                    continue
+            self._remove_from_cache(iMinTree)
+            
 
-                if iCache is not None and iCache > iMinCache:
-                    iCache -= 1 #shift left all cache indices after one removed
-                if iStart == iMinCache:
-                    iStart = minStart
-                    remainingStr = minRemain + remainingStr
-                elif iStart is not None and iStart > iMinCache:
-                    iStart -= 1 #shift left all cache indices after one removed
-                self[i] = (iStart, remainingStr, iCache)
-            self.cachesize -= 1
+    def trim_nonfinal_els(self):
+        """ 
+        Removes from this tree all non-final elements (used to facilitate
+        computation sometimes)
+        """
+        nFinal = self.num_final_strings()
+        self._delete_els(list(range(nFinal,len(self))))
+
+        #remove any unreferenced cache elements
+        curCacheSize = self.cache_size()            
+        hits = [0]*curCacheSize
+        cacheinds = [None]*curCacheSize
+        for i in range(len(self)):
+            iStart, remainingStr, iCache = self[i]
+            if iStart is not None: hits[iStart] += 1
+            if iCache is not None: cacheinds[iCache] = i
+        for hits,i in zip(hits,cacheinds):
+            if hits == 0: self._remove_from_cache(i)
+
         
+    def _delete_els(self, elsToRemove):
+        """ 
+        Delete a self[i] for i in elsToRemove.
+        """
+        if len(elsToRemove) == 0: return
+        
+        last = elsToRemove[0]
+        for i in elsToRemove[1:]:
+            assert(i > last), "elsToRemove *must* be sorted in ascending order!"
+            last = i
+        
+        #remove from cache
+        for i in elsToRemove:
+             self._remove_from_cache(i)
 
+        order = self.eval_order
+        for i in reversed(elsToRemove):
+            del self[i] #remove from self
+            
+            #remove & update eval order
+            order = [ ((k-1) if k>i else k) for k in order if k != i ]
+        self.eval_order = order
+
+        
     def cache_size(self):
         """ 
         Returns the size of the persistent "cache" of partial results
@@ -455,7 +507,10 @@ class MapEvalTree(EvalTree):
             #OLD METHOD: optimize max-cost to get the right number of trees
             # (but this can yield trees with unequal lengths or cache sizes,
             # which is what we're often after for memory reasons)
-            maxCost = self.get_num_applies() / numSubTrees
+            costMet = "size" #cost metric
+            if costMet == "applies":
+                maxCost = self.get_num_applies() / numSubTrees
+            else: maxCost = len(self) / numSubTrees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0/len(self), +1.0/len(self)
             resultingSubtrees = numSubTrees+1 #just to prime the loop
@@ -463,7 +518,7 @@ class MapEvalTree(EvalTree):
 
             #Iterate until the desired number of subtrees have been found.
             while resultingSubtrees != numSubTrees:
-                subTreeSetList, totalCost = create_subtrees(maxCost, maxCostRate)
+                subTreeSetList, totalCost = create_subtrees(maxCost, maxCostRate, costMet)
                 resultingSubtrees = len(subTreeSetList)
                 #print("DEBUG: resulting numTrees = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
                 #     (resultingSubtrees, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
@@ -592,6 +647,8 @@ class MapEvalTree(EvalTree):
             
             subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
+
+            subTree.trim_nonfinal_els()
 
             return subTree
     
