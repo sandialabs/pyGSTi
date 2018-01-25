@@ -1649,7 +1649,7 @@ class FitComparisonTable(WorkspaceTable):
         if NpByX is None:
             try:
                 NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
-            except _np.LinAlgError:
+            except _np.linalg.LinAlgError:
                 _warnings.warn(("LinAlgError when trying to compute the number"
                                 " of non-gauge parameters.  Using total"
                                 " parameters instead."))

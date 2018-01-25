@@ -157,9 +157,9 @@ class GateCalc(object):
 
         # ** See comments at the beginning of get_nongauge_projector for explanation **
 
-        if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates]) or \
-           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps]) or \
-           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects]):
+        if any([not isinstance(gate,_gate.GateMatrix) for gate in self.gates.values()]) or \
+           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.preps.values()]) or \
+           any([not isinstance(vec,_sv.DenseSPAMVec) for vec in self.effects.values()]):
             raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
                                        "parameters for GateSets with sparse "
                                        "member representations"))
@@ -470,7 +470,7 @@ class GateCalc(object):
 
             assert( rank_P == _np.linalg.matrix_rank(Pp, P_RANK_TOL)) #rank shouldn't change with normalization
             #assert( (nParams - rank_P) == _np.linalg.matrix_rank(ret, P_RANK_TOL) ) # dimension of orthogonal space
-        except(_np.linalg.linalg.LinAlgError):
+        except(_np.linalg.LinAlgError):
             _warnings.warn("Linear algebra error (probably a non-convergent" +
                            "SVD) ignored during matric rank checks in " +
                            "GateSet.get_nongauge_projector(...) ")
