@@ -271,7 +271,7 @@ def do_long_sequence_gst(dataFilenameOrSet, targetGateFilenameOrSet,
         - useFreqWeightedChiSq = True / False (default)
         - nestedGateStringLists = True (default) / False
         - includeLGST = True / False (default is True)
-        - distributeMethod = "gatestrings" or "deriv" (default)
+        - distributeMethod = "default", "gatestrings" or "deriv"
         - profile = int (default == 1)
         - check = True / False (default)
         - gateLabelAliases = dict (default = None)
@@ -586,7 +586,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         memLimit=memLimit,
         profiler=profiler,
         comm=comm, distributeMethod=advancedOptions.get(
-            'distributeMethod',"deriv"),
+            'distributeMethod',"default"),
         check=advancedOptions.get('check',False) )
     
     if objective == "chi2":
@@ -626,7 +626,7 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
     parameters['weights'] = advancedOptions.get('gsWeights',None)
     parameters['cptpPenaltyFactor'] = advancedOptions.get('cptpPenaltyFactor',0)
     parameters['spamPenaltyFactor'] = advancedOptions.get('spamPenaltyFactor',0)
-    parameters['distributeMethod'] = advancedOptions.get('distributeMethod','deriv')
+    parameters['distributeMethod'] = advancedOptions.get('distributeMethod','default')
     parameters['depolarizeStart'] = advancedOptions.get('depolarizeStart',0)
     parameters['contractStartToCPTP'] = advancedOptions.get('contractStartToCPTP',False)
     parameters['tolerance'] = advancedOptions.get('tolerance',1e-6)
@@ -828,18 +828,20 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
             if gaugeOptTarget is not None:
                 assert(isinstance(gaugeOptTarget,_objs.GateSet)),"`gaugeOptTarget` must be None or a GateSet"
                 for goparams in gaugeOptSuite_dict.values():
-                    if 'targetGateset' in goparams:
-                        _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                        "user-defined targetGateset in gauge opt"
-                                        "param dict(s)"))
-                    goparams.update( {'targetGateset': gaugeOptTarget } )
+                    goparams_list = [goparams] if hasattr(goparams,'keys') else goparams
+                    for goparams_dict in goparams_list:
+                        if 'targetGateset' in goparams_dict:
+                            _warnings.warn(("`gaugeOptTarget` argument is overriding"
+                                            "user-defined targetGateset in gauge opt"
+                                            "param dict(s)"))
+                        goparams_dict.update( {'targetGateset': gaugeOptTarget } )
                 
             #Gauge optimize to list of gauge optimization parameters
             for goLabel,goparams in gaugeOptSuite_dict.items():
                 
                 printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label),2)
                 gsStart = ret.estimates[est_label].get_start_gateset(goparams)
-                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, printer-3)
+                ret.estimates[est_label].add_gaugeoptimized(goparams, None, goLabel, comm, printer-3)
 
                 #Gauge optimize data-scaled estimate also
                 for suffix in ROBUST_SUFFIX_LIST:
@@ -849,10 +851,10 @@ def do_stdpractice_gst(dataFilenameOrSet,targetGateFilenameOrSet,
                             printer.log("-- Conveying '%s' gauge optimization to %s estimate --" % (goLabel,est_label+suffix),2)
                             params = ret.estimates[est_label].goparameters[goLabel] #no need to copy here
                             gsopt = ret.estimates[est_label].gatesets[goLabel].copy()
-                            ret.estimates[est_label + suffix].add_gaugeoptimized(params, gsopt, goLabel, printer-3)
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(params, gsopt, goLabel, comm, printer-3)
                         else:
                             printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (goLabel,est_label+suffix),2)
-                            ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, printer-3)
+                            ret.estimates[est_label + suffix].add_gaugeoptimized(goparams, None, goLabel, comm, printer-3)
                             
             # Add gauge optimizations to end of any existing "stdout" meta info
             if 'stdout' in ret.estimates[est_label].meta:
@@ -1176,15 +1178,17 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         gaugeOptParams = gaugeOptParams.copy() #so we don't modify the caller's dict
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
-        if "comm" not in gaugeOptParams:
-            gaugeOptParams["comm"] = comm
+
+        #TODO REMOVE: redundant given add_gaugeoptimized behavior
+        #if "comm" not in gaugeOptParams: 
+        #    gaugeOptParams["comm"] = comm 
 
         gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
         gaugeOptParams['gateset'] = gs_lsgst_list[-1] #starting gate set
         _, gaugeEl, go_gs_final = _alg.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl #store gaugeopt el
         ret.estimates[estlbl].add_gaugeoptimized(gaugeOptParams, go_gs_final,
-                                                 None, printer-1)
+                                                 None, comm, printer-1)
 
         tNxt = _time.time()
         profiler.add_time('%s: gauge optimization' % callerName,tRef); tRef=tNxt
@@ -1325,11 +1329,11 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
 
                         # add new gauge-re-optimized result as above
                         ret.estimates[estlbl+'.'+scale_typ].add_gaugeoptimized(
-                            gaugeOptParams, go_gs_reopt, None, printer-1)
+                            gaugeOptParams, go_gs_reopt, None, comm, printer-1)
                     else:
                         # add same gauge-optimized result as above
                         ret.estimates[estlbl+'.'+scale_typ].add_gaugeoptimized(
-                            gaugeOptParams.copy(), go_gs_final, None, printer-1)
+                            gaugeOptParams.copy(), go_gs_final, None, comm, printer-1)
 
 
     profiler.add_time('%s: results initialization' % callerName,tRef)
