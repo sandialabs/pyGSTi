@@ -278,7 +278,7 @@ class GateMapCalc(GateCalc):
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
         #tStart = _time.time()
         dim = self.dim
-        cacheSize = evalTree.prefix_cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
         
@@ -322,7 +322,7 @@ class GateMapCalc(GateCalc):
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.prefix_cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
         if scratch is None:
             rho_cache  = _np.zeros((cacheSize, dim), 'd')
@@ -377,7 +377,7 @@ class GateMapCalc(GateCalc):
         nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.prefix_cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
         #OLD: dpr_scratch = _np.zeros((cacheSize,nDerivCols2 + dim), 'd')
         dpr_scratch = _np.zeros((cacheSize,dim),'d')
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
@@ -415,6 +415,24 @@ class GateMapCalc(GateCalc):
 
         return hpr_cache
 
+    def default_distribute_method(self):
+        """ 
+        Return the preferred MPI distribution mode for this calculator.
+        """
+        return "gatestrings"
+
+    
+    def estimate_cache_size(self, nGateStrings):
+        """
+        Return an estimate of the ideal/desired cache size given a number of 
+        gate strings.
+
+        Returns
+        -------
+        int
+        """
+        return int( 0.7 * nGateStrings )
+
     
     def construct_evaltree(self):
         """
@@ -425,7 +443,7 @@ class GateMapCalc(GateCalc):
 
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
-                           num_param2_groups):
+                           num_param2_groups, num_final_strs):
         """
         Estimate the memory required by a given set of subcalls to computation functions.
 
@@ -454,6 +472,10 @@ class GateMapCalc(GateCalc):
         num_param2_groups : int
             The number of groups to divide the second-derivative parameters into.
             Computation will be automatically parallelized over these groups.
+
+        num_final_strs : int
+            The number of final strings (may be less than or greater than
+            `cacheSize`) the tree will hold.
         
         Returns
         -------
@@ -466,24 +488,25 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
+        num_final_strs = max(num_final_strs,cache_size)
+          # if cache_size happens to be larger than num_final_strs then
+          # we'll need to store at least that many resulting elements.
 
         mem = 0
         for fnName in subcalls:
             if fnName == "bulk_fill_probs":
                 mem += cache_size * dim # pr cache intermediate
-                mem += cache_size # pr cache final
+                mem += num_final_strs # pr cache final (* #elabels!)
 
             elif fnName == "bulk_fill_dprobs":
-                mem += cache_size * (wrtLen1 + dim) # dpr cache
+                mem += cache_size * dim # dpr cache scratch
                 mem += cache_size * dim # pr cache intermediate
-                mem += cache_size # pr cache final
+                mem += num_final_strs * wrtLen1 # dpr cache final (* #elabels!)
 
             elif fnName == "bulk_fill_hprobs":
-                mem += cache_size * (wrtLen2 + dim) # hproduct cache intermediate
-                mem += cache_size * wrtLen1 * wrtLen2 # hproduct cache final
-                mem += cache_size * (wrtLen1 + dim) * 2 # dpr cache (x2)
-                mem += cache_size * dim # pr cache intermediate
-                mem += cache_size # pr cache final
+                mem += cache_size * dim # dpr cache intermediate (scratch)
+                mem += cache_size * wrtLen2 * dim * 2 # dpr cache (x2)
+                mem += num_final_strs * wrtLen1 * wrtLen2  # hpr cache final (* #elabels!)
                 
             else:
                 raise ValueError("Unknown subcall name: %s" % fnName)

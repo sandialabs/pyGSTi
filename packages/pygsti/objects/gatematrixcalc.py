@@ -1107,6 +1107,24 @@ class GateMatrixCalc(GateCalc):
 
 ## END CACHE FUNCTIONS
 
+    def default_distribute_method(self):
+        """ 
+        Return the preferred MPI distribution mode for this calculator.
+        """
+        return "deriv"
+
+    def estimate_cache_size(self, nGateStrings):
+        """
+        Return an estimate of the ideal/desired cache size given a number of 
+        gate strings.
+
+        Returns
+        -------
+        int
+        """
+        return int( 1.3 * nGateStrings )
+    
+
     def construct_evaltree(self):
         """
         Constructs an EvalTree object appropriate for this calculator.
@@ -1116,7 +1134,7 @@ class GateMatrixCalc(GateCalc):
     
     def estimate_mem_usage(self, subcalls, cache_size, num_subtrees,
                            num_subtree_proc_groups, num_param1_groups,
-                           num_param2_groups):
+                           num_param2_groups, num_final_strs):
         """
         Estimate the memory required by a given set of subcalls to computation functions.
 
@@ -1145,12 +1163,19 @@ class GateMatrixCalc(GateCalc):
         num_param2_groups : int
             The number of groups to divide the second-derivative parameters into.
             Computation will be automatically parallelized over these groups.
+
+        num_final_strs : int
+            The number of final strings (may be less than or greater than
+            `cacheSize`) the tree will hold.
+
         
         Returns
         -------
         int
             The memory estimate in bytes.
         """
+        #Note: num_final_strs is irrelevant here b/c cachesize is always >= num_final_strs
+        # and this dictates how large all the storage arrays are.
         np1,np2 = num_param1_groups, num_param2_groups
         FLOATSIZE = 8 # in bytes: TODO: a better way
 

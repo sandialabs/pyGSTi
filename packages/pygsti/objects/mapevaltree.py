@@ -107,8 +107,8 @@ class MapEvalTree(EvalTree):
                 if L >= Lc > 0 and gateString[0:Lc] == candidate:
                     iStart = i
                     remaining = gateString[Lc:]
-                    if iStr in cache_hits: cache_hits[iStr] += 1  #tally cache hit
-                    else: cache_hits[iStr] = 1  #TODO: use default dict?
+                    if iStr in cache_hits: cache_hits[cacheIndices[i]] += 1  #tally cache hit
+                    else: cache_hits[cacheIndices[i]] = 1  #TODO: use default dict?
                     break
             else: #no break => no prefix
                 iStart = None
@@ -118,7 +118,7 @@ class MapEvalTree(EvalTree):
             iCache = curCacheSize
             curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
             dummy_self[iStr] = (iStart, remaining, iCache)
-        
+            
         #PASS #2: for real this time: construct tree but only cache items w/hits
         curCacheSize = 0
         cacheIndices = [] #indices into gatestring_list/self of the strings to cache
@@ -143,7 +143,7 @@ class MapEvalTree(EvalTree):
                 remaining = gateString[:]
 
             # if/where this string should get stored in the cache
-            if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr) > 0:
+            if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr,0) > 0:
                 cacheIndices.append(iStr)
                 iCache = curCacheSize
                 curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
@@ -171,6 +171,7 @@ class MapEvalTree(EvalTree):
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
 
+        
     def squeeze(self, maxCacheSize):
         """ 
         Remove items from cache (if needed) so it contains less than or equal
@@ -185,10 +186,25 @@ class MapEvalTree(EvalTree):
         None
         """
         assert(maxCacheSize >= 0)
-        while self.prefix_cache_size() > maxCacheSize:
+        
+        if maxCacheSize == 0: #special but relevant case
+            curCacheSize = self.cache_size()            
+            cacheinds = [None]*curCacheSize
+            for i in self.get_evaluation_order():
+                iStart, remainingStr, iCache = self[i]
+                if iStart is not None:
+                    remainingStr = self[cacheinds[iStart]][1] + remainingStr
+                if iCache is not None:
+                    cacheinds[iCache] = i
+                self[i] = (None, remainingStr, None)
+            self.cachesize = 0
+            return
+
+        #Otherwise, if maxCacheSize > 0, remove cache elements one at a time:
+        while self.cache_size() > maxCacheSize:
 
             #Figure out what's in cache and # of times each one is hit
-            curCacheSize = self.prefix_cache_size()            
+            curCacheSize = self.cache_size()            
             hits = [0]*curCacheSize
             cacheinds = [None]*curCacheSize
             for i in range(len(self)):
@@ -199,11 +215,11 @@ class MapEvalTree(EvalTree):
             #Find a min-cost item to remove
             minCost = None; iMinTree = None; iMinCache = None
             for i in range(curCacheSize):
-                cost = hits[i]*len(self[cacheInds[i]][1])
+                cost = hits[i]*len(self[cacheinds[i]][1])
                   # hits * len(remainder) ~= # more applies if we
                   # remove i-th cache element.
                 if iMinTree is None or cost < minCost:
-                    minCost = cost; iMinTree = cacheInds[i]
+                    minCost = cost; iMinTree = cacheinds[i]
                     iMinCache = i # in cache
 
             #Remove references to iMin element
@@ -227,7 +243,7 @@ class MapEvalTree(EvalTree):
             self.cachesize -= 1
         
 
-    def prefix_cache_size(self):
+    def cache_size(self):
         """ 
         Returns the size of the persistent "cache" of partial results
         used during the computation of all the strings in this tree.
@@ -264,7 +280,7 @@ class MapEvalTree(EvalTree):
         """
         gateStrings = [None]*len(self)
 
-        cachedStrings = [None]*self.prefix_cache_size()
+        cachedStrings = [None]*self.cache_size()
         
         #Build rest of strings
         for i in self.get_evaluation_order():
@@ -358,7 +374,7 @@ class MapEvalTree(EvalTree):
         printer.log("EvalTree.split done initial prep in %.0fs" %
                     (_time.time()-tm)); tm = _time.time()
 
-        def create_subtrees(maxCost, maxCostRate=0, costMetric="applys"):
+        def create_subtrees(maxCost, maxCostRate=0, costMetric="size"):
             """ 
             Find a set of subtrees by iterating through the tree
             and placing "break" points when the cost of evaluating the
@@ -379,8 +395,8 @@ class MapEvalTree(EvalTree):
             curSubTree = set([evalOrder[0]])
             curTreeCost = cost_fn(self[evalOrder[0]][1]) #remainder length of 0th evaluant
             totalCost = 0
-            cacheIndices = [None]*self.prefix_cache_size()
-            
+            cacheIndices = [None]*self.cache_size()
+
             for k in evalOrder:
                 iStart,remainder,iCache = self[k]
 
@@ -392,7 +408,7 @@ class MapEvalTree(EvalTree):
                 cost = cost_fn(remainder)
                 inds = set([k])
 
-                if iStart is not None and iStart not in curSubTree:
+                if iStart is not None and cacheIndices[iStart] not in curSubTree:
                     #we need to add the tree elements traversed by
                     #following iStart
                     j = iStart #index into cache
@@ -435,6 +451,10 @@ class MapEvalTree(EvalTree):
         ##################################################################
                         
         if numSubTrees is not None:
+
+            #OLD METHOD: optimize max-cost to get the right number of trees
+            # (but this can yield trees with unequal lengths or cache sizes,
+            # which is what we're often after for memory reasons)
             maxCost = self.get_num_applies() / numSubTrees
             maxCostLowerBound, maxCostUpperBound = maxCost, None
             maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0/len(self), +1.0/len(self)
@@ -465,7 +485,7 @@ class MapEvalTree(EvalTree):
                         maxCostUpperBound = last_maxCost
                     else: #too many trees: raise maxCost
                         if maxCostUpperBound is None:
-                            maxCost = totalCost / numSubTrees
+                            maxCost = totalCost #/ numSubTrees
                         else:
                             maxCost = (maxCost + maxCostUpperBound)/2.0
                             maxCostLowerBound = last_maxCost
