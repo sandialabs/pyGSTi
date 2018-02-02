@@ -349,12 +349,11 @@ G2            20  100  5  200
             std.parse_datafile(temp_files + "/sip_test5.data")
 
         #test file with out-of-range frequency
-        with self.assertRaises(ValueError):
-            std.parse_datafile(temp_files + "/sip_test6.data")
-
+        #OLD with self.assertRaises(ValueError):
+        self.assertWarns(std.parse_datafile, temp_files + "/sip_test6.data")
+            
         #test file with out-of-range counts
-        with self.assertRaises(ValueError):
-            std.parse_datafile(temp_files + "/sip_test7.data")
+        self.assertWarns(std.parse_datafile, temp_files + "/sip_test7.data")
 
         #test file with bad syntax
         with self.assertRaises(ValueError):
