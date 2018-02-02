@@ -293,6 +293,7 @@ def make_meas_mxs(gs, prepMeasList):
     outputMatList = []
     for povm in gs.povms.values():
         for E in povm.values():
+            if isinstance(E, _objs.ComplementSPAMVec): continue # complement is dependent on others
             outputMat = _np.zeros([dimE, numFid], float)
             for i,measFid in enumerate(prepMeasList):
                 outputMat[:, i] = _np.dot(E.T, gs.product(measFid))[0,:]
