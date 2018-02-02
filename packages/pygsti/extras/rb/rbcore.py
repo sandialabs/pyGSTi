@@ -19,6 +19,7 @@ from numpy import random as _rndm
 from scipy.optimize import minimize as _minimize
 
 def create_random_gatestring(m, group_or_gateset, inverse = True,
+                             random_pauli = False,
                              interleaved = None, seed=None,
                              group_inverse_only = False,
                              group_prep = False,
@@ -26,13 +27,6 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
                              generated_group = None,
                              gateset_to_group_labels = None,
                              randState=None):
-    # For "generator RB" need to add a subset sampling option. This would create
-    # random sequences of only a sub-set of the gates/elements, but with the inverse
-    # whatever it needs to be. Can write a wrapper around this to then compile the inverse
-    # into another gateset. Could also add a sub-set sampling option which picks sequences
-    # of length m+1 that compile to the identity. The easiest way to do this would be to
-    # just reject sequences that don't compose to I, but there are possibly more efficient
-    # ways.
     """
     Makes a random RB sequence.
     
@@ -151,6 +145,18 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
             random_string_group = prep_random_string_group + random_string_group
         #print(random_string)
         inversion_group_element = generated_group.get_inv(generated_group.product(random_string_group))
+        
+        # This bit of code is a quick hash job, and only works when the group is the 1-qubit Cliffords
+        if random_pauli:
+            pauli_keys = ['Gc0','Gc3','Gc6','Gc9']
+            rndm_index = rndm.randint(0,4)
+            
+            if rndm_index == 0 or rndm_index == 3:
+                bitflip = False
+            else:
+                bitflip = True
+            inversion_group_element = generated_group.product([inversion_group_element,pauli_keys[rndm_index]])
+            
         inversion_sequence = compilation[inversion_group_element]
         #print(inversion_sequence)
         random_string.extend(inversion_sequence)
@@ -175,8 +181,11 @@ def create_random_gatestring(m, group_or_gateset, inverse = True,
                 interleaved_indices[:,0] = rndm_indices
                 rndm_indices = interleaved_indices.flatten()
             random_string = [ group.labels[i] for i in rndm_indices ] 
-            
-    return _objs.GateString(random_string)
+    
+    if not random_pauli:
+        return _objs.GateString(random_string)
+    if random_pauli:
+        return _objs.GateString(random_string), bitflip
 
 def create_random_gatestrings(m_list, K_m, group_or_gateset, inverse=True, 
                               interleaved = None, alias_maps=None, seed=None, 

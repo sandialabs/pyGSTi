@@ -65,12 +65,14 @@ def find_thresh(confidence_level,strings,dof):
     return _scipy.stats.chi2.isf((1-confidence_level)/strings,dof)
 
 def tvd(gatestring, ds0, ds1):
-    assert set(ds0.slIndex.keys()) == set(ds1.slIndex.keys())
-    outcomes = ds0.slIndex.keys()
+#    assert set(ds0.slIndex.keys()) == set(ds1.slIndex.keys())
+#    outcomes = ds0.slIndex.keys()
+    assert set(ds0.olIndex.keys()) == set(ds1.olIndex.keys())
+    outcomes = ds0.olIndex.keys()
     line0 = ds0[gatestring]
     line1 = ds1[gatestring]
-    N0 = line0.total()
-    N1 = line1.total()
+    N0 = line0.total#()
+    N1 = line1.total#()
     return 0.5 * _np.sum(_np.abs(line0[outcome]/N0 - line1[outcome]/N1) for outcome in outcomes)
 
 #Define the data_comparator class.  This object will store the p-values and log-likelihood ratio values for a pair
