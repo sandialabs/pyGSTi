@@ -102,6 +102,12 @@ class TestGateSetMethods(GateSetTestCase):
         self.getset_helper(self.static_gateset)
 
     def getset_helper(self, gs):
+
+        #Test default prep/effects
+        default_prep = gs.prep
+        self.assertArraysAlmostEqual(default_prep,gs.preps["rho0"])
+        default_povm = gs.effects
+        assert(set(default_povm.keys()) == set(['0','1']))
         
         v = np.array( [[1.0/np.sqrt(2)],[0],[0],[1.0/np.sqrt(2)]], 'd')
 

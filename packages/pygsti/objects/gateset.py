@@ -149,6 +149,32 @@ class GateSet(object):
         """
         return self._dim
 
+    @property
+    def prep(self):
+        """
+        The unique state preparation in this gateset, if one exists.  If not, 
+        a ValueError is raised.
+        """
+        if len(self.preps) != 1:
+            raise ValueError("'.prep' can only be used on gate sets" +
+                             " with a *single* state prep.  This GateSet has" +
+                             " %d state preps!" % len(self.preps))
+        return list(self.preps.values())[0]
+
+    
+    @property
+    def effects(self):
+        """
+        The unique POVM in this gateset, if one exists.  If not, 
+        a ValueError is raised.
+        """
+        if len(self.povms) != 1:
+            raise ValueError("'.effects' can only be used on gate sets" +
+                             " with a *single* POVM.  This GateSet has" +
+                             " %d POVMS!" % len(self.povms))
+        return list(self.povms.values())[0]
+
+
     def get_basis_name(self):
         """ DEPRECATED: use `<this object>.basis.name` instead. """
         _warnings.warn('gs.get_basis_name() is deprecated. ' + \
@@ -179,7 +205,7 @@ class GateSet(object):
 
     def get_prep_labels(self):
         """
-        Get the labels of state preparation vectors.
+        DEPRECATED. Get the labels of state preparation vectors.
 
         Returns
         -------
@@ -191,7 +217,7 @@ class GateSet(object):
 
     def get_effect_labels(self):
         """
-        Get all the effect vector labels.
+        DEPRECATED. Get all the effect vector labels.
 
         Returns
         -------
@@ -203,6 +229,7 @@ class GateSet(object):
 
     def get_preps(self):
         """
+        DEPRECATED. 
         Get an list of all the state prepartion vectors.  These
         vectors are copies of internally stored data and thus
         can be modified without altering the gateset.
@@ -217,6 +244,7 @@ class GateSet(object):
 
     def get_effects(self):
         """
+        DEPRECATED.
         Get an list of all the POVM effect vectors.  This list will include
         the "compliment" effect vector at the end of the list if one has been
         specified.  Also, the returned vectors are copies of internally stored
@@ -233,7 +261,7 @@ class GateSet(object):
 
     def num_preps(self):
         """
-        Get the number of state preparation vectors
+        DEPRECATED. Get the number of state preparation vectors
 
         Returns
         -------
@@ -245,7 +273,7 @@ class GateSet(object):
     
     def num_effects(self):
         """
-        Get the number of effect vectors.
+        DEPRECATED. Get the number of effect vectors.
 
         Returns
         -------
