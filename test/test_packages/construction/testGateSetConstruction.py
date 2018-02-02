@@ -329,7 +329,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
         gateset1 = pygsti.objects.GateSet()
         gateset1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
-        gateset1['Mdefault'] = pygsti.obj.UncontrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
+        gateset1['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
                                                              ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
         gateset1['Gi'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)")
         gateset1['Gx'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
