@@ -124,7 +124,8 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
     if gateLabels is not None:
         gateLabelsToEstimate = gateLabels
     else:
-        gateLabelsToEstimate = list(targetGateset.gates.keys()) #no instruments by default
+        gateLabelsToEstimate = list(targetGateset.gates.keys()) + \
+                               list(targetGateset.instruments.keys())
 
     rhoLabelsToEstimate = list(targetGateset.preps.keys())
     povmLabelsToEstimate = list(targetGateset.povms.keys())
@@ -193,7 +194,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
 
         if gateLabel in targetGateset.instruments:
             #Note: we assume leading dim of X matches instrument element ordering
-            lgstGateset.instruments[gateLabel] = _instrument.Instrument(
+            lgstGateset.instruments[gateLabel] = _objs.Instrument(
                 [(lbl, _np.dot(invABMat_p,X_ps[i]))
                  for i,lbl in enumerate(targetGateset.instruments[gateLabel])] )
         else:
