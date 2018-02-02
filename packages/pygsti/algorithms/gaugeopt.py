@@ -401,6 +401,12 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
             dS  = _np.rollaxis(dS, 2) # shape (n, d1, d2)
             assert(dS.shape == (n,d,d))
 
+            # --- NOTE: ordering here, with running `start` index MUST
+            #           correspond to those in GateSet.residuals, which in turn
+            #           must correspond to those in GateCalc.residuals - which
+            #           currently orders as: gates, compiled_gates, preps, effects.
+            
+
             # -- Gate terms
             # -------------------------
             for lbl, G in gs_pre.gates.items():
@@ -413,6 +419,21 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                 result = result.reshape( (d**2, n) ) #must copy b/c non-contiguous
                 my_jacMx[start:start+d**2] = wt * result
                 start += d**2
+
+                
+            # -- Instrument terms
+            # -------------------------
+            for ilbl, Inst in gs_pre.instruments.items():
+                wt   = itemWeights.get(ilbl, gateWeight)
+                for lbl, G in Inst.items():
+                    # same calculation as for gate terms
+                    left = -1 * _np.dot(dS, gs_post.instruments[ilbl][lbl]) # shape (n,d1,d2)
+                    right = _np.swapaxes(_np.dot(G, dS), 0,1) # shape (d1, n, d2) -> (n,d1,d2)
+                    result = _np.swapaxes(_np.dot(S_inv, left + right), 1,2) # shape (d1, d2, n)
+                    result = result.reshape( (d**2, n) ) #must copy b/c non-contiguous
+                    my_jacMx[start:start+d**2] = wt * result
+                    start += d**2
+
 
             # -- prep terms
             # -------------------------                
