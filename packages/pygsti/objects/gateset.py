@@ -24,6 +24,7 @@ from ..tools import basistools as _bt
 from ..tools import listtools as _lt
 
 from . import gatesetmember as _gm
+from . import gatestring as _gs
 from . import gate as _gate
 from . import spamvec as _sv
 from . import povm as _povm
@@ -909,7 +910,7 @@ class GateSet(object):
                     #we've found an instrument - recurse!
                     for inst_el_lbl in self.instruments[gate_label]:
                         compiled_el_lbl = gate_label + "_" + inst_el_lbl
-                        process(action, s[0:i] + (compiled_el_lbl,) + s[i+1:],
+                        process(action, s[0:i] + _gs.GateString((compiled_el_lbl,)) + s[i+1:],
                                 spamtuples, iParent, gate_outcomes + (inst_el_lbl,), i+1)
                     break
             else: #no instruments -- add "raw" gate string s
@@ -2724,7 +2725,7 @@ class GateSet(object):
         newGateset.povms = self.povms.copy(newGateset)
         #newGateset.effects = self.effects.copy(newGateset)
         newGateset.gates = self.gates.copy(newGateset)
-        newGateset.instrumens = self.instruments.copy(newGateset)
+        newGateset.instruments = self.instruments.copy(newGateset)
         newGateset._paramvec = self._paramvec.copy()
         #newGateset._rebuild_paramvec() # unnecessary, as copy will change parent and copy gpindices
         

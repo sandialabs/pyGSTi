@@ -9,9 +9,12 @@ import collections as _collections
 import numpy as _np
 import warnings as _warnings
 
+from ..tools import matrixtools as _mt
+
 #from . import labeldicts as _ld
 from . import gatesetmember as _gm
 from . import gate as _gate
+
 
 def convert(instrument, typ, basis):
     if typ == "TP":
