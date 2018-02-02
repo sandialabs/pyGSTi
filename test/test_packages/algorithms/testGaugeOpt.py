@@ -60,9 +60,9 @@ class TestCoreMethods(AlgorithmsBase):
 
           #test bad effect vector cases
         gs_bad_effect = gs_lgst_target.copy()
-        gs_bad_effect.povms['Mdefault'] = pygsti.obj.POVM( [('0',[100.0,0,0,0])] ) # E eigvals all > 1.0
+        gs_bad_effect.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[100.0,0,0,0])] ) # E eigvals all > 1.0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
-        gs_bad_effect.povms['Mdefault'] = pygsti.obj.POVM( [('0',[-100.0,0,0,0])] ) # E eigvals all < 0
+        gs_bad_effect.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[-100.0,0,0,0])] ) # E eigvals all < 0
         self.runSilent(pygsti.contract, gs_bad_effect, "vSPAM",verbosity=10, tol=10.0)
 
         #with self.assertRaises(ValueError):
@@ -104,7 +104,7 @@ class TestCoreMethods(AlgorithmsBase):
         # routines are more tested
         gs_bigkick = gs_lgst_target.kick(absmag=1.0)
         gs_badspam = gs_bigkick.copy()
-        gs_badspam.povms['Mdefault'] = pygsti.obj.POVM( [('0',np.array( [[2],[0],[0],[4]], 'd'))] )
+        gs_badspam.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',np.array( [[2],[0],[0],[4]], 'd'))] )
           #set a bad evec so vSPAM has to work...
         
 

@@ -329,8 +329,8 @@ class TestGateSetConstructionMethods(BaseTestCase):
         spaceLabels = [('Q0',)] #interpret the 2x2 density matrix as a single qubit named 'Q0'
         gateset1 = pygsti.objects.GateSet()
         gateset1['rho0'] = pygsti.construction.build_vector(stateSpace,spaceLabels,"0")
-        gateset1['Mdefault'] = pygsti.obj.POVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
-                                                 ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
+        gateset1['Mdefault'] = pygsti.obj.UncontrainedPOVM( [('0',pygsti.construction.build_vector(stateSpace,spaceLabels,"0")),
+                                                             ('1',pygsti.construction.build_vector(stateSpace,spaceLabels,"1"))] )
         gateset1['Gi'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"I(Q0)")
         gateset1['Gx'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"X(pi/2,Q0)")
         gateset1['Gy'] = pygsti.construction.build_gate(stateSpace,spaceLabels,"Y(pi/2,Q0)")
@@ -339,7 +339,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         for defParamType in ("full", "TP", "static"):
             gateset_simple = pygsti.objects.GateSet(defParamType)
             gateset_simple['rho0'] = [SQ2, 0, 0, SQ2]
-            gateset_simple['Mdefault'] = pygsti.obj.POVM( [('0',[SQ2, 0, 0, -SQ2])] )
+            gateset_simple['Mdefault'] = pygsti.obj.UnconstrainedPOVM( [('0',[SQ2, 0, 0, -SQ2])] )
             gateset_simple['Gi'] = [ [1, 0, 0, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 1, 0],
@@ -392,7 +392,7 @@ class TestGateSetConstructionMethods(BaseTestCase):
         with self.assertRaises(ValueError):
             gateset_povm_first['rhoBad'] =  np.array([1,2,3],'d') #wrong dimension
         with self.assertRaises(ValueError):
-            gateset_povm_first['Mdefault'] =  pygsti.obj.POVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
+            gateset_povm_first['Mdefault'] =  pygsti.obj.UnconstrainedPOVM( [('0',np.array([1,2,3],'d'))] ) #wrong dimension
 
         gateset2 = pygsti.construction.build_gateset( [2], [('Q0',)],['Gi','Gx','Gy'],
                                                       [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"])
