@@ -738,7 +738,7 @@ def merge_latex_template(qtys, templateFilename, outputFilename,
 
     #render quantities as LaTeX within dir where report will be compiled
     cwd = _os.getcwd()
-    _os.chdir(output_dir)
+    if len(output_dir) > 0: _os.chdir(output_dir)
     try:
         fig_dir = output_base + "_files" #figure directory relative to output_dir
         if not _os.path.isdir(fig_dir):

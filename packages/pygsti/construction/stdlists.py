@@ -50,7 +50,7 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
     ----------
     gateLabelSrc : list or GateSet
         List of gate labels to determine needed LGST strings.  If a GateSet,
-        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        then the gate set's gate and instrument labels are used. Only
         relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
@@ -144,7 +144,8 @@ def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList
                        + "")
 
     if isinstance(gateLabelSrc, _GateSet):
-        gateLabels = list(gateLabelSrc.gates.keys())
+        gateLabels = list(gateLabelSrc.gates.keys()) + \
+                     list(gateLabelSrc.instruments.keys())
     else: gateLabels = gateLabelSrc
 
     lgst_list = _gsc.list_lgst_gatestrings(prepStrs, effectStrs, gateLabels)
@@ -261,7 +262,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
     ----------
     gateLabelSrc : list or GateSet
         List of gate labels to determine needed LGST strings.  If a GateSet,
-        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        then the gate set's gate and instrument labels are used. Only
         relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
@@ -384,7 +385,8 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                        + "")
 
     if isinstance(gateLabelSrc, _GateSet):
-        gateLabels = list(gateLabelSrc.gates.keys())
+        gateLabels = list(gateLabelSrc.gates.keys()) + \
+                     list(gateLabelSrc.instruments.keys())
     else: gateLabels = gateLabelSrc
 
     lgst_list = _gsc.list_lgst_gatestrings(prepStrs, effectStrs, gateLabels)
@@ -530,7 +532,7 @@ def make_lsgst_experiment_list(gateLabelSrc, prepStrs, effectStrs, germList,
     ----------
     gateLabelSrc : list or GateSet
         List of gate labels to determine needed LGST strings.  If a GateSet,
-        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        then the gate set's gate and instrument labels are used. Only
         relevant when `includeLGST == True`.
 
     prepStrs : list of GateStrings
@@ -629,7 +631,7 @@ def make_elgst_lists(gateLabelSrc, germList, maxLengthList,
     ----------
     gateLabelSrc : list or GateSet
         List of gate labels to determine needed LGST strings.  If a GateSet,
-        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        then the gate set's gate and instrument labels are used. Only
         relevant when `includeLGST == True`.
 
     germList : list of GateStrings
@@ -676,7 +678,8 @@ def make_elgst_lists(gateLabelSrc, germList, maxLengthList,
         label strings.
     """
     if isinstance(gateLabelSrc, _GateSet):
-        gateLabels = list(gateLabelSrc.gates.keys())
+        gateLabels = list(gateLabelSrc.gates.keys()) + \
+                     list(gateLabelSrc.instruments.keys())
     else: gateLabels = gateLabelSrc
 
     singleGates = _gsc.gatestring_list([(g,) for g in gateLabels])
@@ -724,7 +727,7 @@ def make_elgst_experiment_list(gateLabelSrc, germList, maxLengthList,
     ----------
     gateLabelSrc : list or GateSet
         List of gate labels to determine needed LGST strings.  If a GateSet,
-        then the gate labels are extracted via `gateLabelSrc.gates.keys()`. Only
+        then the gate set's gate and instrument labels are used. Only
         relevant when `includeLGST == True`.
 
     germList : list of GateStrings

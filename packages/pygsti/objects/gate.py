@@ -2464,12 +2464,14 @@ class LindbladBase(object):
             bsH = len(self.hamGens)+1 #projection-basis size (not nec. == d2)
             _gt._assert_shape(self.hamGens, (bsH-1,d2,d2), self.sparse)
 
+            # apply basis change now, so we don't need to do so repeatedly later
             if self.sparse:
-                # apply basis change now, so we don't need to do so repeatedly later
                 self.hamGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
                                               inplace=True, check=True) for mx in self.hamGens ]
                 for mx in self.hamGens: mx.sort_indices()
-                # for faster addition ops in _construct_errgen
+                  # for faster addition ops in _construct_errgen
+            else:
+                self.hamGens = _np.einsum("ik,akl,lj->aij", self.leftTrans, self.hamGens, self.rightTrans)
             
             assert(_np.isclose(_np.linalg.norm(hamC.imag),0)), \
                 "Hamiltoian coeffs are not all real!"
@@ -2485,12 +2487,15 @@ class LindbladBase(object):
             if self.nonham_diagonal_only:
                 _gt._assert_shape(self.otherGens, (bsO-1,d2,d2), self.sparse)
 
+                # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    # apply basis change now, so we don't need to do so repeatedly later
                     self.otherGens = [ _mt.safereal(_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans)),
                                                     inplace=True, check=True) for mx in self.otherGens ]
                     for mx in self.hamGens: mx.sort_indices()
-                    # for faster addition ops in _construct_errgen
+                      # for faster addition ops in _construct_errgen
+                else:
+                    self.otherGens = _np.einsum("ik,akl,lj->aij", self.leftTrans, self.otherGens, self.rightTrans)
+
 
                 assert(_np.isclose(_np.linalg.norm(_np.imag(otherC)),0))
                 #assert(_np.all(_np.isreal(otherC))) #sometimes fails even when imag to machine prec
@@ -2504,13 +2509,20 @@ class LindbladBase(object):
             else:
                 _gt._assert_shape(self.otherGens, (bsO-1,bsO-1,d2,d2), self.sparse)
 
-                # for faster addition ops in _construct_errgen:
+                # apply basis change now, so we don't need to do so repeatedly later
                 if self.sparse:
-                    # apply basis change now, so we don't need to do so repeatedly later
-                    self.otherGens = [ [_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans))  #TO CHECK if complex OK...
+                    self.otherGens = [ [_mt.safedot(self.leftTrans, _mt.safedot(mx, self.rightTrans))
                                         for mx in mxRow ] for mxRow in self.otherGens ]
+                    #Note: complex OK here, as only linear combos of otherGens (like (i,j) + (j,i)
+                    # terms) need to be real
+
                     for mxRow in self.otherGens:
                         for mx in mxRow: mx.sort_indices()
+                          # for faster addition ops in _construct_errgen:
+                else:
+                    preshape = self.otherGens.shape
+                    self.otherGens = _np.einsum("ik,abkl,lj->abij", self.leftTrans,
+                                                self.otherGens, self.rightTrans)
 
                 assert(_np.isclose(_np.linalg.norm(otherC-otherC.T.conjugate())
                                    ,0)), "other coeff mx is not Hermitian!"
@@ -2738,10 +2750,11 @@ class LindbladBase(object):
                 if self.nonham_diagonal_only:
                     lnd_error_gen += _np.einsum('i,ikl', otherCoeffs, self.otherGens)
                 else:
-                    lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs, self.otherGens)
+                    lnd_error_gen += _np.einsum('ij,ijkl', otherCoeffs,
+                                                self.otherGens)
 
-            lnd_error_gen = _np.dot(self.leftTrans, _np.dot(   #REMOVE IF PRETRANS
-                lnd_error_gen, self.rightTrans)) #basis chg    #REMOVE IF PRETRANS
+            #lnd_error_gen = _np.dot(self.leftTrans, _np.dot(   #REMOVE IF PRETRANS
+            #    lnd_error_gen, self.rightTrans)) #basis chg    #REMOVE IF PRETRANS
 
         assert(_np.isclose( _mt.safenorm(lnd_error_gen,'imag'), 0))
         #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)        
@@ -3440,8 +3453,8 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
 #            return _np.take( self.base_deriv, wrtFilter, axis=1 )
 
     def _dHdp(self):
-        #return self.hamGens #PRETRANS
-        return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
+        return self.hamGens.transpose((1,2,0)) #PRETRANS
+        #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
 
     def _dOdp(self):
         bsH = self.ham_basis_size
@@ -3486,10 +3499,10 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         assert( (tr-2) in (1,2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
 
         #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
-        if tr == 3:
-            dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
-        elif tr == 4:
-            dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
+        #if tr == 3:
+        #    dOdp  = _np.einsum('lk,kna,nj->lja', self.leftTrans, dOdp, self.rightTrans)
+        #elif tr == 4:
+        #    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
         return dOdp
 
@@ -3549,10 +3562,10 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         assert( (tr-2) in (2,4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
 
         #REMOVE IF PRETRANS: before we changed basis right away (in _set_params_from_errgen)
-        if tr == 4:
-            d2Odp2  = _np.einsum('lk,knaq,nj->ljaq', self.leftTrans, d2Odp2, self.rightTrans)
-        elif tr == 6:
-            d2Odp2  = _np.einsum('lk,knabqr,nj->ljabqr', self.leftTrans, d2Odp2, self.rightTrans)
+        #if tr == 4:
+        #    d2Odp2  = _np.einsum('lk,knaq,nj->ljaq', self.leftTrans, d2Odp2, self.rightTrans)
+        #elif tr == 6:
+        #    d2Odp2  = _np.einsum('lk,knabqr,nj->ljabqr', self.leftTrans, d2Odp2, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
         return d2Odp2
 

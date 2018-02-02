@@ -18,11 +18,16 @@ reflbl  :: (alpha | digit | '_')+
 
 nop     :: '{}'
 gate    :: 'G' [ lowercase | digit | '_' ]+
+instrmt :: 'I' [ lowercase | digit | '_' ]+
+povm    :: 'M' [ lowercase | digit | '_' ]+
+prep    :: 'rho' [ lowercase | digit | '_' ]+
 strref  :: 'S' '[' reflbl ']'
 slcref  :: strref [ '[' integer ':' integer ']' ]
-expable :: gate | slcref | '(' string ')' | nop
+expable :: gate | instrmt | slcref | '(' string ')' | nop
 expdstr :: expable [ expop integer ]*
 string  :: expdstr [ [ multop ] expdstr ]*
+pstring :: [ prep ] string
+ppstring:: pstring [ povm ]
 """
 
 from ply import lex, yacc
@@ -38,6 +43,9 @@ class GateStringLexer:
         'INTEGER',
         'NOP',
         'GATE',
+        'INSTRMT',
+        'PREP',
+        'POVM',
         'REFLBL',
         'OPENBR',
         'CLOSEBR',
@@ -50,6 +58,24 @@ class GateStringLexer:
     @staticmethod
     def t_GATE(t):
         r'G[a-z0-9_]+'
+        t.value = t.value,  # make it a tuple
+        return t
+
+    @staticmethod
+    def t_INSTRMT(t):
+        r'I[a-z0-9_]+'
+        t.value = t.value,  # make it a tuple
+        return t
+
+    @staticmethod
+    def t_PREP(t):
+        r'rho[a-z0-9_]+'
+        t.value = t.value,  # make it a tuple
+        return t
+
+    @staticmethod
+    def t_POVM(t):
+        r'M[a-z0-9_]+'
         t.value = t.value,  # make it a tuple
         return t
 
@@ -103,7 +129,8 @@ class GateStringParser(object):
     def __init__(self, lexer_object=None, lookup={}):
         self._lookup = lookup
         self._lexer = lex.lex(object=lexer_object if lexer_object else GateStringLexer())
-        self._parser = yacc.yacc(module=self, start="string", debug=False, tabmodule='pygsti.baseobjs.parsetab_string')
+        self._parser = yacc.yacc(module=self, start="ppstring", debug=False,
+                                 tabmodule='pygsti.baseobjs.parsetab_string')
 
     @property
     def lookup(self):
@@ -141,6 +168,7 @@ class GateStringParser(object):
     @staticmethod
     def p_expable_single(p):
         '''expable : GATE
+                   | INSTRMT
                    | NOP '''
         p[0] = p[1]
 
@@ -174,6 +202,27 @@ class GateStringParser(object):
         '''string : string MULTOP expdstr'''
         p[0] = p[1] + p[3]  # tuple concatenation
 
+    @staticmethod
+    def p_pstring(p):
+        '''pstring : string'''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_pstring_prep(p):
+        '''pstring : PREP string'''
+        p[0] = p[1] + p[2]
+
+    @staticmethod
+    def p_ppstring(p):
+        '''ppstring : pstring'''
+        p[0] = p[1]
+
+    @staticmethod
+    def p_ppstring_povm(p):
+        '''ppstring : pstring POVM'''
+        p[0] = p[1] + p[2]
+
+        
     @staticmethod
     def p_error(p):
         message = "Syntax error"

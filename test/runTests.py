@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run tests for pygsti')
     parser.add_argument('tests', nargs='*', default=default, type=str,
                         help='list of packages to run tests for')
-    parser.add_argument('--package', type=str,
+    parser.add_argument('--package', type=str, default='pygsti',
                         help='package to test coverage for')
     parser.add_argument('--version', '-v', type=str,
                         help='version of python to run the tests under')

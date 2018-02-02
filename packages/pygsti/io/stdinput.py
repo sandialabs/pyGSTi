@@ -358,7 +358,7 @@ class StdInputParser(object):
             for outcomeLabel,iCol in countCols:
                 if colValues[iCol] == '--': continue #skip blank sentinels
                 if colValues[iCol] > 0 and colValues[iCol] < 1:
-                    raise ValueError("Count column (%d) contains value(s) " % iCol +
+                    _warnings.warn("Count column (%d) contains value(s) " % iCol +
                                      "between 0 and 1 - could this be a frequency?")
                 assert(not isinstance(colValues[iCol],tuple)), \
                     "Expanded-format count not allowed with column-key header"
@@ -367,7 +367,7 @@ class StdInputParser(object):
             for outcomeLabel,iCol,iTotCol in freqCols:
                 if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue #skip blank sentinels
                 if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                    raise ValueError("Frequency column (%d) contains value(s) " % iCol +
+                    _warnings.warn("Frequency column (%d) contains value(s) " % iCol +
                                      "outside of [0,1.0] interval - could this be a count?")
                 assert(not isinstance(colValues[iTotCol],tuple)), \
                     "Expanded-format count not allowed with column-key header"
