@@ -84,7 +84,7 @@ def convert(povm, toType, basis):
     if toType in ("full","static"):
         converted_effects = [ (lbl,_sv.convert(vec, toType, basis))
                               for lbl,vec in povm.items() ]
-        return POVM(converted_effects)
+        return UnconstrainedPOVM(converted_effects)
 
     elif toType == "TP":
         if isinstance(povm, TPPOVM):
@@ -180,6 +180,55 @@ class _BasePOVM(POVM):
             items.append( (self.complement_label, complement_effect) )
 
         super(_BasePOVM, self).__init__(dim, items)
+        
+
+    def _reset_member_gpindices(self):
+        """ 
+        Sets gpindices for all non-complement items.  Assumes all non-complement
+        vectors have *independent* parameters (for now).
+        """
+        Np = 0
+        for k,effect in self.items():
+            if k == self.complement_label: continue
+            N = effect.num_params()
+            pslc = slice(Np,Np+N)
+            if effect.gpindices != pslc:
+                effect.set_gpindices(pslc,self)
+            Np += N
+        self.Np = Np
+
+
+    def _rebuild_complement(self, identity_for_complement=None):
+        """ Rebuild complement vector (in case other vectors have changed) """
+        
+        if self.complement_label is not None and self.complement_label in self:
+            non_comp_effects = [ v for k,v in self.items()
+                                 if k != self.complement_label ]
+            
+            if identity_for_complement is None:
+                identity_for_complement = self[self.complement_label].identity
+                
+            complement_effect = _sv.ComplementSPAMVec(
+                identity_for_complement, non_comp_effects)
+            complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
+
+            #Assign new complement effect without calling our __setitem__
+            old_ro = self._readonly; self._readonly = False
+            POVM.__setitem__(self, self.complement_label, complement_effect)
+            self._readonly = old_ro
+
+            
+    def __setitem__(self, key, value):
+        if not self._readonly: # when readonly == False, we're initializing
+            return super(_BasePOVM,self).__setitem__(key,value)
+
+        if key == self.complement_label:
+            raise KeyError("Cannot directly assign the complement effect vector!")
+        value = value.copy() if isinstance(value,_sv.SPAMVec) else \
+                _sv.FullyParameterizedSPAMVec(value)
+        _collections.OrderedDict.__setitem__(self, key, value)
+        self._reset_member_gpindices()
+        self._rebuild_complement()
 
         
     def compile_effects(self, prefix=""):
