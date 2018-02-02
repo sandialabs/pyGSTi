@@ -18,6 +18,7 @@ from ..tools import matrixtools as _mt
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
 from . import gate as _gate
+from . import labeldicts as _ld
 
 _dummy_profiler = _DummyProfiler()
 
@@ -793,7 +794,7 @@ class GateCalc(object):
             probs[SL] = pr(SL,gatestring,clipTo)
             for each spam label (string) SL.
         """
-        probs = { }
+        probs = _ld.OutcomeLabelDict()
         raw_dict, outcomeLbls = compiled_gatestring
         iOut = 0 #outcome index
         for raw_gatestring, spamTuples in raw_dict.items():
