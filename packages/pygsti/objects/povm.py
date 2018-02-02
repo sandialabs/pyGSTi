@@ -456,6 +456,13 @@ class TPPOVM(BasePOVM):
         effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
         return self._copy_gpindices(TPPOVM(effects), parent)
 
+    def __str__(self):
+        s = "TP-POVM with effect vectors:\n"
+        for lbl,effect in self.items():
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
+        return s
+
+
 
 class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
     """ 
@@ -655,7 +662,7 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
         return self._copy_gpindices( TensorProdPOVM(self.factorPOVMs), parent )
 
     def __str__(self):
-        s = "POVM with effect labels:\n"
+        s = "Tensor-product POVM with effect labels:\n"
         s += ", ".join(self.keys()) + "\n"
         s += " Effects (one per column):\n"
         s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
