@@ -39,6 +39,7 @@ from .spamvec import StaticSPAMVec
 from .spamvec import TensorProdSPAMVec
 from .povm import POVM
 from .povm import TPPOVM
+from .povm import UnconstrainedPOVM
 from .povm import TensorProdPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument

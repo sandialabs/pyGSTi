@@ -435,7 +435,7 @@ class GateSet(object):
                 effect_vecs.append( (comp_lbl, comp_vec) )
                 self.povms['Mdefault'] = _povm.TPPOVM(effect_vecs)
             else:
-                self.povms['Mdefault'] = _povm.POVM(effect_vecs)
+                self.povms['Mdefault'] = _povm.UnconstrainedPOVM(effect_vecs)
             
 
         else:
@@ -3076,7 +3076,7 @@ class GateSet(object):
             if isinstance(povm, _povm.TPPOVM):
                 new_gateset.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_gateset.povms[lbl] = _povm.POVM(effects) #everything else
+                new_gateset.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for gateLabel,gate in self.gates.items():
@@ -3137,7 +3137,7 @@ class GateSet(object):
             if isinstance(povm, _povm.TPPOVM):
                 new_gateset.povms[lbl] = _povm.TPPOVM(effects)
             else:
-                new_gateset.povms[lbl] = _povm.POVM(effects) #everything else
+                new_gateset.povms[lbl] = _povm.UnconstrainedPOVM(effects) #everything else
 
             
         #Decrease dimension of gates by truncation

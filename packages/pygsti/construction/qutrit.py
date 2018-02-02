@@ -183,9 +183,9 @@ def make_qutrit_gateset(errorScale, Xangle = _np.pi/2, Yangle = _np.pi/2,
 
     qutritGS = _objs.GateSet()
     qutritGS.preps['rho0'] = rho0final
-    qutritGS.povms['Mdefault'] = _objs.POVM( [('0bright',E0final),
-                                              ('1bright',E1final),
-                                              ('2bright',E2final)] )
+    qutritGS.povms['Mdefault'] = _objs.UnconstrainedPOVM([('0bright',E0final),
+                                                          ('1bright',E1final),
+                                                          ('2bright',E2final)] )
     qutritGS.gates['Gi'] = _objs.FullyParameterizedGate(arrType(gateISOfinal))
     qutritGS.gates['Gx'] = _objs.FullyParameterizedGate(arrType(gateXSOfinal))
     qutritGS.gates['Gy'] = _objs.FullyParameterizedGate(arrType(gateYSOfinal))

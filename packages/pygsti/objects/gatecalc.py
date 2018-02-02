@@ -183,7 +183,7 @@ class GateCalc(object):
             #for povmlbl,povm in self.povms.items():
             #    if isinstance(povm, _povm.TPPOVM):
             #        effects_wout_comp = [ (lbl,E) for lbl,E in povm.items() if lbl != povm.complement_label ]
-            #        newSelf.povms[povmlbl] = _povm.POVM( effects_wout_comp )
+            #        newSelf.povms[povmlbl] = _povm.UnconstrainedPOVM( effects_wout_comp )
 
         
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
@@ -210,7 +210,7 @@ class GateCalc(object):
         #for prepLabel in self.preps:
         #    gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
         #for povmLabel,povm in self.povms.items():
-        #    gsDeriv.povms[povmLabel] = _povm.POVM(
+        #    gsDeriv.povms[povmLabel] = _povm.UnconstrainedPOVM(
         #        [ (eLbl, _np.zeros((dim,1),'d')) for eLbl in povm.keys()] )
 
         gsDeriv_gates = _collections.OrderedDict(
@@ -230,7 +230,7 @@ class GateCalc(object):
                     gsDeriv_effects[lbl] = -_np.dot(EVec.toarray().T, unitMx).T
                 #OLD
                 #for lbl,povm in self.povms.items():
-                #    gsDeriv.povms[lbl] = _povm.POVM(
+                #    gsDeriv.povms[lbl] = _povm.UnconstrainedPOVM(
                 #        [(l,-_np.dot(EVec.T, unitMx).T) for l,EVec in povm.items()])
                 for lbl,gate in self.gates.items():
                     #if isinstance(gate,_gate.GateMatrix):
