@@ -743,7 +743,7 @@ def read_gateset(filename):
         multiple objects.
         """
         if cur_group_typ == "POVM":
-            gs.povms[cur_group] = _objs.POVM( cur_group_info['effects'] )
+            gs.povms[cur_group] = _objs.UnconstrainedPOVM( cur_group_info['effects'] )
         elif cur_group_typ == "TP-POVM":
             assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
             gs.povms[cur_group] = _objs.TPPOVM( cur_group_info['effects'] )

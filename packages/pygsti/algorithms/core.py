@@ -221,7 +221,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                 EVec[0,i] = dsRow.fraction( (effectLabel,) ) #outcome labels should just be effect labels (no instruments!)
             EVec_p = _np.dot( _np.dot(EVec, Vd), Pj ) #truncate Evec => Evec', shape (1,trunc)
             povm_effects.append( (effectLabel, _np.transpose(EVec_p)) )
-        lgstGateset.povms[povmLabel] = _objs.POVM( povm_effects ) 
+        lgstGateset.povms[povmLabel] = _objs.UnconstrainedPOVM( povm_effects ) 
           # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
@@ -333,7 +333,7 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
                             new_vec = EVec.copy()
                             _objs.spamvec.optimize_spamvec( new_vec, lgstGateset.povms[povmLabel][effectLabel])
                             new_effects.append( (effectLabel,new_vec) )                            
-                        lgstGateset.povms[povmLabel] = _objs.POVM( new_effects )
+                        lgstGateset.povms[povmLabel] = _objs.UnconstrainedPOVM( new_effects )
 
                     lgstGateset._check_paramvec()
 
@@ -474,7 +474,7 @@ def _constructB(prepStrs, gs):
         basis_E = _np.zeros( (dim,1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    gs.povms['M_LGST_tmp_povm'] = _objs.POVM(
+    gs.povms['M_LGST_tmp_povm'] = _objs.UnconstrainedPOVM(
         [("E%d"%i,E) for i,E in enumerate(basis_Es)] )
 
     for k,rhostr in enumerate(prepStrs):
@@ -652,8 +652,9 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
     for prepLabel,rhoVec in gs.preps.items():
         gs.preps[prepLabel] = _objs.StaticSPAMVec(rhoVec)
     for povmLabel,povm in gs.povms.items():
-        gs.povms[povmLabel] = _objs.POVM( [ (lbl, _objs.StaticSPAMVec(E))
-                                            for lbl,E in povm.items() ] )
+        gs.povms[povmLabel] = _objs.UnconstrainedPOVM(
+            [ (lbl, _objs.StaticSPAMVec(E))
+              for lbl,E in povm.items() ] )
 
     printer.log("--- eLGST (least squares) ---", 1)
 

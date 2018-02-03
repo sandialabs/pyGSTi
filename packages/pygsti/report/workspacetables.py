@@ -2130,8 +2130,9 @@ class MetadataTable(WorkspaceTable):
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
 
         for povmlbl, povm in gateset.povms.items():
-            if isinstance(povm, _objs.POVM): paramTyp = "unconstrained"
+            if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
             elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
+            elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
             else: paramTyp = "unknown"
             table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
 

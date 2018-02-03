@@ -954,7 +954,7 @@ def basis_build_gateset(stateSpaceLabels, basis,
         if defP == "TP":
             ret.povms[povmLbl] = _povm.TPPOVM(effects)
         else:
-            ret.povms[povmLbl] = _povm.POVM(effects)
+            ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
 
     for (gateLabel,gateExpr) in zip(gateLabels, gateExpressions):
         ret.gates[gateLabel] = basis_build_gate(stateSpaceLabels,

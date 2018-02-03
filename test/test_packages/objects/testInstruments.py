@@ -35,7 +35,7 @@ class InstrumentTestCase(BaseTestCase):
         Uerr = pygsti.rotation_gate_mx([0,0.02,0]) # input angles are halved by the method
         E = np.dot(gs.povms['Mdefault']['0'].T,Uerr).T # effect is stored as column vector
         Erem = self.povm_ident - E
-        gs.povms['Mdefault'] = pygsti.obj.POVM({'0': E, '1': Erem})
+        gs.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': E, '1': Erem})
         
         # Now add the post-measurement gates from the vector E0 and remainder = id-E0
         Gmz_plus = np.dot(E,E.T) #since E0 is stored internally as column spamvec

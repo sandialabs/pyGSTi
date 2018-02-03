@@ -376,7 +376,7 @@ def _contractToValidSPAM(gateset, verbosity=0):
                 scaled_effects = []
                 for ELabel,EVec in gs.povms[povmLbl].items():
                     scaled_effects.append( (ELabel, EVec / r) )
-                gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
+                gs.povms[povmLbl] = _objs.UnconstrainedPOVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
         mx = _tools.ppvec_to_stdmx(vec)
 
@@ -412,7 +412,7 @@ def _contractToValidSPAM(gateset, verbosity=0):
             else:
                 scaled_effects.append( (ELabel,EVec) ) #no scaling
                 
-        gs.povms[povmLbl] = _objs.POVM( scaled_effects ) #Note: always creates an unconstrained POVM
+        gs.povms[povmLbl] = _objs.UnconstrainedPOVM( scaled_effects ) #Note: always creates an unconstrained POVM
 
     #gs.log("Contract to valid SPAM")
     #printer.log('', 2)

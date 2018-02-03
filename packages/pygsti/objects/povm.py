@@ -64,7 +64,7 @@ def convert(povm, toType, basis):
 
     Parameters
     ----------
-    povm : BasePOVM
+    povm : POVM
         POVM to convert
 
     toType : {"full","TP","static"}
@@ -84,7 +84,7 @@ def convert(povm, toType, basis):
     if toType in ("full","static"):
         converted_effects = [ (lbl,_sv.convert(vec, toType, basis))
                               for lbl,vec in povm.items() ]
-        return POVM(converted_effects)
+        return UnconstrainedPOVM(converted_effects)
 
     elif toType == "TP":
         if isinstance(povm, TPPOVM):
@@ -97,14 +97,31 @@ def convert(povm, toType, basis):
         raise ValueError("Invalid toType argument: %s" % toType)
 
 
-
-class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
+class POVM(_gm.GateSetMember, _collections.OrderedDict):
     """ 
     Meant to correspond to a  positive operator-valued measure,
     in theory, this class generalizes that notion slightly to
     include a collection of effect vectors that may or may not
     have all of the properties associated by a mathematical POVM.
     """
+    def __init__(self, dim, items=[]):
+        self._readonly = False #until init is done
+        _collections.OrderedDict.__init__(self, items)
+        _gm.GateSetMember.__init__(self, dim)
+        self._readonly = True
+        assert(self.dim == dim)
+
+    def __setitem__(self, key, value):
+        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        else: return _collections.OrderedDict.__setitem__(self, key, value)
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
+
+
+
+class _BasePOVM(POVM):
+    """ The base behavior for both UnconstrainedPOVM and TPPOVM """
     def __init__(self, effects, preserve_sum=False):
         """
         Creates a new BasePOVM object.
@@ -121,7 +138,6 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
         """
         dim = None
         self.Np = 0
-        self._readonly = False #until init is done
         
         if isinstance(effects,dict):
             items = [(k,v) for k,v in effects.items()] #gives definite ordering of effects
@@ -163,38 +179,58 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
             complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
             items.append( (self.complement_label, complement_effect) )
 
-        _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim)
-        self._readonly = True
-        assert(self.dim == dim)
+        super(_BasePOVM, self).__init__(dim, items)
+        
 
-        
-    def __setitem__(self, key, value):
-        if self._readonly: raise ValueError("Cannot alter POVM elements")
-        else: return _collections.OrderedDict.__setitem__(self, key, value)
+    def _reset_member_gpindices(self):
+        """ 
+        Sets gpindices for all non-complement items.  Assumes all non-complement
+        vectors have *independent* parameters (for now).
+        """
+        Np = 0
+        for k,effect in self.items():
+            if k == self.complement_label: continue
+            N = effect.num_params()
+            pslc = slice(Np,Np+N)
+            if effect.gpindices != pslc:
+                effect.set_gpindices(pslc,self)
+            Np += N
+        self.Np = Np
 
+
+    def _rebuild_complement(self, identity_for_complement=None):
+        """ Rebuild complement vector (in case other vectors have changed) """
         
-    def __reduce__(self):
-        """ Needed for OrderedDict-derived classes (to set dict items) """
-        effects = [ (lbl,effect) for lbl,effect in self.items()
-                    if lbl != self.complement_label ]
-        
-        if self.complement_label is not None:
-            #add complement effect as a std numpy array - it will get
-            # re-created correctly by __init__ w/preserve_sum == True
-            effects.append( (self.complement_label,
-                             _np.array(self[self.complement_label])) )
-            preserve_sum = True
-        else:
-            preserve_sum = False
+        if self.complement_label is not None and self.complement_label in self:
+            non_comp_effects = [ v for k,v in self.items()
+                                 if k != self.complement_label ]
             
-        return (BasePOVM, (effects, preserve_sum),
-                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+            if identity_for_complement is None:
+                identity_for_complement = self[self.complement_label].identity
+                
+            complement_effect = _sv.ComplementSPAMVec(
+                identity_for_complement, non_comp_effects)
+            complement_effect.set_gpindices(slice(0,self.Np), self) #all parameters
 
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+            #Assign new complement effect without calling our __setitem__
+            old_ro = self._readonly; self._readonly = False
+            POVM.__setitem__(self, self.complement_label, complement_effect)
+            self._readonly = old_ro
 
+            
+    def __setitem__(self, key, value):
+        if not self._readonly: # when readonly == False, we're initializing
+            return super(_BasePOVM,self).__setitem__(key,value)
 
+        if key == self.complement_label:
+            raise KeyError("Cannot directly assign the complement effect vector!")
+        value = value.copy() if isinstance(value,_sv.SPAMVec) else \
+                _sv.FullyParameterizedSPAMVec(value)
+        _collections.OrderedDict.__setitem__(self, key, value)
+        self._reset_member_gpindices()
+        self._rebuild_complement()
+
+        
     def compile_effects(self, prefix=""):
         """
         Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
@@ -339,31 +375,10 @@ class BasePOVM(_gm.GateSetMember, _collections.OrderedDict):
         -------
         int
         """
-        return sum([ E.size for E in self.values() ])
-        
-    def copy(self, parent=None):
-        """
-        Copy this POVM.
-
-        Returns
-        -------
-        BasePOVM
-            A copy of this POVM
-        """
-        effects = [ (k,v.copy()) for k,v in self.items() if k != self.complement_label]
-        if self.complement_label is not None: #don't copy ComplementSPAMVec
-            effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
-        return self._copy_gpindices(
-            BasePOVM(effects, bool(self.complement_label is not None)), parent)
-
-    def __str__(self):
-        s = "POVM with effect vectors:\n"
-        for lbl,effect in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
-        return s
+        return sum([ E.size for E in self.values() ])    
 
 
-class POVM(BasePOVM):
+class UnconstrainedPOVM(_BasePOVM):
     """ 
     An unconstrained POVM that just holds a set of effect vectors,
     parameterized individually however you want.
@@ -377,17 +392,7 @@ class POVM(BasePOVM):
         effects : dict of SPAMVecs or array-like
             A dict (or list of key,value pairs) of the effect vectors.
         """
-        super(POVM,self).__init__(effects, preserve_sum=False)
-
-
-    def __reduce__(self):
-        """ Needed for OrderedDict-derived classes (to set dict items) """
-        assert(self.complement_label is None)
-        effects = [ (lbl,effect) for lbl,effect in self.items()]
-        return (POVM, (effects,), {'_gpindices': self._gpindices} )
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
+        super(UnconstrainedPOVM,self).__init__(effects, preserve_sum=False)
 
 
     def copy(self, parent=None):
@@ -400,11 +405,23 @@ class POVM(BasePOVM):
             A copy of this POVM
         """
         effects = [ (k,v.copy()) for k,v in self.items() ]
-        return self._copy_gpindices(POVM(effects), parent)
+        return self._copy_gpindices(UnconstrainedPOVM(effects), parent)
+
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        assert(self.complement_label is None)
+        effects = [ (lbl,effect) for lbl,effect in self.items()]
+        return (UnconstrainedPOVM, (effects,), {'_gpindices': self._gpindices} )
+
+    def __str__(self):
+        s = "Unconstrained POVM with effect vectors:\n"
+        for lbl,effect in self.items():
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
+        return s
 
 
 
-class TPPOVM(BasePOVM):
+class TPPOVM(_BasePOVM):
     """ 
     An POVM whose sum-of-effects is constrained to what, by definition,
     we call the "identity".
@@ -424,23 +441,7 @@ class TPPOVM(BasePOVM):
             `effects` when this __init__ call is made.
         """
         super(TPPOVM,self).__init__(effects, preserve_sum=True)
-
-    def __reduce__(self):
-        """ Needed for OrderedDict-derived classes (to set dict items) """
-        assert(self.complement_label is not None)
-        effects = [ (lbl,effect) for lbl,effect in self.items()
-                    if lbl != self.complement_label ]
-
-        #add complement effect as a std numpy array - it will get
-        # re-created correctly by __init__ w/preserve_sum == True
-        effects.append( (self.complement_label,
-                         _np.array(self[self.complement_label])) )
-            
-        return (TPPOVM, (effects,), {'_gpindices': self._gpindices} )
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
-
+        
     
     def copy(self, parent=None):
         """
@@ -456,6 +457,19 @@ class TPPOVM(BasePOVM):
         effects.append( (self.complement_label, _np.array(self[self.complement_label])) )
         return self._copy_gpindices(TPPOVM(effects), parent)
 
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        assert(self.complement_label is not None)
+        effects = [ (lbl,effect) for lbl,effect in self.items()
+                    if lbl != self.complement_label ]
+
+        #add complement effect as a std numpy array - it will get
+        # re-created correctly by __init__ w/preserve_sum == True
+        effects.append( (self.complement_label,
+                         _np.array(self[self.complement_label])) )
+            
+        return (TPPOVM, (effects,), {'_gpindices': self._gpindices} )
+
     def __str__(self):
         s = "TP-POVM with effect vectors:\n"
         for lbl,effect in self.items():
@@ -464,7 +478,7 @@ class TPPOVM(BasePOVM):
 
 
 
-class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
+class TensorProdPOVM(POVM):
     """ 
     A POVM that is effectively the tensor product of several other
     POVMs (which can be TP).
@@ -479,7 +493,6 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
             POVMs that will be tensor-producted together.
         """
         dim = _np.product( [povm.dim for povm in factorPOVMs ] )
-        self._readonly = False #until init is done
 
         # self.factorPOVMs
         #  Copy each POVM and set it's parent and gpindices.
@@ -495,26 +508,13 @@ class TensorProdPOVM(_gm.GateSetMember, _collections.OrderedDict):
         for el in _itertools.product(*effectLabelKeys):
             effect = _sv.TensorProdSPAMVec('effect',self.factorPOVMs, el) #infers parent & gpindices from factorPOVMs
             items.append( ("".join(el), effect) )
-            
-        _collections.OrderedDict.__init__(self, items)
-        _gm.GateSetMember.__init__(self, dim)
-        self._readonly = True
 
+        super(TensorProdPOVM, self).__init__(dim, items)
 
-    #Move to BASE
-    def __setitem__(self, key, value):
-        if self._readonly: raise ValueError("Cannot alter POVM elements")
-        else: return _collections.OrderedDict.__setitem__(self, key, value)
-
-
-    #Move to BASE
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         return (TensorProdPOVM, (self.factorPOVMs,),
                 {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
-
-    def __pygsti_reduce__(self):
-        return self.__reduce__()
 
 
     def compile_effects(self, prefix=""):

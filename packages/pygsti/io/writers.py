@@ -262,7 +262,7 @@ def write_gateset(gs,filename,title=None):
             output.write("\n")
 
         for povmLabel,povm in gs.povms.items():
-            if isinstance(povm, _objs.POVM): povmType = "POVM"
+            if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
             elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
             else:
                 _warnings.warn(
