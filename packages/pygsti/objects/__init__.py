@@ -17,6 +17,7 @@ from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
 from .gate import Gate
 from .gate import GateMatrix
+from .gate import GateMap
 from .gate import LinearlyParameterizedGate
 from .gate import FullyParameterizedGate
 from .gate import TPParameterizedGate
@@ -50,7 +51,6 @@ from .gatestring import WeightedGateString
 from .gatestringstructure import GatestringStructure
 from .gatestringstructure import LsGermsStructure
 from .multidataset import MultiDataSet
-from .spamspec import SpamSpec
 from .datacomparator import DataComparator
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement

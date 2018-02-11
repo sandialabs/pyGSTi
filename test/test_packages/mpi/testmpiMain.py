@@ -2,6 +2,7 @@ import unittest
 import itertools
 import time
 import sys
+import pickle
 import numpy as np
 from .mpinoseutils import *
 
@@ -679,6 +680,18 @@ def test_MPI_gatestrings_chi2(comm):
 
 
 @mpitest(4)
+def test_MPI_gaugeopt(comm):
+    #Gauge Opt to Target
+    gs_other = std.gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
+    gs_other['Gx'].rotate( (0,0,0.01) )
+    gs_other['Gy'].rotate( (0,0,0.01) )
+    gs_gopt = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, comm=comm)
+
+    #use a method that isn't parallelized with non-None comm (warning is given)
+    gs_gopt_slow = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, method="BFGS", comm=comm)
+
+
+@mpitest(4)
 def test_MPI_gatestrings_logl(comm):
     #Create dataset for serial and parallel runs
     ds,lsgstStrings = create_fake_dataset(comm)
@@ -738,7 +751,15 @@ def test_run1Q_end2end(comm):
                                                 nSamples=1000,
                                                 sampleError="binomial",
                                                 seed=1234, comm=comm)
-    
+    if comm.Get_rank() == 0:
+        pickle.dump(ds, open("mpi_dataset.pkl","wb"))
+    comm.barrier() #to make sure dataset file is written
+
+    #test with pkl file - should only read in on rank0 then broadcast
+    results = pygsti.do_long_sequence_gst("mpi_dataset.pkl", gs_target, fiducials, fiducials,
+                                          germs, [1], comm=comm)
+
+    #test with dataset object
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
     

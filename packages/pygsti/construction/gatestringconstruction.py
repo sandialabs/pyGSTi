@@ -13,8 +13,6 @@ import numpy.random as _rndm
 from ..tools import listtools as _lt
 from ..tools import compattools as _compat
 from ..objects import gatestring as _gs
-from .spamspecconstruction import get_spam_strs as _get_spam_strs
-
 
 def _runExpression(str_expression, myLocals):
     exec( "result = " + str_expression, {"__builtins__": None}, myLocals )

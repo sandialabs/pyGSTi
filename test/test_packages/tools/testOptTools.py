@@ -4,7 +4,7 @@ import numpy as np
 import scipy
 import pygsti
 
-from pygsti.tools import cache_by_hashed_args, timed_block
+from pygsti.tools import cache_by_hashed_args, timed_block, time_hash
 
 from collections import defaultdict
 from functools import partial
@@ -25,8 +25,8 @@ class OptToolsBaseTestCase(BaseTestCase):
         def process_kwargs(**kwargs):
             return ' '.join(str(k) + str(v) for k, v in kwargs.items())
 
-        with self.assertRaises(ValueError):
-            process_kwargs(foo='bar')
+        #OLD: self.assertRaises(ValueError):
+        self.assertWarns(process_kwargs,foo='bar')
 
         @cache_by_hashed_args
         def takes_dictionary(dictionary):
@@ -41,6 +41,14 @@ class OptToolsBaseTestCase(BaseTestCase):
         timeDict = defaultdict(list)
         with timed_block('100th fibonacci', timeDict): # Duration saved to dict under label "100th fibonacci"
             print(fib(100))
+
+        #test "preMessage" argument
+        with timed_block('40th fibonacci', preMessage="Hello"):
+            print(fib(40))
+
+    def test_time_hash(self):
+        x = time_hash()
+
 
 
 

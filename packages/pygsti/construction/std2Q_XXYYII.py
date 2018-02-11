@@ -11,7 +11,6 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
-from . import spamspecconstruction as _spamc
 from collections import OrderedDict as _OrderedDict
 
 description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, X(pi/2)*X(pi/2), Y(pi/2)*Y(pi/2), X(pi/2)*Y(pi/2), and Y(pi/2)*X(pi/2) gates"

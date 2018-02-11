@@ -175,6 +175,8 @@ class TestReport(ReportBaseCase):
 
         with self.assertRaises(ValueError):
             latex(rank3Tensor, specs)
+        
+        
 
 #Test functions within reportables separately? This version of the test is outdated:
 #    def test_reportables(self):

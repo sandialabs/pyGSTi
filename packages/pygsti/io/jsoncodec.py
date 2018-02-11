@@ -47,7 +47,6 @@ def encode_obj(py_obj, binary):
     object
         A JSON-format compatible object.  Usually a dict, list, or string.
     """
-    #print("DB: encoding type ", type(py_obj)) #DEBUG
     is_pygsti_obj = hasattr(py_obj,'__class__') and \
                     hasattr(py_obj.__class__,'__module__') and \
                     py_obj.__class__.__module__.startswith('pygsti')
@@ -158,7 +157,9 @@ def encode_std_obj(py_obj, binary):
     elif isinstance(py_obj, _uuid.UUID):
         return {'__uuid__': str(py_obj.hex) }
     elif isinstance(py_obj, complex):
-        return  {'__complex__': py_obj.__repr__()}
+        rep = py_obj.__repr__() # a string
+        data = tobin(rep) if binary else rep # binary if need be
+        return  {'__complex__': data}
     elif not binary and isinstance(py_obj, bytes):
         return {'__bytes__': tostr(_base64.b64encode(py_obj)) }
     elif binary and isinstance(py_obj, str):
@@ -332,7 +333,7 @@ def decode_std_obj(json_obj, binary):
     elif B('__odict__') in json_obj:
         return _collections.OrderedDict(
             [(decode_obj(k,binary),decode_obj(v,binary)) for k,v in json_obj[B('__odict__')]])
-    elif B('__odict__') in json_obj:
+    elif B('__counter__') in json_obj:
         return _collections.Counter(
             {decode_obj(k,binary): decode_obj(v,binary) for k,v in json_obj[B('__counter__')]})
     elif B('__uuid__') in json_obj:
@@ -363,14 +364,13 @@ def decode_std_obj(json_obj, binary):
             data, dtype=_np.dtype(json_obj[B('dtype')])
         )[0]
     elif B('__complex__') in json_obj:
-        return complex(json_obj[B('__complex__')])
-
+        return complex(tostr(json_obj[B('__complex__')]))
     elif B('__function__') in json_obj:
         modname, fnname = json_obj[B('__function__')]
         module = _importlib.import_module(tostr(modname))
         return getattr(module, tostr(fnname))
     
-    return json_obj
+
 
 def tostr(x):
     """

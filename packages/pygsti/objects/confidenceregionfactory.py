@@ -106,7 +106,7 @@ class ConfidenceRegionFactory(object):
         del to_pickle['parent']
 
         # *don't* pickle any Comm objects
-        if self.linresponse_mlgst_params and self.linresponse_mlgst_params.has_key("comm"):
+        if self.linresponse_mlgst_params and "comm" in self.linresponse_mlgst_params:
             del self.linresponse_mlgst_params['comm'] # one *cannot* pickle Comm objects
 
         return to_pickle
@@ -397,6 +397,11 @@ class ConfidenceRegionFactory(object):
             'gateLabelAliases': aliases
             }
 
+        #Count everything as non-gauge? TODO BETTER
+        self.nNonGaugeParams = self.get_gateset().num_params()
+        self.nGaugeParams = 0
+
+
 
     def view(self, confidenceLevel, regionType='normal',
              hessian_projection_label=None):
@@ -443,7 +448,9 @@ class ConfidenceRegionFactory(object):
             inv_hessian_projection = self.inv_hessian_projections[hessian_projection_label]
         else:
             assert(self.linresponse_mlgst_params is not None), \
-            "Must either compute & project a Hessian matrix or enable linear response parameters"
+                "Must either compute & project a Hessian matrix or enable linear response parameters"
+            assert(hessian_projection_label is None), \
+                "Must set `hessian_projection_label` to None when using linear-response error bars"
             linresponse_mlgst_params = self.linresponse_mlgst_params
 
         #Compute the non-Markovian "radius" if required
@@ -700,7 +707,7 @@ class ConfidenceRegionFactoryView(object):
     def __getstate__(self):
         # *don't* pickle any Comm objects
         to_pickle = self.__dict__.copy()
-        if self.mlgst_params and self.mlgst_params.has_key("comm"):
+        if self.mlgst_params and "comm" in self.mlgst_params:
             del self.mlgst_params['comm'] # one *cannot* pickle Comm objects
         return to_pickle
         
@@ -871,7 +878,7 @@ class ConfidenceRegionFactoryView(object):
         from .. import algorithms as _alg
         assert(self.mlgst_params is not None)
 
-        if hasattr(f0,'dtype') and f0.dtype == _np.dtype("complex"):
+        if isinstance(f0,complex) or (hasattr(f0,'dtype') and f0.dtype == _np.dtype("complex")):
             raise NotImplementedError("Can't handle complex-valued functions yet")
 
         if hasattr(f0,'shape') and len(f0.shape) > 2:
@@ -934,6 +941,10 @@ class ConfidenceRegionFactoryView(object):
             #print "HERE: taking sqrt(abs(%s))" % arg
 
             df = _np.sqrt( abs(_np.dot(gradFdag, _np.dot(self.invRegionQuadcForm, gradF))) )
+        elif isinstance(f0,complex):
+            gradFdag = _np.transpose(gradF) #conjugate?
+            df = _np.sqrt( abs(_np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real))) ) \
+                 + 1j* _np.sqrt( abs(_np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))) )
         else:
             fDims = len(f0.shape)
             gradF = _np.rollaxis(gradF, 0, 1+fDims) # roll parameter axis to be the last index, preceded by f-shape
@@ -941,18 +952,18 @@ class ConfidenceRegionFactoryView(object):
 
             if f0.dtype == _np.dtype("complex"): #real and imaginary parts separately
                 if fDims == 0: #same as float case above
-                    gradFdag = _np.transpose(gradF)
+                    gradFdag = _np.transpose(gradF) #conjugate?
                     df = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF.real))) ) \
                         + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF.imag))) )
                 elif fDims == 1:
                     for i in range(f0.shape[0]):
-                        gradFdag = _np.transpose(gradF[i])
+                        gradFdag = _np.transpose(gradF[i]) #conjugate?
                         df[i] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i].real))) ) \
                             + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i].imag))) )
                 elif fDims == 2:
                     for i in range(f0.shape[0]):
                         for j in range(f0.shape[1]):
-                            gradFdag = _np.transpose(gradF[i,j])
+                            gradFdag = _np.transpose(gradF[i,j]) #conjugate?
                             df[i,j] = _np.sqrt( abs( _np.dot(gradFdag.real, _np.dot(self.invRegionQuadcForm, gradF[i,j].real))) ) \
                                 + 1j * _np.sqrt( abs( _np.dot(gradFdag.imag, _np.dot(self.invRegionQuadcForm, gradF[i,j].imag))) )
                 else:
@@ -988,6 +999,8 @@ def _create_empty_grad(val, nParams):
     """ Get finite difference derivative gradF that is shape (nParams, <shape of val>) """
     if isinstance(val,float) or isinstance(val,int):
         gradVal = _np.zeros( nParams, 'd' )
+    elif isinstance(val,complex):
+        gradVal = _np.zeros( nParams, 'complex' )
     else:
         gradSize = (nParams,) + tuple(val.shape)
         gradVal = _np.zeros( gradSize, val.dtype )

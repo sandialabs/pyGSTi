@@ -8,6 +8,7 @@ from pygsti.objects.gatemapcalc import GateMapCalc
 
 import numpy as np
 import sys, os
+import pickle
 
 from ..testutils import BaseTestCase, compare_files, temp_files
 
@@ -156,58 +157,120 @@ class TestHessianMethods(BaseTestCase):
         res = pygsti.obj.Results()
         res.init_dataset(self.ds)
         res.init_gatestrings(self.gss)
+
+        #Add estimate for hessian-based CI --------------------------------------------------
         res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
                          [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
                          estimate_key="default")
         
         est = res.estimates['default']
         est.add_confidence_region_factory('final iteration estimate', 'final')
+        self.assertWarns(est.add_confidence_region_factory, 'final iteration estimate','final') #overwrites former
         self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
 
         cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
+        self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctry.compute_hessian()
         self.assertTrue( cfctry.has_hessian() )
+        self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
+
+        gs_dummy = cfctry.get_gateset() # test method
+        s = pickle.dumps(cfctry) # test pickle
+        pickle.loads(s)
 
         cfctry.project_hessian('std')
         cfctry.project_hessian('none')
         cfctry.project_hessian('optimal gate CIs')
         cfctry.project_hessian('intrinsic error')
+        with self.assertRaises(ValueError):
+            cfctry.project_hessian(95.0, 'normal', 'FooBar') #bad hessianProjection
 
-        cfctry.enable_linear_response_errorbars()
-        #{'dataset': self.ds, 'gateStringsToUse': list(self.ds.keys())})
-
+        self.assertTrue( cfctry.can_construct_views() )
+        
         ci_std = cfctry.view( 95.0, 'normal', 'std')
         ci_noproj = cfctry.view( 95.0, 'normal', 'none')
         ci_intrinsic = cfctry.view( 95.0, 'normal', 'intrinsic error')
         ci_opt = cfctry.view( 95.0, 'normal', 'optimal gate CIs')
-        #ci_linresponse = ??
-        
+
         with self.assertRaises(ValueError):
-            cfctry.project_hessian(95.0, 'normal', 'FooBar') #bad hessianProjection
+            cfctry.view(95.0, 'foobar') #bad region type
 
         self.assertWarns(cfctry.view, 0.95, 'normal', 'none') # percentage < 1.0
 
-        for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic): # , ci_linresponse
-            try: 
+        
+        #Add estimate for linresponse-based CI --------------------------------------------------
+        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
+                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'logl'},
+                         estimate_key="linresponse")
+
+        estLR = res.estimates['linresponse']
+        
+        #estLR.add_confidence_region_factory('final iteration estimate', 'final') #Could do this, but use alt. method for more coverage
+        with self.assertRaises(KeyError):
+            estLR.get_confidence_region_factory('final iteration estimate', 'final') #won't create by default
+        cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final', createIfNeeded=True) #now it will
+        self.assertTrue( estLR.has_confidence_region_factory('final iteration estimate', 'final'))
+
+        #cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
+        self.assertFalse( cfctryLR.can_construct_views() ) # b/c no hessian or LR enabled yet...
+        cfctryLR.enable_linear_response_errorbars() #parent results object is used to automatically populate params
+
+        #self.assertTrue( cfctryLR.can_construct_views() )         
+        ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
+        
+        gs_dummy = cfctryLR.get_gateset() # test method
+        s = pickle.dumps(cfctryLR) # test pickle
+        pickle.loads(s)
+
+
+        #Add estimate for with bad objective ---------------------------------------------------------
+        res.add_estimate(stdxyi.gs_target.copy(), stdxyi.gs_target.copy(),
+                         [self.gateset]*len(self.maxLengthList), parameters={'objective': 'foobar'},
+                         estimate_key="foo")
+        est = res.estimates['foo']
+        est.add_confidence_region_factory('final iteration estimate', 'final')
+        with self.assertRaises(ValueError): # bad objective
+            est.get_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
+        
+
+
+        # Now test each of the views we created above ------------------------------------------------
+        for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic, ci_linresponse):
+
+            s = pickle.dumps(ci_cur) # test pickle
+            pickle.loads(s)
+            
+            #linear response CI doesn't support profile likelihood intervals
+            if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
                 ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals("Gx")
                 ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals("rho0")
                 ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals("Mdefault")
                 ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
-            except NotImplementedError: 
-                pass #linear response CI doesn't support profile likelihood intervals
+
+                with self.assertRaises(ValueError):
+                    ci_cur.get_profile_likelihood_confidence_intervals("foobar") #invalid label
     
             def fnOfGate_float(mx,b):
                 return float(mx[0,0])
+            def fnOfGate_complex(mx,b):
+                return complex(mx[0,0] + 1.0j)
             def fnOfGate_0D(mx,b):
                 return np.array( float(mx[0,0]) )
             def fnOfGate_1D(mx,b):
                 return mx[0,:]
             def fnOfGate_2D(mx,b):
                 return mx[:,:]
+            def fnOfGate_2D_complex(mx,b):
+                return np.array(mx[:,:] + 1j*mx[:,:],'complex')
             def fnOfGate_3D(mx,b):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 
-            for fnOfGate in (fnOfGate_float, fnOfGate_0D, fnOfGate_1D, fnOfGate_2D, fnOfGate_3D):
+            fns = (fnOfGate_float, fnOfGate_0D, fnOfGate_1D,
+                   fnOfGate_2D, fnOfGate_3D)
+            if ci_cur is not ci_linresponse: # complex functions not supported by linresponse CIs
+                fns += (fnOfGate_complex, fnOfGate_2D_complex)
+
+            for fnOfGate in fns:
                 FnClass = gsf.gatefn_factory(fnOfGate)
                 FnObj = FnClass(self.gateset, 'Gx')
                 if fnOfGate is fnOfGate_3D:
@@ -219,7 +282,7 @@ class TestHessianMethods(BaseTestCase):
                                             FnObj, returnFnVal=True, verbosity=4)
 
             ##SHORT-CIRCUIT linear reponse here to reduce run time
-            #if ci_cur is ci_linresponse: continue
+            if ci_cur is ci_linresponse: continue
     
             def fnOfVec_float(v,b):
                 return float(v[0])
@@ -324,7 +387,6 @@ class TestHessianMethods(BaseTestCase):
         cfctry.project_hessian('std')
         ci_std = cfctry.view( 95.0, 'normal', 'std')
 
-        import pickle
         s = pickle.dumps(cfctry)
         cifctry2 = pickle.loads(s)
         

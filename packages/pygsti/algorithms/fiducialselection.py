@@ -766,8 +766,6 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
             return goodFidList
 
 
-        return best_score, best_weights, finalFidList #pylint: disable=undefined-variable
-
     def get_neighbors(boolVec):
         """ Iterate over neighbors of `boolVec` """
         for i in range(nFids):

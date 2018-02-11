@@ -218,6 +218,10 @@ class TestCoreMethods(AlgorithmsBase):
                                                 probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                                 spam_penalty_factor=1.0, verbosity=0) #uses both penalty factors
 
+        gs_single_lsgst_cpsp = self.runSilent(pygsti.do_mc2gst, ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+                                              probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
+                                              spam_penalty_factor=1.0, verbosity=10) #uses both penalty factors w/verbosity > 0
+
         
         gs_lsgst = pygsti.do_iterative_mc2gst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                              minProbClipForWeighting=1e-6, probClipInterval=(-1e6,1e6),
@@ -311,6 +315,10 @@ class TestCoreMethods(AlgorithmsBase):
         gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                                           probClipInterval=(-1e2,1e2), verbosity=0)
 
+        gs_single_mlgst_cpsp = self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+                                              probClipInterval=(-1e2,1e2), cptp_penalty_factor=1.0,
+                                              spam_penalty_factor=1.0, verbosity=10) #uses both penalty factors w/verbosity > 0
+
         gs_mlegst = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
                                                minProbClip=1e-6, probClipInterval=(-1e2,1e2),
                                                memLimit=CM + 1024**3)
@@ -347,7 +355,7 @@ class TestCoreMethods(AlgorithmsBase):
         gs_mlegst_chk_opts3 = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
                                                        minProbClip=1e-6, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
-                                                       gatestringWeightsDict={ ('Gx',): 2.0 } )
+                                                        gatestringWeightsDict={ ('Gx',): 2.0 }, alwaysPerformMLE=True )
 
         #Forcing function used by linear response error bars
         forcingfn_grad = np.ones((1,gs_clgst.num_params()), 'd')
@@ -355,14 +363,22 @@ class TestCoreMethods(AlgorithmsBase):
             ds, gs_clgst, self.lsgstStrings[0], verbosity=0,
             minProbClip=1e-6, probClipInterval=(-1e2,1e2),
             forcefn_grad=forcingfn_grad)
+        gs_lsgst_chk_opts4 = pygsti.algorithms.core._do_mlgst_base(
+            ds, gs_clgst, self.lsgstStrings[0], verbosity=0, poissonPicture=False, 
+            minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+            forcefn_grad=forcingfn_grad) # non-poisson picture
 
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust
         #self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
         #                probClipInterval=(-1e2,1e2), verbosity=4, memLimit=curMem+8500000) #invoke memory control
 
+        #non-Poisson picture - should use (-1,-1) gateset for consistency?
         pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
                         probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
-                       #non-Poisson picture - should use (-1,-1) gateset for consistency?
+        pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+                        probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False,
+                        spam_penalty_factor=1.0, cptp_penalty_factor=1.0)
+
 
         #Check errors:
         with self.assertRaises(MemoryError):

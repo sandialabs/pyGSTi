@@ -206,7 +206,7 @@ class GatestringStructure(object):
         -------
         rows, cols : int
         """
-        return len(self.effectStrs), len(self.prepStrs)
+        return len(self.minor_yvals()), len(self.minor_xvals())
 
     
     def get_basestrings(self):
@@ -362,7 +362,7 @@ class LsGermsStructure(GatestringStructure):
         return missing_list
 
         
-    def add_unindexed(self, gsList):
+    def add_unindexed(self, gsList, dsfilter=None):
         """
         Adds unstructured gate strings (not in any plaquette).
 
@@ -371,13 +371,29 @@ class LsGermsStructure(GatestringStructure):
         gsList : list of GateStrings
             The gate strings to add.
 
+        dsfilter : DataSet, optional
+            If not None, check that this data set contains all of the 
+            gate strings being added.  If dscheck does not contain a gate
+            sequence, it is *not* added.
+
         Returns
         -------
-        None
+        missing : list
+            A list of elements in `gsList` which were not found in `dsfilter`
+            and therefore not added.
         """
+        from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
+        
+        missing_list = []
         for gatestr in gsList:
             if gatestr not in self.allstrs:
+                if dsfilter:
+                    trans_gatestr = _gstrc.translate_gatestring(gatestr, self.aliases)
+                    if trans_gatestr not in dsfilter:
+                        missing_list.append( gatestr )
+                        continue
                 self.allstrs.append(gatestr)
+        return missing_list
 
     def done_adding_strings(self):
         """

@@ -153,17 +153,41 @@ class Basis(object):
         return len(self._matrices)
 
     def __eq__(self, other):
-        if self.sparse: return False # to expensive to compare sparse matrices
+        if self.sparse and self.dim.gateDim > 16:
+            return False # to expensive to compare sparse matrices
         
         otherIsBasis = isinstance(other, Basis)
         if otherIsBasis and (self.sparse != other.sparse):
             return False
         
         if self.sparse:
+            def sparse_equal(A,B,atol = 1e-8):
+                if _np.array_equal(A.shape, B.shape)==0:
+                    return False
+    
+                r1,c1 = A.nonzero()
+                r2,c2 = B.nonzero()
+    
+                lidx1 = _np.ravel_multi_index((r1,c1), A.shape)
+                lidx2 = _np.ravel_multi_index((r2,c2), B.shape)
+                sidx1 = lidx1.argsort()
+                sidx2 = lidx2.argsort()
+    
+                index_match = _np.array_equal(lidx1[sidx1], lidx2[sidx2])
+                if index_match==0:
+                    return False
+                else:  
+                    v1 = A.data
+                    v2 = B.data        
+                    V1 = v1[sidx1]
+                    V2 = v2[sidx2]        
+                return _np.allclose(V1,V2, atol=atol)
+
             if otherIsBasis:
-                return not any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
+                return all([ sparse_equal(A,B) for A,B in zip(self._matrices, other._matrices)])
+                #OLD return not any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
             else:
-                return not any([ (A!=B).nnz for A,B in zip(self._matrices, other)])
+                return all([ sparse_equal(A,B) for A,B in zip(self._matrices, other)])
         else:
             if otherIsBasis:
                 return _np.array_equal(self._matrices, other._matrices)
@@ -225,10 +249,12 @@ class Basis(object):
         -------
         bool
         '''
-        for mx in self._matrices:
+        for i,mx in enumerate(self._matrices):
             t = _np.trace(_np.dot(mx, mx))
             t = _np.real(t)
-            if t > 1e-6:
+            if i == 0:
+                if not _np.isclose(t,1.0): return False
+            elif t > 1e-6:
                 return False
         return True
 
@@ -613,7 +639,7 @@ def basis_longname(basis):
     return _basisConstructorDict[basis].longname
 
 
-def basis_element_labels(basis, dimOrBlockDims):
+def basis_element_labels(basis, dimOrBlockDims=None):
     """
     Returns a list of short labels corresponding to to the
     elements of the described basis.  These labels are
@@ -628,7 +654,7 @@ def basis_element_labels(basis, dimOrBlockDims):
         Pauli-product (pp) and Qutrit (qt).  If the basis is
         not known, then an empty list is returned.
 
-    dimOrBlockDims : int or list
+    dimOrBlockDims : int or list, optional
         Dimension of basis matrices.  If a list of integers,
         then gives the dimensions of the terms in a
         direct-sum decomposition of the density
@@ -643,6 +669,9 @@ def basis_element_labels(basis, dimOrBlockDims):
     if isinstance(basis, Basis):
         return basis.labels
 
+    assert(dimOrBlockDims is not None), \
+        "Must specify `dimOrBlockDims` when `basis` isn't a Basis object"
+    
     if dimOrBlockDims == 1 or (hasattr(dimOrBlockDims,'__len__')
         and len(dimOrBlockDims) == 1 and dimOrBlockDims[0] == 1):
         return [ "" ]       # Special case of single element basis, in which

@@ -727,12 +727,16 @@ def read_gateset(filename):
             gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
                                                                   nonham_basis, cptp, nonham_diagonal_only,
                                                                   truncate, basis)
+        elif cur_typ == "STATIC-GATE":
+            gs.gates[cur_label] = _objs.StaticGate(qty)
 
-        elif cur_typ in ("IGATE",):
-            #just add numpy array `qty` to matrices list
+        elif cur_typ in ("IGATE","STATIC-IGATE"):
+            mxOrGate = _objs.StaticGate(qty) if cur_typ == "STATIC-IGATE" \
+                       else qty #just add numpy array `qty` to matrices list
+                                # and it will be made into a fully-param gate.
             if "matrices" in cur_group_info:
-                cur_group_info['matrices'].append( (cur_label,qty) )
-            else:  cur_group_info['matrices'] = [ (cur_label,qty) ]
+                cur_group_info['matrices'].append( (cur_label,mxOrGate) )
+            else:  cur_group_info['matrices'] = [ (cur_label,mxOrGate) ]
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
 
@@ -775,10 +779,6 @@ def read_gateset(filename):
                 if len(parts) > 1:
                     basis_dims = list(map(int, "".join(parts[1:]).split(",")))
                     if len(basis_dims) == 1: basis_dims = basis_dims[0]
-                elif gs.get_dimension() is not None:
-                    basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-                elif len(spam_vecs) > 0:
-                    basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
                 else:
                     basis_dims = None
             elif line.startswith("GAUGEGROUP:"):

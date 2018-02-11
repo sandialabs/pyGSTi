@@ -25,7 +25,7 @@ class EvalTreeTestCase(BaseTestCase):
 
     def test_matrix_tree_2Q(self):
         self.helper_tree(pygsti.obj.MatrixEvalTree,False)
-        
+
     def helper_tree(self, TreeClass, b1Q):
         if b1Q:
             gs_target = std1Q_XY.gs_target
@@ -77,7 +77,19 @@ class EvalTreeTestCase(BaseTestCase):
                 ops += len(remainder)
             print("Number of apply ops = ", ops)
             self.assertEqual(ops, t.get_num_applies())
-        #else specific tests for MatrixEvalTree?
+
+            t2 = t.copy()
+            t2.squeeze(4)
+            t2.squeeze(0) #special case
+        else: # specific tests for MatrixEvalTree?
+            t.get_min_tree_size() #just make sure it runs...
+
+            #Creation failure b/c of unknown gate labels (for now just matrix eval tree)
+            with self.assertRaises(AssertionError):
+                tbad = TreeClass()
+                compiled_strs,_,_,_ =gs_target.compile_gatestrings([ (), ('Gnotpresent',)])
+                tbad.initialize([""] + gateLabels, compiled_strs )
+
 
         #Split using numSubTrees
         gsl1 = t.generate_gatestring_list()
@@ -122,6 +134,32 @@ class EvalTreeTestCase(BaseTestCase):
             fslc = st.final_slice(t2)
             sub_gsl = st.generate_gatestring_list(permute=False) #permute=False not necessary though, since subtree is not split it's elements are not permuted
             self.assertEqual(sub_gsl,unpermuted_list[fslc])
+
+            
+        #Test invalid split arguments
+        t3 = TreeClass()
+        t3.initialize([""] + gateLabels, compiled_gatestrings)            
+        with self.assertRaises(ValueError):
+            t3.split(lookup, maxSubTreeSize=10, numSubTrees=10) #can't specify both
+        with self.assertRaises(ValueError):
+            t3.split(lookup, numSubTrees=0) #numSubTrees must be > 0
+
+        #Creation of a tree with duplicate strings
+        if b1Q:
+            strs_with_dups = [(),
+                              ('Gx',),
+                              ('Gy',),
+                              ('Gx','Gy'),
+                              ('Gx','Gy'),
+                              (),
+                              ('Gx','Gx','Gx'),
+                              ('Gx','Gy','Gx')]
+            compiled_gatestrings2, lookup2, outcome_lookup2, nEls2 = \
+                        gs_target.compile_gatestrings(strs_with_dups)
+            tdup = TreeClass()
+            tdup.initialize([""] + gateLabels, compiled_gatestrings2)
+        
+        
 
 
 

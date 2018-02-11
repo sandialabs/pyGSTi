@@ -12,7 +12,6 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 import numpy as _np
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
-from . import spamspecconstruction as _spamc
 from ..tools import gatetools as _gt
 
 description = "I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE gates"

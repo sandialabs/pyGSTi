@@ -92,6 +92,16 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        nRandom=100, seed=None, verbosity=3,
                        memLimit=1024*10)
 
+        fidPairs3b = self.runSilent( #huge nRandom (should cap to all pairs)
+            pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
+                       std.gs_target, std.fiducials, std.fiducials,
+                       std.germs, prepovmTuples="first",
+                       searchMode="random",
+                       constrainToTP=True,
+                       nRandom=1000000, seed=None, verbosity=3,
+                       memLimit=1024*10)
+
+
         insuff_fids = pygsti.construction.gatestring_list([('Gx',)])
         with self.assertRaises(ValueError):
             fidPairs4 = self.runSilent( #insufficient fiducials

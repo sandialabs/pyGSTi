@@ -396,5 +396,59 @@ class BasisBaseTestCase(BaseTestCase):
         mxInReducedBasis = bt.resize_std_mx(mxInStdBasis, 'contract', end, begin)
         original         = bt.resize_std_mx(mxInReducedBasis, 'expand', begin, end)
 
+    def test_basis_object(self):
+        #test a few aspects of a Basis object that other tests miss...
+        b = Basis("pp",2)
+        beq = b.expanded_equivalent()
+        longnm = bt.basis_longname(b)
+        lbls = bt.basis_element_labels(b)
+
+        raw_mxs = bt.basis_matrices("pp",2)
+        with self.assertRaises(NotImplementedError):
+            bt.basis_matrices("foobar",2) #invalid basis name
+
+        print("Dim = ", repr(b.dim) ) # calls Dim.__repr__
+
+    def test_basis_constructors(self):
+        #special constructions not covered elsewhere
+        ppMax1 = bt.pp_matrices(2,maxWeight=1) #using maxWeight
+        qutrit1 = bt.qt_matrices(1) #special case when dim==1
+
+        #Cover invalid Dim construction
+        with self.assertRaises(TypeError):
+            pygsti.baseobjs.Dim(1.2)
+
+        
+    def test_sparse_basis(self):
+        sparsePP = Basis("pp",2,sparse=True)
+        sparsePP2 = Basis("pp",2,sparse=True)
+        sparseBlockPP = Basis("pp",[2,2],sparse=True)
+        
+        mxs = sparsePP.get_composite_matrices()
+        block_mxs = sparseBlockPP.get_composite_matrices()
+
+        expeq = sparsePP.expanded_equivalent()
+        block_expeq = sparseBlockPP.expanded_equivalent()
+
+        raw_mxs = bt.basis_matrices("pp",2,sparse=True)
+        
+        #test equality of bases with other bases and matrices
+        self.assertEqual(sparsePP, sparsePP2)
+        self.assertEqual(sparsePP, raw_mxs)
+
+        #sparse transform matrix
+        trans = sparsePP.transform_matrix(sparsePP2)
+        self.assertArraysAlmostEqual(trans, np.identity(4,'d'))
+
+        #test equality for large bases, which is too expensive so it always returns false
+        large_sparsePP = Basis("pp",16,sparse=True)
+        large_sparsePP2 = Basis("pp",16,sparse=True)
+        self.assertNotEqual(large_sparsePP, large_sparsePP2)
+        
+
+        
+        
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -188,11 +188,12 @@ class DataSetRow(object):
                 "Cannot set outcome counts directly on a DataSet with non-trivially timestamped data"
             assert(self.reps is not None), \
                 "Cannot set outcome counts directly on a DataSet without repetition data"
-                    
+
+            outcomeIndxToLookFor = self.dataset.olIndex.get(outcomeLbl,None)
             for i,outcomeIndx in enumerate(self.oli):
-                if outcomeIndx == self.dataset.olIndex[ outcomeLbl ]:
+                if outcomeIndx == outcomeIndxToLookFor:
                     self.reps[i] = count; break
-            else: # need to add a new label
+            else: # need to add a new label & entry to reps[]
                 raise NotImplementedError("Cannot create new outcome labels by assignment")
                     
     def _get_counts(self, timestamp=None, all_outcomes=False):
@@ -867,8 +868,8 @@ class DataSet(object):
         gateString = self._keepseparate_update_gatestr(gateString)
             
         if not overwriteExisting and gateString in self:
-            iNext = int(max(self[gateString].times)) + 1 \
-                    if (len(self[gateString].times) > 0) else 0
+            iNext = int(max(self[gateString].time)) + 1 \
+                    if (len(self[gateString].time) > 0) else 0
             timeStampList = [iNext]*len(countList)
         else:
             timeStampList = [0]*len(countList)
@@ -1468,6 +1469,8 @@ class DataSet(object):
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
+            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+
             #Turn spam labels into outcome labels
             self.gsIndex = _OrderedDict()
             self.olIndex = _OrderedDict( [ ((str(sl),),i) for sl,i in state_dict['slIndex'].items() ] )

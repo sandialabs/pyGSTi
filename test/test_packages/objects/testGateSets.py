@@ -147,6 +147,13 @@ class TestGateSetMethods(GateSetTestCase):
             gs2 = gs.copy()
             error = gs2.povms['foobar']
 
+        Iz = pygsti.obj.Instrument( [('0', np.random.random( (4,4) ))] )
+        gs["Iz"] = Iz #set an instrument
+        Iz2 = gs["Iz"] #get an instrument
+
+        deriv = gs.deriv_wrt_params()
+
+
 
     def test_copy(self):
         cp = self.gateset.copy()
@@ -173,7 +180,7 @@ class TestGateSetMethods(GateSetTestCase):
         cp.set_all_parameterizations('full') # so POVM can be transformed...
         cp.transform(elT)
 
-        self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T), 0 )
+        self.assertAlmostEqual( self.gateset.frobeniusdist(cp, T, normalize=False), 0 ) #test out normalize=False
         self.assertAlmostEqual( self.gateset.jtracedist(cp, T), 0 )
         self.assertAlmostEqual( self.gateset.diamonddist(cp, T), 0 )
 
@@ -930,12 +937,20 @@ class TestGateSetMethods(GateSetTestCase):
             evt, slicesList, True):
             hprobs_by_block[:,s1,s2] = hprobs_blk
             dprobs12_by_block[:,s1,s2] = dprobs12_blk
+
+        #again, but no dprobs12
+        hprobs_by_block2 = np.zeros(hprobs_to_fill.shape,'d')
+        for s1,s2, hprobs_blk in self.gateset.bulk_hprobs_by_block(
+                evt, slicesList, False):
+            hprobs_by_block2[:,s1,s2] = hprobs_blk
+
         #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.bulk_hprobs_by_block(
         #    mevt, slicesList, True):
         #    mhprobs_by_block[:,s1,s2] = hprobs_blk
         #    mdprobs12_by_block[:,s1,s2] = dprobs12_blk
 
         self.assertArraysAlmostEqual(hprobs_by_block,hprobs_to_fill)
+        self.assertArraysAlmostEqual(hprobs_by_block2,hprobs_to_fill)
         self.assertArraysAlmostEqual(dprobs12_by_block,dprobs12)
         #self.assertArraysAlmostEqual(mhprobs_by_block,hprobs_to_fill, places=FD_HESS_PLACES)
         #self.assertArraysAlmostEqual(mdprobs12_by_block,dprobs12, places=FD_HESS_PLACES)
@@ -957,8 +972,39 @@ class TestGateSetMethods(GateSetTestCase):
         #                        print("  el(%d,%d):  %g - %g = %g" % (i,j,x,y,x-y))
 
 
+    def test_tree_construction(self):
+        gatestrings = [('Gx',),
+                       ('Gy',),
+                       ('Gx','Gy'),
+                       ('Gy','Gy'),
+                       ('Gy','Gx'),
+                       ('Gx','Gx','Gx'),
+                       ('Gx','Gy','Gx'),
+                       ('Gx','Gy','Gy'),
+                       ('Gy','Gy','Gy'),
+                       ('Gy','Gx','Gx') ]
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestrings, maxTreeSize=4 )
+        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestrings, maxTreeSize=4 )
 
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestrings, minSubtrees=2, maxTreeSize=4 )
+        mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestrings, minSubtrees=2, maxTreeSize=4 )
 
+        for distributeMethod in ('deriv','gatestrings'):
+            for memLimit in (1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
+                try:
+                    evt,_,_,lookup,outcome_lookup = self.gateset.bulk_evaltree_from_resources(
+                        gatestrings, memLimit=memLimit, distributeMethod=distributeMethod, subcalls=['bulk_fill_hprobs'])
+                    evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
+                        gatestrings, memLimit=memLimit, distributeMethod=distributeMethod, subcalls=['bulk_fill_hprobs'])
+                except MemoryError:
+                    pass #OK - when memlimit is too small and splitting is unproductive
+
+        #balanced not implemented
+        with self.assertRaises(NotImplementedError):
+            evt,_,_,lookup,outcome_lookup = self.gateset.bulk_evaltree_from_resources(
+                gatestrings, memLimit=memLimit, distributeMethod="balanced", subcalls=['bulk_fill_hprobs'])
+                
+                
 
     def test_tree_splitting(self):
         gatestrings = [('Gx',),
@@ -1035,6 +1081,14 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(ValueError):
             self.gateset['Gbad'] = pygsti.obj.FullyParameterizedGate(np.zeros((5,5),'d')) #wrong gate dimension
 
+        gs_multispam = self.gateset.copy()
+        gs_multispam.preps['rho1'] = gs_multispam.preps['rho0'].copy()
+        gs_multispam.povms['M2'] = gs_multispam.povms['Mdefault'].copy()
+        with self.assertRaises(ValueError):
+            gs_multispam.prep #can only use this property when there's a *single* prep
+        with self.assertRaises(ValueError):
+            gs_multispam.effects #can only use this property when there's a *single* POVM
+
 
     def test_iteration(self):
         #Iterate over all gates and SPAM matrices
@@ -1045,6 +1099,212 @@ class TestGateSetMethods(GateSetTestCase):
         name = self.gateset.get_basis_name()
         dim  = self.gateset.get_basis_dimension()
         self.gateset.set_basis(name, dim)
+
+        with self.assertRaises(AssertionError):
+            self.gateset.get_prep_labels()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_effect_labels()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_preps()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_effects()
+        with self.assertRaises(AssertionError):
+            self.gateset.num_preps()
+        with self.assertRaises(AssertionError):
+            self.gateset.num_effects()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_reverse_spam_defs()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_spam_labels()
+        with self.assertRaises(AssertionError):
+            self.gateset.get_spamgate(None)
+        with self.assertRaises(AssertionError):
+            self.gateset.iter_gates()
+        with self.assertRaises(AssertionError):
+            self.gateset.iter_preps()
+        with self.assertRaises(AssertionError):
+            self.gateset.iter_effects()
+
+
+        #simulate copying an old gateset
+        old_gs = self.gateset.copy()
+        del old_gs.__dict__['_calcClass']
+        del old_gs.__dict__['basis']
+        old_gs._basisNameAndDim = ('pp',2)
+        copy_of_old = old_gs.copy()
+
+
+    def test_base_gatecalc(self):
+        rawCalc = pygsti.objects.gatecalc.GateCalc(4, {'Gx': "dummy", 'Gy': "gates"},None,None, np.zeros(1,'d'))
+
+        #Lots of things that derived classes implement
+        with self.assertRaises(NotImplementedError):
+            rawCalc._buildup_dPG() # b/c gates are not GateMatrix-derived (they're strings in fact!)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.product(('Gx',))
+        with self.assertRaises(NotImplementedError):
+            rawCalc.dproduct(('Gx',))
+        with self.assertRaises(NotImplementedError):
+            rawCalc.hproduct(('Gx',))
+        with self.assertRaises(NotImplementedError):
+            rawCalc.construct_evaltree()
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_product(None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_dproduct(None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_hproduct(None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_fill_probs(None,None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_fill_dprobs(None,None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_fill_hprobs(None,None)
+        with self.assertRaises(NotImplementedError):
+            rawCalc.bulk_hprobs_by_block(None,None)
+
+    def test_base_gatematrixcalc(self):
+        rawCalc = self.gateset._calc()
+
+        #Make call variants that aren't called by GateSet routines
+        dg = rawCalc.dgate('Gx', flat=False)
+        dgflat = rawCalc.dgate('Gx', flat=True)
+
+        rawCalc.hproduct(('Gx','Gx'), flat=True, wrtFilter1=[0,1], wrtFilter2=[1,2,3])
+        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+
+        custom_spamTuple = ( np.zeros((4,1),'d'), np.zeros((4,1),'d') )
+        rawCalc._rhoE_from_spamTuple(custom_spamTuple)
+
+        evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( [('Gx',), ('Gx','Gx')] )
+        nEls = evt.num_final_elements()
+
+        mx = np.zeros((nEls,3,3),'d')
+        dmx = np.zeros((nEls,3),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_hprobs(mx, evt, 
+                                 prMxToFill=pmx, deriv1MxToFill=dmx, deriv2MxToFill=dmx,
+                                 wrtFilter1=[0,1,2], wrtFilter2=[0,1,2]) #same slice on each deriv
+        
+        mx = np.zeros((nEls,3,2),'d')
+        dmx1 = np.zeros((nEls,3),'d')
+        dmx2 = np.zeros((nEls,2),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_hprobs(mx, evt, 
+                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
+                                 wrtFilter1=[0,1,2], wrtFilter2=[2,3]) #different slices on 1st vs. 2nd deriv
+                                 
+
+        with self.assertRaises(ValueError):
+            rawCalc.estimate_mem_usage(["foobar"], 1,1,1,1,1,1)
+
+        cptpGateset = self.gateset.copy()
+        cptpGateset.set_all_parameterizations("CPTP") # so gates have nonzero hessians
+        cptpCalc = cptpGateset._calc()
+
+        hg = cptpCalc.hgate('Gx', flat=False)
+        hgflat = cptpCalc.hgate('Gx', flat=True)
+
+        cptpCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), False,False, clipTo=(-1,1))
+        
+
+
+    def test_base_gatemapcalc(self):
+        rawCalc = self.mgateset._calc()
+
+        #Make call variants that aren't called by GateSet routines
+        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1))
+        rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+        rawCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), False,False, clipTo=(-1,1))
+                
+        custom_spamTuple = ( np.nan*np.ones((4,1),'d'), np.zeros((4,1),'d') )
+        rawCalc.pr( custom_spamTuple, ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
+
+
+        rawCalc.estimate_cache_size(100)
+        with self.assertRaises(ValueError):
+            rawCalc.estimate_mem_usage(["foobar"], 1,1,1,1,1,1)
+
+        evt,lookup,outcome_lookup = self.mgateset.bulk_evaltree( [('Gx',), ('Gx','Gx')] )
+        nEls = evt.num_final_elements()
+        nP = self.mgateset.num_params()
+
+        mx = np.zeros((nEls,3),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_dprobs(mx, evt, 
+                                 prMxToFill=pmx, clipTo=(-1,1),wrtFilter=[0,1,2])
+
+        mx = np.zeros((nEls,nP),'d')
+        rawCalc.bulk_fill_dprobs(mx, evt, 
+                                 prMxToFill=pmx, clipTo=(-1,1), wrtBlockSize=2)
+        
+        mx = np.zeros((nEls,3,2),'d')
+        dmx1 = np.zeros((nEls,3),'d')
+        dmx2 = np.zeros((nEls,2),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
+                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
+                                 wrtFilter1=[0,1,2], wrtFilter2=[2,3]) #different slices on 1st vs. 2nd deriv
+
+        mx = np.zeros((nEls,nP,nP),'d')
+        dmx1 = np.zeros((nEls,nP),'d')
+        dmx2 = np.zeros((nEls,nP),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
+                                 prMxToFill=pmx, deriv1MxToFill=dmx1, deriv2MxToFill=dmx2,
+                                 wrtBlockSize1=2, wrtBlockSize2=3) #use block sizes
+
+        
+    def test_base_gatesetmember(self):
+        #Test some parts of GateSetMember that aren't tested elsewhere
+        raw_member = pygsti.objects.gatesetmember.GateSetMember(dim=4)
+        with self.assertRaises(ValueError):
+            raw_member.gpindices = slice(0,3) # read-only!
+        with self.assertRaises(ValueError):
+            raw_member.parent = None # read-only!
+
+        #Test _compose_gpindices
+        parent_gpindices = slice(10,20)
+        child_gpindices = slice(2,4)
+        x = pygsti.objects.gatesetmember._compose_gpindices(
+            parent_gpindices, child_gpindices)
+        self.assertEqual(x, slice(12,14))
+            
+        parent_gpindices = slice(10,20)
+        child_gpindices = np.array([0,2,4],'i')
+        x = pygsti.objects.gatesetmember._compose_gpindices(
+            parent_gpindices, child_gpindices)
+        self.assertEqual(list(x), list(np.array([10,12,14],'i'))) # lists so assertEqual works
+
+        parent_gpindices = np.array([2,4,6,8,10],'i')
+        child_gpindices = np.array([0,2,4],'i')
+        x = pygsti.objects.gatesetmember._compose_gpindices(
+            parent_gpindices, child_gpindices)
+        self.assertEqual(list(x), list(np.array([2,6,10],'i')))
+
+        #Test _decompose_gpindices
+        parent_gpindices = slice(10,20)
+        sibling_gpindices = slice(12,14)
+        x = pygsti.objects.gatesetmember._decompose_gpindices(
+            parent_gpindices, sibling_gpindices)
+        self.assertEqual(x, slice(2,4))
+            
+        parent_gpindices = slice(10,20)
+        sibling_gpindices = np.array([10,12,14],'i')
+        x = pygsti.objects.gatesetmember._decompose_gpindices(
+            parent_gpindices, sibling_gpindices)
+        self.assertEqual(list(x), list(np.array([0,2,4],'i')))
+
+        parent_gpindices = np.array([2,4,6,8,10],'i')
+        sibling_gpindices = np.array([2,6,10],'i')
+        x = pygsti.objects.gatesetmember._decompose_gpindices(
+            parent_gpindices, sibling_gpindices)
+        self.assertEqual(list(x), list(np.array([0,2,4],'i')))
+
+        
+
+            
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

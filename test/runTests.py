@@ -32,7 +32,7 @@ def run_mpi_coverage_tests(coverage_cmd, nproc=4):
 def create_html(dirname, coverage_cmd):
     subprocess.call([coverage_cmd, 'html', '--directory=%s' % dirname])
 
-default   = ['tools', 'iotest', 'objects', 'construction', 'drivers', 'report', 'algorithms', 'optimize', 'extras', 'mpi']
+default   = ['tools', 'iotest', 'objects', 'construction', 'drivers', 'report', 'reportb', 'algorithms', 'algorithmsb', 'optimize', 'extras', 'mpi']
 slowtests = ['report', 'drivers']
 
 def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,

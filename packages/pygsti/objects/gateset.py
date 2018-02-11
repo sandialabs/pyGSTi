@@ -212,7 +212,7 @@ class GateSet(object):
         list of strings
         """
         assert(False),"Deprecated!"
-        return list(self.preps.keys())
+        #return list(self.preps.keys())
 
 
     def get_effect_labels(self):
@@ -224,7 +224,7 @@ class GateSet(object):
         list of strings
         """
         assert(False),"Deprecated!"
-        return list(self.effects.keys())
+        #return list(self.effects.keys())
 
 
     def get_preps(self):
@@ -240,7 +240,7 @@ class GateSet(object):
             list of state preparation vectors of shape (dim, 1).
         """
         assert(False),"Deprecated!"
-        return [ self.preps[l].copy() for l in self.get_prep_labels() ]
+        #return [ self.preps[l].copy() for l in self.get_prep_labels() ]
 
     def get_effects(self):
         """
@@ -256,7 +256,7 @@ class GateSet(object):
             list of POVM effect vectors of shape (dim, 1).
         """
         assert(False),"Deprecated!"
-        return [ self.effects[l].copy() for l in self.get_effect_labels() ]
+        #return [ self.effects[l].copy() for l in self.get_effect_labels() ]
 
 
     def num_preps(self):
@@ -268,7 +268,7 @@ class GateSet(object):
         int
         """
         assert(False),"Deprecated!"
-        return len(self.preps)
+        #return len(self.preps)
 
     
     def num_effects(self):
@@ -280,7 +280,7 @@ class GateSet(object):
         int
         """
         assert(False),"Deprecated!"
-        return len(self.effects)
+        #return len(self.effects)
 
 
     def get_reverse_spam_defs(self):
@@ -294,10 +294,10 @@ class GateSet(object):
             values == SPAM labels.
         """
         assert(False),"Deprecated!"
-        d = _collections.OrderedDict()
-        for label in self.spamdefs:
-            d[  self.spamdefs[label] ] = label
-        return d
+        #d = _collections.OrderedDict()
+        #for label in self.spamdefs:
+        #    d[  self.spamdefs[label] ] = label
+        #return d
 
     def get_spam_labels(self):
         """
@@ -308,7 +308,7 @@ class GateSet(object):
         list of strings
         """
         assert(False),"Deprecated!"
-        return list(self.spamdefs.keys())
+        #return list(self.spamdefs.keys())
 
 
     def get_spamgate(self, spamLabel):
@@ -326,7 +326,7 @@ class GateSet(object):
         numpy array
         """
         assert(False),"Deprecated!"
-        return self._calc()._make_spamgate(spamLabel)
+        #return self._calc()._make_spamgate(spamLabel)
 
 
 
@@ -1515,6 +1515,8 @@ class GateSet(object):
                         # even "maximal" splitting (num trees == num strings)
                         # won't help - see if we can squeeze "ng==nprocs" cached tree
                         # to have zero cachesize
+                        if nprocs not in evt_cache:
+                            memEstimate(nprocs,np1,np2,Ng,verb=1)
                         if hasattr(evt_cache[nprocs],"squeeze") and \
                            memEstimate(nprocs,np1,np2,nG,cacheSize=0) <= memLimit:
                             evt_cache[nprocs].squeeze(0)
@@ -1524,8 +1526,7 @@ class GateSet(object):
                 mem_estimate = memEstimate(ng,np1,np2,Ng,verb=1)
                 while mem_estimate > memLimit:
                     ng += Ng; next = memEstimate(ng,np1,np2,Ng,verb=1)
-                    assert next < mem_estimate, \
-                        "Not enough memory: splitting unproductive"
+                    if(next >= mem_estimate): raise MemoryError("Not enough memory: splitting unproductive")
                     mem_estimate = next
                 
                    #Note: could do these while loops smarter, e.g. binary search-like?
@@ -2806,8 +2807,8 @@ class GateSet(object):
             an iterator over all (gateLabel,gate) pairs
         """
         assert(False),"Deprecated!"
-        for (label,gate) in self.gates.items():
-            yield (label, gate)
+        #for (label,gate) in self.gates.items():
+        #    yield (label, gate)
 
     def iter_preps(self):
         """
@@ -2817,8 +2818,8 @@ class GateSet(object):
             an iterator over all (prepLabel,vector) pairs
         """
         assert(False),"Deprecated!"
-        for (label,vec) in self.preps.items():
-            yield (label, vec)
+        #for (label,vec) in self.preps.items():
+        #    yield (label, vec)
 
     def iter_effects(self):
         """
@@ -2828,8 +2829,8 @@ class GateSet(object):
             an iterator over all (effectLabel,vector) pairs
         """
         assert(False),"Deprecated!"
-        for (label,vec) in self.effects.items():
-            yield (label, vec)
+        #for (label,vec) in self.effects.items():
+        #    yield (label, vec)
 
 
 
@@ -3116,11 +3117,11 @@ class GateSet(object):
 
         for instLabel,inst in self.instruments.items():
             inst_gates = []
-            for gate in inst.values():
+            for outcomeLbl,gate in inst.items():
                 newGate = _np.zeros( (newDimension,newDimension) )
                 newGate[ 0:curDim, 0:curDim ] = gate[:,:]
                 for i in range(curDim,newDimension): newGate[i,i] = 1.0
-                inst_gates.append( _gate.FullyParameterizedGate(newGate) )
+                inst_gates.append( (outcomeLbl,_gate.FullyParameterizedGate(newGate)) )
             new_gateset.instruments[instLabel] = _instrument.Instrument(inst_gates)
 
         return new_gateset
@@ -3177,10 +3178,10 @@ class GateSet(object):
 
         for instLabel,inst in self.instruments.items():
             inst_gates = []
-            for gate in inst.values():
+            for outcomeLbl,gate in inst.items():
                 newGate = _np.zeros( (newDimension,newDimension) )
                 newGate[ :, : ] = gate[0:newDimension,0:newDimension]
-                inst_gates.append( _gate.FullyParameterizedGate(newGate) )
+                inst_gates.append( (outcomeLbl,_gate.FullyParameterizedGate(newGate)) )
             new_gateset.instruments[instLabel] = _instrument.Instrument(inst_gates)
 
         return new_gateset

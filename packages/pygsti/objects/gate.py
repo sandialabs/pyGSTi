@@ -13,6 +13,7 @@ import scipy.sparse.linalg as _spsl
 import functools as _functools
 import itertools as _itertools
 import copy as _copy
+import warnings as _warnings
 
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
@@ -2419,8 +2420,16 @@ class LindbladBase(object):
         if self.sparse is None: self.sparse = False #the default
 
         self.dim = d2 #also set by GateMatrix and GateMap (but consistent, so OK)
-        self.ham_basis = _Basis(ham_basis,d,sparse=self.sparse)
-        self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
+        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
+            self.ham_basis = _Basis(ham_basis,d,sparse=self.sparse)
+        else: # ham_basis is a list of matrices
+            self.ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=self.sparse)
+
+        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
+            self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
+        else: # ham_basis is a list of matrices
+            self.other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=self.sparse)
+        
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
 
         #Assumed gate was in the pauli-product basis initially.  I think
@@ -2910,7 +2919,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             
         if self.sparse:
             #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
-            state = _mt.expm_multiply_fast(self.err_gen_prep, state)
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state[:,0])
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
@@ -2952,15 +2961,12 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         -------
         None
         """
-        assert(len(v) == self.num_params())
-        self.paramvals = v
-        self._construct_errgen()
+        LindbladBase.from_vector(self, v)
         if self.sparse:
             self.err_gen_prep = _mt.expm_multiply_prep(self.err_gen)
         else:
             self.exp_err_gen = _spl.expm(self.err_gen)
-        self.dirty = True
-
+            
 
     def copy(self, parent=None):
         """
@@ -2973,7 +2979,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         """
         #Construct new gate with dummy identity mx
         if self.unitary_postfactor is not None:
-            factor = unitary_postfactor.copy()
+            factor = self.unitary_postfactor.copy()
         elif self.sparse:
             factor = _sps.identity( self.err_gen.shape[0], 'd', 'csr' )
         else:
@@ -3072,7 +3078,12 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         else:
             assert(len(amount) == self.dim-1)
             D = _np.diag( [1]+list(1.0 - _np.array(amount,'d')) )
-        mx = _np.dot(D,self.base)
+
+        if self.unitary_postfactor is not None:
+            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+        else:
+            dense = self.exp_err_gen
+        mx = _np.dot(D,dense)
         tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
@@ -3080,7 +3091,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
 
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
-        self._construct_matrix()
+        self._construct_errgen()
         self.dirty = True
 
 
@@ -3114,14 +3125,18 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         """
         assert(not self.sparse), "rotate() not implemented for sparse LindbladParameterizedGateMap objects"
         rotnMx = _gt.rotation_gate_mx(amount,mxBasis)
-        mx = _np.dot(rotnMx,self.base)
+        if self.unitary_postfactor is not None:
+            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+        else:
+            dense = self.exp_err_gen
+        mx = _np.dot(rotnMx,dense)
         tGate = LindbladParameterizedGateMap(mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
                                           True, self.matrix_basis)
         #Note: truncate=True to be safe
         self.paramvals[:] = tGate.paramvals[:]
-        self._construct_matrix()
+        self._construct_errgen()
         self.dirty = True
 
 
@@ -3135,19 +3150,29 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
 
         Parameters
         ----------
-        otherGate : LindbladParameterizedGate
+        otherGate : LindbladParameterizedGateMap
             The gate to compose to the right of this one.
 
         Returns
         -------
-        LindbladParameterizedGate
+        LindbladParameterizedGateMap
         """
         assert(not self.sparse), "compose() not implemented for sparse LindbladParameterizedGateMap objects"
         assert( isinstance(otherGate, LindbladParameterizedGateMap) )
         assert(self.cptp == otherGate.cptp)
         assert(self.nonham_diagonal_only == otherGate.nonham_diagonal_only)
 
-        composed_mx = _np.dot(self, otherGate)
+        if self.unitary_postfactor is not None:
+            dense = _np.dot(self.exp_err_gen, self.unitary_postfactor)
+        else:
+            dense = self.exp_err_gen
+
+        if otherGate.unitary_postfactor is not None:
+            other_dense = _np.dot(otherGate.exp_err_gen, otherGate.unitary_postfactor)
+        else:
+            other_dense = otherGate.exp_err_gen
+
+        composed_mx = _np.dot(dense, other_dense)
         return LindbladParameterizedGateMap(composed_mx,self.unitary_postfactor,
                                           self.ham_basis, self.other_basis,
                                           self.cptp,self.nonham_diagonal_only,
@@ -3504,7 +3529,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         #elif tr == 4:
         #    dOdp  = _np.einsum('lk,knab,nj->ljab', self.leftTrans, dOdp, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-        return dOdp
+        return _np.real(dOdp)
 
 
     def _d2Odp2(self):
@@ -3524,9 +3549,9 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
             else:
                 d2Odp2  = _np.zeros([d2,d2,nP,nP],'d')
                             
-        else: #all lindblad terms included                
+        else: #all lindblad terms included
+            nP = bsO-1
             if self.cptp:
-                nP = bsO-1
                 d2Odp2  = _np.zeros([d2,d2,nP,nP,nP,nP],'complex') #yikes! maybe make this SPARSE in future?
                 
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
@@ -3567,7 +3592,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         #elif tr == 6:
         #    d2Odp2  = _np.einsum('lk,knabqr,nj->ljabqr', self.leftTrans, d2Odp2, self.rightTrans)
         assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
-        return d2Odp2
+        return _np.real(d2Odp2)
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -3929,7 +3954,7 @@ def _d2expSeries(X, dX, d2X):
             commutant2A = _np.einsum("ikq,kja->ijaq",dX,last_commutant) - \
                     _np.einsum("ika,kjq->ijaq",last_commutant,dX)
             commutant2B = _np.einsum("ik,kjaq->ijaq",X,last_commutant2) - \
-                    _np.einsum("ikaq,kj->ijaq",last_commutant,X)
+                    _np.einsum("ikaq,kj->ijaq",last_commutant2,X)
 
         elif tr == 4:
             commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
@@ -4349,28 +4374,27 @@ class ComposedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
+        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), 'd')
+        
         #Product rule to compute jacobian
         for i,gate in enumerate(self.factorgates): # loop over the gate we differentiate wrt
             if gate.num_params() == 0: continue #no contribution
             deriv = gate.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
-            deriv.shape = (self.dim,self.dim,self.num_params())
+            deriv.shape = (self.dim,self.dim,gate.num_params())
 
             if i > 0: # factors before ith
                 pre = self.factorgates[0]
                 for gateA in self.factorgates[1:i]:
-                    pre = _np.dot(gate,pre)
+                    pre = _np.dot(gateA,pre)
                 deriv = _np.einsum("ija,jk->ika", deriv, pre )
 
             if i+1 < len(self.factorgates): # factors after ith
                 post = self.factorgates[i+1]
                 for gateA in self.factorgates[i+2:i]:
-                    post = _np.dot(gate,post)
+                    post = _np.dot(gateA,post)
                 deriv = _np.einsum("ij,jka->ika", post, deriv )
 
-            if derivMx is None:
-                derivMx = deriv
-            else:
-                derivMx += deriv
+            derivMx[:,:,gate.gpindices] += deriv
 
         derivMx.shape = (self.dim**2, self.num_params())
         if wrtFilter is None:
@@ -4620,9 +4644,9 @@ class ComposedGateMap(GateMap):
         return mx
 
     
-    def as_matrix(self):
-        """ Return the gate as a sparse matrix """
-        return self.as_sparse_matrix().toarray()
+    #def as_matrix(self):
+    #    """ Return the gate as a sparse matrix """
+    #    return self.as_sparse_matrix().toarray()
 
     
     def num_params(self):
@@ -4792,7 +4816,7 @@ class ComposedGateMap(GateMap):
     def __str__(self):
         """ Return string representation """
         s = "Composed gate map:\n"
-        s += _mt.mx_to_string(self.as_matrix(), width=4, prec=2)
+        s += _mt.mx_to_string(self.as_sparse_matrix(), width=4, prec=2)
         return s
 
 
@@ -4939,8 +4963,8 @@ class EmbeddedGateMap(GateMap):
             self.acton = self._fast_acton
 
     def __getstate__(self):
-        # Don't pickle 'instancemethod'
-        d = self.__dict__.copy()
+        # Don't pickle 'instancemethod' or parent (see gatesetmember implementation)
+        d = _gatesetmember.GateSetMember.__getstate__(self)
         del d['acton']
         return d
     
@@ -5092,6 +5116,13 @@ class EmbeddedGateMap(GateMap):
             output_state[ inds ] += self.embedded_gate.acton( state[inds] )
 
         #act on other blocks trivially:
+        self._acton_other_blocks_trivially(output_state)
+
+        assert(output_state.shape == state.shape)
+        return output_state
+
+    
+    def _acton_other_blocks_trivially(self, output_state):
         offset = 0
         _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
@@ -5100,10 +5131,7 @@ class EmbeddedGateMap(GateMap):
                 output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
             offset += blockSize
 
-        assert(output_state.shape == state.shape)
-        return output_state
-
-
+            
     def _fast_acton_sp1(self, state):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
@@ -5121,13 +5149,7 @@ class EmbeddedGateMap(GateMap):
 
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            offset = 0
-            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
-            for i,blockDim in enumerate(blockDims):
-                blockSize = blockDim**2
-                if i != self.iTensorProdBlk:
-                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
-                offset += blockSize
+            self._acton_other_blocks_trivially(output_state)
         return output_state
 
     
@@ -5144,13 +5166,7 @@ class EmbeddedGateMap(GateMap):
 
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            offset = 0
-            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
-            for i,blockDim in enumerate(blockDims):
-                blockSize = blockDim**2
-                if i != self.iTensorProdBlk:
-                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
-                offset += blockSize
+            self._acton_other_blocks_trivially(output_state)
         return output_state
 
 
@@ -5165,13 +5181,7 @@ class EmbeddedGateMap(GateMap):
                                  
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            offset = 0
-            _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
-            for i,blockDim in enumerate(blockDims):
-                blockSize = blockDim**2
-                if i != self.iTensorProdBlk:
-                    output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
-                offset += blockSize
+            self._acton_other_blocks_trivially(output_state)
         return output_state
 
 
@@ -5182,8 +5192,9 @@ class EmbeddedGateMap(GateMap):
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
+        embedded_sparse = self.embedded_gate.as_sparse_matrix().tolil()
         for i,j,gi,gj in self._iter_matrix_elements():
-            finalGate[i,j] = self.embedded_gate[gi,gj]
+            finalGate[i,j] = embedded_sparse[gi,gj]
 
         return finalGate.tocsr()
 
@@ -5518,10 +5529,13 @@ class EmbeddedGate(GateMatrix):
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
-        for i,j,gi,gj in self._iter_matrix_elements():
+        for i,j,gi,gj in self.embedded_map._iter_matrix_elements():
             derivMx[i*self.dim+j,:] = embedded_deriv[gi*M+gj,:] #fill row of jacobian
 
-        return derivMx
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
         
     def has_nonzero_hessian(self):
@@ -5545,7 +5559,7 @@ class EmbeddedGate(GateMatrix):
         -------
         Gate
             A copy of this gate.
-        """        
+        """
         return self._copy_gpindices( EmbeddedGate(
             self.embedded_map.stateSpaceLabels,
             self.embedded_map.targetLabels,
@@ -5599,6 +5613,7 @@ class EmbeddedGate(GateMatrix):
         None
         """
         self.embedded_map.depolarize(amount)
+        self._construct_matrix()
 
 
     def rotate(self, amount, mxBasis="gm"):
@@ -5630,6 +5645,7 @@ class EmbeddedGate(GateMatrix):
         None
         """
         self.embedded_map.rotate(amount, mxBasis)
+        self._construct_matrix()
 
 
     def compose(self, otherGate):

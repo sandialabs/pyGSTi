@@ -11,7 +11,6 @@ I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and X(pi/2)*X(pi/2)
 
 from . import gatestringconstruction as _strc
 from . import gatesetconstruction as _setc
-from . import spamspecconstruction as _spamc
 
 description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and X(pi/2)*X(pi/2) gates"
 

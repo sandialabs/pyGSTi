@@ -606,7 +606,7 @@ class TensorProdPOVM(POVM):
             (and it's inverse) used in the above similarity transform.            
         """
         raise ValueError("Cannot transform a TensorProdPOVM")
-        self.dirty = True
+        #self.dirty = True
 
 
     def depolarize(self, amount):

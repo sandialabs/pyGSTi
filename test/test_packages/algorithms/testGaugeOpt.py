@@ -23,7 +23,9 @@ class TestCoreMethods(AlgorithmsBase):
         #Gauge Opt to Target
         gs_lgst_target     = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, verbosity=10, checkJac=True)
 
-        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0, useDirectCP=False) #non-direct CP contraction
+        #
+        gs_lgst.basis = self.gateset.basis.copy()
+        gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst, "CP",verbosity=10, tol=10.0, useDirectCP=False) #non-direct CP contraction
 
         #Gauge Opt to Target using non-frobenius metrics
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
@@ -38,6 +40,18 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_targetAlt  = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
                                             spamMetric='tracedist', verbosity=10, checkJac=True)
 
+        #Using other methods
+        gs_BFGS = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, method='BFGS', verbosity=10)
+        with self.assertRaises(ValueError): #Invalid metric
+            self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, method='BFGS', spamMetric='foobar', verbosity=10)
+        with self.assertRaises(ValueError): #Invalid metric
+            self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, method='BFGS', gatesMetric='foobar', verbosity=10)
+            
+        with self.assertRaises(ValueError): #can't use least-squares for anything but frobenius metric
+            self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
+                           spamMetric='tracedist', method='ls', verbosity=10, checkJac=True)
+
+
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
         #                   gatesMetric='foobar', verbosity=10) #bad gatesMetric
@@ -45,17 +59,18 @@ class TestCoreMethods(AlgorithmsBase):
         #with self.assertRaises(ValueError):
         #    self.runSilent(pygsti.gaugeopt_to_target, gs_lgst_target, self.gateset,
         #                   spamMetric='foobar', verbosity=10) #bad spamMetric
-
+                
 
         #Contractions
         gs_clgst_tp    = self.runSilent(pygsti.contract, gs_lgst_target, "TP",verbosity=10, tol=10.0)
         gs_clgst_cp    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0)
+        gs_clgst_cp2    = self.runSilent(pygsti.contract, gs_lgst_target, "CP",verbosity=10, tol=10.0)
         gs_clgst_cptp  = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0)
         gs_clgst_cptp2 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, useDirectCP=False)
         gs_clgst_cptp3 = self.runSilent(pygsti.contract, gs_lgst_target, "CPTP",verbosity=10, tol=10.0, maxiter=0)
         gs_clgst_xp    = self.runSilent(pygsti.contract, gs_lgst_target, "XP", ds,verbosity=10, tol=10.0)
         gs_clgst_xptp  = self.runSilent(pygsti.contract, gs_lgst_target, "XPTP", ds,verbosity=10, tol=10.0)
-        gs_clgst_vsp   = pygsti.contract(gs_lgst_target, "vSPAM",verbosity=10, tol=10.0) # self.runSilent(
+        gs_clgst_vsp   = self.runSilent(pygsti.contract, gs_lgst_target, "vSPAM",verbosity=10, tol=10.0)
         gs_clgst_none  = self.runSilent(pygsti.contract, gs_lgst_target, "nothing",verbosity=10, tol=10.0)
 
           #test bad effect vector cases
@@ -97,6 +112,12 @@ class TestCoreMethods(AlgorithmsBase):
         gs_lgst_cptptarget2= self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset,
                                             cptp_penalty_factor=1.0, spam_penalty_factor=1.0, gauge_group=TP_gauge_group, verbosity=10, checkJac=True) #no point? (remove?)
 
+        #Use "None" gauge group
+        gs_none = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, gauge_group=None, verbosity=10)
+        soln, trivialEl, gs_none = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, gauge_group=None, verbosity=10, returnAll=True)
+
+
+        
 
         #TODO: check output lies in space desired
 

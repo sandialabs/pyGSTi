@@ -127,7 +127,7 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         #Parser functions don't take a VerbosityPrinter yet, and so
         # always output to stdout (TODO)
         bToStdout = (printer.verbosity > 0 and printer.filename is None)
-
+        
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"

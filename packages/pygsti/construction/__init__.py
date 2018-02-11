@@ -9,7 +9,6 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 from .gateconstruction import *
 from .gatesetconstruction import *
 from .gatestringconstruction import *
-from .spamspecconstruction import *
 from .datasetconstruction import *
 from .stdlists import *
 from .qutrit import make_qutrit_gateset
