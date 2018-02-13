@@ -127,6 +127,11 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         #need to *not* pickle parent, as __reduce__ bypasses GateSetMember.__getstate__
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
+
+        #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
+        if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
+        if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
+        
         return (Instrument, (None, list(self.items())), dict_to_pickle)
 
     def __pygsti_reduce__(self):

@@ -61,6 +61,12 @@ class ReportableQty(object):
         else:
             return ReportableQty(self.value / x)
 
+    def __div__(self,x): #for python 2.7
+        if self.has_eb():
+            return ReportableQty(self.value / x, self.errbar / x, self.nonMarkovianEBs)
+        else:
+            return ReportableQty(self.value / x)
+
     def __getstate__(self):
         state_dict = self.__dict__.copy()
         return state_dict 

@@ -6,6 +6,8 @@ import pickle
 import os
 import copy
 
+from pygsti.construction import std1Q_XYI as std
+
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 # This class is for unifying some gatesets that get used in this file and in testGateSets2.py

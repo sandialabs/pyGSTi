@@ -29,12 +29,12 @@ class GateStringTestCase(BaseTestCase):
         with self.assertRaises(NotImplementedError):
             raw_gss.get_plaquette(x=0,y=0)
         with self.assertRaises(NotImplementedError):
-            raw_gss.plaquette_rows_cols(x=0,y=0)
+            raw_gss.plaquette_rows_cols()
 
 
         gss = pygsti.objects.LsGermsStructure([1,2,4], std.germs, std.prepStrs, std.effectStrs)
         with self.assertRaises(NotImplementedError):
-            raw_gss.truncate()
+            gss.truncate()
 
 
 if __name__ == '__main__':

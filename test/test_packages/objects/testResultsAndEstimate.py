@@ -46,9 +46,11 @@ class ResultsEstimateTestCase(BaseTestCase):
         res.init_gatestrings(gss)
 
         self.assertWarns( res.init_dataset, ds ) # usually don't want to re-init
+        self.assertWarns( res.init_gatestrings, gss ) # usually don't want to re-init
         with self.assertRaises(ValueError):
             res.init_gatestrings("foobar")
-        self.assertWarns( res.init_gatestrings, gss ) # usually don't want to re-init
+        res.init_gatestrings(gss) # make sure "foobar" test above doesn't leave results in an un-init state
+
 
         #add estimates
         res.add_estimate(std.gs_target.copy(), std.gs_target.copy(),
