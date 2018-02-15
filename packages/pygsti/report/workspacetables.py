@@ -1872,7 +1872,7 @@ class GatesSingleMetricTable(WorkspaceTable):
         if tableTitle:
             latex_head =  "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
             latex_head += "\\multicolumn{%d}{c|}{%s} \\\\ \cline{1-%d}\n" % (nCols,tableTitle,nCols)
-            latex_head += " & " + " & ".join(colHeadings) + "\\\\ \hline\n"
+            latex_head += " & ".join(colHeadings) + "\\\\ \hline\n"
         
             html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
             html_head += '<tr><th colspan="%d">%s</th></tr>\n' % (nCols,tableTitle)

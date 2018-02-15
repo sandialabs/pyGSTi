@@ -7,6 +7,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import gc as _gc
 from .. import objects as _objs
 
 from .plothelpers import _eformat
@@ -80,14 +81,6 @@ def mpl_make_linear_cmap(rgb_colors, name=None):
         
     return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
         
-    cdict = {label: []
-             for label, idx in zip(labels, list(range(len(start_color))))}
-
-    if name is None:
-        name = 'linear_' + str(start_color) + '-' + str(final_color)
-
-    return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
-
 
 def mpl_besttxtcolor( x, cmap, norm ):
     """
@@ -115,6 +108,8 @@ def mpl_besttxtcolor( x, cmap, norm ):
 
 def mpl_process_lbl(lbl, math=False):
     """ Process a (plotly-compatible) text label `lbl` to matplotlb text."""
+    if not _compat.isstr(lbl):
+        lbl = str(lbl) # just force as a string
     math = math or ('<sup>' in lbl) or ('<sub>' in lbl) or \
            ('_' in lbl) or ('|' in lbl) or (len(lbl) == 1)
     try:
@@ -184,6 +179,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         Matplotlib figure, unless save_to is not None, in which case 
         the figure is closed and None is returned.
     """
+    numMPLFigs = len(_plt.get_fignums())
     fig = pygsti_fig.plotlyfig
     data_trace_list = fig['data']
 
@@ -349,16 +345,26 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             marker = traceDict.get('marker',None)
             line = marker['line'] if marker else None
             color = mpl_color(marker['color'] if marker else "rgba(0,0,0,1.0)")
-            linewidth = float(line['width']) if line else 1.0
-    
-            x = traceDict['x'] 
-            y = traceDict['y']
+            linewidth = float(line['width']) if (line and line['width'] is not None) else 1.0
+
+            x = y = None
+            if 'x' in traceDict and 'y' in traceDict:
+                x = traceDict['x'] 
+                y = traceDict['y']
+            elif 'r' in traceDict and 't' in traceDict:
+                x = traceDict['r'] 
+                y = traceDict['t']
+            
+            assert(x is not None and y is not None), "x and y both None in trace: %s" % traceDict
             lines = _plt.plot(x,y)
-            if mode == 'lines': ls = '-'
-            elif mode == 'markers': ls = '.'
-            elif mode == 'lines+markers': ls = '-.'
+            if mode == 'lines':
+                ls = '-'; ms = 'None'
+            elif mode == 'markers':
+                ls = 'None'; ms = "."
+            elif mode == 'lines+markers':
+                ls = '-'; ms = "."
             else: raise ValueError("Unknown mode: %s" % mode)
-            _plt.setp(lines, linestyle=ls, color=color, linewidth=linewidth)
+            _plt.setp(lines, linestyle=ls, marker=ms, color=color, linewidth=linewidth)
             
             if showlegend and name:
                 handles.append(lines[0])
@@ -366,7 +372,9 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 
         elif typ == "scattergl": #currently used only for colored points...
             x = traceDict['x'] 
-            y = traceDict['y'] 
+            y = traceDict['y']
+            assert(x is not None and y is not None), "x and y both None in trace: %s" % traceDict
+            
             colormap = pygsti_fig.colormap
             if colormap:
                 norm, cmap = colormap.get_matplotlib_norm_and_cmap()
@@ -446,12 +454,16 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                     borderaxespad=0., loc="upper left")
         
     if save_to:
+        _gc.collect() # too many open files (b/c matplotlib doesn't close everything) can cause the below to fail
         _plt.savefig(save_to, bbox_extra_artists=(axes,),
                      bbox_inches='tight') #need extra artists otherwise
                                           #axis labels get clipped 
         _plt.cla()
         _plt.close(mpl_fig)
         del mpl_fig
+        _gc.collect() # again, to be safe...
+        if len(_plt.get_fignums()) != numMPLFigs:
+            raise ValueError("WARNING: MORE FIGURES OPEN NOW (%d) THAN WHEN WE STARTED %d)!!" % (len(_plt.get_fignums()), numMPLFigs))
         return None #figure is closed!
     else:
         return mpl_fig

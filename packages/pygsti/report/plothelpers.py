@@ -15,118 +15,119 @@ from .. import objects   as _objs
 from ..baseobjs import smart_cached
 
 
-def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
-                       gatestring_filter=None, gateLabelAliases=None):
-    """ 
-    Pre-compute a list of (i,j,gstr) tuples for use in other matrix-
-    generation functions.  
-
-    This consolidates all the logic for selecting a subset (via fidpairs_filter,
-    gatestring_filter, or  dataset membership) of prep + base + effect
-    strings to compute.  The element (i,j,gstr) means that the (i,j)-th
-    element of a resulting matrix corresponds to the gate string gstr.
-    Typically gstr = prep[j] + gateString + effect[i].  Matrix indices that
-    are absent correspond to Nan entries in a resulting matrix.
-
-    Parameters
-    ----------
-    gateString : tuple of gate labels
-        The base gate sequence that is sandwiched between each effectStr
-        and prepStr.
-
-    dataset : DataSet
-        The data used to test for gate sequence membership
-
-    strs : 2-tuple
-        A (prepStrs,effectStrs) tuple of fiducial string lists.
-
-    fidpair_filter : list, optional
-        If not None, a list of (iRhoStr,iEStr) tuples specifying a subset of
-        all the prepStr,effectStr pairs to include in a result matrix.
-
-    gatestring_filter : list, optional
-        If not None, a list of GateString objects specifying which elements of
-        result matrices should be computed.  Any matrix entry corresponding to
-        an gate string *not* in this list is set to NaN.  When both
-        fidpair_filter and gatesetring_filter are non-None, gatestring_filter
-        is given precedence.
-
-    gateLabelAliases : dictionary, optional
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into when checking
-        for membership in the dataset.
-
-
-    Returns
-    -------
-    tuples : list
-        A list of (i,j,gstr) tuples.
-    rows : int
-        The number of rows in resulting matrices
-    cols : int
-        The number of columns in resulting matrices
-    """
-    tuples = []
-    prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
-    if gateString is None: 
-        return tuples, len(effectStrs),len(prepStrs) #all-NaN mxs
-
-    if gatestring_filter is not None:
-        gs_filter_dict = { gs: True for gs in gatestring_filter } #fast lookups
-
-    #No filtering -- just fiducial pair check
-    for i,effectStr in enumerate(effectStrs):
-        for j,prepStr in enumerate(prepStrs):
-            gstr = prepStr + gateString + effectStr
-            ds_gstr = _tools.find_replace_tuple(gstr,gateLabelAliases)
-            if dataset is None or ds_gstr in dataset:
-                #Note: gatestring_filter trumps fidpair_filter
-                if gatestring_filter is None:
-                    if fidpair_filter is None or (j,i) in fidpair_filter:
-                        tuples.append((i,j,gstr))
-                elif gstr in gs_filter_dict:
-                    tuples.append((i,j,gstr))
-
-    return tuples,len(effectStrs),len(prepStrs)
-
-
-
-def expand_aliases_in_map(gatestring_map, gateLabelAliases):
-    """
-    Returns a new gate string map whose strings have been 
-    modified to expand any aliases given by `gateLabelAliases`.
-
-    Parameters
-    ----------
-    gatestring_map : list of tuples
-        the original gate string map, typically obtained by 
-        calling :func:`get_gatestring_map`.
-
-    gateLabelAliases : dictionary
-        Dictionary whose keys are gate label "aliases" and whose values are tuples
-        corresponding to what that gate label should be expanded into.
-        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-
-    Returns
-    -------
-    list
-        A list of (i,j,gstr) tuples.
-    rows : int
-        The number of rows in resulting matrices
-    cols : int
-        The number of columns in resulting matrices
-    """    
-    if gateLabelAliases is None: return gatestring_map
-
-    gatestring_tuples, rows, cols = gatestring_map
-    
-    #find & replace aliased gate labels with their expanded form
-    new_gatestring_tuples = []
-    for (i,j,s) in gatestring_tuples:
-        new_gatestring_tuples.append(
-            (i,j, _tools.find_replace_tuple(s,gateLabelAliases)) )
-
-    return new_gatestring_tuples, rows, cols
+#OLD: gatestring "maps"
+#def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
+#                       gatestring_filter=None, gateLabelAliases=None):
+#    """ 
+#    Pre-compute a list of (i,j,gstr) tuples for use in other matrix-
+#    generation functions.  
+#
+#    This consolidates all the logic for selecting a subset (via fidpairs_filter,
+#    gatestring_filter, or  dataset membership) of prep + base + effect
+#    strings to compute.  The element (i,j,gstr) means that the (i,j)-th
+#    element of a resulting matrix corresponds to the gate string gstr.
+#    Typically gstr = prep[j] + gateString + effect[i].  Matrix indices that
+#    are absent correspond to Nan entries in a resulting matrix.
+#
+#    Parameters
+#    ----------
+#    gateString : tuple of gate labels
+#        The base gate sequence that is sandwiched between each effectStr
+#        and prepStr.
+#
+#    dataset : DataSet
+#        The data used to test for gate sequence membership
+#
+#    strs : 2-tuple
+#        A (prepStrs,effectStrs) tuple of fiducial string lists.
+#
+#    fidpair_filter : list, optional
+#        If not None, a list of (iRhoStr,iEStr) tuples specifying a subset of
+#        all the prepStr,effectStr pairs to include in a result matrix.
+#
+#    gatestring_filter : list, optional
+#        If not None, a list of GateString objects specifying which elements of
+#        result matrices should be computed.  Any matrix entry corresponding to
+#        an gate string *not* in this list is set to NaN.  When both
+#        fidpair_filter and gatesetring_filter are non-None, gatestring_filter
+#        is given precedence.
+#
+#    gateLabelAliases : dictionary, optional
+#        Dictionary whose keys are gate label "aliases" and whose values are tuples
+#        corresponding to what that gate label should be expanded into when checking
+#        for membership in the dataset.
+#
+#
+#    Returns
+#    -------
+#    tuples : list
+#        A list of (i,j,gstr) tuples.
+#    rows : int
+#        The number of rows in resulting matrices
+#    cols : int
+#        The number of columns in resulting matrices
+#    """
+#    tuples = []
+#    prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
+#    if gateString is None: 
+#        return tuples, len(effectStrs),len(prepStrs) #all-NaN mxs
+#
+#    if gatestring_filter is not None:
+#        gs_filter_dict = { gs: True for gs in gatestring_filter } #fast lookups
+#
+#    #No filtering -- just fiducial pair check
+#    for i,effectStr in enumerate(effectStrs):
+#        for j,prepStr in enumerate(prepStrs):
+#            gstr = prepStr + gateString + effectStr
+#            ds_gstr = _tools.find_replace_tuple(gstr,gateLabelAliases)
+#            if dataset is None or ds_gstr in dataset:
+#                #Note: gatestring_filter trumps fidpair_filter
+#                if gatestring_filter is None:
+#                    if fidpair_filter is None or (j,i) in fidpair_filter:
+#                        tuples.append((i,j,gstr))
+#                elif gstr in gs_filter_dict:
+#                    tuples.append((i,j,gstr))
+#
+#    return tuples,len(effectStrs),len(prepStrs)
+#
+#
+#
+#def expand_aliases_in_map(gatestring_map, gateLabelAliases):
+#    """
+#    Returns a new gate string map whose strings have been 
+#    modified to expand any aliases given by `gateLabelAliases`.
+#
+#    Parameters
+#    ----------
+#    gatestring_map : list of tuples
+#        the original gate string map, typically obtained by 
+#        calling :func:`get_gatestring_map`.
+#
+#    gateLabelAliases : dictionary
+#        Dictionary whose keys are gate label "aliases" and whose values are tuples
+#        corresponding to what that gate label should be expanded into.
+#        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
+#
+#    Returns
+#    -------
+#    list
+#        A list of (i,j,gstr) tuples.
+#    rows : int
+#        The number of rows in resulting matrices
+#    cols : int
+#        The number of columns in resulting matrices
+#    """    
+#    if gateLabelAliases is None: return gatestring_map
+#
+#    gatestring_tuples, rows, cols = gatestring_map
+#    
+#    #find & replace aliased gate labels with their expanded form
+#    new_gatestring_tuples = []
+#    for (i,j,s) in gatestring_tuples:
+#        new_gatestring_tuples.append(
+#            (i,j, _tools.find_replace_tuple(s,gateLabelAliases)) )
+#
+#    return new_gatestring_tuples, rows, cols
 
 
 

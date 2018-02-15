@@ -1,5 +1,6 @@
 import unittest
 import warnings
+import collections
 import pickle
 import pygsti
 import os
@@ -11,8 +12,11 @@ import numpy as np
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 
-class TestReport(ReportBaseCase):
+bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and 
+              os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))
 
+class TestReport(ReportBaseCase):
+    
     def checkFile(self, fn):
         if 'PYGSTI_DEEP_TESTING' in os.environ and \
            os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
@@ -28,10 +32,50 @@ class TestReport(ReportBaseCase):
             # Normal testing -- no latex comparison
             pass
 
+    def test_offline_zip(self):
+        pygsti.report.create_offline_zip(temp_files + "/.")
+
+    def test_failures(self):
+        self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
+        with self.assertRaises(ValueError): # backward compat catch - when forget to specify title
+            pygsti.report.create_standard_report(self.results,temp_files+"/XXX", 95)
+
+        with self.assertRaises(ValueError): #PDF report with multiple gauge opts
+            pygsti.report.create_standard_report(self.results,temp_files + "/XXX.pdf")
+
+    def test_std_clifford_comp(self):
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.gs_target,3) is not None)
+        nonStdGS = std.gs_target.rotate((0.15,-0.03,0.03))
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
+        
+
     def test_reports_chi2_noCIs(self):
         vs = self.versionsuffix
         pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
                                             confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
+
+        #Test advanced options
+        linkto = ('tex','pdf','pkl') if bLatex else ('tex','pkl')
+        results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
+        pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
+                                             confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'errgen_type': "logG-logT",
+                                                              'precision': {'normal': 2, 'polar': 1, 'sci': 1}},
+                                             link_to=linkto)
+        
+        pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL},temp_files + "/general_reportA_adv2",
+                                             confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'errgen_type': "logTiG",
+                                                              'resizable': False,
+                                                              'autosize': 'none'})
+
+        #test latex reporting
+        if bLatex:
+            pygsti.report.create_standard_report(self.results.view("default","go0"),temp_files + "/general_reportA.pdf",
+                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
+
+        
+
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
 
@@ -110,6 +154,9 @@ class TestReport(ReportBaseCase):
     def test_report_notebook(self):
         pygsti.report.create_report_notebook(self.results_logL, temp_files + "/report_notebook.ipynb", None,
                                              verbosity=3)
+        pygsti.report.create_report_notebook({'one': self.results_logL, 'two': self.results_logL},
+                                             temp_files + "/report_notebook.ipynb", None,
+                                             verbosity=3) # multiple comparable datasets
 
 
     def test_table_formatting(self):

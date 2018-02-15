@@ -202,23 +202,23 @@ class TestCoreMethods(AlgorithmsBase):
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         CM = pygsti.baseobjs.profiler._get_mem_usage()
 
-        gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        gs_single_lsgst = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-4,
                                            probClipInterval=(-1e6,1e6), regularizeFactor=1e-3,
                                            verbosity=0) #uses regularizeFactor
 
-        gs_single_lsgst_cp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        gs_single_lsgst_cp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-4,
                                            probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                            verbosity=0) #uses cptp_penalty_factor
 
-        gs_single_lsgst_sp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        gs_single_lsgst_sp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-4,
                                               probClipInterval=(-1e6,1e6), spam_penalty_factor=1.0,
                                               verbosity=0) #uses spam_penalty_factor
 
-        gs_single_lsgst_cpsp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        gs_single_lsgst_cpsp = pygsti.do_mc2gst(ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-4,
                                                 probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                                 spam_penalty_factor=1.0, verbosity=0) #uses both penalty factors
 
-        gs_single_lsgst_cpsp = self.runSilent(pygsti.do_mc2gst, ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-6,
+        gs_single_lsgst_cpsp = self.runSilent(pygsti.do_mc2gst, ds, gs_clgst, self.lsgstStrings[0], minProbClipForWeighting=1e-4,
                                               probClipInterval=(-1e6,1e6), cptp_penalty_factor=1.0,
                                               spam_penalty_factor=1.0, verbosity=10) #uses both penalty factors w/verbosity > 0
 
@@ -373,16 +373,16 @@ class TestCoreMethods(AlgorithmsBase):
         #                probClipInterval=(-1e2,1e2), verbosity=4, memLimit=curMem+8500000) #invoke memory control
 
         #non-Poisson picture - should use (-1,-1) gateset for consistency?
-        pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+        pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                         probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False)
-        pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+        pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-1, # 1e-1 b/c get inf Jacobians...
                         probClipInterval=(-1e2,1e2), verbosity=0, poissonPicture=False,
                         spam_penalty_factor=1.0, cptp_penalty_factor=1.0)
 
 
         #Check errors:
         with self.assertRaises(MemoryError):
-            pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+            pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                             probClipInterval=(-1e2,1e2),verbosity=0, memLimit=1)
 
 

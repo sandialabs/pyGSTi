@@ -800,7 +800,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
         for i, gatestring in enumerate(gatestrings):
             chk_ret = twirled_deriv(gateset, gatestring, eps)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
-                _warnings.warn("bulk twirled derive norm mismatch = "
+                _warnings.warn("bulk twirled derivative norm mismatch = "
                                "%g - %g = %g"
                                % (_nla.norm(ret[i]), _nla.norm(chk_ret),
                                   _nla.norm(ret[i] - chk_ret)))
@@ -936,7 +936,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array([1.0]*nGerms, 'd')
 
-    combinedTDDD = _np.einsum('i,ijk', weights, twirledDerivDaggerDeriv)
+    combinedTDDD = _np.einsum(str('i,ijk->jk'), weights, twirledDerivDaggerDeriv) #str(.) skirts numpy 14.0 bug in einsum
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()

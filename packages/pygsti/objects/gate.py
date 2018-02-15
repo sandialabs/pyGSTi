@@ -4816,7 +4816,7 @@ class ComposedGateMap(GateMap):
     def __str__(self):
         """ Return string representation """
         s = "Composed gate map:\n"
-        s += _mt.mx_to_string(self.as_sparse_matrix(), width=4, prec=2)
+        s += str(self.as_sparse_matrix())
         return s
 
 

@@ -4,6 +4,7 @@ import warnings
 import pygsti
 import sys
 import os
+import psutil
 
 temp_files    = 'temp_test_files'
 compare_files = 'cmp_chk_files'
@@ -18,7 +19,12 @@ class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
         # move working directories
-        self.old = os.getcwd()
+        try:
+            self.old = os.getcwd()
+        except OSError as e:
+            print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
+            raise e
+        
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
         # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))

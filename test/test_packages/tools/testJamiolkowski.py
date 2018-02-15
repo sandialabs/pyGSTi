@@ -161,6 +161,7 @@ class TestJamiolkowskiMethods(JamiolkowskiTestCase):
         '''
 
         sumOfNeg  = pygsti.sum_of_negative_choi_evals(std1Q.gs_target)
+        sumOfNegWt= pygsti.sum_of_negative_choi_evals(std1Q.gs_target, {'Gx': 1.0, 'Gy': 0.5} )
         sumsOfNeg = pygsti.sums_of_negative_choi_evals(std1Q.gs_target)
         magsOfNeg = pygsti.mags_of_negative_choi_evals(std1Q.gs_target)
         self.assertAlmostEqual(sumOfNeg, 0.0)

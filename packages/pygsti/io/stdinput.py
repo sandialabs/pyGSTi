@@ -577,13 +577,14 @@ class StdInputParser(object):
 
         #Parse preamble -- lines beginning with # or ## until first non-# line
         preamble_directives = _OrderedDict()
-        for line in open(filename,'r'):
-            line = line.strip()
-            if len(line) == 0 or line[0] != '#': break
-            if line.startswith("## "):
-                parts = line[len("## "):].split("=")
-                if len(parts) == 2: # key = value
-                    preamble_directives[ parts[0].strip() ] = parts[1].strip()
+        with open(filename,'r') as f:
+            for line in f:
+                line = line.strip()
+                if len(line) == 0 or line[0] != '#': break
+                if line.startswith("## "):
+                    parts = line[len("## "):].split("=")
+                    if len(parts) == 2: # key = value
+                        preamble_directives[ parts[0].strip() ] = parts[1].strip()
         
         #Process premble
         orig_cwd = _os.getcwd()
@@ -603,30 +604,32 @@ class StdInputParser(object):
 
         #Read data lines of data file
         dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
-        nLines = sum(1 for line in open(filename,'r'))
+        with open(filename,'r') as f:
+            nLines = sum(1 for line in f)
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
         display_progress = get_display_progress_fn(showProgress)
 
-        for (iLine,line) in enumerate(open(filename,'r')):
-            if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
-
-            line = line.strip()
-            if len(line) == 0 or line[0] == '#': continue
-            try:
-                parts = line.split()
-                lastpart = parts[-1]
-                gateStringStr = line[:-len(lastpart)].strip()
-                gateStringTuple = self.parse_gatestring(gateStringStr, lookupDict)
-                gateString = _objs.GateString(gateStringTuple, gateStringStr)
-                timeSeriesStr = lastpart.strip()
-            except ValueError as e:
-                raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
-
-            seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
-            timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
-            dataset.add_raw_series_data(gateString, seriesList, timesList)
+        with open(filename,'r') as f:
+            for (iLine,line) in enumerate(f):
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
+    
+                line = line.strip()
+                if len(line) == 0 or line[0] == '#': continue
+                try:
+                    parts = line.split()
+                    lastpart = parts[-1]
+                    gateStringStr = line[:-len(lastpart)].strip()
+                    gateStringTuple = self.parse_gatestring(gateStringStr, lookupDict)
+                    gateString = _objs.GateString(gateStringTuple, gateStringStr)
+                    timeSeriesStr = lastpart.strip()
+                except ValueError as e:
+                    raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+    
+                seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
+                timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
+                dataset.add_raw_series_data(gateString, seriesList, timesList)
                 
         dataset.done_adding_data()
         return dataset

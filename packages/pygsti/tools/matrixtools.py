@@ -755,7 +755,9 @@ def _findx(a, inds, always_copy=False):
             a_inds.shape = a_inds_shape #reshape
         else:
             a_inds = _np.zeros( a_inds_shape, a.dtype ) #has zero elements
-            asssert(a_inds.size == 0)
+            assert(a_inds.size == 0)
+
+        a_inds = a_inds.squeeze(axis=tuple(squeeze))
         return a_inds
 
 
