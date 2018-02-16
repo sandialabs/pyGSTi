@@ -72,7 +72,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     # (single) index.
     if nprocs > len(indices) and (comm is not None) and allow_split_comm:
         color = loc_indices[0] if isinstance(loc_indices[0], int) \
-                else (hash(loc_indices[0]) >> 32) # mpi4py only allows 32-bit ints
+                else (int(hash(loc_indices[0])) >> 32) # mpi4py only allows 32-bit ints
         loc_comm = comm.Split(color=color, key=rank)
     else: 
         loc_comm = None
@@ -777,8 +777,6 @@ def parallel_apply(f, l, comm):
     if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group 
         locResults = [f(arg) for arg in locArgs] # needs to do anything
     else: locResults = []
-    print("DB Rank%d: locCommSize = %d, locRank=%d, locResults = %s" % (comm.Get_rank(),locComm.Get_size() if locComm else -1,
-                                                                        locComm.Get_rank() if locComm else -1, locResults))
     results = comm.allgather(locResults) # Certain there is a better way to do this (see above)
     results = list(_itertools.chain.from_iterable(results)) # list-of-lists -> single list
     return results
