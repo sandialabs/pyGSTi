@@ -309,13 +309,14 @@ class TestCoreMethods(AlgorithmsBase):
 
         gs_lgst = pygsti.do_lgst(ds, self.fiducials, self.fiducials, self.gateset, svdTruncateTo=4, verbosity=0)
         gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,self.gateset, {'spam':1.0, 'gates': 1.0}, checkJac=True)
-        gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
+        gs_clgst = pygsti.contract(gs_lgst_go, "CPTP") 
+        gs_clgst = gs_clgst.depolarize(gate_noise=0.02, spam_noise=0.02) # just to avoid infinity objective funct & jacs below
         CM = pygsti.baseobjs.profiler._get_mem_usage()
 
         gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                                           probClipInterval=(-1e2,1e2), verbosity=0)
 
-        gs_single_mlgst_cpsp = self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-1,
+        gs_single_mlgst_cpsp = self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                                               probClipInterval=(-1e2,1e2), cptp_penalty_factor=1.0,
                                               spam_penalty_factor=1.0, verbosity=10) #uses both penalty factors w/verbosity > 0
          

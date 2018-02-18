@@ -14,6 +14,11 @@ from .reportBaseCase import ReportBaseCase
 
 bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and 
               os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))
+try:
+    import pandas
+    bPandas = True
+except ImportError:
+    bPandas = False
 
 class TestReport(ReportBaseCase):
     
@@ -55,8 +60,9 @@ class TestReport(ReportBaseCase):
                                             confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
 
         #Test advanced options
-        linkto = ('tex','pdf','pkl') if bLatex else ('pkl',) #Note: can't render as 'tex' without
-         #  matplotlib b/c figs still get rendered as 'latex': FUTURE: see if this is desirable (merge_helpers.py around ln 433)
+        linkto = ()
+        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+        if bPandas: linkto = ('pkl',) + linkto
         results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
         pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
                                              confidenceLevel=None, verbosity=3,  auto_open=False,
