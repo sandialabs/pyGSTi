@@ -312,22 +312,23 @@ class TestCoreMethods(AlgorithmsBase):
         gs_clgst = pygsti.contract(gs_lgst_go, "CPTP")
         CM = pygsti.baseobjs.profiler._get_mem_usage()
 
-        gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+        gs_single_mlgst = pygsti.do_mlgst(ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                                           probClipInterval=(-1e2,1e2), verbosity=0)
 
-        gs_single_mlgst_cpsp = self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-6,
+        gs_single_mlgst_cpsp = self.runSilent(pygsti.do_mlgst, ds, gs_clgst, self.lsgstStrings[0], minProbClip=1e-4,
                                               probClipInterval=(-1e2,1e2), cptp_penalty_factor=1.0,
                                               spam_penalty_factor=1.0, verbosity=10) #uses both penalty factors w/verbosity > 0
+         
 
         gs_mlegst = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings, verbosity=0,
-                                               minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+                                               minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                memLimit=CM + 1024**3)
         maxLogL, all_gs_mlegst_tups = pygsti.do_iterative_mlgst(
             ds, gs_clgst, [ [gs.tup for gs in gsList] for gsList in self.lsgstStrings],
-            minProbClip=1e-6, probClipInterval=(-1e2,1e2), returnAll=True, returnMaxLogL=True)
+            minProbClip=1e-4, probClipInterval=(-1e2,1e2), returnAll=True, returnMaxLogL=True)
 
         gs_mlegst_verb = self.runSilent(pygsti.do_iterative_mlgst, ds, gs_clgst, self.lsgstStrings, verbosity=10,
-                                             minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+                                             minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                              memLimit=CM + 1024**3)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(gs_mlegst_verb),0, places=5)
         self.assertAlmostEqual(gs_mlegst.frobeniusdist(all_gs_mlegst_tups[-1]),0,places=5)
@@ -335,25 +336,25 @@ class TestCoreMethods(AlgorithmsBase):
 
         #Run internal checks on less max-L values (so it doesn't take forever)
         gs_mlegst_chk = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
-                                                 minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+                                                 minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                  check=True)
 
         #Other option variations - just make sure they run at this point
         gs_mlegst_chk_opts = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
-                                                       minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+                                                       minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
                                                        gatestringWeightsDict={ ('Gx',): 2.0 } )
 
         aliased_list = [ pygsti.obj.GateString( [ (x if x != "Gx" else "GA1") for x in gs]) for gs in self.lsgstStrings[0] ]
         gs_withA1 = gs_clgst.copy(); gs_withA1.gates["GA1"] = gs_clgst.gates["Gx"]
         del gs_withA1.gates["Gx"] # otherwise gs_withA1 will have Gx params that we have no knowledge of!
-        gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-6,
+        gs_mlegst_chk_opts2 = pygsti.do_mlgst(ds, gs_withA1, aliased_list, minProbClip=1e-4,
                                               probClipInterval=(-1e2,1e2), verbosity=10,
                                               gateLabelAliases={ 'GA1': ('Gx',) })
 
         #Other option variations - just make sure they run at this point
         gs_mlegst_chk_opts3 = pygsti.do_iterative_mlgst(ds, gs_clgst, self.lsgstStrings[0:2], verbosity=0,
-                                                       minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+                                                       minProbClip=1e-4, probClipInterval=(-1e2,1e2),
                                                        gateStringSetLabels=["Set1","Set2"], useFreqWeightedChiSq=True,
                                                         gatestringWeightsDict={ ('Gx',): 2.0 }, alwaysPerformMLE=True )
 
@@ -361,11 +362,11 @@ class TestCoreMethods(AlgorithmsBase):
         forcingfn_grad = np.ones((1,gs_clgst.num_params()), 'd')
         gs_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
             ds, gs_clgst, self.lsgstStrings[0], verbosity=0,
-            minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+            minProbClip=1e-4, probClipInterval=(-1e2,1e2),
             forcefn_grad=forcingfn_grad)
         gs_lsgst_chk_opts4 = pygsti.algorithms.core._do_mlgst_base(
             ds, gs_clgst, self.lsgstStrings[0], verbosity=0, poissonPicture=False, 
-            minProbClip=1e-6, probClipInterval=(-1e2,1e2),
+            minProbClip=1e-4, probClipInterval=(-1e2,1e2),
             forcefn_grad=forcingfn_grad) # non-poisson picture
 
         #Check with small but ok memlimit -- not anymore since new mem estimation uses current memory, making this non-robust

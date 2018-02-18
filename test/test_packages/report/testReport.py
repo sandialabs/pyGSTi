@@ -55,7 +55,8 @@ class TestReport(ReportBaseCase):
                                             confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
 
         #Test advanced options
-        linkto = ('tex','pdf','pkl') if bLatex else ('tex','pkl')
+        linkto = ('tex','pdf','pkl') if bLatex else ('pkl',) #Note: can't render as 'tex' without
+         #  matplotlib b/c figs still get rendered as 'latex': FUTURE: see if this is desirable (merge_helpers.py around ln 433)
         results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
         pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
                                              confidenceLevel=None, verbosity=3,  auto_open=False,
