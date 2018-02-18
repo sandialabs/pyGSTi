@@ -4,7 +4,7 @@ import warnings
 import pygsti
 import sys
 import os
-import psutil
+#import psutil
 
 temp_files    = 'temp_test_files'
 compare_files = 'cmp_chk_files'
@@ -22,7 +22,7 @@ class BaseTestCase(unittest.TestCase):
         try:
             self.old = os.getcwd()
         except OSError as e:
-            print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
+            #print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
             raise e
         
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py

@@ -1,7 +1,7 @@
 import os
 import unittest
 import pygsti
-import psutil
+#import psutil
 from pygsti.extras import drift
 
 from ..testutils import compare_files, temp_files
