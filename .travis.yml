@@ -32,7 +32,7 @@ before_install:
 install:
   - travis_retry travis_wait pip install -r requirements.txt
   - pip install --global-option=build_ext --global-option="-I/usr/include/suitesparse" cvxpy cvxopt >/dev/null
-  - pip install ipython mpi4py zmq coverage msgpack-python cython >/dev/null
+  - pip install ipython mpi4py zmq coverage msgpack-python cython psutil >/dev/null
   - pip install -e . >/dev/null
   
 cache:

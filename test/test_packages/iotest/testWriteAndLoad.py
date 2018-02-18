@@ -2,7 +2,7 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os
+import os, time
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 class TestWriteAndLoad(BaseTestCase):
@@ -35,6 +35,7 @@ class TestWriteAndLoad(BaseTestCase):
         ds3 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #loads from cache file
 
+        ds.comment = "# Hello" # comment character doesn't get doubled...
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt", ds,
                                 outcomeLabelOrder=['0','1'])
         ds5 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #rewrites cache file
@@ -89,10 +90,10 @@ Gx^4 20 80 0.2 100
 """
         with open(temp_files + "/TestMultiDataset.txt","w") as output:
             output.write(multi_dataset_txt)
-
+        time.sleep(3) #so cache file is created strictly *after* dataset is created (above)
 
         ds = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt")
-        ds2 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True)
+        ds2 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True) #creates cache file
         ds3 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True) #load from cache
 
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset2.txt", ds, strList)
@@ -102,6 +103,7 @@ Gx^4 20 80 0.2 100
         self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['1'], ds['DS1'][('Gx','Gy')]['1'] )
 
         #write all strings in ds to file with given spam label ordering
+        ds.comment = "# Hello" # comment character doesn't get doubled...
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset3.txt",
                                      ds, outcomeLabelOrder=('0','1'))
 
@@ -234,7 +236,25 @@ GAUGEGROUP: Full
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
 
+    def test_gateset_writeload(self):
+        gs = std.gs_target.copy()
 
+        for param in ('full','TP','CPTP','static'):
+            print("Param: ",param)
+            gs.set_all_parameterizations(param)
+            filename = temp_files + "/gateset_%s.txt" % param
+            pygsti.io.write_gateset(gs, filename)
+            gs2 = pygsti.io.read_gateset(filename)
+            self.assertAlmostEqual( gs.frobeniusdist(gs2), 0.0 )
+            for lbl in gs.gates:
+                self.assertEqual( type(gs.gates[lbl]), type(gs2.gates[lbl]))
+            for lbl in gs.preps:
+                self.assertEqual( type(gs.preps[lbl]), type(gs2.preps[lbl]))
+            for lbl in gs.povms:
+                self.assertEqual( type(gs.povms[lbl]), type(gs2.povms[lbl]))
+            for lbl in gs.instruments:
+                self.assertEqual( type(gs.instruments[lbl]), type(gs2.instruments[lbl]))
+        
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

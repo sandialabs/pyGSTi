@@ -399,6 +399,7 @@ def povm_entanglement_infidelity(gatesetA, gatesetB, povmlbl):
     """
     return 1.0 - _tools.povm_fidelity(gatesetA, gatesetB, povmlbl)
 POVM_entanglement_infidelity = _gsf.povmfn_factory(povm_entanglement_infidelity)
+# init args == (gateset1, gatesetB, povmlbl)
 
 def povm_jt_diff(gatesetA, gatesetB, povmlbl):
     """ 
@@ -409,6 +410,7 @@ def povm_jt_diff(gatesetA, gatesetB, povmlbl):
     """
     return _tools.povm_jtracedist(gatesetA, gatesetB, povmlbl)
 POVM_jt_diff = _gsf.povmfn_factory(povm_jt_diff)
+# init args == (gateset1, gatesetB, povmlbl)
 
 try:
     import cvxpy as _cvxpy # pylint: disable=unused-import
@@ -517,7 +519,7 @@ Angles_btwn_rotn_axes = _gsf.gatesetfn_factory(angles_btwn_rotn_axes)
 # init args == (gateset)
 
 
-def entanglement_fidelity(A, mxBasis, B):
+def entanglement_fidelity(A, B, mxBasis):
     """Entanglement fidelity between A and B"""
     return _tools.process_fidelity(A, B, mxBasis)
 Entanglement_fidelity = _gsf.gatesfn_factory(entanglement_fidelity)
@@ -631,7 +633,7 @@ def nonunitary_avg_gate_infidelity(A, B, mxBasis):
     U = std_unitarity(A,B,mxBasis)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))
 Nonunitary_avg_gate_infidelity = _gsf.gatesfn_factory(nonunitary_avg_gate_infidelity)
-
+# init args == (gateset1, gateset2, gateLabel)
 
 def eigenvalue_nonunitary_entanglement_infidelity(A, B, mxBasis):
     """ Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of A*B^{-1} """
@@ -647,6 +649,7 @@ def eigenvalue_nonunitary_avg_gate_infidelity(A, B, mxBasis):
     U = eigenvalue_unitarity(A,B)
     return (d-1.0)/d * (1.0 - _np.sqrt(U))
 Eigenvalue_nonunitary_avg_gate_infidelity = _gsf.gatesfn_factory(eigenvalue_nonunitary_avg_gate_infidelity)
+# init args == (gateset1, gateset2, gateLabel)
 
 
 def eigenvalue_entanglement_infidelity(A, B, mxBasis):
@@ -757,21 +760,21 @@ Rel_eigvals = _gsf.gatesfn_factory(rel_eigvals)
 
 def rel_logTiG_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(B^{-1} * A)"""
-    rel_gate = _tools.error_generator(A, B, "logTiG")
+    rel_gate = _tools.error_generator(A, B, mxBasis, "logTiG")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logTiG_eigvals = _gsf.gatesfn_factory(rel_logTiG_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logGTi_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(A * B^{-1})"""
-    rel_gate = _tools.error_generator(A, B, "logGTi")
+    rel_gate = _tools.error_generator(A, B, mxBasis, "logGTi")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logGTi_eigvals = _gsf.gatesfn_factory(rel_logGTi_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
 
 def rel_logGmlogT_eigvals(A, B, mxBasis):
     """ Eigenvalues of log(A) - log(B)"""
-    rel_gate = _tools.error_generator(A, B, "logG-logT")
+    rel_gate = _tools.error_generator(A, B, mxBasis, "logG-logT")
     return _np.linalg.eigvals(rel_gate).astype("complex") #since they generally *can* be complex
 Rel_logGmlogT_eigvals = _gsf.gatesfn_factory(rel_logGmlogT_eigvals)
 # init args == (gateset1, gateset2, gateLabel)
@@ -1128,12 +1131,14 @@ def vec_as_stdmx(vec, mxBasis):
     """ SPAM vectors as a standard density matrix """
     return _tools.vec_to_stdmx(vec, mxBasis)
 Vec_as_stdmx = _gsf.vecfn_factory(vec_as_stdmx)
+# init args == (gateset, label, typ)
 
 def vec_as_stdmx_eigenvalues(vec, mxBasis):
     """ Eigenvalues of the density matrix corresponding to a SPAM vector """
     mx = _tools.vec_to_stdmx(vec, mxBasis)
     return _np.linalg.eigvals(mx)
 Vec_as_stdmx_eigenvalues = _gsf.vecfn_factory(vec_as_stdmx_eigenvalues)
+# init args == (gateset, label, typ)
 
 
 def info_of_gatefn_by_name(name):

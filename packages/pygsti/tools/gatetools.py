@@ -311,9 +311,7 @@ def diamonddist(A, B, mxBasis='gm', return_x=False):
 #       prob.solve(solver="SCS")#This always fails
     except:
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
-        if return_x:
-            return -2, _np.zeros((dim,dim)) #still need to return x!
-        return -2
+        return (-2, _np.zeros((dim,dim))) if return_x else -2
 
     if return_x:
         X = Y.value + 1j*Z.value #encodes state at which maximum trace-distance occurs
@@ -912,6 +910,8 @@ def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
         return _spl.expm(error_gen + _spl.logm(target_gate))
     elif typ == "logTiG":
         return _np.dot(target_gate, _spl.expm(error_gen))
+    elif typ == "logGTi":
+        return _np.dot(_spl.expm(error_gen), target_gate)
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
@@ -1624,10 +1624,11 @@ def project_gateset(gateset, targetGateset,
     """
     
     gateLabels = list(gateset.gates.keys())  # gate labels
+    basis = gateset.basis
     
     if basis.name != targetGateset.basis.name:
         raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
-                         % (basis.name, targetGateset.basis.name))
+                         % (gateset.basis.name, targetGateset.basis.name))
     
     # Note: set to "full" parameterization so we can set the gates below
     #  regardless of what parameterization the original gateset had.
@@ -1666,6 +1667,8 @@ def project_gateset(gateset, targetGateset,
                             _np.einsum('ij,ijkl', OProj, OGens)
             lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basis)
 
+        targetGate = targetGateset.gates[gl]
+            
         if 'H' in projectiontypes:
             gsDict['H'].gates[gl] = gate_from_error_generator(
                 ham_error_gen, targetGate, genType)

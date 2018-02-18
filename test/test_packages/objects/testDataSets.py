@@ -18,11 +18,19 @@ class TestDataSetMethods(BaseTestCase):
         ds[ ('Gx',) ] = {'0': 10, '1': 90}
         ds[ ('Gx',) ]['0'] = 10
         ds[ ('Gx',) ]['1'] = 90
+        with self.assertRaises(NotImplementedError):
+            ds[ ('Gx',) ]['new'] = 20 # assignment can't create *new* outcome labels (yet)
         #OLD ds.add_counts_1q( ('Gx','Gy'), 10, 40 )
         #OLD ds.add_counts_1q( ('Gx','Gy'), 40, 10 ) #freq much different from existing
         ds.add_count_dict( ('Gy','Gy'), {'FooBar': 10, '1': 90 }) # OK to add outcome labels on the fly
         ds.add_count_dict( ('Gy','Gy'), {'1': 90 }) # now all outcome labels OK now
+        ds.add_count_dict( ('Gy','Gy'),pygsti.obj.labeldicts.OutcomeLabelDict([('0',10), ('1',90)]),
+                           overwriteExisting=False) #adds counts at next available integer timestep
         ds.done_adding_data()
+
+        #Test that we don't *need* to add anything
+        dsEmpty = pygsti.objects.DataSet(outcomeLabels=['0','1'])
+        dsEmpty.done_adding_data()
 
         dsWritable = ds.copy_nonstatic()
         dsWritable[('Gy',)] = {'0': 20, '1': 80}
@@ -122,6 +130,15 @@ class TestDataSetMethods(BaseTestCase):
             for spamLabel,count in dsRow.counts.items():
                 cnt += count
 
+        #Check degrees of freedom
+        ds.get_degrees_of_freedom()
+        ds2.get_degrees_of_freedom()
+        ds3.get_degrees_of_freedom()
+        ds4.get_degrees_of_freedom()
+
+        #String Manipulation
+        ds.process_gate_strings( lambda s: pygsti.construction.manipulate_gatestring(s, [( ('Gx',), ('Gy',))]) )
+
         #Test truncation
         ds2.truncate( [('Gx',),('Gx','Gy')] ) #non-static
         ds4.truncate( [('Gx',),('Gx','Gy')] ) #static
@@ -159,12 +176,12 @@ class TestDataSetMethods(BaseTestCase):
 
         #Test various other methods
         nStrs = len(ds)
-        cntDict = ds[('Gx',)].as_dict()
-        asStr = str(ds[('Gx',)])
+        cntDict = ds[('Gy',)].as_dict()
+        asStr = str(ds[('Gy',)])
         
-        ds[('Gx',)].scale(2.0)
-        self.assertEqual(ds[('Gx',)]['0'], 20)
-        self.assertEqual(ds[('Gx',)]['1'], 180)
+        ds[('Gy',)].scale(2.0)
+        self.assertEqual(ds[('Gy',)]['0'], 20)
+        self.assertEqual(ds[('Gy',)]['1'], 180)
         
 
         #Test loading a deprecated dataset file
@@ -329,6 +346,19 @@ Gx^4 20 80 0.2 100
         mds4 = pygsti.objects.MultiDataSet(outcomeLabels=['0','1'])
         mds5 = pygsti.objects.MultiDataSet()
 
+        #Create a multidataset with time dependence and no rep counts
+        ds1_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds1_time = np.array(np.arange(0,6),'d')
+
+        ds2_oli = np.array( [0,1]*3, 'i' ) # 3 gate strings * 2 outcome labels
+        ds2_time = np.array(np.arange(2,8),'d')
+
+        mds_oli = collections.OrderedDict( [ ('ds1', ds1_oli), ('ds2', ds2_oli) ] )
+        mds_time = collections.OrderedDict( [ ('ds1', ds1_time), ('ds2', ds2_time) ] )
+        mdsNoReps = pygsti.objects.MultiDataSet(mds_oli, mds_time, None, gateStringIndices=gstrInds,
+                                                outcomeLabels=['0','1'])
+
+
         #mds2.add_dataset_counts("new_ds1", ds1_cnts)
         sl_none = mds5.get_outcome_labels()
 
@@ -365,6 +395,7 @@ Gx^4 20 80 0.2 100
         nStrs = len(multiDS)
         labels = list(multiDS.keys())
         self.assertEqual(labels, ['DS0', 'DS1', 'myDS'])
+        self.assertTrue( multiDS.has_key('DS0') )
 
         for label in multiDS:
             DS = multiDS[label]
@@ -377,7 +408,17 @@ Gx^4 20 80 0.2 100
         for label,DS in multiDS.items():
             pass
 
+        #iteration over MultiDataSet without reps (slightly different logic)
+        for label in mdsNoReps: 
+            pass
+        for label,ds in mdsNoReps.items():
+            pass
+        for ds in mdsNoReps.values():
+            pass
+        
+
         sumDS = multiDS.get_datasets_aggregate('DS0','DS1')
+        sumDS_noReps = mdsNoReps.get_datasets_aggregate('ds1','ds2')
         multiDS_str = str(multiDS)
         multiDS_copy = multiDS.copy()
 
@@ -396,14 +437,19 @@ Gx^4 20 80 0.2 100
         #Loading and saving
         multiDS.save(temp_files + "/multidataset.saved")
         multiDS.save(temp_files + "/multidataset.saved.gz")
+        mdsNoReps.save(temp_files + "/multidataset_noreps.saved")
         with open(temp_files + "/multidataset.stream","wb") as streamfile:
             multiDS.save(streamfile)
 
         multiDS.load(temp_files + "/multidataset.saved")
         multiDS.load(temp_files + "/multidataset.saved.gz")
+        mdsNoReps.load(temp_files + "/multidataset_noreps.saved")
         with open(temp_files + "/multidataset.stream","rb") as streamfile:
             multiDS.load(streamfile)
         multiDS2 = pygsti.obj.MultiDataSet(fileToLoadFrom=temp_files + "/multidataset.saved")
+
+        #Finally, add a dataset w/reps to a multidataset without them
+        mdsNoReps.add_dataset('DSwReps', mds2['ds1'])
 
     def test_collisionAction(self):
         ds = pygsti.objects.DataSet(outcomeLabels=['0','1'], collisionAction="keepseparate")
@@ -429,6 +475,9 @@ Gx^4 20 80 0.2 100
                             ['0','0','1','0','1','0','1','1','1','0'], #spam labels
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], #time stamps
                             None) #no repeats
+
+        with self.assertRaises(ValueError):
+            ds[('Gx',)].scale(2.0) # can't scale a dataset without repeat counts
 
         oli = collections.OrderedDict([('0',0), ('1',1)])
         ds2 = pygsti.objects.DataSet(outcomeLabelIndices=oli)
@@ -524,13 +573,17 @@ Gx^4 20 80 0.2 100
                             [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
 
         printInfo(ds, ('Gx',) )
-
+        
         ds[('Gy','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times
         dsNoReps = ds.copy() #tests copy() before any rep-data is added
 
         ds.add_raw_series_data( ('Gy',),['0','1'],[0.0, 1.0], [3,7]) #using repetitions
         ds.add_series_data( ('Gy','Gy'), [ {'0': 2, '1': 8}, {'0': 6, '1': 4}, {'1': 10} ],
                             [0.0, 1.2, 2.4])
+        OD = collections.OrderedDict
+        ds.add_series_data( ('Gy','Gy','Gy'), [ OD([('0',2),('1',8)]), OD([('0',6),('1',4)]), OD([('1',10)]) ],
+                            [0.0, 1.2, 2.4]) # add with ordered dicts
+
         ds[('Gx','Gx')] = (['0','1'], [0.0, 1.0], [10,10]) #add via spam-labels, times, reps
         ds[('Gx','Gy')] = (['0','1'], [0.0, 1.0]) #add via spam-labels, times *after* we've added rep data
 
@@ -547,7 +600,17 @@ Gx^4 20 80 0.2 100
         dsNoReps[('Gy','Gy')][1] = ('0',0.4)    # or be omitted
         printInfo(ds, ('Gx',) )
         printInfo(ds, ('Gy',) )
+        
+        with self.assertRaises(ValueError):
+            ds[('Gx',)].outcomes = ['x','x'] #can't assign outcomes
 
+        dsScaled = ds.copy()
+        for row in dsScaled.values():
+            row.scale(3.141592) # so counts are no longer intergers
+        printInfo(dsScaled, ('Gx',) ) #triggers rounding warnings
+        dsScaled.done_adding_data()
+        printInfo(dsScaled, ('Gx',) ) # (static case)
+        
         ds.done_adding_data()
         dsNoReps.done_adding_data()
 
@@ -558,6 +621,8 @@ Gx^4 20 80 0.2 100
             ds.add_raw_series_data( ('Gy','Gx'),['0','1'],[0.0, 1.0], [2,2])
         with self.assertRaises(ValueError):
             ds.add_series_from_dataset(ds) #can't add to a static dataset
+        with self.assertRaises(ValueError):
+            dsNoReps.build_repetition_counts() #not allowed on static dataset
 
         #test contents
         self.assertTrue( ('Gx',) in ds)
@@ -565,6 +630,15 @@ Gx^4 20 80 0.2 100
         self.assertTrue( ds.has_key(('Gx',)) )
         self.assertEqual( list(ds.get_outcome_labels()), [('0',),('1',)] )
         self.assertEqual( list(ds.get_gate_labels()), ['Gx','Gy'] )
+
+        #Check degrees of freedom
+        ds.get_degrees_of_freedom()
+        ds.get_degrees_of_freedom( [('Gx',)] )
+        dsNoReps.get_degrees_of_freedom()
+        dsNoReps.get_degrees_of_freedom( [('Gx',)] )
+        dsScaled.get_degrees_of_freedom()
+        dsScaled.get_degrees_of_freedom( [('Gx',)] )
+
 
         #test iteration
         for gstr,dsRow in ds.items():
@@ -623,6 +697,8 @@ Gx^4 20 80 0.2 100
         print("Before [1,2) time slice")
         print(ds)
         ds_slice = ds.time_slice(1.0,2.0)
+        ds_empty_slice = ds.time_slice(100.0,101.0)
+        ds_slice2 = dsNoReps.time_slice(1.0,2.0)
         print("Time slice:")
         print(ds_slice)
         ds_slice = ds.time_slice(1.0,2.0,aggregateToTime=0.0)
@@ -660,6 +736,10 @@ Gx^4 20 80 0.2 100
         #ds.compute_fourier_filtering(verbosity=5)
         #dsT = ds.create_dataset_at_time(0.2)
         #dsT2 = ds.create_dataset_from_time_range(0,0.3)
+
+    def test_deprecated_dataset(self):
+        with open(compare_files + '/deprecated.dataset', 'rb') as datasetfile:
+            ds_from_pkl = pickle.load(datasetfile)
 
         
     def test_tddataset_from_file(self):

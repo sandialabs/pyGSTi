@@ -1,6 +1,7 @@
 import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
+from pygsti.construction import std2Q_XYICNOT as std2Q
 from pygsti.objects.gatemapcalc import GateMapCalc
 import sys, os
 
@@ -394,6 +395,26 @@ class TestDriversMethods(DriversTestCase):
                                 std.germs, maxLens)
 
 
+        #Some parameter variants & output to pkl
+        advancedOpts = {'objective': 'chi2', 'profile': 2 }
+        result = self.runSilent(pygsti.do_model_test, gs_guess,
+                                ds, std.gs_target, std.fiducials, std.fiducials,
+                                std.germs, maxLens, advancedOptions=advancedOpts,
+                                output_pkl = temp_files + "/driverModelTestResult1.pkl")
+
+        with self.assertRaises(ValueError):
+            advancedOpts = {'objective': 'foobar' }
+            self.runSilent(pygsti.do_model_test, gs_guess,
+                           ds, std.gs_target, std.fiducials, std.fiducials,
+                           std.germs, maxLens, advancedOptions=advancedOpts)
+        with self.assertRaises(ValueError):
+            advancedOpts = {'profile': 'foobar' }
+            self.runSilent(pygsti.do_model_test, gs_guess,
+                           ds, std.gs_target, std.fiducials, std.fiducials,
+                           std.germs, maxLens, advancedOptions=advancedOpts)
+
+        
+
     def test_robust_data_scaling(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers2.dataset%s" % self.versionsuffix)
         gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
@@ -403,8 +424,15 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_long_sequence_gst,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, advancedOptions={'badFitThreshold': -100,
-                                                                     'onBadFit': ["robust","Robust","robust+","Robust+"]})
+                                                                     'onBadFit': ["do nothing","robust","Robust","robust+","Robust+"]})
 
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.do_long_sequence_gst,
+                           ds, std.gs_target, std.fiducials, std.fiducials,
+                           std.germs, maxLens, advancedOptions={'badFitThreshold': -100,
+                                                                'onBadFit': ["foobar"]})
+
+        
     def test_stdpracticeGST(self):
         ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/drivers.dataset%s" % self.versionsuffix)
         gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
@@ -419,21 +447,48 @@ class TestDriversMethods(DriversTestCase):
         pygsti.report.create_standard_report(result, temp_files + "/full_report_stdpractice",
                                              "Std Practice Test Report", verbosity=2)
 
-        #with string args
+        #with string args, gaugeOptTarget, output pkl, and advanced options
         result = self.runSilent(pygsti.do_stdpractice_gst,
                                 temp_files + "/driver_test_dataset.txt",
                                 temp_files + "/driver.gateset",
                                 temp_files + "/driver_fiducials.txt",
                                 temp_files + "/driver_fiducials.txt",
                                 temp_files + "/driver_germs.txt",
-                                maxLens, modes="TP", comm=None, memLimit=None, verbosity=5)
+                                maxLens, modes="TP", comm=None, memLimit=None, verbosity=5,
+                                gaugeOptTarget = gs_guess,
+                                output_pkl = temp_files + "/driver_results1.pkl",
+                                advancedOptions={'all': {'objective': 'chi2'}} )
 
         # test running just Target mode
         self.runSilent(pygsti.do_stdpractice_gst,
                        ds, std.gs_target, std.fiducials, std.fiducials,
                        std.germs, maxLens, modes="Target")
 
+        # test invalid mode
+        with self.assertRaises(ValueError):
+            self.runSilent(pygsti.do_stdpractice_gst,
+                           ds, std.gs_target, std.fiducials, std.fiducials,
+                           std.germs, maxLens, modes="Foobar")
 
+    def test_gaugeopt_suite_to_dict(self):
+        
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary("single", std.gs_target, verbosity=1)
+        d2 = pygsti.drivers.gaugeopt_suite_to_dictionary(d, std.gs_target, verbosity=1) #with dictionary - basically a pass-through
+
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam","none"],
+                                                        std.gs_target, verbosity=1)
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "unreliable2Q"],
+                                                        std2Q.gs_target, verbosity=1)
+
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["single","unreliable2Q"], std.gs_target, verbosity=1) #non-2Q gates
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["single","unreliable2Q"], std2Q.gs_target, verbosity=1)
+
+        advOpts = {'all': {'unreliableGates': ['Gx','Gcnot']}}
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["single","unreliable2Q"], std2Q.gs_target, advOpts, verbosity=1)
+        d = pygsti.drivers.gaugeopt_suite_to_dictionary(["varySpam","unreliable2Q"], std2Q.gs_target, advOpts, verbosity=1)
+
+        with self.assertRaises(ValueError):
+            pygsti.drivers.gaugeopt_suite_to_dictionary(["foobar"], std.gs_target, verbosity=1)
 
     def test_bootstrap(self):
 

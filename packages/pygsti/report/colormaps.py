@@ -28,16 +28,17 @@ def as_rgb_array(colorStr):
     if colorStr.startswith('#') and len(colorStr) >= 7:
         r,g,b = colorStr[1:3], colorStr[3:5], colorStr[5:7]
         r = float(int(r,16))
-        g = float(int(r,16))
-        b = float(int(r,16))
+        g = float(int(g,16))
+        b = float(int(b,16))
         rgb = r,g,b                                                                          
     elif colorStr.startswith('rgb(') and colorStr.endswith(')'):
         tupstr = colorStr[len('rgb('):-1]
         rgb = [float(x) for x in tupstr.split(',')]
     elif colorStr.startswith('rgba(') and colorStr.endswith(')'):
         tupstr = colorStr[len('rgba('):-1]
-        rgba = tupstr.split(',')
-        rgb = [float(x)/256.0 for x in rgba[0:3]] + [float(rgba[3])]
+        #OLD: rgba = tupstr.split(',')
+        #OLD: rgb = [float(x)/256.0 for x in rgba[0:3]] + [float(rgba[3])]
+        rgb = [float(x) for x in tupstr.split(',')[0:3] ] #ignore alpha
     else:
         raise ValueError("Cannot convert colorStr = ", colorStr)
     return _np.array(rgb)
@@ -75,7 +76,7 @@ def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
             break
     else:
         val,color = plotly_colorscale[-1]
-        assert(val <= normalized_val)
+        assert(val <= normalized_value)
         interp_rgb = as_rgb_array(color)
     return 'rgb(%d,%d,%d)' % ( int(round(interp_rgb[0])),
                                int(round(interp_rgb[1])),

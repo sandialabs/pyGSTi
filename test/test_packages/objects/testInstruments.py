@@ -22,9 +22,107 @@ class InstrumentTestCase(BaseTestCase):
         self.gs_target.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.povm_ident = self.gs_target.povms['Mdefault']['0'] + self.gs_target.povms['Mdefault']['1']
 
+        self.gs_target_wTP = self.gs_target.copy()
+        self.gs_target_wTP.instruments['IzTP'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+
         super(InstrumentTestCase, self).setUp()
 
+    def testFailures(self):
+        with self.assertRaises(ValueError):
+            pygsti.objects.instrument.convert( self.gs_target.instruments["Iz"], "foobar", self.gs_target.basis)
 
+        #Constructor
+        with self.assertRaises(AssertionError):
+            pygsti.obj.Instrument(["Non-none-matrices"], ["Non-none-items"]) #can't both be non-None
+        with self.assertRaises(ValueError):
+            pygsti.obj.Instrument("foobar") #gate_matrices must be a list or dict
+
+        #TP Constructor
+        with self.assertRaises(AssertionError):
+            pygsti.obj.TPInstrument(["Non-none-matrices"], ["Non-none-items"]) #can't both be non-None
+        with self.assertRaises(ValueError):
+            pygsti.obj.TPInstrument("foobar") #gate_matrices must be a list or dict
+
+            
+    def testFutureFunctionality(self):
+        #Test instrument construction with elemnts whose gpindices are already initialized.
+        # Since this isn't allowed currently (a future functionality), we need to do some hacking
+        E = self.gs_target.povms['Mdefault']['0']
+        InstEl = pygsti.obj.FullyParameterizedGate( np.dot(E,E.T) )
+        InstEl2 = InstEl.copy()
+        nParams = InstEl.num_params() # should be 16
+        
+        I = pygsti.obj.Instrument({})
+        InstEl.set_gpindices(slice(0,16), I)
+        InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
+
+        # TESTING ONLY - so we can add items!!!
+        I._readonly = False 
+        I['A'] = InstEl
+        I['B'] = InstEl2
+        I._readonly = True
+
+        I._paramvec = I._build_paramvec()
+          # this whole test was to exercise this function's ability to
+          # form a parameter vector with weird overlapping gpindices.
+        self.assertEqual( len(I._paramvec) , 24 )
+
+
+    def testInstrumentMethods(self):
+        
+        v = self.gs_target_wTP.to_vector()
+        
+        gs = self.gs_target_wTP.copy()
+        gs.from_vector(v)
+        gs.basis = self.gs_target_wTP.basis.copy()
+        
+        self.assertAlmostEqual(gs.frobeniusdist(self.gs_target_wTP),0.0)
+
+        for lbl in ('Iz','IzTP'):
+            deriv = gs.instruments[lbl]['plus'].deriv_wrt_params()
+            try:
+                self.assertEqual(deriv.shape[1], gs.instruments[lbl]['plus'].num_params())
+            except NotImplementedError:
+                pass # TPInstrumentGate doesn't implement num_params (yet?)
+            deriv = gs.instruments[lbl]['plus'].deriv_wrt_params([0])
+            self.assertEqual(deriv.shape[1], 1)
+
+            #DON'T do this -- we *could* alter an Instrument's constituents, but it doesn't update
+            # the instrument's underlying paramvec (yet)
+            #try:
+            #    gs.instruments[lbl]['plus'].set_value(np.identity(4,'d'))
+            #except ValueError:
+            #    pass # OK: not allowed for TPInstrumentGate objects
+
+            nEls =  gs.instruments[lbl].num_elements()
+            igate = gs.instruments[lbl]['plus'].copy()
+            print("igate = ",str(igate))
+            str_inst = str(gs.instruments[lbl])
+            
+            inst_copy = gs.instruments[lbl].copy()
+            T = pygsti.objects.FullGaugeGroupElement(
+                np.array( [ [1,0,0,0],
+                            [0,1,0,0],
+                            [0,0,0,1],
+                            [0,0,1,0] ], 'd') )
+            inst_copy.transform(T)
+
+        gs.depolarize(0.01)
+        gs.rotate((0,0,0.01))
+        gs.rotate(max_rotate=0.01, seed=1234)
+
+    def testChangeDimension(self):
+        gs = self.gs_target.copy()
+        new_gs = gs.increase_dimension(6)
+        new_gs = gs.decrease_dimension(3)
+
+        #TP
+        gs = self.gs_target.copy()
+        gs.set_all_parameterizations("TP")
+        new_gs = gs.increase_dimension(6)
+        new_gs = gs.decrease_dimension(3)
+
+        
     def testIntermediateMeas(self):
         # Mess with the target gateset to add some error to the povm and instrument
         self.assertEqual(self.gs_target.num_params(),92) # 4*3 + 16*5 = 92
@@ -231,3 +329,50 @@ class InstrumentTestCase(BaseTestCase):
         
         
         print("DONE")
+
+    def testAdvancedGateStrs(self):
+        #specify prep and/or povm labels in gate string:
+        gs_normal = pygsti.obj.GateString( ('Gx',) )
+        gs_wprep = pygsti.obj.GateString( ('rho0','Gx') )
+        gs_wpovm = pygsti.obj.GateString( ('Gx','Mdefault') )
+        gs_wboth = pygsti.obj.GateString( ('rho0','Gx','Mdefault') )
+
+        #Now compute probabilities for these:
+        gateset = self.gs_target.copy()
+        probs_normal = gateset.probs(gs_normal)
+        probs_wprep = gateset.probs(gs_wprep)
+        probs_wpovm = gateset.probs(gs_wpovm)
+        probs_wboth = gateset.probs(gs_wboth)
+
+        print(probs_normal)
+        print(probs_wprep)
+        print(probs_wpovm)
+        print(probs_wboth)
+
+        self.assertEqual( probs_normal, probs_wprep )
+        self.assertEqual( probs_normal, probs_wpovm )
+        self.assertEqual( probs_normal, probs_wboth )
+
+        #now try bulk op
+        bulk_probs = gateset.bulk_probs([gs_normal, gs_wprep, gs_wpovm, gs_wboth],check=True)
+
+    def testWriteAndLoad(self):
+        gs = self.gs_target.copy()
+
+        s = str(gs) #stringify with instruments
+
+        for param in ('full','TP','CPTP','static'):
+            print("Param: ",param)
+            gs.set_all_parameterizations(param)
+            filename = temp_files + "/gateset_with_instruments_%s.txt" % param
+            pygsti.io.write_gateset(gs, filename)
+            gs2 = pygsti.io.read_gateset(filename)
+            self.assertAlmostEqual( gs.frobeniusdist(gs2), 0.0 )
+            for lbl in gs.gates:
+                self.assertEqual( type(gs.gates[lbl]), type(gs2.gates[lbl]))
+            for lbl in gs.preps:
+                self.assertEqual( type(gs.preps[lbl]), type(gs2.preps[lbl]))
+            for lbl in gs.povms:
+                self.assertEqual( type(gs.povms[lbl]), type(gs2.povms[lbl]))
+            for lbl in gs.instruments:
+                self.assertEqual( type(gs.instruments[lbl]), type(gs2.instruments[lbl]))

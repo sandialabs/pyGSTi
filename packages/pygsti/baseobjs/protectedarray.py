@@ -86,7 +86,7 @@ class ProtectedArray(object):
         return ret
 
     def __getslice__(self, i, j):
-        #For special cases when getslice is still called, e.g. A[:]
+        #For special cases when getslice is still called, e.g. A[:] in Python 2.7
         return self.__getitem__(slice(i, j))
 
     def __getitem__( self, key ) :

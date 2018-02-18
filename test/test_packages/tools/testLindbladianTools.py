@@ -2,6 +2,7 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
 import numpy as np
 import scipy
+import scipy.sparse as sps
 import pygsti
 
 import pygsti.tools.lindbladtools as lt
@@ -16,6 +17,12 @@ class LindbladianToolsBaseTestCase(BaseTestCase):
 
         self.assertArraysAlmostEqual(lt.hamiltonian_to_lindbladian(np.zeros(shape=(2,2))),
                                      expectedLindbladian)
+        sparse = sps.csr_matrix(np.zeros(shape=(2,2)))
+        spL = lt.hamiltonian_to_lindbladian(sparse, True)
+        self.assertArraysAlmostEqual(spL.toarray(),
+                                     expectedLindbladian)
+                
+        
 
     def test_stochastic_lindbladian(self):
         a = np.array([[1,2],[3,4]])
@@ -27,6 +34,12 @@ class LindbladianToolsBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(
             lt.stochastic_lindbladian(a),
             expected)
+        sparse = sps.csr_matrix(a)
+        spL = lt.stochastic_lindbladian(sparse, True)
+        self.assertArraysAlmostEqual(spL.toarray(),
+                                     expected)
+                
+
 
     def test_nonham_lindbladian(self):
         a = np.array([[1,2],[3,4]])
@@ -39,6 +52,13 @@ class LindbladianToolsBaseTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(
                 lt.nonham_lindbladian(a, b),
                 expected)
+        sparsea = sps.csr_matrix(a)
+        sparseb = sps.csr_matrix(b)
+        spL = lt.nonham_lindbladian(sparsea, sparseb, True)
+        self.assertArraysAlmostEqual(spL.toarray(),
+                                     expected)
+
+        
 
 
 if __name__ == '__main__':

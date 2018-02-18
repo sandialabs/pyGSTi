@@ -930,8 +930,16 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
     if isinstance(gaugeOptSuite, dict):
         gaugeOptSuite_dict = _collections.OrderedDict()
         for lbl, goparams in gaugeOptSuite.items():
-            gaugeOptSuite_dict[lbl] = goparams.copy()
-            gaugeOptSuite_dict[lbl].update( {'verbosity': printer } )
+            if hasattr(goparams,'keys'):
+                gaugeOptSuite_dict[lbl] = goparams.copy()
+                gaugeOptSuite_dict[lbl].update( {'verbosity': printer } )
+            else:
+                assert(isinstance(goparams, list)), "If not a dictionary, gauge opt params should be a list of dicts!"
+                gaugeOptSuite_dict[lbl] = []
+                for goparams_stage in goparams:
+                    dct = goparams_stage.copy()
+                    dct.update( {'verbosity': printer } )
+                    gaugeOptSuite_dict[lbl].append( dct )
             
     else:
         gaugeOptSuite_dict = _collections.OrderedDict()
@@ -1259,7 +1267,7 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
                             
                     reopt = bool(scale_typ == "Robust+")
                     
-                elif onBadFit == "do nothing":
+                elif scale_typ == "do nothing":
                     continue #go to next on-bad-fit directive
                 else:
                     raise ValueError("Invalid on-bad-fit directive: %s" % scale_typ)

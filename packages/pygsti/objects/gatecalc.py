@@ -2061,14 +2061,14 @@ class GateCalc(object):
                 resids.append(
                         wt * gate.residuals(
                     otherCalc.gates[gateLabel], T, Ti))
-                nSummands += wt * (gate.dim)**2
+                nSummands += wt**2 * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * rhoV.residuals(otherCalc.preps[lbl],
                                               'prep', T, Ti))
-                nSummands += wt * rhoV.dim
+                nSummands += wt**2 * rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
@@ -2076,26 +2076,26 @@ class GateCalc(object):
                     wt * Evec.residuals(otherCalc.effects[lbl],
                                         'effect', T, Ti))
 
-                nSummands += wt * Evec.dim
+                nSummands += wt**2 * Evec.dim
 
         else:
             for gateLabel,gate in self.gates.items():
                 wt = sqrt_itemWeights.get(gateLabel, gateWeight)
                 resids.append(
                     wt * gate.residuals(otherCalc.gates[gateLabel]))
-                nSummands += wt * (gate.dim)**2
+                nSummands += wt**2 * (gate.dim)**2
 
             for lbl,rhoV in self.preps.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * rhoV.residuals(otherCalc.preps[lbl],'prep'))
-                nSummands += wt * rhoV.dim
+                nSummands += wt**2 * rhoV.dim
 
             for lbl,Evec in self.effects.items():
                 wt = sqrt_itemWeights.get(lbl, spamWeight)
                 resids.append(
                     wt * Evec.residuals(otherCalc.effects[lbl],'effect'))
-                nSummands += wt * Evec.dim
+                nSummands += wt**2 * Evec.dim
 
         resids = [r.flatten() for r in resids]
         resids = _np.concatenate(resids)

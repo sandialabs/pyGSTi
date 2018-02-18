@@ -563,6 +563,108 @@ GAUGEGROUP: Full
 """
 
 
+        gatesetfile_test9 = \
+"""#My Gateset file with TP gates and no basis dim specified
+
+TP-PREP: rho
+LiouvilleVec
+1.0/sqrt(2) 0 0 1.0/sqrt(2)
+
+TP-POVM: Mdefault
+
+EFFECT: 0
+LiouvilleVec
+1.0/sqrt(2) 0 0 1.0/sqrt(2)
+
+EFFECT: 1
+LiouvilleVec
+1.0/sqrt(2) 0 0 -1.0/sqrt(2)
+
+END POVM
+
+TP-GATE: G1
+LiouvilleMx
+1 0 0 0
+0 1 0 0
+0 0 0 -1
+0 0 1 0
+
+CPTP-GATE: G2
+LiouvilleMx
+1 0 0 0
+0 0 0 1
+0 0 1 0
+0 -1 0 0
+
+BASIS: pp
+GAUGEGROUP: TP
+"""
+
+        gatesetfile_test10 = \
+"""#My Gateset file with instrument and POVM at end
+
+PREP: rho
+LiouvilleVec
+1.0/sqrt(2) 0 0 1.0/sqrt(2)
+
+GATE: G1
+LiouvilleMx
+1 0 0 0
+0 1 0 0
+0 0 0 -1
+0 0 1 0
+
+GATE: G2
+LiouvilleMx
+1 0 0 0
+0 0 0 1
+0 0 1 0
+0 -1 0 0
+
+Instrument: Iz
+
+IGATE: minus
+LiouvilleMx
+      0.50000000               0               0     -0.50000000
+               0               0               0               0
+               0               0               0               0
+     -0.50000000               0               0      0.50000000
+
+
+IGATE: plus
+LiouvilleMx
+      0.50000000               0               0      0.50000000
+               0               0               0               0
+               0               0               0               0
+      0.50000000               0               0      0.50000000
+
+
+END Instrument
+
+POVM: Mdefault
+
+EFFECT: 0
+LiouvilleVec
+1.0/sqrt(2) 0 0 -1.0/sqrt(2)
+
+END POVM
+
+BASIS: pp
+GAUGEGROUP: full
+"""
+        
+        gatesetfile_test11 = \
+"""# Invalid gauge group
+
+GATE: G1
+UnitaryMx
+ 1 0
+ 0 1
+
+GAUGEGROUP: Foobar
+"""
+
+
 
 
         f = open(temp_files + "/sip_test.gateset1","w")
@@ -589,6 +691,15 @@ GAUGEGROUP: Full
         f = open(temp_files + "/sip_test.gateset8","w")
         f.write(gatesetfile_test8); f.close()
 
+        f = open(temp_files + "/sip_test.gateset9","w")
+        f.write(gatesetfile_test9); f.close()
+
+        f = open(temp_files + "/sip_test.gateset10","w")
+        f.write(gatesetfile_test10); f.close()
+
+        f = open(temp_files + "/sip_test.gateset11","w")
+        f.write(gatesetfile_test11); f.close()
+
 
         gs1 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset1")
         gs2 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset2")
@@ -605,6 +716,11 @@ GAUGEGROUP: Full
             pygsti.io.read_gateset(temp_files + "/sip_test.gateset7")
 
         gs8 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset8")
+        gs9 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset9")
+        gs10 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset10")
+
+        self.assertWarns(pygsti.io.read_gateset, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
+
 
         #print " ==> gateset1:\n", gs1
         #print " ==> gateset2:\n", gs2

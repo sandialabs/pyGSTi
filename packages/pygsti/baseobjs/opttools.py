@@ -12,6 +12,7 @@ from contextlib  import contextmanager
 from collections import defaultdict
 from datetime    import datetime
 from functools   import wraps
+import warnings
 
 # note that this decorator ignores **kwargs
 def cache_by_hashed_args(obj):
@@ -21,7 +22,9 @@ def cache_by_hashed_args(obj):
     @wraps(obj)
     def _memoizer(*args, **kwargs):
         if len(kwargs) > 0:
-            raise ValueError('Cannot currently memoize on kwargs')
+            #instead of an error, just don't cache in this case
+            warnings.warn('Cannot currently memoize on kwargs') 
+            return obj(*args, **kwargs)
         try:
             if args not in cache:
                 cache[args] = obj(*args, **kwargs)

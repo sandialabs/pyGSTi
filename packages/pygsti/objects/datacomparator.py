@@ -243,7 +243,7 @@ class DataComparator():
             gatestring = self.llrVals_and_strings[violator_loc][0]
             llr = self.llrVals_and_strings[violator_loc][1]
             datalineList = [ds[gatestring] for ds in dsList]
-            nListList = _np.array([dataline.values() for dataline in datalineList])
+            nListList = _np.array([list(dataline.counts.values()) for dataline in datalineList])
             self.alpha_dict[gatestring] = target_score / llr
             print('Rescaling counts for string '+str(gatestring)+' by '+str(self.alpha_dict[gatestring]))
             print('|target score - new score| = '+str(loglikelihoodRatioTestObj(self.alpha_dict[gatestring],nListList,target_score)))

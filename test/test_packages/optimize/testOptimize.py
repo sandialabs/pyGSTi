@@ -63,6 +63,44 @@ class TestOptimizeMethods(BaseTestCase):
         pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='rel')
         pygsti.optimize.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='abs')
 
+    def test_customcg_helpers(self):
+        #Run helper routines to customcg to make sure they at least execute:
+        def g(x): # a function with tricky boundaries (|x| only defined in [-2,2]
+            if x < -2.0 or x > 2.0: return None
+            else: return abs(x)
+
+        start = -2.0
+        guess = 4.0 # None
+        pygsti.optimize.customcg._maximize1D(g,start,guess,g(start))
+
+        start = -3.0 #None
+        guess = -1.5
+        pygsti.optimize.customcg._maximize1D(g,start,guess,g(start))
+
+
+        def g(x): # a bad function with a gap between it's boundaries
+            if x > -2.0 and x < 2.0: return None
+            else: return 1.0
+
+        start = -4.0
+        guess = 4.0
+        pygsti.optimize.customcg._maximize1D(g,start,guess,g(start))
+
+    def test_customlm(self):
+        #Test a few boundary cases
+        def f(x):
+            return np.inf * np.ones(2,'d')
+        def jac(x):
+            return np.zeros( (2,3), 'd')
+
+        x0 = np.ones(3,'d')
+        xf, converged, msg = pygsti.optimize.customlm.custom_leastsq(f, jac, x0)
+        self.assertEqual(msg, "Infinite norm of objective function at initial point!")
+
+        xf, converged, msg = pygsti.optimize.customlm.custom_leastsq(f, jac, x0, max_iter=0)
+        self.assertEqual(msg, "Maximum iterations (0) exceeded")
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

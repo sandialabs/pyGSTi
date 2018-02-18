@@ -461,6 +461,7 @@ class GateMatrixCalc(GateCalc):
         for m,gateLabel1 in enumerate(revGateLabelList):
             inds1 = gpindices1[gateLabel1]
             nDerivCols1 = dgate_dgateLabel1[gateLabel1].shape[1]
+            if nDerivCols1 == 0: continue
             
             for l,gateLabel2 in enumerate(revGateLabelList):
                 inds2 = gpindices1[gateLabel2]
@@ -1599,7 +1600,8 @@ class GateMatrixCalc(GateCalc):
 
 
     def _rhoE_from_spamTuple(self, spamTuple):
-        if len(spamTuple) == 2:
+        assert( len(spamTuple) == 2 )
+        if _compat.isstr(spamTuple[0]):
             rholabel,elabel = spamTuple
             rho = self.preps[rholabel].toarray()
             E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
@@ -2633,9 +2635,9 @@ class GateMatrixCalc(GateCalc):
             old_err = _np.seterr(over='ignore')
             rho,E = self._rhoE_from_spamTuple(spamTuple)
             
-            if prMxToFill is not None:
-                _fas(prMxToFill, [fInds],
-                     self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
+            #if prMxToFill is not None:
+            #    _fas(prMxToFill, [fInds],
+            #         self._probs_from_rhoE(rho, E, Gs[gInds], scaleVals[gInds]), add=sumInto)
             if deriv1MxToFill is not None:
                 _fas(deriv1MxToFill, [fInds,pslc1], self._dprobs_from_rhoE( 
                     spamTuple, rho, E, Gs[gInds], dGs1[gInds], scaleVals[gInds], wrtSlice1), add=sumInto)
@@ -2687,7 +2689,7 @@ class GateMatrixCalc(GateCalc):
             hprobs = _np.zeros( (nElements, _slct.length(wrtSlice1),
                                  _slct.length(wrtSlice2)), 'd' )
 
-            prMxToFill = None
+            #prMxToFill = None
             deriv1MxToFill = dprobs1
             deriv2MxToFill = dprobs2
             mxToFill = hprobs

@@ -295,6 +295,7 @@ def write_gateset(gs,filename,title=None):
             if isinstance(gate, _objs.FullyParameterizedGate): typ = "GATE"
             elif isinstance(gate, _objs.TPParameterizedGate): typ = "TP-GATE"
             elif isinstance(gate, _objs.LindbladParameterizedGate): typ = "CPTP-GATE"
+            elif isinstance(gate, _objs.StaticGate): typ = "STATIC-GATE"
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"
@@ -319,7 +320,8 @@ def write_gateset(gs,filename,title=None):
 
             for label,gate in inst.items():
                 if isinstance(gate, _objs.FullyParameterizedGate): typ = "IGATE"
-                elif isinstance(gate, _objs.TPInstrumentGate): typ = "IGATE" #ok
+                elif isinstance(gate, _objs.TPInstrumentGate): typ = "IGATE" # ok b/c instrument itself is marked as TP
+                elif isinstance(gate, _objs.StaticGate): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"

@@ -22,7 +22,7 @@ def convert(instrument, typ, basis):
             return instrument
         else:
             return TPInstrument(list(instrument.items()))
-    elif typ == "full":
+    elif typ in ("full","static"):
         gate_list = [(k,_gate.convert(g,typ,basis)) for k,g in instrument.items()]
         return Instrument(gate_list)
     else:
@@ -72,6 +72,23 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         self._paramvec = self._build_paramvec()
         self._readonly = True
 
+
+    #No good way to update Instrument on the fly yet...
+    #def _update_paramvec(self, modified_obj=None):
+    #    """Updates self._paramvec after a member of this GateSet is modified"""
+    #    for obj in self.values():
+    #        assert(obj.gpindices is self), "Cannot add/adjust parameter vector!"
+    #
+    #    #update parameters changed by modified_obj
+    #    self._paramvec[modified_obj.gpindices] = modified_obj.to_vector()
+    #
+    #    #re-initialze any members that also depend on the updated parameters
+    #    modified_indices = set(modified_obj.gpindices_as_array())
+    #    for obj in self.values()
+    #        if obj is modified_obj: continue
+    #        if modified_indices.intersection(obj.gpindices_as_array()):
+    #            obj.from_vector(self._paramvec[obj.gpindices])
+
         
     def _build_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
@@ -102,13 +119,20 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
         return v
 
     def __setitem__(self, key, value):
-        if self._readonly: raise ValueError("Cannot alter POVM elements")
+        if self._readonly: raise ValueError("Cannot alter Instrument elements")
         else: return _collections.OrderedDict.__setitem__(self, key, value)
-
         
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (Instrument, (None, list(self.items())), self.__dict__)
+        #need to *not* pickle parent, as __reduce__ bypasses GateSetMember.__getstate__
+        dict_to_pickle = self.__dict__.copy()
+        dict_to_pickle['_parent'] = None
+
+        #Python 2.7: remove elements of __dict__ that get initialized by OrderedDict impl
+        if '_OrderedDict__root' in dict_to_pickle: del dict_to_pickle['_OrderedDict__root']
+        if '_OrderedDict__map' in dict_to_pickle: del dict_to_pickle['_OrderedDict__map']
+        
+        return (Instrument, (None, list(self.items())), dict_to_pickle)
 
     def __pygsti_reduce__(self):
         return self.__reduce__()

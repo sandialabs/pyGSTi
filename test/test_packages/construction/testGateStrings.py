@@ -253,7 +253,27 @@ class TestGateStringMethods(BaseTestCase):
             truncScheme="whole germ powers", keepFraction=0.7, keepSeed=1234)
         self.assertEqual(set(lsgstLists8[-1]), set(lsgstStructs8[-1].allstrs))
 
+        # empty max-lengths ==> no output
+        lsgstStructs9 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, [] )
+        self.assertEqual(len(lsgstStructs9), 0)
 
+        # checks against datasets
+        ds = pygsti.objects.DataSet(outcomeLabels=['0','1']) # a dataset that is missing
+        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )     # almost all our strings...
+        ds.done_adding_data()
+        lgst_strings = pygsti.construction.list_lgst_gatestrings(strs,strs,gateLabels)
+        lsgstStructs10 = pygsti.construction.make_lsgst_structs(
+            gateLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="drop", verbosity=4 )
+        self.assertEqual([pygsti.obj.GateString(('Gx',))], lsgstStructs10[-1].allstrs)
+        
+        with self.assertRaises(ValueError):
+            pygsti.construction.make_lsgst_structs(
+                gateLabels, strs, strs, germs, maxLens, dscheck=ds ) #missing sequences
+        with self.assertRaises(ValueError):
+            pygsti.construction.make_lsgst_structs(
+                gateLabels, strs, strs, germs, maxLens, dscheck=ds, actionIfMissing="foobar" ) #invalid action
+        
 
 
         # ELGST
@@ -316,6 +336,8 @@ class TestGateStringMethods(BaseTestCase):
             pygsti.obj.GateString( ('Gx','Gx'), "GxGy" ) #mismatch
         with self.assertRaises(ValueError):
             pygsti.obj.GateString( None )
+        with self.assertRaises(ValueError): 
+            pygsti.obj.GateString( ('foobar',), "foobar" ) # lexer illegal character
 
         w1 = pygsti.obj.WeightedGateString( ('Gx','Gy'), "GxGy", weight=0.5)
         w2 = pygsti.obj.WeightedGateString( ('Gy',), "Gy", weight=0.5)
@@ -408,6 +430,7 @@ class TestGateStringMethods(BaseTestCase):
         self.assertEqual(result, ("A","B","C","B","C","B","C"))
 
         results = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], sequenceRules)
+        results_trivial = pygsti.construction.manipulate_gatestring_list([tuple('ABC'),tuple('GHI')], None) #special case
 
 
 if __name__ == "__main__":

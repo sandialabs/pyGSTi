@@ -401,6 +401,18 @@ class TestGateSetConstructionMethods(BaseTestCase):
                                                        [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                        effectLabels=['1','0'] )
 
+        gateset2c = pygsti.construction.build_gateset( [1,1], [('L0',),('L1',)],['Gi','Gd'],
+                                                       [ "I(L0)","D(L1)"], parameterization="linear",
+                                                       prepLabels=[], effectLabels=[])
+
+        #constructions that result in non-"pp" automatic basis selection: (CANT DO THIS YET - NO Labels for odd-dim blocks...
+        #gateset2d = pygsti.construction.build_gateset( [3], [('L0',),('L1',),('L2',)],['Gi'],
+        #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #qutrit
+        #gateset2e = pygsti.construction.build_gateset( [5], [('L0',),('L1',),('L2',),('L3',),('L4',)],['Gi'],
+        #                                               [ "I(L0)"], prepLabels=[], effectLabels=[]) #gell-mann
+
+        
+
         gateset4_txt = \
 """
 # Test text file describing a gateset
@@ -602,27 +614,28 @@ GAUGEGROUP: Full
             gateset.depolarize(spam_noise=0.1,max_spam_noise=0.1) #can't specify both
 
 
-    def test_spamspecs(self):
-        strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
-        prepSpecs, effectSpecs = pygsti.construction.build_spam_specs(fiducialGateStrings=strs)
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(prepSpecs=prepSpecs, prepStrs=strs) #can't specify both...
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(prepStrs=strs, fiducialGateStrings=strs) #can't specify both...
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs() # must specify something!
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(prepStrs=strs, effectSpecs=effectSpecs, effectStrs=strs) #can't specify both...
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(effectStrs=strs, fiducialGateStrings=strs) #can't specify both...
-
-        with self.assertRaises(ValueError):
-            pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
+    #OLD
+    #def test_spamspecs(self):
+    #    strs = pygsti.construction.gatestring_list( [('Gx',),('Gy',),('Gx','Gx')] )
+    #    prepSpecs, effectSpecs = pygsti.construction.build_spam_specs(fiducialGateStrings=strs)
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs(prepSpecs=prepSpecs, prepStrs=strs) #can't specify both...
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs(prepStrs=strs, fiducialGateStrings=strs) #can't specify both...
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs() # must specify something!
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs(prepStrs=strs, effectSpecs=effectSpecs, effectStrs=strs) #can't specify both...
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs(effectStrs=strs, fiducialGateStrings=strs) #can't specify both...
+    #
+    #    with self.assertRaises(ValueError):
+    #        pygsti.construction.build_spam_specs(prepStrs=strs) # must specify some E-thing!
 
     def test_protected_array(self):
         pa1 = pygsti.baseobjs.protectedarray.ProtectedArray( np.zeros((3,3),'d') ) #nothing protected

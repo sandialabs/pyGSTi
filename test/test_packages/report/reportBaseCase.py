@@ -95,13 +95,14 @@ class ReportBaseCase(BaseTestCase):
         _, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
         gaugeOptParams['_gaugeGroupEl'] = gaugeEl  #so can gauge-propagate CIs
         cls.results.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
+        cls.results.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset, "go_dup")
 
         #Compute results for MLGST with TP constraint
         # Use do_long_sequence_gst with a non-mark dataset to trigger data scaling
         tp_target = targetGateset.copy(); tp_target.set_all_parameterizations("TP")
 
         
-        cls.ds3 = cls.ds2.copy_nonstatic()
+        cls.ds3 = cls.ds.copy_nonstatic()
         cls.ds3.add_counts_from_dataset(cls.ds2)
         cls.ds3.done_adding_data()
         

@@ -2346,6 +2346,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         # the same gateset, gate strings, comm, memlim, etc.
         evTree = evaltree_cache['evTree']
         wrtBlkSize = evaltree_cache['wrtBlkSize']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
     else:
         evTree, wrtBlkSize,_,lookup,outcomes_lookup = gs.bulk_evaltree_from_resources(
             gateStringsToUse, comm, mlim, distributeMethod,
@@ -2355,6 +2357,9 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         if evaltree_cache is not None:
             evaltree_cache['evTree'] = evTree
             evaltree_cache['wrtBlkSize'] = wrtBlkSize
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
     

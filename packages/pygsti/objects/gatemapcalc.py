@@ -72,7 +72,8 @@ class GateMapCalc(GateCalc):
         
     #Same as GateMatrixCalc, but not general enough to be in base class
     def _rhoE_from_spamTuple(self, spamTuple):
-        if len(spamTuple) == 2:
+        assert( len(spamTuple) == 2 )
+        if _compat.isstr(spamTuple[0]):
             rholabel,elabel = spamTuple
             rho = self.preps[rholabel].toarray()
             E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))

@@ -2,6 +2,7 @@ import unittest
 import itertools
 import time
 import sys
+import pickle
 import numpy as np
 from .mpinoseutils import *
 
@@ -679,6 +680,18 @@ def test_MPI_gatestrings_chi2(comm):
 
 
 @mpitest(4)
+def test_MPI_gaugeopt(comm):
+    #Gauge Opt to Target
+    gs_other = std.gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
+    gs_other['Gx'].rotate( (0,0,0.01) )
+    gs_other['Gy'].rotate( (0,0,0.01) )
+    gs_gopt = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, comm=comm)
+
+    #use a method that isn't parallelized with non-None comm (warning is given)
+    gs_gopt_slow = pygsti.gaugeopt_to_target(gs_other, std.gs_target, verbosity=10, method="BFGS", comm=comm)
+
+
+@mpitest(4)
 def test_MPI_gatestrings_logl(comm):
     #Create dataset for serial and parallel runs
     ds,lsgstStrings = create_fake_dataset(comm)
@@ -738,11 +751,20 @@ def test_run1Q_end2end(comm):
                                                 nSamples=1000,
                                                 sampleError="binomial",
                                                 seed=1234, comm=comm)
-    
+    if comm.Get_rank() == 0:
+        pickle.dump(ds, open("mpi_dataset.pkl","wb"))
+    comm.barrier() #to make sure dataset file is written
+
+    #test with pkl file - should only read in on rank0 then broadcast
+    results = pygsti.do_long_sequence_gst("mpi_dataset.pkl", gs_target, fiducials, fiducials,
+                                          germs, [1], comm=comm)
+
+    #test with dataset object
     results = pygsti.do_long_sequence_gst(ds, gs_target, fiducials, fiducials,
                                           germs, maxLengths, comm=comm)
-    
-    pygsti.report.create_standard_report(results, "mpi_test_report",
+
+    #Use dummy duplicate of results to trigger MPI data-comparison processing:
+    pygsti.report.create_standard_report({"one": results, "two": results}, "mpi_test_report",
                                          "MPI test report", confidenceLevel=95,
                                          verbosity=2, comm=comm)
 
@@ -799,6 +821,152 @@ def test_MPI_profiler(comm):
     #    p.format_memory(sortBy="foobar")
     #with self.assertRaises(NotImplementedError):
     #    p.format_memory(sortBy="timestamp")
+
+
+@mpitest(4)
+def test_MPI_tools(comm):
+    from pygsti.tools import mpitools as mpit
+
+    indices = list(range(10))
+    nprocs = comm.Get_size()
+    rank = comm.Get_rank()
+
+    # ------------------ distribute_indices_base --------------------------------
+    
+    #case of procs < nIndices
+    loc_indices, owners = mpit.distribute_indices_base(indices, nprocs, rank, allow_split_comm=True)
+    if nprocs == 4: #should always be the case
+        if rank == 0: assert(loc_indices == [0,1,2])
+        if rank == 1: assert(loc_indices == [3,4,5])
+        if rank == 2: assert(loc_indices == [6,7])
+        if rank == 3: assert(loc_indices == [8,9])
+        assert(owners == {0: 0, 1: 0, 2: 0,
+                          3: 1, 4: 1, 5: 1,
+                          6: 2, 7: 2,
+                          8: 3, 9: 3}) # index : owner-rank
+
+    #case of nIndices > procs, allow_split_comm = True, no extras
+    indices = list(range(2))
+    loc_indices, owners = mpit.distribute_indices_base(indices, nprocs, rank, allow_split_comm=True)
+    if nprocs == 4: #should always be the case
+        if rank == 0: assert(loc_indices == [0])
+        if rank == 1: assert(loc_indices == [0])
+        if rank == 2: assert(loc_indices == [1])
+        if rank == 3: assert(loc_indices == [1])
+        assert(owners == {0: 0, 1: 2}) # only gives *first* owner
+
+    #case of nIndices > procs, allow_split_comm = True, 1 extra proc
+    indices = list(range(3))
+    loc_indices, owners = mpit.distribute_indices_base(indices, nprocs, rank, allow_split_comm=True)
+    if nprocs == 4: #should always be the case
+        if rank == 0: assert(loc_indices == [0])
+        if rank == 1: assert(loc_indices == [0])
+        if rank == 2: assert(loc_indices == [1])
+        if rank == 3: assert(loc_indices == [2])
+        assert(owners == {0: 0, 1: 2, 2: 3}) # only gives *first* owner
+
+    #case of nIndices > procs, allow_split_comm = False
+    indices = list(range(3))
+    loc_indices, owners = mpit.distribute_indices_base(indices, nprocs, rank, allow_split_comm=False)
+    if nprocs == 4: #should always be the case
+        if rank == 0: assert(loc_indices == [0])
+        if rank == 1: assert(loc_indices == [1])
+        if rank == 2: assert(loc_indices == [2])
+        if rank == 3: assert(loc_indices == [])  #only one proc per index
+        assert(owners == {0: 0, 1: 1, 2: 2}) # only gives *first* owner
+
+    #Boundary case of no indices
+    loc_indices, owners = mpit.distribute_indices_base([], nprocs, rank, allow_split_comm=False)
+    assert(loc_indices == [])
+    assert(owners == {})
+    
+        
+    # ------------------ slice_up_slice --------------------------------
+    slices = mpit.slice_up_slice( slice(0,4), num_slices=2)
+    assert(slices[0] == slice(0,2))
+    assert(slices[1] == slice(2,4))
+    slices = mpit.slice_up_slice( slice(None,None), num_slices=2)
+    assert(slices[0] == slice(0,0))
+    assert(slices[1] == slice(0,0))
+
+
+    # ------------------ distribute & gather slices--------------------------------
+    master = np.arange(100)
+
+    def test(slc, allow_split_comm=True, maxbuf=None):
+        slices, loc_slice, owners, loc_comm = mpit.distribute_slice(slc,comm,allow_split_comm)
+        my_array = np.zeros(100,'d')
+        my_array[loc_slice] = master[loc_slice] # ~ computation (just copy from "master")
+        mpit.gather_slices(slices, owners, my_array, 
+                           arToFillInds=[], axes=0, comm=comm,
+                           max_buffer_size=maxbuf)
+        assert(np.linalg.norm(my_array[slc] - master[slc]) < 1e-6)
+
+        my_array2 = np.zeros(100,'d')
+        my_array2[loc_slice] = master[loc_slice] # ~ computation (just copy from "master")
+        mpit.gather_slices_by_owner([loc_slice], my_array2, arToFillInds=[],
+                                    axes=0, comm=comm, max_buffer_size=maxbuf)
+        assert(np.linalg.norm(my_array2[slc] - master[slc]) < 1e-6)
+
+    test(slice(0,8)) #more indices than processors
+    test(slice(0,3)) #fewer indices than processors
+    test(slice(0,3),False) #fewer indices than processors w/split comm
+    test(slice(0,10),maxbuf=10) #with max-buffer
+    test(slice(0,10),maxbuf=0) #with max-buffer that cannot be attained - should WARN
+
+    master2D = np.arange(100).reshape((10,10))
+    
+    def test2D(slc1,slc2, allow_split_comm=True, maxbuf=None):
+        slices1, loc_slice1, owners1, loc_comm1 = mpit.distribute_slice(slc1,comm,allow_split_comm)
+        slices2, loc_slice2, owners2, loc_comm2 = mpit.distribute_slice(slc2,loc_comm1,allow_split_comm)
+        
+        my_array = np.zeros((10,10),'d')
+        my_array[loc_slice1,loc_slice2] = master2D[loc_slice1,loc_slice2].copy() # ~ computation (just copy from "master")
+
+    #Can't do this until distribute_slice gets upgraded to work with multiple dims...
+    #     mpit.gather_slices(slices, owners, my_array, 
+    #                        arToFillInds=[], axes=0, comm=comm,
+    #                        max_buffer_size=maxbuf)
+    #     assert(np.linalg.norm(my_array[slc] - master2D[slc]) < 1e-6)
+
+        my_array2 = np.zeros((10,10),'d')
+        my_array2[loc_slice1,loc_slice2] = master2D[loc_slice1,loc_slice2].copy() # ~ computation (just copy from "master")
+        mpit.gather_slices_by_owner([(loc_slice1,loc_slice2)], my_array2, arToFillInds=[],
+                                    axes=(0,1), comm=comm, max_buffer_size=maxbuf)
+        #print("Rank %d: locslc1 = %s, locslc2 = %s, loc_comm1_size=%d" % (rank, str(loc_slice1),str(loc_slice2),
+        #                                                                  loc_comm1.Get_size() if loc_comm1 else -1))
+        assert(np.linalg.norm(my_array2[slc1,slc2] - master2D[slc1,slc2]) < 1e-6)
+        
+
+    test2D(slice(0,8),slice(0,4)) #more indices than processors
+    test2D(slice(0,3),slice(0,3)) #fewer indices than processors
+    test2D(slice(0,3),slice(0,3),False) #fewer indices than processors w/split comm
+    test2D(slice(0,10), slice(0,5), maxbuf=20) #with max-buffer
+    
+    #trivial case with comm = None => nothing to do
+    mpit.gather_slices(None, None, master, arToFillInds=[], axes=0, comm=None)
+    mpit.gather_slices_by_owner(slice(0,100), master, arToFillInds=[], axes=0, comm=None)
+
+    # ------------------ parallel apply --------------------------------
+
+    #Doesn't work in python3 b/c comm.split hands in distribute_indices...
+    #def f(x):
+    #    return x + "!"
+    #results = mpit.parallel_apply( f,["Hi","there"], comm)
+    #assert(results == ["Hi!","there!"])
+
+    def f(i):
+        return i + 10
+    results = mpit.parallel_apply( f,[1,2], comm)
+    assert(results == [11,12])
+
+#
+#    # convenience method to avoid importing mpi4py at the top level
+#    c = mpit.get_comm()
+    
+    
+    
+
 
 
 if __name__ == "__main__":

@@ -40,6 +40,10 @@ class AutoExperimentDesignTestCase(BaseTestCase):
         #test returnAll - this just prints more info...
         p,m = fidsel.generate_fiducials(gs_target, algorithm_kwargs={'returnAll': True})
 
+        #test invalid algorithm
+        with self.assertRaises(ValueError):
+            fidsel.generate_fiducials(gs_target, algorithm='foobar') 
+
 
         # Now that we have germs and fiducials, we can construct the list of experiments we need to perform in
         # order to do GST. The only new things to provide at this point are the sizes for the experiments we want
@@ -63,6 +67,8 @@ class AutoExperimentDesignTestCase(BaseTestCase):
                                             algorithm_kwargs={'iterations': 1})
         slackPrepFids, slackMeasFids = fidsel.generate_fiducials(gs_target, algorithm='slack',
                                                                  algorithm_kwargs={'slackFrac': 0.25})
+        fidsel.generate_fiducials(gs_target, algorithm='slack') # slacFrac == 1.0 if don't specify either slackFrac or fixedSlack
+                
 
         germsMaxLength3 = germsel.generate_germs(gs_target, candidateGermCounts={3: 'all upto'}, seed=2017)
 

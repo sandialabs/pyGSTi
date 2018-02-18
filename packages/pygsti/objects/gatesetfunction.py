@@ -282,7 +282,7 @@ def vecsfn_factory(fn):
                       gateset.basis,  *self.args, **self.kwargs)
             else:
                 povmlbl,Elbl = self.lbl.split(":") #for effect, lbl must == "povmLbl:ELbl"
-                return fn(gateset.preps[povmlbl][Elbl], self.other_vecsrc[povmlbl][Elbl],
+                return fn(gateset.povms[povmlbl][Elbl], self.other_vecsrc[povmlbl][Elbl],
                           gateset.basis,  *self.args, **self.kwargs)
         
     GSFTemp.__name__ = fn.__name__ + str("_class")

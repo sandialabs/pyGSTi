@@ -58,7 +58,7 @@ def _errgen_formula(errgen_type, typ):
     else:
         gen = desc = "???"
     
-    if typ == "latex": #minor modifications for latex versino
+    if typ == "latex": #minor modifications for latex version
         gen = gen.replace('<span class="math">','$')
         gen = gen.replace('</span>','$')
         desc = desc.replace('<em>','\\emph{')
@@ -1232,8 +1232,8 @@ def create_report_notebook(results, filename, title="auto",
 
     #Insert multi-dataset specific analysis
     if len(dsKeys) > 1:
-        nb.add_markdown( ('# Dataset comparisons\n',
-                          'This report contains information for more than one data set.',
+        nb.add_markdown( ('# Dataset comparisons\n'
+                          'This report contains information for more than one data set.'
                           'This page shows comparisons between different data sets.') )
         
         nb.add_code("""\
@@ -1261,9 +1261,9 @@ def create_report_notebook(results, filename, title="auto",
         nb.save_to(filename)
 
 
-def find_std_clifford_compilation(gateset, verbosity):
+def find_std_clifford_compilation(gateset, verbosity=0):
     """
-    Returns the standard cliffor compilation for `gateset`, if
+    Returns the standard Clifford compilation for `gateset`, if
     one exists.  Otherwise returns None.
 
     Parameters
@@ -1271,10 +1271,13 @@ def find_std_clifford_compilation(gateset, verbosity):
     gateset : GateSet
         The ideal (target) gate set of primitive gates.
 
+    verbosity : int, optional
+        How much detail to send to stdout.
+
     Returns
     -------
     dict or None
-        The clifford compilation dictionary (if one can be found).
+        The Clifford compilation dictionary (if one can be found).
     """
     printer = _VerbosityPrinter.build_printer(verbosity)
     std_modules = ("std1Q_XY",

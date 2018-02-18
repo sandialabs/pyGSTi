@@ -2014,8 +2014,8 @@ class WorkspaceTable(WorkspaceOutput):
             assert('normal' in precision), "Must at least specify 'normal' precision"
             p = precision['normal']
             precDict = { 'normal': p,
-                         'polar': precision.get(['polar'],p),
-                         'sci': precision.get(['sci'],p) }
+                         'polar': precision.get('polar',p),
+                         'sci': precision.get('sci',p) }
 
         ID = self.ID
         tableID = "table_" + ID
@@ -2565,7 +2565,8 @@ class WorkspacePlot(WorkspaceOutput):
                     plots_python[plotDivID] = data
                 elif switched_item_mode == "separate files":
                     outputFilename = _os.path.join(output_dir, "%s.pkl" % plotDivID)
-                    _pickle.dump(data, open(outputFilename,"wb"))
+                    with open(outputFilename,"wb") as fPkl:
+                        _pickle.dump(data, fPkl)
                     plots_python[plotDivID] = "data_%s = pickle.load(open('%s','rb'))" \
                                                          % (plotDivID,outputFilename)
                 else:

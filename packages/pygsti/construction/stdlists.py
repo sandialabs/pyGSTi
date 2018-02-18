@@ -15,7 +15,6 @@ from ..objects import GateSet as _GateSet
 from ..objects import GateString as _GateString
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from . import gatestringconstruction as _gsc
-from . import spamspecconstruction as _ssc
 
 
 def make_lsgst_lists(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthList,
@@ -375,7 +374,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
     printer = _VerbosityPrinter.build_printer(verbosity)
     if germLengthLimits is None: germLengthLimits = {}
     
-    if nest == True and includeLGST == True and maxLengthList[0] == 0:
+    if nest == True and includeLGST == True and len(maxLengthList)>0 and maxLengthList[0] == 0:
         _warnings.warn("Setting the first element of a max-length list to zero"
                        + " to ensure the inclusion of LGST sequences has been"
                        + " replaced by the `includeLGST` parameter which"
@@ -417,13 +416,16 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
     running_gss = _LsGermsStructure([],germList,prepStrs,
                                     effectStrs,gateLabelAliases,
                                     sequenceRules)
+
+    missing_lgst = []
     
     if includeLGST and len(maxLengthList) == 0:
         #Add *all* LGST sequences as unstructured if we don't add them below
-        running_gss.add_unindexed(lgst_list)
+        missing_lgst = running_gss.add_unindexed(lgst_list, dscheck)
     
     lsgst_listOfStructs = [ ] # list of gate string structures to return
     missing_list = []
+    totStrs = len(running_gss.allstrs)
 
     for i,maxLen in enumerate(maxLengthList):
 
@@ -436,13 +438,13 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
                                     sequenceRules)
         if maxLen == 0:
             #Special LGST case
-            gss.add_unindexed(lgst_list)
+            missing_lgst = gss.add_unindexed(lgst_list, dscheck)
         else:
             if includeLGST and i == 0: #first maxlen, so add LGST seqs as empty germ
                 #Note: no FPR on LGST strings
                 missing_list.extend( gss.add_plaquette(empty_germ, maxLen, empty_germ,
                                                        allPossiblePairs, dscheck) )
-                gss.add_unindexed(lgst_list) # only adds those not already present
+                missing_lgst = gss.add_unindexed(lgst_list, dscheck) # only adds those not already present
             
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germList:
@@ -486,15 +488,20 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
         if nest: gss = gss.copy() #pinch off a copy of running_gss
         gss.done_adding_strings()
         lsgst_listOfStructs.append( gss )
+        totStrs += len(gss.allstrs) #only relevant for non-nested case
 
+    if nest: #then totStrs computation about overcounts -- just take string count of final stage
+        totStrs = len(running_gss.allstrs)
+        
     printer.log("--- Gate Sequence Creation ---", 1)
-    printer.log(" %d sequences created" % len(gss.allstrs),2)
+    printer.log(" %d sequences created" % totStrs,2)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested sequences were missing"
-                    % (len(dscheck), len(gss.allstrs), len(missing_list)), 2)
-    if len(missing_list) > 0:
+                    % (len(dscheck), totStrs, len(missing_list)), 2)
+    if len(missing_list) > 0 or len(missing_lgst) > 0:
         missing_msgs = ["Prep: %s, Germ: %s, L: %d, Meas: %s, Seq: %s" % tup
-                        for tup in missing_list]
+                        for tup in missing_list] + \
+                       ["LGST Seq: %s" % gstr for gstr in missing_lgst ]
         printer.log("The following sequences were missing from the dataset:",4)
         printer.log("\n".join(missing_msgs), 4)
         if actionIfMissing == "raise":
@@ -503,6 +510,7 @@ def make_lsgst_structs(gateLabelSrc, prepStrs, effectStrs, germList, maxLengthLi
             pass
         else:
             raise ValueError("Invalid `actionIfMissing` argument: %s" % actionIfMissing)
+        
 
     for i,struct in enumerate(lsgst_listOfStructs):
         if nest:

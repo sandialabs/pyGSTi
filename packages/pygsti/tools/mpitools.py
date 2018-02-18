@@ -13,6 +13,7 @@ from . import slicetools as _slct
 from . import compattools as _compat
 from .matrixtools import _fas, _findx, _findx_shape
 
+
 def distribute_indices(indices, comm, allow_split_comm=True):
     """ 
     Partition an array of indices (any type) evenly among `comm`'s processors.
@@ -70,7 +71,9 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     # single index and multiple procs getting the *same*
     # (single) index.
     if nprocs > len(indices) and (comm is not None) and allow_split_comm:
-        loc_comm = comm.Split(color=loc_indices[0], key=rank)  
+        color = loc_indices[0] if isinstance(loc_indices[0], int) \
+                else (int(hash(loc_indices[0])) >> 32) # mpi4py only allows 32-bit ints
+        loc_comm = comm.Split(color=color, key=rank)
     else: 
         loc_comm = None
 
@@ -128,9 +131,11 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
 
     if nprocs >= nIndices:
         if allow_split_comm:
-            nloc_std =  nprocs // nIndices
+            nloc_std =  nprocs // nIndices  # this many processors per index, w/out any "extra"
             extra = nprocs - nloc_std*nIndices # extra procs
-            if rank < extra*(nloc_std+1):
+            # indices 0 to extra-1 get (nloc_std+1) processors each
+            # incides extra to nIndices-1 get nloc_std processors each
+            if rank < extra*(nloc_std+1): # rank < 
                 loc_indices = [ indices[rank // (nloc_std+1)] ]
             else:
                 loc_indices = [ indices[
@@ -522,7 +527,7 @@ def gather_slices_by_owner(slicesIOwn, arToFill, arToFillInds,
             axisSlices = []
             for iaxis,axis in enumerate(axes):
                 slc = slcTup[iaxis]
-                if max_indices[iaxis] is None or max_indices[iaxis] >= _sltc.length(slc):
+                if max_indices[iaxis] is None or max_indices[iaxis] >= _slct.length(slc):
                     axisSlices.append( [slc] ) #arIndx[axis] = slc
                 else:
                     axisSlices.append( _slct.divide(slc, max_indices[iaxis]) )
@@ -768,11 +773,12 @@ def parallel_apply(f, l, comm):
     results : list
         list of items after f has been applied
     '''
-    locIndices, _, locComm = distribute_indices(l, comm)
+    locArgs, _, locComm = distribute_indices(l, comm)
     if locComm is None or locComm.Get_rank() == 0: #only first proc in local comm group 
-        locResults = [f(l[i]) for i in locIndices] # needs to do anything
+        locResults = [f(arg) for arg in locArgs] # needs to do anything
     else: locResults = []
-    results = comm.allgather(locResults, root=0) # Certain there is a better way to do this (see above)
+    results = comm.allgather(locResults) # Certain there is a better way to do this (see above)
+    results = list(_itertools.chain.from_iterable(results)) # list-of-lists -> single list
     return results
 
 def get_comm():
