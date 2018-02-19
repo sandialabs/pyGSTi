@@ -95,57 +95,70 @@ class TutorialsTestCase(unittest.TestCase):
 
 class TutorialsMethods(TutorialsTestCase):
 
+class TutorialsMethods(TutorialsTestCase):
+
     def test_tutorial_00(self):
-        self.runTutorial_jupyter("00 Quick and easy GST.ipynb")
+        self.runTutorial_jupyter("00 Getting Started.ipynb")
 
     def test_tutorial_01(self):
         self.runTutorial_jupyter("01 GateSets.ipynb")
 
     def test_tutorial_02(self):
-        self.runTutorial_jupyter("02 Gatestring lists.ipynb")
+        self.runTutorial_jupyter("02 Matrix Bases.ipynb")
 
     def test_tutorial_03(self):
-        self.runTutorial_jupyter("03 DataSets.ipynb")
+        self.runTutorial_jupyter("03 GateStrings.ipynb")
 
     def test_tutorial_04(self):
-        self.runTutorial_jupyter("04 Algorithms.ipynb")
+        self.runTutorial_jupyter("04 DataSets.ipynb")
 
     def test_tutorial_05(self):
-        self.runTutorial_jupyter("05 Plotting.ipynb")
+        self.runTutorial_jupyter("05 Text file IO.ipynb")
 
     def test_tutorial_06(self):
-        self.runTutorial_jupyter("06 Advanced Algorithms.ipynb")
+        self.runTutorial_jupyter("06 Fiducials, Germs, and Maximum Lengths.ipynb")
 
     def test_tutorial_07(self):
-        self.runTutorial_jupyter("07 Report Generation.ipynb")
+        self.runTutorial_jupyter("07 Fiducial and Germ Selection.ipynb")
 
     def test_tutorial_08(self):
-        self.runTutorial_jupyter("08 Fiducial Reduction.ipynb")
+        self.runTutorial_jupyter("08 Algorithms low-level.ipynb")
 
     def test_tutorial_09(self):
-        self.runTutorial_jupyter("09 Bootstrapped Error Bars.ipynb")
+        self.runTutorial_jupyter("09 Algorithms high-level.ipynb")
 
     def test_tutorial_10(self):
-        self.runTutorial_jupyter("10 Fiducial Selection - 1 qubit (X, Y).ipynb")
+        self.runTutorial_jupyter("10 Fiducial Pair Reduction.ipynb")
 
     def test_tutorial_11(self):
-        self.runTutorial_jupyter("11 Fiducial Selection - 2 qubits (IX, IY, XI, XY, Entangling).ipynb")
+        self.runTutorial_jupyter("11 Results.ipynb")
 
     def test_tutorial_12(self):
-        self.runTutorial_jupyter("12 Germ Selection.ipynb")
+        self.runTutorial_jupyter("12 Report Generation.ipynb")
 
     def test_tutorial_13(self):
-        self.runTutorial_jupyter("13 GST on 2 qubits.ipynb")
+        self.runTutorial_jupyter("13 Workspace Basics.ipynb")
 
     def test_tutorial_14(self):
-        self.runTutorial_jupyter("14 GST on 2 qubits - custom 2Q gate.ipynb")
+        self.runTutorial_jupyter("14 Workspace Switchboards.ipynb")
 
     def test_tutorial_15(self):
-        self.runTutorial_jupyter("15 Easy Experiment Setup.ipynb")
+        self.runTutorial_jupyter("15 Randomized Benchmarking.ipynb")
 
     def test_tutorial_16(self):
-        self.runTutorial_jupyter("16 Randomized Benchmarking.ipynb")
+        self.runTutorial_jupyter("16 Robust Phase Estimation.ipynb")
 
+    def test_tutorial_17(self):
+        self.runTutorial_jupyter("17 Pure Data Analysis.ipynb")
+
+    def test_tutorial_18(self):
+        self.runTutorial_jupyter("18 Model Testing.ipynb")
+
+    def test_tutorial_19(self):
+        self.runTutorial_jupyter("19 Basic drift characterization.ipynb")
+
+    def test_tutorial_20(self):
+        self.runTutorial_jupyter("20 Intermediate Measurements.ipynb")
 
 
 if __name__ == "__main__":
