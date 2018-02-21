@@ -105,6 +105,8 @@ class ReportText(object):
             
             elif fmt == "python":
                 return {"python": self._raw}
+            else:
+                raise NotImplementedError("Cannot render text blocks in %s format!" % fmt)
             
         else:
             raise ValueError("Invalid `form` argument (passed to __init__): %s"

@@ -333,14 +333,27 @@ class BasisBaseTestCase(BaseTestCase):
         Basis([('std', 2), ('gm', 2)])
 
         std  = Basis('std', 2)
+        std4  = Basis('std', 4)
+        std2x2 = Basis([('std', 2), ('std', 2)])
         gm   = Basis('gm', 2)
         ungm = Basis('gm_unnormalized', 2)
+        empty = Basis([]) #special "empty" basis
+        self.assertEqual(empty.name, "*Empty*")
+
+        from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),"std","gm")
+        from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),std,"gm")
+        from_basis,to_basis = pygsti.tools.build_basis_pair(np.identity(4,'d'),"std",gm)
+
+        gm_mxs = gm.get_composite_matrices()
+        unnorm = Basis(matrices=[ gm_mxs[0], 2*gm_mxs[1] ])
 
         std[0]
         std.get_sub_basis_matrices(0)
 
-        #self.assertTrue(std.is_normalized()) ?
+        print(gm.get_composite_matrices())
+        self.assertTrue(gm.is_normalized())
         self.assertFalse(ungm.is_normalized())
+        self.assertFalse(unnorm.is_normalized())
 
         transMx = bt.transform_matrix(std, gm)
 
@@ -386,6 +399,15 @@ class BasisBaseTestCase(BaseTestCase):
         bt.change_basis(mx, 'std', 'gm') # shortname lookup
         bt.change_basis(mx, std, gm) # object
         bt.change_basis(mx, std, 'gm') # combination
+        bt.flexible_change_basis(mx, std, gm) #same dimension
+        I2x2 = np.identity(8,'d')
+        I4 = bt.flexible_change_basis(I2x2, std2x2, std4)
+        self.assertArraysAlmostEqual(bt.flexible_change_basis(I4, std4, std2x2), I2x2)
+        
+        with self.assertRaises(ValueError):
+            bt.change_basis(mx, std, std4) # basis size mismatch
+        
+        
         mxInStdBasis = np.array([[1,0,0,2],
                                  [0,0,0,0],
                                  [0,0,0,0],
@@ -423,6 +445,9 @@ class BasisBaseTestCase(BaseTestCase):
         sparsePP = Basis("pp",2,sparse=True)
         sparsePP2 = Basis("pp",2,sparse=True)
         sparseBlockPP = Basis("pp",[2,2],sparse=True)
+        sparsePP_2Q = Basis("pp",4,sparse=True)
+        sparseGM_2Q = Basis("gm",2,sparse=True) #different sparsity structure than PP 2Q
+        denseGM = Basis("gm",2,sparse=False)
         
         mxs = sparsePP.get_composite_matrices()
         block_mxs = sparseBlockPP.get_composite_matrices()
@@ -435,10 +460,13 @@ class BasisBaseTestCase(BaseTestCase):
         #test equality of bases with other bases and matrices
         self.assertEqual(sparsePP, sparsePP2)
         self.assertEqual(sparsePP, raw_mxs)
+        self.assertNotEqual(sparsePP, sparsePP_2Q)
+        self.assertNotEqual(sparsePP_2Q, sparseGM_2Q)
 
         #sparse transform matrix
         trans = sparsePP.transform_matrix(sparsePP2)
         self.assertArraysAlmostEqual(trans, np.identity(4,'d'))
+        trans2 = sparsePP.transform_matrix(denseGM)
 
         #test equality for large bases, which is too expensive so it always returns false
         large_sparsePP = Basis("pp",16,sparse=True)

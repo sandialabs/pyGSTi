@@ -146,6 +146,7 @@ def grasp_greedy_construction(elements, scoreFn, rclFn, feasibleThreshold=None,
         candidateScores = _np.array([scoreFn(candidateSoln)
                                      for candidateSoln in candidateSolns])
         rclIdxs = rclFn(candidateScores)
+        assert(len(rclIdxs)>0), "Empty reduced candidate list!"
         chosenIdx = _np.random.choice(rclIdxs)
         soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1

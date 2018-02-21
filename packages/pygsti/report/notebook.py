@@ -93,7 +93,7 @@ class Notebook(object):
             tag for the cell. Either 'code' or 'markdown'
         '''
         lines = block.splitlines(True)
-        self.cells.append(NotebookCell(cellType, lines))
+        self.add(NotebookCell(cellType, lines))
 
     def add_file(self, filename, cellType):
         '''
@@ -227,7 +227,7 @@ class Notebook(object):
         with open(filename, 'r') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
-            self.cells.append(NotebookCell(cell['cell_type'], cell['source']))
+            self.add(NotebookCell(cell['cell_type'], cell['source']))
 
     def add_notebook_files(self, filenames):
         '''

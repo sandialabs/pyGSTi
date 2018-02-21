@@ -504,6 +504,45 @@ def test_MPI_fills(comm):
         for k,gstr in enumerate(gstrs):
             assert(np.linalg.norm(taken_result[lookup[k]]-vhp_parallelF2[tstLookup[k]]) < 1e-6)
 
+@mpitest(4)
+def test_MPI_compute_cache(comm):
+    #try to run hard-to-reach cases where there are lots of processors compared to
+    # the number of elements being computed:
+    from pygsti.construction import std1Q_XY #nice b/c only 2 gates
+
+    #Create some gateset
+    gs = std.gs_target.copy()
+    gs.kick(0.1,seed=1234)
+
+    #Get some gate strings
+    gstrs = pygsti.construction.gatestring_list([('Gx',), ('Gy')])
+    tree,lookup,outcome_lookup = gs.bulk_evaltree(gstrs)
+
+    #Check fill probabilities
+    nEls = tree.num_final_elements()
+    nGateStrings = len(gstrs)
+    nDerivCols = gs.num_params()
+    print("NUMS = ",nEls,nGateStrings,nDerivCols)
+
+    #Get serial results
+    vhp_serial = np.empty( (nEls,nDerivCols,nDerivCols),'d')
+
+    d = gs.dim
+    slc1 = slice(0,2)
+    slc2 = slice(0,2)
+    scache = np.empty(nEls,'d')
+    pcache = np.empty((nEls,d,d),'d')
+    dcache1 = np.empty((nEls,2,d,d),'d')
+    dcache2 = np.empty((nEls,2,d,d),'d')
+    hcache = gs._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+                                                comm, wrtSlice1=slc1, wrtSlice2=slc2)
+
+    #without comm
+    hcache_chk = gs._calc()._compute_hproduct_cache(tree, pcache, dcache1, dcache2, scache,
+                                                comm=None, wrtSlice1=slc1, wrtSlice2=slc2)
+    assert(np.linalg.norm(hcache-hcache_chk) < 1e-6)
+    
+
 
 @mpitest(4)
 def test_MPI_by_block(comm):
@@ -713,6 +752,32 @@ def test_MPI_gatestrings_logl(comm):
         assert(gs1.frobeniusdist(gs2_go) < 1e-5)
     return
 
+@mpitest(4)
+def test_MPI_mlgst_forcefn(comm):
+    fiducials = std.fiducials
+    gs_target = std.gs_target
+    lgstStrings = pygsti.construction.list_lgst_gatestrings(fiducials, fiducials,
+                                                             list(gs_target.gates.keys()))
+    #Create dataset on root proc
+    if comm is None or comm.Get_rank() == 0:
+        datagen_gateset = gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
+        ds = pygsti.construction.generate_fake_data(datagen_gateset, lgstStrings,
+                                                    nSamples=10000, sampleError='binomial', seed=100)
+        ds = comm.bcast(ds, root=0)
+    else:
+        ds = comm.bcast(None, root=0)
+
+    
+    gs_lgst = pygsti.do_lgst(ds, fiducials, fiducials, gs_target, svdTruncateTo=4, verbosity=0)
+    gs_lgst_go = pygsti.gaugeopt_to_target(gs_lgst,gs_target, {'spam':1.0, 'gates': 1.0})
+
+    forcingfn_grad = np.ones((1,gs_lgst_go.num_params()), 'd')
+    gs_lsgst_chk_opts3 = pygsti.algorithms.core._do_mlgst_base(
+        ds, gs_lgst_go, lgstStrings, verbosity=3,
+        minProbClip=1e-4, probClipInterval=(-1e2,1e2),
+        forcefn_grad=forcingfn_grad, comm=comm)
+
+
 
 @mpitest(4)
 def test_MPI_derivcols(comm):
@@ -908,10 +973,18 @@ def test_MPI_tools(comm):
                                     axes=0, comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array2[slc] - master[slc]) < 1e-6)
 
+        indices = [ pygsti.tools.slicetools.as_array(s) for s in slices ]
+        loc_indices = pygsti.tools.slicetools.as_array(loc_slice)
+        my_array3 = np.zeros(100,'d')
+        my_array3[loc_indices] = master[loc_indices] # ~ computation (just copy from "master")
+        mpit.gather_indices(indices, owners, myarray3, arToFillInds=[], axes=0,
+                            comm=comm, max_buffer_size=maxbuf)
+        assert(np.linalg.norm(my_array3[slc] - master[slc]) < 1e-6)
+
     test(slice(0,8)) #more indices than processors
     test(slice(0,3)) #fewer indices than processors
-    test(slice(0,3),False) #fewer indices than processors w/split comm
-    test(slice(0,10),maxbuf=10) #with max-buffer
+    test(slice(0,3),False) #fewer indices than processors w/out split comm
+    test(slice(0,10),maxbuf=12) #with max-buffer
     test(slice(0,10),maxbuf=0) #with max-buffer that cannot be attained - should WARN
 
     master2D = np.arange(100).reshape((10,10))
@@ -960,13 +1033,18 @@ def test_MPI_tools(comm):
     results = mpit.parallel_apply( f,[1,2], comm)
     assert(results == [11,12])
 
-#
-#    # convenience method to avoid importing mpi4py at the top level
-#    c = mpit.get_comm()
+    # convenience method to avoid importing mpi4py at the top level
+    c = mpit.get_comm()
     
-    
-    
-
+@mpitest(4)
+def test_MPI_printer(comm):
+    #Test output of each rank to separate file:
+    pygsti.obj.VerbosityPrinter._commPath = "./"
+    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"    
+    printer = pygsti.obj.VerbosityPrinter(verbosity=1, comm=comm)
+    printer.log("HELLO!")
+    pygsti.obj.VerbosityPrinter._commPath = "./"
+    pygsti.obj.VerbosityPrinter._commFileName = "mpi_test_output"    
 
 
 if __name__ == "__main__":

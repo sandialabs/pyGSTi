@@ -298,10 +298,18 @@ class TestGateSetMethods(GateSetTestCase):
                                             self.gateset.preps['rho0']))))
         p2 = self.gateset.probs(gatestring)[('0',)]
         self.assertSingleElemArrayAlmostEqual(p1, p2)
+        
         gateset_with_nan = self.gateset.copy()
         gateset_with_nan['rho0'][:] = np.nan
         self.assertWarns(gateset_with_nan.probs,gatestring)
+        self.assertWarns(gateset_with_nan.probs,gatestring*5) # long gatestring: warning uses elipsis
 
+        mgateset_with_nan = self.mgateset.copy()
+        mgateset_with_nan['rho0'][:] = np.nan
+        self.assertWarns(mgateset_with_nan.probs,gatestring)
+        self.assertWarns(mgateset_with_nan.probs,gatestring*5) # long gatestring: warning uses elipsis
+
+        
     def test_bulk_probabilities(self):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
@@ -1088,6 +1096,10 @@ class TestGateSetMethods(GateSetTestCase):
             gs_multispam.prep #can only use this property when there's a *single* prep
         with self.assertRaises(ValueError):
             gs_multispam.effects #can only use this property when there's a *single* POVM
+        with self.assertRaises(ValueError):
+            prep,gates,povm = gs_multispam.split_gatestring( pygsti.obj.GateString(('Gx','Mdefault')) )
+        with self.assertRaises(ValueError):
+            prep,gates,povm = gs_multispam.split_gatestring( pygsti.obj.GateString(('rho0','Gx')) )
 
 
     def test_iteration(self):
@@ -1132,6 +1144,15 @@ class TestGateSetMethods(GateSetTestCase):
         del old_gs.__dict__['basis']
         old_gs._basisNameAndDim = ('pp',2)
         copy_of_old = old_gs.copy()
+
+    def test_load_old_gateset(self):
+        vs = "v2" if self.versionsuffix == "" else "v3"
+        pygsti.obj.results.enable_old_python_results_unpickling()
+        with open(compare_files + "/pygsti0.9.3.gateset.pkl.%s" % vs,'rb') as f:
+            gs = pickle.load(f)
+        pygsti.obj.results.disable_old_python_results_unpickling()
+        with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
+            pickle.dump(gs, f)
 
 
     def test_base_gatecalc(self):
@@ -1217,6 +1238,7 @@ class TestGateSetMethods(GateSetTestCase):
         rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1))
         rawCalc.pr( ('rho0','Mdefault_0'), ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
         rawCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), False,False, clipTo=(-1,1))
+        rawCalc.hpr( ('rho0','Mdefault_0'), ('Gx','Gx'), True,True, clipTo=(-1,1))
                 
         custom_spamTuple = ( np.nan*np.ones((4,1),'d'), np.zeros((4,1),'d') )
         rawCalc.pr( custom_spamTuple, ('Gx','Gx'), clipTo=(-1,1), bUseScaling=True)
@@ -1238,7 +1260,15 @@ class TestGateSetMethods(GateSetTestCase):
         mx = np.zeros((nEls,nP),'d')
         rawCalc.bulk_fill_dprobs(mx, evt, 
                                  prMxToFill=pmx, clipTo=(-1,1), wrtBlockSize=2)
-        
+
+
+        mx = np.zeros((nEls,3,3),'d')
+        dmx = np.zeros((nEls,3),'d')
+        pmx = np.zeros(nEls,'d')
+        rawCalc.bulk_fill_hprobs(mx, evt, clipTo=(-1,1),
+                                 prMxToFill=pmx, deriv1MxToFill=dmx, deriv2MxToFill=dmx,
+                                 wrtFilter1=[0,1,2], wrtFilter2=[0,1,2]) #same slice on each deriv
+
         mx = np.zeros((nEls,3,2),'d')
         dmx1 = np.zeros((nEls,3),'d')
         dmx2 = np.zeros((nEls,2),'d')

@@ -230,9 +230,8 @@ def gaugeopt_custom(gateset, objective_fn, gauge_group=None,
         try:
             if gateset.frobeniusdist(gs_cmp) > 1e-6:
                 raise ValueError("MPI ERROR in gaugeopt: *different* gatesets" +
-                                 " given to different processors!")
-        except NotImplementedError: # Some gates (maps) don't implement this
-            pass # OK
+                                 " given to different processors!") # pragma: no cover
+        except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
     if gauge_group is None:
         gauge_group = gateset.default_gauge_group
@@ -387,7 +386,7 @@ def _create_objective_fn(gateset, targetGateset, itemWeights=None,
                     _mpit.distribute_slice(allDerivColSlice, comm)
             if mySubComm is not None:
                 _warnings.warn("Note: more CPUs(%d)" % comm.Get_size()
-                       +" than gauge-opt derivative columns(%d)!" % N)
+                       +" than gauge-opt derivative columns(%d)!" % N) # pragma: no cover
 
             n = _slct.length(myDerivColSlice)
             wrtIndices = _slct.indices(myDerivColSlice) if (n < N) else None
@@ -722,8 +721,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
         
         sgndm = _tools.matrix_sign(denMx)
         if _np.linalg.norm(sgndm - sgndm.T.conjugate()) >= 1e-4:
-            _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...")
-            sgndm = (sgndm + sgndm.T.conjugate())/2.0
+            _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...") # pragma: no cover
+            sgndm = (sgndm + sgndm.T.conjugate())/2.0                                    # pragma: no cover
         assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
             "sgndm should be Hermitian!"
 
@@ -762,8 +761,8 @@ def _spam_penalty_jac_fill(spamPenaltyVecGradToFill, gs_pre, gs_post,
     
             sgnE = _tools.matrix_sign(EMx)
             if(_np.linalg.norm(sgnE - sgnE.T.conjugate()) >= 1e-4):
-                _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...")
-                sgnE = (sgnE + sgnE.T.conjugate())/2.0
+                _warnings.warn("Matrix sign mapped Hermitian->Non-hermitian; correcting...") # pragma: no cover
+                sgnE = (sgnE + sgnE.T.conjugate())/2.0                                       # pragma: no cover
             assert(_np.linalg.norm(sgnE - sgnE.T.conjugate()) < 1e-4), \
                 "sgnE should be Hermitian!"
     

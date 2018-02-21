@@ -558,6 +558,10 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
 
     assert(outputFilename.endswith(".html")), "outputFilename should have ended with .html!"
     outputDir = _os.path.dirname(outputFilename)
+    
+    fig_dir = outputFilename + ".files"
+    if not _os.path.isdir(fig_dir):
+        _os.mkdir(fig_dir)
             
     #Copy offline directory into position
     if not connected:
@@ -569,7 +573,7 @@ def merge_html_template(qtys, templateFilename, outputFilename, auto_open=False,
     qtys_html = render_as_html(qtys, dict(switched_item_mode="inline",
                                           global_requirejs=False,
                                           resizable=resizable, autosize=autosize,
-                                          output_dir=None, link_to=link_to,
+                                          output_dir=fig_dir, link_to=link_to,
                                           precision=precision), link_to, printer)
 
     fullTemplateFilename = _os.path.join( _os.path.dirname(_os.path.abspath(__file__)),

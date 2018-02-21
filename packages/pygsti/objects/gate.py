@@ -321,12 +321,12 @@ def check_deriv_wrt_params(gate, deriv_to_check=None, eps=1e-7):
             diff = abs(deriv_to_check[i,j] - fd_deriv[i,j])
             if diff > 10*eps:
                 print("deriv_chk_mismatch: (%d,%d): %g (comp) - %g (fd) = %g" %
-                      (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff))
+                      (i,j,deriv_to_check[i,j],fd_deriv[i,j],diff)) # pragma: no cover
 
     if _np.linalg.norm(fd_deriv - deriv_to_check)/fd_deriv.size > 10*eps:
         raise ValueError("Failed check of deriv_wrt_params:\n" +
                          " norm diff = %g" % 
-                         _np.linalg.norm(fd_deriv - deriv_to_check))
+                         _np.linalg.norm(fd_deriv - deriv_to_check)) # pragma: no cover
 
 
 #Note on initialization sequence of Gates within a GateSet:

@@ -47,6 +47,8 @@ class ProfilerTestCase(BaseTestCase):
             p.format_memory(sortBy="foobar")
         with self.assertRaises(NotImplementedError):
             p.format_memory(sortBy="timestamp")
+        empty = pygsti.baseobjs.Profiler(comm, default_print_memcheck=True)
+        self.assertEqual(empty.format_memory(sortBy="timestamp"),"No memory checkpoints")
 
     def test_profiler_pickling(self):
         comm=None

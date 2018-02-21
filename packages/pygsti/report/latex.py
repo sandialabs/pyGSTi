@@ -93,7 +93,8 @@ def cell(data, label, spec):
     -------
     string
     '''
-    return data
+    addMathMode = bool(("^" in data or "_" in data) and "$" not in data)
+    return "$"+data+"$" if addMathMode else data
 
 def list(l, specs):
     """

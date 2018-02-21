@@ -299,7 +299,7 @@ class LsGermsStructure(GatestringStructure):
         """ Returns a list of the minor y-values"""
         return self.effectStrs
 
-    def add_plaquette(self, basestr, L, germ, fidpairs, dsfilter=None):
+    def add_plaquette(self, basestr, L, germ, fidpairs=None, dsfilter=None):
         """
         Adds a plaquette with the given fiducial pairs at the
         `(L,germ)` location.
@@ -315,7 +315,8 @@ class LsGermsStructure(GatestringStructure):
 
         fidpairs : list
             A list if `(i,j)` tuples of integers, where `i` is a prepation
-            fiducial index and `j` is a measurement fiducial index.
+            fiducial index and `j` is a measurement fiducial index.  None
+            can be used to mean all pairs.
 
         dsfilter : DataSet, optional
             If not None, check that this data set contains all of the 
@@ -331,7 +332,10 @@ class LsGermsStructure(GatestringStructure):
 
         missing_list = []
         from ..construction import gatestringconstruction as _gstrc #maybe move used routines to a gatestringtools.py?
-        
+
+        if fidpairs is None:
+            fidpairs = list(_itertools.product(range(len(self.prepStrs)),
+                                               range(len(self.effectStrs))))
         if dsfilter:
             inds_to_remove = []
             for k,(i,j) in enumerate(fidpairs):

@@ -994,7 +994,7 @@ class GateMatrixCalc(GateCalc):
                                " by giving hproduct cache computation" +
                                " *fewer* processors and *smaller* (sub-)tree" +
                                " (e.g. by splitting tree beforehand), as there"+
-                               " are more cpus than hessian elements.")
+                               " are more cpus than hessian elements.") # pragma: no cover
 
             # allocate final result memory
             hProdCache = _np.zeros( (cacheSize,) + hessn_shape )            
@@ -1004,7 +1004,7 @@ class GateMatrixCalc(GateCalc):
             allDeriv2ColSlice = slice(0,nDerivCols2)
             deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
                 _mpit.distribute_slice(allDeriv1ColSlice, comm)
-
+ 
             # Get slice into entire range of gateset params so that
             #  per-gate hessians can be computed properly
             if wrtSlice1 is not None and wrtSlice1.start is not None:
@@ -1880,7 +1880,7 @@ class GateMatrixCalc(GateCalc):
                     _warnings.warn("norm(vp-check_vp) = %g - %g = %g" % \
                                (_nla.norm(prMxToFill[fInds]),
                                 _nla.norm(check_vp),
-                                _nla.norm(prMxToFill[fInds] - check_vp)))
+                                _nla.norm(prMxToFill[fInds] - check_vp))) # pragma: no cover
                     #for i,gs in enumerate(gatestring_list):
                     #    if abs(vp[i] - check_vp[i]) > 1e-7:
                     #        print "   %s => p=%g, check_p=%g, diff=%g" % (str(gs),vp[i],check_vp[i],abs(vp[i]-check_vp[i]))
@@ -1893,28 +1893,17 @@ class GateMatrixCalc(GateCalc):
                     _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" %
                           (_nla.norm(dprMxToFill[fInds]),
                            _nla.norm(check_vdp),
-                           _nla.norm(dprMxToFill[fInds] - check_vdp) ))
+                           _nla.norm(dprMxToFill[fInds] - check_vdp) )) # pragma: no cover
 
             if hprMxToFill is not None:
                 check_vhp = _np.concatenate(
                     [ self.hpr(spamTuple, gateString, False,False,clipTo)
                       for gateString in gatestring_list ], axis=0 )
                 if _nla.norm(hprMxToFill[fInds][0] - check_vhp[0]) > 1e-6:
-                    print("Final inds = ",fInds)
-                    print("Shape = ",check_vhp.shape, hprMxToFill[fInds].shape)
-                    for i in range(2):
-                        for j in range(71):
-                            for k in range(71):
-                                if abs(check_vhp[i,j,k] - hprMxToFill[fInds][i,j,k]) > 1e-6:
-                                    a,b = check_vhp[i,j,k], hprMxToFill[fInds][i,j,k]
-                                    print("Diff %d,%d,%d: %g-%g=%g" % (i,j,k,a,b,a-b))
-                    
-                    print("Filled:\n",hprMxToFill[fInds][0,0:5,10:20])
-                    print("Check:\n",check_vhp[0,0:5,10:20])
                     _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
                              (_nla.norm(hprMxToFill[fInds]),
                               _nla.norm(check_vhp),
-                              _nla.norm(hprMxToFill[fInds] - check_vhp)))
+                              _nla.norm(hprMxToFill[fInds] - check_vhp))) # pragma: no cover
 
 
 
@@ -2212,7 +2201,7 @@ class GateMatrixCalc(GateCalc):
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.Np 
-                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
+                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks)) # pragma: no cover
 
                 def calc_and_fill_blk(spamTuple, fInds, gInds, pslc1, pslc2, sumInto):
                     """ Compute and fill result quantities blocks for given arguments """
@@ -2475,7 +2464,7 @@ class GateMatrixCalc(GateCalc):
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than hessian elements(%d)!" % (self.Np**2)
-                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2))
+                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2)) # pragma: no cover
 
                 for iBlk1 in myBlk1Indices:
                     blk_wrtSlice1 = blocks1[iBlk1]

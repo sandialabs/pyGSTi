@@ -413,7 +413,7 @@ class Results(object):
                   " This Results object will been updated, and while most data will"
                   " be transferred seamlessly, there may be some saved values which"
                   " are not imported. Please re-save (or re-pickle) this upgraded object"
-                  " to avoid seeing this message, or re-run the analysis leading to "
+                  " to avoid seeing this message, or re-run the analysis leading to"
                   " these results to create a new current-version Results object.")
             
             params = _collections.OrderedDict()
@@ -630,3 +630,22 @@ def enable_old_python_results_unpickling():
     _sys.modules['pygsti.objects.profiler'] = _profiler
     _sys.modules['pygsti.report.resultcache'] = dummy_resultcache_module()
     _sys.modules['pygsti.report.results'] = _sys.modules[__name__]
+
+def disable_old_python_results_unpickling():
+    import sys as _sys
+    
+    #Classes
+    del _sys.modules[__name__].ResultOptions
+    del _sys.modules[__name__].Estimate
+    del _sys.modules['pygsti.objects.labeldicts'].OrderedGateDict
+    del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMVecDict
+    del _sys.modules['pygsti.objects.labeldicts'].OrderedSPAMLabelDict
+    
+    #Modules
+    del _sys.modules['pygsti.tools.basis']
+    del _sys.modules['pygsti.tools.dim']
+    del _sys.modules['pygsti.objects.verbosityprinter']
+    del _sys.modules['pygsti.objects.protectedarray']
+    del _sys.modules['pygsti.objects.profiler']
+    del _sys.modules['pygsti.report.resultcache']
+    del _sys.modules['pygsti.report.results']

@@ -254,6 +254,8 @@ GAUGEGROUP: Full
                 self.assertEqual( type(gs.povms[lbl]), type(gs2.povms[lbl]))
             for lbl in gs.instruments:
                 self.assertEqual( type(gs.instruments[lbl]), type(gs2.instruments[lbl]))
+
+        #TODO: create unknown derived classes and write this gateset.
         
 
 if __name__ == "__main__":

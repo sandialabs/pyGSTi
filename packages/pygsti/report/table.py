@@ -157,7 +157,7 @@ class ReportTable(object):
             'render_includes': render_includes }
 
         if fmt not in _convertDict:
-            raise NotImplementedError('%s format option is not currently supported')
+            raise NotImplementedError('%s format option is not currently supported' % fmt)
 
         table = _convertDict[fmt]['table'] # Function for rendering a table in the format "fmt"
         rows  = [row.render(fmt, spec) for row in self._rows]

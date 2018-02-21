@@ -1,5 +1,6 @@
 from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
+import numpy as np
 
 from pygsti.tools.slicetools import *
 
@@ -26,10 +27,19 @@ class SliceToolsBaseTestCase(BaseTestCase):
         intersect(slice(None, 10, 1), slice(1, 10, 1))
         intersect(slice(1, 10, 1),    slice(None, 10, 1))
         intersect(slice(1, None, 1),  slice(1, 10, 1))
+        intersect(slice(1, 10, 1),  slice(1, None, 1))
+        intersect(slice(10, -10, 1),  slice(10, -10, 1))        
 
     def test_list_to_slice(self):
         self.assertEqual(list_to_slice([]), slice(0, 0))
         self.assertEqual(list_to_slice([1, 2, 3, 4]), slice(1, 5))
+        self.assertEqual(list_to_slice(slice(0,4)), slice(0, 4))
+        with self.assertRaises(ValueError):
+            list_to_slice([0,1,2,3,10]) # doesn't correspond to a slice
+
+    def test_asarray(self):
+        self.assertArraysAlmostEqual(as_array(slice(0,10)), np.arange(10))
+        self.assertArraysAlmostEqual(as_array([0,1,2,3,4,5,6,7,8,9]), np.arange(10))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

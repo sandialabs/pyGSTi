@@ -209,6 +209,10 @@ class SPAMVecTestCase(BaseTestCase):
             #print(r, "->", evs)
         print("OK2")
 
+        vec.depolarize(0.01)
+        vec.depolarize((0.1,0.09,0.08))        
+        
+
     #TODO
     def test_complement_spamvec(self):
         gateset = pygsti.construction.build_gateset(
@@ -288,6 +292,9 @@ class SPAMVecTestCase(BaseTestCase):
             T = pygsti.objects.FullGaugeGroupElement(
                 np.array( [ [0,1],
                             [1,0] ], 'd') )
+
+            v = p.to_vector()
+            p.from_vector(v)
 
             try:
                 p.transform(T)

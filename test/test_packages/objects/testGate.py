@@ -322,7 +322,7 @@ class GateTestCase(BaseTestCase):
             nonham_diagonal_only=True, truncate=True, mxBasis="pp")
         gates_to_test.append( testGate )
 
-        compGate = pygsti.objects.ComposedGateMap( [testGate, testGate] )
+        compGate = pygsti.objects.ComposedGateMap( [testGate, testGate, testGate] )
         dummyGS.gates['Gcomp'] = compGate # so to/from vector work in tests below
         gates_to_test.append( dummyGS.gates['Gcomp'] )
 
@@ -338,7 +338,9 @@ class GateTestCase(BaseTestCase):
             T = pygsti.objects.FullGaugeGroupElement(
                 np.array( [ [0,1],
                             [1,0] ], 'd') )
-
+            T2 = pygsti.objects.UnitaryGaugeGroupElement(
+                np.array( [ [1,0],
+                            [0,1] ], 'd') )
 
             #test Gate methods
             self.assertEqual( gate.get_dimension(), 4 )
@@ -350,6 +352,10 @@ class GateTestCase(BaseTestCase):
 
             try:
                 gate.transform(T)
+            except ValueError: pass #OK, as this is unallowed for some gate types
+
+            try:
+                gate.transform(T2)
             except ValueError: pass #OK, as this is unallowed for some gate types
 
             try:

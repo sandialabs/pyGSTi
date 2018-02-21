@@ -109,8 +109,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             msg = "Sum of squares is at most %g" % f_norm2_tol
             converged = True; break
 
-        printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
-            
+        #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
+        
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
         Jac = None; JTJ = None; JTf = None
 
@@ -119,7 +119,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
-        
+
+        Jnorm = _np.linalg.norm(Jac)
+        printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k,norm_f,mu,Jnorm))
+
         assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
         assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
         scaleFctr = 1.0 #_np.linalg.norm(Jac)

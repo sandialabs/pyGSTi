@@ -165,7 +165,7 @@ class SpamTable(WorkspaceTable):
                         rowData.append( fig )
                         rowFormatters.append('Figure')
                     else:
-                        raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+                        raise ValueError("Invalid 'display_as' argument: %s" % display_as) # pragma: no cover
     
                 for gateset in gatesets:
                     cri = confidenceRegionInfo if confidenceRegionInfo and \
@@ -180,7 +180,8 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Normal')
         
                     if confidenceRegionInfo is not None:
-                        intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(lbl)[:,None]
+                        intervalVec = confidenceRegionInfo.get_profile_likelihood_confidence_intervals(povmlbl)[:,None] #for all povm params
+                        intervalVec = intervalVec[gatesets[-1].povms[povmlbl][lbl].gpindices] #specific to this effect
                         rowData.append( intervalVec ); rowFormatters.append('Normal')
         
                 #Note: no dependence on confidence region (yet) when HS vector is not shown...
@@ -378,7 +379,7 @@ class GatesTable(WorkspaceTable):
                     row_data.append( fig )
                     row_formatters.append('Figure')
                 else:
-                    assert(False)
+                    assert(False) # pragma: no cover
                 
             table.addrow(row_data, row_formatters)
     
@@ -1030,7 +1031,7 @@ class old_RotationAxisVsTargetTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(RotationAxisVsTargetTable,self).__init__(
+        super(old_RotationAxisVsTargetTable,self).__init__(
             ws, self._create, gateset, targetGateset, confidenceRegionInfo)
 
         
@@ -1210,7 +1211,7 @@ class old_RotationAxisTable(WorkspaceTable):
         -------
         ReportTable
         """
-        super(RotationAxisTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo, showAxisAngleErrBars)
+        super(old_RotationAxisTable,self).__init__(ws, self._create, gateset, confidenceRegionInfo, showAxisAngleErrBars)
 
         
     def _create(self, gateset, confidenceRegionInfo, showAxisAngleErrBars):
@@ -1234,8 +1235,9 @@ class old_RotationAxisTable(WorkspaceTable):
     
         formatters = [None, 'Pi'] + ['Pi'] * len(gateLabels)
     
-        rotnAxisAngles, rotnAxisAnglesEB = _ev(_reportables.Angles_btwn_rotn_axes(gateset),
-                                               confidenceRegionInfo)
+        rotnAxisAnglesQty = _ev(_reportables.Angles_btwn_rotn_axes(gateset),
+                                confidenceRegionInfo)
+        rotnAxisAngles, rotnAxisAnglesEB = rotnAxisAnglesQty.get_value_and_err_bar()
     
         for i,gl in enumerate(gateLabels):
             decomp, decompEB = decomps[i].get_value_and_err_bar() #OLD
@@ -1310,8 +1312,8 @@ class GateEigenvalueTable(WorkspaceTable):
             - "absdiff-evals" : absolute difference w/target eigenvalues
             - "infdiff-evals" : 1-Re(z0.C*z) difference w/target eigenvalues
             - "absdiff-log-evals" : Re & Im differences in eigenvalue logarithms
-            - "gidm" : the gauge-invariant diamond norm metric
-            - "giinf" : the gauge-invariant infidelity metric
+            - "evdm" : the gauge-invariant "eigenvalue diamond norm" metric
+            - "evinf" : the gauge-invariant "eigenvalue infidelity" metric
 
         virtual_gates : list, optional
             If not None, a list of `GateString` objects specifying additional "gates"
@@ -1361,12 +1363,12 @@ class GateEigenvalueTable(WorkspaceTable):
                 formatters.append('MathText')
                 
             elif disp == "polar":
-                colHeadings.append('Eigenvalues')
+                colHeadings.append('Eigenvalues') #Note: make sure header is *distinct* for pandas conversion
                 formatters.append(None)
                 
             elif disp == "relpolar":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Rel. Evals ($R$)')
+                    colHeadings.append('Rel. Evals')  #Note: make sure header is *distinct* for pandas conversion
                     formatters.append(None)
                     
             elif disp == "absdiff-evals":
@@ -1386,14 +1388,14 @@ class GateEigenvalueTable(WorkspaceTable):
                     formatters.append('MathText')
                     formatters.append('MathText')
                     
-            elif disp == "gidm":
+            elif disp == "evdm":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Gauge-inv. Diamond norm')
+                    colHeadings.append('Eigenvalue Diamond norm')
                     formatters.append('Conversion')
                     
-            elif disp == "giinf":
+            elif disp == "evinf":
                 if(targetGateset is not None): #silently ignore
-                    colHeadings.append('Gauge-inv. infidelity')
+                    colHeadings.append('Eigenvalue infidelity')
                     formatters.append(None)
             else:
                 raise ValueError("Invalid display element: %s" % disp)
@@ -1492,18 +1494,18 @@ class GateEigenvalueTable(WorkspaceTable):
                     row_formatters.append('Vec')
                     row_formatters.append('Pi')
 
-                elif disp == "gidm":
-                    if targetGateset is None:
-                        fn = _reportables.gaugeinv_diamondnorm if _tools.isstr(gl) else \
-                             _reportables.gatestring_gaugeinv_diamondnorm
+                elif disp == "evdm":
+                    if targetGateset is not None:
+                        fn = _reportables.Eigenvalue_diamondnorm if _tools.isstr(gl) else \
+                             _reportables.Gatestring_eigenvalue_diamondnorm
                         gidm = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( gidm )
                         row_formatters.append('Normal')
                 
-                elif disp == "giinf":
-                    if targetGateset is None:
-                        fn = _reportables.gaugeinv_infidelity if _tools.isstr(gl) else \
-                             _reportables.gatestring_gaugeinv_infidelity
+                elif disp == "evinf":
+                    if targetGateset is not None:
+                        fn = _reportables.Eigenvalue_entanglement_infidelity if _tools.isstr(gl) else \
+                             _reportables.Gatestring_eigenvalue_entanglement_infidelity
                         giinf = _ev(fn(gateset, targetGateset, gl), confidenceRegionInfo)
                         row_data.append( giinf )
                         row_formatters.append('Normal')
@@ -1962,19 +1964,20 @@ class StandardErrgenTable(WorkspaceTable):
         #  given basis matrices)
         lindbladMxs = _tools.std_error_generators(d2, projection_type,
                                                   projection_basis) # in std basis
-    
+
         if not _np.isclose(round(nQubits),nQubits): 
             #Non-integral # of qubits, so just show as a single row
             yd,xd = 1,d
             xlabel = ""; ylabel = ""        
-        if nQubits == 1:
+        elif nQubits == 1:
             yd,xd = 1,2 # y and x pauli-prod *basis* dimensions
             xlabel = "Q1"; ylabel = ""
         elif nQubits == 2:
             yd,xd = 2,2
             xlabel = "Q2"; ylabel="Q1"
         else:
-            yd,xd = 2,d/2
+            assert(d%2 == 0)
+            yd,xd = 2,d//2
             xlabel = "Q*"; ylabel="Q1"
     
         topright = "%s \\ %s" % (ylabel,xlabel) if (len(ylabel) > 0) else ""
@@ -2190,12 +2193,12 @@ class SoftwareEnvTable(WorkspaceTable):
             try:
                 mod = __import__(moduleName)
                 return str(mod.__version__)
-            except ImportError:
-                return "missing"
-            except AttributeError:
-                return "ver?"
-            except Exception:
-                return "???"
+            except ImportError:     # pragma: no cover
+                return "missing"    # pragma: no cover
+            except AttributeError:  # pragma: no cover
+                return "ver?"       # pragma: no cover
+            except Exception:       # pragma: no cover
+                return "???"        # pragma: no cover
             
         colHeadings = ('Quantity','Value')
         formatters = ('Bold','Bold')

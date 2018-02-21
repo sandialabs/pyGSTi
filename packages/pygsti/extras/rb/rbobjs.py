@@ -167,7 +167,7 @@ class RBResults(object):
     http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032.
     """    
     def __init__(self, dataset, results, fit='standard', 
-                 success_outcomelabel='plus', fit_parameters_dict=None, dim = 2, 
+                 success_outcomelabel='1', fit_parameters_dict=None, dim = 2, 
                  weight_data=False, pre_avg=True, infinite_data=False, 
                  one_freq_adjust=False):
 

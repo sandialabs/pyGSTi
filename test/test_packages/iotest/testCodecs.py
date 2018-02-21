@@ -2,6 +2,7 @@ import unittest
 import os,sys
 import numpy as np
 import pickle
+import collections
 
 import pygsti
 from pygsti.construction import std1Q_XY as std
@@ -244,6 +245,51 @@ class TestCodecs(CodecsTestCase):
         for obj in self.miscObjects:
             s = pickle.dumps(obj)
             x = pickle.loads(s)
+
+    def test_std_decode(self):
+        # test decode_std_base function since it isn't easily reached/covered:
+        binary = False
+        
+        mock_json_obj = {'__tuple__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__list__': ['a','b']}
+        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,[],binary)
+
+        mock_json_obj = {'__set__': ['a','b']}
+        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,set(),binary)
+
+        mock_json_obj = {'__ndict__': [('key1','val1'),('key2','val2')]}
+        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,{},binary)
+
+        mock_json_obj = {'__odict__': [('key1','val1'),('key2','val2')]}
+        pygsti.io.jsoncodec.decode_std_base(mock_json_obj,collections.OrderedDict(),binary)
+
+        mock_json_obj = {'__uuid__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__ndarray__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__npgeneric__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__complex__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__counter__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
+        mock_json_obj = {'__slice__': True}
+        with self.assertRaises(AssertionError):
+            pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
+
 
     
 

@@ -771,10 +771,11 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
                 errSum, errs, fd_jac = _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 printer.log("Jacobian has error %g and %d of %d indices with error > tol" % (errSum, len(errs), jac.shape[0]), 3)
                 if len(errs) > 0:
-                    i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))
-                    printer.log(" ==> Worst index = %d,%d. Analytic jac = %g, Fwd Diff = %g" % (i,j, jac[i,j], fd_jac[i,j]), 3)
-                    printer.log(" ==> max err = ", errs[0][2], 3)
-                    printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3)
+                    i,j = errs[0][0:2]; maxabs = _np.max(_np.abs(jac))                        # pragma: no cover
+                    printer.log(" ==> Worst index = %d,%d. Analytic jac = %g, Fwd Diff = %g"  # pragma: no cover
+                                % (i,j, jac[i,j], fd_jac[i,j]), 3)                            # pragma: no cover
+                    printer.log(" ==> max err = ", errs[0][2], 3)                             # pragma: no cover
+                    printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3) # pragma: no cover
 
             return jac
             #OLD return _np.concatenate( [ gs.dproduct(gateStr, flat=True) \
@@ -1098,10 +1099,9 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         gs_cmp = comm.bcast(gs if (comm.Get_rank() == 0) else None, root=0)
         try:
             if gs.frobeniusdist(gs_cmp) > 1e-6:
-                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" +
-                             " given to different processors!")
-        except NotImplementedError: # Some gates (maps) don't implement this
-            pass # OK
+                raise ValueError("MPI ERROR: *different* MC2GST start gatesets" + # pragma: no cover
+                             " given to different processors!")                   # pragma: no cover
+        except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
     #convert list of GateStrings to list of raw tuples since that's all we'll need
     if len(gateStringsToUse) > 0 and \
@@ -1459,8 +1459,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
-        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian ) # pragma: no cover
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
 
 
     full_minErrVec = _objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
@@ -2302,16 +2302,15 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         try:
             if gs.frobeniusdist(gs_cmp) > 1e-6:
                 raise ValueError("MPI ERROR: *different* MLGST start gatesets" +
-                                 " given to different processors!")
-        except NotImplementedError: # Some gates (maps) don't implement this
-            pass # OK
+                                 " given to different processors!") # pragma: no cover
+        except NotImplementedError: pass # OK if some gates (maps) don't implement this
 
         if forcefn_grad is not None:
             forcefn_cmp = comm.bcast(forcefn_grad if (comm.Get_rank() == 0) else None, root=0)
             normdiff = _np.linalg.norm(forcefn_cmp - forcefn_grad)
             if normdiff > 1e-6: 
                 #printer.warning("forcefn_grad norm mismatch = ",normdiff) #only prints on rank0
-                _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" % (comm.Get_rank(),normdiff))
+                _warnings.warn("Rank %d: forcefn_grad norm mismatch = %g" % (comm.Get_rank(),normdiff)) # pragma: no cover
             #assert(normdiff <= 1e-6)
             forcefn_grad = forcefn_cmp #use broadcast value to make certain each proc has *exactly* the same input
 
@@ -2645,8 +2644,8 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     else:
         opt_x, _, _, msg, flag = \
             _spo.leastsq( _objective_func, x0, xtol=tol['relx'], ftol=tol['relx'], gtol=0,
-                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian )
-        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)
+                          maxfev=maxfev*(len(x0)+1), full_output=True, Dfun=_jacobian ) # pragma: no cover
+        printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
     profiler.add_time("do_mlgst: leastsq",tm)
 
     tm = _time.time()
@@ -2690,7 +2689,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
             #print " DEBUG LOGL = ", _tools.logl(gs, dataset, gateStringsToUse),
             #  " DELTA = ",(logL_upperbound-_tools.logl(gs, dataset, gateStringsToUse))
         else:
-            printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1)
+            printer.log("  **Warning** upper_bound_logL - logl = " + str(deltaLogL), 1) # pragma: no cover
 
     profiler.add_time("do_mlgst: post-opt",tm)
     profiler.add_time("do_mlgst: total time",tStart)

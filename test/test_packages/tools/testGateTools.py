@@ -202,13 +202,19 @@ class GateBaseTestCase(BaseTestCase):
                 
 
     def test_project_gateset(self):
-        projectionTypes=('H','S','H+S','LND')
+        projectionTypes=('H','S','H+S','LND', 'LNDF')
         gs_target = std2Q_XXYYII.gs_target.copy()
         gs = gs_target.depolarize(gate_noise=0.01)
 
         for genType in ("logG-logT", "logTiG", "logGTi"):
             proj_gateset, Np_dict = gatetools.project_gateset(
                 gs, gs_target, projectionTypes, genType)
+
+        with self.assertRaises(ValueError):
+            gs_target_gm = std2Q_XXYYII.gs_target.copy()
+            gs_target_gm.basis = pygsti.obj.Basis("gm",4)
+            gatetools.project_gateset(
+                gs, gs_target_gm, projectionTypes, genType) # basis mismatch
 
 
 if __name__ == '__main__':

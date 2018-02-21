@@ -390,9 +390,11 @@ class TestDriversMethods(DriversTestCase):
         gs_guess = std.gs_target.depolarize(gate_noise=0.01,spam_noise=0.01)
 
         maxLens = self.maxLens
+        output_pkl_stream = open(temp_files + "/driverModelTestResult1.pkl",'wb')
         result = self.runSilent(pygsti.do_model_test, gs_guess,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
-                                std.germs, maxLens)
+                                std.germs, maxLens, output_pkl=output_pkl_stream)
+        output_pkl_stream.close()
 
 
         #Some parameter variants & output to pkl
@@ -400,7 +402,7 @@ class TestDriversMethods(DriversTestCase):
         result = self.runSilent(pygsti.do_model_test, gs_guess,
                                 ds, std.gs_target, std.fiducials, std.fiducials,
                                 std.germs, maxLens, advancedOptions=advancedOpts,
-                                output_pkl = temp_files + "/driverModelTestResult1.pkl")
+                                output_pkl = temp_files + "/driverModelTestResult2.pkl")
 
         with self.assertRaises(ValueError):
             advancedOpts = {'objective': 'foobar' }
@@ -448,6 +450,12 @@ class TestDriversMethods(DriversTestCase):
                                              "Std Practice Test Report", verbosity=2)
 
         #with string args, gaugeOptTarget, output pkl, and advanced options
+        myGaugeOptSuiteDict = {
+            'MyGaugeOpt': {
+                'itemWeights': {'gates': 1, 'spam': 0.0001},
+                'targetGateset': std.gs_target # to test overriding internal target gateset (prints a warning)
+            }
+        }
         result = self.runSilent(pygsti.do_stdpractice_gst,
                                 temp_files + "/driver_test_dataset.txt",
                                 temp_files + "/driver.gateset",
@@ -456,13 +464,20 @@ class TestDriversMethods(DriversTestCase):
                                 temp_files + "/driver_germs.txt",
                                 maxLens, modes="TP", comm=None, memLimit=None, verbosity=5,
                                 gaugeOptTarget = gs_guess,
+                                gaugeOptSuite = myGaugeOptSuiteDict,
                                 output_pkl = temp_files + "/driver_results1.pkl",
-                                advancedOptions={'all': {'objective': 'chi2'}} )
+                                advancedOptions={ 'all': {
+                                    'objective': 'chi2',
+                                    'badFitThreshold': -100, # so we create a robust estimate and convey
+                                    'onBadFit': ["robust"]   # guage opt to it.
+                                } } )
 
-        # test running just Target mode
+        # test running just Target mode, and writing to an output *stream*
+        out_pkl_stream = open(temp_files + "/driver_results2.pkl",'wb')
         self.runSilent(pygsti.do_stdpractice_gst,
                        ds, std.gs_target, std.fiducials, std.fiducials,
-                       std.germs, maxLens, modes="Target")
+                       std.germs, maxLens, modes="Target", output_pkl=out_pkl_stream)
+        out_pkl_stream.close()
 
         # test invalid mode
         with self.assertRaises(ValueError):
@@ -471,6 +486,9 @@ class TestDriversMethods(DriversTestCase):
                            std.germs, maxLens, modes="Foobar")
 
     def test_gaugeopt_suite_to_dict(self):
+
+        gs_target_trivialgg = std2Q.gs_target.copy()
+        gs_target_trivialgg.default_gauge_group = pygsti.obj.TrivialGaugeGroup(4)
         
         d = pygsti.drivers.gaugeopt_suite_to_dictionary("single", std.gs_target, verbosity=1)
         d2 = pygsti.drivers.gaugeopt_suite_to_dictionary(d, std.gs_target, verbosity=1) #with dictionary - basically a pass-through
@@ -478,7 +496,7 @@ class TestDriversMethods(DriversTestCase):
         d = pygsti.drivers.gaugeopt_suite_to_dictionary(["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam","none"],
                                                         std.gs_target, verbosity=1)
         d = pygsti.drivers.gaugeopt_suite_to_dictionary(["varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam", "unreliable2Q"],
-                                                        std2Q.gs_target, verbosity=1)
+                                                        gs_target_trivialgg, verbosity=1)
 
         d = pygsti.drivers.gaugeopt_suite_to_dictionary(["single","unreliable2Q"], std.gs_target, verbosity=1) #non-2Q gates
         d = pygsti.drivers.gaugeopt_suite_to_dictionary(["single","unreliable2Q"], std2Q.gs_target, verbosity=1)
@@ -580,11 +598,11 @@ class TestDriversMethods(DriversTestCase):
                        bootgs_p, std.gs_target, gateMetric = 'frobenius',
                        spamMetric = 'frobenius', plot=False)
 
-        ##Test plotting -- removed b/c plotting was removed w/matplotlib removal
-        #self.runSilent(pygsti.drivers.gauge_optimize_gs_list,
-        #               bootgs_p, std.gs_target,
-        #               gateMetric = 'frobenius', spamMetric = 'frobenius',
-        #               plot=True)
+        #Test plotting not impl -- b/c plotting was removed w/matplotlib removal
+        with self.assertRaises(NotImplementedError):
+            pygsti.drivers.gauge_optimize_gs_list(
+                bootgs_p, std.gs_target, gateMetric = 'frobenius',
+                spamMetric = 'frobenius', plot=True)
 
 
         #Test utility functions -- just make sure they run for now...

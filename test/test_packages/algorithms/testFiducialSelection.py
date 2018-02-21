@@ -64,7 +64,7 @@ class FiducialSelectionTestCase(AlgorithmTestCase):
 
         with self.assertRaises(Exception):
             pygsti.alg.optimize_integer_fiducials_slack(
-                std.gs_target, std.fiducials) #invalid (or missing) prepOrMeas
+                std.gs_target, std.fiducials, fixedSlack=0.1) #invalid (or missing) prepOrMeas
 
 
         print("prepFidList = ",prepFidList)
@@ -88,6 +88,21 @@ class FiducialSelectionTestCase(AlgorithmTestCase):
             pygsti.alg.test_fiducial_list(
             std.gs_target,measFidList,"foobar",
             scoreFunc='all',returnAll=False)
+
+    def test_grasp_fidsel(self):
+        prepFidList = pygsti.alg.grasp_fiducial_optimization(
+            std.gs_target, std.fiducials, prepOrMeas = "prep",
+            alpha = 0.0, verbosity=4)
+        
+        measFidList = pygsti.alg.grasp_fiducial_optimization(
+            std.gs_target, std.fiducials, prepOrMeas = "meas",
+            alpha = 1.0, verbosity=4)
+        
+        with self.assertRaises(ValueError):
+            pygsti.alg.grasp_fiducial_optimization(
+            std.gs_target, std.fiducials, prepOrMeas = "foobar",
+            alpha = 0.5, verbosity=4)
+        
 
 if __name__ == '__main__':
     unittest.main(verbosity = 2)

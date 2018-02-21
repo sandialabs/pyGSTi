@@ -759,6 +759,29 @@ Gy 11001100
         self.assertEqual(ds[('Gy',)].fraction('1'), 0.5)
         self.assertEqual(ds[('Gx',)].total, 9)
 
+        bad_dataset_txt = \
+"""## 0 = 0
+## 1 = 1
+Foobar 011001
+Gx 111000111
+Gy 11001100
+"""
+        with open(temp_files + "/BadTDDataset.txt","w") as output:
+            output.write(bad_dataset_txt)
+        with self.assertRaises(ValueError):
+            pygsti.io.load_tddataset(temp_files + "/BadTDDataset.txt")
+        
+
+    def test_load_old_dataset(self):
+        vs = "v2" if self.versionsuffix == "" else "v3"
+        #pygsti.obj.results.enable_old_python_results_unpickling()
+        with open(compare_files + "/pygsti0.9.3.dataset.pkl.%s" % vs,'rb') as f:
+            ds = pickle.load(f)
+        #pygsti.obj.results.disable_old_python_results_unpickling()
+        with open(temp_files + "/repickle_old_dataset.pkl.%s" % vs,'wb') as f:
+            pickle.dump(ds, f)
+
+
 
 #OLD
 #    def test_intermediate_measurements(self):

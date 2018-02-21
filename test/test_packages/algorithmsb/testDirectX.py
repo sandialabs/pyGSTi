@@ -43,6 +43,12 @@ class DirectXTestCase(BaseTestCase):
             gateStringLabels=['G0','G1','G2','G3','G4','G5'], svdTruncateTo=4, verbosity=10)
         self.assertEqual(set(gs.gates.keys()), set(['G0','G1','G2','G3','G4','G5']))
 
+        aliases = {'Gy2': ('Gy',)}
+        gs = directx.gateset_with_lgst_gatestring_estimates(
+            [pygsti.obj.GateString(('Gy2',))], self.ds, self.prepStrs, self.effectStrs, self.tgt, includeTargetGates=True,
+            gateStringLabels=None, svdTruncateTo=4, verbosity=10, gateLabelAliases=aliases)
+
+
 
     def test_direct_lgst(self):
         gslist = directx.direct_lgst_gatesets(

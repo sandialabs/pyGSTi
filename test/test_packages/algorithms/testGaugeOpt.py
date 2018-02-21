@@ -116,8 +116,12 @@ class TestCoreMethods(AlgorithmsBase):
         gs_none = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, gauge_group=None, verbosity=10)
         soln, trivialEl, gs_none = self.runSilent(pygsti.gaugeopt_to_target, gs_lgst, self.gateset, gauge_group=None, verbosity=10, returnAll=True)
 
+        #Use "None" default gauge group
+        gs_none = self.gateset.copy()
+        gs_none.default_gauge_group = None
+        self.runSilent(pygsti.gaugeopt_to_target, gs_none, self.gateset, verbosity=10)
+        soln, trivialEl, gs_none = self.runSilent(pygsti.gaugeopt_to_target, gs_none, self.gateset, verbosity=10, returnAll=True)
 
-        
 
         #TODO: check output lies in space desired
 
