@@ -90,6 +90,19 @@ class TestWorkspace(ReportBaseCase):
         data = [trace]
         fig = go.Figure(data=[trace], layout={})
         pygsti.report.workspace.enable_plotly_pickling()
+
+        #DEBUG
+        #import dill
+        #dill.detect.trace(True)
+        #dill.detect.badobjects(fig['frames'], depth=1)
+        #print(dir(fig))
+        #print("frames: ",type(fig['frames']))
+        #s = pickle.dumps(fig['frames'])
+        #print("layout",type(fig['layout']))
+        #s = pickle.dumps(fig['layout'])
+        #print("data",type(fig['data']))
+        #s = pickle.dumps(fig['data'])
+
         s = pickle.dumps(fig)
         fig2 = pickle.loads(s)
         pygsti.report.workspace.disable_plotly_pickling()

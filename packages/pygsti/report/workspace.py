@@ -54,6 +54,19 @@ def enable_plotly_pickling():
         plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
         del plotlyDictClass.__setattr__
     plotlyDictClass.__setitem__ = setitem
+
+    #Extra Python2 code b/c of Python2.7 pickling issues
+    def getstate(self):
+        to_pkl = self.__dict__.copy(); del to_pkl['_parent']
+        return to_pkl
+
+    def doreduce(self):
+        return (plotly.graph_objs.graph_objs.Figure,
+                (), self.__dict__)
+
+    if _sys.version_info < (3, 0):
+        plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
+        plotlyDictClass.__getstate__ = getstate
     
 def disable_plotly_pickling():
     """ Reverses the effect of :func:`enable_plotly_pickling` """

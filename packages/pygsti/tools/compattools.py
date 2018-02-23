@@ -24,6 +24,15 @@ def isstr(x):
     """ Return whether `x` has a string type """
     return isinstance(x, basestring)
 
+def _numpy14einsumfix():
+    """ str(.) on first arg of einsum skirts a bug in Numpy 14.0 """
+    import numpy as _np
+    if _np.__version__ == '1.14.0':
+        def fixed_einsum(s, *args, **kwargs):
+            return _np.orig_einsum(str(s),*args,**kwargs)
+        _np.orig_einsum = _np.einsum
+        _np.einsum = fixed_einsum
+
 #Worse way to do this
 #import sys as _sys
 #

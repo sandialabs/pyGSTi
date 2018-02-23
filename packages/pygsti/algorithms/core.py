@@ -21,6 +21,7 @@ from .. import construction as _pc
 from ..baseobjs import DummyProfiler as _DummyProfiler
 _dummy_profiler = _DummyProfiler()
 
+
 CUSTOMLM = True
 FLOATSIZE = 8 #TODO: better way?
 #from .track_allocations import AllocationTracker
