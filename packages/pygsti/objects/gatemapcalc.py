@@ -752,7 +752,7 @@ class GateMapCalc(GateCalc):
                 if blkComm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than derivative columns(%d)!" % self.Np
-                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks))
+                       +" [blkSize = %.1f, nBlks=%d]" % (blkSize,nBlks)) # pragma: no cover
                 fillComm = blkComm #comm used by calc_and_fill
 
                 for iBlk in myBlkIndices:
@@ -983,7 +983,7 @@ class GateMapCalc(GateCalc):
                 if blk2Comm is not None:
                     _warnings.warn("Note: more CPUs(%d)" % mySubComm.Get_size()
                        +" than hessian elements(%d)!" % (self.Np**2)
-                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2))
+                       +" [blkSize = {%.1f,%.1f}, nBlks={%d,%d}]" % (blkSize1,blkSize2,nBlks1,nBlks2)) # pragma: no cover
                 fillComm = blk2Comm #comm used by calc_and_fill
 
                 for iBlk1 in myBlk1Indices:

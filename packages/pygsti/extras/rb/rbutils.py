@@ -279,7 +279,7 @@ def gatedependence_of_errormaps(gs_actual, gs_target, norm='diamond',
     delta = []
     
     if mxBasis is None:
-        mxBasis = gs_actual.get_basis_name()
+        mxBasis = gs_actual.basis.name
     assert(mxBasis=='pp' or mxBasis=='gm' or mxBasis=='std'), "mxBasis must be 'gm', 'pp' or 'std'."
     
     for gate in list(gs_target.gates.keys()):
@@ -1080,7 +1080,7 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_outcomelabel=('0',),
     Magesan_theory_params['r'] = average_gateset_infidelity(gs_actual,gs_target,None,d)    
     Magesan_theory_params['p'] = r_to_p(Magesan_theory_params['r'],d)
     Magesan_theory_params['delta'] = gatedependence_of_errormaps(gs_actual, 
-                                                                 gs_target, norm,d)
+                                                                 gs_target,norm,None,d)
     error_gs = errormaps(gs_actual, gs_target)   
        
     R_list = []
@@ -1097,28 +1097,28 @@ def Magesan_theory_parameters(gs_actual, gs_target, success_outcomelabel=('0',),
                                       axis=0, dtype=_np.float64)    
     error_gs.gates['GQ2'] = _np.dot(error_gs.gates['GQ'],error_gs.gates['Gavg'])
     
-    error_gs.preps['rhoc_mixed'] = 1./d*error_gs['identity']
+    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.basis_build_identity_vec(error_gs.basis)
 
-    #HERE
     #Assumes standard POVM labels
-    povm = _objs.POVM( [('plus_cm', gs_target.povms['Mdefault']['0']),
-                        ('minus_cm', gs_target.povms['Mdefault']['1'])] )
-    gsl = [('Gavg',),('GR',),('Gavg','GQ',)]   
-    ave_error_gsl = _cnst.create_gatestring_list("a", a=gsl)
+    povm = _objs.UnconstrainedPOVM( [('0_cm', gs_target.povms['Mdefault']['0']),
+                                     ('1_cm', gs_target.povms['Mdefault']['1'])] )
+    ave_error_gsl = _cnst.gatestring_list([('rho0','Gavg'),('rho0','GR'),('rho0','Gavg','GQ')])
     N=1
     data = _cnst.generate_fake_data(error_gs, ave_error_gsl, N, 
-                                    sampleError="none", seed=1)
+                                    sampleError="none")
 
-    if isinstance(success_outcomelabel, tuple):
-        success_outcomelabel_cm = (success_outcomelabel[0] +'_cm',)
-    else:
-        success_outcomelabel_cm = success_outcomelabel +'_cm'
+    #TIM: not sure how below code is supposed to work...
+    #if isinstance(success_outcomelabel, tuple):
+    #     = (success_outcomelabel[0] +'_cm',)
+    #else:
+    #    success_outcomelabel_cm = success_outcomelabel +'_cm'
+    success_outcomelabel_cm = success_outcomelabel #Eriks HACK to get code to run...
     
-    pr_L_p = data[('Gavg',)][success_outcomelabel]
-    pr_L_I = data[('Gavg',)][success_outcomelabel_cm]
-    pr_R_p = data[('GR',)][success_outcomelabel]
-    pr_R_I = data[('GR',)][success_outcomelabel_cm]
-    pr_Q_p = data[('Gavg','GQ',)][success_outcomelabel]
+    pr_L_p = data[('rho0','Gavg')][success_outcomelabel]
+    pr_L_I = data[('rho0','Gavg')][success_outcomelabel_cm]
+    pr_R_p = data[('rho0','GR')][success_outcomelabel]
+    pr_R_I = data[('rho0','GR')][success_outcomelabel_cm]
+    pr_Q_p = data[('rho0','Gavg','GQ')][success_outcomelabel]
     p = Magesan_theory_params['p']    
     B_1 = pr_R_I
     A_1 = (pr_Q_p/p) - pr_L_p + ((p -1)*pr_L_I/p) \

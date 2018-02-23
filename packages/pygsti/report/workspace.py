@@ -45,22 +45,42 @@ def enable_plotly_pickling():
         return dict.__setitem__(self,key,value)
     
     plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
-    plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
-    plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
-    plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
-    del plotlyDictClass.__getattr__
-    del plotlyDictClass.__setattr__
+    if hasattr(plotlyDictClass,'__setitem__'):
+        plotlyDictClass.__saved_setitem__ = plotlyDictClass.__setitem__
+    if hasattr(plotlyDictClass,'__getattr__'):
+        plotlyDictClass.__saved_getattr__ = plotlyDictClass.__getattr__
+        del plotlyDictClass.__getattr__
+    if hasattr(plotlyDictClass,'__setattr__'):
+        plotlyDictClass.__saved_setattr__ = plotlyDictClass.__setattr__
+        del plotlyDictClass.__setattr__
     plotlyDictClass.__setitem__ = setitem
+
+    #Extra Python2 code b/c of Python2.7 pickling issues
+    def getstate(self):
+        to_pkl = self.__dict__.copy(); del to_pkl['_parent']
+        return to_pkl
+
+    def doreduce(self):
+        return (plotly.graph_objs.graph_objs.Figure,
+                (), self.__dict__)
+
+    if _sys.version_info < (3, 0):
+        plotly.graph_objs.graph_objs.Figure.__reduce__ = doreduce
+        plotlyDictClass.__getstate__ = getstate
     
 def disable_plotly_pickling():
     """ Reverses the effect of :func:`enable_plotly_pickling` """
     import plotly
     plotlyDictClass = plotly.graph_objs.Figure.__bases__[0]
-    plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
-    plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
-    plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
-    del plotlyDictClass.__saved_getattr__
-    del plotlyDictClass.__saved_setattr__
+    if hasattr(plotlyDictClass, '__saved_setitem__'):
+        plotlyDictClass.__setitem__ = plotlyDictClass.__saved_setitem__
+        del plotlyDictClass.__saved_setitem__
+    if hasattr(plotlyDictClass, '__saved_getattr__'):
+        plotlyDictClass.__getattr__ = plotlyDictClass.__saved_getattr__
+        del plotlyDictClass.__saved_getattr__
+    if hasattr(plotlyDictClass, '__saved_setattr__'):
+        plotlyDictClass.__setattr__ = plotlyDictClass.__saved_setattr__
+        del plotlyDictClass.__saved_setattr__
 
 def ws_custom_digest(md5, v):
     """ A "digest" function for hashing several special types"""
@@ -260,8 +280,8 @@ class Workspace(object):
           # Specific to 1Q gates
         self.GateDecompTable = makefactory(_wt.GateDecompTable)
         self.old_GateDecompTable = makefactory(_wt.old_GateDecompTable)
-        #self.RotationAxisTable = makefactory(_wt.RotationAxisTable)
-        #self.RotationAxisVsTargetTable = makefactory(_wt.RotationAxisVsTargetTable)
+        self.old_RotationAxisVsTargetTable = makefactory(_wt.old_RotationAxisVsTargetTable)
+        self.old_RotationAxisTable = makefactory(_wt.old_RotationAxisTable)
 
           # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
@@ -2055,7 +2075,8 @@ class WorkspaceTable(WorkspaceOutput):
 
             if switched_item_mode == 'inline':
                 base = self._render_html(tableID, divHTML, None, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices) #no JS yet...
+                                         self.switchboards, self.sbSwitchIndices, None,
+                                         self.options.get('link_to',None)) #no JS yet...
                 js = self._form_table_js(tableID, base['html'], '\n'.join(divJS), base['js'])
                   # creates JS for everything: plot creation, switchboard init, autosize
                 
@@ -2168,7 +2189,7 @@ class WorkspaceTable(WorkspaceOutput):
                         latex_list.append("%% Didn't generated anything for tableID=%s" % tableDivID )
                 else:
                     raise ValueError("Invalid `switched_item_mode` render option: %s" %
-                                     switched_item_mode)
+                                     switched_item_mode) # pragma: no cover
 
 
             return {'latex': "\n".join(latex_list) }
@@ -2288,7 +2309,7 @@ class WorkspaceTable(WorkspaceOutput):
             filebase,ext = _os.path.splitext(_os.path.basename(filename))
 
             tempDir = _os.path.join(output_dir,"%s_temp" % filebase)
-            _os.mkdir(tempDir)
+            if not _os.path.exists(tempDir): _os.mkdir(tempDir)
 
             self.set_render_options(switched_item_mode="separate files",
                                     switched_item_id_overrides={index: filebase},
@@ -2489,6 +2510,7 @@ class WorkspacePlot(WorkspaceOutput):
             if switched_item_mode == 'inline':
                 base = self._render_html(plotID, divHTML, None, divIDs, self.switchpos_map,
                                          self.switchboards, self.sbSwitchIndices, [relwrap_cls])
+                                         # Don't link_to b/c plots will all have download buttons
                 if handlersOnly:
                     js = '\n'.join(divJS) + base['js'] #insert plot handlers above switchboard init JS
                 else:
@@ -2514,7 +2536,12 @@ class WorkspacePlot(WorkspaceOutput):
             assert('output_dir' in self.options and self.options['output_dir']), \
                     "Cannot render a plot as 'latex' without a valid " +\
                     "'output_dir' render option (regardless of switched_item_mode)"
-
+            
+            if switched_item_mode not in ('inline','separate files'):
+                raise ValueError("Invalid `switched_item_mode` render option: %s" %
+                                 switched_item_mode) #for uniformity with other cases,
+                                                     # even though it's not used.
+                            
             from .mpl_colormaps import plotly_to_matplotlib as _plotly_to_matplotlib
 
             output_dir = self.options['output_dir']
@@ -2554,7 +2581,7 @@ class WorkspacePlot(WorkspaceOutput):
                 if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
                 
-                if 'pythonValue' in fig.metadata:
+                if fig.pythonvalue is not None:
                     data = {'value': fig.pythonvalue }
                     if "pythonErrorBar" in fig.metadata:
                         data['errorbar'] = fig.metadata['pythonErrorBar']
@@ -2574,6 +2601,10 @@ class WorkspacePlot(WorkspaceOutput):
                                      switched_item_mode)
                 
             return {'python': plots_python }
+
+        else:
+            raise NotImplementedError("Invalid rendering format: %s" % typ)
+                
 
     def saveas(self, filename, index=None, verbosity=0):
         """
@@ -2775,7 +2806,8 @@ class WorkspaceText(WorkspaceOutput):
 
             if switched_item_mode == 'inline':
                 base = self._render_html(textID, divHTML, None, divIDs, self.switchpos_map,
-                                         self.switchboards, self.sbSwitchIndices) #no JS yet...
+                                         self.switchboards, self.sbSwitchIndices, None,
+                                         self.options.get('link_to',None)) #no JS yet...
                 js = self._form_text_js(textID, base['html'], base['js'])
                   # creates JS for everything: plot creation, switchboard init, autosize
                 
@@ -2976,7 +3008,7 @@ class WorkspaceText(WorkspaceOutput):
             filebase,ext = _os.path.splitext(_os.path.basename(filename))
 
             tempDir = _os.path.join(output_dir,"%s_temp" % filebase)
-            _os.mkdir(tempDir)
+            if not _os.path.exists(tempDir): _os.mkdir(tempDir)
 
             self.set_render_options(switched_item_mode="separate files",
                                     switched_item_id_overrides={index: filebase},

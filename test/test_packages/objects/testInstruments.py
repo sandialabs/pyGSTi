@@ -45,7 +45,7 @@ class InstrumentTestCase(BaseTestCase):
 
             
     def testFutureFunctionality(self):
-        #Test instrument construction with elemnts whose gpindices are already initialized.
+        #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         E = self.gs_target.povms['Mdefault']['0']
         InstEl = pygsti.obj.FullyParameterizedGate( np.dot(E,E.T) )
@@ -127,6 +127,7 @@ class InstrumentTestCase(BaseTestCase):
         # Mess with the target gateset to add some error to the povm and instrument
         self.assertEqual(self.gs_target.num_params(),92) # 4*3 + 16*5 = 92
         gs = self.gs_target.depolarize(gate_noise=0.01, spam_noise=0.01)
+        gs2 = self.gs_target.depolarize(max_gate_noise=0.01, max_spam_noise=0.01, seed=1234) #another way to depolarize
         gs.povms['Mdefault'].depolarize(0.01)
 
         # Introducing a rotation error to the measurement

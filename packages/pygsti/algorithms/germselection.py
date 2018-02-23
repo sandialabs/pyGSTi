@@ -936,7 +936,7 @@ def test_germ_list_infl(gateset, germsToTest, scoreFunc='all', weights=None,
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array([1.0]*nGerms, 'd')
 
-    combinedTDDD = _np.einsum(str('i,ijk->jk'), weights, twirledDerivDaggerDeriv) #str(.) skirts numpy 14.0 bug in einsum
+    combinedTDDD = _np.einsum('i,ijk->jk', weights, twirledDerivDaggerDeriv)
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
     nGaugeParams = gateset.num_gauge_params()

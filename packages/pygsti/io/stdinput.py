@@ -759,7 +759,8 @@ def read_gateset(filename):
         elif cur_group_typ == "TP-Instrument":
             gs.instruments[cur_group] = _objs.TPInstrument( cur_group_info['matrices'] )
         else:
-            raise ValueError("Unknown group type: %s!" % cur_group_typ)
+            raise ValueError("Unknown group type: %s!" % cur_group_typ ) # pragma: no cover
+            # should be unreachable given group-name test below
 
 
     gs = _objs.GateSet()

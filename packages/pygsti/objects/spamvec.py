@@ -1712,7 +1712,7 @@ class TensorProdSPAMVec(SPAMVec):
         None
         """
         raise ValueError("Cannot set the value of a TensorProdSPAMVec directly!")
-        self.dirty = True
+        #self.dirty = True
 
     def transform(self, S, typ):
         """

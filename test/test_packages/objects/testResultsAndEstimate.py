@@ -65,6 +65,7 @@ class ResultsEstimateTestCase(BaseTestCase):
 
           #Get effective estimate dataset
         effds = est.get_effective_dataset()
+        effds, subMxs = est.get_effective_dataset(return_subMxs=True)
 
           #add gauge-optimized
         goparams = {'itemWeights': {'gates': 1.0, 'spam': 0.1}, 'method': 'BFGS' } #method so we don't need a legit comm
@@ -151,6 +152,16 @@ class ResultsEstimateTestCase(BaseTestCase):
         self.assertWarns( res.create_presentation_pdf )
         self.assertWarns( res.create_presentation_ppt )
         self.assertWarns( res.create_general_report_pdf )
+
+    def test_load_old_results(self):
+        vs = "v2" if self.versionsuffix == "" else "v3"
+        pygsti.obj.results.enable_old_python_results_unpickling()
+        with open(compare_files + "/pygsti0.9.3.results.pkl.%s" % vs,'rb') as f:
+            results = pickle.load(f)
+        pygsti.obj.results.disable_old_python_results_unpickling()
+
+        with open(temp_files + "/repickle_old_results.pkl.%s" % vs,'wb') as f:
+            pickle.dump(results, f)
 
         
 if __name__ == '__main__':

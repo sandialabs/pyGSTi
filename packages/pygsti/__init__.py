@@ -22,3 +22,7 @@ from .construction.gateconstruction import * # *_qubit_gate fns
 from .objects import Basis
 from .tools import *
 from .drivers import *
+
+#NUMPY BUG FIX (imported from tools)
+from .tools.compattools import _numpy14einsumfix
+_numpy14einsumfix()

@@ -73,6 +73,7 @@ class TestReport(ReportBaseCase):
         pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL},temp_files + "/general_reportA_adv2",
                                              confidenceLevel=None, verbosity=3,  auto_open=False,
                                              advancedOptions={'errgen_type': "logTiG",
+                                                              'precision': 2, #just a single int
                                                               'resizable': False,
                                                               'autosize': 'none'})
 
@@ -164,6 +165,82 @@ class TestReport(ReportBaseCase):
         pygsti.report.create_report_notebook({'one': self.results_logL, 'two': self.results_logL},
                                              temp_files + "/report_notebook.ipynb", None,
                                              verbosity=3) # multiple comparable datasets
+        
+
+    def test_inline_template(self):
+        #Generate some results (quickly)
+        gs_tgt = std.gs_target.copy()
+        gs_datagen = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
+        gateStrings = pygsti.construction.make_lsgst_experiment_list(
+            gs_tgt, std.fiducials, std.fiducials, std.germs,[1])
+        ds = pygsti.construction.generate_fake_data(
+            gs_datagen, gateStrings, nSamples=10000, sampleError='round')
+        gs_test = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
+        results = pygsti.do_model_test(gs_test, ds, gs_tgt, std.fiducials, std.fiducials, std.germs, [1])
+        
+        #Mimic factory report creation to test "inline" rendering of switchboards, tables, and figures:
+        qtys = {}
+        qtys['title'] = "Test Inline Report"
+        qtys['date'] = "THE DATE"
+        qtys['confidenceLevel'] = "NOT-SET"
+        qtys['linlg_pcntle'] = "95"
+        qtys['linlg_pcntle_inv'] = "5"
+        #qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
+
+        qtys['pdfinfo'] = "PDFINFO"
+
+        # Generate Switchboard
+        ws = pygsti.report.Workspace()
+        printer = pygsti.obj.VerbosityPrinter(1)
+        switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
+            pygsti.report.factory._create_master_switchboard(ws, {'MyTest': results}, None, 10, 
+                                                             printer, 'html', False)
+
+        gsTgt = switchBd.gsTarget
+        ds = switchBd.ds
+        eff_ds = switchBd.eff_ds
+        modvi_ds = switchBd.modvi_ds
+        prepStrs = switchBd.prepStrs
+        effectStrs = switchBd.effectStrs
+        germs = switchBd.germs
+        strs = switchBd.strs
+        cliffcomp = switchBd.clifford_compilation
+ 
+        def addqty(b, name, fn, *args, **kwargs):
+            qtys[name] = fn(*args, **kwargs)
+                
+        addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
+        addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+        addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
+
+        gsFinal = switchBd.gsFinal
+        gsGIRep = switchBd.gsGIRep
+        gsEP = switchBd.gsGIRepEP
+        cri = None
+
+        addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], cri )
+        addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
+        addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+        addqty(4,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+        addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], "boxes", cri)
+
+        # Generate plots                                                                                                                     
+        addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+        
+        # 3) populate template file => report file                                                                                        
+        templateFile = "../../../../test/test_packages/cmp_chk_files/report_dashboard_template.html"
+          # trickery to use a template in nonstadard location
+        linkto = ()
+        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+        if bPandas: linkto = ('pkl',) + linkto
+        toggles = {'CompareDatasets': False, 'ShowScaling': False, 'CombineRobust': True }
+        pygsti.report.merge_helpers.merge_html_template(qtys, templateFile, temp_files + "/inline_report.html",
+                                                        auto_open=False, precision=None, link_to=linkto,
+                                                        connected=False, toggles=toggles, renderMath=True,
+                                                        resizable=True, autosize='none', verbosity=printer)
 
 
     def test_table_formatting(self):
@@ -229,6 +306,12 @@ class TestReport(ReportBaseCase):
 
         with self.assertRaises(ValueError):
             latex(rank3Tensor, specs)
+
+    def test_factory_helpers(self):
+        pygsti.report.factory._errgen_formula("logTiG", "latex")
+        pygsti.report.factory._errgen_formula("logGTi", "latex")
+        pygsti.report.factory._errgen_formula("logG-logT", "latex")
+        pygsti.report.factory._errgen_formula("foobar", "latex")
         
         
 

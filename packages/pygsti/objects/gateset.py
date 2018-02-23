@@ -444,9 +444,12 @@ class GateSet(object):
             self._rebuild_paramvec()
             
             self._dim = stateDict['_dim']
-            self._calcClass = stateDict['_calcClass']
+            self._calcClass = stateDict.get('_calcClass',_GateMatrixCalc)
             self._default_gauge_group = stateDict['_default_gauge_group']
-            self.basis = stateDict['basis']
+            self.basis = stateDict.get('basis', _Basis('unknown', None))
+            if self.basis.name == "unknown" and '_basisNameAndDim' in stateDict:
+                self.basis = _Basis(stateDict['_basisNameAndDim'][0],
+                                    stateDict['_basisNameAndDim'][1])
 
             assert(len(stateDict['preps']) <= 1), "Cannot convert GateSets with multiple preps!"
             for lbl,gate in stateDict['gates'].items(): self.gates[lbl] = gate

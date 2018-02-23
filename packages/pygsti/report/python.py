@@ -38,15 +38,25 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     except ImportError:
         raise ValueError(("You must have the optional 'pandas' package "
                           "installed to render tables in the 'python' format"))
+
+    def getval(lbl):
+        return lbl.value if isinstance(lbl, _ReportableQty) else lbl
     
     if customHeadings is not None \
             and "python" in customHeadings:
         colLabels = customHeadings['python']
     else:
-        colLabels = colHeadingsFormatted
+        colLabels = [getval(x) for x in colHeadingsFormatted]
     nCols = len(colLabels)
 
     if nCols == 0: return {'python': _pd.DataFrame() }
+
+    #Remove duplicate in colLabels (otherwise these cols get merged weirdly below)
+    for i in range(len(colLabels)):
+        if colLabels[i] in colLabels[0:i]:
+            k = 1
+            while colLabels[i]+str(k) in colLabels[0:i]: k+=1
+            colLabels[i] = colLabels[i]+str(k)
 
     #Add addition error-bar columns for any columns that have error bar info
     cols_containing_ebs = set()
@@ -64,7 +74,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         n += 1
         
     rowLabels = [ ]
-    rowIndexName =  colLabels[0].value if isinstance(colLabels[0], _ReportableQty) else colLabels[0]
+    rowIndexName =  getval(colLabels[0])
     if len(rowIndexName.strip()) == 0:
         rowIndexName = None
 
@@ -73,7 +83,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         dict_of_columns[colLabel] = []
 
     for formatted_rowData in rows:
-        rowLabels.append(formatted_rowData[0]); n=0
+        rowLabels.append(getval(formatted_rowData[0])); n=0
         
         for i,formatted_cellData in enumerate(formatted_rowData[1:],start=1):
             if i in cols_containing_ebs:
@@ -85,9 +95,11 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
                 dict_of_columns[colLabels[i+n+1]].append( eb )
                 n += 1
             else:
-                dict_of_columns[colLabels[i+n]].append( formatted_cellData )
+                dict_of_columns[colLabels[i+n]].append( getval(formatted_cellData) )
 
     indx = _pd.Index(rowLabels, name=rowIndexName)
+    #print("DB PANDAS: headings=",colLabels)  #DEBUG
+    #print("col_dict(cnt) = ", [(k,len(v)) for k,v in dict_of_columns.items()]) #DEBUG
     df = _pd.DataFrame(dict_of_columns,
                        columns=dict_of_columns.keys(),
                        index=indx)

@@ -252,10 +252,7 @@ class Basis(object):
         for i,mx in enumerate(self._matrices):
             t = _np.trace(_np.dot(mx, mx))
             t = _np.real(t)
-            if i == 0:
-                if not _np.isclose(t,1.0): return False
-            elif t > 1e-6:
-                return False
+            if not _np.isclose(t,1.0): return False
         return True
 
     def get_composite_matrices(self):

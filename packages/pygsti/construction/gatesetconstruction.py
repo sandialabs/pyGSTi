@@ -664,7 +664,7 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
 
         if parameterization == "TP":
             if not finalBasis.real:
-                raise ValueError("TP gates must be real. Failed to build gate!")
+                raise ValueError("TP gates must be real. Failed to build gate!") # pragma: no cover
             return _gate.TPParameterizedGate(_np.real(finalGateInFinalBasis))
 
         elif parameterization in ("linear","linearTP"):
@@ -730,7 +730,8 @@ def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="f
             for l in labels:
                 if l.startswith('Q'): stateSpaceDim *= 2
                 elif l.startswith('L'): stateSpaceDim *= 1
-                else: raise ValueError("Invalid state space label: %s" % l) #unreachable (checked above)
+                else: raise ValueError("Invalid state space label: %s" % l) # pragma: no cover
+                      #unreachable (checked above)
 
             if unitaryEmbedding or parameterization not in ("linear","linearTP"):
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")

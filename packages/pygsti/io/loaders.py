@@ -63,7 +63,7 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
                     printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("WARNING: Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file") # pragma: no cover
             else:
                 printer.log("Cache file not found or is tool old -- one will"
                             + "be created after loading is completed")
@@ -137,7 +137,7 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
                     printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("WARNING: Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file") # pragma: no cover
             else:
                 printer.log("Cache file not found or is too old -- one will be"
                             + "created after loading is completed")

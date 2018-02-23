@@ -135,7 +135,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
             extra = nprocs - nloc_std*nIndices # extra procs
             # indices 0 to extra-1 get (nloc_std+1) processors each
             # incides extra to nIndices-1 get nloc_std processors each
-            if rank < extra*(nloc_std+1): # rank < 
+            if rank < extra*(nloc_std+1):
                 loc_indices = [ indices[rank // (nloc_std+1)] ]
             else:
                 loc_indices = [ indices[
@@ -292,10 +292,10 @@ def distribute_slice(s, comm, allow_split_comm=True):
         nprocs = comm.Get_size()
         rank = comm.Get_rank()
 
-    slices = slice_up_slice(s, nprocs)
-    assert(len(slices) == nprocs)
+    slices = slice_up_slice(s, min(nprocs,_slct.length(s)))
+    assert(len(slices) <= nprocs)
     loc_iSlices, slcOwners = \
-        distribute_indices_base( list(range(nprocs)), nprocs, rank,
+        distribute_indices_base( list(range(len(slices))), nprocs, rank,
                                  allow_split_comm)
     assert(len(loc_iSlices) <= 1) # should not assign more than one slice to
                          # each proc by design (there are only nprocs slices)

@@ -18,7 +18,7 @@ class RBTestCase(BaseTestCase):
 
         clifford_to_primitive = std1Q_XYI.clifford_compilation
 
-        m_list = [1,101,201,301,401,501,601,701,801,801,1001]
+        m_list = [1,101]# ,201,301,401,501,601,701,801,801,1001]
         K_m = 10
 
         filename_base = os.path.join(temp_files,'rb_template')
@@ -27,8 +27,7 @@ class RBTestCase(BaseTestCase):
                                                seed=0)
 
         depol_strength = 1e-3
-        gs_experimental = std1Q_XYI.gs_target
-        gs_experimental = gs_experimental.depolarize(gate_noise=depol_strength)
+        gs_experimental = std1Q_XYI.gs_target.depolarize(gate_noise=depol_strength)
 
         all_rb_sequences = []
         for seqs_for_single_cliff_len in rb_sequences:
@@ -69,9 +68,22 @@ class RBTestCase(BaseTestCase):
         #with self.assertRaises(ValueError):
         #    w.RandomizedBenchmarkingPlot(rb_results,'foobar')
             
-        rb_results.print_results()
-        rb_results.compute_bootstrap_error_bars()
-        rb_results.print_results()
+        #rb_results.print_results()
+        #rb_results.compute_bootstrap_error_bars()
+        #rb_results.print_results()
+
+        #Test plotting of results
+        clifford_gateset = pygsti.construction.build_alias_gateset(gs_experimental,clifford_to_primitive)
+        clifford_targetGateset = pygsti.construction.build_alias_gateset(gs_target,clifford_to_primitive)
+        w = pygsti.report.Workspace()
+        w.RandomizedBenchmarkingPlot(
+            rb_results, xlim=None, ylim=None, 
+            fit='standard', Magesan_zeroth=True, Magesan_first=True,
+            exact_decay=True,L_matrix_decay=True, Magesan_zeroth_SEB=True, 
+            Magesan_first_SEB=True, L_matrix_decay_SEB=True,gs=clifford_gateset,
+            gs_target=clifford_targetGateset,group=clifford_group,
+            norm='1to1', legend=True)
+
 
     def test_rb_strings(self):
         clifford_group = rb.std1Q.clifford_group

@@ -186,7 +186,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
     if 'special' in pygsti_fig.metadata:
         if pygsti_fig.metadata['special'] == "keyplot":
             return special_keyplot(pygsti_fig, save_to, fontsize)
-        else: raise ValueError("Invalid `special` label: %s" % special)
+        else: raise ValueError("Invalid `special` label: %s" % pygsti_fig.metadata['special'])
     
     #if axes is None: 
     mpl_fig,axes = _plt.subplots()  # create a new figure if no axes are given    
@@ -303,12 +303,14 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             axes.set_xlim(0,plt_data.shape[1])
             axes.set_ylim(0,plt_data.shape[0])
 
-            xtics = _np.array(xtickvals)+0.5 #_np.arange(plt_data.shape[1])+0.5
-            axes.set_xticks(xtics, minor=False)
-                
-            ytics = _np.array(ytickvals)+0.5 # _np.arange(plt_data.shape[0])+0.5
-            axes.set_yticks(ytics, minor=False)
- 
+            if xtickvals is not None:
+                xtics = _np.array(xtickvals)+0.5 #_np.arange(plt_data.shape[1])+0.5
+                axes.set_xticks(xtics, minor=False)
+
+            if ytickvals is not None:
+                ytics = _np.array(ytickvals)+0.5 # _np.arange(plt_data.shape[0])+0.5
+                axes.set_yticks(ytics, minor=False)
+            
             grid = bool(len(shapes) > 1)
             if grid:
                 def _get_minor_tics(t):
@@ -344,8 +346,8 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
             mode = traceDict.get('mode','lines')
             marker = traceDict.get('marker',None)
             line = marker['line'] if marker else None
-            color = mpl_color(marker['color'] if marker else "rgba(0,0,0,1.0)")
-            linewidth = float(line['width']) if (line and line['width'] is not None) else 1.0
+            color = mpl_color(marker.get('color','rgb(0,0,0)') if marker else 'rgb(0,0,0)')
+            linewidth = float(line['width']) if (line and line.get('width',None) is not None) else 1.0
 
             x = y = None
             if 'x' in traceDict and 'y' in traceDict:

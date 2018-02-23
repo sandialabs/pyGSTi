@@ -26,6 +26,15 @@ class EvalTreeTestCase(BaseTestCase):
     def test_matrix_tree_2Q(self):
         self.helper_tree(pygsti.obj.MatrixEvalTree,False)
 
+    def test_base_tree(self):
+        raw_tree = pygsti.obj.EvalTree()
+        with self.assertRaises(NotImplementedError):
+            raw_tree.initialize(None,None)
+        with self.assertRaises(NotImplementedError):
+            raw_tree.generate_gatestring_list()
+        with self.assertRaises(NotImplementedError):
+            raw_tree.split(None)
+
     def helper_tree(self, TreeClass, b1Q):
         if b1Q:
             gs_target = std1Q_XY.gs_target
@@ -52,6 +61,9 @@ class EvalTreeTestCase(BaseTestCase):
 
         t = TreeClass()
         t.initialize([""] + gateLabels, compiled_gatestrings)
+        nStrs = t.num_final_strings()
+        self.assertEqual(nStrs, len(compiled_gatestrings))
+        self.assertEqual(t.final_slice(None),slice(0,nStrs)) #trivial since t is not split
 
         #normal order
         #print("\n".join([ "%d: %s -> %s" % (k,str(iStart),str(rem)) for k,(iStart,rem) in enumerate(t)]))

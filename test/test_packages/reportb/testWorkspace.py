@@ -1,8 +1,10 @@
 import os
 import unittest
+import pickle
 import pygsti
 #import psutil
 from pygsti.extras import drift
+from pygsti.construction import stdQT_XYIMS
 
 from ..testutils import compare_files, temp_files
 
@@ -12,7 +14,11 @@ from ..report.reportBaseCase import ReportBaseCase
 
 bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and 
               os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))
-
+try:
+    import pandas
+    bPandas = True
+except ImportError:
+    bPandas = False
 
 #HACK for tracking open files
 # try:
@@ -51,7 +57,8 @@ class TestWorkspace(ReportBaseCase):
         super(TestWorkspace, self).setUp()
 
         self.tgt = self.results.estimates['default'].gatesets['target']
-        self.ds = self.results.dataset
+        self.ds = self.results.dataset.copy()
+        self.ds.comment = "Hello\nWorld!" # for testing DS overview table
         self.gs = self.results.estimates['default'].gatesets['go0']
         self.gss = self.results.gatestring_structs['final']
 
@@ -65,29 +72,143 @@ class TestWorkspace(ReportBaseCase):
         wnb = pygsti.report.Workspace()
         wnb.init_notebook_mode(connected=False, autodisplay=False)
 
+    def test_plotly_pickling(self):
+        import plotly.plotly as py
+        import plotly.graph_objs as go
+
+        # Create random data with numpy
+        N = 1000
+        random_x = np.random.randn(N)
+        random_y = np.random.randn(N)
+
+        # Create a trace
+        trace = go.Scatter(
+            x = random_x,
+            y = random_y,
+            mode = 'markers'
+        )
+        data = [trace]
+        fig = go.Figure(data=[trace], layout={})
+        pygsti.report.workspace.enable_plotly_pickling()
+
+        #DEBUG
+        #import dill
+        #dill.detect.trace(True)
+        #dill.detect.badobjects(fig['frames'], depth=1)
+        #print(dir(fig))
+        #print("frames: ",type(fig['frames']))
+        #s = pickle.dumps(fig['frames'])
+        #print("layout",type(fig['layout']))
+        #s = pickle.dumps(fig['layout'])
+        #print("data",type(fig['data']))
+        #s = pickle.dumps(fig['data'])
+
+        s = pickle.dumps(fig)
+        fig2 = pickle.loads(s)
+        pygsti.report.workspace.disable_plotly_pickling()
+
+        #Again for good measure
+        pygsti.report.workspace.enable_plotly_pickling()
+        pygsti.report.workspace.disable_plotly_pickling()
+
+    def test_custom_digest(self):
+        import hashlib
+        M = hashlib.md5()
+        ws = pygsti.report.Workspace()
+
+        NA = ws.NotApplicable()
+        pygsti.report.workspace.ws_custom_digest(M, NA)
+
+        switchbd = ws.Switchboard(["My Switch"],[["On","Off"]],["buttons"])
+        switchbd.add("gs", [0])
+        switchval = switchbd.gs
+        pygsti.report.workspace.ws_custom_digest(M, switchval)
+
+
     def test_table_creation(self):
         w = pygsti.report.Workspace()
         tbls = []; cr = None
-        
+
+        gsMultiSpam = self.gs.copy()
+        gsMultiSpam.povms['Msecondpovm'] = self.gs.povms['Mdefault'].copy()
+        gsTP = self.tgt.depolarize(0.01,0.01); gsTP.set_all_parameterizations("TP")
+        gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTP")
+        gsGM = self.gs.depolarize(0.01,0.01); gsGM.basis = pygsti.obj.Basis("gm",2)
+        gsSTD = self.gs.depolarize(0.01,0.01); gsSTD.basis = pygsti.obj.Basis("std",2)
+        gsQT = stdQT_XYIMS.gs_target.depolarize(0.01,0.01)
+
+        #Construct confidence regions
+        def make_cr(gs):
+            hessian = pygsti.tools.logl_hessian(gs, self.ds, self.gss.allstrs,
+                                                minProbClip=1e-4, probClipInterval=(-1e6,1e6),
+                                                radius=1e-4)
+            est = pygsti.objects.estimate.Estimate(None, gs, None, []) #dummy w/out parent
+            crfactory = pygsti.obj.ConfidenceRegionFactory(
+                parent=est, gateset_lbl="target", gatestring_list_lbl=None,
+                hessian=hessian, nonMarkRadiusSq=0.0)
+            crfactory.project_hessian('std')
+            return crfactory.view(95)
+
+        cr2 = make_cr(self.gs)
+        cr2TP = make_cr(gsTP)
+        cr2CPTP = make_cr(gsCPTP)
+
+        #----------------- Test table creation ---------------------------
         tbls.append( w.BlankTable() )
         tbls.append( w.SpamTable(self.gs, ["mytitle"], "boxes", cr, True ) )
+        tbls.append( w.SpamTable(self.gs, ["mytitle"], "boxes", cr2, True ) )
         tbls.append( w.SpamTable(self.gs, ["mytitle"], "numbers", cr, False ) )
+        with self.assertRaises(ValueError):
+            w.SpamTable(self.gs, ["mytitle"], "foobar", cr, False ) #invalid display_as
+        
         tbls.append( w.SpamParametersTable(self.gs, cr ) )
+        tbls.append( w.SpamParametersTable(gsMultiSpam, cr ) )
+        
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="boxes", confidenceRegionInfo=cr ) )
         tbls.append( w.GatesTable(self.gs, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr ) )
+        tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2TP ) )
+        tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidenceRegionInfo=cr2CPTP ) )        
+        with self.assertRaises(ValueError):
+            w.GatesTable(self.gs, ["mytitle"], display_as="foobar", confidenceRegionInfo=cr )
+            
         tbls.append( w.ChoiTable(self.gs, ["mytitle"], cr ) )
+        with self.assertRaises(ValueError):
+            w.ChoiTable(self.gs, ["mytitle"], cr, display=("foobar",) )
+        
         tbls.append( w.GatesVsTargetTable(self.gs, self.tgt, cr) )
+        with self.assertRaises(ValueError):
+            w.GatesVsTargetTable(self.gs, self.tgt, cr, display=("foobar",) )
+        
         tbls.append( w.SpamVsTargetTable(self.gs, self.tgt, cr ) )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="boxes", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logTiG") )
         tbls.append( w.ErrgenTable(self.gs, self.tgt, cr, display_as="numbers", genType="logG-logT") )
+        tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", genType="logGTi") )
+        tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", genType="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.gs_target, cr, display_as="numbers", genType="logGTi") )
+        with self.assertRaises(ValueError):
+            w.ErrgenTable(self.gs, self.tgt, cr, display=('foobar',))
+        with self.assertRaises(AssertionError):
+            w.ErrgenTable(self.gs, self.tgt, cr, display_as='foobar')
+        with self.assertRaises(ValueError):
+            w.ErrgenTable(self.gs, self.tgt, cr, genType='foobar')
+        
         tbls.append( w.GateDecompTable(self.gs, self.tgt, cr) )
-        #tbls.append( w.RotationAxisVsTargetTable(self.gs, self.tgt, cr ) )
-        #tbls.append( w.RotationAxisTable(self.gs, cr) )
+        
         tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr) )
-        tbls.append( w.DataSetOverviewTable(self.ds) )
+        tbls.append( w.GateEigenvalueTable(self.gs, None, cr, display=("polar",) ) ) # polar with no target gateset
+        tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr, display=("evdm","evinf"),
+                                           virtual_gates=[pygsti.obj.GateString(('Gx','Gx'))] ) )
+        with self.assertRaises(ValueError):
+            tbls.append( w.GateEigenvalueTable(self.gs, self.tgt, cr, display=("foobar",)) )
+        
+        tbls.append( w.DataSetOverviewTable(self.ds,maxLengthList=[1,2,4,8]) )
         tbls.append( w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
-                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
+                                          self.results.estimates['default'].gatesets['iteration estimates'], self.ds) )
+        with self.assertRaises(ValueError):
+            w.FitComparisonTable(self.gss.Ls, self.results.gatestring_structs['iteration'],
+                                 self.results.estimates['default'].gatesets['iteration estimates'], self.ds, objective="foobar")
+
         tbls.append( w.GaugeRobustErrgenTable(self.gs, self.tgt) )
 
         prepStrs = self.results.gatestring_lists['prep fiducials']
@@ -104,23 +225,58 @@ class TestWorkspace(ReportBaseCase):
             tbls.append( w.GatesSingleMetricTable(
                 metric, [[self.gs],[self.gs]],[[self.tgt],[self.tgt]],
                 ['column one'], ['row one','row two'], gateLabel="Gx")) #2D
+            tbls.append( w.GatesSingleMetricTable(
+                metric, [self.gs,None],[self.tgt,self.tgt], ['one','two'])) #1D w/None gateset
 
-        tbls.append( w.StandardErrgenTable(4, "hamiltonian", "pp") )
-        tbls.append( w.StandardErrgenTable(4, "stochastic", "pp") )
-        tbls.append( w.StandardErrgenTable(4, "hamiltonian", "gm") )
-        tbls.append( w.StandardErrgenTable(4, "stochastic", "gm") )
-        
-        tbls.append( w.GaugeOptParamsTable(self.results.estimates['default'].goparameters['go0']) )
-        tbls.append( w.MetadataTable(self.gs, self.results.estimates['default'].parameters ) )
+        tbls.append( w.StandardErrgenTable(4, "hamiltonian", "pp") )  # 1Q
+        tbls.append( w.StandardErrgenTable(9, "stochastic", "gm") )   # qutrit
+        tbls.append( w.StandardErrgenTable(16, "hamiltonian", "gm") ) # 2Q
+        tbls.append( w.StandardErrgenTable(64, "stochastic", "pp") )  # >2Q (3Q)
+
+        goparams = self.results.estimates['default'].goparameters['go0'].copy()
+        goparams.update({'method': "LM", 'cptp_penalty_factor': 1.0}) # for coverage
+        tbls.append( w.GaugeOptParamsTable(goparams) )
+        tbls.append( w.GaugeOptParamsTable(False) )
+
+        params = self.results.estimates['default'].parameters.copy()
+        params['gaugeOptParams'] = goparams # add for coverate
+        tbls.append( w.MetadataTable(self.gs, params) )
+        params['gaugeOptParams'] = [goparams] # can also be a list (for GOpt stages)
+        tbls.append( w.MetadataTable(gsTP, params) )
         tbls.append( w.SoftwareEnvTable() )
 
+        profiler = self.results.estimates['default'].parameters.get('profiler',None)
+        tbls.append( w.ProfilerTable(profiler,"time") )
+        tbls.append( w.ProfilerTable(profiler,"name") )
+        if profiler is not None:
+            with self.assertRaises(ValueError):
+                w.ProfilerTable(profiler,"foobar")
+            
+        #OLD tables
+        tbls.append( w.old_RotationAxisVsTargetTable(self.gs, self.tgt) )
+        tbls.append( w.old_GateDecompTable(self.gs) )
+        tbls.append( w.old_RotationAxisTable(self.gs) )
+
+
         #Now test table rendering in html
-        for tbl in tbls:
+        for i,tbl in enumerate(tbls):
             print("Table: %s" % str(type(tbl)))
             out_html = tbl.render("html")
             #out_latex = tbl.render("latex") #not supported yet (figure formatting wants scratchdir)
+            
+            tbl.saveas(temp_files + "/saved_table_%d.html" % i)
             if bLatex:
-                tbl.saveas(temp_files + "/saved_table_%s.pdf" % str(id(tbl)))
+                tbl.saveas(temp_files + "/saved_table_%d.tex" % i)
+                tbl.saveas(temp_files + "/saved_table_%d.pdf" % i)
+            if bPandas:
+                tbl.saveas(temp_files + "/saved_table_%d.pkl" % i)
+            with self.assertRaises(ValueError):
+                tbl.saveas(temp_files + "/saved_table_%d.foobar" % i) # Unknown file type
+
+        w.save_cache(temp_files + "/saved_workspace_cache1.pkl", showUnpickled=True)
+        w.load_cache(temp_files + "/saved_workspace_cache1.pkl")
+
+        w2 = pygsti.report.Workspace(temp_files + "/saved_workspace_cache1.pkl") # init from cache
 
         #printOpenFiles()
         #print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
@@ -131,9 +287,11 @@ class TestWorkspace(ReportBaseCase):
         w = pygsti.report.Workspace()
         prepStrs = self.results.gatestring_lists['prep fiducials']
         effectStrs = self.results.gatestring_lists['effect fiducials']
+        non_gatestring_strs = [ ('Gx',), ('Gy',) ]
         
         plts = []
         plts.append( w.BoxKeyPlot(prepStrs, effectStrs) )
+        plts.append( w.BoxKeyPlot(non_gatestring_strs, non_gatestring_strs) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=True,
                                     hoverInfo=True, sumUp=False, invert=False) )
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
@@ -143,10 +301,18 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("chi2","logl"), self.gss, self.ds, self.gs, boxLabels=False,
                                     hoverInfo=True, sumUp=False, invert=False, typ="scatter") )
 
+        dsc = pygsti.objects.DataComparator([self.ds,self.ds])
+        plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.gs, dscomparator=dsc) ) # dscmp with 'None' dataset specified
+
         tds = pygsti.io.load_tddataset(compare_files + "/timeseries_data_trunc.txt")
         driftresults = drift.do_basic_drift_characterization(tds)
         plts.append( w.ColorBoxPlot(("driftpv","driftpwr"), self.gss, self.ds, self.gs, boxLabels=False,
                                     hoverInfo=True, sumUp=True, invert=False, driftresults=driftresults) )
+
+        with self.assertRaises(ValueError):
+            w.ColorBoxPlot(("foobar",), self.gss, self.ds, self.gs)
+        with self.assertRaises(ValueError):
+            w.ColorBoxPlot(("chi2",), self.gss, self.ds, self.gs, typ="foobar")
 
         from pygsti.algorithms import directx as dx
         #specs = pygsti.construction.build_spam_specs(
@@ -166,12 +332,16 @@ class TestWorkspace(ReportBaseCase):
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                   colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)) )
+        plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",colormap=None))
         plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", boxLabels=True) )
         plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],scale=1.5) )
+        plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.gs.gates['Gx'])],["purple"],amp=2.0) )
 
         projections = np.zeros(16,'d')
         plts.append( w.ProjectionsBoxPlot(projections, "pp", boxLabels=False) )
         plts.append( w.ProjectionsBoxPlot(projections, "gm", boxLabels=True) )
+        plts.append( w.ProjectionsBoxPlot(np.zeros(9,'d'), "gm", boxLabels=True) )  # non-qubit case
+        plts.append( w.ProjectionsBoxPlot(np.zeros(64,'d'), "gm", boxLabels=True) ) # >2Q case
         
         choievals = np.array([-0.03, 0.02, 0.04, 0.98])
         choieb = np.array([0.05, 0.01, 0.02, 0.01])
@@ -181,13 +351,30 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.FitComparisonBarPlot(self.gss.Ls, self.results.gatestring_structs['iteration'],
                                           self.results.estimates['default'].gatesets['iteration estimates'], self.ds,) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
+
+        plts.append( w.DatasetComparisonHistogramPlot(dsc, nbins=50, frequency=True, 
+                                                      log=True, display='pvalue'))
+        plts.append( w.DatasetComparisonHistogramPlot(dsc, nbins=None, frequency=True, 
+                                                      log=False, display='llr'))
+        with self.assertRaises(ValueError):
+            w.DatasetComparisonHistogramPlot(dsc, nbins=50, frequency=True, 
+                                             log=False, display='foobar')
+                    
+        # Note: RandomizedBenchmarkingPlot is tested in extras/test_rb.py
                      
         #Now test table rendering in html
-        for plt in plts:
+        for i,plt in enumerate(plts):
             print("Plot: %s" % str(type(plt)))
             out_html = plt.render("html")
+            plt.saveas(temp_files + "/saved_plot_%d.html" % i)
+            plt.saveas(temp_files + "/saved_plot_%d.pkl" % i) #Note: plots don't need Pandas for pickling
             if bLatex:
-                plt.saveas(temp_files + "/saved_plot_%s.pdf" % str(id(plt)))
+                plt.saveas(temp_files + "/saved_plot_%d.pdf" % i)
+            with self.assertRaises(ValueError):
+                plt.saveas(temp_files + "/saved_plot_%d.foobar" % i) # Unknown file type
+
+        w.save_cache(temp_files + "/saved_workspace_cache1.pkl")
+        w.load_cache(temp_files + "/saved_workspace_cache1.pkl")
 
         # printOpenFiles()
         # print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
@@ -209,8 +396,8 @@ class TestWorkspace(ReportBaseCase):
         switchbd["ds"][:] = [ds, ds]
         switchbd["gs"][:] = [gs, gs2]
 
-        switchbd2 = w.Switchboard(["spamWeight"], [["0.0","0.1","0.2","0.5","0.9","0.95"]], ["slider"])
-
+        switchbd2 = w.Switchboard(["spamWeight"], [["0.0","0.1","0.2","0.5","0.9","0.95"]], ["slider"])        
+        
         tbl = w.SpamTable(switchbd["gs"])
         plt = w.ColorBoxPlot(("chi2","logl"), self.gss, switchbd["ds"], switchbd["gs"], boxLabels=False)
 
@@ -226,6 +413,133 @@ class TestWorkspace(ReportBaseCase):
         
         switchbd3.render("html")
         tbl2.render("html")
+
+        switchbd3.render("html")
+        try:
+            switchbd3.display()
+        except:
+            pass #might work, might not, depending on how much ipython support exists...
+
+        switchbd4 = w.Switchboard(["My Numeric Slider"],[["0.0","1.0","1.5"]],["numslider"])
+        switchbd5 = w.Switchboard(["My Switch"],[["On","Off"]],["buttons"],show="none") #test show=="none"
+        with self.assertRaises(KeyError):
+            switchbd5['key'] = 10 # can't add switched values like this.
+        switchbd5.switchTypes[0] = "foobar" #mess with Switchboard internals to trigger errors below
+        with self.assertRaises(ValueError):
+            switchbd5.get_switch_change_handlerjs(0)
+        with self.assertRaises(ValueError):
+            switchbd5.get_switch_valuejs(0)
+
+        switchbd4.render("html")
+        #switchbd5.render("html")
+
+        view1 = switchbd.view()
+        view2 = switchbd.view(['dataset'])
+        view3 = switchbd.view([True,False])
+        
+        try:
+            view1.display()
+        except:
+            pass #might work, might not, depending on how much ipython support exists...
+
+    def test_text_creation(self):
+        printer = pygsti.obj.VerbosityPrinter(1)
+        printer.start_recording()
+        printer.log("Hello World")
+        lineinfo = printer.stop_recording()
+        
+        ws = pygsti.report.Workspace()
+        texts = []
+        texts.append( ws.StdoutText( lineinfo ) )
+
+        #Now test rendering
+        for i,text in enumerate(texts):
+            print("Text: %s" % str(type(text)))
+            out_html = text.render("html")
+            text.saveas(temp_files + "/saved_text_%d.html" % i)
+            text.saveas(temp_files + "/saved_text_%d.pkl" % i)
+            if bLatex:
+                text.saveas(temp_files + "/saved_text_%d.pdf" % i)
+            with self.assertRaises(ValueError):
+                text.saveas(temp_files + "/saved_text_%d.foobar" % i) # Unknown file type
+        
+
+    def test_workspaceoutput(self):
+        ws = pygsti.report.Workspace()
+        raw_wo = pygsti.report.workspace.WorkspaceOutput(ws)
+
+        s = pickle.dumps(raw_wo)
+        raw_wo2 = pickle.loads(s)
+
+        #test some base class paths
+        with self.assertRaises(ValueError):
+            raw_wo.set_render_options(foobar="10")
+        with self.assertRaises(NotImplementedError):
+            raw_wo.render("html")
+        with self.assertRaises(NotImplementedError):
+            raw_wo.saveas("doesntmatter.html")
+
+        raw_wo.set_render_options(global_requirejs=True)
+        raw_wo._create_onready_handler("myJavascriptCode;")
+            
+        try:
+            raw_wo.display()
+        except:
+            pass #might work or not, depending on how much ipython is installed
+
+    def test_notapplicable(self):
+        ws = pygsti.report.Workspace()
+        NA = ws.NotApplicable()
+        NA.render("html")
+        NA.render("latex")
+        NA.render("python")
+        with self.assertRaises(ValueError):
+            NA.render("foobar")
+
+    def test_plot_and_table_objects(self):
+        ws = pygsti.report.Workspace()
+
+        printer = pygsti.obj.VerbosityPrinter(1)
+        printer.start_recording()
+        printer.log("Hello World (with $\\alpha$ math latex)")
+        lineinfo = printer.stop_recording()
+        strs = pygsti.construction.gatestring_list([ (), ('Gx',), ('Gx','Gy')])
+        
+        table = ws.BlankTable()
+        plot = ws.BoxKeyPlot(strs, strs)
+        text = ws.StdoutText( lineinfo )
+        objs = [table, plot, text] # list of "representative" objects for testing
+
+        for obj in objs:
+            print("Testing ",type(obj))
+            obj.set_render_options(precision=4,
+                                   output_dir=temp_files) # needed for html rendering
+            obj.render("html")
+            
+            obj.set_render_options(switched_item_mode='foobar')
+            with self.assertRaises(ValueError):
+                obj.render("html") #invalid switched-item-mode
+            if bLatex:
+                with self.assertRaises(ValueError):
+                    obj.render("latex") #invalid switched-item-mode
+            if bPandas:
+                with self.assertRaises(ValueError):
+                    obj.render("python") #invalid switched-item-mode
+
+            for mode in ('separate files','inline'):
+                obj.set_render_options(switched_item_mode=mode,
+                                       autosize="continual") #pick options not used elsewhere
+                obj.render("html")
+                if bLatex:  obj.render("latex")
+                if bPandas: obj.render("python")
+
+            with self.assertRaises(NotImplementedError):
+                obj.render("foobar")
+
+        #Individual item tests
+        with self.assertRaises(ValueError):
+            plot.set_render_options(valign="foobar")
+            plot.render("html")
 
 
     def test_plot_helpers(self):
@@ -258,4 +572,72 @@ class TestWorkspace(ReportBaseCase):
         # now the mxs that aren't all-NaNs don't all have the same # of Nans => warning
         #self.assertWarns(ph._compute_num_boxes_dof, subMxs, sumUp=True, element_dof=1)
         ph._compute_num_boxes_dof( subMxs, sumUp=True, element_dof=1) # Python2.7 doesn't always warn...
-        
+
+
+    def test_plot_basefns(self):
+        #Tests non-covered boundary cases for plot-supporting functions
+        colormap = pygsti.report.colormaps.DivergingColormap(0,10)
+        mx = np.identity(2,'d')
+        mxs = [ [mx, mx],
+                [mx, mx] ]
+        gstrs = pygsti.construction.gatestring_list([ (), ('Gx',) ])
+
+        # ---- nested_color_boxplot ----
+        pygsti.report.workspaceplots.nested_color_boxplot(mxs, colormap)
+
+        # ---- generate_boxplot ----
+        pygsti.report.workspaceplots.generate_boxplot(
+            mxs, gstrs, gstrs,
+            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
+            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap) #gatestring labels
+
+        pygsti.report.workspaceplots.generate_boxplot(
+            mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
+            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
+            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            sumUp=True, hoverInfo=True) #sumup test
+
+        pygsti.report.workspaceplots.generate_boxplot(
+            mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
+            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
+            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            sumUp=False, hoverInfo=False) # no hover info
+
+        pygsti.report.workspaceplots.generate_boxplot(
+            mxs, ['xlbl1','xlbl2'], ['ylbl1','ylbl2'],
+            ['ixlbl1','ixlbl2'], ['iylbl1','iylbl2'],
+            'Xlbl','Ylbl','innerXlbl','innerYlbl', colormap,
+            sumUp=True, invert=True) #ignores invert
+
+
+        # ----- gatestring_color_scatterplot -----
+        germs = preps = effects = gstrs
+        gss = pygsti.obj.LsGermsStructure([1,2],germs,preps,effects)
+        for L in [1,2]:
+            for germ in germs:
+                gss.add_plaquette(germ*L, L, germ)
+        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+            gss, mxs, colormap, sumUp=True)
+        pygsti.report.workspaceplots.gatestring_color_scatterplot(
+            gss, mxs, colormap, hoverInfo=False)
+
+        # ---- gatestring_color_histogram ----
+        zmx = np.zeros((2,2),'d')
+        mxs_allzeros = [ [zmx, zmx],
+                         [zmx, zmx] ]
+        pygsti.report.workspaceplots.gatestring_color_histogram(
+            gss, mxs_allzeros, colormap) # when there's no counts to plot
+
+        # ---- gatematrix_color_boxplot ----
+        pygsti.report.workspaceplots.gatematrix_color_boxplot(
+            np.identity(4,'d'), -1.0, 1.0, mxBasis="pp", mxBasisY="gm")
+          # test weird case when there's different bases on diff axes
+
+        # ---- matrix_color_boxplot ----
+        pygsti.report.workspaceplots.matrix_color_boxplot(
+            np.identity(16,'d'), colormap=colormap, grid="black:2") # test "gridcolor:linewidth" format of grid argument.
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+

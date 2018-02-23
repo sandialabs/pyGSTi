@@ -676,7 +676,8 @@ def optimize_integer_fiducials_slack(gateset, fidList, prepOrMeas=None,
     elif prepOrMeas == 'meas':
         fidArrayList = make_meas_mxs(gateset, fidList)
     else:
-        raise Exception('prepOrMeas must be specified!')
+        raise ValueError('prepOrMeas must be specified!') # pragma: no cover
+          # unreachable given check within test_fiducial_list above
     numMxs = len(fidArrayList)
 
     def compute_score(wts, cache_score=True):

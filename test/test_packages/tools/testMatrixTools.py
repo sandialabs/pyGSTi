@@ -141,16 +141,29 @@ class MatrixBaseTestCase(BaseTestCase):
         mx = np.array([[1+1j, 0],
                        [2+2j, 3+3j]], 'complex')
         smx = sps.csr_matrix(mx)
+        smx_lil = sps.lil_matrix(mx) # currently unsupported
 
         r = mt.safereal(mx, inplace=False)
         self.assertArraysAlmostEqual(r, np.real(mx))
         i = mt.safeimag(mx, inplace=False)
         self.assertArraysAlmostEqual(i, np.imag(mx))
-
+        
         r = mt.safereal(smx, inplace=False)
         self.assertArraysAlmostEqual(r.toarray(), np.real(mx))
         i = mt.safeimag(smx, inplace=False)
         self.assertArraysAlmostEqual(i.toarray(), np.imag(mx))
+
+        with self.assertRaises(NotImplementedError):
+            mt.safereal(smx_lil, inplace=False)
+        with self.assertRaises(NotImplementedError):
+            mt.safeimag(smx_lil, inplace=False)
+
+        with self.assertRaises(AssertionError):
+            mt.safereal(mx, check=True)
+        with self.assertRaises(AssertionError):
+            mt.safeimag(mx, check=True)
+
+
 
         M = mx.copy(); M = mt.safereal(M, inplace=True)
         self.assertArraysAlmostEqual(M, np.real(mx))
@@ -171,6 +184,14 @@ class MatrixBaseTestCase(BaseTestCase):
 
         B = np.array([1,1],'d')
         expA = mt._custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta)
+
+
+        nonSq = np.array([[1, 2, 4],
+                          [2, 3, 5]], 'd')
+        N = sps.csr_matrix(nonSq)
+
+        with self.assertRaises(ValueError):
+            mt.expm_multiply_prep(N)
 
         
 if __name__ == '__main__':

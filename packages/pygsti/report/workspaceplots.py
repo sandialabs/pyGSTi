@@ -658,6 +658,9 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     yvals = g.used_yvals()
     inner_xvals = g.minor_xvals()
     inner_yvals = g.minor_yvals()
+    
+    if addl_hover_subMxs is None:
+        addl_hover_subMxs = {}
 
     #TODO: move hover-function creation routines to new function since duplicated in
     # gatestring_color_boxplot
@@ -715,17 +718,28 @@ def gatestring_color_scatterplot(gatestring_structure, subMxs, colormap,
     for ix,x in enumerate(g.used_xvals()):
         for iy,y in enumerate(g.used_yvals()):
             plaq = g.get_plaquette(x,y)
-            #TODO: if sumUp then need to sum before appending...
-            for iiy,iix,gstr in plaq:
-                if gstr in gstrs: continue #skip duplicates
-                xs.append( len(gstr))
-                ys.append( subMxs[iy][ix][iiy][iix] )
-                gstrs.add(gstr)
-                if hoverInfo:
-                    if callable(hoverInfo):
-                        texts.append( hoverInfo(subMxs[iy][ix][iiy][iix],iy,ix,iiy,iix) )
-                    else:
-                        texts.append(str(subMxs[iy][ix][iiy][iix]))
+            if sumUp:
+                if plaq.base not in gstrs:
+                    tot = sum( [subMxs[iy][ix][iiy][iix] for iiy,iix,_ in plaq] )
+                    xs.append( len(plaq.base) ) # x-coord is len of *base* string
+                    ys.append(tot)
+                    gstrs.add(plaq.base)
+                    if hoverInfo:
+                        if callable(hoverInfo):
+                            texts.append( hoverInfo(tot,iy,ix) )
+                        else:
+                            texts.append(str(tot))
+            else:
+                for iiy,iix,gstr in plaq:
+                    if gstr in gstrs: continue #skip duplicates
+                    xs.append( len(gstr))
+                    ys.append( subMxs[iy][ix][iiy][iix] )
+                    gstrs.add(gstr)
+                    if hoverInfo:
+                        if callable(hoverInfo):
+                            texts.append( hoverInfo(subMxs[iy][ix][iiy][iix],iy,ix,iiy,iix) )
+                        else:
+                            texts.append(str(subMxs[iy][ix][iiy][iix]))
 
     trace = go.Scattergl(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
@@ -1730,7 +1744,7 @@ class ColorBoxPlot(WorkspacePlot):
                 elif colormapType == "redseq": color = "whiteToRed"
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=max_abs, color=color)
                 
-            else: assert(False) #invalid colormapType was set above
+            else: assert(False), "Internal logic error" # pragma: no cover
 
             if typ == "boxes":
                 newfig = gatestring_color_boxplot(gss, subMxs, colormap,
@@ -2173,7 +2187,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             projections = projections.reshape( (4,4) )
             xlabel = "Q2"; ylabel="Q1"
         else:
-            projections = projections.reshape( (4,projections.size/4) )
+            projections = projections.reshape( (4,projections.size//4) )
             xlabel = "Q*"; ylabel="Q1"
 
         if EBmatrix is not None:
@@ -2806,7 +2820,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,gs=False,
-                 gs_target=False,group=False, norm='1to1', legend=True,
+                 gs_target=False,group=False, group_to_gateset=None, norm='1to1', legend=True,
                  title='Randomized Benchmarking Decay', scale=1.0):
         """
         Plot RB decay curve, as a function of some the sequence length
@@ -2876,7 +2890,13 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         group : MatrixGroup, optional
             Required, if plotting R matrix theory decay. The matrix group that gs
             is an implementation of.
-            
+
+        group_to_gateset : dict, optional
+            If not None, a dictionary that maps labels of group elements to labels
+            of gs. Only used if subset_sampling is not None. If subset_sampling is 
+            not None and the gs and group elements have the same labels, this dictionary
+            is not required. Otherwise it is necessary.
+
         norm : str, optional
             The norm used for calculating the Magesan theory bounds.
             
@@ -2895,13 +2915,13 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         super(RandomizedBenchmarkingPlot,self).__init__(
             ws, self._create, rbR, xlim, ylim, fit, Magesan_zeroth,
             Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
-            Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group, norm,
-            legend, title, scale)
+            Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
+            group_to_gateset, norm, legend, title, scale)
         
     def _create(self, rbR, xlim, ylim, fit, Magesan_zeroth,
                 Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
                 Magesan_first_SEB, L_matrix_decay_SEB, gs, gs_target, group,
-                norm, legend, title, scale):
+                group_to_gateset, norm, legend, title, scale):
 
         from ..extras.rb import rbutils as _rbutils
         #TODO: maybe move the computational/fitting part of this function
@@ -2934,7 +2954,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
                            " and a target gateset is required.")
             else:
                 MTP = _rbutils.Magesan_theory_parameters(gs, gs_target, 
-                                                success_spamlabel=rbR.success_spamlabel,
+                                                success_outcomelabel=rbR.success_outcomelabel,
                                                          norm=norm,d=rbR.d)
                 f_an = MTP['p']
                 A_an = MTP['A']
@@ -2947,11 +2967,11 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         if exact_decay is True:
             if (gs is False) or (group is False):
                 raise ValueError("To plot the exact decay curve a gateset" +
-                           "and the target group are required.")
+                                 " and the target group are required.")
             else:
                 mvalues,ASPs = _rbutils.exact_RB_ASPs(gs,group,max(xdata),m_min=1,m_step=1,
-                                                      d=rbR.d,
-                                                      success_spamlabel=rbR.success_spamlabel)
+                                                      d=rbR.d, group_to_gateset=group_to_gateset,
+                                                      success_outcomelabel=rbR.success_outcomelabel)
                 
         if L_matrix_decay is True:
             if (gs is False) or (gs_target is False):
@@ -2960,7 +2980,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
             else:
                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
                 _rbutils.L_matrix_ASPs(gs,gs_target,max(xdata),m_min=1,m_step=1,d=rbR.d,
-                                             success_spamlabel=rbR.success_spamlabel)
+                                       success_outcomelabel=rbR.success_outcomelabel, error_bounds=True)
 
         xlabel = 'Sequence length'
 

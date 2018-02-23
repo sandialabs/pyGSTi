@@ -144,7 +144,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
         return slice(start,stop,step) 
 
     if array_ok: return _np.array(lst,'i')
-    else: assert(False),"List does not correspond to a slice!"
+    else: raise ValueError("List does not correspond to a slice!")
 
 def as_array(slcOrListLike):
     """ 

@@ -173,8 +173,8 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
-        except:
-            printer.warning("SVD error!!"); return 0
+        except:                                       # pragma: no cover
+            printer.warning("SVD error!!"); return 0  # pragma: no cover
             #SVD did not converge -> just say no amplified params...
 
         numAmplified = 0
@@ -572,8 +572,8 @@ def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
-        except:
-            printer.warning("SVD error!!"); return 0
+        except:                                       # pragma: no cover
+            printer.warning("SVD error!!"); return 0  # pragma: no cover
             #SVD did not converge -> just say no amplified params...
 
         numAmplified = 0

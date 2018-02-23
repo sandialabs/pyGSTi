@@ -119,7 +119,7 @@ class GateStringLexer:
     def t_error(t):
         if t is not None:
             raise ValueError("Illegal character '{}' at position {} of string '{}'".format(t.value[0], t.lexpos, t.lexer.lexdata))
-        raise ValueError("Lexer error")
+        raise ValueError("Lexer error") # pragma: no cover
 
 
 class GateStringParser(object):

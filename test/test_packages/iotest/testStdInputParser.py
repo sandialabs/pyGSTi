@@ -40,7 +40,9 @@ class TestStdInputParser(BaseTestCase):
                          ("S [ 2 ]G3", ('G1', 'G2', 'G3')),
                          ("S[G12]", ('G1', 'G2')),
                          ("S[S23]", ('G2', 'G3')),
-                         ("G1\tG2", ('G1', 'G2'))]
+                         ("G1\tG2", ('G1', 'G2')),
+                         ("rho0 Gx", ('rho0','Gx')),
+                         ("rho0 Gx Mdefault", ('rho0','Gx','Mdefault'))]
 
         std = pygsti.io.StdInputParser()
 
@@ -58,6 +60,7 @@ class TestStdInputParser(BaseTestCase):
 
         with self.assertRaises(ValueError):
             std.parse_gatestring("(G1")
+
 
     def test_string_exception(self):
         """Test lookup failure and Syntax error"""
@@ -641,6 +644,9 @@ LiouvilleMx
 
 END Instrument
 
+BASIS: pp
+GAUGEGROUP: full
+
 POVM: Mdefault
 
 EFFECT: 0
@@ -648,9 +654,6 @@ LiouvilleVec
 1.0/sqrt(2) 0 0 -1.0/sqrt(2)
 
 END POVM
-
-BASIS: pp
-GAUGEGROUP: full
 """
         
         gatesetfile_test11 = \
@@ -664,6 +667,23 @@ UnitaryMx
 GAUGEGROUP: Foobar
 """
 
+
+        gatesetfile_test12 = \
+"""# Invalid item type
+
+FOOBARGATE: G1
+UnitaryMx
+ 1 0
+ 0 1
+
+BASIS: pp
+GAUGEGROUP: full
+"""
+
+        gatesetfile_test13 = \
+"""# Cannot infer basis dimension
+BASIS: pp
+"""
 
 
 
@@ -700,6 +720,11 @@ GAUGEGROUP: Foobar
         f = open(temp_files + "/sip_test.gateset11","w")
         f.write(gatesetfile_test11); f.close()
 
+        f = open(temp_files + "/sip_test.gateset12","w")
+        f.write(gatesetfile_test12); f.close()
+
+        f = open(temp_files + "/sip_test.gateset13","w")
+        f.write(gatesetfile_test13); f.close()
 
         gs1 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset1")
         gs2 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset2")
@@ -720,6 +745,10 @@ GAUGEGROUP: Foobar
         gs10 = pygsti.io.read_gateset(temp_files + "/sip_test.gateset10")
 
         self.assertWarns(pygsti.io.read_gateset, temp_files + "/sip_test.gateset11") #invalid gauge group = warning
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset(temp_files + "/sip_test.gateset12") # invalid item type
+        with self.assertRaises(ValueError):
+            pygsti.io.read_gateset(temp_files + "/sip_test.gateset13") # cannot infer basis dim
 
 
         #print " ==> gateset1:\n", gs1
