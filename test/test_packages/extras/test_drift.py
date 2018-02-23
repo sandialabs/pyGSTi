@@ -31,10 +31,10 @@ class DriftTestCase(BaseTestCase):
 
             # This box constructs some GST objects, needed to create any sort of boxplot with GST data
 
-            # This manually specifies the germ and fiducial structure for the imported data.
-            fiducial_strs = ['{}','Gx','Gy','GxGx','GxGxGx','GyGyGy']
-            germ_strs = ['Gi','Gx','Gy','GxGy','GxGyGi','GxGiGy','GxGiGi','GyGiGi','GxGxGiGy','GxGyGyGi','GxGxGyGxGyGy']
-            log2maxL = 1 # log2 of the maximum germ power
+        # This manually specifies the germ and fiducial structure for the imported data.
+        fiducial_strs = ['{}','Gx','Gy','GxGx','GxGxGx','GyGyGy']
+        germ_strs = ['Gi','Gx','Gy','GxGy','GxGyGi','GxGiGy','GxGiGi','GyGiGi','GxGxGiGy','GxGyGyGi','GxGxGyGxGyGy']
+        log2maxL = 1 # log2 of the maximum germ power
 
         # Below we use the maxlength, germ and fuducial lists to create the GST structures needed for box plots.
         fiducials = [pygsti.objects.GateString(None,fs) for fs in fiducial_strs]
@@ -205,8 +205,9 @@ class DriftTestCase(BaseTestCase):
         parray_multiqubit_marg[0,0,1,:] = np.array([pt10(t)+pt11(t) for t in range(0,T)])
         parray_multiqubit_marg[0,1,0,:] = np.array([pt00(t)+pt10(t) for t in range(0,T)])
         parray_multiqubit_marg[0,1,1,:] = np.array([pt01(t)+pt11(t) for t in range(0,T)])
-        
-        results_multiqubit_marg.plot_estimated_probability(sequence=0,entity=0,outcome=0,parray=parray_multiqubit_marg)
+
+        if bMPL:
+            results_multiqubit_marg.plot_estimated_probability(sequence=0,entity=0,outcome=0,parray=parray_multiqubit_marg)
 
 
         N = 10 # Counts per timestep
