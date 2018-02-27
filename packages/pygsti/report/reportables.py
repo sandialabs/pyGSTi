@@ -698,22 +698,6 @@ Eigenvalue_nonunitary_diamondnorm = _gsf.gatesfn_factory(eigenvalue_nonunitary_d
 # init args == (gateset1, gateset2, gateLabel)
 
 
-
-
-#OLD: TIMS FN... seems perhaps better motivated, but for now keep this simple and equal to gatestring_ version
-#@gate_quantity() # This function changes arguments to (gateLabel, gateset, confidenceRegionInfo)
-#def gaugeinv_infidelity(gate, mxBasis):
-#    """ 
-#    Returns gauge-invariant "version" of the unitary fidelity in which
-#    the unitarity is replaced with the gauge-invariant quantity
-#    `(lambda^dagger lambda - 1) / (d**2 - 1)`, where `lambda` is the spectrum 
-#    of A, which equals the unitarity in at least one particular gauge.
-#    """
-#    d2 = gate.shape[0]
-#    lmb = _np.linalg.eigvals(gate)
-#    Uproxy = (_np.real(_np.vdot(lmb,lmb)) - 1.0) / (d2 - 1.0)
-#    return 1.0 - _np.sqrt( Uproxy )
-
 def avg_gate_infidelity(A, B, mxBasis):
     """ Returns the average gate infidelity between A and B, where B is the "target" operation."""
     d = _np.sqrt(A.shape[0])

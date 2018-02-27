@@ -407,8 +407,6 @@ class DenseSPAMVec(SPAMVec):
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
         ret = getattr(self.__dict__['base'],attr)
-        #if(self.base.shape != (self.dim,1)): # OLD: never used
-        #    raise ValueError("Cannot change dimension of Vector")
         self.dirty = True
         return ret
 

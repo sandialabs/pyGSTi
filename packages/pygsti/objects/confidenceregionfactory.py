@@ -225,9 +225,6 @@ class ConfidenceRegionFactory(object):
         nDataParams  = dataset.get_degrees_of_freedom(ds_gatestring_list)
           #number of independent parameters in dataset (max. model # of params)
 
-        #OLD nDataParams  = nGateStrings*(len(dataset.get_spam_labels())-1)
-
-        
         MIN_NON_MARK_RADIUS = 1e-8 #must be >= 0
 
         if obj == 'logl':

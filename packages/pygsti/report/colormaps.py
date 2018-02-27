@@ -36,8 +36,6 @@ def as_rgb_array(colorStr):
         rgb = [float(x) for x in tupstr.split(',')]
     elif colorStr.startswith('rgba(') and colorStr.endswith(')'):
         tupstr = colorStr[len('rgba('):-1]
-        #OLD: rgba = tupstr.split(',')
-        #OLD: rgb = [float(x)/256.0 for x in rgba[0:3]] + [float(rgba[3])]
         rgb = [float(x) for x in tupstr.split(',')[0:3] ] #ignore alpha
     else:
         raise ValueError("Cannot convert colorStr = ", colorStr)

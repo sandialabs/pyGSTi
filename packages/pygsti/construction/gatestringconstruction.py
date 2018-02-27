@@ -316,15 +316,6 @@ def list_all_gatestrings_onelen(gateLabels, length):
 
 def gen_all_gatestrings_onelen(gateLabels, length):
     """Generator version of list_all_gatestrings_onelen"""
-#    OLD
-#    if length == 0: yield _gs.GateString( () )
-#    elif length == 1:
-#        for g in gateLabels:
-#            yield _gs.GateString( (g,) )
-#    else:
-#        for g in gateLabels:
-#            for s in gen_all_gatestrings_onelen(gateLabels, length-1):
-#                yield _gs.GateString( (g,) ) + s
     for gateTuple in _itertools.product(gateLabels, repeat=length):
         yield _gs.GateString(gateTuple)
 

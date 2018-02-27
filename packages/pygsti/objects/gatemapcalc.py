@@ -279,7 +279,7 @@ class GateMapCalc(GateCalc):
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
         #tStart = _time.time()
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size()
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
         
@@ -305,13 +305,8 @@ class GateMapCalc(GateCalc):
             for j,E in enumerate(EVecs):
                 ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
                 #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-
                 # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
                 
-            #HERE - need to decide on expected shape for acton(...)
-
-        #OLD: pCache = _np.dot(E,rho_cache.T) # (1,cacheSize)
-        #OLD: return _np.squeeze(pCache, axis=0) # shape (cacheSize,)
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
 
@@ -323,18 +318,13 @@ class GateMapCalc(GateCalc):
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size()
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
         if scratch is None:
             rho_cache  = _np.zeros((cacheSize, dim), 'd')
-            #OLDdpr_cache  = _np.zeros((len(evalTree), nDerivCols),'d')
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache  = scratch
-            #OLD
-            #assert(scratch.shape == (cacheSize,nDerivCols + dim))
-            #rho_cache  = scratch[:,nDerivCols:nDerivCols+dim]
-            #dpr_cache  = scratch[:,0:nDerivCols]
             
         eps = 1e-7 #hardcoded?
         pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
@@ -378,8 +368,7 @@ class GateMapCalc(GateCalc):
         nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
-        #OLD: dpr_scratch = _np.zeros((cacheSize,nDerivCols2 + dim), 'd')
+        cacheSize = evalTree.cache_size()
         dpr_scratch = _np.zeros((cacheSize,dim),'d')
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
             
@@ -489,11 +478,6 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
-
-        #OLD
-        #num_final_strs = max(num_final_strs,cache_size)
-        #  # if cache_size happens to be larger than num_final_strs then
-        #  # we'll need to store at least that many resulting elements.
 
         mem = 0
         for fnName in subcalls:

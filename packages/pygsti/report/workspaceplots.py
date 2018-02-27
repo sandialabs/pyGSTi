@@ -1485,7 +1485,6 @@ class ColorBoxPlot(WorkspacePlot):
                 directGSTgatesets, dscomparator, driftresults, submatrices,
                 typ, scale):
 
-        #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
@@ -2980,8 +2979,6 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         xlabel = 'Sequence length'
 
-        #OLD cmap = _plt.cm.get_cmap('Set1')
-        
         data = [] # list of traces
         data.append( go.Scatter(
             x = xdata, y = ydata,

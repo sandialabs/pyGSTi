@@ -250,7 +250,7 @@ def matrix_sign(M):
                 U[i,j] = - sum([U[i,k]*U[k,j] for k in range(i+1,j)]) / S
     return _np.dot(Z, _np.dot(U, _np.conjugate(Z.T)))
 
-    #OLD quick & dirty - not always stable
+    #Quick & dirty - not always stable:
     #U,_,Vt = _np.linalg.svd(M)
     #return _np.dot(U,Vt)
 
