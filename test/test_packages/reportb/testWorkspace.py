@@ -481,7 +481,7 @@ class TestWorkspace(ReportBaseCase):
         
         tbl = w.SpamTable(self.gs, ["mytitle"], switchbd6.typ, None)        
         tbl.saveas(temp_files + "/saved_switched_table.html", index=0)
-        tbl.saveas(temp_files + "/saved_switched_table.pkl") # OK to not specify index in pkl case
+        if bPandas: tbl.saveas(temp_files + "/saved_switched_table.pkl") # OK to not specify index in pkl case
         with self.assertRaises(ValueError):
             tbl.saveas(temp_files + "/saved_switched_table.html") # must supply index
         with self.assertRaises(ValueError):
