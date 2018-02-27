@@ -118,9 +118,6 @@ def generate_fake_data(gatesetOrDataset, gatestring_list, nSamples,
             trans_s = _gstrc.translate_gatestring(s, aliasDict)
             if gsGen:
                 ps = all_probs[trans_s]
-                #OLD: ps = gsGen.probs(trans_s) 
-                  # an (un-ordered!) dictionary of probabilities; keys = outcome labels
-                  # (will include all possible intermediate measurements)
     
                 if sampleError in ("binomial","multinomial"):
                     #Adjust to probabilities if needed (and warn if not close to in-bounds)

@@ -585,8 +585,6 @@ class GateMatrix(Gate):
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
         ret = getattr(self.__dict__['base'],attr)
-        #if(self.base.shape != (self.dim,self.dim)): #OLD - never used
-        #    raise ValueError("Cannot change shape of Gate")
         self.dirty = True
         return ret
 
@@ -1703,11 +1701,6 @@ class LinearlyParameterizedGate(GateMatrix):
         # and even if one exists it may be difficult to find efficiently.
         raise ValueError("Invalid transform for this LinearlyParameterizedGate")
     
-        #OLD (TODO: remove)
-        #self.leftTrans = _np.dot(Si,self.leftTrans)
-        #self.rightTrans = _np.dot(self.rightTrans,S)
-        #self._construct_matrix()
-
 
     def depolarize(self, amount):
         """
@@ -2018,7 +2011,7 @@ class EigenvalueParameterizedGate(GateMatrix):
                         vecs[:,ik] = self.B[:,k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
                     nullsp = _mt.nullspace(V); 
-                    #if nullsp.shape[1] < nToReal: #OLD DEBUG
+                    #if nullsp.shape[1] < nToReal: # DEBUG
                     #    raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
                     #                     % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
                     assert(nullsp.shape[1] >= nToReal),"Cannot find enough real linear combos!"
@@ -2289,12 +2282,6 @@ class EigenvalueParameterizedGate(GateMatrix):
         # *will* affect the eigenvalues.  In the future, perhaps we could allow
         # *unitary* type similarity transformations.
         raise ValueError("Invalid transform for this EigenvalueParameterizedGate")
-
-        #OLD:
-        #if Si is None: Si = _np.linalg.inv(S)
-        #self.B = _np.dot(Si,self.B)
-        #self.Bi = _np.dot(self.Bi,S)
-        #self._construct_matrix()
 
 
     def depolarize(self, amount):
@@ -2784,26 +2771,20 @@ class LindbladBase(object):
             data = _np.zeros(len(indices),'complex') # data starts at zero
             
             if bsH > 0:
-                #OLD lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
+                # lnd_error_gen = sum([c*gen for c,gen in zip(hamCoeffs, self.hamGens)])
                 self.csr_sum(data,hamCoeffs, self.hamGens, self.hamCSRSumIndices)
-            else:
-                #OLD lnd_error_gen = _sps.csr_matrix((d2,d2), dtype='complex')
-                pass
 
             if bsO > 0:
                 if self.nonham_diagonal_only:
-                    #OLD lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
+                    # lnd_error_gen += sum([c*gen for c,gen in zip(otherCoeffs, self.otherGens)])
                     self.csr_sum(data, otherCoeffs, self.otherGens, self.otherCSRSumIndices)
                 else:
-                    #OLD lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
-                    #OLD                      for c,gen in zip(cRow,genRow)])
+                    # lnd_error_gen += sum([c*gen for cRow,genRow in zip(otherCoeffs, self.otherGens)
+                    #                      for c,gen in zip(cRow,genRow)])
                     self.csr_sum(data, otherCoeffs.flat,
                                  [oGen for oGenRow in self.otherGens for oGen in oGenRow],
                                  self.otherCSRSumIndices)
             lnd_error_gen = _sps.csr_matrix( (data, indices.copy(), indptr.copy()), shape=(N,N) ) #copies needed (?)
-            #CHECK w/OLD assert(_spsl.norm(lnd_error_gen_chk - lnd_error_gen) < 1e-6) OK
-            
-            #OLD: lnd_error_gen = self.leftTrans.dot( lnd_error_gen.dot(self.rightTrans)) #basis chg
             
 
         else: #dense matrices

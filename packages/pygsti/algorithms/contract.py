@@ -227,22 +227,6 @@ def _contractToCP_direct(gateset,verbosity,TPalso=False,maxiter=100000,tol=1e-8)
             #  print "DEBUG: orig evals == ",evals                #DEBUG
             assert( abs( sum(new_evals) - 1.0 ) < 1e-8 )
 
-
-#  OLD projection code -- can runaway, and take many iters
-#        while min(new_evals) < 0:
-#          new_evals = [ max(ev.real,0) for ev in new_evals ]  #don't need .real in theory, but small im parts can snowball in practice
-#          inds_to_shift = [i for (i,ev) in enumerate(new_evals) if ev > 0]
-#          assert(len(inds_to_shift) > 0)
-#
-#          shift = (1.0 - sum(new_evals))/float(len(inds_to_shift))
-#          for i in inds_to_shift: new_evals[i] += shift
-#
-#          if abs( sum(new_evals) - 1.0 ) >= 1e-8:              #DEBUG
-#            print "DEBUG: sum(new_evals) == ",sum(new_evals)   #DEBUG
-#            print "DEBUG: new_evals == ",new_evals             #DEBUG
-#
-#          assert( abs( sum(new_evals) - 1.0 ) < 1e-8 )
-
             new_Jmx = _np.dot(evecs, _np.dot( _np.diag(new_evals), _np.linalg.inv(evecs) ) )
 
             #Make trace preserving by zeroing out real parts of off diagonal blocks and imaginary parts

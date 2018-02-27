@@ -361,10 +361,7 @@ class GatesTable(WorkspaceTable):
                     gate_dim   = gatesets[-1].get_dimension()
                     basis = gatesets[-1].basis
                     gate_deriv = gatesets[-1].gates[gl].deriv_wrt_params()
-                    intervalMx = _np.abs(_np.dot(gate_deriv, intervalVec).reshape(gate_dim,gate_dim))
-                    
-                    # vector of parameter intervals
-                    #OLD: intervalMx = intervalVec.reshape(len(intervalVec),1) #col of boxes
+                    intervalMx = _np.abs(_np.dot(gate_deriv, intervalVec).reshape(gate_dim,gate_dim))                    
                     
                 if display_as == "numbers":
                     row_data.append(intervalMx)
@@ -1835,22 +1832,6 @@ class GatesSingleMetricTable(WorkspaceTable):
     def _create(self, metric, gatesets, targetGatesets, titles,
                 rowtitles, tableTitle, gateLabel, confidenceRegionInfo):
     
-        #OLD
-        #basis = targetGateset.basis
-        #
-        ##Check that all gatesets are in the same basis as targetGateset
-        #for title,gateset in zip(titles,gatesets):
-        #    if basis.name != gateset.basis.name:
-        #        raise ValueError("Basis mismatch between '%s' gateset (%s) and target (%s)!"\
-        #                         % (title, gateset.basis.name, basis.name))
-        #def mknice(x):
-        #    """Typeset known titles more nicely"""
-        #    if x == "H": return "$\mathcal{H}$"
-        #    if x == "S": return "$\mathcal{H}$"
-        #    if x in ("H + S","H+S"): return "$\mathcal{H} + \mathcal{S}$"
-        #    return x
-        #  >>> tuple( [ "%s(%s)" % (niceNm,title) for title in titles] )
-
         if rowtitles is None:
             assert(gateLabel is None), "`gateLabel` must be None when `rowtitles` is"
             colHeadings = ("Gate",) + tuple(titles)

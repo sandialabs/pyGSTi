@@ -119,7 +119,6 @@ class MatrixEvalTree(EvalTree):
 
         #avgBiteSize = 0
         #useCounts = {}
-        #OLD (sequential): for (k,gateString) in enumerate(gatestring_list):
         for k in indices_sorted_by_gatestring_len:
             gateString = gatestring_list[k]
             L = len(gateString)

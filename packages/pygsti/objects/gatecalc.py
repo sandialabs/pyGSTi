@@ -69,22 +69,6 @@ class GateCalc(object):
         self.gates = gates
         self.preps = preps
         self.effects = effects
-        #OLD self.assumeSumToOne = False #OLD: bool( ("remainder","remainder") in list(spamdefs.values()))
-          #Whether spamdefs contains the value ("remainder", "remainder"),
-          #  which specifies a spam label that generates probabilities such that
-          #  all SPAM label probabilities sum exactly to 1.0.
-
-        #OLD
-        # self.num_rho_params = [v.num_params() for v in list(self.preps.values())]
-        # self.num_e_params = [v.num_params() for v in list(self.effects.values())]
-        # self.num_gate_params = [g.num_params() for g in list(self.gates.values())]
-        # self.rho_offset = [ sum(self.num_rho_params[0:i]) for i in range(len(self.preps)+1) ]
-        # self.e_offset = [ sum(self.num_e_params[0:i]) for i in range(len(self.effects)+1) ]
-        # self.tot_rho_params = sum(self.num_rho_params)
-        # self.tot_e_params = sum(self.num_e_params)
-        # self.tot_gate_params = sum(self.num_gate_params)
-        # self.tot_spam_params = self.tot_rho_params + self.tot_e_params
-        # self.tot_params = self.tot_spam_params + self.tot_gate_params
         self.paramvec = paramvec
         self.Np = len(paramvec)
 
@@ -178,18 +162,11 @@ class GateCalc(object):
                 if isinstance(EVec, _sv.ComplementSPAMVec):
                     del newSelf.effects[effectlbl]
             self = newSelf #HACK!!! replacing self for remainder of this fn with version without Ecs
-
-            #OLD: using POVMs in GateSet
-            #for povmlbl,povm in self.povms.items():
-            #    if isinstance(povm, _povm.TPPOVM):
-            #        effects_wout_comp = [ (lbl,E) for lbl,E in povm.items() if lbl != povm.complement_label ]
-            #        newSelf.povms[povmlbl] = _povm.UnconstrainedPOVM( effects_wout_comp )
-
         
         #Use a GateSet object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
-        dim = self.dim #OLD self._dim
-        nParams = self.Np #OLD self.num_params()
-        nElements = sum([obj.size for _,obj in self.iter_objs()]) #OLD self.num_elements()
+        dim = self.dim 
+        nParams = self.Np 
+        nElements = sum([obj.size for _,obj in self.iter_objs()])
 
         #This was considered as optional behavior, but better to just delete qtys from GateSet
         ##whether elements of the raw gateset matrices/SPAM vectors that are not
@@ -201,17 +178,6 @@ class GateCalc(object):
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
         # *all* elements of a gate set.
-
-        #OLD
-        #gsDeriv = GateSet("full", self.preps._prefix, self.effects_prefix,
-        #                  self.gates._prefix, self.povms._prefix, self.instruments._prefix)
-        #for gateLabel in self.gates:
-        #    gsDeriv.gates[gateLabel] = _np.zeros((dim,dim),'d')
-        #for prepLabel in self.preps:
-        #    gsDeriv.preps[prepLabel] = _np.zeros((dim,1),'d')
-        #for povmLabel,povm in self.povms.items():
-        #    gsDeriv.povms[povmLabel] = _povm.UnconstrainedPOVM(
-        #        [ (eLbl, _np.zeros((dim,1),'d')) for eLbl in povm.keys()] )
 
         gsDeriv_gates = _collections.OrderedDict(
             [(label,_np.zeros((dim,dim),'d')) for label in self.gates])
@@ -228,10 +194,7 @@ class GateCalc(object):
                     gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec.toarray())
                 for lbl,EVec in self.effects.items():
                     gsDeriv_effects[lbl] = -_np.dot(EVec.toarray().T, unitMx).T
-                #OLD
-                #for lbl,povm in self.povms.items():
-                #    gsDeriv.povms[lbl] = _povm.UnconstrainedPOVM(
-                #        [(l,-_np.dot(EVec.T, unitMx).T) for l,EVec in povm.items()])
+
                 for lbl,gate in self.gates.items():
                     #if isinstance(gate,_gate.GateMatrix):
                     gsDeriv_gates[lbl] = _np.dot(unitMx,gate) - \
@@ -361,8 +324,6 @@ class GateCalc(object):
         dPG = self._buildup_dPG()
 
         #print("DB: shapes = ",dP.shape,dG.shape)
-        #OLD: M = _np.concatenate( (dP,dG), axis=1 )
-        #OLD: nullsp = _mt.nullspace(dPG) #columns are nullspace basis vectors
         nullsp = _mt.nullspace_qr(dPG) #columns are nullspace basis vectors
         gen_dG = nullsp[0:nParams,:] #take upper (gate-param-segment) of vectors for basis
                                      # of subspace intersection in gate-parameter space
@@ -477,34 +438,6 @@ class GateCalc(object):
                            "GateSet.get_nongauge_projector(...) ")
             
         return Pp 
-        #OLD: return ret
-
-
-#OLD
-#    def _is_remainder_spamlabel(self, label):
-#        """
-#        Returns whether or not the given SPAM label is the
-#        special "remainder" SPAM label which generates
-#        probabilities such that all SPAM label probabilities
-#        sum exactly to 1.0.
-#        """
-#        if not _compat.isstr(label): return False #b/c label could be a custom (rho,E) pair
-#        return bool(self.spamdefs[label] == ("remainder","remainder"))
-
-#OLD
-#    def _get_remainder_row_index(self, spam_label_rows):
-#        """ 
-#        Returns the index within the spam_label_rows dictionary
-#        of the remainder label, or None if the remainder label
-#        is not present.
-#        """
-#        remainder_row_index = None
-#        for spamLabel,rowIndex in spam_label_rows.items():
-#            if self._is_remainder_spamlabel(spamLabel):
-#                assert(self.assumeSumToOne) # ensure the remainder label is allowed
-#                assert(remainder_row_index is None) # ensure there is at most one dummy spam label
-#                remainder_row_index = rowIndex
-#        return remainder_row_index
 
         
     def product(self, gatestring, bScale=False):

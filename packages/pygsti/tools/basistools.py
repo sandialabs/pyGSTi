@@ -305,57 +305,6 @@ def resize_mx(mx, dimOrBlockDims=None, resize=None):
     return resize_std_mx(mx, resize, a, b)
 
 
-#OLD: scratch?? (Lucas) TODO REMOVE
-#    '''
-#    Convert a gate matrix in an arbitrary basis of either a "direct-sum" or the embedding
-#    space to a matrix in the same basis in the opposite space.
-#
-#    Parameters
-#    ----------
-#    mx: numpy array
-#        Matrix of size N x N, where N is the dimension
-#        of the density matrix space, i.e. sum( dimOrBlockDims_i^2 )
-#
-#    dimOrBlockDims : int or list of ints
-#        Structure of the density-matrix space.
-#
-#    Returns
-#    -------
-#    numpy array
-#        A M x M matrix, where M is the dimension of the
-#        embedding density matrix space, i.e.
-#        sum( dimOrBlockDims_i )^2
-#    '''
-#    bothBases = isinstance(startBasis, Basis) and isinstance(endBasis, Basis)
-#    if resize is not None and \
-#            bothBases or \
-#            (dimOrBlockDims is not None):
-#        if dimOrBlockDims is not None:# not bothBases:
-#            dim = Dim(dimOrBlockDims)
-#            startBasis = Basis(startBasis, dim)
-#            endBasis   = Basis(endBasis, dim)
-#        else:
-#            assert bothBases
-#        stdBasis1  = Basis('std', startBasis.dim.blockDims)
-#        stdBasis2  = Basis('std', endBasis.dim.blockDims)
-#        try:
-#            assert resize in ['expand', 'contract'], 'Incorrect resize argument: {}'.format(resize)
-#
-#            start = change_basis(mx, startBasis, stdBasis1, dimOrBlockDims)
-#            mid = resize_std_mx(start, resize, stdBasis1, stdBasis2)
-#            # No else case needed, see assert
-#            return change_basis(mid, stdBasis2, endBasis, dimOrBlockDims)
-#        except ValueError:
-#            print('startBasis: {}'.format(startBasis))
-#            print('endBasis: {}'.format(endBasis))
-#            print('stdBasis1: {}'.format(stdBasis1))
-#            print(stdBasis1.dim)
-#            print('stdBasis2: {}'.format(stdBasis2))
-#            print(stdBasis2.dim)
-#            raise
-#    else:
-#        return change_basis(mx, startBasis, endBasis, dimOrBlockDims)
-
 def state_to_stdmx(state_vec):
     """
     Convert a state vector into a density matrix.

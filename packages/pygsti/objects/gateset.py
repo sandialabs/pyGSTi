@@ -546,17 +546,7 @@ class GateSet(object):
             the number of gauge gateset parameters.
         """
         dPG = self._calc()._buildup_dPG()
-        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
-        
-        #OLD DEBUG
-        #print("Svals of dPG:")
-        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(dPG, compute_uv=False))] ))
-        #print("----")
-        #print("DB: gaugeDirs = ",gaugeDirs.shape, ", nP =",self.num_params())
-        #print("DIRS = \n",gaugeDirs[0:self.num_params(),0:3])
-        #print("Svals = ")
-        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(gaugeDirs[0:self.num_params(),:], compute_uv=False))] ))
-        
+        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions        
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
@@ -1026,37 +1016,6 @@ class GateSet(object):
         raw_dict,_,outcomes,nEls = self.compile_gatestrings([gatestring])
         assert(len(outcomes[0]) == nEls)
         return raw_dict,outcomes[0]
-
-
-    #OLD
-    #def compile_gatestrings(self, gatestring_list, return_lookup=False):
-    #    ret = _collections.OrderedDict()
-    #    for i,gstr in enumerate(gatestring_list):
-    #        self.compile_gatestring(gstr, ret, i if return_lookup else None)
-    #        
-    #    if return_lookup:
-    #        # return a dict of final-element index-arrays, indexed by
-    #        # `gatestring_list` index.  Spamtuples have been marked with
-    #        # parent indices, so we need to remove these markers as we
-    #        # process the final dictionary.
-    #        lookup = _collections.OrderedDict(
-    #            [ i:[] for i in range(len(gatestring_list))] )
-    #
-    #        iEl = 0
-    #        for raw_str, spamTuples in ret.items():
-    #            unmarked_spamTuples = []
-    #            for iParent,rhoLbl,ELbl in spamTuples:
-    #                lookup[iParent].append(iEl); iEl += 1
-    #                unmarked_spamTuples.append( (rhoLbl,ELbl) )
-    #            ret[raw_str][:] = unmarked_spamTuples # [:] is essential so doesn't assign new odict item
-    #
-    #        #convert lists -> integer arrays (for user convenience)
-    #        lookup = _collections.OrderedDict( 
-    #            [ (i,_np.array(v,'i')) for i,v in lookup.items()])
-    #        
-    #        return ret, lookup
-    #    else:
-    #        return ret
 
 
     def product(self, gatestring, bScale=False):
@@ -1590,11 +1549,6 @@ class GateSet(object):
                         if next >= mem_estimate:
                             raise MemoryError("Not enough memory: splitting unproductive")
                         mem_estimate = next                    
-
-                    #OLD
-                    #np1 = num_params
-                    #np2 = num_params if bNp2Matters else 1
-                    #ng = Ng = max(nprocs // (np1*np2), 1)
             else:
                 memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
@@ -3239,12 +3193,3 @@ class GateSet(object):
                 [ev.real for ev in _np.linalg.eigvals(
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
-
-        #OLD
-        #prep_penalty = sum( [ _lf.prep_penalty(rhoVec,self.basis)
-        #                        for rhoVec in list(self.preps.values()) ] )
-        #effect_penalty   = sum( [ _lf.effect_penalty(EVec,self.basis)
-        #                        for EVec in list(self.effects.values()) ] )
-        #print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
-        #print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))
-

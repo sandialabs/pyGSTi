@@ -73,14 +73,6 @@ class GateMatrixCalc(GateCalc):
         return GateMatrixCalc(self.dim, self.gates, self.preps,
                               self.effects, self.paramvec)
         
-    #OLD
-    #def _make_spamgate(self, spamlabel):
-    #    prepLabel,effectLabel = self.spamdefs[spamlabel]
-    #    if prepLabel == "remainder":  return None
-    #
-    #    rho,E = self.preps[prepLabel], self.effects[effectLabel]
-    #    return _np.kron(rho.base, _np.conjugate(_np.transpose(E)))
-
 
     def product(self, gatestring, bScale=False):
         """
@@ -123,8 +115,7 @@ class GateMatrixCalc(GateCalc):
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < PSMALL and H.min() > -PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate,G/nG); scale_exp += _np.log(nG)
-                    #OLD: _np.dot(G/nG,gate); scale_exp += _np.log(nG) LEXICOGRAPHICAL VS MATRIX ORDER
+                    G = _np.dot(gate,G/nG); scale_exp += _np.log(nG) # LEXICOGRAPHICAL VS MATRIX ORDER
                 else: G = H
 
             old_err = _np.seterr(over='ignore')
@@ -136,8 +127,7 @@ class GateMatrixCalc(GateCalc):
         else:
             G = _np.identity( self.dim )
             for lGate in gatestring:
-                G = _np.dot(self.gates[lGate].base,G) #product of gates
-                #OLD: G = _np.dot(G,self[lGate]) LEXICOGRAPHICAL VS MATRIX ORDER
+                G = _np.dot(self.gates[lGate].base,G) #product of gates, LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
         
@@ -1614,7 +1604,7 @@ class GateMatrixCalc(GateCalc):
 
     def _probs_from_rhoE(self, rho, E, Gs, scaleVals):
         #Compute probability and save in return array
-        # want vp[iFinal] = float(dot(E, dot(G, rho)))  ##OLD, slightly slower version: p = trace(dot(self.SPAMs[spamLabel], G))
+        # want vp[iFinal] = float(dot(E, dot(G, rho)))
         #  vp[i] = sum_k,l E[0,k] Gs[i,k,l] rho[l,0] * scaleVals[i]
         #  vp[i] = sum_k E[0,k] dot(Gs, rho)[i,k,0]  * scaleVals[i]
         #  vp[i] = dot( E, dot(Gs, rho))[0,i,0]      * scaleVals[i]

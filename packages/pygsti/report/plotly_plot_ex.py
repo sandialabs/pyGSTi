@@ -224,18 +224,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
                      oh=orig_height if orig_height else "null",
                      plotlyResizeJS=plotly_resize_js)
 
-
-    #OLD: case of simple plot creation without any creation handlers
-    #
-    #    #NOTE: In this case, JS is placed which creates
-    #    # the plot immediately.  When resize or autosize
-    #    # are True, creation is deferred to *handlers* which
-    #    # must be called by "parent" object.  Maybe this should
-    #    # be the case here too?
-    #    full_script = (
-    #        '  {plotlyCreateJS}\n'
-    #        ).format(plotlyCreateJS=plot_js)
-
     return {'html': plot_html, 'js': full_script }
         
 
