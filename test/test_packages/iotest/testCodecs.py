@@ -290,7 +290,12 @@ class TestCodecs(CodecsTestCase):
         with self.assertRaises(AssertionError):
             pygsti.io.jsoncodec.decode_std_base(mock_json_obj,"",binary)
 
-
+    
+    def test_helpers(self):
+        pygsti.io.jsoncodec.tostr("Hi")
+        pygsti.io.jsoncodec.tostr(b"Hi")
+        pygsti.io.jsoncodec.tobin("Hi")
+        pygsti.io.jsoncodec.tobin(b"Hi")
     
 
 

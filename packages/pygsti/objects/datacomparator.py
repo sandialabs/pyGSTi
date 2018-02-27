@@ -56,10 +56,11 @@ def is_gatestring_allowed_by_exclusion(gate_exclusions,gatestring):
     return True
 
 def is_gatestring_allowed_by_inclusion(gate_inclusions,gatestring):
+    if len(gatestring) == 0: return True # always include the empty string
     for gate in gate_inclusions:
-        if gate not in gatestring:
-            return False
-    return True
+        if gate in gatestring:
+            return True
+    return False
 
 def find_thresh(confidence_level,strings,dof):
     return _scipy.stats.chi2.isf((1-confidence_level)/strings,dof)

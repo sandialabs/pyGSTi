@@ -70,6 +70,9 @@ def distribute_indices(indices, comm, allow_split_comm=True):
     # indices, resulting in all procs getting only a 
     # single index and multiple procs getting the *same*
     # (single) index.
+    #if nprocs > 1 and len(indices)==1 and (comm is not None) and allow_split_comm:
+    #    loc_comm = comm #split is unnecessary
+    #el
     if nprocs > len(indices) and (comm is not None) and allow_split_comm:
         color = loc_indices[0] if isinstance(loc_indices[0], int) \
                 else (int(hash(loc_indices[0])) >> 32) # mpi4py only allows 32-bit ints
@@ -312,7 +315,7 @@ def distribute_slice(s, comm, allow_split_comm=True):
         else: 
             loc_comm = None
 
-    else: 
+    else:
         loc_slice = slice(None)
         loc_comm = None
 

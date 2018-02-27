@@ -227,7 +227,7 @@ class Workspace(object):
 
         #print("FACTORY FN DEF = \n",new_func)
         exec_globals = {'cls' : cls, 'self': self}
-        if _sys.version_info > (3, 0):
+        if PY3:
             exec(factory_func_def, exec_globals) #Python 3
         else:
             exec("""exec factory_func_def in exec_globals""") #Python 2
@@ -2132,6 +2132,9 @@ class WorkspaceTable(WorkspaceOutput):
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
 
+            if render_dir is not None and not _os.path.exists(render_dir):
+                _os.mkdir(render_dir)
+
             cwd = _os.getcwd()
             latex_list = []
             for i, table in enumerate(self.tables):
@@ -2261,9 +2264,10 @@ class WorkspaceTable(WorkspaceOutput):
         N = len(self.tables)
         
         if filename.endswith(".html"):
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspaceTable")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceTable")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2580,7 +2584,7 @@ class WorkspacePlot(WorkspaceOutput):
                 plotDivID = plotID + "_%d" % i
                 if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
-                
+
                 if fig.pythonvalue is not None:
                     data = {'value': fig.pythonvalue }
                     if "pythonErrorBar" in fig.metadata:
@@ -2640,9 +2644,10 @@ class WorkspacePlot(WorkspaceOutput):
         
         if filename.endswith(".html"):
             #Note: Same as WorkspaceTable except for N
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspacePlot")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspacePlot")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2960,9 +2965,10 @@ class WorkspaceText(WorkspaceOutput):
         N = len(self.texts)
         
         if filename.endswith(".html"):
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspaceText")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceText")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards

@@ -534,6 +534,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     yvals = g.used_yvals()
     inner_xvals = g.minor_xvals()
     inner_yvals = g.minor_yvals()
+    
+    if addl_hover_subMxs is None:
+        addl_hover_subMxs = {}
 
     # Note: invert == True case not handled yet, and the below hover label
     # routines assume L,germ structure in particular
@@ -869,7 +872,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
 
     xbins_for_numpy = _np.linspace(minval-binsize/2.0,maxval+binsize/2.0,nbins+1)
     hist_values, np_bins = _np.histogram(ys, nbins, range=(minval-binsize/2.0,
-                                                     maxval+binsize/2.0))
+                                                           maxval+binsize/2.0))
     if len(hist_values) > 0 and len(hist_values[hist_values>0]) > 0:
         minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
         maxlog = _np.log10(1.5*_np.max(hist_values) )
@@ -1685,11 +1688,7 @@ class ColorBoxPlot(WorkspacePlot):
             
             elif (submatrices is not None) and ptyp in submatrices:
                 precomp = False; ytitle = ptyp
-                if ptyp + ".colormap" in submatrices:
-                    colormapType = submatrices[ptyp + ".colormap"]
-                else:
-                    colormapType = "seq"
-            
+                colormapType = submatrices.get(ptyp + ".colormap","seq")            
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
@@ -2078,10 +2077,10 @@ class PolarEigenvaluePlot(WorkspacePlot):
         # sure this data is filled in with undisplayed data here (because we
         # don't want to see the residual data!).
         for trace in data:
-            if len(trace['r']) < 4:
-                extra = 4-len(trace['r'])
-                trace['r'] += [1e3]*extra
-                trace['t'] += [0.0]*extra
+            if len(trace['r']) < 4:  #hopefully never needed
+                extra = 4-len(trace['r'])  # pragma: no cover
+                trace['r'] += [1e3]*extra  # pragma: no cover
+                trace['t'] += [0.0]*extra  # pragma: no cover
         while len(data) < 3:
             data.append( go.Scatter(
                 r = [1e3]*4,
@@ -2937,8 +2936,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         A = rbR.results['A']
         B = rbR.results['B']
         f = rbR.results['f']
-        #if fit == 'first order':
-        #    C = rbR.dicts[gstyp]['C1']
+        if fit == 'first order':
+            C = rbR.results['C']
         pre_avg = rbR.pre_avg
         
         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
@@ -3021,7 +3020,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         if fit=='first order':
             data.append( go.Scatter(
                 x = _np.arange(max(xdata)),
-                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1,B1,C1,f1),
+                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A,B,C,f),
                 mode = 'lines',
                 line = dict(width=1, color=color2),
                 name = fit_label_2,

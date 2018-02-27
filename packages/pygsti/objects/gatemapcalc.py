@@ -489,9 +489,11 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
-        num_final_strs = max(num_final_strs,cache_size)
-          # if cache_size happens to be larger than num_final_strs then
-          # we'll need to store at least that many resulting elements.
+
+        #OLD
+        #num_final_strs = max(num_final_strs,cache_size)
+        #  # if cache_size happens to be larger than num_final_strs then
+        #  # we'll need to store at least that many resulting elements.
 
         mem = 0
         for fnName in subcalls:

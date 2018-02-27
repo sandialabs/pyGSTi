@@ -64,7 +64,15 @@ class RBTestCase(BaseTestCase):
                                                    dim=2)
         #Maybe move this to workspace tests?
         w = pygsti.report.Workspace()
-        w.RandomizedBenchmarkingPlot(rb_results)
+        w.RandomizedBenchmarkingPlot(rb_results, fit='first order')
+        with self.assertRaises(ValueError): # needs gateset
+            w.RandomizedBenchmarkingPlot(rb_results, Magesan_zeroth=False, Magesan_zeroth_SEB=True) # sets M_zeroth=True
+        with self.assertRaises(ValueError): # needs gateset
+            w.RandomizedBenchmarkingPlot(rb_results, Magesan_first=False, Magesan_first_SEB=True) # sets M_first=True
+        with self.assertRaises(ValueError): # needs gateset
+            w.RandomizedBenchmarkingPlot(rb_results, exact_decay=True)
+        with self.assertRaises(ValueError): # needs gateset
+            w.RandomizedBenchmarkingPlot(rb_results, L_matrix_decay=True)
         #with self.assertRaises(ValueError):
         #    w.RandomizedBenchmarkingPlot(rb_results,'foobar')
             

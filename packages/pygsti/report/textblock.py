@@ -51,7 +51,7 @@ class ReportText(object):
         string
         '''
         if self._format is None:
-            return {'html': str(self._raw)}
+            return {fmt: str(self._raw)}
         
         elif self._format == "VerbosityPrinter":
             if fmt == "html":

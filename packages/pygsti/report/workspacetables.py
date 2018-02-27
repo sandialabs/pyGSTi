@@ -2129,14 +2129,14 @@ class MetadataTable(WorkspaceTable):
             elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
             elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
             elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
-            else: paramTyp = "unknown"
+            else: paramTyp = "unknown" # pragma: no cover
             table.addrow((lbl + " parameterization", paramTyp), (None,'Verbatim'))
 
         for povmlbl, povm in gateset.povms.items():
             if isinstance(povm, _objs.UnconstrainedPOVM): paramTyp = "unconstrained"
             elif isinstance(povm, _objs.TPPOVM): paramTyp = "TP"
             elif isinstance(povm, _objs.TensorProdPOVM): paramTyp = "TensorProd"
-            else: paramTyp = "unknown"
+            else: paramTyp = "unknown" # pragma: no cover
             table.addrow((povmlbl + " parameterization", paramTyp), (None,'Verbatim'))
 
             for lbl,vec in povm.items():
@@ -2144,7 +2144,7 @@ class MetadataTable(WorkspaceTable):
                 elif isinstance(vec, _objs.FullyParameterizedSPAMVec): paramTyp = "full"
                 elif isinstance(vec, _objs.TPParameterizedSPAMVec): paramTyp = "TP"
                 elif isinstance(vec, _objs.ComplementSPAMVec): paramTyp = "Comp"
-                else: paramTyp = "unknown"
+                else: paramTyp = "unknown" # pragma: no cover
                 table.addrow(("> " + lbl + " parameterization", paramTyp), (None,'Verbatim'))
         
         for gl,gate in gateset.gates.items():
@@ -2157,7 +2157,7 @@ class MetadataTable(WorkspaceTable):
                 paramTyp = "Lindblad"
                 if gate.cptp: paramTyp += " CPTP "
                 paramTyp += "(%d, %d params)" % (gate.ham_basis_size, gate.other_basis_size)
-            else: paramTyp = "unknown"
+            else: paramTyp = "unknown" # pragma: no cover
             table.addrow((gl + " parameterization", paramTyp), (None,'Verbatim'))
             
         

@@ -638,7 +638,7 @@ class GateSet(object):
             v = _np.delete(v, indices_to_remove)
             get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
             memo = set() #keep track of which object's gpindices have been set
-            for _,obj in self.iter_objs():
+            for lbl,obj in self.iter_objs():
                 if obj.gpindices is not None:
                     if id(obj) in memo: continue #already processed
                     if isinstance(obj.gpindices, slice):
@@ -962,7 +962,8 @@ class GateSet(object):
                             if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
                                 elIndicesByParent[iParent].append(i)
                                 outcomesByParent[iParent].append(tup)
-                            else: assert(tup in outcomesByParent) # double-check - could REMOVE for speed in future
+                            else: assert(tup in outcomesByParent) # pragma: no check
+                                    # double-check - could REMOVE for speed in future
                 else:
                     assert(action == "add") # s should have been added in "add" process!
                     raw_spamTuples_dict[s] = spamtuples
@@ -1444,22 +1445,11 @@ class GateSet(object):
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
                         % (distributeMethod, memLimit*C))
 
-        def prime_factors(n):  #TODO: move this fn somewhere else
-            """ GCD algorithm to produce prime factors of `n` """
-            i = 2; factors = []
-            while i * i <= n:
-                if n % i:
-                    i += 1
-                else:
-                    n //= i
-                    factors.append(i)
-            if n > 1:
-                factors.append(n)
-            return factors
-
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0,cacheSize=None):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
+
+            nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
             
             if cacheSize is None:
                 #Get cache size
@@ -1472,7 +1462,6 @@ class GateSet(object):
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
                 else:
                     #heuristic (but fast)
-                    nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
                     cacheSize = calc.estimate_cache_size(nFinalStrs)
                     
 
@@ -1506,23 +1495,23 @@ class GateSet(object):
             distributeMethod = calc.default_distribute_method()
 
         if distributeMethod == "gatestrings":
-            np1 = 1; np2 = 1; Ng = nprocs
-            ng = nprocs
             Nstrs = len(gatestring_list)
+            np1 = 1; np2 = 1; Ng = min(nprocs,Nstrs)
+            ng = Ng
             if memLimit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
                 # with fast cacheSize computation then switch to slow
-                while memEstimate(ng,np1,np2,Ng,True) > memLimit:
+                while memEstimate(ng,np1,np2,Ng,False) > memLimit:
                     ng += Ng
                     if ng >= Nstrs:
                         # even "maximal" splitting (num trees == num strings)
-                        # won't help - see if we can squeeze "ng==nprocs" cached tree
+                        # won't help - see if we can squeeze the this maximally-split tree
                         # to have zero cachesize
-                        if nprocs not in evt_cache:
-                            memEstimate(nprocs,np1,np2,Ng,verb=1)
-                        if hasattr(evt_cache[nprocs],"squeeze") and \
-                           memEstimate(nprocs,np1,np2,nG,cacheSize=0) <= memLimit:
-                            evt_cache[nprocs].squeeze(0)
+                        if Nstrs not in evt_cache:
+                            memEstimate(Nstrs,np1,np2,Ng,verb=1)
+                        if hasattr(evt_cache[Nstrs],"squeeze") and \
+                           memEstimate(Nstrs,np1,np2,Ng,cacheSize=0) <= memLimit:
+                            evt_cache[Nstrs].squeeze(0) #To get here, need to use higher-dim gatesets
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
                         
@@ -1549,7 +1538,7 @@ class GateSet(object):
                 if desired_Ng >= nprocs:
                     return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
-                    fctrs = sorted(prime_factors(nprocs)); i=1
+                    fctrs = sorted(_mt.prime_factors(nprocs)); i=1
                     if int(_np.ceil(desired_Ng)) in fctrs:
                         return int(_np.ceil(desired_Ng)) #we got lucky
                     while _np.product(fctrs[0:i]) < desired_Ng: i+=1
@@ -1721,11 +1710,13 @@ class GateSet(object):
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
+                evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
                 lookup = evalTree.split(lookup, None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
+                    evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
                     lookup = evalTree.split(lookup, maxTreeSize, None) # fall back to split for max size
         
         if maxTreeSize is not None or minSubtrees is not None:
