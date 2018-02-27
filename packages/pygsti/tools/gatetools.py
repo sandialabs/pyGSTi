@@ -462,12 +462,15 @@ def get_povm_map(gateset, povmlbl):
         The matrix of the "POVM map" in the `gateset.basis` basis.
     """
     povmVectors = list(gateset.povms[povmlbl].values())
-    d = len(povmVectors)
-    assert( d**2 == len(povmVectors[0]) ), "Can only compute POVM metrics when num of effects == H space dimension"
+    d = int(round(_np.sqrt(gateset.dim))) # density matrix is dxd
+    nV = len(povmVectors)
+    assert(d**2 == gateset.dim), "GateSet dimension (%d) is not a perfect square!" % gateset.dim
+    #assert( nV**2 == d ), "Can only compute POVM metrics when num of effects == H space dimension"
+    #   I don't think above assert is needed - should work in general (Robin?)
     povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
     
-    Sk_embedding_in_std = _np.zeros( (d**2, d) )
-    for i in range(d):
+    Sk_embedding_in_std = _np.zeros( (d**2, nV) )
+    for i in range(nV):
         Sk_embedding_in_std[:,i] = _mut(i,i,d).flatten()
 
     std_to_basis = _bt.transform_matrix("std", gateset.basis, d)
