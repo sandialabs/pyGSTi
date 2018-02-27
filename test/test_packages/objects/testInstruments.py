@@ -43,6 +43,10 @@ class InstrumentTestCase(BaseTestCase):
         with self.assertRaises(ValueError):
             pygsti.obj.TPInstrument("foobar") #gate_matrices must be a list or dict
 
+        tpi = self.gs_target_wTP.instruments["IzTP"]
+        with self.assertRaises(ValueError):
+            tpi['plus'] = None #can't set value of a TP Instrument element
+
             
     def testFutureFunctionality(self):
         #Test instrument construction with elements whose gpindices are already initialized.
@@ -106,6 +110,11 @@ class InstrumentTestCase(BaseTestCase):
                             [0,0,0,1],
                             [0,0,1,0] ], 'd') )
             inst_copy.transform(T)
+
+            v = gs.to_vector()
+            gates = gs.instruments[lbl].compile_gates(prefix="ABC")
+            for igate in gates.values():
+                igate.from_vector(v[igate.gpindices]) # gpindices should be setup relative to GateSet's param vec
 
         gs.depolarize(0.01)
         gs.rotate((0,0,0.01))
@@ -258,8 +267,8 @@ class InstrumentTestCase(BaseTestCase):
         
         
         print("GateSet IO")
-        pygsti.io.write_gateset(gateset, "testGateset.txt")
-        gateset2 = pygsti.io.load_gateset("testGateset.txt")
+        pygsti.io.write_gateset(gateset, temp_files + "/testGateset.txt")
+        gateset2 = pygsti.io.load_gateset(temp_files + "/testGateset.txt")
         self.assertAlmostEqual(gateset.frobeniusdist(gateset2),0.0)
         
         print("Multiplication")

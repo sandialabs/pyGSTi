@@ -995,17 +995,48 @@ class TestGateSetMethods(GateSetTestCase):
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestrings, maxTreeSize=4 )
 
         evt,lookup,outcome_lookup = self.gateset.bulk_evaltree( gatestrings, minSubtrees=2, maxTreeSize=4 )
+        self.assertWarns(self.gateset.bulk_evaltree, gatestrings, minSubtrees=3, maxTreeSize=8 )
+           #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
+           
         mevt,mlookup,moutcome_lookup = self.mgateset.bulk_evaltree( gatestrings, minSubtrees=2, maxTreeSize=4 )
 
-        for distributeMethod in ('deriv','gatestrings'):
-            for memLimit in (1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
-                try:
-                    evt,_,_,lookup,outcome_lookup = self.gateset.bulk_evaltree_from_resources(
-                        gatestrings, memLimit=memLimit, distributeMethod=distributeMethod, subcalls=['bulk_fill_hprobs'])
-                    evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
-                        gatestrings, memLimit=memLimit, distributeMethod=distributeMethod, subcalls=['bulk_fill_hprobs'])
-                except MemoryError:
-                    pass #OK - when memlimit is too small and splitting is unproductive
+        ##Make a few-param gateset to better test mem limits
+        gs_few = self.gateset.copy()
+        gs_few.set_all_parameterizations("static")
+        gs_few.preps['rho0'] = self.gateset.preps['rho0'].copy()
+        self.assertEqual(gs_few.num_params(),4)
+
+        #gs_big = pygsti.construction.build_gateset(
+        #    [8], [('Q0','Q3','Q2')],['Gi'], [ "I(Q0)"])
+        #gs_big._calcClass = GateMapCalc
+
+        class FakeComm(object):
+            def __init__(self,size): self.size = size
+            def Get_rank(self): return 0
+            def Get_size(self): return self.size
+            def bcast(self,obj, root=0): return obj
+            
+        for nprocs in (1,4,10,40,100):
+            fake_comm = FakeComm(nprocs)
+            for distributeMethod in ('deriv','gatestrings'):
+                for memLimit in (-100, 1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
+                    print("Nprocs = %d, method = %s, memLim = %g" % (nprocs, distributeMethod, memLimit))
+                    try:
+                        evt,_,_,lookup,outcome_lookup = self.gateset.bulk_evaltree_from_resources(
+                            gatestrings, memLimit=memLimit, distributeMethod=distributeMethod,
+                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
+                        evt,_,_,lookup,outcome_lookup = self.mgateset.bulk_evaltree_from_resources(
+                            gatestrings, memLimit=memLimit, distributeMethod=distributeMethod,
+                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
+                        evt,_,_,lookup,outcome_lookup = gs_few.bulk_evaltree_from_resources(
+                            gatestrings, memLimit=memLimit, distributeMethod=distributeMethod,
+                            subcalls=['bulk_fill_hprobs'], comm=fake_comm)
+                        evt,_,_,lookup,outcome_lookup = gs_few.bulk_evaltree_from_resources(
+                            gatestrings, memLimit=memLimit, distributeMethod=distributeMethod,
+                            subcalls=['bulk_fill_dprobs'], comm=fake_comm) #where bNp2Matters == False
+                                                
+                    except MemoryError:
+                        pass #OK - when memlimit is too small and splitting is unproductive
 
         #balanced not implemented
         with self.assertRaises(NotImplementedError):
@@ -1101,6 +1132,11 @@ class TestGateSetMethods(GateSetTestCase):
         with self.assertRaises(ValueError):
             prep,gates,povm = gs_multispam.split_gatestring( pygsti.obj.GateString(('rho0','Gx')) )
 
+        gs = self.gateset.copy()
+        gs._paramvec[:] = 0.0 #mess with paramvec to get error below
+        with self.assertRaises(ValueError):
+            gs._check_paramvec(debug=True) # param vec is now out of sync!
+
 
     def test_iteration(self):
         #Iterate over all gates and SPAM matrices
@@ -1153,6 +1189,12 @@ class TestGateSetMethods(GateSetTestCase):
         pygsti.obj.results.disable_old_python_results_unpickling()
         with open(temp_files + "/repickle_old_gateset.pkl.%s" % vs,'wb') as f:
             pickle.dump(gs, f)
+
+        #also test automatic setting of _calcClass
+        gs = self.gateset.copy()
+        del gs._calcClass
+        c = gs._calc() #automatically sets _calcClass
+        self.assertTrue(hasattr(gs,'_calcClass'))
 
 
     def test_base_gatecalc(self):
@@ -1331,6 +1373,23 @@ class TestGateSetMethods(GateSetTestCase):
         x = pygsti.objects.gatesetmember._decompose_gpindices(
             parent_gpindices, sibling_gpindices)
         self.assertEqual(list(x), list(np.array([0,2,4],'i')))
+
+    def test_gpindices(self):
+        #Test instrument construction with elements whose gpindices are already initialized.
+        # Since this isn't allowed currently (a future functionality), we need to do some hacking
+        gs = self.gateset.copy()
+        gs.gates['Gnew1'] = pygsti.obj.FullyParameterizedGate( np.identity(4,'d') )
+        del gs.gates['Gnew1']
+
+        v = gs.to_vector()
+        Np = gs.num_params()
+        gate_with_gpindices = pygsti.obj.FullyParameterizedGate( np.identity(4,'d') )
+        gate_with_gpindices[0,:] = v[0:4]
+        gate_with_gpindices.set_gpindices(np.concatenate( (np.arange(0,4), np.arange(Np,Np+12)) ), gs) #manually set gpindices
+        gs.gates['Gnew2'] = gate_with_gpindices
+        gs.gates['Gnew3'] = pygsti.obj.FullyParameterizedGate( np.identity(4,'d') )
+        del gs.gates['Gnew3'] #this causes update of Gnew2 indices
+        del gs.gates['Gnew2']
 
         
 

@@ -29,13 +29,11 @@ from ..baseobjs import Basis as _Basis
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
-#Temporary while we develop fastcalc
 try:
-    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
-#from ..tools import fastcalc as _fastcalc
 
 
 def optimize_gate(gateToOptimize, targetGate):
@@ -219,11 +217,17 @@ def convert(gate, toType, basis):
         cptp = False if toType == "GLND" else True #only "General LiNDbladian" is non-cptp
         truncate=True
 
+        def beq(b1,b2):
+            """ Check if bases have equal names """
+            b1 = b1.name if isinstance(b1,_Basis) else b1
+            b2 = b2.name if isinstance(b2,_Basis) else b2
+            return b1 == b2
+
         if isinstance(gate, LindbladParameterizedGate) and \
            _np.linalg.norm(gate.unitary_postfactor-unitary_post) < 1e-6 \
-           and ham_basis==gate.ham_basis and nonham_basis==gate.other_basis \
+           and beq(ham_basis,gate.ham_basis) and beq(nonham_basis,gate.other_basis) \
            and cptp==gate.cptp and nonham_diagonal_only==gate.nonham_diagonal_only \
-           and basis==gate.matrix_basis:
+           and beq(basis,gate.matrix_basis):
             return gate #no conversion necessary
         else:
             return LindbladParameterizedGate(
@@ -581,8 +585,8 @@ class GateMatrix(Gate):
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
         ret = getattr(self.__dict__['base'],attr)
-        if(self.base.shape != (self.dim,self.dim)):
-            raise ValueError("Cannot change shape of Gate")
+        #if(self.base.shape != (self.dim,self.dim)): #OLD - never used
+        #    raise ValueError("Cannot change shape of Gate")
         self.dirty = True
         return ret
 
@@ -665,8 +669,8 @@ class GateMatrix(Gate):
             raise ValueError("%s has %d dimensions when 2 are expected"
                              % (M, len(matrix.shape)))
 
-        if matrix.shape[0] != matrix.shape[1]:
-            raise ValueError("%s is not a *square* 2D array" % M)
+        if matrix.shape[0] != matrix.shape[1]: # checked above, but just to be safe
+            raise ValueError("%s is not a *square* 2D array" % M) # pragma: no cover
 
         return matrix
 
@@ -1904,15 +1908,8 @@ class EigenvalueParameterizedGate(GateMatrix):
             any off diagonal elements lying on the top row are *not*
             parameterized as implied by the TP constraint.
         """
-
         def cmplx_compare(ia,ib):
-            """Helper for comparing complex numbers"""
-            a,b = evals[ia], evals[ib]
-            if a.real < b.real:   return -1
-            elif a.real > b.real: return  1
-            elif a.imag < b.imag: return -1
-            elif a.imag > b.imag: return  1
-            else: return 0
+            return _mt.complex_compare(evals[ia], evals[ib])
         cmplx_compare_key = _functools.cmp_to_key(cmplx_compare)
 
         def isreal(a):
@@ -2010,7 +2007,7 @@ class EigenvalueParameterizedGate(GateMatrix):
                 #                               [Cr]      (nullspace of V)
                 # Note: only involve complex evecs (don't disturb TP evec!)            
                 evecIndsToMakeReal = []
-                for k in range(i,j): 
+                for k in range(i,j):
                     if _np.linalg.norm(self.B[:,k].imag) >= IMAG_TOL:
                         evecIndsToMakeReal.append(k)
 
@@ -2021,9 +2018,9 @@ class EigenvalueParameterizedGate(GateMatrix):
                         vecs[:,ik] = self.B[:,k]
                     V = _np.concatenate((vecs.real, vecs.imag), axis=1)
                     nullsp = _mt.nullspace(V); 
-                    if nullsp.shape[1] < nToReal: #DEBUG
-                        raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
-                                         % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
+                    #if nullsp.shape[1] < nToReal: #OLD DEBUG
+                    #    raise ValueError("Nullspace only has dimension %d when %d was expected! (i=%d, j=%d, blkSize=%d)\nevals = %s" \
+                    #                     % (nullsp.shape[1],nToReal, i,j,blkSize,str(self.evals)) )
                     assert(nullsp.shape[1] >= nToReal),"Cannot find enough real linear combos!"
                     nullsp = nullsp[:,0:nToReal] #truncate #cols if there are more than we need
     
@@ -2049,7 +2046,10 @@ class EigenvalueParameterizedGate(GateMatrix):
                     conjB = _np.conj(self.B[:,k])
                     for l in range(j,N):
                         if _np.isclose(conj,self.evals[l]) and \
-                                _np.allclose(conjB, self.B[:,l]):
+                                (_np.allclose(conjB, self.B[:,l]) or
+                                 _np.allclose(conjB, 1j*self.B[:,l]) or
+                                 _np.allclose(conjB, -1j*self.B[:,l]) or
+                                 _np.allclose(conjB, -1*self.B[:,l])): #numpy normalizes but doesn't fix "phase" of evecs
                             self.params.append( [  # real-part param
                                     (1.0, (k,k)),  # (prefactor, index)
                                     (1.0, (l,l)) ] ) 
@@ -2060,8 +2060,11 @@ class EigenvalueParameterizedGate(GateMatrix):
                             iConjugate[k] = l #save conj. pair index for below
                             break
                     else:
+                        # should be unreachable, since we ensure mx is real above - but
+                        # this may fail when there are multiple degenerate complex evals
+                        # since the evecs can get mixed (and we check for evec "match" above)
                         raise ValueError("Could not find conjugate pair " 
-                                         + " for %s" % self.evals[k])
+                                         + " for %s" % self.evals[k]) # pragma: no cover
             
             
             if includeOffDiagsInDegen2Blocks and blkSize == 2:
@@ -2219,7 +2222,7 @@ class EigenvalueParameterizedGate(GateMatrix):
             tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
             if _np.linalg.norm(tmp.imag) >= IMAG_TOL: #just a warning until we figure this out.
                 print("EigenvalueParameterizedGate deriv_wrt_params WARNING:" + 
-                      " Imag part = ",_np.linalg.norm(tmp.imag)," pdesc = ",pdesc)
+                      " Imag part = ",_np.linalg.norm(tmp.imag)," pdesc = ",pdesc) # pragma: no cover
             #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
             #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
             derivMx[:,k] = tmp.real.flatten()
@@ -2552,10 +2555,12 @@ class LindbladBase(object):
                     otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
                     try:
                         Lmx = _np.linalg.cholesky(otherC)
-                    except _np.linalg.LinAlgError: #Lmx not postitive definite?
-                        pos_evals = evals.clip(1e-12,1e100) #try again with 1e-12
-                        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
-                        Lmx = _np.linalg.cholesky(otherC)
+
+                    # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                    except _np.linalg.LinAlgError:                         # pragma: no cover
+                        pos_evals = evals.clip(1e-12,1e100)                # pragma: no cover
+                        otherC = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
+                        Lmx = _np.linalg.cholesky(otherC)                  # pragma: no cover
     
                     for i in range(bsO-1):
                         assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
@@ -2613,8 +2618,28 @@ class LindbladBase(object):
 
     def get_csr_sum_indices(self, csr_matrices):
         """ 
-        Returns array of index-arrays needed for use in csr_sum, along with
-        indptr and indices arrays for "template" matrix.
+        Precomputes the indices needed to sum a set of CSR sparse matrices.
+
+        Computes the index-arrays needed for use in :method:`csr_sum`,
+        along with the index pointer and column-indices arrays for constructing
+        a "template" CSR matrix to be the destination of `csr_sum`.
+
+        Parameters
+        ----------
+        csr_matrices : list
+            The SciPy CSR matrices to be summed.
+
+        Returns
+        -------
+        ind_arrays : list
+            A list of numpy arrays giving the destination data-array indices
+            of each element of `csr_matrices`.
+        indptr, indices : numpy.ndarray
+            The row-pointer and column-indices arrays specifying the sparsity 
+            structure of a the destination CSR matrix.
+        N : int
+            The dimension of the destination matrix (and of each member of
+            `csr_matrices`)
         """
         if len(csr_matrices) == 0: return []
         
@@ -2650,7 +2675,39 @@ class LindbladBase(object):
 
         
     def csr_sum(self, data, coeffs, csr_mxs, csr_sum_indices):
-        """ TESTING TODO docstring """
+        """ 
+        Accelerated summation of several CSR-format sparse matrices.
+
+        :method:`get_csr_sum_indices` precomputes the necessary indices for
+        summing directly into the data-array of a destination CSR sparse matrix.
+        If `data` is the data-array of matrix `D` (for "destination"), then this
+        method performs:
+
+        `D += sum_i( coeff[i] * csr_mxs[i] )`
+
+        Note that `D` is not returned; the sum is done internally into D's
+        data-array.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            The data-array of the destination CSR-matrix.
+
+        coeffs : iterable
+            The weight coefficients which multiply each summed matrix.
+
+        csr_mxs : iterable
+            A list of CSR matrix objects whose data-array is given by
+            `obj.data` (e.g. a SciPy CSR sparse matrix).
+
+        csr_sum_indices : list
+            A list of precomputed index arrays as returned by
+            :method:`get_csr_sum_indices`.
+
+        Returns
+        -------
+        None
+        """
         for coeff,mx,inds in zip(coeffs, csr_mxs, csr_sum_indices):
             data[inds] += coeff*mx.data        
 
@@ -3022,7 +3079,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             #just conjugate postfactor and Lindbladian exponent by U:
             if self.unitary_postfactor is not None:
                 self.unitary_postfactor = _mt.safedot(Uinv,_mt.safedot(self.unitary_postfactor, U))
-            self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))                
+            self.err_gen = _mt.safedot(Uinv,_mt.safedot(self.err_gen, U))
             self._set_params_from_errgen(self.err_gen, truncate=True)
             self._construct_errgen() # unnecessary? (TODO)
             if self.sparse:
@@ -4181,8 +4238,8 @@ class TPInstrumentGate(GateMatrix):
             for i in self.dependents: #re-init all my dependents (may be redundant)
                 if i == 0 and self.index > 0: continue # 0th param-gate already init by index==0 element
                 pgate_local_inds = _gatesetmember._decompose_gpindices(
-                    self.gpindices, param_gates[i].gpindices)
-                param_gates[i].from_vector( v[pgate_local_inds] )
+                    self.gpindices, self.param_gates[i].gpindices)
+                self.param_gates[i].from_vector( v[pgate_local_inds] )
                 
         self._construct_matrix()
 
@@ -4209,12 +4266,22 @@ class TPInstrumentGate(GateMatrix):
     
 class ComposedGate(GateMatrix):
     """
-    TODO: docstring
-    a gate that is the composition of a number of matrix factors (possibly other gates)
+    A gate that is the composition of a number of matrix factors (possibly other gates).
     """
     
     def __init__(self, gates_to_compose):
-        """ TODO docstring -- note gates are composed with vectors in *left-to-right* ordering (like gate strings)"""
+        """
+        Creates a new ComposedGate.
+
+        Parameters
+        ----------
+        gates_to_compose : list
+            A list of 2D numpy arrays (matrices) and/or `GateMatrix`-derived
+            objects that are composed to form this gate.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as gate sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+        """
         assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
         self.factorgates = gates_to_compose
         
@@ -4390,7 +4457,7 @@ class ComposedGate(GateMatrix):
 
             if i+1 < len(self.factorgates): # factors after ith
                 post = self.factorgates[i+1]
-                for gateA in self.factorgates[i+2:i]:
+                for gateA in self.factorgates[i+2:]:
                     post = _np.dot(gateA,post)
                 deriv = _np.einsum("ij,jka->ika", post, deriv )
 
@@ -4539,12 +4606,23 @@ class ComposedGate(GateMatrix):
     
 class ComposedGateMap(GateMap):
     """
-    TODO: docstring
-    a gate that is the composition of a number of (map) factors (possibly other gates)
+    A gate map that is the composition of a number of map-like factors (possibly
+    other `GateMap`s)
     """
     
     def __init__(self, gates_to_compose):
-        """ TODO docstring -- note gates are composed with vectors in *left-to-right* ordering (like gate strings)"""
+        """
+        Creates a new ComposedGateMap.
+
+        Parameters
+        ----------
+        gates_to_compose : list
+            List of `Gate`-derived objects (`GateMatrix`- or `GateMap`-derived)
+            that are composed to form this gate map.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as gate sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+        """
         assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
         self.factorgates = gates_to_compose
         
@@ -4823,11 +4901,42 @@ class ComposedGateMap(GateMap):
 
 class EmbeddedGateMap(GateMap):
     """
-    TODO: docstring
+    A gate map containing a single lower (or equal) dimensional gate within it.
+    An EmbeddedGateMap acts as the identity on all of its domain except the 
+    subspace of its contained gate, where it acts as the contained gate does.
     """
     
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
-        """ TODO docstring """
+        """
+        Initialize an EmbeddedGateMap object.
+
+        Parameters
+        ----------
+        stateSpaceLabels : a list of tuples
+            This argument specifies the density matrix space upon which this
+            gate acts.  Each tuple corresponds to a block of a density matrix
+            in the standard basis (and therefore a component of the direct-sum
+            density matrix space). Elements of a tuple are user-defined labels
+            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
+            interpret the d-dimensional state space corresponding to a d x d
+            block as a tensor product between qubit and single level systems.
+            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `gate_to_embed` (the
+            "contained" gate).
+
+        gate_to_embed : Gate
+            The gate object that is to be contained within this gate, and
+            that specifies the only non-trivial action of the EmbeddedGateMap.
+
+        basis : Basis
+            Specifies the basis to be used for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this basis must
+            have the same dimension and direct-sum structure given by
+            the `stateSpaceLabels`.
+        """
         dmDim, gateDim, blockDims = basis.dim #cast to basis first?
         self.stateSpaceLabels = stateSpaceLabels
         self.targetLabels = targetLabels
@@ -4861,7 +4970,7 @@ class EmbeddedGateMap(GateMap):
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
-                             " same tensor-product-block of the state space -- checked previously")
+                             " same tensor-product-block of the state space -- checked previously") # pragma: no cover
     
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
@@ -5082,7 +5191,7 @@ class EmbeddedGateMap(GateMap):
         raise NotImplementedError(
             ("EmbeddedGateMap not intialized properly, as this acton(...) "
              "method *should* have been replaced by an appropriate "
-             "implementation based on Cython availability"))
+             "implementation based on Cython availability")) # pragma: no cover
 
     
     def _slow_acton(self, state):
@@ -5116,13 +5225,13 @@ class EmbeddedGateMap(GateMap):
             output_state[ inds ] += self.embedded_gate.acton( state[inds] )
 
         #act on other blocks trivially:
-        self._acton_other_blocks_trivially(output_state)
+        self._acton_other_blocks_trivially(output_state,state)
 
         assert(output_state.shape == state.shape)
         return output_state
 
     
-    def _acton_other_blocks_trivially(self, output_state):
+    def _acton_other_blocks_trivially(self, output_state,state):
         offset = 0
         _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
@@ -5149,7 +5258,7 @@ class EmbeddedGateMap(GateMap):
 
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            self._acton_other_blocks_trivially(output_state)
+            self._acton_other_blocks_trivially(output_state,state)
         return output_state
 
     
@@ -5166,7 +5275,7 @@ class EmbeddedGateMap(GateMap):
 
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            self._acton_other_blocks_trivially(output_state)
+            self._acton_other_blocks_trivially(output_state,state)
         return output_state
 
 
@@ -5181,7 +5290,7 @@ class EmbeddedGateMap(GateMap):
                                  
         #act on other blocks trivially:
         if self.nBasisBlocks > 1:
-            self._acton_other_blocks_trivially(output_state)
+            self._acton_other_blocks_trivially(output_state,state)
         return output_state
 
 
@@ -5382,7 +5491,9 @@ class EmbeddedGateMap(GateMap):
 
 class EmbeddedGate(GateMatrix):
     """
-    Encapsulates a gate matrix TODO docstring
+    A gate containing a single lower (or equal) dimensional gate within it.
+    An EmbeddedGate acts as the identity on all of its domain except the 
+    subspace of its contained gate, where it acts as the contained gate does.
     """
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
         """
@@ -5390,9 +5501,30 @@ class EmbeddedGate(GateMatrix):
 
         Parameters
         ----------
-        M : array_like or Gate
-            a square 2D numpy array representing the gate action.  The
-            shape of this array sets the dimension of the gate.
+        stateSpaceLabels : a list of tuples
+            This argument specifies the density matrix space upon which this
+            gate acts.  Each tuple corresponds to a block of a density matrix
+            in the standard basis (and therefore a component of the direct-sum
+            density matrix space). Elements of a tuple are user-defined labels
+            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
+            interpret the d-dimensional state space corresponding to a d x d
+            block as a tensor product between qubit and single level systems.
+            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `gate_to_embed` (the
+            "contained" gate).
+
+        gate_to_embed : GateMatrix
+            The gate object that is to be contained within this gate, and
+            that specifies the only non-trivial action of the EmbeddedGate.
+
+        basis : Basis
+            Specifies the basis to be used for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this basis must
+            have the same dimension and direct-sum structure given by
+            the `stateSpaceLabels`.
         """
         _,gateDim,_ = basis.dim #cast to basis first?
         self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basis)

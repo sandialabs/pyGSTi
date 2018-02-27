@@ -16,15 +16,12 @@ import itertools as _itertools
 
 from .basistools import change_basis
 
-#Temporary while we develop fastcalc
 try:
-    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _warnings.warn("Could not import Cython extension - falling back to slower pure-python routines")
     _fastcalc = None
-#from ..tools import fastcalc as _fastcalc
-
     
 #EXPM_DEFAULT_TOL = 1e-7
 EXPM_DEFAULT_TOL = 2**-53 #Scipy default
@@ -604,6 +601,56 @@ def real_matrix_log(M, actionIfImaginary="raise", TOL=1e-8):
     return logM
 
 
+## ------------------------ General utility fns -----------------------------------
+
+
+def complex_compare(a,b):
+    """
+    Comparison function for complex numbers that compares real part, then
+    imaginary part.
+
+    Parameters
+    ----------
+    a,b : complex
+
+    Returns
+    -------
+    -1 if a < b
+     0 if a == b
+    +1 if a > b
+    """
+    if a.real < b.real:   return -1
+    elif a.real > b.real: return  1
+    elif a.imag < b.imag: return -1
+    elif a.imag > b.imag: return  1
+    else: return 0
+
+
+def prime_factors(n):
+    """
+    GCD algorithm to produce prime factors of `n`
+    
+    Parameters
+    ----------
+    n : int
+        The number to factorize.
+
+    Returns
+    -------
+    list
+        The prime factors of `n`.
+    """
+    i = 2; factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return factors
+
 
 def minweight_match(a, b, metricfn=None, return_pairs=True,
                     pass_indices_to_metricfn=False):
@@ -927,6 +974,7 @@ def _custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta): # t == 1.0
         F = eta * F
         B = F
     return F
+
 
 
 #From SciPy source, as a reference - above we assume A is a sparse csr matrix

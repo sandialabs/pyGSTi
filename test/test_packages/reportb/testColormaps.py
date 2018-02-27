@@ -72,6 +72,7 @@ class ColormapTests(BaseTestCase):
         llcmap = cmap.LinlogColormap(1.0, 10.0, 16, 0.95, 1, "red")
         mpl = pygsti.report.mpl_colormaps.mpl_LinLogNorm(llcmap)
         x = mpl.inverse(1.0) # test out inverse() function
+        xar = mpl.inverse(np.array([1.0,2.0],'d'))
 
 
         # Test plotly -> matplotlib conversion

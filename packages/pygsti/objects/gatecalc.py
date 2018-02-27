@@ -1119,7 +1119,11 @@ class GateCalc(object):
     def _fill_result_tuple_collectrho(self, result_tup, evalTree,
                            param_slice1, param_slice2, calc_and_fill_fn):
         """ 
-        TODO docstring -- like above but collections common rho spamtuples together (for map evaluation)
+        Similar to :method:`_fill_result_tuple`, but collects common-rho
+        spamtuples together for speeding up map-based evaluation.  Thus, where
+        `_fill_result_tuple` makes a separate call to `calc_and_fill_fn` for 
+        each `(rhoLabel,Elabel)` spamtuple, this function calls 
+        `calc_and_fill_fn(rhoLabel, Elabels, ...)`.
         """ 
         
         pslc1 = param_slice1

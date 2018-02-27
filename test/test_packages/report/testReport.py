@@ -4,6 +4,8 @@ import collections
 import pickle
 import pygsti
 import os
+import shutil
+import subprocess
 from pygsti.construction import std1Q_XYI as std
 from ..testutils import compare_files, temp_files
 
@@ -237,6 +239,8 @@ class TestReport(ReportBaseCase):
         if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
         if bPandas: linkto = ('pkl',) + linkto
         toggles = {'CompareDatasets': False, 'ShowScaling': False, 'CombineRobust': True }
+        if os.path.exists(temp_files + "/inline_report.html.files"):
+            shutil.rmtree(temp_files + "/inline_report.html.files") #clear figures directory
         pygsti.report.merge_helpers.merge_html_template(qtys, templateFile, temp_files + "/inline_report.html",
                                                         auto_open=False, precision=None, link_to=linkto,
                                                         connected=False, toggles=toggles, renderMath=True,
@@ -312,6 +316,69 @@ class TestReport(ReportBaseCase):
         pygsti.report.factory._errgen_formula("logGTi", "latex")
         pygsti.report.factory._errgen_formula("logG-logT", "latex")
         pygsti.report.factory._errgen_formula("foobar", "latex")
+
+    def test_merge_helpers(self):
+        """ Tests boundary cases for merge_helpers.py functinos """
+        import pygsti.report.merge_helpers as mh
+
+        # ---- insert_resource ----
+        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+                           offline_filename="myOfflineFile.js")
+        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+                           offline_filename=None, integrity="TEST", crossorigin="TEST")
+
+        with self.assertRaises(ValueError):
+            mh.insert_resource(connected=True, online_url=None, offline_filename="myOfflineFile.foobar") 
+            #unknown resource type (extension)
+        with self.assertRaises(ValueError):
+            mh.insert_resource(connected=False, online_url=None, offline_filename="myOfflineFile.foobar") 
+            #unknown resource type (extension)
+
+        # ---- rsync_offline_dir ----
+        outputDir = temp_files + "/rsync_offline_testdir"
+        if os.path.exists(outputDir):
+            shutil.rmtree(outputDir) #make sure no directory exists
+        mh.rsync_offline_dir(outputDir) #creates outputDir
+        os.remove(os.path.join(outputDir, "offline/README.txt")) # remove a single file
+        mh.rsync_offline_dir(outputDir) #creates *only* the single file removed
+
+        # ---- read_and_preprocess_template ----
+        tmpl = "#iftoggle(tname)\nSomething\n#elsetoggle\nNO END TOGGLE!"
+        with open(temp_files + "/test_toggles.txt","w") as f:
+            f.write(tmpl)
+        with self.assertRaises(AssertionError):
+            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #endtoggle
+
+        tmpl = "#iftoggle(tname)\nSomething\nNO ELSE OR END TOGGLE!"
+        with open(temp_files + "/test_toggles.txt","w") as f:
+            f.write(tmpl)
+        with self.assertRaises(AssertionError):
+            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #elsetoggle or #endtoggle
+
+        # ---- makeEmptyDir ----
+        dirname = temp_files + "/empty_testdir"
+        if os.path.exists(dirname):
+            shutil.rmtree(dirname) #make sure no directory exists
+        mh.makeEmptyDir(dirname)
+
+
+        # ---- fill_std_qtys ----
+        qtys = {}
+        mh.fill_std_qtys(qtys, connected=True, renderMath=True, CSSnames=[]) #test connected=True case
+
+        # ---- evaluate_call ----
+        printer = pygsti.obj.VerbosityPrinter(1)
+        stdout, stderr, returncode = mh.process_call(['ls','foobar.foobar'])
+        with self.assertRaises(subprocess.CalledProcessError):
+            mh.evaluate_call(['ls','foobar.foobar'], stdout, stderr, returncode, printer)
+
+        # ---- to_pdfinfo ----
+        pdfinfo =  mh.to_pdfinfo([ ('key','value'),
+                                   ('key2', ("TUP","LE")),
+                                   ('key3', collections.OrderedDict([("One", 1), ("Two",1)])) ])
+        self.assertEqual(pdfinfo, "key={value},\nkey2={[TUP, LE]},\nkey3={Dict[One: 1, Two: 1]}")
+
+        
         
         
 

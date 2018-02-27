@@ -193,6 +193,18 @@ class MatrixBaseTestCase(BaseTestCase):
         with self.assertRaises(ValueError):
             mt.expm_multiply_prep(N)
 
+    def test_complex_compare(self):
+        self.assertEqual(mt.complex_compare(1.0+2.0j,1.0+2.0j),  0) # ==
+        self.assertEqual(mt.complex_compare(1.0+2.0j,2.0+2.0j), -1) #real a < real b
+        self.assertEqual(mt.complex_compare(1.0+2.0j,0.5+2.0j), +1) #real a > real b
+        self.assertEqual(mt.complex_compare(1.0+2.0j,1.0+3.0j), -1) #imag a < imag b
+        self.assertEqual(mt.complex_compare(1.0+2.0j,1.0+1.0j), +1) #imag a > imag b
+
+    def test_prime_factors(self):
+        self.assertEqual(mt.prime_factors(7), [7])
+        self.assertEqual(mt.prime_factors(10), [2,5])
+        self.assertEqual(mt.prime_factors(12), [2,2,3])
+
         
 if __name__ == '__main__':
     unittest.main(verbosity=2)

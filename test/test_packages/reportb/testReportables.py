@@ -21,6 +21,7 @@ class TestReportables(BaseTestCase):
 
         self.assertAlmostEqual(rptbl._projectToValidProb(-0.1), 0.0)
         self.assertAlmostEqual(rptbl._projectToValidProb(1.1), 1.0)
+        self.assertAlmostEqual(rptbl._projectToValidProb(0.5), 0.5)
 
         nan_qty = rptbl.evaluate(None) # none function -> nan qty
         self.assertTrue( np.isnan(nan_qty.value) )
@@ -172,6 +173,35 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
             gsf = gsf_factory(gs1,"Mdefault:0","effect")
             rptbl.evaluate(gsf)
+
+    def test_nearby_gatesetfns(self):
+        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
+        gs2 = std.gs_target.copy()
+        gstr = pygsti.obj.GateString( ('Gx','Gx') )
+        
+        fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
+        fn.evaluate(gs1)
+        fn.evaluate_nearby(gs1)        
+        
+        fn = rptbl.Gatestring_half_diamond_norm(gs1,gs2,gstr)
+        fn.evaluate(gs1)
+        fn.evaluate_nearby(gs1)
+
+    def test_closest_unitary(self):
+        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
+        gs2 = std.gs_target.copy()
+        rptbl.closest_unitary_fidelity(gs1.gates['Gx'], gs2.gates['Gx'], "pp") # gate2 is unitary
+        rptbl.closest_unitary_fidelity(gs2.gates['Gx'], gs1.gates['Gx'], "pp") # gate1 is unitary
+
+    def test_general_decomp(self):
+        gs1 = std.gs_target.depolarize(gate_noise=0.1, spam_noise=0.05)
+        gs2 = std.gs_target.copy()
+        gs1.gates['Gx'] = np.array( [[-1, 0, 0, 0],
+                                     [ 0,-1, 0, 0],
+                                     [ 0, 0, 1, 0],
+                                     [ 0, 0, 0, 1]], 'd') # -1 eigenvalues => use approx log.
+        rptbl.general_decomposition(gs1,gs2)
+        
 
 
 
