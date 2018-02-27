@@ -17,7 +17,8 @@ ext_modules = [
               sources=["packages/pygsti/tools/fastcalc.pyx"], # , "fastcalc.c
               # Cython docs on NumPy usage should mention this!
               #define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
-               #leave above commented, see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+              #leave above commented, see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+              #define_macros = [('CYTHON_TRACE','1')], #for profiling
               include_dirs=['.', np.get_include()]
               #libraries=['m'] #math lib?
               )

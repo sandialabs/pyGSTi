@@ -29,13 +29,11 @@ from ..baseobjs import Basis as _Basis
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
-#Temporary while we develop fastcalc
 try:
-    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
-#from ..tools import fastcalc as _fastcalc
 
 
 def optimize_gate(gateToOptimize, targetGate):

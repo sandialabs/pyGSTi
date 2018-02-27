@@ -19,14 +19,11 @@ from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import gatesetmember as _gatesetmember
 
-#Temporary while we develop fastcalc
 try:
-    import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()})
+    #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
-#from ..tools import fastcalc as _fastcalc
-
 
 IMAG_TOL = 1e-8 #tolerance for imaginary part being considered zero
 
