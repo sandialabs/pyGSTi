@@ -1653,39 +1653,33 @@ class ColorBoxPlot(WorkspacePlot):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
             elif ptyp == "driftpv":
-                precomp=False
-                colormapType = "linlog"
-                linlog_color = "green"
-                ytitle="1 / pvalue"
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
                 assert(driftresults.indices_to_sequences is not None), \
                     "The `driftresults` must contain the mapping between indices and GateStrings!"
+                precomp=False
+                colormapType = "manuallinlog"
+                linlog_color = "green"
+                linlog_trans = 1/(1-driftresults.confidence)
+                ytitle="1 / pvalue"
                     
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
-                
-                # Erik: The threshold value, above which it should be colored and log-spaced
-                # is:
-                # 1/(1-driftresults.confidence)
-            
+                            
             elif ptyp == "driftpwr":
-                precomp=False
-                colormapType = "linlog"
-                linlog_color = "green"
-                ytitle="Maximum power in spectrum"
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
                 assert(driftresults.indices_to_sequences is not None), \
                     "The `driftresults` must contain the mapping between indices and GateStrings!"
+                precomp=False
+                colormapType = "manuallinlog"
+                linlog_color = "green"
+                linlog_trans = driftresults.ps_significance_threshold
+                ytitle="Maximum power in spectrum"
                 
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_maxpower_matrices(plaq, driftresults)
-                
-                # Erik: The threshold value, above which it should be colored and log-spaced
-                # is:
-                # driftresults.ps_significance_threshold
-            
+                            
             elif (submatrices is not None) and ptyp in submatrices:
                 precomp = False; ytitle = ptyp
                 colormapType = submatrices.get(ptyp + ".colormap","seq")            
@@ -1727,7 +1721,10 @@ class ColorBoxPlot(WorkspacePlot):
 
             if colormapType == "linlog":
                 colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,
-                                    linlg_pcntle, dof_per_box, linlog_color)
+                                                     linlg_pcntle, dof_per_box, linlog_color)
+            elif colormapType == "manuallinlog":
+                colormap = _colormaps.LinlogColormap.manual_transition_pt(
+                    0, dataMax, linlog_trans, linlog_color)
 
             elif colormapType == "trivial":
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
