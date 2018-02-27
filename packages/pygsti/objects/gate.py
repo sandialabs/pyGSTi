@@ -2618,8 +2618,28 @@ class LindbladBase(object):
 
     def get_csr_sum_indices(self, csr_matrices):
         """ 
-        Returns array of index-arrays needed for use in csr_sum, along with
-        indptr and indices arrays for "template" matrix.
+        Precomputes the indices needed to sum a set of CSR sparse matrices.
+
+        Computes the index-arrays needed for use in :method:`csr_sum`,
+        along with the index pointer and column-indices arrays for constructing
+        a "template" CSR matrix to be the destination of `csr_sum`.
+
+        Parameters
+        ----------
+        csr_matrices : list
+            The SciPy CSR matrices to be summed.
+
+        Returns
+        -------
+        ind_arrays : list
+            A list of numpy arrays giving the destination data-array indices
+            of each element of `csr_matrices`.
+        indptr, indices : numpy.ndarray
+            The row-pointer and column-indices arrays specifying the sparsity 
+            structure of a the destination CSR matrix.
+        N : int
+            The dimension of the destination matrix (and of each member of
+            `csr_matrices`)
         """
         if len(csr_matrices) == 0: return []
         
@@ -2655,7 +2675,39 @@ class LindbladBase(object):
 
         
     def csr_sum(self, data, coeffs, csr_mxs, csr_sum_indices):
-        """ TESTING TODO docstring """
+        """ 
+        Accelerated summation of several CSR-format sparse matrices.
+
+        :method:`get_csr_sum_indices` precomputes the necessary indices for
+        summing directly into the data-array of a destination CSR sparse matrix.
+        If `data` is the data-array of matrix `D` (for "destination"), then this
+        method performs:
+
+        `D += sum_i( coeff[i] * csr_mxs[i] )`
+
+        Note that `D` is not returned; the sum is done internally into D's
+        data-array.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            The data-array of the destination CSR-matrix.
+
+        coeffs : iterable
+            The weight coefficients which multiply each summed matrix.
+
+        csr_mxs : iterable
+            A list of CSR matrix objects whose data-array is given by
+            `obj.data` (e.g. a SciPy CSR sparse matrix).
+
+        csr_sum_indices : list
+            A list of precomputed index arrays as returned by
+            :method:`get_csr_sum_indices`.
+
+        Returns
+        -------
+        None
+        """
         for coeff,mx,inds in zip(coeffs, csr_mxs, csr_sum_indices):
             data[inds] += coeff*mx.data        
 
@@ -4214,12 +4266,22 @@ class TPInstrumentGate(GateMatrix):
     
 class ComposedGate(GateMatrix):
     """
-    TODO: docstring
-    a gate that is the composition of a number of matrix factors (possibly other gates)
+    A gate that is the composition of a number of matrix factors (possibly other gates).
     """
     
     def __init__(self, gates_to_compose):
-        """ TODO docstring -- note gates are composed with vectors in *left-to-right* ordering (like gate strings)"""
+        """
+        Creates a new ComposedGate.
+
+        Parameters
+        ----------
+        gates_to_compose : list
+            A list of 2D numpy arrays (matrices) and/or `GateMatrix`-derived
+            objects that are composed to form this gate.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as gate sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+        """
         assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
         self.factorgates = gates_to_compose
         
@@ -4544,12 +4606,23 @@ class ComposedGate(GateMatrix):
     
 class ComposedGateMap(GateMap):
     """
-    TODO: docstring
-    a gate that is the composition of a number of (map) factors (possibly other gates)
+    A gate map that is the composition of a number of map-like factors (possibly
+    other `GateMap`s)
     """
     
     def __init__(self, gates_to_compose):
-        """ TODO docstring -- note gates are composed with vectors in *left-to-right* ordering (like gate strings)"""
+        """
+        Creates a new ComposedGateMap.
+
+        Parameters
+        ----------
+        gates_to_compose : list
+            List of `Gate`-derived objects (`GateMatrix`- or `GateMap`-derived)
+            that are composed to form this gate map.  Elements are composed
+            with vectors  in  *left-to-right* ordering, maintaining the same
+            convention as gate sequences in pyGSTi.  Note that this is
+            *opposite* from standard matrix multiplication order.
+        """
         assert(len(gates_to_compose) > 0), "Must compose at least one gate!"
         self.factorgates = gates_to_compose
         
@@ -4828,11 +4901,42 @@ class ComposedGateMap(GateMap):
 
 class EmbeddedGateMap(GateMap):
     """
-    TODO: docstring
+    A gate map containing a single lower (or equal) dimensional gate within it.
+    An EmbeddedGateMap acts as the identity on all of its domain except the 
+    subspace of its contained gate, where it acts as the contained gate does.
     """
     
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
-        """ TODO docstring """
+        """
+        Initialize an EmbeddedGateMap object.
+
+        Parameters
+        ----------
+        stateSpaceLabels : a list of tuples
+            This argument specifies the density matrix space upon which this
+            gate acts.  Each tuple corresponds to a block of a density matrix
+            in the standard basis (and therefore a component of the direct-sum
+            density matrix space). Elements of a tuple are user-defined labels
+            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
+            interpret the d-dimensional state space corresponding to a d x d
+            block as a tensor product between qubit and single level systems.
+            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `gate_to_embed` (the
+            "contained" gate).
+
+        gate_to_embed : Gate
+            The gate object that is to be contained within this gate, and
+            that specifies the only non-trivial action of the EmbeddedGateMap.
+
+        basis : Basis
+            Specifies the basis to be used for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this basis must
+            have the same dimension and direct-sum structure given by
+            the `stateSpaceLabels`.
+        """
         dmDim, gateDim, blockDims = basis.dim #cast to basis first?
         self.stateSpaceLabels = stateSpaceLabels
         self.targetLabels = targetLabels
@@ -5387,7 +5491,9 @@ class EmbeddedGateMap(GateMap):
 
 class EmbeddedGate(GateMatrix):
     """
-    Encapsulates a gate matrix TODO docstring
+    A gate containing a single lower (or equal) dimensional gate within it.
+    An EmbeddedGate acts as the identity on all of its domain except the 
+    subspace of its contained gate, where it acts as the contained gate does.
     """
     def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
         """
@@ -5395,9 +5501,30 @@ class EmbeddedGate(GateMatrix):
 
         Parameters
         ----------
-        M : array_like or Gate
-            a square 2D numpy array representing the gate action.  The
-            shape of this array sets the dimension of the gate.
+        stateSpaceLabels : a list of tuples
+            This argument specifies the density matrix space upon which this
+            gate acts.  Each tuple corresponds to a block of a density matrix
+            in the standard basis (and therefore a component of the direct-sum
+            density matrix space). Elements of a tuple are user-defined labels
+            beginning with "L" (single Level) or "Q" (two-level; Qubit) which
+            interpret the d-dimensional state space corresponding to a d x d
+            block as a tensor product between qubit and single level systems.
+            (E.g. a 2-qubit space might be labelled `[('Q0','Q1')]`).
+
+        targetLabels : list of strs
+            The labels contained in `stateSpaceLabels` which demarcate the
+            portions of the state space acted on by `gate_to_embed` (the
+            "contained" gate).
+
+        gate_to_embed : GateMatrix
+            The gate object that is to be contained within this gate, and
+            that specifies the only non-trivial action of the EmbeddedGate.
+
+        basis : Basis
+            Specifies the basis to be used for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this basis must
+            have the same dimension and direct-sum structure given by
+            the `stateSpaceLabels`.
         """
         _,gateDim,_ = basis.dim #cast to basis first?
         self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basis)

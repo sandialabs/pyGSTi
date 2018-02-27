@@ -893,7 +893,16 @@ class DataSet(object):
             links it to a particular time step (i.e. the i-th element of the
             list specifies the outcome of the i-th measurement in the series).
 
-        TODO: docstring
+        timeStampList : list
+            A list of floating point timestamps, each associated with the single
+            corresponding outcome in `outcomeLabelList`. Must be the same length
+            as `outcomeLabelList`.
+
+        repCountList : list, optional
+            A list of integer counts specifying how many outcomes of type given
+            by `outcomeLabelList` occurred at the time given by `timeStampList`.
+            If None, then all counts are assumed to be 1.  When not None, must
+            be the same length as `outcomeLabelList`.
 
         Returns
         -------
@@ -968,7 +977,14 @@ class DataSet(object):
             A list of dictionaries holding the outcome-label:count pairs for each 
             time step (times given by `timeStampList`.
 
-        TODO: docstring
+        timeStampList : list
+            A list of floating point timestamps, each associated with an entire
+            dictionary of outcomes specified by `countDictList`.
+
+        overwriteExisting : bool, optional
+            If `True`, overwrite any existing data for the `gateString`.  If
+            `False`, add the count data with the next non-negative integer
+            timestamp.
 
         Returns
         -------
@@ -987,7 +1003,8 @@ class DataSet(object):
                 expanded_timeList.append(t)
                 expanded_repList.append(cntDict[ol]) #could do this only for counts > 1
         return self.add_raw_series_data(gateString, expanded_outcomeList,
-                                        expanded_timeList, expanded_repList)
+                                        expanded_timeList, expanded_repList,
+                                        overwriteExisting)
 
 
     def add_counts_from_dataset(self, otherDataSet):
