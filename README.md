@@ -29,7 +29,7 @@ Here's the basic idea:
      ```
 
   4. pyGSTi takes the data file and outputs a "report" - currently a
-     HTML web page - that looks something like this.
+     HTML web page.
 
 There are numerous [Tutorial](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Tutorials)
 and [Example](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Examples)
