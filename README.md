@@ -11,18 +11,46 @@ This is the root directory of the pyGSTi software, which is a Python
  under the GNU General Public License (GPL).  Copyright and license information
  can be found in ``license.txt``, and the GPL itself in ``COPYING``.
 
+Gate Set Tomography is used to characterize the operations performed by
+hardware designed to implement a (small) system of quantum bits (qubits).
+Here's the basic idea:
+
+  1. you tell pyGSTi what quantum operations you'd like to perform
+  2. pyGSTi tells you what sequences of operations it want's data for
+  3. you perform the requested experiments and place the resulting
+     data (outcome counts) into a text file that looks something like:
+
+     ```
+     ## Columns = 0 count, 1 count
+     {} 0 100
+     Gx 10 90
+     GxGy 40 60
+     Gx^4 20 80
+     ```
+
+  4. pyGSTi takes the data file and outputs a "report" - currently a
+     HTML web page - that looks something like this.
+
+There are numerous [Tutorial](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Tutorials)
+and [Example](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Examples)
+ipython notebooks (especially
+[Tutorial 0](https://github.com/pyGSTio/pyGSTi/blob/beta/jupyter_notebooks/Tutorials/00%20Getting%20Started.ipynb)
+) included in this repository that demonstrate pyGSTi's
+syntax and use, as well as a [FAQ](https://github.com/pyGSTio/pyGSTi/blob/beta/jupyter_notebooks/FAQ.ipynb).
+
 
 Getting Started:
 ---------------
-pyGSTi is written entirely in Python, and so there's no compiling necessary.
-The first step is to install Python (and
-[Jupyter notebook](http://jupyter.org/) is highly recommended) if you haven't
-already.  In order to use pyGSTi you need to tell your Python distribution
-where pyGSTi lives, which can be done in one of two ways:
+pyGSTi is written almost entirely in Python.  Apart from a single optional
+Cython module, there's no compiling necessary. The first step is to install
+Python (and [Jupyter notebook](http://jupyter.org/) is highly recommended)
+if you haven't already.  In order to use pyGSTi you need to tell your Python
+distribution where pyGSTi lives, which can be done in one of several ways:
 
 * User-Only Installation
 
-     To install pyGSTi for the current user, run ``python install_locally.py``
+    To install pyGSTi for the current user, you can run from the top-level
+    directory either ``pip install -e .`` or ``python install_locally.py``.
 
     This adds the current pyGSTi path to Python's list of search paths, and
     doesn't require administrative access.  Typically you want to do this if
@@ -31,6 +59,8 @@ where pyGSTi lives, which can be done in one of two ways:
     You'd also want to use this option if you'd like long-term access the
     tutorial notebook files in the ``jupyter_notebooks`` directory under this
     one, since this means you'll be keeping this directory around anyway.
+    The ``pip install -e .`` is slightly preferable since it will automatically
+    build the optional Cython extension.
 
 * System-Wide Installation
 
@@ -53,7 +83,7 @@ where pyGSTi lives, which can be done in one of two ways:
     to be the one Python uses when you ``import pygsti``.
 
 Using pyGSTi
-----------
+------------
 
 After you've installed pyGSTi, you should be able to import the 
 `pygsti` Python package.  The next thing to do is take a look at
@@ -66,11 +96,15 @@ the tutorials, which you do by:
   ``jupyter notebook``
 
 The Jupyter server should open up your web browser to the server root, from
-where you can start the first "00" tutorial notebook.  (Note that the key
+where you can start the first "0th" tutorial notebook.  (Note that the key
 command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
-just ``Enter``.)
+just ``Enter``.)  Example notebooks, found in the ``jupyter_notebooks/Examples/``
+directory, are focused on more specific tasks than the tutorials, and will be
+most useful for those looking to get a quick start using pyGSTi in a typical
+scenario.
 
 Congratulations!  You're up and running with pyGSTi!
+
 
 
 Documentation
