@@ -518,7 +518,8 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         #In LGST case, gauge optimimize starting point to the target
         # (historical; sometimes seems to help in practice, since it's gauge
         # optimizing to physical gates (e.g. something in CPTP)
-        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
+        tol = gaugeOptParams.get('tol',1e-8) if gaugeOptParams else 1e-8
+        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, tol=tol, comm=comm) 
           #Note: use *default* gauge-opt params when optimizing
 
     elif startingPt == "target":
@@ -1176,9 +1177,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
 
-        #TODO REMOVE: redundant given add_gaugeoptimized behavior
-        #if "comm" not in gaugeOptParams: 
-        #    gaugeOptParams["comm"] = comm 
+        # somewhat redundant given add_gaugeoptimized behavior - but
+        #  if not here won't do parallel gaugeopt_to_target below
+        if "comm" not in gaugeOptParams: 
+            gaugeOptParams["comm"] = comm 
 
         gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
         gaugeOptParams['gateset'] = gs_lsgst_list[-1] #starting gate set
