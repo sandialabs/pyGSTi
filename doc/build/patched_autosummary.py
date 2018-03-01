@@ -143,7 +143,8 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
-                        if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
+                        #if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
+                        if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
                             # skip imported members if expected
                             items.append(name)
                         else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
