@@ -112,7 +112,10 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
         new_files.append(fn)
 
         with open(fn, 'w') as f:
-            doc = get_documenter(app, obj, parent)
+            try:
+                doc = get_documenter(app, obj, parent) # newer Sphinx versions
+            except(TypeError): # when fn takes only 2 args
+                doc = get_documenter(obj, parent) # older Sphinx versions
 
             if template_name is not None:
                 template = template_env.get_template(template_name)
@@ -132,7 +135,11 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     except AttributeError as e:
                         print("EGN AttrErr: %s.%s: " % (obj.__name__,name),str(e))
                         continue
-                    documenter = get_documenter(app, value, obj)
+                    try:
+                        documenter = get_documenter(app, value, obj) #newer Sphinx versions
+                    except(TypeError): # when fn takes only 2 args
+                        documenter = get_documenter(value, obj) # older Sphinx versions
+                        
                     print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
