@@ -1663,7 +1663,7 @@ class TensorProdSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         if len(self.factors) == 0: return _np.empty(0,'d')
-        if scratch is not None:
+        if scratch is not None and _fastcalc is not None:
             assert(scratch.shape[0] == self.dim)
             # use faster kron that avoids memory allocation.
             # Note: this uses more memory b/c all self.factors.toarray() results
