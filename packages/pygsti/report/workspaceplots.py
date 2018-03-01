@@ -2421,7 +2421,12 @@ class FitComparisonBarPlot(WorkspacePlot):
         xtics = []; ys = []; colors = []; texts=[]
 
         if NpByX is None:
-            NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            try:
+                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            except: #numpy can throw a LinAlgError
+                _warnings.warn(("FigComparisonBarPlot could not obtain number of"
+                                " *non-gauge* parameters - using total params instead"))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
 
         if isinstance(datasetByX, _objs.DataSet):
             datasetByX = [datasetByX]*len(gatesetByX)
