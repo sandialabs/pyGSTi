@@ -16,6 +16,27 @@ import sys
 import os
 import shlex
 
+print("**** conf.py executed from within %s ****" % os.getcwd())
+
+print("*********** MONKEY-PATCHING AUTOSUMMARY ***************")
+sys.path.insert(0, os.path.abspath('.'))
+import patched_autosummary
+import sphinx.ext.autosummary
+sphinx.ext.autosummary.generate_autosummary_docs = \
+            patched_autosummary.generate_autosummary_docs_patch
+sphinx.ext.autosummary.generate.generate_autosummary_docs = \
+            patched_autosummary.generate_autosummary_docs_patch
+
+#Alternate way, but doesn't get called soon enough to do monkey-patch
+#def patch_autosummary(_):
+#    import sphinx.ext.autosummary
+#    sphinx.ext.autosummary.generate_autosummary_docs = \
+#            patched_autosummary.generate_autosummary_docs_patch
+#
+#def setup(app):
+#    app.connect('builder-inited', patch_autosummary)
+
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -148,7 +169,7 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+#html_static_path = ['_static']
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
