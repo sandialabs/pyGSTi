@@ -32,6 +32,8 @@
 
 from sphinx.ext.autosummary.generate import *
 from sphinx.ext.autosummary.generate import _simple_warn, _simple_info, _underline
+from sphinx.util import logger, display_chunk
+from sphinx.util.console import bold
 
 #Lazy "import *" above: could list all the things we need, like:
 #package_dir
@@ -197,3 +199,43 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                                         suffix=suffix, warn=warn, info=info,
                                         base_path=base_path, builder=builder,
                                         template_dir=template_dir, app=app)
+
+        
+def quiet_old_status_iterator(iterable, summary, color="darkgreen", stringify_func=display_chunk):
+    # type: (Iterable, unicode, str, Callable[[Any], unicode]) -> Iterator
+    l = 0
+    for item in iterable:
+        if l == 0:
+            logger.info(bold(summary), nonl=True)
+            l = 1
+        #QUIET
+        #logger.info(stringify_func(item), color=color, nonl=True)
+        #logger.info(" ", nonl=True)
+        yield item
+    if l == 1:
+        logger.info('')
+        
+
+def quiet_status_iterator(iterable, summary, color="darkgreen", length=0, verbosity=0,
+                          stringify_func=display_chunk):
+    # type: (Iterable, unicode, str, int, int, Callable[[Any], unicode]) -> Iterable  # NOQA
+    if length == 0:
+        for item in quiet_old_status_iterator(iterable, summary, color, stringify_func):
+            yield item
+        return
+    l = 0
+    summary = bold(summary)
+    logger.info(summary + " QUIET")
+    for item in iterable:
+        l += 1
+        #QUIET
+        #s = '%s[%3d%%] %s' % (summary, 100 * l / length, colorize(color, stringify_func(item)))
+	#if verbosity:
+        #    s += '\n'
+        #else:
+        #    s = term_width_line(s)
+        #logger.info(s, nonl=True)
+        yield item
+    if l > 0:
+        logger.info('')
+

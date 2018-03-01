@@ -2957,7 +2957,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             
         if self.sparse:
             #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
-            state = _mt.expm_multiply_fast(self.err_gen_prep, state[:,0])
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state[:,0])[:,None] # (N,1) -> (N,1) shape mapping
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
