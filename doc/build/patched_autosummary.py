@@ -133,21 +133,21 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     try:
                         value = safe_getattr(obj, name)
                     except AttributeError as e:
-                        print("EGN AttrErr: %s.%s: " % (obj.__name__,name),str(e))
+                        #print("EGN AttrErr: %s.%s: " % (obj.__name__,name),str(e))
                         continue
                     try:
                         documenter = get_documenter(app, value, obj) #newer Sphinx versions
                     except(TypeError): # when fn takes only 2 args
                         documenter = get_documenter(value, obj) # older Sphinx versions
                         
-                    print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
+                    #print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
                         if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
                             # skip imported members if expected
                             items.append(name)
-                        else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
+                        #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
                           if x in include_public or not x.startswith('_')]
                 return public, items
@@ -162,8 +162,8 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     get_members(obj, 'class', imported=imported_members)
                 ns['exceptions'], ns['all_exceptions'] = \
                     get_members(obj, 'exception', imported=imported_members)
-                print("EGN: module type: ", obj.__name__,"\nFNS: ",
-                      ns['functions'], "\nCLASSES:",ns['classes'])
+                #print("EGN: module type: ", obj.__name__,"\nFNS: ",
+                #      ns['functions'], "\nCLASSES:",ns['classes'])
             elif doc.objtype == 'class':
                 ns['members'] = dir(obj)
                 ns['methods'], ns['all_methods'] = \
