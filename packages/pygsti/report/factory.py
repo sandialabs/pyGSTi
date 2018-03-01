@@ -707,6 +707,12 @@ def create_standard_report(results, filename, title="auto",
         raise ValueError("PDF reports can only show a *single* dataset," +
                          " estimate, and gauge optimization.")
 
+    if len(Ls) > 0 and Ls[0] == 0:
+        _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
+                        " [0,1,2,4] instead of [1,2,4], is deprecated and"
+                        " may cause 'no data to plot' errors when creating"
+                        " this report.  Please remove this leading zero."))
+
     # Generate Tables
     printer.log("*** Generating tables ***")
         
