@@ -19,27 +19,27 @@ import importlib
 
 print("**** conf.py executed from within %s ****" % os.getcwd())
 
-print("*********** REDIRECTING stderr -> /dev/null ***************")
-sys.stderr = open(os.devnull, 'w')
-
-import logging
-logger = logging.getLogger("sphinx") # get root sphinx logger
-#logger.setLevel(logging.ERROR) # I don't think this works...
-warningHandler = None
-for hdlr in logger.handlers:
-    if hdlr.level == logging.WARNING:
-        warningHandler = hdlr; break
-if warningHandler:
-    logger.removeHandler(hdlr)
-    print("*********** REMOVED SPHINX WARNING HANDLER ***********")
-else:
-    logger = logging.getLogger() # try root logger (default arg = None)
-    for hdlr in logger.handlers:
-        if hdlr.level == logging.WARNING:
-            warningHandler = hdlr; break
-    if warningHandler:
-        logger.removeHandler(hdlr)
-        print("*********** REMOVED ROOT WARNING HANDLER ***********")
+#print("*********** REDIRECTING stderr -> /dev/null ***************")
+#sys.stderr = open(os.devnull, 'w')
+#
+#import logging
+#logger = logging.getLogger("sphinx") # get root sphinx logger
+##logger.setLevel(logging.ERROR) # I don't think this works...
+#warningHandler = None
+#for hdlr in logger.handlers:
+#    if hdlr.level == logging.WARNING:
+#        warningHandler = hdlr; break
+#if warningHandler:
+#    logger.removeHandler(hdlr)
+#    print("*********** REMOVED SPHINX WARNING HANDLER ***********")
+#else:
+#    logger = logging.getLogger() # try root logger (default arg = None)
+#    for hdlr in logger.handlers:
+#        if hdlr.level == logging.WARNING:
+#            warningHandler = hdlr; break
+#    if warningHandler:
+#        logger.removeHandler(hdlr)
+#        print("*********** REMOVED ROOT WARNING HANDLER ***********")
     
 
 print("*********** MONKEY-PATCHING AUTOSUMMARY ***************")
