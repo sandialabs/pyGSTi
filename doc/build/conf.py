@@ -19,9 +19,9 @@ import importlib
 
 print("**** conf.py executed from within %s ****" % os.getcwd())
 
-#print("*********** REDIRECTING stderr -> /dev/null ***************")
-#sys.stderr = open(os.devnull, 'w')
-#
+print("*********** REDIRECTING stderr -> /dev/null ***************")
+sys.stderr = open(os.devnull, 'w')
+
 #import logging
 #logger = logging.getLogger("sphinx") # get root sphinx logger
 ##logger.setLevel(logging.ERROR) # I don't think this works...
