@@ -44,12 +44,12 @@ from sphinx.util.console import bold
 #rst_escape
 #find_autosummary_in_files(sources)
 
+
 def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                                     warn=_simple_warn, info=_simple_info,
                                     base_path=None, builder=None, template_dir=None,
                                     imported_members=False, app=None):
     # type: (List[unicode], unicode, unicode, Callable, Callable, unicode, Builder, unicode, bool, Any) -> None  # NOQA
-
     showed_sources = list(sorted(sources))
     if len(showed_sources) > 20:
         showed_sources = showed_sources[:10] + ['...'] + showed_sources[-10:]
@@ -131,6 +131,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
             def get_members(obj, typ, include_public=[], imported=True):
                 # type: (Any, unicode, List[unicode], bool) -> Tuple[List[unicode], List[unicode]]  # NOQA
                 items = []  # type: List[unicode]
+                dbcount = 0
                 for name in dir(obj):
                     try:
                         value = safe_getattr(obj, name)
@@ -146,8 +147,9 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
+                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 20):
                             # skip imported members if expected
+                            dbcount += 1
                             items.append(name)
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
