@@ -151,7 +151,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                         if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 50):
                             # skip imported members if expected
                             #if dbcount < 17:
-                                items.append(name)
+                            items.append(name)
                             #else:
                             #    print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
                             #          file=sys.stdout)
