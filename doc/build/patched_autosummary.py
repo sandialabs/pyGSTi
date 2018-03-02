@@ -146,9 +146,14 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                         
                     #print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
                     if documenter.objtype == typ:
+                        valmod = getattr(value, '__module__', None)
+                        valmod_parts = valmod.split(".")
+                        objname_parts = obj.__name__.split(".")
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        #if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        if imported or valmod == obj.__name__ or \
+                           (len(valmod_parts) > 2 and len(objname_parts) == 2 and valmod_parts[0:2] == objname_parts):
                             # skip imported members if expected
                             #if dbcount < 17:
                             items.append(name)
