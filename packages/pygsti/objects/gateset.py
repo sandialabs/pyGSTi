@@ -2053,11 +2053,8 @@ class GateSet(object):
     def bulk_probs(self, gatestring_list,
                    clipTo=None, check=False, comm=None):
         """
-        TODO: fix doc strings for all bulk_* functions
-        Construct a dictionary containing the bulk-probabilities
-        for every spam label (each possible initialization &
-        measurement pair) for each gate sequence given by
-        evalTree.
+        Construct a dictionary containing the probabilities
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2081,9 +2078,9 @@ class GateSet(object):
         Returns
         -------
         probs : dictionary
-            A dictionary such that
-            probs[SL] = bulk_pr(SL,evalTree,clipTo,check)
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, p)` tuples, where `outcome` is a tuple of labels
+            and `p` is the corresponding probability.
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
@@ -2094,10 +2091,8 @@ class GateSet(object):
                     check=False,comm=None,wrtBlockSize=None):
 
         """
-        Construct a dictionary containing the bulk-probability-
-        derivatives for every spam label (each possible
-        initialization & measurement pair) for each gate
-        sequence given by evalTree.
+        Construct a dictionary containing the probability-derivatives
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2134,9 +2129,12 @@ class GateSet(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that
-            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, and `dp` is an array containing
+            the derivative of `p` with respect to each parameter.  If `returnPr`
+            if False, then `p` is not included in the tuples (so they're just
+            `(outcome, dp)`).
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
@@ -2149,10 +2147,8 @@ class GateSet(object):
                     wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
-        Construct a dictionary containing the bulk-probability-
-        Hessians for every spam label (each possible
-        initialization & measurement pair) for each gate
-        sequence given by evalTree.
+        Construct a dictionary containing the probability-Hessians
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2191,9 +2187,13 @@ class GateSet(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that
-            ``hprobs[SL] = bulk_hpr(SL,evalTree,returnPr,returnDeriv,clipTo,check)``
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, `dp` is a 1D array containing
+            the derivative of `p` with respect to each parameter, and `hp` is a
+            2D array containing the Hessian of `p` with respect to each parameter.
+            If `returnPr` if False, then `p` is not included in the tuples.
+            If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
@@ -2204,29 +2204,29 @@ class GateSet(object):
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         """
-        Identical to bulk_probs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probabilities for an entire tree of gate strings.
 
-        Specifically, the probabilities for all gate strings
-        and a given SPAM label are placed into the row of
-        mxToFill specified by spam_label_rows[spamLabel].
+        This routine fills a 1D array, `mxToFill` with the probabilities
+        corresponding to the *compiled* gate strings found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        objects is *compiled* into a lists of gate-only sequences along with
+        a mapping of final elements (i.e. probabilities) to gate-only sequence
+        and prep/effect pairs.  The evaluation tree organizes how to efficiently
+        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        must have length equal to the number of final elements (this can be 
+        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        correspond to which strings and outcomes, you'll need the mappings 
+        generated when the original list of `GateStrings` was compiled.
 
         Parameters
         ----------
         mxToFill : numpy ndarray
-          an already-allocated KxS numpy array, where K is larger
-          than the maximum value in spam_label_rows and S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings())
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+          an already-allocated 1D numpy array of length equal to the
+          total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -2253,43 +2253,30 @@ class GateSet(object):
     def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
                          check=False,comm=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
-
         """
-        Identical to bulk_dprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-derivatives for an entire tree of gate
+        strings.
 
-        Specifically, the probability derivatives for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ]
+        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
+        probability-derivatives for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M is the 
+          number of gate set parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
         clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -2317,7 +2304,6 @@ class GateSet(object):
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
-
         Returns
         -------
         None
@@ -2335,47 +2321,35 @@ class GateSet(object):
                          gatherMemLimit=None):
 
         """
-        Identical to bulk_hprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-Hessians for an entire tree of gate
+        strings.
 
-        Specifically, the probability hessians for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities and/or derivatives can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ] and
-        derivMxToFill[ spam_label_rows[spamLabel] ] respectively.
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        probability-Hessians for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxMxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExMxM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill : numpy array, optional
-          when not None, an already-allocated KxSxM numpy array that is filled
-          with the probability derivatives as per spam_label_rows, similar to
-          bulk_fill_dprobs(...).
+        derivMxToFill1, derivMxToFill2 : numpy array, optional
+          when not None, an already-allocated ExM numpy array that is filled
+          with probability derivatives, similar to bulk_fill_dprobs(...), but
+          where M is the number of gateset parameters selected for the 1st and 2nd
+          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
-        clipTo : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+        clipTo : 2-tuple, optional
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -2386,7 +2360,7 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being second-differentiated with respect to (see
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtBlockSize2, wrtBlockSize2 : int or float, optional
@@ -2398,10 +2372,12 @@ class GateSet(object):
           wrtFilter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
         gatherMemLimit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
-
 
         Returns
         -------

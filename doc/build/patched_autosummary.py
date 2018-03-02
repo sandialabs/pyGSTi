@@ -30,6 +30,7 @@
  or package being documented.
 """
 
+import sys, os
 from sphinx.ext.autosummary.generate import *
 from sphinx.ext.autosummary.generate import _simple_warn, _simple_info, _underline
 from sphinx.util import logger, display_chunk
@@ -145,12 +146,21 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                         
                     #print("EGN %s.%s typ = " % (obj.__name__,name),documenter.objtype, " tgt=",typ)
                     if documenter.objtype == typ:
+                        valmod = getattr(value, '__module__', None)
+                        valmod_parts = valmod.split(".") if (valmod is not None) else []
+                        objname_parts = obj.__name__.split(".")
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 20):
+                        #DEBUG if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        #if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
+                        if imported or valmod == obj.__name__ or \
+                           (len(valmod_parts) > 2 and len(objname_parts) == 2 and valmod_parts[0:2] == objname_parts):
                             # skip imported members if expected
-                            dbcount += 1
                             items.append(name)
+                            #else:
+                            #    print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
+                            #          file=sys.stdout)
+                            dbcount += 1
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
                           if x in include_public or not x.startswith('_')]

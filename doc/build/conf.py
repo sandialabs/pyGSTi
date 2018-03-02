@@ -51,16 +51,16 @@ sphinx.ext.autosummary.generate_autosummary_docs = \
 sphinx.ext.autosummary.generate.generate_autosummary_docs = \
             patched_autosummary.generate_autosummary_docs_patch
 
-print("*********** MONKEY-PATCHING STATUS ITERATORS ***************")
-import sphinx.util
-import sphinx.environment
-import sphinx.builders
-sphinx.util.old_status_iterator = patched_autosummary.quiet_old_status_iterator
-sphinx.util.status_iterator = patched_autosummary.quiet_status_iterator
-importlib.reload(sphinx.environment)
-importlib.reload(sphinx.builders)
-importlib.reload(sphinx.application)
-importlib.reload(sphinx.cmdline)
+#print("*********** MONKEY-PATCHING STATUS ITERATORS ***************")
+#import sphinx.util
+#import sphinx.environment
+#import sphinx.builders
+#sphinx.util.old_status_iterator = patched_autosummary.quiet_old_status_iterator
+#sphinx.util.status_iterator = patched_autosummary.quiet_status_iterator
+#importlib.reload(sphinx.environment)
+#importlib.reload(sphinx.builders)
+#importlib.reload(sphinx.application)
+#importlib.reload(sphinx.cmdline)
 
 #Alternate way, but doesn't get called soon enough to do monkey-patch
 #def patch_autosummary(_):
