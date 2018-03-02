@@ -44,13 +44,13 @@ from sphinx.util.console import bold
 #rst_escape
 #find_autosummary_in_files(sources)
 
-dbcount = 0
+
 def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                                     warn=_simple_warn, info=_simple_info,
                                     base_path=None, builder=None, template_dir=None,
                                     imported_members=False, app=None):
     # type: (List[unicode], unicode, unicode, Callable, Callable, unicode, Builder, unicode, bool, Any) -> None  # NOQA
-
+    dbcount = 0
     showed_sources = list(sorted(sources))
     if len(showed_sources) > 20:
         showed_sources = showed_sources[:10] + ['...'] + showed_sources[-10:]
@@ -147,7 +147,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 10):
                             # skip imported members if expected
                             dbcount += 1
                             items.append(name)
