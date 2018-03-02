@@ -22,24 +22,24 @@ print("**** conf.py executed from within %s ****" % os.getcwd())
 print("*********** REDIRECTING stderr -> /dev/null ***************")
 sys.stderr = open(os.devnull, 'w')
 
-#import logging
-#logger = logging.getLogger("sphinx") # get root sphinx logger
-##logger.setLevel(logging.ERROR) # I don't think this works...
-#warningHandler = None
-#for hdlr in logger.handlers:
-#    if hdlr.level == logging.WARNING:
-#        warningHandler = hdlr; break
-#if warningHandler:
-#    logger.removeHandler(hdlr)
-#    print("*********** REMOVED SPHINX WARNING HANDLER ***********")
-#else:
-#    logger = logging.getLogger() # try root logger (default arg = None)
-#    for hdlr in logger.handlers:
-#        if hdlr.level == logging.WARNING:
-#            warningHandler = hdlr; break
-#    if warningHandler:
-#        logger.removeHandler(hdlr)
-#        print("*********** REMOVED ROOT WARNING HANDLER ***********")
+import logging
+logger = logging.getLogger("sphinx") # get root sphinx logger
+#logger.setLevel(logging.ERROR) # I don't think this works...
+warningHandler = None
+for hdlr in logger.handlers:
+    if hdlr.level == logging.WARNING:
+        warningHandler = hdlr; break
+if warningHandler:
+    logger.removeHandler(hdlr)
+    print("*********** REMOVED SPHINX WARNING HANDLER ***********")
+else:
+    logger = logging.getLogger() # try root logger (default arg = None)
+    for hdlr in logger.handlers:
+        if hdlr.level == logging.WARNING:
+            warningHandler = hdlr; break
+    if warningHandler:
+        logger.removeHandler(hdlr)
+        print("*********** REMOVED ROOT WARNING HANDLER ***********")
     
 
 print("*********** MONKEY-PATCHING AUTOSUMMARY ***************")
@@ -51,16 +51,16 @@ sphinx.ext.autosummary.generate_autosummary_docs = \
 sphinx.ext.autosummary.generate.generate_autosummary_docs = \
             patched_autosummary.generate_autosummary_docs_patch
 
-print("*********** MONKEY-PATCHING STATUS ITERATORS ***************")
-import sphinx.util
-import sphinx.environment
-import sphinx.builders
-sphinx.util.old_status_iterator = patched_autosummary.quiet_old_status_iterator
-sphinx.util.status_iterator = patched_autosummary.quiet_status_iterator
-importlib.reload(sphinx.environment)
-importlib.reload(sphinx.builders)
-importlib.reload(sphinx.application)
-importlib.reload(sphinx.cmdline)
+#print("*********** MONKEY-PATCHING STATUS ITERATORS ***************")
+#import sphinx.util
+#import sphinx.environment
+#import sphinx.builders
+#sphinx.util.old_status_iterator = patched_autosummary.quiet_old_status_iterator
+#sphinx.util.status_iterator = patched_autosummary.quiet_status_iterator
+#importlib.reload(sphinx.environment)
+#importlib.reload(sphinx.builders)
+#importlib.reload(sphinx.application)
+#importlib.reload(sphinx.cmdline)
 
 #Alternate way, but doesn't get called soon enough to do monkey-patch
 #def patch_autosummary(_):
