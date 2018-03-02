@@ -148,13 +148,13 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 17):
+                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 50):
                             # skip imported members if expected
-                            if dbcount < 17:
+                            #if dbcount < 17:
                                 items.append(name)
-                            else:
-                                print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
-                                      file=sys.stdout)
+                            #else:
+                            #    print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
+                            #          file=sys.stdout)
                             dbcount += 1
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
