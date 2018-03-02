@@ -1,12 +1,15 @@
+""" Defines the GateString class and derived classes which represent gate strings."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines the GateString class and derived classes which represent gate strings."""
 
 import numpy as _np
+import uuid  as _uuid
+from ..tools import compattools as _compat
+from ..baseobjs import GateStringParser as _GateStringParser
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
@@ -26,7 +29,7 @@ class GateString(object):
     testing for equality, indexing,  slicing, multiplying).
     """
 
-    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True):
+    def __init__(self, tupleOfGateLabels, stringRepresentation=None, bCheck=True, lookup=None):
         """
         Create a new GateString object
 
@@ -43,15 +46,21 @@ class GateString(object):
         bCheck : bool, optional
             If true, raise ValueEror if stringRepresentation does not evaluate
             to tupleOfGateLabels.
+
+        lookup : dict, optional
+            A dictionary with keys == labels and values == tuples of gate labels
+            which can be used for substitutions using the S<label> syntax.
         """
+        self.uuid = _uuid.uuid4()
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
 
         if tupleOfGateLabels is None or (bCheck and stringRepresentation is not None):
-            from ..io import stdinput as _stdinput
-            parser = _stdinput.StdInputParser()
-            chkTuple = parser.parse_gatestring( stringRepresentation )
+            gsparser = _GateStringParser()
+            gsparser.lookup = lookup
+            chkTuple = gsparser.parse(stringRepresentation)
+
             if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
             elif tuple(tupleOfGateLabels) != chkTuple:
                 raise ValueError("Error intializing GateString: " +
@@ -60,7 +69,7 @@ class GateString(object):
 
         # if tupleOfGateLabels is a GateString, then copy it
         if isinstance(tupleOfGateLabels, GateString):
-            self.tup = tupleOfGateLabels.tup
+            self._tup = tupleOfGateLabels.tup
             if stringRepresentation is None:
                 self.str = tupleOfGateLabels.str
             else:
@@ -70,7 +79,7 @@ class GateString(object):
             if stringRepresentation is None:
                 stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
 
-            self.tup = tuple(tupleOfGateLabels)
+            self._tup = tuple(tupleOfGateLabels)
             self.str = str(stringRepresentation)
 
     #Conversion routines for evalTree usage -- TODO: make these member functions
@@ -101,7 +110,7 @@ class GateString(object):
         for gateLabel in gateLabels:
             translateDict[gateLabel] = c
             c = chr(ord(c) + 1)
-        return "".join([ translateDict[gateLabel] for gateLabel in self.tup ])
+        return "".join([ translateDict[gateLabel] for gateLabel in self._tup ])
 
     @classmethod
     def from_pythonstr(cls,pythonString,gateLabels):
@@ -135,18 +144,17 @@ class GateString(object):
             c = chr(ord(c) + 1)
         return cls( tuple([ translateDict[c] for c in pythonString ]) )
 
-
     def __str__(self):
         return self.str
 
     def __len__(self):
-        return len(self.tup)
+        return len(self._tup)
 
     def __repr__(self):
         return "GateString(%s)" % self.str
 
     def __iter__(self):
-        return self.tup.__iter__()
+        return self._tup.__iter__()
 
     def __add__(self,x):
         if not isinstance(x, GateString):
@@ -154,45 +162,60 @@ class GateString(object):
         if self.str != "{}":
             s = (self.str + x.str) if x.str != "{}" else self.str
         else: s = x.str
-        return GateString(self.tup + x.tup, s, bCheck=False)
+        return GateString(self._tup + x.tup, s, bCheck=False)
 
     def __mul__(self,x):
-        assert( (isinstance(x,int) or _np.issubdtype(x,int)) and x >= 0)
+        assert( (_compat.isint(x) or _np.issubdtype(x,int)) and x >= 0)
         if x > 1: s = "(%s)^%d" % (self.str,x)
         elif x == 1: s = "(%s)" % self.str
         else: s = "{}"
-        return GateString(self.tup * x, s, bCheck=False)
+        return GateString(self._tup * x, s, bCheck=False)
 
     def __pow__(self,x): #same as __mul__()
         return self.__mul__(x)
 
     def __eq__(self,x):
         if x is None: return False
-        return self.tup == tuple(x) #better than x.tup since x can be a tuple
+        return self._tup == tuple(x) #better than x.tup since x can be a tuple
 
     def __lt__(self,x):
-        return self.tup.__lt__(x)
+        return self._tup.__lt__(tuple(x))
 
     def __gt__(self,x):
-        return self.tup.__gt__(x)
+        return self._tup.__gt__(tuple(x))
 
     def __hash__(self):
-        return self.tup.__hash__()
+        return hash(self._tup)
+        #return hash(self.uuid)
 
     def __copy__(self):
-        return GateString( self.tup, self.str, bCheck=False)
+        return GateString( self._tup, self.str, bCheck=False)
 
     #def __deepcopy__(self, memo):
-    #    return GateString( self.tup, self.str, bCheck=False)
+    #    return GateString( self._tup, self.str, bCheck=False)
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return GateString( self.tup.__getitem__(key) )
-        return self.tup.__getitem__(key)
+            return GateString( self._tup.__getitem__(key) )
+        return self._tup.__getitem__(key)
 
     def __setitem__(self, key, value):
         raise ValueError("Cannot set elements of GateString tuple (they're read-only)")
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            if k == 'tup':                    # backwards compatibility
+                self._tup = state_dict['tup'] # backwards compatibility
+            else:
+                self.__dict__[k] = v
+    
+    @property
+    def tup(self):
+        """ This GateString as a standard Python tuple."""
+        return self._tup
 
 
 class WeightedGateString(GateString):
@@ -207,7 +230,7 @@ class WeightedGateString(GateString):
     treated as having zero weight and the result is another WeightedGateString.
     """
 
-    def __init__(self,tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=True):
+    def __init__(self, tupleOfGateLabels, stringRepresentation=None, weight=1.0, bCheck=True):
         """
         Create a new WeightedGateString object
 
@@ -251,15 +274,15 @@ class WeightedGateString(GateString):
         return WeightedGateString(tmp.tup, tmp.str, self.weight, bCheck=False) #keep weight
 
     def __copy__(self):
-        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
+        return WeightedGateString( self._tup, self.str, self.weight, bCheck=False )
 
 #    def __deepcopy__(self, memo):
-#        return WeightedGateString( self.tup, self.str, self.weight, bCheck=False )
+#        return WeightedGateString( self._tup, self.str, self.weight, bCheck=False )
 
     def __getitem__(self, key):
         if isinstance( key, slice ):
-            return WeightedGateString( self.tup.__getitem__(key), None, self.weight, bCheck=False )
-        return self.tup.__getitem__(key)
+            return WeightedGateString( self._tup.__getitem__(key), None, self.weight, bCheck=False )
+        return self._tup.__getitem__(key)
 
 
 class CompressedGateString(object):
@@ -295,9 +318,19 @@ class CompressedGateString(object):
         """
         if not isinstance(gatestring, GateString):
             raise ValueError("CompressedGateStrings can only be created from existing GateString objects")
-        self.tup = CompressedGateString.compress_gate_label_tuple(
+        self._tup = CompressedGateString.compress_gate_label_tuple(
             gatestring.tup, minLenToCompress, maxPeriodToLookFor)
         self.str = gatestring.str
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            if k == 'tup':                    # backwards compatibility
+                self._tup = state_dict['tup'] # backwards compatibility
+            else:
+                self.__dict__[k] = v
 
     def expand(self):
         """
@@ -307,7 +340,7 @@ class CompressedGateString(object):
         -------
         GateString
         """
-        tup = CompressedGateString.expand_gate_label_tuple(self.tup)
+        tup = CompressedGateString.expand_gate_label_tuple(self._tup)
         return GateString(tup, self.str, bCheck=False)
 
     @staticmethod
@@ -409,3 +442,4 @@ class CompressedGateString(object):
 #    gs = GateString(('Gx',) )
 #    print ((gs + wgs)*2).weight
 #    print (wgs + gs).weight
+

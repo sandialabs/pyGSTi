@@ -1,0 +1,32 @@
+@@markdown
+# Input Summary
+Information pertaining to the ideal target gate set and data set.
+@@markdown
+### Ideal SPAM operations.
+The *ideal* input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.
+@@code
+ws.SpamTable(gs_target, None, 'boxes', includeHSVec=False)
+
+@@markdown
+### Fiducial sequences.
+A list of the preparation and measurement "fiducial" gate sequences.
+@@code
+ws.GatestringTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+
+@@markdown
+### Germ sequences.
+A list of the "germ" gate sequences.
+@@code
+ws.GatestringTable(germs, "Germ", nCols=2)
+
+@@markdown
+### General dataset properties.
+Various properties of the data set used in the analysis.
+@@code
+ws.DataSetOverviewTable(ds)
+
+@@markdown
+### Ideal logic gates
+The *ideal* (generally unitary) logic gates.  Each has a name starting with <q>G</q>, and is represented as a $d^2\times d^2$ *superoperator* that acts by matrix multiplication on vectors in $\mathcal{B}(\mathcal{H})$.  Matrices are displayed using a heat map that ranges between 1.0 (red) and -1.0 (blue).
+@@code
+ws.GatesTable(gs_target, display_as="boxes")

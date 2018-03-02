@@ -1,6 +1,7 @@
-from pygsti.objects.verbosityprinter import *
+from pygsti.baseobjs.verbosityprinter import *
 from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest, sys, os
+import pickle
 
 # The path for a temporary file to be generated in
 filePath        = temp_files + '/printer_output.txt'
@@ -21,7 +22,7 @@ def _generate_with(printer):
                 printer.error(errorMessage)
             with printer.progress_logging(2):
                 for i, item in enumerate(data):
-                    printer.show_progress(i, len(data), messageLevel=2)
+                    printer.show_progress(i, len(data)) #, messageLevel=2)
 
 def _to_temp_file(printer):
     data     = list(range(2))
@@ -149,6 +150,16 @@ class TestVerbosePrinter(BaseTestCase):
     def test_str(self):
         str(VerbosityPrinter.build_printer(2))
 
+    def test_pickleable(self):
+        vbp = VerbosityPrinter.build_printer(2)
+        s = pickle.dumps(vbp)
+        vbp2 = pickle.loads(s)
+
+    def test_log_variants(self):
+        vbp = VerbosityPrinter.build_printer(2)
+        vbp.log("Hello",end="\n\n")
+
+        
 if __name__ == '__main__':
     unittest.main(verbosity=2)
 

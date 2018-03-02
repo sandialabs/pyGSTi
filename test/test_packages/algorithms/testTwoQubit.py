@@ -17,9 +17,9 @@ class TestTwoQubitMethods(BaseTestCase):
         gs_target = pygsti.construction.build_gateset(
             [4], [('Q0','Q1')],['Gix','Giy','Gxi','Gyi','Gcnot'],
             [ "X(pi/2,Q1)", "Y(pi/2,Q1)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "CX(pi,Q0,Q1)" ],
-            ["rho0"], ["0"], ["E0","E1","E2"], ["0","1","2"],
+            ["rho0"], ["0"], ["E0","E1","E2","Ec"], ["0","1","2","C"],
             spamdefs={'upup': ("rho0","E0"), 'updn': ("rho0","E1"),
-                      'dnup': ("rho0","E2"), 'dndn': ("rho0","remainder") },
+                      'dnup': ("rho0","E2"), 'dndn': ("rho0","Ec") },
             basis="gm" )
 
         fiducialStrings16 = pygsti.construction.gatestring_list(
@@ -30,7 +30,7 @@ class TestTwoQubitMethods(BaseTestCase):
 
         specs16 = pygsti.construction.build_spam_specs(
             fiducialStrings16, prep_labels=['rho0'],
-            effect_labels=['E0','E1','E2', 'remainder'])
+            effect_labels=['E0','E1','E2','Ec'])
 
         germs4 = pygsti.construction.gatestring_list(
             [ ('Gix',), ('Giy',), ('Gxi',), ('Gyi',) ] )

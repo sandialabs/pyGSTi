@@ -1,34 +1,15 @@
+""" Functions for loading GST objects from text files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for loading GST objects from text files."""
 
 import os as _os
-import json as _json
 
 from . import stdinput as _stdinput
 from .. import objects as _objs
-
-def load_parameter_file(filename):
-    """
-    Load a json-formatted parameter file.
-
-    Parameters
-    ----------
-    filename : string
-        The name of the file to load.
-
-    Returns
-    -------
-    dict
-        The json file converted to a python dictionary.
-    """
-    with open(filename, 'r') as inputfile:
-        return _json.load(inputfile)
-    # return _json.load( open(filename, "rb") )
 
 def load_dataset(filename, cache=False, collisionAction="aggregate",
                  verbosity=1):
@@ -82,7 +63,7 @@ def load_dataset(filename, cache=False, collisionAction="aggregate",
                     printer.log("Loading from cache file: %s" % cache_filename)
                     ds = _objs.DataSet(fileToLoadFrom=cache_filename)
                     return ds
-                except: print("WARNING: Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file") # pragma: no cover
             else:
                 printer.log("Cache file not found or is tool old -- one will"
                             + "be created after loading is completed")
@@ -146,7 +127,7 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
         #Parser functions don't take a VerbosityPrinter yet, and so
         # always output to stdout (TODO)
         bToStdout = (printer.verbosity > 0 and printer.filename is None)
-
+        
         if cache:
             # bReadCache = False
             cache_filename = filename + ".cache"
@@ -156,7 +137,7 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
                     printer.log("Loading from cache file: %s" % cache_filename)
                     mds = _objs.MultiDataSet(fileToLoadFrom=cache_filename)
                     return mds
-                except: print("WARNING: Failed to load from cache file")
+                except: print("WARNING: Failed to load from cache file") # pragma: no cover
             else:
                 printer.log("Cache file not found or is too old -- one will be"
                             + "created after loading is completed")
@@ -177,6 +158,14 @@ def load_multidataset(filename, cache=False, collisionAction="aggregate",
                                              collisionAction=collisionAction)
     return mds
 
+
+def load_tddataset(filename, cache=False):
+    """
+    Load a TDDataSet (time-dependent data set) from a file.
+    """
+    parser = _stdinput.StdInputParser()
+    tdds = parser.parse_tddatafile(filename)
+    return tdds
 
 
 def load_gateset(filename):

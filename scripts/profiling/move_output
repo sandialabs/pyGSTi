@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+
+import pstats
+p = pstats.Stats('output/profile.txt')
+p.strip_dirs().sort_stats("time").print_stats()

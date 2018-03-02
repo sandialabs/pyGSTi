@@ -56,23 +56,23 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, Yrot, SPAMdepol,
             [2], [('Q0',)],['Gi','Gx','Gz'],
             [ "I(Q0)", "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
     else:
         outputGateset = _setc.build_gateset(
             [2], [('Q0',)],['Gx','Gz'],
             [ "X(%s,Q0)" % epsilonTrue, "Z(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
     if Yrot != 0:
         gatesetAux1 = _setc.build_gateset(
             [2], [('Q0',)],['Gi','Gy','Gz'],
             [ "I(Q0)", "Y(%s,Q0)" % Yrot, "Z(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=["0"],
-            effectLabels=["E0"], effectExpressions=["1"],
-            spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+            effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
+            spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
         outputGateset.gates['Gx'] = _objs.FullyParameterizedGate(
             _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),
@@ -339,8 +339,8 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
 
 
 #TODO savePlot arg is never used?
-def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs,
-                  plot=False, savePlot=False):
+def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs):
+#                  plot=False):
 
     """ Experimental test function """
     kList = [2**k for k in range(log2kMax+1)]
@@ -349,21 +349,21 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     epsilonCosStrList, epsilonSinStrList = make_rpe_epsilon_str_lists_gx_gz(kList)
     thetaCosStrList, thetaSinStrList = make_rpe_theta_str_lists_gx_gz(kList)
 
-    percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
-    percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
+    #percentAlphaError = 100*_np.abs((_np.pi/2-alphaTrue)/alphaTrue)
+    #percentEpsilonError = 100*_np.abs((_np.pi/4 - epsilonTrue)/epsilonTrue)
 
     simGateset = _setc.build_gateset( [2], [('Q0',)],['Gi','Gx','Gz'],
                                       [ "I(Q0)", "X("+str(epsilonTrue)+",Q0)", "Z("+str(alphaTrue)+",Q0)"],
                                       prepLabels=["rho0"], prepExpressions=["0"],
-                                      effectLabels=["E0"], effectExpressions=["1"],
-                                      spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                      effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
+                                      spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
 
     gatesetAux1 = _setc.build_gateset( [2], [('Q0',)],['Gi','Gy','Gz'],
                                        [ "I(Q0)", "Y("+str(Yrot)+",Q0)", "Z(pi/2,Q0)"],
                                        prepLabels=["rho0"], prepExpressions=["0"],
-                                       effectLabels=["E0"], effectExpressions=["1"],
-                                       spamdefs={'plus': ('rho0','E0'), 'minus': ('rho0','remainder') } )
+                                       effectLabels=["E0","Ec"], effectExpressions=["0","complement"],
+                                       spamdefs={'0': ('rho0','E0'), '1': ('rho0','Ec') } )
 
     simGateset.gates['Gx'] =  _objs.FullyParameterizedGate(
         _np.dot(_np.dot(_np.linalg.inv(gatesetAux1.gates['Gy']),simGateset.gates['Gx']),
@@ -373,7 +373,7 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
 
     thetaTrue = _tools.rpe.extract_theta(simGateset)
 
-    SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
+    #SPAMerror = _np.dot(simGateset.effects['E0'].T,simGateset.preps['rho0'])[0,0]
 
     jMax = runs
 
@@ -429,44 +429,45 @@ def rpe_ensemble_test(alphaTrue, epsilonTrue, Yrot, SPAMdepol, log2kMax, N, runs
     #print "% true alpha deviation from target:", percentAlphaError
 
     if plot:
-        import matplotlib as _mpl
-        _mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
-        _mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
-        _mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
-
-        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
-        _mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
-
-        _mpl.pyplot.show()
-
-        _mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
-
-#        _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
-        _mpl.pyplot.xlabel('k')
-        _mpl.pyplot.ylabel(r'$\Phi func.$')
-        _mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
-        _mpl.pyplot.legend()
+        raise NotImplementedError("plot removed b/c matplotlib support dropped")
+        #import matplotlib as _mpl #REMOVED
+        #_mpl.pyplot.loglog(kList,_np.median(alphaErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\alpha_z - \widehat{\alpha_z}$')
+        #_mpl.pyplot.title('RPE error in Z angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(epsilonErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\epsilon_x - \widehat{\epsilon_x}$')
+        #_mpl.pyplot.title('RPE error in X angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(thetaErrorArray,axis=0),label='N='+str(N))
+        #
+        #_mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\theta_{xz} - \widehat{\theta_{xz}}$')
+        #_mpl.pyplot.title('RPE error in X axis angle\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
+        #
+        #_mpl.pyplot.show()
+        #
+        #_mpl.pyplot.loglog(kList,_np.median(PhiFunErrorArray,axis=0),label='N='+str(N))
+        #
+#       # _mpl.pyplot.loglog(kList,_np.array(kList)**-1.,'-o',label='1/k')
+        #_mpl.pyplot.xlabel('k')
+        #_mpl.pyplot.ylabel(r'$\Phi func.$')
+        #_mpl.pyplot.title('RPE error in Phi func.\n% error in Z angle '+str(percentAlphaError)+'%, % error in X angle '+str(percentEpsilonError)+'%\n% error in SPAM, '+str(100*SPAMerror)+'%, X-Z axis error '+str(Yrot)+'\nMedian of '+str(jMax)+' Trials')
+        #_mpl.pyplot.legend()
 
     outputDict = {}
 #    outputDict['alphaArray'] = alphaHatListArray

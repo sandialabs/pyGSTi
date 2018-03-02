@@ -1,8 +1,11 @@
 import unittest
 import warnings
+import collections
 import pickle
 import pygsti
 import os
+import shutil
+import subprocess
 from pygsti.construction import std1Q_XYI as std
 from ..testutils import compare_files, temp_files
 
@@ -11,10 +14,17 @@ import numpy as np
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 
+bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and 
+              os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))
+try:
+    import pandas
+    bPandas = True
+except ImportError:
+    bPandas = False
+
 class TestReport(ReportBaseCase):
-
+    
     def checkFile(self, fn):
-
         if 'PYGSTI_DEEP_TESTING' in os.environ and \
            os.environ['PYGSTI_DEEP_TESTING'].lower() in ("yes","1","true"):
             # Deep testing -- do latex comparison
@@ -29,224 +39,212 @@ class TestReport(ReportBaseCase):
             # Normal testing -- no latex comparison
             pass
 
+    def test_offline_zip(self):
+        pygsti.report.create_offline_zip(temp_files + "/.")
+
+    def test_failures(self):
+        self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
+        with self.assertRaises(ValueError): # backward compat catch - when forget to specify title
+            pygsti.report.create_standard_report(self.results,temp_files+"/XXX", 95)
+
+        with self.assertRaises(ValueError): #PDF report with multiple gauge opts
+            pygsti.report.create_standard_report(self.results,temp_files + "/XXX.pdf")
+
+    def test_std_clifford_comp(self):
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(std.gs_target,3) is not None)
+        nonStdGS = std.gs_target.rotate((0.15,-0.03,0.03))
+        self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
+        
+
     def test_reports_chi2_noCIs(self):
-
         vs = self.versionsuffix
-        self.results.create_full_report_pdf(filename=temp_files + "/full_reportA%s.pdf" % vs, confidenceLevel=None,
-                                         debugAidsAppendix=False, gaugeOptAppendix=False,
-                                         pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportA%s.pdf" % vs, confidenceLevel=None)
-        self.results.create_presentation_pdf(filename=temp_files + "/slidesA%s.pdf" % vs, confidenceLevel=None,
-                                           debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
-        if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename=temp_files + "/slidesA.ppt", confidenceLevel=None,
-                                                 debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportA",
+                                            confidenceLevel=None, verbosity=3,  auto_open=False) # omit title as test
 
-        #Run again using default filenames
-        self.results.create_full_report_pdf(filename="auto", confidenceLevel=None,
-                                         debugAidsAppendix=False, gaugeOptAppendix=False,
-                                         pixelPlotAppendix=False, whackamoleAppendix=False)
-        self.results.create_brief_report_pdf(filename="auto", confidenceLevel=None)
-        self.results.create_presentation_pdf(filename="auto", confidenceLevel=None,
-                                           debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
-        if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename="auto", confidenceLevel=None,
-                                                 debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False)
+        #Test advanced options
+        linkto = ()
+        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+        if bPandas: linkto = ('pkl',) + linkto
+        results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
+        pygsti.report.create_standard_report(results_odict,temp_files + "/general_reportA_adv1",
+                                             confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'errgen_type': "logG-logT",
+                                                              'precision': {'normal': 2, 'polar': 1, 'sci': 1}},
+                                             link_to=linkto)
+        
+        pygsti.report.create_standard_report({"One": self.results, "Two": self.results_logL},temp_files + "/general_reportA_adv2",
+                                             confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'errgen_type': "logTiG",
+                                                              'precision': 2, #just a single int
+                                                              'resizable': False,
+                                                              'autosize': 'none'})
 
+        #test latex reporting
+        if bLatex:
+            pygsti.report.create_standard_report(self.results.view("default","go0"),temp_files + "/general_reportA.pdf",
+                                                 confidenceLevel=None, verbosity=3,  auto_open=False)
 
-        #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportA%s.tex" % vs)
-        self.checkFile("brief_reportA%s.tex" % vs)
-        self.checkFile("slidesA%s.tex" % vs)
+        
 
+        #Compare the html files?
+        #self.checkFile("general_reportA%s.html" % vs)
 
 
     def test_reports_chi2_wCIs(self):
         vs = self.versionsuffix
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('intrinsic error')
 
-        self.results.create_full_report_pdf(filename=temp_files + "/full_reportB%s.pdf" % vs, confidenceLevel=95,
-                                         debugAidsAppendix=True, gaugeOptAppendix=True,
-                                         pixelPlotAppendix=True, whackamoleAppendix=True,
-                                         verbosity=2)
-        self.results.create_full_report_pdf(filename=temp_files + "/full_reportB-noGOpt%s.pdf" % vs, confidenceLevel=95,
-                                         debugAidsAppendix=True, gaugeOptAppendix=False,
-                                         pixelPlotAppendix=True, whackamoleAppendix=True) # to test blank GOpt tables
-        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportB%s.pdf" % vs, confidenceLevel=95, verbosity=2)
-        self.results.create_presentation_pdf(filename=temp_files + "/slidesB%s.pdf" % vs, confidenceLevel=95,
-                                           debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                           verbosity=2)
-        if self.have_python_pptx:
-            self.results.create_presentation_ppt(filename=temp_files + "/slidesB%s.ppt" % vs, confidenceLevel=95,
-                                                 debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                                 verbosity=2)
-
-        #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportB%s.tex" % vs)
-        self.checkFile("full_reportB%s_appendices.tex" % vs)
-        self.checkFile("brief_reportB%s.tex" % vs)
-        self.checkFile("slidesB%s.tex" % vs)
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportB",
+                                            "Report B", confidenceLevel=95, verbosity=3,  auto_open=False)
+        #Compare the html files?
+        #self.checkFile("general_reportB%s.html" % vs)
 
 
     def test_reports_chi2_nonMarkCIs(self):
         vs = self.versionsuffix
+        crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
+        crfact.compute_hessian(comm=None)
+        crfact.project_hessian('std')
 
-        #Non-markovian error bars (negative confidenceLevel) & tooltips
-        self.results.create_full_report_pdf(filename=temp_files + "/full_reportE%s.pdf" % vs, confidenceLevel=-95,
-                                         debugAidsAppendix=True, gaugeOptAppendix=True,
-                                         pixelPlotAppendix=True, whackamoleAppendix=True,
-                                         verbosity=2, tips=True)
-        self.results.create_brief_report_pdf(filename=temp_files + "/brief_reportE%s.pdf" % vs, confidenceLevel=-95,
-                                             verbosity=2, tips=True)
-
-        #Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportE%s.tex" % vs)
-        self.checkFile("full_reportE%s_appendices.tex" % vs)
+        #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
+        pygsti.report.create_standard_report(self.results,temp_files + "/general_reportE",
+                                             "Report E", confidenceLevel=95, verbosity=3,  auto_open=False,
+                                             advancedOptions={'nm threshold': -10})
+        #Compare the html files?
+        #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_noCIs(self):
-
         vs = self.versionsuffix
-        self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportC%s.pdf" % vs, confidenceLevel=None,
-                                                 debugAidsAppendix=False, gaugeOptAppendix=False,
-                                                 pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                 verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportC%s.pdf" % vs, confidenceLevel=None, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesC%s.pdf" % vs, confidenceLevel=None,
-                                                  debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                  verbosity=2)
-        self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportC%s.pdf" % vs, confidenceLevel=None,
-                                                    verbosity=2, showAppendix=True)
 
-        if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesC%s.ppt" % vs, confidenceLevel=None,
-                                                      debugAidsAppendix=False, pixelPlotAppendix=False, whackamoleAppendix=False,
-                                                      verbosity=2)
+        #Also test adding a model-test estimate to this report
+        gs_guess = std.gs_target.depolarize(gate_noise=0.07,spam_noise=0.03)
+        results = self.results_logL.copy()
+        results.add_model_test(std.gs_target, gs_guess, estimate_key='Test', gauge_opt_keys="auto")
+
         
-        ##Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportC%s.tex" % vs)
-        self.checkFile("brief_reportC%s.tex" % vs)
-        self.checkFile("slidesC%s.tex" % vs)
-        #self.checkFile("general_reportC%s.tex" % vs)
+        #Note: this report will have (un-combined) Robust estimates too
+        pygsti.report.create_standard_report(results,temp_files + "/general_reportC",
+                                             "Report C", confidenceLevel=None, verbosity=3,  auto_open=False,
+                                             advancedOptions={'combine_robust': False} )
+        #Compare the html files?
+        #self.checkFile("general_reportC%s.html" % vs)
 
 
     def test_reports_logL_TP_wCIs(self):
-
         vs = self.versionsuffix
-        self.results_logL.create_full_report_pdf(filename=temp_files + "/full_reportD%s.pdf" % vs, confidenceLevel=95,
-                                                 debugAidsAppendix=True, gaugeOptAppendix=True,
-                                                 pixelPlotAppendix=True, whackamoleAppendix=True,
-                                                 verbosity=2)
-        self.results_logL.create_brief_report_pdf(filename=temp_files + "/brief_reportD%s.pdf" % vs, confidenceLevel=95, verbosity=2)
-        self.results_logL.create_presentation_pdf(filename=temp_files + "/slidesD%s.pdf" % vs, confidenceLevel=95,
-                                                  debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                                  verbosity=2)
-        self.results_logL.create_general_report_pdf(filename=temp_files + "/general_reportD%s.pdf" % vs, confidenceLevel=95,
-                                                    verbosity=2, tips=True) #test tips here too
 
-        if self.have_python_pptx:
-            self.results_logL.create_presentation_ppt(filename=temp_files + "/slidesD%s.ppt" % vs, confidenceLevel=95,
-                                                      debugAidsAppendix=True, pixelPlotAppendix=True, whackamoleAppendix=True,
-                                                      verbosity=2)
+        #Use propagation method instead of directly computing a factory for the go0 gauge-opt
+        crfact = self.results.estimates['default'].add_confidence_region_factory('final iteration estimate', 'final')
+        crfact.compute_hessian(comm=None)
 
-        ##Compare the text files, assume if these match the PDFs are equivalent
-        self.checkFile("full_reportD%s.tex" % vs)
-        self.checkFile("full_reportD%s_appendices.tex" % vs)
-        self.checkFile("brief_reportD%s.tex" % vs)
-        self.checkFile("slidesD%s.tex" % vs)
-        #self.checkFile("general_reportD%s.tex" % vs)
+        self.results.estimates['default'].gauge_propagate_confidence_region_factory('go0') #instead of computing one        
+        crfact = self.results.estimates['default'].get_confidence_region_factory('go0') #was created by propagation
+        crfact.project_hessian('optimal gate CIs')
 
+        #Note: this report will have Robust estimates too
+        pygsti.report.create_standard_report(self.results_logL,temp_files + "/general_reportD",
+                                             "Report D", confidenceLevel=95, verbosity=3,  auto_open=False)
+        #Compare the html files?
+        #self.checkFile("general_reportD%s.html" % vs)
 
-
-    def test_extra_logL_TP_figs_and_tables(self):
-
-        #Run a few tests to generate tables & figures we don't use in reports
-        self.results_logL.tables["chi2ProgressTable"]
-        self.results_logL.tables["logLProgressTable"]
-        self.results_logL.figures["bestEstimateSummedColorBoxPlot"]
-        self.results_logL.figures["blankBoxPlot"]
-        self.results_logL.figures["blankSummedBoxPlot"]
-        self.results_logL.figures["directLGSTColorBoxPlot"]
-        self.results_logL.figures["directLGSTDeviationColorBoxPlot"]
-        with self.assertRaises(KeyError):
-            self.results_logL.figures["FooBar"]
-        with self.assertRaises(KeyError):
-            self.results_logL._specials['FooBar']
-
-        #Run tests to generate tables we don't use in reports
-        self.results_logL.tables["bestGatesetVsTargetAnglesTable"]
+    def test_reports_multiple_ds(self):
+        vs = self.versionsuffix
+        
+        #Note: this report will have (un-combined) Robust estimates too
+        pygsti.report.create_standard_report({"chi2": self.results, "logl": self.results_logL},
+                                             temp_files + "/general_reportF",
+                                             "Report F", confidenceLevel=None, verbosity=3,  auto_open=False)
+        #Compare the html files?
+        #self.checkFile("general_reportC%s.html" % vs)
 
 
+    def test_report_notebook(self):
+        pygsti.report.create_report_notebook(self.results_logL, temp_files + "/report_notebook.ipynb", None,
+                                             verbosity=3)
+        pygsti.report.create_report_notebook({'one': self.results_logL, 'two': self.results_logL},
+                                             temp_files + "/report_notebook.ipynb", None,
+                                             verbosity=3) # multiple comparable datasets
+        
 
-    def test_table_generation(self):
-        import pygsti.report.generation as gen
-        formats = ['latex','html','test','ppt'] #all the formats we know
-        tableclass = "cssClass"
-        longtable = False
-        confidenceRegionInfo = None
+    def test_inline_template(self):
+        #Generate some results (quickly)
+        gs_tgt = std.gs_target.copy()
+        gs_datagen = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
+        gateStrings = pygsti.construction.make_lsgst_experiment_list(
+            gs_tgt, std.fiducials, std.fiducials, std.germs,[1])
+        ds = pygsti.construction.generate_fake_data(
+            gs_datagen, gateStrings, nSamples=10000, sampleError='round')
+        gs_test = gs_tgt.depolarize(gate_noise=0.01,spam_noise=0.01)
+        results = pygsti.do_model_test(gs_test, ds, gs_tgt, std.fiducials, std.fiducials, std.germs, [1])
+        
+        #Mimic factory report creation to test "inline" rendering of switchboards, tables, and figures:
+        qtys = {}
+        qtys['title'] = "Test Inline Report"
+        qtys['date'] = "THE DATE"
+        qtys['confidenceLevel'] = "NOT-SET"
+        qtys['linlg_pcntle'] = "95"
+        qtys['linlg_pcntle_inv'] = "5"
+        #qtys['errorgenformula'], qtys['errorgendescription'] = _errgen_formula(errgen_type, fmt)
 
-        gateset = pygsti.io.load_gateset(compare_files + "/analysis.gateset")
-        ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        qtys['pdfinfo'] = "PDFINFO"
 
-        chi2, chi2Hessian = pygsti.chi2(ds, gateset, returnHessian=True)
-        ci = pygsti.obj.ConfidenceRegion(gateset, chi2Hessian, 95.0,
-                                         hessianProjection="std")
-        gateset_tp = pygsti.contract(gateset,"TP"); gateset_tp.set_all_parameterizations("TP")
-        chi2, chi2Hessian_TP = pygsti.chi2(ds, gateset_tp, returnHessian=True)
-        ci_TP = pygsti.obj.ConfidenceRegion(gateset_tp, chi2Hessian_TP, 95.0,
-                                            hessianProjection="std")
+        # Generate Switchboard
+        ws = pygsti.report.Workspace()
+        printer = pygsti.obj.VerbosityPrinter(1)
+        switchBd, dataset_labels, est_labels, gauge_opt_labels, Ls, swLs = \
+            pygsti.report.factory._create_master_switchboard(ws, {'MyTest': results}, None, 10, 
+                                                             printer, 'html', False)
 
-        chi2, chi2Hessian_tgt = pygsti.chi2(ds, std.gs_target, returnHessian=True)
-        ci_tgt = pygsti.obj.ConfidenceRegion(std.gs_target, chi2Hessian_tgt, 95.0,
-                                         hessianProjection="std")
-        target_tp = std.gs_target.copy(); target_tp.set_all_parameterizations("TP")
-        chi2, chi2Hessian_tgt_TP = pygsti.chi2(ds, target_tp, returnHessian=True)
-        ci_TP_tgt = pygsti.obj.ConfidenceRegion(target_tp, chi2Hessian_tgt_TP, 95.0,
-                                            hessianProjection="std")
+        gsTgt = switchBd.gsTarget
+        ds = switchBd.ds
+        eff_ds = switchBd.eff_ds
+        modvi_ds = switchBd.modvi_ds
+        prepStrs = switchBd.prepStrs
+        effectStrs = switchBd.effectStrs
+        germs = switchBd.germs
+        strs = switchBd.strs
+        cliffcomp = switchBd.clifford_compilation
+ 
+        def addqty(b, name, fn, *args, **kwargs):
+            qtys[name] = fn(*args, **kwargs)
+                
+        addqty(2,'targetSpamBriefTable', ws.SpamTable, gsTgt, None, display_as='boxes', includeHSVec=False)
+        addqty(2,'targetGatesBoxTable', ws.GatesTable, gsTgt, display_as="boxes")
+        addqty(2,'datasetOverviewTable', ws.DataSetOverviewTable, ds)
 
-        gateset_2q = pygsti.construction.build_gateset(
-            [4], [('Q0','Q1')],['GIX','GIY','GXI','GYI','GCNOT'],
-            [ "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)" ],
-            prepLabels=['rho0'], prepExpressions=["0"], effectLabels=['E0','E1','E2'], effectExpressions=["0","1","2"],
-            spamdefs={'upup': ('rho0','E0'), 'updn': ('rho0','E1'), 'dnup': ('rho0','E2'),
-                           'dndn': ('rho0','remainder') }, basis="pp" )
+        gsFinal = switchBd.gsFinal
+        gsGIRep = switchBd.gsGIRep
+        gsEP = switchBd.gsGIRepEP
+        cri = None
 
+        addqty(4,'bestGatesetSpamParametersTable', ws.SpamParametersTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], cri )
+        addqty(4,'bestGatesetSpamBriefTable', ws.SpamTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], 'boxes', cri, includeHSVec=False)
+        addqty(4,'bestGatesetSpamVsTargetTable', ws.SpamVsTargetTable, gsFinal, gsTgt, cri)
+        addqty(4,'bestGatesetGaugeOptParamsTable', ws.GaugeOptParamsTable, switchBd.goparams)
+        addqty(4,'bestGatesetGatesBoxTable', ws.GatesTable, switchBd.gsTargetAndFinal,
+               ['Target','Estimated'], "boxes", cri)
 
-        #tests which fill in the cracks of the full-report tests
-        tab = gen.get_gateset_spam_table(gateset, None)
-        tab_wCI = gen.get_gateset_spam_table(gateset, None, ci)
-        table_wCI_as_str = str(tab_wCI)
-
-        gen.get_gateset_spam_table(gateset, None)
-        gen.get_gateset_gates_table(gateset_tp, ci_TP) #test zero-padding
-        gen.get_unitary_gateset_gates_table(std.gs_target, ci_tgt) #unitary gates w/CIs
-        gen.get_unitary_gateset_gates_table(target_tp, ci_TP_tgt) #unitary gates w/CIs
-        gen.get_gateset_closest_unitary_table(gateset_2q, None) #test higher-dim gateset
-        gen.get_gateset_closest_unitary_table(gateset, ci) #test with CIs (long...)
-        gen.get_gateset_rotn_axis_table(std.gs_target, None) #try to get "--"s and "X"s to display
-        gen.get_chi2_progress_table([0], [gateset_tp], [ [('Gx',)],], ds) #TP case
-        gen.get_chi2_confidence_region(gateset_tp, ds, 95) #TP case
-
-        gen.get_gatestring_multi_table([ [('Gx',),('Gz',)], [('Gy',)] ],
-                                       ["list1","list2"], commonTitle=None) #commonTitle == None case w/diff length lists
-
-        with self.assertRaises(ValueError):
-            gen.get_unitary_gateset_gates_table(std.gs_target, ci) #gateset-CI mismatch
-        with self.assertRaises(ValueError):
-            gen.get_gateset_spam_parameters_table(std.gs_target, ci) #gateset-CI mismatch
-
-
-
-
-        #LogL case tests
-        gen.get_logl_progress_table([0], [gateset_tp], [ [('Gx',)],], ds) # logL case
-        gen.get_logl_progress_table([0], [gateset], [ [('Gx',)],], ds) # logL case
-
-        gen.get_logl_confidence_region(gateset_tp, ds, 95,
-                                       gatestring_list=None, probClipInterval=(-1e6,1e6),
-                                       minProbClip=1e-4, radius=1e-4, hessianProjection="std")
-        gen.get_logl_confidence_region(gateset, ds, 95,
-                                       gatestring_list=None, probClipInterval=(-1e6,1e6),
-                                       minProbClip=1e-4, radius=1e-4, hessianProjection="std")
+        # Generate plots                                                                                                                     
+        addqty(4,'gramBarPlot', ws.GramMatrixBarPlot, ds,gsTgt,10,strs)
+        
+        # 3) populate template file => report file                                                                                        
+        templateFile = "../../../../test/test_packages/cmp_chk_files/report_dashboard_template.html"
+          # trickery to use a template in nonstadard location
+        linkto = ()
+        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+        if bPandas: linkto = ('pkl',) + linkto
+        toggles = {'CompareDatasets': False, 'ShowScaling': False, 'CombineRobust': True }
+        if os.path.exists(temp_files + "/inline_report.html.files"):
+            shutil.rmtree(temp_files + "/inline_report.html.files") #clear figures directory
+        pygsti.report.merge_helpers.merge_html_template(qtys, templateFile, temp_files + "/inline_report.html",
+                                                        auto_open=False, precision=None, link_to=linkto,
+                                                        connected=False, toggles=toggles, renderMath=True,
+                                                        resizable=True, autosize='none', verbosity=printer)
 
 
     def test_table_formatting(self):
@@ -263,206 +261,266 @@ class TestReport(ReportBaseCase):
                 return "weird"
         w = weirdType()
 
+        from pygsti.report.convert import converter
+        specs = dict(longtables=False, tableID=None, tableclass=None,
+               scratchDir=None, precision=6, polarprecision=3, sciprecision=0,
+               resizable=False, autosize=False, fontsize=None, complexAsPolar=True,
+               brackets=False)
+        html  = converter('html')  # Retrieve low-level formatters
+        latex = converter('latex')
+
         print("Float formatting")
-        pygsti.report.html.html(f)
-        pygsti.report.latex.latex(f)
-        pygsti.report.ppt.ppt(f)
+        html(f, specs)
+        latex(f, specs)
 
         print("List formatting")
-        pygsti.report.html.html(l)
-        pygsti.report.latex.latex(l)
-        pygsti.report.ppt.ppt(l)
+        html(l, specs)
+        latex(l, specs)
 
         print("Arbitrary class formatting")
-        pygsti.report.html.html(w)
-        pygsti.report.latex.latex(w)
-        pygsti.report.ppt.ppt(w)
+        html(w, specs)
+        latex(w, specs)
 
         print("Vector formatting")
-        pygsti.report.html.html(vec)
-        pygsti.report.latex.latex(vec)
-        pygsti.report.ppt.ppt(vec)
+        html(vec, specs)
+        latex(vec, specs)
 
         print("Vector formatting (w/brackets)")
-        pygsti.report.html.html(vec, brackets=True)
-        pygsti.report.latex.latex(vec, brackets=True)
-        pygsti.report.ppt.ppt(vec, brackets=True)
+        specs['brackets'] = True
+        html(vec, specs)
+        latex(vec, specs)
+        specs['brackets'] = False
 
         print("Matrix formatting")
-        pygsti.report.html.html_matrix(mx, fontsize=8, brackets=False)
-        pygsti.report.latex.latex_matrix(mx, fontsize=8, brackets=False)
-        pygsti.report.ppt.ppt_matrix(mx, fontsize=8, brackets=False)
+        specs['fontsize'] = 8
+        html(mx, specs)
+        latex(mx, specs)
+        specs['fontsize'] = None
 
         print("Value formatting")
-        ROUND = 2; complxAsPolar=True
+        specs['precision'] = 2
+        specs['complexAsPolar'] = True
         for complxAsPolar in (True,False):
             for x in (0.001,0.01,1.0,10.0,100.0,1000.0,10000.0,1.0+1.0j,10j,1.0+1e-10j,1e-10j,"N/A"):
-                pygsti.report.html.html_value(x, ROUND, complxAsPolar)
-                pygsti.report.latex.latex_value(x, ROUND, complxAsPolar)
-                pygsti.report.ppt.ppt_value(x, ROUND, complxAsPolar)
+                html(x, specs)
+                latex(x, specs)
 
         with self.assertRaises(ValueError):
-            pygsti.report.html.html(rank3Tensor)
+            html(rank3Tensor, specs)
 
         with self.assertRaises(ValueError):
-            pygsti.report.latex.latex(rank3Tensor)
+            latex(rank3Tensor, specs)
+
+    def test_factory_helpers(self):
+        pygsti.report.factory._errgen_formula("logTiG", "latex")
+        pygsti.report.factory._errgen_formula("logGTi", "latex")
+        pygsti.report.factory._errgen_formula("logG-logT", "latex")
+        pygsti.report.factory._errgen_formula("foobar", "latex")
+
+    def test_merge_helpers(self):
+        """ Tests boundary cases for merge_helpers.py functinos """
+        import pygsti.report.merge_helpers as mh
+
+        # ---- insert_resource ----
+        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+                           offline_filename="myOfflineFile.js")
+        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+                           offline_filename=None, integrity="TEST", crossorigin="TEST")
 
         with self.assertRaises(ValueError):
-            pygsti.report.ppt.ppt(rank3Tensor)
-
-
-    def test_reportables(self):
-        #Test that None is returned when qty cannot be computed
-        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
-        self.assertIsNone(qty)
-        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
-        self.assertIsNone(qty)
-
-        #test ignoring gate strings not in dataset
-        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
-                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(plus) diff", self.gs_clgst, self.ds,
-                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
-        qty_str = str(qty) #test __str__
-
-        #Test gateset gates mismatch
-        from pygsti.construction import std1Q_XY as stdXY
+            mh.insert_resource(connected=True, online_url=None, offline_filename="myOfflineFile.foobar") 
+            #unknown resource type (extension)
         with self.assertRaises(ValueError):
-            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
-        with self.assertRaises(ValueError):
-            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
-                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
+            mh.insert_resource(connected=False, online_url=None, offline_filename="myOfflineFile.foobar") 
+            #unknown resource type (extension)
+
+        # ---- rsync_offline_dir ----
+        outputDir = temp_files + "/rsync_offline_testdir"
+        if os.path.exists(outputDir):
+            shutil.rmtree(outputDir) #make sure no directory exists
+        mh.rsync_offline_dir(outputDir) #creates outputDir
+        os.remove(os.path.join(outputDir, "offline/README.txt")) # remove a single file
+        mh.rsync_offline_dir(outputDir) #creates *only* the single file removed
+
+        # ---- read_and_preprocess_template ----
+        tmpl = "#iftoggle(tname)\nSomething\n#elsetoggle\nNO END TOGGLE!"
+        with open(temp_files + "/test_toggles.txt","w") as f:
+            f.write(tmpl)
+        with self.assertRaises(AssertionError):
+            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #endtoggle
+
+        tmpl = "#iftoggle(tname)\nSomething\nNO ELSE OR END TOGGLE!"
+        with open(temp_files + "/test_toggles.txt","w") as f:
+            f.write(tmpl)
+        with self.assertRaises(AssertionError):
+            mh.read_and_preprocess_template(temp_files + "/test_toggles.txt", {'tname': True}) # no #elsetoggle or #endtoggle
+
+        # ---- makeEmptyDir ----
+        dirname = temp_files + "/empty_testdir"
+        if os.path.exists(dirname):
+            shutil.rmtree(dirname) #make sure no directory exists
+        mh.makeEmptyDir(dirname)
+
+
+        # ---- fill_std_qtys ----
+        qtys = {}
+        mh.fill_std_qtys(qtys, connected=True, renderMath=True, CSSnames=[]) #test connected=True case
+
+        # ---- evaluate_call ----
+        printer = pygsti.obj.VerbosityPrinter(1)
+        stdout, stderr, returncode = mh.process_call(['ls','foobar.foobar'])
+        with self.assertRaises(subprocess.CalledProcessError):
+            mh.evaluate_call(['ls','foobar.foobar'], stdout, stderr, returncode, printer)
+
+        # ---- to_pdfinfo ----
+        pdfinfo =  mh.to_pdfinfo([ ('key','value'),
+                                   ('key2', ("TUP","LE")),
+                                   ('key3', collections.OrderedDict([("One", 1), ("Two",1)])) ])
+        self.assertEqual(pdfinfo, "key={value},\nkey2={[TUP, LE]},\nkey3={Dict[One: 1, Two: 1]}")
+
+        
+        
+        
+
+#Test functions within reportables separately? This version of the test is outdated:
+#    def test_reportables(self):
+#        #Test that None is returned when qty cannot be computed
+#        qty = pygsti.report.reportables.compute_dataset_qty("FooBar",self.ds)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_qty("FooBar",self.gs_clgst)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("FooBar",self.gs_clgst, self.ds)
+#        self.assertIsNone(qty)
+#        qty = pygsti.report.reportables.compute_gateset_gateset_qty("FooBar",self.gs_clgst, self.gs_clgst)
+#        self.assertIsNone(qty)
+#
+#        #test ignoring gate strings not in dataset
+#        qty = pygsti.report.reportables.compute_dataset_qty("gate string length", self.ds,
+#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty = pygsti.report.reportables.compute_gateset_dataset_qty("prob(0) diff", self.gs_clgst, self.ds,
+#                                                            pygsti.construction.gatestring_list([('Gx','Gx'),('Gfoobar',)]) )
+#        qty_str = str(qty) #test __str__
+#
+#        #Test gateset gates mismatch
+#        from pygsti.construction import std1Q_XY as stdXY
+#        with self.assertRaises(ValueError):
+#            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
+#                "Gx fidelity",std.gs_target, stdXY.gs_target) #Gi missing from 2nd gateset
+#        with self.assertRaises(ValueError):
+#            qty = pygsti.report.reportables.compute_gateset_gateset_qty(
+#                "Gx fidelity",stdXY.gs_target, std.gs_target) #Gi missing from 1st gateset
 
 
 
-    def test_results_object(self):
-        results = pygsti.report.Results()
-        results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
-                            self.lgstStrings, self.targetGateset)
-
-        results.parameters.update(
-            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
-             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-             'weights': None, 'defaultDirectory': temp_files + "",
-             'defaultBasename': "MyDefaultReportName",
-             'hessianProjection': 'std'} )
-
-        results.create_full_report_pdf(
-            filename=temp_files + "/singleReport.pdf")
-        results.create_brief_report_pdf(
-            filename=temp_files + "/singleBrief.pdf")
-        results.create_presentation_pdf(
-            filename=temp_files + "/singleSlides.pdf")
-        if self.have_python_pptx:
-            results.create_presentation_ppt(
-                filename=temp_files + "/singleSlides.ppt", pptTables=True)
-
-        #test tree splitting of hessian
-        results.parameters['memLimit'] = 10*(1024)**2 #10MB
-        results.create_brief_report_pdf(confidenceLevel=95,
-            filename=temp_files + "/singleBriefMemLimit.pdf")
-        results.parameters['memLimit'] = 10 #10 bytes => too small
-        with self.assertRaises(MemoryError):
-            results.create_brief_report_pdf(confidenceLevel=90,
-               filename=temp_files + "/singleBriefMemLimit.pdf")
-
-
-        #similar test for chi2 hessian
-        results2 = pygsti.report.Results()
-        results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
-                            self.lgstStrings, self.targetGateset)
-        results2.parameters.update(
-            {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
-             'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
-             'weights': None, 'defaultDirectory': temp_files + "",
-             'defaultBasename': "MyDefaultReportName",
-             'hessianProjection': "std"} )
-        results2.parameters['memLimit'] = 10*(1024)**2 #10MB
-        results2.create_brief_report_pdf(confidenceLevel=95,
-            filename=temp_files + "/singleBriefMemLimit2.pdf")
-        results2.parameters['memLimit'] = 10 #10 bytes => too small
-        with self.assertRaises(MemoryError):
-            results2.create_brief_report_pdf(confidenceLevel=90,
-               filename=temp_files + "/singleBriefMemLimit2.pdf")
-
-
-
-
-        results_str = str(results)
-        tableNames = list(results.tables.keys())
-        figNames = list(results.figures.keys())
-        for g in results.gatesets:
-            s = str(g)
-        for g in results.gatestring_lists:
-            s = str(g)
-        s = str(results.dataset)
-        s = str(results.options)
-
-        self.assertTrue(tableNames[0] in results.tables)
-
-        with self.assertRaises(KeyError):
-            x = results.tables.get('foobar')
-        with self.assertRaises(ValueError):
-            results.tables['newKey'] = "notAllowed"
-        with self.assertRaises(NotImplementedError):
-            for x in results.tables: # cannot __iter__
-                print(x)
-        with self.assertRaises(NotImplementedError):
-            for x in results.tables.iteritems(): # cannot iter
-                print(x)
-        with self.assertRaises(NotImplementedError):
-            for x in list(results.tables.values()): # cannot iter
-                print(x)
-
-        pkl = pickle.dumps(results)
-        results_copy = pickle.loads(pkl)
-        self.assertEqual(tableNames, list(results_copy.tables.keys()))
-        self.assertEqual(figNames, list(results_copy.figures.keys()))
-        #self.assertEqual(results.options, results_copy.options) #need to add equal test to ResultsOptions
-        self.assertEqual(results.parameters, results_copy.parameters)
-
-        results2 = pygsti.report.Results()
-        results2.options.template_path = "/some/path/to/templates"
-        results2.options.latex_cmd = "myCustomLatex"
-
-        #bad objective function name
-        results_badObjective = pygsti.report.Results()
-        #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
-        #                                 self.lgstStrings)
-        results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
-                                               [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
-                                               pygsti.construction.repeat_with_max_length, True)
-
-        with self.assertRaises(ValueError):
-            results_badObjective._get_confidence_region(95)
-        with self.assertRaises(ValueError):
-            results_badObjective._specials['DirectLongSeqGatesets']
-        with self.assertRaises(ValueError):
-            results_badObjective.create_full_report_pdf(filename=temp_files + "/badReport.pdf")
-        with self.assertRaises(ValueError):
-            results_badObjective.create_presentation_pdf(filename=temp_files + "/badSlides.pdf")
-        if self.have_python_pptx:
-            with self.assertRaises(ValueError):
-                results_badObjective.create_presentation_ppt(filename=temp_files + "/badSlides.pptx")
-
-    # Commented out by LSaldyt - dummy axes can't be given to figures, since they save their contents immediately to file
-    #def test_report_figure_object(self):
-    #    axes = {'dummy': "matplotlib axes"}
-    #    fig = pygsti.report.figure.ReportFigure(axes, {})
-    #    fig.set_extra_info("extra!")
-    #    self.assertEqual(fig.get_extra_info(), "extra!")
-
-    def test_regaugeopt(self):
-        results2 = self.results.copy()
-        results2.reoptimize_gauge({'itemWeights': {'Gx':1 }})
-        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief1.pdf")
-        results2.reoptimize_gauge({'itemWeights': {'Gy':1 }})
-        results2.create_brief_report_pdf(filename=temp_files + "/reopt_brief2.pdf")
+#def test_results_object(self):
+#    results = pygsti.report.Results()
+#    results.init_single("logl", self.targetGateset, self.ds, self.gs_clgst,
+#                        self.lgstStrings, self.targetGateset)
+#
+#    results.parameters.update(
+#        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+#         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+#         'weights': None, 'defaultDirectory': temp_files + "",
+#         'defaultBasename': "MyDefaultReportName",
+#         'hessianProjection': 'std'} )
+#
+#    results.create_full_report_pdf(
+#        filename=temp_files + "/singleReport.pdf")
+#    results.create_brief_report_pdf(
+#        filename=temp_files + "/singleBrief.pdf")
+#    results.create_presentation_pdf(
+#        filename=temp_files + "/singleSlides.pdf")
+#    if self.have_python_pptx:
+#        results.create_presentation_ppt(
+#            filename=temp_files + "/singleSlides.ppt", pptTables=True)
+#
+#    #test tree splitting of hessian
+#    results.parameters['memLimit'] = 10*(1024)**2 #10MB
+#    results.create_brief_report_pdf(confidenceLevel=95,
+#        filename=temp_files + "/singleBriefMemLimit.pdf")
+#    results.parameters['memLimit'] = 10 #10 bytes => too small
+#    with self.assertRaises(MemoryError):
+#        results.create_brief_report_pdf(confidenceLevel=90,
+#           filename=temp_files + "/singleBriefMemLimit.pdf")
+#
+#
+#    #similar test for chi2 hessian
+#    results2 = pygsti.report.Results()
+#    results2.init_single("chi2", self.targetGateset, self.ds, self.gs_clgst,
+#                        self.lgstStrings, self.targetGateset)
+#    results2.parameters.update(
+#        {'minProbClip': 1e-6, 'minProbClipForWeighting': 1e-4,
+#         'probClipInterval': (-1e6,1e6), 'radius': 1e-4,
+#         'weights': None, 'defaultDirectory': temp_files + "",
+#         'defaultBasename': "MyDefaultReportName",
+#         'hessianProjection': "std"} )
+#    results2.parameters['memLimit'] = 10*(1024)**2 #10MB
+#    results2.create_brief_report_pdf(confidenceLevel=95,
+#        filename=temp_files + "/singleBriefMemLimit2.pdf")
+#    results2.parameters['memLimit'] = 10 #10 bytes => too small
+#    with self.assertRaises(MemoryError):
+#        results2.create_brief_report_pdf(confidenceLevel=90,
+#           filename=temp_files + "/singleBriefMemLimit2.pdf")
+#
+#
+#
+#
+#    results_str = str(results)
+#    tableNames = list(results.tables.keys())
+#    figNames = list(results.figures.keys())
+#    for g in results.gatesets:
+#        s = str(g)
+#    for g in results.gatestring_lists:
+#        s = str(g)
+#    s = str(results.dataset)
+#    s = str(results.options)
+#
+#    self.assertTrue(tableNames[0] in results.tables)
+#
+#    with self.assertRaises(KeyError):
+#        x = results.tables.get('foobar')
+#    with self.assertRaises(ValueError):
+#        results.tables['newKey'] = "notAllowed"
+#    with self.assertRaises(NotImplementedError):
+#        for x in results.tables: # cannot __iter__
+#            print(x)
+#    with self.assertRaises(NotImplementedError):
+#        for x in results.tables.iteritems(): # cannot iter
+#            print(x)
+#    with self.assertRaises(NotImplementedError):
+#        for x in list(results.tables.values()): # cannot iter
+#            print(x)
+#
+#    pkl = pickle.dumps(results)
+#    results_copy = pickle.loads(pkl)
+#    self.assertEqual(tableNames, list(results_copy.tables.keys()))
+#    self.assertEqual(figNames, list(results_copy.figures.keys()))
+#    #self.assertEqual(results.options, results_copy.options) #need to add equal test to ResultsOptions
+#    self.assertEqual(results.parameters, results_copy.parameters)
+#
+#    results2 = pygsti.report.Results()
+#    results2.options.template_path = "/some/path/to/templates"
+#    results2.options.latex_cmd = "myCustomLatex"
+#
+#    #bad objective function name
+#    results_badObjective = pygsti.report.Results()
+#    #results_badObjective.init_single("foobar", self.targetGateset, self.ds, self.gs_clgst,
+#    #                                 self.lgstStrings)
+#    results_badObjective.init_Ls_and_germs("foobar", self.targetGateset, self.ds, self.gs_clgst, [0], self.germs,
+#                                           [self.gs_clgst], [self.lgstStrings], self.fiducials, self.fiducials,
+#                                           pygsti.construction.repeat_with_max_length, True)
+#
+#    with self.assertRaises(ValueError):
+#        results_badObjective._get_confidence_region(95)
+#    with self.assertRaises(ValueError):
+#        results_badObjective._specials['DirectLongSeqGatesets']
+#    with self.assertRaises(ValueError):
+#        results_badObjective.create_full_report_pdf(filename=temp_files + "/badReport.pdf")
+#    with self.assertRaises(ValueError):
+#        results_badObjective.create_presentation_pdf(filename=temp_files + "/badSlides.pdf")
+#    if self.have_python_pptx:
+#        with self.assertRaises(ValueError):
+#            results_badObjective.create_presentation_ppt(filename=temp_files + "/badSlides.pptx")
 
 
 if __name__ == "__main__":

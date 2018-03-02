@@ -2,16 +2,10 @@ import unittest
 import pygsti
 from pygsti.construction import std1Q_XYI as std
 import numpy as np
-import os
+import os, time
 from ..testutils import BaseTestCase, compare_files, temp_files
 
 class TestWriteAndLoad(BaseTestCase):
-
-    def test_paramfile(self):
-        d = {'a': 1, 'b': 2 }
-        pygsti.io.write_parameter_file(temp_files + "/paramFile.json", d)
-        d2 = pygsti.io.load_parameter_file(temp_files + "/paramFile.json")
-        self.assertEqual(d,d2)
 
     def test_dataset_file(self):
 
@@ -30,9 +24,9 @@ class TestWriteAndLoad(BaseTestCase):
               #must give numZeroCols or meaningful header string (default => 2 cols)
 
 
-        ds = pygsti.obj.DataSet(spamLabels=['plus','minus'])
-        ds.add_count_dict( ('Gx',), {'plus': 10, 'minus': 90} )
-        ds.add_count_dict( ('Gx','Gy'), {'plus': 40, 'minus': 60} )
+        ds = pygsti.obj.DataSet(outcomeLabels=['0','1'], comment="Hello")
+        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
+        ds.add_count_dict( ('Gx','Gy'), {'0': 40, '1': 60} )
         ds.done_adding_data()
 
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",
@@ -41,24 +35,54 @@ class TestWriteAndLoad(BaseTestCase):
         ds3 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #creates cache file
         ds4 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #loads from cache file
 
+        ds.comment = "# Hello" # comment character doesn't get doubled...
         pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt", ds,
-                                spamLabelOrder=['plus','minus'])
+                                outcomeLabelOrder=['0','1'])
         ds5 = pygsti.io.load_dataset(temp_files + "/dataset_loadwrite.txt", cache=True) #rewrites cache file
 
         for s in ds:
-            self.assertEqual(ds[s]['plus'],ds5[s]['plus'])
-            self.assertEqual(ds[s]['minus'],ds5[s]['minus'])
+            self.assertEqual(ds[s]['0'],ds5[s][('0',)])
+            self.assertEqual(ds[s]['1'],ds5[s][('1',)])
 
         with self.assertRaises(ValueError):
             pygsti.io.write_dataset(temp_files + "/dataset_loadwrite.txt",ds, [('Gx',)] ) #must be GateStrings
 
+    def test_sparse_dataset_files(self):
+        ds = pygsti.objects.DataSet()
+
+        ds.add_count_dict( ('Gx',), {'0': 10, '1': 90} )
+        ds[ ('Gy',) ] = {'0': 20, '1': 80}
+        ds[ ('Gx','Gy') ] = {('0','0'): 30, ('1','1'): 70}
+        
+        ds.done_adding_data()
+        print("ORIG DS:"); print(ds)
+
+        ordering = [('0',), ('1',), ('0','0'), ('1','1')]
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset1.txt", ds, outcomeLabelOrder=None, fixedColumnMode=True)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset2.txt", ds, outcomeLabelOrder=None, fixedColumnMode=False)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset1.txt", ds, outcomeLabelOrder=ordering, fixedColumnMode=True)
+        pygsti.io.write_dataset(temp_files + "/sparse_dataset2.txt", ds, outcomeLabelOrder=ordering, fixedColumnMode=False)
+
+        ds1 = pygsti.io.load_dataset(temp_files + "/sparse_dataset1.txt")
+        ds2 = pygsti.io.load_dataset(temp_files + "/sparse_dataset2.txt")
+
+        print("\nDS1:"); print(ds1)
+        print("\nDS2:"); print(ds2)
+
+        for s in ds:
+            self.assertEqual(ds[s].counts,ds1[s].counts)
+            self.assertEqual(ds[s].counts,ds2[s].counts)
+
+            
     def test_multidataset_file(self):
         strList = pygsti.construction.gatestring_list( [(), ('Gx',), ('Gx','Gy') ] )
         pygsti.io.write_empty_dataset(temp_files + "/emptyMultiDataset.txt", strList,
-                                           headerString='## Columns = ds1 plus count, ds1 minus count, ds2 plus count, ds2 minus count')
+                                           headerString='## Columns = ds1 0 count, ds1 1 count, ds2 0 count, ds2 1 count')
 
         multi_dataset_txt = \
-"""## Columns = DS0 plus count, DS0 minus count, DS1 plus frequency, DS1 count total
+"""# My Comment
+## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total
+# My Comment2
 {} 0 100 0 100
 Gx 10 90 0.1 100
 GxGy 40 60 0.4 100
@@ -66,21 +90,22 @@ Gx^4 20 80 0.2 100
 """
         with open(temp_files + "/TestMultiDataset.txt","w") as output:
             output.write(multi_dataset_txt)
-
+        time.sleep(3) #so cache file is created strictly *after* dataset is created (above)
 
         ds = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt")
-        ds2 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True)
+        ds2 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True) #creates cache file
         ds3 = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset.txt", cache=True) #load from cache
 
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset2.txt", ds, strList)
         ds_copy = pygsti.io.load_multidataset(temp_files + "/TestMultiDataset2.txt")
 
-        self.assertEqual(ds_copy['DS0'][('Gx',)]['plus'], ds['DS0'][('Gx',)]['plus'] )
-        self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['minus'], ds['DS1'][('Gx','Gy')]['minus'] )
+        self.assertEqual(ds_copy['DS0'][('Gx',)]['0'], ds['DS0'][('Gx',)]['0'] )
+        self.assertEqual(ds_copy['DS0'][('Gx','Gy')]['1'], ds['DS1'][('Gx','Gy')]['1'] )
 
         #write all strings in ds to file with given spam label ordering
+        ds.comment = "# Hello" # comment character doesn't get doubled...
         pygsti.io.write_multidataset(temp_files + "/TestMultiDataset3.txt",
-                                     ds, spamLabelOrder=('plus','minus'))
+                                     ds, outcomeLabelOrder=('0','1'))
 
         with self.assertRaises(ValueError):
             pygsti.io.write_multidataset(
@@ -117,60 +142,62 @@ Gx^4 20 80 0.2 100
         gs = pygsti.io.load_gateset(temp_files + "/gateset_loadwrite.txt")
         self.assertAlmostEqual(gs.frobeniusdist(std.gs_target), 0)
 
-        gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
-                                                         [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                                         prepLabels=['rho0'], prepExpressions=["0"],
-                                                         effectLabels=['E0'], effectExpressions=["1"],
-                                                         spamdefs={'plus': ('rho0','E0'),
-                                                                        'minus': ('remainder','remainder') })
-        pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
-        gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
-        self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
+        #OLD (remainder gateset type)
+        #gateset_m1m1 = pygsti.construction.build_gateset([2], [('Q0',)],['Gi','Gx','Gy'],
+        #                                                 [ "I(Q0)","X(pi/2,Q0)", "Y(pi/2,Q0)"],
+        #                                                 prepLabels=['rho0'], prepExpressions=["0"],
+        #                                                 effectLabels=['E0'], effectExpressions=["0"],
+        #                                                 spamdefs={'0': ('rho0','E0'),
+        #                                                           '1': ('remainder','remainder') })
+        #pygsti.io.write_gateset(gateset_m1m1, temp_files + "/gateset_m1m1_loadwrite.txt", "My title m1m1")
+        #gs_m1m1 = pygsti.io.load_gateset(temp_files + "/gateset_m1m1_loadwrite.txt")
+        #self.assertAlmostEqual(gs_m1m1.frobeniusdist(gateset_m1m1), 0)
 
         gateset_txt = """# Gateset file using other allowed formats
-rho0
+PREP: rho0
 StateVec
 1 0
 
-rho1
+PREP: rho1
 DensityMx
 0 0
 0 1
 
-E
-StateVec
-0 1
+POVM: Mdefault
 
-Gi
+EFFECT: 00
+StateVec
+1 0
+
+END POVM
+
+GATE: Gi
 UnitaryMx
  1 0
  0 1
 
-Gx
+GATE: Gx
 UnitaryMxExp
  0    pi/4
 pi/4   0
 
-Gy
+GATE: Gy
 UnitaryMxExp
  0       -1j*pi/4
 1j*pi/4    0
 
-Gx2
+GATE: Gx2
 UnitaryMx
  0  1
  1  0
 
-Gy2
+GATE: Gy2
 UnitaryMx
  0   -1j
 1j    0
 
-
-IDENTITYVEC sqrt(2) 0 0 0
-SPAMLABEL plus0 = rho0 E
-SPAMLABEL plus1 = rho1 E
-SPAMLABEL minus = remainder
+BASIS: pp 2
+GAUGEGROUP: Full
 """
         with open(temp_files + "/formatExample.gateset","w") as output:
             output.write(gateset_txt)
@@ -190,7 +217,7 @@ SPAMLABEL minus = remainder
 
         self.assertArraysAlmostEqual(gs_formats.preps['rho0'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
         self.assertArraysAlmostEqual(gs_formats.preps['rho1'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
-        self.assertArraysAlmostEqual(gs_formats.effects['E'], 1/np.sqrt(2)*np.array([[1],[0],[0],[-1]],'d'))
+        self.assertArraysAlmostEqual(gs_formats.povms['Mdefault']['00'], 1/np.sqrt(2)*np.array([[1],[0],[0],[1]],'d'))
 
         #pygsti.print_mx( rotXPi )
         #pygsti.print_mx( rotYPi )
@@ -209,7 +236,27 @@ SPAMLABEL minus = remainder
         self.assertEqual( tuple(d['F1']), ('Gx','Gx'))
 
 
+    def test_gateset_writeload(self):
+        gs = std.gs_target.copy()
 
+        for param in ('full','TP','CPTP','static'):
+            print("Param: ",param)
+            gs.set_all_parameterizations(param)
+            filename = temp_files + "/gateset_%s.txt" % param
+            pygsti.io.write_gateset(gs, filename)
+            gs2 = pygsti.io.read_gateset(filename)
+            self.assertAlmostEqual( gs.frobeniusdist(gs2), 0.0 )
+            for lbl in gs.gates:
+                self.assertEqual( type(gs.gates[lbl]), type(gs2.gates[lbl]))
+            for lbl in gs.preps:
+                self.assertEqual( type(gs.preps[lbl]), type(gs2.preps[lbl]))
+            for lbl in gs.povms:
+                self.assertEqual( type(gs.povms[lbl]), type(gs2.povms[lbl]))
+            for lbl in gs.instruments:
+                self.assertEqual( type(gs.instruments[lbl]), type(gs2.instruments[lbl]))
+
+        #TODO: create unknown derived classes and write this gateset.
+        
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

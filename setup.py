@@ -1,7 +1,8 @@
 """A python implementation of Gate Set Tomography"""
 
 from distutils.core import setup
-	
+from distutils.extension import Extension
+
 #execfile("packages/pygsti/_version.py")
 
 # 3.0 changes the way exec has to be called
@@ -9,6 +10,25 @@ with open("packages/pygsti/_version.py") as f:
     code = compile(f.read(), "packages/pygsti/_version.py", 'exec')
     exec(code)
 
+try:
+    import numpy as np
+    from Cython.Build import cythonize
+    ext_modules = [
+        Extension("pygsti.tools.fastcalc",
+                  sources=["packages/pygsti/tools/fastcalc.pyx"], # , "fastcalc.c
+                  # Cython docs on NumPy usage should mention this!
+                  #define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
+                  #leave above commented, see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+                  #define_macros = [('CYTHON_TRACE','1')], #for profiling
+                  include_dirs=['.', np.get_include()]
+                  #libraries=['m'] #math lib?
+                  )
+        ]
+    ext_modules = cythonize(ext_modules)
+except ImportError: # if Cython isn't available (e.g. in readthedocs) just skip
+    #print warning??
+    ext_modules = []
+    
 
 classifiers = """\
 Development Status :: 4 - Beta
@@ -37,24 +57,36 @@ setup(name='pyGSTi',
       version=__version__,
       description='A python implementation of Gate Set Tomography',
       long_description=descriptionTxt,
-      author='Erik Nielsen, Kenneth Rundinger, John Gamble, Robin Blume-Kohout',
+      author='Erik Nielsen, Kenneth Rudinger, John Gamble, Robin Blume-Kohout',
       author_email='pygsti@sandia.gov',
       packages=['pygsti', 'pygsti.algorithms', 'pygsti.construction', 'pygsti.drivers', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
-      package_data={'pygsti.report': ['templates/*.tex', 'templates/*.pptx']},
-      requires=['numpy','scipy','matplotlib','pyparsing'],
+      package_data={'pygsti.report': ['templates/*.tex', 'templates/*.html', 'templates/*.json',
+                                      'templates/report_notebook/*.txt',
+                                      'templates/standard_html_report/*.html',
+                                      'templates/offline/README.txt',
+                                      'templates/offline/*.js',
+                                      'templates/offline/*.css',
+                                      'templates/offline/fonts/*',
+                                      'templates/offline/images/*']},
+      requires=['numpy','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
-           'powerpoint file generation': ['python-pptx'],
            'nose testing' : ['nose'],
            'image comparison' : ['Pillow'],
-           'accurate memory profiling' : ['psutil']
+           'accurate memory profiling' : ['psutil'],
+           'multi-processor support' : ['mpi4py'],
+           'evolutionary optimization algorithm': ['deap'],
+           'pickling report tables': ['pandas'],
+           'generating PDFs of report figures': ['matplotlib'],
+           'generating report notebooks': ['ipython','notebook'],
+           'read/write message pack format': ['msgpack-python'],
+	   'extension modules': ['cython']
       },
       platforms = ["any"],      
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
       classifiers = filter(None, classifiers.split("\n")),
+      ext_modules=ext_modules,
      )
-
-#other optional requirements: deap, pptx, Pillow, cvxpy

@@ -1,3 +1,4 @@
+"""Defines OrderedDict-derived classes used to store specific pyGSTi objects"""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -6,13 +7,22 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 import collections as _collections
 import numpy as _np
+import copy as _copy
 import warnings as _warnings
 
 from . import spamvec as _sv
 from . import gate as _gate
+from . import gatesetmember as _gm
+from ..tools import compattools as _compat
 
 class PrefixOrderedDict(_collections.OrderedDict):
+    """ 
+    A base class for an ordered dictionary whose keys *must* be strings
+    which begin with a given prefix.
+    """
     def __init__(self, prefix, items=[]):
+        """ Creates a new PrefixOrderedDict whose keys must begin
+            with the string `prefix`."""
         #** Note: if change __init__ signature, update __reduce__ below
         self._prefix = prefix
         super(PrefixOrderedDict,self).__init__(items)
@@ -29,217 +39,240 @@ class PrefixOrderedDict(_collections.OrderedDict):
     #    return (PrefixOrderedDict, (self._prefix, items), None)
 
 
+    """ 
+    An ordered dictionary whose keys must begin with a given prefix,
+    and which holds Gate objects.  This class ensures that every value is a
+    :class:`Gate`-derived object by converting any non-`Gate` values into
+    `Gate`s upon assignment and raising an error if this is not possible.
+    """
 
-class OrderedSPAMVecDict(PrefixOrderedDict):
-    def __init__(self, parent, default_param, remainderLabel, prefix, items=[]):
+    
+
+class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
+    """ 
+    An ordered dictionary whose keys must begin with a given prefix.
+
+    This class also ensure that every value is an object of the appropriate GateSet
+    member type (e.g. :class:`SPAMVec`- or :class:`Gate`-derived object) by converting any
+    values into that type upon assignment and raising an error if this is not possible.
+    """
+    def __init__(self, parent, default_param, prefix, typ, items=[]):
+        """
+        Creates a new OrderedMemberDict.
+
+        Parameters
+        ----------
+        parent : GateSet
+            The parent gate set, needed to obtain the dimension and handle
+            updates to parameters.
+        
+        default_param : {"TP","full"}
+            The default parameterization used when creating a `SPAMVec`-derived
+            object from a key assignment.
+
+        prefix : str
+            The required prefix of all keys (which must be strings).
+
+        typ : {"gate","spamvec","povm","instrument"}
+            The type of objects that this dictionary holds.  This is 
+            needed for automatic object creation and for validation. 
+
+        items : list, optional
+            Used by pickle and other serializations to initialize elements.
+        """
         #** Note: if change __init__ signature, update __reduce__ below
-        self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "TP" or "full"
-        self.remainderLabel = remainderLabel
-        super(OrderedSPAMVecDict,self).__init__(prefix, items)
+        
+        # Note: we *don't* want to be calling parent's "rebuild" function here,
+        # when we're creating a new list, as this behavior is only intented for
+        # explicit insertions.  Since calling the base class __init__ will
+        # call this class's __setitem__ we set parent to None for this step.
+        self.parent = None # so __init__ below doesn't call _rebuild_paramvec
+        self.default_param = default_param  # "TP", "full", or "static"
+        self.typ = typ
 
-    def _check_dim(self, vec):
+        PrefixOrderedDict.__init__(self, prefix, items)
+        _gm.GateSetChild.__init__(self, parent) # set's self.parent
+
+        #Set parent our elements, now that the list has been initialized
+        # (done for un-pickling b/c reduce => __init__ is called to construct
+        #  unpickled object)
+        if self.parent is not None:
+            for el in self.values(): el.set_gpindices(el.gpindices, self.parent)
+              #sets parent and retains any existing indices in elements
+            
+
+    def _check_dim(self, obj):
+        if isinstance(obj, _gm.GateSetMember):
+            dim = obj.dim
+        elif self.typ == "spamvec":
+            dim = len(obj)
+        elif self.typ == "gate":
+            try:
+                d1 = len(obj)
+                d2 = len(obj[0]) #pylint: disable=unused-variable
+            except:
+                raise ValueError("%s doesn't look like a 2D array/list" % obj)
+            if any([len(row) != d1 for row in obj]):
+                raise ValueError("%s is not a *square* 2D array" % obj)
+            dim = d1
+        else:
+            raise ValueError("Cannot obtain dimension!")
+
         if self.parent is None: return
         if self.parent.dim is None:
-            self.parent._dim = len(vec) # use _dim to set
-        elif self.parent.dim != len(vec):
-            raise ValueError("Cannot add vector with dimension" +
-                             "%d to gateset of dimension %d"
-                             % (len(vec),self.parent.dim))
+            self.parent._dim = dim
+        elif self.parent.dim != dim:
+            raise ValueError("Cannot add object with dimension " +
+                             "%s to gateset of dimension %d"
+                             % (dim,self.parent.dim))
 
     def __getitem__(self, key):
-        if key == self.remainderLabel:
-            if self.parent is None or self.parent.povm_identity is None:
-                raise KeyError("Cannot compute remainder vector because "
-                               + " identity vector is not set!")
-            return self.parent.povm_identity - sum(self.values())
-        return super(OrderedSPAMVecDict,self).__getitem__(key)
+        #if self.parent is not None:
+        #    #print("DEBUG: cleaning paramvec before getting ", key)
+        #    self.parent._clean_paramvec()
+        return super(OrderedMemberDict,self).__getitem__(key)
 
 
-    def __setitem__(self, key, vec):
-        self._check_dim(vec)
+    def __setitem__(self, key, value):
+        self._check_dim(value)
 
-        if isinstance(vec, _sv.SPAMVec):  #if we're given a SPAMVec object...
-            #just replace or create vector
-            super(OrderedSPAMVecDict,self).__setitem__(key, vec)
+        if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
+            #When self has a valid parent (as it usually does, except when first initializing)
+            # we copy and reset the gpindices & parent of GateSetMember values which either:
+            # 1) belong to a different parent (indices would be inapplicable if the exist)
+            # 2) have indices but no parent (indices are inapplicable to us)
+            # Note that we don't copy and reset the case when a value's parent and gpindices
+            #  are both None, as gpindices==None indicates that the value may not have had
+            #  its gpindices allocated yet and so *might* have "latent" gpindices that do
+            #  belong to our parent (self.parent) (and copying a value will reset all
+            #  the parents to None).
+            wrongParent = (value.parent is not None) and (value.parent is not self.parent)
+            inappInds = (value.parent is None) and (value.gpindices is not None)
+            
+            if self.parent is not None and (wrongParent or inappInds):
+                value = value.copy()  # copy value (so we don't mess up other parent) and
+                value.set_gpindices(None, self.parent) # erase gindices don't apply to us
+            super(OrderedMemberDict,self).__setitem__(key, value)
 
-        elif key in self: #if a SPAMVec object already exists...
+        elif key in self: #if a object already exists...
             #try to set its value
-            super(OrderedSPAMVecDict,self).__getitem__(key).set_vector(vec)
+            super(OrderedMemberDict,self).__getitem__(key).set_value(value)
 
         else:
-            #otherwise, we've been given a non-SPAMVec-object that doesn't
+            #otherwise, we've been given a non-GateSetMember-object that doesn't
             # exist yet, so use default creation flags to make one:
+            obj = None
             if self.default_param == "TP":
-                vecObj = _sv.TPParameterizedSPAMVec(vec)
+                if self.typ == "spamvec": obj = _sv.TPParameterizedSPAMVec(value)
+                if self.typ == "gate": obj = _gate.TPParameterizedGate(value)
             elif self.default_param == "full":
-                vecObj = _sv.FullyParameterizedSPAMVec(vec)
+                if self.typ == "spamvec":  obj = _sv.FullyParameterizedSPAMVec(value)
+                if self.typ == "gate":  obj = _gate.FullyParameterizedGate(value)
             elif self.default_param == "static":
-                vecObj = _sv.StaticSPAMVec(vec)
+                if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
+                if self.typ == "gate":  obj = _gate.StaticGate(value)
             else:
                 raise ValueError("Invalid default_param: %s" % self.default_param)
+            
+            if obj is None:
+                raise ValueError("Cannot set a value of type: ",type(value))
 
-            super(OrderedSPAMVecDict,self).__setitem__(key, vecObj)
+            if self.parent is not None: obj.set_gpindices(None, self.parent)
+            super(OrderedMemberDict,self).__setitem__(key, obj)
 
-    def copy(self, parent):
+            
+        #rebuild GateSet's parameter vector (params may need to be added)
+        if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after inserting ", key, " : ", list(self.keys()))
+            self.parent._update_paramvec( super(OrderedMemberDict,self).__getitem__(key) )
+
+    def __delitem__(self, key):
+        """Implements `del self[key]`"""
+        super(OrderedMemberDict,self).__delitem__(key)
+        if self.parent is not None:
+            #print("DEBUG: rebuilding paramvec after deleting ", key, " : ", list(self.keys()))
+            self.parent._rebuild_paramvec()
+
+
+    def copy(self, parent=None):
         """
-        Returns a copy of this OrderedSPAMVecDict.
+        Returns a copy of this OrderedMemberDict.
 
         Parameters
         ----------
         parent : GateSet
             The new parent GateSet, if one exists.  Typically, when copying
-            an OrderedSPAMVecDict you want to reset the parent.
+            an OrderedMemberDict you want to reset the parent.
 
         Returns
         -------
-        OrderedSPAMVecDict
+        OrderedMemberDict
         """
-        return OrderedSPAMVecDict(parent, self.default_param,
-                           self.remainderLabel, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.items()])
-
+        return OrderedMemberDict(parent, self.default_param,
+                                 self._prefix, self.typ,
+                                 [(lbl,val.copy(parent)) for lbl,val in self.items()])
+    
     def __reduce__(self):
         #Call constructor to create object, but with parent == None to avoid
         # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
-        return (OrderedSPAMVecDict,
-                (None, self.default_param,
-                 self.remainderLabel, self._prefix, items), None)
+        return (OrderedMemberDict,
+                (None, self.default_param, self._prefix, self.typ, list(self.items())), None)
+
+    def __pygsti_reduce__(self):
+        return self.__reduce__()
 
 
 
 
+class OutcomeLabelDict(_collections.OrderedDict):
+    """
+    An ordered dictionary of outcome labels, whose keys are tuple-valued
+    outcome labels.  This class extends an ordinary OrderedDict by
+    implements mapping string-values single-outcome labels to 1-tuples
+    containing that label (and vice versa), allowing the use of strings
+    as outcomes labels from the user's perspective.
+    """
 
-class OrderedGateDict(PrefixOrderedDict):
-    def __init__(self, parent, default_param, prefix, items=[]):
-        #** Note: if change __init__ signature, update __reduce__ below
-        self.parent = parent # dimension == parent.dim
-        self.default_param = default_param  # "TP" or "full"
-        super(OrderedGateDict,self).__init__(prefix, items)
+    #Whether mapping from strings to 1-tuples is performed
+    _strict = False
 
-
-    def _check_dim(self, M):
-        if isinstance(M, _gate.Gate):
-            gate_dim = M.dim
-        else:
-            try:
-                d1 = len(M)
-                d2 = len(M[0]) #pylint: disable=unused-variable
-            except:
-                raise ValueError("%s doesn't look like a 2D array/list" % M)
-            if any([len(row) != d1 for row in M]):
-                raise ValueError("%s is not a *square* 2D array" % M)
-            gate_dim = d1
-
-        #Dimension check
-        if self.parent is None: return
-        if self.parent.dim is None:
-            self.parent._dim = gate_dim #use _dim to set
-        elif self.parent.dim != gate_dim:
-            raise ValueError("Cannot add gate with dimension " +
-                             "%d to gateset of dimension %d"
-                             % (gate_dim,self.parent.dim))
-
-
-    def __setitem__(self, key, M):
-        self._check_dim(M)
-
-        if isinstance(M, _gate.Gate):  #if we're given a Gate object...
-            #just replace or create vector
-            super(OrderedGateDict,self).__setitem__(key, M)
-
-        elif key in self: #if a Gate object already exists...
-            #try to set its value
-            super(OrderedGateDict,self).__getitem__(key).set_matrix(_np.asarray(M))
-
-        else:
-            #otherwise, we've been given a non-Gate-object that doesn't
-            # exist yet, so use default creation flags to make one:
-            if self.default_param == "TP":
-                gateObj = _gate.TPParameterizedGate(M)
-            elif self.default_param == "full":
-                gateObj = _gate.FullyParameterizedGate(M)
-            elif self.default_param == "static":
-                gateObj = _gate.StaticGate(M)
-            else:
-                raise ValueError("Invalid default_param: %s" %
-                                 self.default_param)
-
-            super(OrderedGateDict,self).__setitem__(key, gateObj)
-
-    def copy(self, parent):
+    def __init__(self, items=[]):
         """
-        Returns a copy of this OrderedGateDict.
+        Creates a new OutcomeLabelDict.
 
         Parameters
         ----------
-        parent : GateSet, optional
-            The new parent GateSet, if one exists.  Typically, when copying
-            an OrderedGateDict you want to reset the parent.
-
-        Returns
-        -------
-        OrderedGateDict
-        """
-
-        return OrderedGateDict(parent, self.default_param, self._prefix,
-                           [(lbl,val.copy()) for lbl,val in self.items()])
-
-    def __reduce__(self):
-        #Call constructor to create object, but with parent == None to avoid
-        # circular pickling of GateSets.  Must set parent separately.
-        items = [(k,v) for k,v in self.items()]
-        return (OrderedGateDict,
-                (None, self.default_param, self._prefix, items), None)
-
-
-
-
-class OrderedSPAMLabelDict(_collections.OrderedDict):
-    def __init__(self, remainderLabel, items=[]):
+        items : list, optional
+            Used by pickle and other serializations to initialize elements.
+        """  
         #** Note: if change __init__ signature, update __reduce__ below
-        self.remainderLabel = remainderLabel
-        super(OrderedSPAMLabelDict,self).__init__(items)
+        super(OutcomeLabelDict,self).__init__(items)
+        
 
+    def __getitem__(self, key):
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        return super(OutcomeLabelDict,self).__getitem__(key)
+        
     def __setitem__(self, key, val):
-        if not isinstance(key, str):
-            key = str(key)
-        if type(val) != tuple or len(val) != 2:
-            raise KeyError("SPAM label values must be 2-tuples!")
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        super(OutcomeLabelDict,self).__setitem__(key,val)
 
-        prepLabel, effectLabel = val
-        if prepLabel == self.remainderLabel:
-            if effectLabel != self.remainderLabel:
-                raise ValueError("POVM label must always ==" +
-                                 "%s when preparation " % self.remainderLabel +
-                                 "label does")
-
-            # This spam label generates probabilities which equal
-            #  1 - sum(other spam label probs)
-            _warnings.warn( "You have choosen to use a gate set in a sum-to-one"
-                            + "mode in which the spam label %s " % key
-                            + "will generate probabilities equal to 1.0 minus "
-                            + "the sum of all the probabilities of the other "
-                            + "spam labels.")
-
-        # if inserted *value* already exists, clobber so values are unique
-        iToDel = None
-        for k,v in self.items():
-            if val == v:
-                iToDel = k; break
-        if iToDel is not None:
-            del self[iToDel] #can't do within loop in Python3
-
-        #TODO: perhaps add checks that value == (prepLabel,effectLabel) labels exist
-        # (would need to add a "parent" member to access the GateSet)
-
-        super(OrderedSPAMLabelDict,self).__setitem__(key,val)
+    def __contains__(self, key):
+        if not OutcomeLabelDict._strict:
+            key = (key,) if _compat.isstr(key) else tuple(key)
+        return key in super(OutcomeLabelDict,self).keys()
 
     def copy(self):
-        return OrderedSPAMLabelDict(self.remainderLabel,
-                                    [(lbl,val) for lbl,val in self.items()])
+        """ Return a copy of this OutcomeLabelDict. """
+        return OutcomeLabelDict([(lbl,_copy.deepcopy(val))
+                                 for lbl,val in self.items()])
+
+    def __pygsti_reduce__(self):
+        items = [(k,v) for k,v in self.items()]
+        return (OutcomeLabelDict, (items,), None)
 
     def __reduce__(self):
         items = [(k,v) for k,v in self.items()]
-        return (OrderedSPAMLabelDict, (self.remainderLabel, items), None)
+        return (OutcomeLabelDict, (items,), None)

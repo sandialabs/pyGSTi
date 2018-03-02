@@ -1,23 +1,37 @@
+""" Utility functions operating on gate matrices """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions operating on gate matrices """
 
 import numpy as _np
 import scipy.linalg as _spl
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 import warnings as _warnings
 
 from . import jamiolkowski as _jam
 from . import matrixtools as _mt
+from . import lindbladtools as _lt
+from . import compattools as _compat
 from . import basistools as _bt
+from ..baseobjs import Basis as _Basis
+from ..baseobjs.basis import basis_matrices as _basis_matrices
+
+def _mut(i,j,N):
+    mx = _np.zeros( (N,N), 'd'); mx[i,j] = 1.0
+    return mx
 
 def _hack_sqrtm(A):
-    return _spl.sqrtm(A) #Travis found this scipy function
-                         # to be incorrect in certain cases (we need a workaround)
-    #return _np.array( (_np.matrix(A))**0.5 ) #gives error about int power
+    sqrt,_ = _spl.sqrtm(A, disp=False) #Travis found this scipy function
+                                       # to be incorrect in certain cases (we need a workaround)
+    if _np.any(_np.isnan(sqrt)):  #this is sometimes a good fallback when sqrtm doesn't work.
+        ev,U = _np.linalg.eig(A)
+        sqrt = _np.dot( U, _np.dot( _np.diag(_np.sqrt(ev)), _np.linalg.inv(U)))
+        
+    return sqrt
 
 def fidelity(A, B):
     """
@@ -107,28 +121,50 @@ def frobeniusdist2(A, B):
     """
     return _mt.frobeniusnorm2(A-B)
 
+def residuals(A, B):
+    """
+    Calculate residuals between the elements of two matrices
+
+    Parameters
+    ----------
+    A : numpy array
+        First matrix.
+
+    B : numpy array
+        Second matrix.
+
+    Returns
+    -------
+    np.array
+        residuals
+    """
+    return (A-B).flatten()
+
 
 def tracenorm(A):
     """
     Compute the trace norm of matrix A given by:
 
-      Tr( sqrt{ A^2 } )
+      Tr( sqrt{ A^dagger * A } )
 
     Parameters
     ----------
     A : numpy array
         The matrix to compute the trace norm of.
     """
-    evals = _np.linalg.eigvals( A )
-    return sum( [abs(ev) for ev in evals] )
-
+    if _np.linalg.norm(A - _np.conjugate(A.T)) < 1e-8:
+        #Hermitian, so just sum eigenvalue magnitudes
+        return _np.sum( _np.abs( _np.linalg.eigvals( A ) ) )
+    else:
+        #Sum of singular values (positive by construction)
+        return _np.sum( _np.linalg.svd(A, compute_uv=False) )
 
 def tracedist(A, B):
     """
     Compute the trace distance between matrices A and B,
     given by:
 
-      D = 0.5 * Tr( sqrt{ (A-B)^2 } )
+      D = 0.5 * Tr( sqrt{ (A-B)^dagger * (A-B) } )
 
     Parameters
     ----------
@@ -139,7 +175,7 @@ def tracedist(A, B):
 
 
 
-def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
+def diamonddist(A, B, mxBasis='gm', return_x=False):
     """
     Returns the approximate diamond norm describing the difference between gate
     matrices A and B given by :
@@ -151,19 +187,24 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     A, B : numpy array
         The *gate* matrices to use when computing the diamond norm.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit respectively.
+    mxBasis : Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-    dimOrStateSpaceDims : int or list of ints, optional
-        Structure of the density-matrix space, which further specifies the basis
-        of gateMx (see BasisTools).
+    return_x : bool, optional
+        Whether to return a numpy array encoding the state (rho) at 
+        which the maximal trace distance occurs.
 
     Returns
     -------
-    float
+    dm : float
        Diamond norm
+    W : numpy array
+       Only returned if `return_x = True`.  Encodes the state rho, such that
+       `dm = trace( |(J(A)-J(B)).T * W| )`.
     """
+    mxBasis = _bt.build_basis_for_matrix(A, mxBasis)
 
     #currently cvxpy is only needed for this function, so don't import until here
     import cvxpy as _cvxpy
@@ -200,8 +241,8 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
     assert(dim == A.shape[1] == B.shape[0] == B.shape[1])
 
     #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by density mx dimension
-    JAstd = smallDim * _jam.jamiolkowski_iso(A, mxBasis, "std", dimOrStateSpaceDims)
-    JBstd = smallDim * _jam.jamiolkowski_iso(B, mxBasis, "std", dimOrStateSpaceDims)
+    JAstd = smallDim * _jam.fast_jamiolkowski_iso_std(A, mxBasis)
+    JBstd = smallDim * _jam.fast_jamiolkowski_iso_std(B, mxBasis)
 
     #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
     #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
@@ -270,82 +311,15 @@ def diamonddist(A, B, mxBasis='gm', dimOrStateSpaceDims=None):
 #       prob.solve(solver="SCS")#This always fails
     except:
         _warnings.warn("CVXOPT failed - diamonddist returning -2!")
-        return -2
-    return prob.value
+        return (-2, _np.zeros((dim,dim))) if return_x else -2
 
+    if return_x:
+        X = Y.value + 1j*Z.value #encodes state at which maximum trace-distance occurs
+        return prob.value, X
+    else:
+        return prob.value
 
-#Kenny's Monte-Carlo version
-# had additional params: nSamples=1000, seed=None
-#
-#    nSamples : int, optional
-#        Number of Monte Carlo samples to use for diamond norm approximation.
-#
-#    seed : int, optional
-#        If not None, a seed value for the random number generator used
-#        to produce Monte Carlo samples.
-#
-#
-#    gate_dim = A.shape[0]
-#    assert(gate_dim == A.shape[1] == B.shape[0] == B.shape[1])
-#
-#    if dimOrStateSpaceDims is not None:
-#        raise ValueError("Diamond Norm not fully implemented when dimOrStateSpaceDims is not None")
-#        #Need to think more about how to deal with dimOrStateSpaceDims...
-#    state_dim = _np.sqrt(gate_dim) # dimension of state space -- more complicated with dimOrStateSpaceDims?
-#
-#    #first, get gate matrices into std basis
-#    if mxBasis == "std":
-#        AInStdBasis, BInStdBasis = A, B
-#    elif mxBasis == "gm" or mxBasis == "pauli":
-#        AInStdBasis = _bt.gm_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.gm_to_std(B, dimOrStateSpaceDims)
-#    elif mxBasis == "pp":
-#        AInStdBasis = _bt.pp_to_std(A, dimOrStateSpaceDims)
-#        BInStdBasis = _bt.pp_to_std(B, dimOrStateSpaceDims)
-#    else: raise ValueError("Invalid mxBasis: %s" % mxBasis)
-#
-#    rndm = _np.random.RandomState(seed)
-#
-#    AtensorId = _np.kron(AInStdBasis,_np.identity(gate_dim))
-#    BtensorId = _np.kron(BInStdBasis,_np.identity(gate_dim))
-#    gateDiffTensorId = BtensorId - AtensorId # in std basis by construction
-#
-#    def random_two_state_density_mx():
-#        x = rndm.randn(state_dim*2,1) + 1j * rndm.randn(state_dim*2,1)
-#        x = x / _np.linalg.norm(x,'fro') # normalize state
-#        x = _np.dot(x,_np.conj(x).T) # state => density matrix via dm = psi x psi_dag
-#        x = _np.reshape(x.T,[(state_dim*2)**2,1]) #density matrix in std basis
-#        return x
-#
-#    #Note:  We are using definition that ||X||_1 = Tr(sqrt(X^dagger X)), not 0.5 * Tr(sqrt(X^dagger X))
-#    def one_shot_one_qubit_diamond_norm(gateDiffTensorId):
-#        randStateDM = random_two_state_density_mx() # in std basis
-#        outDM = _np.dot(gateDiffTensorId,randStateDM) # in std basis
-#        outDM = _np.reshape(outDM, [2*state_dim, 2*state_dim] )
-#            # Omit transposition here to save time, as that does not affect eigenvalues
-#        return _np.sum(_np.abs(_np.linalg.eigvalsh(outDM)))
-#
-#    oneShotVals = [ one_shot_one_qubit_diamond_norm(gateDiffTensorId) for i in xrange(nSamples) ]
-#    return max(oneShotVals)
-
-
-
-#Scratch -- to remove later
-  ##extract unitary from targetGate (assumes it corresponds to a unitary)
-  #target_JMx = _jam.jamiolkowski_iso( targetGate )
-  #target_Jevals, target_Jevecs = _np.linalg.eig(target_JMx)
-  #max_target_Jevec = target_Jevecs[:,_np.argmax(target_Jevals)]  # |max_Jevec> = (U x I)|bell>
-
-    #TODO -- need to extract ex matrix from target_U = _spl.expm(ex) and decompose ex in terms of pauli?
-    # |bell> = [1,0,0,1]/sqrt(2) (1-qubit) -- not sure how to generalize yet
-    #target_U = _np.sqrt(2) * _np.array( [ [max_target_Jevec[0], max_target_Jevec[1]], [max_target_Jevec[2],max_target_Jevec[3]] ] )
-
-  #U = _spl.expm( 1j * (solnVec[0]*sigmax + solnVec[1]*sigmay + solnVec[2]*sigmaz) )
-  #vU = _np.dot( _np.kron(U,I), bell ) # "Choi vector" corresponding to unitary U
-  #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
-
-
-def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
+def jtracedist(A, B, mxBasis=None): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)|)
     """
     Compute the Jamiolkowski trace distance between gate matrices A and B,
     given by:
@@ -360,16 +334,19 @@ def jtracedist(A, B, mxBasis="gm"): #Jamiolkowski trace distance:  Tr(|J(A)-J(B)
     A, B : numpy array
         The matrices to compute the distance between.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit, respectively.
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
-    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
-    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
+    if mxBasis is None:
+        mxBasis = _Basis('gm', int(round(_np.sqrt(A.shape[0]))))
+    JA = _jam.fast_jamiolkowski_iso_std(A, mxBasis)
+    JB = _jam.fast_jamiolkowski_iso_std(B, mxBasis)
     return tracedist(JA,JB)
 
 
-def process_fidelity(A, B, mxBasis="gm"):
+def process_fidelity(A, B, mxBasis=None):
     """
     Returns the process fidelity between gate
       matrices A and B given by :
@@ -384,12 +361,20 @@ def process_fidelity(A, B, mxBasis="gm"):
     A, B : numpy array
         The matrices to compute the fidelity between.
 
-    mxBasis : {"std","gm","pp","qt"}, optional
-        the basis of the gate matrices A and B : standard (matrix units),
-        Gell-Mann, Pauli-product, or Qutrit, respectively.
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
-    JA = _jam.jamiolkowski_iso(A, gateMxBasis=mxBasis)
-    JB = _jam.jamiolkowski_iso(B, gateMxBasis=mxBasis)
+    if A[0,0] == 1.0 and B[0,0] == 1.0: #then assume TP-like gates & use simpler formula
+        TrLambda = _np.trace( _np.dot(A, _np.linalg.inv(B)) )
+        d2 = A.shape[0]
+        return TrLambda / d2
+    
+    if mxBasis is None:
+        mxBasis = _Basis('gm', int(round(_np.sqrt(A.shape[0]))))
+    JA = _jam.jamiolkowski_iso(A, mxBasis)
+    JB = _jam.jamiolkowski_iso(B, mxBasis)
     return fidelity(JA,JB)
 
 
@@ -450,6 +435,111 @@ def fidelity_upper_bound(gateMx):
     #print "DEBUG: U = \n", closestUnitaryGateMx
     #print "DEBUG: closest U evals = ",closestU_evals
     #print "DEBUG:  evecs = \n",closestU_evecs
+
+
+def get_povm_map(gateset, povmlbl):
+    """
+    Constructs a gate-like quantity for the POVM within `gateset`.
+
+    This is done by embedding the `k`-outcome classical output space of the POVM
+    in the Hilbert-Schmidt space of `k` by `k` density matrices by placing the 
+    classical probability distribution along the diagonal of the density matrix.
+    Currently, this is only implemented for the case when `k` equals `d`, the 
+    dimension of the POVM's Hilbert space.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gateset supplying the POVM effect vectors and the basis those
+        vectors are in.
+
+    povmlbl : str
+        The POVM label
+
+    Returns
+    -------
+    numpy.ndarray
+        The matrix of the "POVM map" in the `gateset.basis` basis.
+    """
+    povmVectors = list(gateset.povms[povmlbl].values())
+    d = int(round(_np.sqrt(gateset.dim))) # density matrix is dxd
+    nV = len(povmVectors)
+    assert(d**2 == gateset.dim), "GateSet dimension (%d) is not a perfect square!" % gateset.dim
+    #assert( nV**2 == d ), "Can only compute POVM metrics when num of effects == H space dimension"
+    #   I don't think above assert is needed - should work in general (Robin?)
+    povm_mx = _np.concatenate( povmVectors, axis=1 ).T # "povm map" ( B(H) -> S_k )
+    
+    Sk_embedding_in_std = _np.zeros( (d**2, nV) )
+    for i in range(nV):
+        Sk_embedding_in_std[:,i] = _mut(i,i,d).flatten()
+
+    std_to_basis = _bt.transform_matrix("std", gateset.basis, d)
+    assert(std_to_basis.shape == (d**2,d**2))
+
+    return _np.dot(std_to_basis, _np.dot(Sk_embedding_in_std, povm_mx))
+
+
+def povm_fidelity(gateset, targetGateset, povmlbl):
+    """
+    Computes the process (entanglement) fidelity between POVM maps.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    povmlbl : str
+        The POVM label
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
+    return process_fidelity(povm_mx, target_povm_mx, targetGateset.basis)
+
+
+def povm_jtracedist(gateset, targetGateset, povmlbl):
+    """
+    Computes the Jamiolkowski trace distance between POVM maps using :func:`jtracedist`.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    povmlbl : str
+        The POVM label
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
+    return jtracedist(povm_mx, target_povm_mx, targetGateset.basis)
+
+
+def povm_diamonddist(gateset, targetGateset, povmlbl):
+    """
+    Computes the diamond distance between POVM maps using :func:`diamonddist`.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        Gate sets containing the two POVMs to compare.
+
+    povmlbl : str
+        The POVM label
+
+    Returns
+    -------
+    float
+    """
+    povm_mx = get_povm_map(gateset, povmlbl)
+    target_povm_mx = get_povm_map(targetGateset, povmlbl)
+    return diamonddist(povm_mx, target_povm_mx, targetGateset.basis)
 
 
 #decompose gate matrix into axis of rotation, etc
@@ -649,7 +739,57 @@ def unitary_to_process_mx(U):
     return _np.kron(U,_np.conjugate(U))
 
 
-def error_generator(gate, target_gate, typ="logG-logT"):
+def process_mx_to_unitary(superop):
+    """
+    Compute the unitary corresponding to the (unitary-action!)
+    super-operator `superop` which acts on (row)-vectorized
+    density matrices.  The super-operator must be of the form
+    `kron(U,U.conj)` or an error will be thrown.
+
+    Parameters
+    ----------
+    superop : numpy array
+        The superoperator matrix which acts on vectorized 
+        density matrices (in the 'std' matrix-unit basis).
+
+    Returns
+    -------
+    numpy array
+       The unitary matrix which acts on state vectors.
+    """
+    d2 = superop.shape[0]; d = int(round(_np.sqrt(d2)))
+    U = _np.empty( (d,d), 'complex')
+    
+    for i in range(d):
+        densitymx_i = _np.zeros( (d,d), 'd' ); densitymx_i[i,i] = 1.0 # |i><i|
+        UiiU = _np.dot(superop, densitymx_i.flat).reshape((d,d)) # U|i><i|U^dag
+        
+        if i > 0:
+            j=0
+            densitymx_ij = _np.zeros( (d,d), 'd' ); densitymx_ij[i,j] = 1.0 # |i><i|
+            UijU = _np.dot(superop, densitymx_ij.flat).reshape((d,d)) # U|i><j|U^dag
+            Uj = U[:,j]
+            Ui = _np.dot(UijU, Uj)
+        else:
+            ##method1: use random state projection
+            #rand_state = _np.random.rand(d)
+            #projected_rand_state = _np.dot(UiiU, rand_state)
+            #assert(_np.linalg.norm(projected_rand_state) > 1e-8)
+            #projected_rand_state /= _np.linalg.norm(projected_rand_state)
+            #Ui = projected_rand_state
+
+            #method2: get eigenvector corresponding to largest eigenvalue (more robust)
+            evals,evecs = _np.linalg.eig(UiiU)
+            imaxeval = _np.argmax(_np.abs(evals))
+            #TODO: assert other eigenvalues are much smaller?
+            Ui = evecs[:,imaxeval]
+            Ui /= _np.linalg.norm(Ui)
+        U[:,i] = Ui
+        
+    return U
+
+
+def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     """
     Construct the error generator from a gate and its target.
 
@@ -665,11 +805,17 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     target_gate : ndarray
       The target gate matrix
 
-    typ : {"logG-logT", "logTiG"}
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    typ : {"logG-logT", "logTiG", "logGTi"}
       The type of error generator to compute.  Allowed values are:
       
       - "logG-logT" : errgen = log(gate) - log(target_gate)
       - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+      - "logGTi" : errgen = log( dot(gate,inv(target_gate)) )
 
     Returns
     -------
@@ -679,39 +825,51 @@ def error_generator(gate, target_gate, typ="logG-logT"):
     TOL = 1e-8
     
     if typ == "logG-logT":
-        logG = _mt.real_matrix_log(gate,"ignore",TOL)
-        logT = _mt.real_matrix_log(target_gate,"ignore",TOL)
+        try:
+            logT = _mt.unitary_superoperator_matrix_log(target_gate, mxBasis)
+        except AssertionError: #if not unitary, fall back to just taking the real log
+            logT = _mt.real_matrix_log(target_gate, "raise", TOL) #make a fuss if this can't be done
+        logG = _mt.approximate_matrix_log(gate, logT)
 
-        # if logG and logT are both real, just take the difference,
-        #  as there are no branch cut issues in this case
+        # Both logG and logT *should* be real, so we just take the difference.
         if _np.linalg.norm(_np.imag(logG)) < TOL and \
            _np.linalg.norm(_np.imag(logT)) < TOL:
-            return _np.real(logG - logT) 
+            return _np.real(logG - logT)
 
-        #Otherwise, there could be branch cut issues, so rotate
-        # the branch cut to a point in between the target's
-        # eigenvalues
-        _warnings.warn("Could not construct a real logarithms for the" +
-                       "'logG-logT' generator.  Perhaps you should use " +
-                       "the 'logTiG' generator instead?")
+        #Otherwise, there could be branch cut issues or worse, so just
+        # raise an error for now (maybe return a dummy if needed elsewhere?)
+        raise ValueError("Could not construct a real logarithms for the" +
+                         "'logG-logT' generator.  Perhaps you should use " +
+                         "the 'logTiG' or 'logGTi' generator instead?")
 
-        evals = _spl.eigvals(target_gate)
-        N = len(evals)
-        angles = _np.sort(_np.imag(_np.log(evals)))
-        deltas = [ angles[i+1]-angles[i] for i in range(N-1) ]
-        deltas.append(angles[0]+2*_np.pi - angles[N-1])
-        iMax = _np.argmax(deltas)
-        if iMax < N-1:
-            bca = (angles[iMax] + angles[iMax+1])/2 + _np.pi #branch-cut angle
-        else: #iMax == N-1
-            bca = (angles[N-1] + angles[0]+2*_np.pi)/2 - _np.pi
-        a = _np.exp(1j*bca)
-        errgen = _spl.logm(a*gate) - _spl.logm(a*target_gate)
-        
     elif typ == "logTiG":
         target_gate_inv = _spl.inv(target_gate)
-        errgen = _spl.logm(_np.dot(target_gate_inv,gate))
-        
+        try:
+            errgen = _mt.near_identity_matrix_log(_np.dot(target_gate_inv,gate), TOL)
+        except AssertionError: #not near the identity, fall back to the real log
+            _warnings.warn(("Near-identity matrix log failed; falling back "
+                            "to approximate log for logTiG error generator"))
+            errgen = _mt.real_matrix_log(_np.dot(target_gate_inv,gate), "warn", TOL)
+            
+        if _np.linalg.norm(errgen.imag) > TOL:
+            _warnings.warn("Falling back to approximate log for logTiG error generator")
+            errgen = _mt.approximate_matrix_log(_np.dot(target_gate_inv,gate),
+                                                _np.zeros(gate.shape,'d'), TOL=TOL)
+
+    elif typ == "logGTi":
+        target_gate_inv = _spl.inv(target_gate)
+        try:
+            errgen = _mt.near_identity_matrix_log(_np.dot(gate,target_gate_inv), TOL)
+        except AssertionError: #not near the identity, fall back to the real log
+            _warnings.warn(("Near-identity matrix log failed; falling back "
+                            "to approximate log for logGTi error generator"))
+            errgen = _mt.real_matrix_log(_np.dot(gate,target_gate_inv), "warn", TOL)
+            
+        if _np.linalg.norm(errgen.imag) > TOL:
+            _warnings.warn("Falling back to approximate log for logGTi error generator")
+            errgen = _mt.approximate_matrix_log(_np.dot(gate,target_gate_inv),
+                                                _np.zeros(gate.shape,'d'), TOL=TOL)
+
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
 
@@ -720,7 +878,6 @@ def error_generator(gate, target_gate, typ="logG-logT"):
         #maybe this is actually ok, but a complex error generator will
         # need to be plotted differently, etc -- TODO
     return _np.real(errgen)
-
 
 
 
@@ -756,8 +913,47 @@ def gate_from_error_generator(error_gen, target_gate, typ="logG-logT"):
         return _spl.expm(error_gen + _spl.logm(target_gate))
     elif typ == "logTiG":
         return _np.dot(target_gate, _spl.expm(error_gen))
+    elif typ == "logGTi":
+        return _np.dot(_spl.expm(error_gen), target_gate)
     else:
         raise ValueError("Invalid error-generator type: %s" % typ)
+
+def std_scale_factor(dim, projection_type):
+    """
+    Returns the multiplicative scaling that should be applied to the output of
+    :func"`std_error_generators`, before using them as projectors, in order to
+    compute the "standard" reported projection onto that type of error (i.e.
+    the coefficient of the standard generator terms built un-normalized-Paulis).
+
+    Parameters
+    ----------
+    dim : int
+      The dimension of the error generators; also the  associated gate
+      dimension.  This must be a perfect square, as `sqrt(dim)`
+      is the dimension of density matrices. For a single qubit, dim == 4.
+      
+    projection_type : {"hamiltonian", "stochastic", "affine"}
+      The type/class of error generators to get the scaling for.
+
+    Returns
+    -------
+    float
+    """
+    d2 = dim
+    d = int(_np.sqrt(d2))
+
+    if projection_type == "hamiltonian":
+        scaleFctr = 1.0 / ( d*_np.sqrt(2) )
+        # so projection is coefficient of Hamiltonian term (w/un-normalized Paulis)
+    elif projection_type == "stochastic":
+        scaleFctr = 1.0 / d
+        # so projection is coefficient of P*rho*P stochastic term in generator (w/un-normalized Paulis)
+    elif projection_type == "affine":
+        scaleFctr = 1.0 # so projection is coefficient of P affine term in generator (w/un-normalized Paulis)
+    else:
+        raise ValueError("Invalid projection_type argument: %s"
+                         % projection_type)
+    return scaleFctr
 
 
 def std_error_generators(dim, projection_type, projection_basis):
@@ -773,11 +969,12 @@ def std_error_generators(dim, projection_type, projection_basis):
       associated gate dimension, and must be a perfect square, as `sqrt(dim)`
       is the dimension of density matrices. For a single qubit, dim == 4.
       
-    projection_type : {"hamiltonian", "stochastic"}
+    projection_type : {"hamiltonian", "stochastic", "affine"}
       The type of error generators to construct.  If "hamiltonian", then the
       Hamiltonian generators which take a density matrix rho -> -i*[ H, rho ]
       for Pauli-product matrix H.  If "stochastic", then the Stochastic error
-      generators which take rho -> P*rho*P for Pauli-product matrix P.
+      generators which take rho -> P*rho*P for Pauli-product matrix P.  If
+      "affine", then the affine generators which take rho -> P.
 
     projection_basis : {'std', 'gm', 'pp', 'qt'}
       Which basis is used to construct the error generators.  Allowed
@@ -790,13 +987,14 @@ def std_error_generators(dim, projection_type, projection_basis):
       An array of shape (#basis-elements,dim,dim).  `generators[i]` is the
       generator corresponding to the ith basis matrix in the 
       *std* (matrix unit) basis.  (Note that in most cases #basis-elements
-      == dim, so the size of `generators` is (dim,dim,dim) ).
+      == dim, so the size of `generators` is (dim,dim,dim) ).  Each 
+      generator is normalized so that as a vector it has unit Frobenius norm.
     """
     d2 = dim
     d = int(_np.sqrt(d2))
 
     #Get a list of the basis matrices
-    mxs = _bt.basis_matrices(projection_basis, d)
+    mxs = _basis_matrices(projection_basis, d)
 
     assert(len(mxs) == d2)
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
@@ -804,9 +1002,11 @@ def std_error_generators(dim, projection_type, projection_basis):
     lindbladMxs = _np.empty( (len(mxs),d2,d2), 'complex' )
     for i,basisMx in enumerate(mxs):
         if projection_type == "hamiltonian":
-            lindbladMxs[i] = _bt.hamiltonian_to_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.hamiltonian_to_lindbladian(basisMx) # in std basis
         elif projection_type == "stochastic":
-            lindbladMxs[i] = _bt.stochastic_lindbladian(basisMx) # in std basis
+            lindbladMxs[i] = _lt.stochastic_lindbladian(basisMx) # in std basis
+        elif projection_type == "affine":
+            lindbladMxs[i] = _lt.affine_lindbladian(basisMx) #in std basis
         else:
             raise ValueError("Invalid projection_type argument: %s"
                              % projection_type)
@@ -819,7 +1019,8 @@ def std_error_generators(dim, projection_type, projection_basis):
 
 
 def std_errgen_projections(errgen, projection_type, projection_basis,
-                           mxBasis="gm", return_generators=False):
+                           mxBasis="gm", return_generators=False,
+                           return_scale_fctr=False):
     """
     Compute the projections of a gate error generator onto generators
     for a standard set of errors constructed from the elements of a 
@@ -830,25 +1031,32 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     errgen: : ndarray
       The error generator matrix to project.
       
-    projection_type : {"hamiltonian", "stochastic"}
+    projection_type : {"hamiltonian", "stochastic", "affine"}
       The type of error generators to project the gate error generator onto.
       If "hamiltonian", then use the Hamiltonian generators which take a density
       matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.  If "stochastic",
       then use the Stochastic error generators which take rho -> P*rho*P for
-      Pauli-product matrix P (recall P is self adjoint).
+      Pauli-product matrix P (recall P is self adjoint).  If "affine", then
+      use the affine error generators which take rho -> P (superop is |P>><<1|).
 
-    projection_basis : {'std', 'gm', 'pp', 'qt'}
-      The basis is used to construct the error generators onto which the gate
-      error generator is projected onto.  Allowed values are Matrix-unit (std),
-      Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+    projection_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      The basis `errgen` is represented in.  Allowed options are Matrix-unit
-      (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     return_generators : bool, optional
       If True, return the error generators projected against along with the
       projection values themseves.
+
+    return_scale_fctr : bool, optional
+      If True, also return the scaling factor that was used to multply the
+      projections onto *normalized* error generators to get the returned
+      values.
 
     Returns
     -------
@@ -862,15 +1070,19 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
       (#basis-els,gate_dim,gate_dim) such that  `generators[i]` is the
       generator corresponding to the i-th basis element.  Note 
       that these matricies are in the *std* (matrix unit) basis.
+
+    scale : float
+      Only returned when `return_scale_fctr == True`.  A mulitplicative
+      scaling constant that *has already been applied* to `projections`.
     """
 
     errgen_std = _bt.change_basis(errgen, mxBasis, "std")
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
-    nQubits = _np.log2(d)
+    # nQubits = _np.log2(d)
 
     #Get a list of the d2 generators (in corresspondence with the
-    #  Pauli-product matrices given by _bt.pp_matrices(d) ).
+    #  Pauli-product matrices given by _basis.pp_matrices(d) ).
     lindbladMxs = std_error_generators(d2, projection_type, projection_basis) # in std basis
 
     assert(len(lindbladMxs) == d2)
@@ -879,19 +1091,57 @@ def std_errgen_projections(errgen, projection_type, projection_basis,
     projections = _np.empty( len(lindbladMxs), 'd' )
     for i,lindbladMx in enumerate(lindbladMxs):
         proj = _np.real_if_close(_np.vdot( errgen_std.flatten(), lindbladMx.flatten() ), tol=1000)
+
+        #DEBUG - for checking why perfect gates gave weird projections --> log ambiguity
+        #print("DB: rawproj(%d) = " % i,proj)
+        #errgen_pp = errgen.copy()#_bt.change_basis(errgen_std,"std","pp")
+        #lindbladMx_pp = _bt.change_basis(lindbladMx,"std","pp")
+        #if proj > 1.0:
+        #    for k in range(errgen_std.shape[0]):
+        #        for j in range(errgen_std.shape[1]):
+        #            if abs(errgen_pp[k,j].conjugate() * lindbladMx_pp[k,j]) > 1e-2:
+        #                print(" [%d,%d]: + " % (k,j),errgen_pp[k,j].conjugate(),"*",lindbladMx_pp[k,j],"=",(errgen_pp[k,j].conjugate() * lindbladMx_pp[i,j]))
+        
         #assert(_np.isreal(proj)), "non-real projection: %s" % str(proj) #just a warning now
         if not _np.isreal(proj): 
-            _warnings.warn("Dropping non-real part of projection: %s" % str(proj))
-            proj = proj.real
+            _warnings.warn("Taking abs() of non-real projection: %s" % str(proj))
+            proj = abs(proj)
         projections[i] = proj
 
-    if return_generators:
-        return projections, lindbladMxs
+    scaleFctr = std_scale_factor(d2, projection_type)
+    projections *= scaleFctr
+    lindbladMxs /= scaleFctr # so projections * generators give original
+
+    ret = [projections]
+    if return_generators: ret.append(lindbladMxs)
+    if return_scale_fctr: ret.append(scaleFctr)
+    return ret[0] if len(ret)==1 else tuple(ret)
+
+
+def _assert_shape(ar, shape, sparse=False):
+    """ Asserts ar.shape == shape ; works with sparse matrices too """
+    if not sparse or len(shape) == 2:
+        assert(ar.shape == shape), \
+            "Shape mismatch: %s != %s!" % (str(ar.shape),str(shape))
     else:
-        return projections
+        if len(shape) == 3: #first "dim" is a list
+            assert(len(ar) == shape[0]), \
+                "Leading dim mismatch: %d != %d!" % (len(ar),shape[0])
+            assert(shape[0] == 0 or ar[0].shape == (shape[1],shape[2])), \
+                "Shape mismatch: %s != %s!" % (str(ar[0].shape),str(shape[1:]))
+        elif len(shape) == 4: #first 2 dims are lists
+            assert(len(ar) == shape[0]), \
+                "Leading dim mismatch: %d != %d!" % (len(ar),shape[0])
+            assert(shape[0] == 0 or len(ar[0]) == shape[1]), \
+                "Second dim mismatch: %d != %d!" % (len(ar[0]),shape[1])
+            assert(shape[0] == 0 or shape[1] == 0 or ar[0][0].shape == (shape[2],shape[3])), \
+                "Shape mismatch: %s != %s!" % (str(ar[0][0].shape),str(shape[2:]))
+        else:
+            raise NotImplementedError("Number of dimensions must be <= 4!")
 
 
-def lindblad_error_generators(dmbasis, normalize):
+def lindblad_error_generators(dmbasis_ham, dmbasis_other, normalize,
+                              other_diagonal_only=False):
     """
     Compute the superoperator-generators corresponding to Lindblad terms.
 
@@ -899,13 +1149,14 @@ def lindblad_error_generators(dmbasis, normalize):
     superoperator generators which correspond to the terms of the Lindblad
     expression:
     
-    L(rho) = sum_i( h_i [B_i,rho] ) + 
+    L(rho) = sum_i( h_i [A_i,rho] ) + 
              sum_ij( o_ij * (B_i rho B_j^dag -
                              0.5( rho B_j^dag B_i + B_j^dag B_i rho) ) )
 
-    where {B_i} is a basis for Hilbert Schmidt (density matrix) space with the
-    identity element removed so that each B_i is traceless.  If we write L(rho)
-    in terms of superoperators H_i and O_ij,
+    where {A_i} and {B_i} are bases (possibly the same) for Hilbert Schmidt
+    (density matrix) space with the identity element removed so that each
+    A_i and B_i are traceless.  If we write L(rho) in terms of superoperators
+    H_i and O_ij,
     
     L(rho) = sum_i( h_i H_i(rho) ) + sum_ij( o_ij O_ij(rho) )
 
@@ -920,62 +1171,129 @@ def lindblad_error_generators(dmbasis, normalize):
 
     Parameters
     ----------
-    dmbasis : list
+    dmbasis_ham : list
         A list of basis matrices {B_i} *including* the identity as the first
-        element, making this argument easily obtained by call to
-        :func:`pp_matrices` or a similar function.  The matrices are expected
-        to be in the standard basis, and should be traceless except for the
-        identity.
+        element, for the returned Hamiltonian-type error generators.  This
+        argument is easily obtained by call to  :func:`pp_matrices` or a
+        similar function.  The matrices are expected to be in the standard
+        basis, and should be traceless except for the identity.  Matrices
+        should be NumPy arrays or SciPy CSR sparse matrices.
+
+    dmbasis_other : list
+        A list of basis matrices {B_i} *including* the identity as the first
+        element, for the returned Stochastic-type error generators.  This
+        argument is easily obtained by call to  :func:`pp_matrices` or a
+        similar function.  The matrices are expected to be in the standard
+        basis, and should be traceless except for the identity.  Matrices
+        should be NumPy arrays or SciPy CSR sparse matrices.
 
     normalize : bool
         Whether or not generators should be normalized so that 
         numpy.linalg.norm(generator.flat) == 1.0  Note that the generators 
         will still, in general, be non-orthogonal.
 
+    other_diagonal_only : bool, optional
+        If True, only the "diagonal" Stochastic error generators are
+        returned; that is, the generators corresponding to the `i==j`
+        terms in the Lindblad expression.
 
     Returns
     -------
-    ham_generators : numpy.ndarray
-        An array of shape (d-1,d,d), where d is the size of the basis,
-        i.e. d == len(dmbasis).  `ham_generators[i]` gives the matrix for H_i.
+    ham_generators : numpy.ndarray or list of SciPy CSR matrices
+        If dense matrices where given, an array of shape (d-1,d,d), where d is
+        the size of the basis, i.e. d == len(dmbasis).  `ham_generators[i]`
+        gives the matrix for H_i.  If sparse matrices were given, a list
+        of shape (d,d) CSR matrices.
 
-    other_generators : numpy.ndarray
-        An array of shape (d-1,d-1,d,d), where d is the size of the basis.
-        `other_generators[i,j]` gives the matrix for O_ij.
+    other_generators : numpy.ndarray or list of lists of SciPy CSR matrices
+        If dense matrices where given, An array of shape (d-1,d-1,d,d), where d
+        is the size of the basis. `other_generators[i,j]` gives the matrix for
+        O_ij.  If sparse matrices were given, a list of lists of shape (d,d)
+        CSR matrices.
     """
-    mxs = dmbasis # list of basis matrices (assumed to be in std basis)
-    d2 = len(mxs)
-    d = int(_np.sqrt(d2))
-    assert(_np.isclose(d*d,d2)), "basis size  must be a perfect square"
-    assert(_np.isclose(_np.linalg.norm(mxs[0]-_np.identity(d)/_np.sqrt(d)),0)),\
-        "The first matrix in 'dmbasis' must be the identity"
+    if dmbasis_ham is not None:
+        ham_mxs = dmbasis_ham # list of basis matrices (assumed to be in std basis)
+        ham_nMxs = len(ham_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    else:
+        ham_nMxs = 0
 
-    hamLindbladTerms = _np.empty( (d2-1,d2,d2), 'complex' )
-    for i,B in enumerate(mxs[1:]): #don't include identity
-        hamLindbladTerms[i] = _bt.hamiltonian_to_lindbladian(B) # in std basis
-        if normalize:
-            norm = _np.linalg.norm(hamLindbladTerms[i].flat)
-            if not _np.isclose(norm,0):
-                hamLindbladTerms[i] /= norm #normalize projector
-                assert(_np.isclose(_np.linalg.norm(hamLindbladTerms[i].flat),1.0))
+    if dmbasis_other is not None:
+        other_mxs = dmbasis_other # list of basis matrices (assumed to be in std basis)
+        other_nMxs = len(other_mxs) # usually == d2, but not necessary (e.g. w/maxWeight)
+    else:
+        other_nMxs = 0
 
+    if ham_nMxs > 0:
+        d = ham_mxs[0].shape[0]
+        sparse = _sps.issparse(ham_mxs[0])
+    elif other_nMxs > 0:
+        d = other_mxs[0].shape[0]
+        sparse = _sps.issparse(other_mxs[0])
+    else: 
+        d = 0 #will end up returning no generators
+        sparse = False
+    d2 = d**2
+    normfn = _spsl.norm if sparse else _np.linalg.norm
+    identityfn = (lambda d: _sps.identity(d,'d','csr')) if sparse else _np.identity
 
-    otherLindbladTerms = _np.empty( (d2-1,d2-1,d2,d2), 'complex' )
-    for i,Lm in enumerate(mxs[1:]): #don't include identity
-        for j,Ln in enumerate(mxs[1:]): #don't include identity
-            #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
-            otherLindbladTerms[i,j] = _bt.nonham_lindbladian(Lm,Ln)
+    if ham_nMxs > 0 and other_nMxs > 0:
+        assert(other_mxs[0].shape[0] == ham_mxs[0].shape[0]), \
+            "Bases must have the same dimension!"
+
+    if ham_nMxs > 0:
+        assert(_np.isclose(normfn(ham_mxs[0]-identityfn(d)/_np.sqrt(d)),0)),\
+            "The first matrix in 'dmbasis_ham' must be the identity"
+
+        hamLindbladTerms = [ None ] * (ham_nMxs-1) if sparse else \
+                           _np.empty( (ham_nMxs-1,d2,d2), 'complex' )
+
+        for i,B in enumerate(ham_mxs[1:]): #don't include identity
+            hamLindbladTerms[i] = _lt.hamiltonian_to_lindbladian(B,sparse) # in std basis
             if normalize:
-                norm = _np.linalg.norm(otherLindbladTerms[i,j].flat)
+                norm = normfn(hamLindbladTerms[i]) #same as norm(term.flat)
                 if not _np.isclose(norm,0):
-                    otherLindbladTerms[i,j] /= norm #normalize projector
-                    assert(_np.isclose(_np.linalg.norm(
-                                otherLindbladTerms[i,j].flat),1.0))
-            #I don't think this is true in general, but appears to be true for "pp" basis (why?)
-            #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
-            #    assert(_np.isclose(_np.linalg.norm(
-            #                otherLindbladTerms[i,j]-
-            #                otherLindbladTerms[j,i].conjugate()),0))
+                    hamLindbladTerms[i] /= norm #normalize projector
+                    assert(_np.isclose(normfn(hamLindbladTerms[i]),1.0))
+    else:
+        hamLindbladTerms = None
+
+    if other_nMxs > 0:
+        assert(_np.isclose(normfn(other_mxs[0]-identityfn(d)/_np.sqrt(d)),0)),\
+            "The first matrix in 'dmbasis_other' must be the identity"
+
+        if other_diagonal_only:
+            otherLindbladTerms = [ None ] * (other_nMxs-1) if sparse else \
+                                 _np.empty( (other_nMxs-1,d2,d2), 'complex' )
+            for i,Lm in enumerate(other_mxs[1:]): #don't include identity
+                otherLindbladTerms[i] = _lt.nonham_lindbladian(Lm,Lm,sparse)
+                if normalize:
+                    norm = normfn(otherLindbladTerms[i]) #same as norm(term.flat)
+                    if not _np.isclose(norm,0):
+                        otherLindbladTerms[i] /= norm #normalize projector
+                        assert(_np.isclose(normfn(otherLindbladTerms[i]),1.0))
+        
+        else:
+            otherLindbladTerms = \
+                [ [ None ] * (other_nMxs-1) for i in range(other_nMxs-1)] if sparse else \
+                _np.empty( (other_nMxs-1,other_nMxs-1,d2,d2), 'complex' )
+
+            for i,Lm in enumerate(other_mxs[1:]): #don't include identity
+                for j,Ln in enumerate(other_mxs[1:]): #don't include identity
+                    #print("DEBUG NONHAM LIND (%d,%d)" % (i,j)) #DEBUG!!!
+                    otherLindbladTerms[i][j] = _lt.nonham_lindbladian(Lm,Ln,sparse)
+                    if normalize:
+                        norm = normfn(otherLindbladTerms[i][j]) #same as norm(term.flat)
+                        if not _np.isclose(norm,0):
+                            otherLindbladTerms[i][j] /= norm #normalize projector
+                            assert(_np.isclose(normfn(otherLindbladTerms[i][j]),1.0))
+                    #I don't think this is true in general, but appears to be true for "pp" basis (why?)
+                    #if j < i: # check that other[i,j] == other[j,i].C, i.e. other is Hermitian
+                    #    assert(_np.isclose(_np.linalg.norm(
+                    #                otherLindbladTerms[i][j]-
+                    #                otherLindbladTerms[j][i].conjugate()),0))
+    else:
+        otherLindbladTerms = None
+
 
 
     #Check for orthogonality - otherLindblad terms are *not* orthogonal!
@@ -1006,36 +1324,51 @@ def lindblad_error_generators(dmbasis, normalize):
     return hamLindbladTerms, otherLindbladTerms
 
 
-def lindblad_errgen_projections(errgen, projection_basis,
-                                mxBasis="gm", normalize=True, 
-                                return_generators=False):
+def lindblad_errgen_projections(errgen, ham_basis,
+                                other_basis, mxBasis="gm",
+                                normalize=True, return_generators=False,
+                                other_diagonal_only=False, sparse=False):
     """
     Compute the projections of a gate error generator onto generators
-    for the Lindblad-term errors when expressed in the pauli-product basis.
+    for the Lindblad-term errors when expressed in the given 
+    "projection basis".
 
     Parameters
     ----------
     errgen: : ndarray
       The error generator matrix to project.
 
-    projection_basis : {'std', 'gm', 'pp', 'qt'}
-      The basis is used to construct the lindblad error generators onto which
-      the gate  error generator is projected onto.  Allowed values are
-      Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp) and Qutrit (qt).
+    ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis is used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
+
+    other_basis : {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
+        The basis is used to construct the Stochastic-type lindblad error
+        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt), list of numpy arrays, or a custom basis object.
       
-    mxBasis : {'std', 'gm', 'pp', 'qt'}, optional
-      Which basis `errgen` is represented in.  Allowed
-      options are Matrix-unit (std), Gell-Mann (gm),
-      Pauli-product (pp), and Qutrit (qt).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source basis. Allowed values are Matrix-unit (std), 
+        Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     normalize : bool, optional
-        Whether or not the generators being projected onto are normalized, so
-        that numpy.linalg.norm(generator.flat) == 1.0.  Note that the generators
-        will still, in general, be non-orthogonal.
+      Whether or not the generators being projected onto are normalized, so
+      that numpy.linalg.norm(generator.flat) == 1.0.  Note that the generators
+      will still, in general, be non-orthogonal.
 
     return_generators : bool, optional
       If True, return the error generators projected against along with the
       projection values themseves.
+
+    other_diagonal_only : bool, optional
+      If True, then only projections onto the "diagonal" terms in the
+      Lindblad expresssion are returned.
+
+    sparse : bool, optional
+      Whether to create sparse or dense basis matrices when strings
+      are given as `ham_basis` and `other_basis`
 
     Returns
     -------
@@ -1045,7 +1378,7 @@ def lindblad_errgen_projections(errgen, projection_basis,
 
     other_projections : numpy.ndarray
       An array of shape (d-1,d-1), where d is the dimension of the gate,
-      giving the projections onto the "other"-type Lindblad terms.
+      giving the projections onto the Stochastic-type Lindblad terms.
 
     ham_generators : numpy.ndarray
       The Hamiltonian-type Lindblad term generators, as would be returned
@@ -1053,49 +1386,62 @@ def lindblad_errgen_projections(errgen, projection_basis,
       Shape is (d-1,d,d), and `ham_generators[i]` is in the standard basis.
 
     other_generators : numpy.ndarray
-      The "other"-type Lindblad term generators, as would be returned
+      The Stochastic-type Lindblad term generators, as would be returned
       from `lindblad_error_generators(pp_matrices(sqrt(d)), normalize)`.
       Shape is (d-1,d-1,d,d), and `other_generators[i]` is in the std basis.
     """
-
     errgen_std = _bt.change_basis(errgen, mxBasis, "std")
+    if _sps.issparse(errgen_std):
+        errgen_std_flat = errgen_std.tolil().reshape(
+            (errgen_std.shape[0]*errgen_std.shape[1],1) ).tocsr() # b/c lil's are only type that can reshape...
+    else:
+        errgen_std_flat = errgen_std.flatten()
+    errgen_std = None #ununsed below, and sparse reshape doesn't copy, so mark as None
+    
 
     d2 = errgen.shape[0]
     d = int(_np.sqrt(d2))
     #nQubits = _np.log2(d)
-
+    
     #Get a list of the generators in corresspondence with the
     #  specified basis elements.
-    hamGens,otherGens = lindblad_error_generators(
-        _bt.basis_matrices(projection_basis, d), 
-        normalize) # in std basis
+    if isinstance(ham_basis, _Basis):
+        hamBasisMxs = ham_basis.get_composite_matrices()
+    elif _compat.isstr(ham_basis):
+        hamBasisMxs = _basis_matrices(ham_basis, d, sparse=sparse)
+    else: 
+        hamBasisMxs = ham_basis
+        
+    if isinstance(other_basis, _Basis):
+        otherBasisMxs = other_basis.get_composite_matrices()
+    elif _compat.isstr(other_basis):
+        otherBasisMxs = _basis_matrices(other_basis, d, sparse=sparse)
+    else: 
+        otherBasisMxs = other_basis
+        
+    hamGens, otherGens = lindblad_error_generators(
+        hamBasisMxs,otherBasisMxs,normalize,other_diagonal_only) # in std basis
 
-    assert(hamGens.shape == (d2-1,d2,d2))
-    assert(otherGens.shape == (d2-1,d2-1,d2,d2))
+    if hamBasisMxs is not None:
+        bsH = len(hamBasisMxs) #basis size (not necessarily d2)
+    else: bsH = 0
+
+    if otherBasisMxs is not None:
+        bsO = len(otherBasisMxs) #basis size (not necessarily d2)
+    else: bsO = 0
+
+    if bsH > 0: sparse = _sps.issparse(hamBasisMxs[0])
+    elif bsO > 0: sparse = _sps.issparse(otherBasisMxs[0])
+    else: sparse = False # default?
+    
     assert(_np.isclose(d*d,d2)) #d2 must be a perfect square
-
-    #OLD: just lump hamiltonian generators in with the others, even though they
-    #   should be orthogonal to all the non-hamiltonian error generators.
-    #hamProjs = _np.empty( hamGens.shape[0], 'd' )
-    #for i,genMx in enumerate(hamGens):
-    #    hamProjs[i] = _np.real_if_close(_np.vdot( errgen_std.flatten(), genMx.flatten() ))
-    #    assert(_np.isreal(hamProjs[i]))
-
-    #OLD: doesn't work because otherGens are *not* orthogonal (but they are linearly independent)
-    #otherProjs = _np.empty( (otherGens.shape[0],otherGens.shape[1]), 'complex' )
-    #for i in range(otherGens.shape[0]):
-    #    for j in range(otherGens.shape[1]):
-    #        otherProjs[i,j] = _np.vdot( errgen_std.flatten(),
-    #                                    otherGens[i,j].flatten())
-    #        if i==j: 
-    #            otherProjs[i,j] = _np.real_if_close(otherProjs[i,j])
-    #            assert(_np.isreal(otherProjs[i,j]))
-    #        if i > j:
-    #            #print("DEBUG conjugates (%d,%d):" % (i,j)) #DEBUG!!!
-    #            #print("other[%d,%d] = \n" % (i,j), otherGens[i,j])
-    #            #print("other[%d,%d] = \n" % (j,i), otherGens[j,i])
-    #            assert(_np.isclose(otherProjs[i,j], otherProjs[j,i].conjugate())) 
-    #             #at least for "pp" basis, otherProjs is hermetian when computed this way...
+    if bsH > 0:
+        _assert_shape(hamGens, (bsH-1,d2,d2), sparse)
+    if bsO > 0:
+        if other_diagonal_only:
+            _assert_shape(otherGens, (bsO-1,d2,d2), sparse)
+        else:
+            _assert_shape(otherGens, (bsO-1,bsO-1,d2,d2), sparse)
 
     #Perform linear least squares solve to find "projections" onto each otherGens element - defined so that
     #  sum_i projection_i * otherGen_i = (errgen_std-ham_errgen) as well as possible.
@@ -1105,26 +1451,92 @@ def lindblad_errgen_projections(errgen, projection_basis,
     
     #Do linear least squares soln to expressing errgen_std as a linear combo
     # of the lindblad generators
-    M = _np.concatenate( (hamGens.reshape((d2-1,d2**2)).T, otherGens.reshape(((d2-1)**2,d2**2)).T), axis=1)
-    assert(_np.linalg.matrix_rank(M,1e-7) == M.shape[1]) #check err gens are linearly independent
-    Mdag = M.T.conjugate()
-    projs = _np.dot(_np.linalg.inv(_np.dot(Mdag,M)),
-                         _np.dot(Mdag,errgen_std.flatten()))
-    hamProjs = projs[0:(d2-1)]
-    otherProjs = projs[(d2-1):]
+    if bsH > 0:
+        if not sparse:
+            H = hamGens.reshape((bsH-1,d2**2)).T #ham generators == columns
+            Hdag = H.T.conjugate()
 
-    hamProjs.shape = (hamGens.shape[0],)
-    otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
+            #Do linear least squares: this is what takes the bulk of the time
+            hamProjs   = _np.linalg.solve(_np.dot(Hdag,H), _np.dot(Hdag,errgen_std_flat))
+            hamProjs.shape = (hamGens.shape[0],)
+        else:
+            rows = [ hamGen.tolil().reshape((1,d2**2)) for hamGen in hamGens ]
+            H = _sps.vstack(rows, 'csr').transpose()
+            Hdag = H.copy().transpose().conjugate()
 
+            #Do linear least squares: this is what takes the bulk of the time
+            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS 
+                hamProjs = _np.zeros(bsH-1, 'd')
+            else:
+                hamProjs   = _spsl.spsolve(Hdag.dot(H), Hdag.dot(errgen_std_flat) )
+                if _sps.issparse(hamProjs): hamProjs = hamProjs.toarray().flatten()
+            hamProjs.shape = (bsH-1,)
+    else:
+        hamProjs = None
+
+    if bsO > 0:
+        if not sparse:
+            if other_diagonal_only:
+                O = otherGens.reshape((bsO-1,d2**2)).T # other generators == columns
+            else:
+                O = otherGens.reshape(((bsO-1)**2,d2**2)).T # other generators == columns
+            Odag = O.T.conjugate()
+    
+            #Do linear least squares: this is what takes the bulk of the time
+            otherProjs = _np.linalg.solve(_np.dot(Odag,O), _np.dot(Odag,errgen_std_flat))
+    
+            if other_diagonal_only:
+                otherProjs.shape = (otherGens.shape[0],)
+            else:
+                otherProjs.shape = (otherGens.shape[0],otherGens.shape[1])
+
+        else:
+            if other_diagonal_only:
+                rows = [oGen.tolil().reshape((1,d2**2)) for oGen in otherGens]
+                O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
+            else:
+                rows = [oGen.tolil().reshape((1,d2**2)) for oGenRow in otherGens for oGen in oGenRow]
+                O = _sps.vstack(rows, 'csr').transpose() # other generators == columns
+            Odag = O.copy().transpose().conjugate() #TODO: maybe conjugate copies data?
+
+            #Do linear least squares: this is what takes the bulk of the time
+            if _mt.safenorm(errgen_std_flat) < 1e-8: #protect against singular RHS 
+                otherProjs = _np.zeros(bsO-1, 'd') if other_diagonal_only else \
+                             _np.zeros((bsO-1,bsO-1), 'd')
+            else:
+                otherProjs = _spsl.spsolve(Odag.dot(O), Odag.dot(errgen_std_flat))
+                if _sps.issparse(otherProjs): otherProjs = otherProjs.toarray().flatten()
+    
+            if other_diagonal_only:
+                otherProjs.shape = (bsO-1,)
+            else:
+                otherProjs.shape = (bsO-1,bsO-1)
+    else:
+        otherProjs = None
+
+
+    #check err gens are linearly independent -- but can take a very long time, so comment out!
+    #assert(_np.linalg.matrix_rank(H,1e-7) == H.shape[1])
+    #assert(_np.linalg.matrix_rank(O,1e-7) == O.shape[1])
+    #if False: # further check against older (slower) version
+    #    M = _np.concatenate( (hamGens.reshape((bs-1,d2**2)).T, otherGens.reshape(((bs-1)**2,d2**2)).T), axis=1)
+    #    assert(_np.linalg.matrix_rank(M,1e-7) == M.shape[1]) #check err gens are linearly independent
+    #    Mdag = M.T.conjugate()
+    #    print("DB D: %.1f" % (time.time()-t)); t = time.time()
+    #    projs = _np.linalg.solve(_np.dot(Mdag,M), _np.dot(Mdag,errgen_std_flat))        
+    #    hamProjs_chk = projs[0:(bs-1)]
+    #    otherProjs_chk = projs[(bs-1):]
+    #    assert(_np.linalg.norm(hamProjs-hamProjs_chk) < 1e-6)
+    #    assert(_np.linalg.norm(otherProjs-otherProjs_chk) < 1e-6)
+    
     if return_generators:
         return hamProjs, otherProjs, hamGens, otherGens
     else:
         return hamProjs, otherProjs
 
-
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
 # calls to this one and unitary_to_processmx
-def rotation_gate_mx(r,mxBasis="gm"):
+def rotation_gate_mx(r, mxBasis="gm"):
     """
     Construct a rotation gate matrix.
 
@@ -1142,10 +1554,10 @@ def rotation_gate_mx(r,mxBasis="gm"):
         A tuple of coeffiecients, one per non-identity
         Pauli-product basis element
 
-    mxBasis : {'std', 'gm','pp'}, optional
-      Which basis returned matrix is represented in.
-      Allowed options are Matrix-unit (std), Gell-Mann
-      (gm) and Pauli-product (pp).
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 .
     Returns
     -------
@@ -1156,19 +1568,231 @@ def rotation_gate_mx(r,mxBasis="gm"):
     assert(d**2 == len(r)+1), "Invalid number of rotation angles"
 
     #get Pauli-product matrices (in std basis)
-    pp = _bt.pp_matrices(d)
+    pp = _basis_matrices('pp', d)
     assert(len(r) == len(pp[1:]))
 
     #build unitary (in std basis)
     ex = _np.zeros( (d,d), 'complex' )
-    for rot,pp_mx in zip(r,pp[1:]):
+    for rot, pp_mx in zip(r, pp[1:]):
         ex += rot/2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
     stdGate = unitary_to_process_mx(U)
-    
-    if mxBasis == "pp":   ret = _bt.std_to_pp(stdGate)
-    elif mxBasis == "gm": ret = _bt.std_to_gm(stdGate)
-    elif mxBasis == "std": ret = stdGate
-    else: raise ValueError("Invalid basis specifier: %s" % mxBasis)
+
+    ret = _bt.change_basis(stdGate, 'std', mxBasis, None)
 
     return ret
+
+
+
+def project_gateset(gateset, targetGateset,
+                    projectiontypes=('H','S','H+S','LND'),
+                    genType="logG-logT"):
+    """
+    Construct one or more new gatesets by projecting the error generator of
+    `gateset` onto some sub-space then reconstructing.
+
+    Parameters
+    ----------
+    gateset : GateSet
+        The gate set whose error generator should be projected.
+
+    targetGateset : GateSet
+        The set of target (ideal) gates.
+
+    projectiontypes : tuple of {'H','S','H+S','LND','LNDCP'}
+        Which projections to use.  The length of this tuple gives the
+        number of `GateSet` objects returned.  Allowed values are:
+
+        - 'H' = Hamiltonian errors
+        - 'S' = Stochastic Pauli-channel errors
+        - 'H+S' = both of the above error types
+        - 'LND' = errgen projected to a normal (CPTP) Lindbladian
+        - 'LNDF' = errgen projected to an unrestricted (full) Lindbladian
+
+    genType : {"logG-logT", "logTiG"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logG-logT" : errgen = log(gate) - log(target_gate)
+      - "logTiG" : errgen = log( dot(inv(target_gate), gate) )
+
+    Returns
+    -------
+    projected_gatesets : list of GateSets
+       Elements are projected versions of `gateset` corresponding to
+       the elements of `projectiontypes`.
+
+    Nps : list of parameter counts
+       Integer parameter counts for each gate set in `projected_gatesets`.
+       Useful for computing the expected log-likelihood or chi2.
+    """
+    
+    gateLabels = list(gateset.gates.keys())  # gate labels
+    basis = gateset.basis
+    
+    if basis.name != targetGateset.basis.name:
+        raise ValueError("Basis mismatch between gateset (%s) and target (%s)!"\
+                         % (gateset.basis.name, targetGateset.basis.name))
+    
+    # Note: set to "full" parameterization so we can set the gates below
+    #  regardless of what parameterization the original gateset had.
+    gsDict = {}; NpDict = {}
+    for p in projectiontypes:
+        gsDict[p] = gateset.copy()
+        gsDict[p].set_all_parameterizations("full")
+        NpDict[p] = 0
+
+        
+    errgens = [ error_generator(gateset.gates[gl],
+                                targetGateset.gates[gl],
+                                targetGateset.basis, genType)
+                for gl in gateLabels ]
+
+    for gl,errgen in zip(gateLabels,errgens):
+        if ('H' in projectiontypes) or ('H+S' in projectiontypes):
+            hamProj, hamGens = std_errgen_projections(
+                errgen, "hamiltonian", basis.name, basis, True)
+            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
+            ham_error_gen = _bt.change_basis(ham_error_gen,"std",basis)
+            
+        if ('S' in projectiontypes) or ('H+S' in projectiontypes):
+            stoProj, stoGens = std_errgen_projections(
+                errgen, "stochastic", basis.name, basis, True)
+            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
+            sto_error_gen = _bt.change_basis(sto_error_gen,"std",basis)
+            
+        if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
+            HProj, OProj, HGens, OGens = \
+                lindblad_errgen_projections(
+                    errgen, basis.name, basis.name, basis, normalize=False,
+                    return_generators=True)
+            #Note: return values *can* be None if an empty/None basis is given
+            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
+                            _np.einsum('ij,ijkl', OProj, OGens)
+            lnd_error_gen = _bt.change_basis(lnd_error_gen,"std",basis)
+
+        targetGate = targetGateset.gates[gl]
+            
+        if 'H' in projectiontypes:
+            gsDict['H'].gates[gl] = gate_from_error_generator(
+                ham_error_gen, targetGate, genType)
+            NpDict['H'] += len(hamProj)
+            
+        if 'S' in projectiontypes:
+            gsDict['S'].gates[gl]  = gate_from_error_generator(
+                sto_error_gen, targetGate, genType)
+            NpDict['S'] += len(stoProj)
+
+        if 'H+S' in projectiontypes:
+            gsDict['H+S'].gates[gl] = gate_from_error_generator(
+                ham_error_gen+sto_error_gen, targetGate, genType)
+            NpDict['H+S'] += len(hamProj) + len(stoProj)
+
+        if 'LNDF' in projectiontypes:
+            gsDict['LNDF'].gates[gl] = gate_from_error_generator(
+                lnd_error_gen, targetGate, genType)
+            NpDict['LNDF'] += HProj.size + OProj.size
+
+        if 'LND' in projectiontypes:
+            evals,U = _np.linalg.eig(OProj)
+            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
+            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U)))
+              #OProj_cp is now a pos-def matrix
+            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
+                               _np.einsum('ij,ijkl', OProj_cp, OGens)
+            lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp,"std",basis)
+
+            gsDict['LND'].gates[gl] = gate_from_error_generator(
+                lnd_error_gen_cp, targetGate, genType)
+            NpDict['LND'] += HProj.size + OProj.size
+
+        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
+        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
+        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens)
+        #  # (only negative stochastic projections OK)
+        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
+        #gsHSCP.gates[gl] = _tools.gate_from_error_generator(
+        #    ham_error_gen, targetGate, genType) #+sto_error_gen_cp
+
+
+    #DEBUG!!!
+    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_evals(gateset))
+    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_evals(gsDict['LND']))
+    
+    #Check for CPTP where expected
+    #assert(_tools.sum_of_negative_choi_evals(gsHSCP) < 1e-6)
+    #assert(_tools.sum_of_negative_choi_evals(gsDict['LND']) < 1e-6)
+
+    #Collect and return requrested results:
+    ret_gs = [ gsDict[p] for p in projectiontypes ]
+    ret_Nps = [ NpDict[p] for p in projectiontypes ]
+    return ret_gs, ret_Nps
+
+def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
+    """
+    Project each gate of `gateset` onto the eigenspace of the corresponding
+    gate within `targetGateset`.  Return the resulting `GateSet`.
+
+    Parameters
+    ----------
+    gateset, targetGateset : GateSet
+        The gate set being projected and the gate set specifying the "target"
+        eigen-spaces, respectively.
+
+    EPS : float, optional
+        Small magnitude specifying how much to "nudge" the target gates
+        before eigen-decomposing them, so that their spectra will have the
+        same conjugacy structure as the gates of `gateset`.
+
+    Returns
+    -------
+    GateSet
+    """
+    ret = targetGateset.copy()
+    ret.set_all_parameterizations("full") # so we can freely assign gates new values
+    
+    for gl,gate in gateset.gates.items():
+        tgt_gate = targetGateset.gates[gl].copy()
+        tgt_gate = (1.0-EPS)*tgt_gate + EPS*gate # breaks tgt_gate's degeneracies w/same structure as gate
+        evals_gate = _np.linalg.eigvals(gate)
+        evals_tgt, Utgt = _np.linalg.eig(tgt_gate)
+        _, pairs = _mt.minweight_match(evals_tgt, evals_gate, return_pairs=True)
+        
+        evals = evals_gate.copy()
+        for i,j in pairs: #replace target evals w/matching eval of gate
+            evals[i] = evals_gate[j]
+
+        Utgt_inv = _np.linalg.inv(Utgt)
+        epgate = _np.dot(Utgt, _np.dot(_np.diag(evals), Utgt_inv))
+        epgate = _np.real_if_close(epgate, tol=1000)
+        if _np.linalg.norm(_np.imag(epgate)) > 1e-7:
+            _warnings.warn(("Target-eigenspace-projected gate has an imaginary"
+                            " component.  This usually isn't desired and"
+                            " indicates a failure to match eigenvalues."))
+        ret.gates[gl] = epgate
+
+    return ret
+    
+
+
+#TODO: remove later? deprecate?
+def unitary_to_pauligate(U):
+    """
+    Get the linear operator on (vectorized) density
+    matrices corresponding to a n-qubit unitary
+    operator on states.
+
+    Parameters
+    ----------
+    U : numpy array
+        A dxd array giving the action of the unitary
+        on a state in the sigma-z basis.
+        where d = 2 ** n-qubits
+
+    Returns
+    -------
+    numpy array
+        The operator on density matrices that have been
+        vectorized as d**2 vectors in the Pauli basis.
+    """
+    assert U.shape[0] == U.shape[1], '"Unitary" matrix is not square'
+    return _bt.change_basis(unitary_to_process_mx(U), 'std', 'pp')

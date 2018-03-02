@@ -1,10 +1,10 @@
+""" Utility functions for working with lists """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions for working with lists """
 
 def remove_duplicates_in_place(l,indexToTest=None):
     """
@@ -76,9 +76,9 @@ def remove_duplicates(l,indexToTest=None):
     return lcopy
 
 
-def compute_occurance_indices(lst):
+def compute_occurrence_indices(lst):
     """
-    Returns a 0-based list of integers specifying which occurance,
+    Returns a 0-based list of integers specifying which occurrence,
     i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
@@ -103,6 +103,53 @@ def compute_occurance_indices(lst):
             lookup[x] += 1
         ret.append( lookup[x] )
     return ret
+
+def find_replace_tuple(t,aliasDict):
+    """
+    Replace elements of t according to rules in `aliasDict`.
+
+    Parameters
+    ----------
+    t : tuple or list
+        The object to perform replacements upon.
+
+    aliasDict : dictionary
+        Dictionary whose keys are potential elements of `t` and whose values
+        are tuples corresponding to a sub-sequence that the given element should
+        be replaced with.  If None, no replacement is performed.
+
+    Returns
+    -------
+    tuple
+    """
+    t = tuple(t)
+    if aliasDict is None: return t
+    for label,expandedStr in aliasDict.items():
+        while label in tuple(t):
+            i = t.index(label)
+            t = t[:i] + tuple(expandedStr) + t[i+1:]
+    return t
+
+
+def find_replace_tuple_list(list_of_tuples,aliasDict):
+    """
+    Applies :func:`find_replace_tuple` on each element of `list_of_tuples`.
+
+    Parameters
+    ----------
+    list_of_tuples : list
+        A list of tuple objects to perform replacements upon.
+
+    aliasDict : dictionary
+        Dictionary whose keys are potential elements of `t` and whose values
+        are tuples corresponding to a sub-sequence that the given element should
+        be replaced with.  If None, no replacement is performed.
+
+    Returns
+    -------
+    list
+    """
+    return [ find_replace_tuple(t,aliasDict) for t in list_of_tuples ]
 
 
 

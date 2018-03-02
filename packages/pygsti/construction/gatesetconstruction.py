@@ -1,47 +1,39 @@
+"""Functions for the construction of new gate sets."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-"""Functions for the construction of new gate sets."""
 
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
 import scipy.linalg as _spl
+import warnings as _warnings
 
+
+from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
+from ..tools import compattools as _compat
 from ..objects import gate as _gate
+from ..objects import spamvec as _spamvec
+from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
-
+from ..baseobjs import Basis as _Basis
+from ..baseobjs import Dim as _Dim
 
 #############################################
 # Build gates based on "standard" gate names
 ############################################
 
-#TODO: stateSpaceLabels is never used?
-def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
+def basis_build_vector(vecExpr, basis):
     """
     Build a rho or E vector from an expression.
 
     Parameters
     ----------
-    stateSpaceDims : list of ints
-        Dimensions specifying the structure of the density-matrix space.
-        Elements correspond to block dimensions of an allowed density matrix in
-        the standard basis, and the density-matrix space is the direct sum of
-        linear spaces of dimension block-dimension^2.
-
-    stateSpaceLabels : a list of tuples
-        Each tuple corresponds to a block of a density matrix in the standard
-        basis (and therefore a component of the direct-sum density matrix
-        space). Elements of a tuple are user-defined labels beginning with "L"
-        (single level) or "Q" (two-level; qubit) which interpret the
-        d-dimensional state space corresponding to a d x d block as a tensor
-        product between qubit and single level systems.
-
     vecExpr : string
         the expression which determines which vector to build.  Currenlty, only
         integers are allowed, which specify a the vector for the pure state of
@@ -50,20 +42,17 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
         space, and is independent of the direct-sum decomposition of density
         matrix space.
 
-    basis : {'gm','pp','std','qt'}, optional
-       the basis of the returned vector.
-
-        - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann
-        - 'pp' == Pauli-product
-        - 'qt' == Qutrit
+    basis : Basis object
+        The basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
     numpy array
         The vector specified by vecExpr in the desired basis.
     """
-    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = basis.dim
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a
                                                          #Hilbert-space state index, so "reduced-std" basis
 
@@ -83,34 +72,33 @@ def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
                 vecIndex += 1
         start += blockDim
 
-    return _bt.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
+    return _bt.change_basis(vecInReducedStdBasis, 'std', basis)
 
-def build_identity_vec(stateSpaceDims, basis="gm"):
+def build_vector(stateSpaceDims, stateSpaceLabels, vecExpr, basis="gm"):
+    """
+    DEPRECATED: use :func:`basis_build_vector` instead.
+    """
+    _warnings.warn(("This function is deprecated and will be removed in the"
+                    " future.  Please use `basis_build_vector` instead."))
+    return basis_build_vector(vecExpr, _Basis(basis, stateSpaceDims))
+
+def basis_build_identity_vec(basis):
     """
     Build a the identity vector for a given space and basis.
 
     Parameters
     ----------
-    stateSpaceDims : list of ints
-       Dimenstions specifying the structure of the density-matrix space.
-        Elements correspond to block dimensions of an allowed density matrix in
-        the standard basis, and the density-matrix space is the direct sum of
-        linear spaces of dimension block-dimension^2.
-
-    basis : {'gm','pp','std','qt'}, optional
-        the basis of the returned vector.
-
-        - 'std' == Standard (matrix units)
-        - 'gm' == Gell-Mann
-        - 'pp' == Pauli-product
-        - 'qt' == Qutrit
+    basis : Basis object
+        The basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     Returns
     -------
     numpy array
         The identity vector in the desired basis.
     """
-    _, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    _, gateDim, blockDims = basis.dim 
     vecInReducedStdBasis = _np.zeros( (gateDim,1), 'd' ) # assume index given as vecExpr refers to a Hilbert-space state index, so "reduced-std" basis
 
     #set all diagonal elements of density matrix to 1.0 (end result = identity density mx)
@@ -121,10 +109,28 @@ def build_identity_vec(stateSpaceDims, basis="gm"):
                 if i == j: vecInReducedStdBasis[ vecIndex, 0 ] = 1.0  #set diagonal element of density matrix
                 vecIndex += 1
         start += blockDim
+    return _bt.change_basis(vecInReducedStdBasis, "std", basis)
 
-    return _bt.change_basis(vecInReducedStdBasis, "std", basis, stateSpaceDims)
+def build_identity_vec(stateSpaceDims, basis="gm"):
+    """
+    Build the identity vector given a certain density matrix struture.
 
+    Parameters
+    ----------
+    stateSpaceDims : list
+        A list of integers specifying the dimension of each block
+        of a block-diagonal the density matrix.
 
+    basis : str, optional
+        The string abbreviation of the basis of the returned vector.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt).
+
+    Returns
+    -------
+    numpy array
+    """
+    return basis_build_identity_vec(_Basis(basis, stateSpaceDims))
 
 def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 #coherentStateSpaceBlockDims
@@ -143,13 +149,10 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     gateExpr : string containing an expression for the gate to build
 
-    basis : string
-      - "std" = gate matrix operates on density mx expressed as sum of matrix
-        units
-      - "gm"  = gate matrix operates on dentity mx expressed as sum of
-        normalized Gell-Mann matrices
-      - "pp"  = gate matrix operates on density mx expresses as sum of
-        tensor-prod of pauli matrices
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
     """
     # gateExpr can contain single qubit ops: X(theta) ,Y(theta) ,Z(theta)
     #                      two qubit ops: CNOT
@@ -160,7 +163,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
     #Gate matrix will be in matrix unit basis, which we order by vectorizing
     # (by concatenating rows) each block of coherent states in the order given.
-    dmDim, _ , _ = _bt._processBlockDims(stateSpaceDims)
+    dmDim, _ , _ = _Dim(stateSpaceDims)
     fullOpDim = dmDim**2
 
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
@@ -227,8 +230,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
                     if (b1[:K]+b1[K+1:]) == (b2[:K]+b2[K+1:]):   #if all part of tensor prod match except for qubit we're operating on
                         UcohBlk[i,j] = Ugate[ b1[K], b2[K] ] # then fill in element
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -243,18 +245,31 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
                     gateTermInStdBasis[fi,fj] = gateBlk[i,j]
 
 
-        elif gateName in ('CX','CY','CZ'): #two-qubit gate names
-            assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label1 = args[1]; assert(label1.startswith('Q'))
-            label2 = args[2]; assert(label2.startswith('Q'))
+        elif gateName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
 
-            if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
-            elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
-            elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
-            Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+            if gateName in ('CX','CY','CZ'):
+                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
+                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+                label1, label2 = args[1:]
+
+                if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
+                elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
+                elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
+                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+                
+            else: # gateName in ('CNOT','CPHASE')
+                assert(len(args) == 2) # qubit-label1, qubit-label2
+                label1, label2 = args
+                if gateName == 'CNOT':
+                    Utarget = _np.array( [[0, 1],
+                                          [1, 0]], 'd')
+                elif gateName == 'CPHASE':
+                    Utarget = _np.array( [[1, 0],
+                                          [0,-1]], 'd')
+
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
+            assert(label1.startswith('Q') and label2.startswith('Q'))
             iTensorProdBlk = tensorBlkIndices[label1] # index of tensor product block (of state space) this bit label is part of
             assert( iTensorProdBlk == tensorBlkIndices[label2] ) #labels must be members of the same tensor product block
             cohBlk = stateSpaceLabels[iTensorProdBlk]
@@ -278,8 +293,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
 
             #print "UcohBlk = \n",UcohBlk
 
-            UcohBlkc = UcohBlk.conjugate()
-            gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis into final gate basis
             mapBlk = []
@@ -292,7 +306,6 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             for i,fi in enumerate(mapBlk):
                 for j,fj in enumerate(mapBlk):
                     gateTermInStdBasis[fi,fj] = gateBlk[i,j]
-
 
         elif gateName == "LX":  #TODO - better way to describe leakage?
             assert(len(args) == 3) # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
@@ -307,8 +320,7 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
 
-            Utotc = Utot.conjugate()
-            gateBlk = _np.kron(Utot,Utotc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+            gateBlk = _gt.unitary_to_process_mx(Utot) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
             #Map gateBlk's basis (vectorized 2x2) into final gate basis
             mapBlk = [] #note: "start index" is effectively zero since we're mapping all the blocs
@@ -349,27 +361,19 @@ def _oldBuildGate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm"):
         gateInStdBasis = _np.dot(gateInStdBasis, gateTermInStdBasis)
 
     #Pare down gateInStdBasis to only include those matrix unit basis elements that are allowed to be nonzero
-    gateInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateInStdBasis, stateSpaceDims)
+    gateInReducedStdBasis = _bt.resize_mx(gateInStdBasis, stateSpaceDims, resize='contract')
 
     #Change from std (mx unit) basis to another if requested
     gateMxInFinalBasis = _bt.change_basis(gateInReducedStdBasis, "std", basis, stateSpaceDims)
     
     return _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
-
-def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
-#coherentStateSpaceBlockDims
+def basis_build_gate(stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
     """
     Build a Gate object from an expression.
 
     Parameters
     ----------
-    stateSpaceDims : list of ints
-        Dimenstions specifying the structure of the density-matrix space.
-        Elements correspond to block dimensions of an allowed density matrix in
-        the standard basis, and the density-matrix space is the direct sum of
-        linear spaces of dimension block-dimension^2.
-
     stateSpaceLabels : a list of tuples
         Each tuple corresponds to a block of a density matrix in the standard
         basis (and therefore a component of the direct-sum density matrix
@@ -394,21 +398,18 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
           on qubit labeled by ssl1 with ssl0 being the control.
         - CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.  Acts
           on qubit labeled by ssl1 with ssl0 being the control.
+        - CNOT(ssl0, ssl1) = standard controlled-not gate.  Acts on qubit
+          labeled by ssl1 with ssl0 being the control.
+        - CPHASE(ssl0, ssl1) = standard controlled-phase gate.  Acts on qubit
+          labeled by ssl1 with ssl0 being the control.
         - LX(theta, i0, i1) = leakage between states i0 and i1.  Implemented as
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
-    basis : {'gm','pp','std','qt'}, optional
-        the basis of the returned gate.
-
-        - "std" = gate matrix operates on density mx expressed as sum of matrix
-          units
-        - "gm"  = gate matrix operates on dentity mx expressed as sum of
-          normalized Gell-Mann matrices
-        - "pp"  = gate matrix operates on density mx expressed as sum of
-          tensor-product of Pauli matrices
-        - "qt"  = gate matrix operates on density mx expressed as sum of
-          Qutrit basis matrices
+    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
 
     parameterization : {"full","TP","static","linear","linearTP"}, optional
         How to parameterize the resulting gate.
@@ -439,10 +440,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     #                      clevel qubit ops: Leak
     #                      two clevel opts: Flip
     #  each of which is given additional parameters specifying which indices it acts upon
-
-    dmDim, gateDim, blockDims = _bt._processBlockDims(stateSpaceDims)
+    dmDim, gateDim, blockDims = basis.dim
     #fullOpDim = dmDim**2
-
     #Store each tensor product blocks start index (within the density matrix), which tensor product block
     #  each label is in, and check to make sure dimensions match stateSpaceDims
     tensorBlkIndices = {}; startIndex = []; M = 0
@@ -467,12 +466,16 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
     # ----------------------------------------------------------------------------------------------------------------------------------------
 
     def equals_except(list1, list2, exemptIndices):
+        """ Test equivalence of list1 and list2 except for certain indices """
         for i,(l1,l2) in enumerate(zip(list1,list2)):
             if i in exemptIndices: continue
             if l1 != l2: return False
         return True
 
-    def embed_gate_unitary(Ugate, labels):  # Ugate should be in std basis (really no other basis it could be since gm and pp are only for acting on dm space)
+    def embed_gate_unitary(Ugate, labels):
+        """ Use the "unitary method" to embed a gate within it's larger Hilbert space """
+        # Note: Ugate should be in std basis (really no other basis it could be
+        # since gm and pp are only for acting on dm space)
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) > 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the same tensor-product-block of the state space")
@@ -510,8 +513,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
                     UcohBlk[i,j] = Ugate[ gate_i, gate_j ] # fill in element
                     #FUTURE: could keep track of what Ugate <-> UcohBlk elements for parameterization here
 
-        UcohBlkc = UcohBlk.conjugate()
-        gateBlk = _np.kron(UcohBlk,UcohBlkc) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
+        gateBlk = _gt.unitary_to_process_mx(UcohBlk) # N^2 x N^2 mx operating on vectorized tensor product block of densty matrix
 
         #print "DEBUG: Ugate = \n", Ugate
         #print "DEBUG: UcohBlk = \n", UcohBlk
@@ -525,16 +527,18 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if parameterization != "full":
             raise ValueError("Unitary embedding is only implemented for parmeterization='full'")
 
-        finalGateInFinalBasis = _bt.change_basis(finalGateInStdBasis, "std", basis, blockDims)
+        finalGateInFinalBasis = _bt.change_basis(finalGateInStdBasis, "std", basis.name, blockDims)
         return _gate.FullyParameterizedGate(finalGateInFinalBasis)
 
 
     def embed_gate(gatemx, labels, indicesToParameterize="all"):
+        """ Embed "local" gate matrix into gate for larger Hilbert space using
+            our standard method """
         #print "DEBUG: embed_gate gatemx = \n", gatemx
         iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-        assert( len(set(iTensorProdBlks)) == 1 )
-          #All qubit labels of a multi-qubit gate must correspond to the
-          # same tensor-product-block of the state space -- checked previously
+        if len(set(iTensorProdBlks)) != 1:
+            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
+                             " same tensor-product-block of the state space -- checked previously")
 
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
         tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
@@ -634,55 +638,33 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         #   bases for the other blocks - say the "std" basis (which one does't matter since the identity is the same for std, gm, and pp)
 
         #print "DEBUG: embed_gate gateBlk = \n", gateBlk
-        full_finalToPP = _np.identity( gateDim, 'complex' )
-        full_ppToFinal = _np.identity( gateDim, 'complex' )
+        tensorDim = blockDims[iTensorProdBlk]
+        startBasis = _Basis('pp',  tensorDim)
+        finalBasis = _Basis(basis.name, tensorDim)
 
-        if basis == "std":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
-            full_ppToFinal[offset:offset+N,offset:offset+N] = ppToStd
-            full_finalToPP[offset:offset+N,offset:offset+N] = stdToPP
-            realMx = False
+        d = slice(offset, offset+N)
 
-        elif basis == "gm":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
-            gmToStd = _bt.gm_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToGM = _np.linalg.inv(gmToStd)
-            full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToGM, ppToStd )
-            full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, gmToStd )
-            realMx = True
+        full_ppToFinal       = _np.identity(gateDim, 'complex')
+        full_ppToFinal[d, d] = startBasis.transform_matrix(finalBasis)
 
-        elif basis == "pp":
-            # Note: finalGate may have some non-power-of-2 dimensional blocks that can't be in a "pp" basis,
-            #  but don't check for this here as they'll be caught by any gate term that operates on that block
-            realMx = True
+        full_finalToPP       = _np.identity(gateDim, 'complex')
+        full_finalToPP[d, d] = finalBasis.transform_matrix(startBasis)
 
-        elif basis == "qt":
-            ppToStd = _bt.pp_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToPP = _np.linalg.inv(ppToStd)
-            qtToStd = _bt.qt_to_std_transform_matrix(blockDims[iTensorProdBlk]); stdToQT = _np.linalg.inv(qtToStd)
-            full_ppToFinal[offset:offset+N,offset:offset+N] = _np.dot( stdToQT, ppToStd )
-            full_finalToPP[offset:offset+N,offset:offset+N] = _np.dot( stdToPP, qtToStd )
-            realMx = True
-
-        else: raise ValueError("Invalid 'basis' parameter: %s (must by 'std', 'gm', 'pp', or 'qt')" % basis)
-
+        finalGateInFinalBasis = _np.dot(full_ppToFinal,
+                                        _np.dot( finalGate, full_finalToPP))
         if parameterization == "full":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
             return _gate.FullyParameterizedGate(
                 _np.real(finalGateInFinalBasis)
-                if realMx else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis )
 
         if parameterization == "static":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
             return _gate.StaticGate(
                 _np.real(finalGateInFinalBasis)
-                if realMx else finalGateInFinalBasis )
+                if finalBasis.real else finalGateInFinalBasis )
 
         if parameterization == "TP":
-            finalGateInFinalBasis = _np.dot(full_ppToFinal,
-                                            _np.dot( finalGate, full_finalToPP))
-            if not realMx:
-                raise ValueError("TP gates must be real. Failed to build gate!")
+            if not finalBasis.real:
+                raise ValueError("TP gates must be real. Failed to build gate!") # pragma: no cover
             return _gate.TPParameterizedGate(_np.real(finalGateInFinalBasis))
 
         elif parameterization in ("linear","linearTP"):
@@ -699,7 +681,7 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
 
             return _gate.LinearlyParameterizedGate(
                 finalGate, paramArray, parameterToBaseIndicesMap,
-                full_ppToFinal, full_finalToPP, realMx )
+                full_ppToFinal, full_finalToPP, finalBasis.real )
 
 
         else:
@@ -748,7 +730,8 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             for l in labels:
                 if l.startswith('Q'): stateSpaceDim *= 2
                 elif l.startswith('L'): stateSpaceDim *= 1
-                else: raise ValueError("Invalid state space label: %s" % l)
+                else: raise ValueError("Invalid state space label: %s" % l) # pragma: no cover
+                      #unreachable (checked above)
 
             if unitaryEmbedding or parameterization not in ("linear","linearTP"):
                 raise ValueError("'D' gate only makes sense to use when unitaryEmbedding is False and parameterization == 'linear'")
@@ -771,12 +754,12 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             elif gateName == 'Z': ex = -1j * theta*_bt.sigmaz/2
 
             Ugate = _spl.expm(ex) # 2x2 unitary matrix operating on single qubit in [0,1] basis
+            #print("CDBG Ugate = \n",Ugate)
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == 'N': #more general single-qubit gate
@@ -792,29 +775,42 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label,)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 4x4 mx in Pauli-product basis -- better for parameterization
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 4x4 mx operating on vectorized 1Q densty matrix in std basis
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 4x4 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label,), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
-        elif gateName in ('CX','CY','CZ'): #two-qubit gate names
-            assert(len(args) == 3) # theta, qubit-label1, qubit-label2
-            theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
-            label1 = args[1].strip(); assert(label1.startswith('Q'))
-            label2 = args[2].strip(); assert(label2.startswith('Q'))
+                
+        elif gateName in ('CX','CY','CZ','CNOT','CPHASE'): #two-qubit gate names
 
-            if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2.
-            elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2.
-            elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2.
-            Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+            if gateName in ('CX','CY','CZ'):
+                assert(len(args) == 3) # theta, qubit-label1, qubit-label2
+                theta = eval( args[0], {"__builtins__":None}, {'pi': _np.pi})
+                label1 = args[1].strip(); label2 = args[2].strip()
+
+                if gateName == 'CX': ex = -1j * theta*_bt.sigmax/2
+                elif gateName == 'CY': ex = -1j * theta*_bt.sigmay/2
+                elif gateName == 'CZ': ex = -1j * theta*_bt.sigmaz/2
+                Utarget = _spl.expm(ex) # 2x2 unitary matrix operating on target qubit
+                
+            else: # gateName in ('CNOT','CPHASE')
+                assert(len(args) == 2) # qubit-label1, qubit-label2
+                label1 = args[0].strip(); label2 = args[1].strip()
+
+                if gateName == 'CNOT':
+                    Utarget = _np.array( [[0, 1],
+                                          [1, 0]], 'd')
+                elif gateName == 'CPHASE':
+                    Utarget = _np.array( [[1, 0],
+                                          [0,-1]], 'd')
+
             Ugate = _np.identity(4, 'complex'); Ugate[2:,2:] = Utarget #4x4 unitary matrix operating on isolated two-qubit space
 
+            assert(label1.startswith('Q') and label2.startswith('Q'))
             if unitaryEmbedding:
                 gateTermInFinalBasis = embed_gate_unitary(Ugate, (label1,label2)) #Ugate assumed to be in std basis (really the only option)
             else:
-                Ugatec = Ugate.conjugate()
-                gateMx = _np.kron(Ugate,Ugatec) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
-                pp_gateMx = _bt.std_to_pp(gateMx) # *real* 16x16 mx in Pauli-product basis -- better for parameterization
+                gateMx = _gt.unitary_to_process_mx(Ugate) # complex 16x16 mx operating on vectorized 2Q densty matrix in std basis
+                pp_gateMx = _bt.change_basis(gateMx, 'std', 'pp') # *real* 16x16 mx in Pauli-product basis -- better for parameterization
                 gateTermInFinalBasis = embed_gate(pp_gateMx, (label1,label2), defaultI2P) # pp_gateMx assumed to be in the Pauli-product basis
 
         elif gateName == "LX":  #TODO - better way to describe leakage?
@@ -830,11 +826,15 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
             Utot[ i1,i2 ] = Ugate[0,1]
             Utot[ i2,i1 ] = Ugate[1,0]
             Utot[ i2,i2 ] = Ugate[1,1]
-            Utotc = Utot.conjugate()
-            gateTermInStdBasis = _np.kron(Utot,Utotc) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            gateTermInReducedStdBasis = _bt.contract_to_std_direct_sum_mx(gateTermInStdBasis, blockDims)
+            gateTermInStdBasis = _gt.unitary_to_process_mx(Utot) # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
+            print(blockDims)
+            # contract [3] to [2, 1]
+            gateTermInReducedStdBasis = _bt.resize_std_mx(gateTermInStdBasis, 
+                                                             'contract', 
+                                                             _Basis('std', 3), 
+                                                             _Basis('std', blockDims))
 
-            gateMxInFinalBasis = _bt.change_basis(gateTermInReducedStdBasis, "std", basis, blockDims)
+            gateMxInFinalBasis = _bt.change_basis(gateTermInReducedStdBasis, "std", basis.name, blockDims)
             gateTermInFinalBasis = _gate.FullyParameterizedGate(gateMxInFinalBasis)
 
         else: raise ValueError("Invalid gate name: %s" % gateName)
@@ -842,21 +842,148 @@ def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameter
         if gateInFinalBasis is None:
             gateInFinalBasis = gateTermInFinalBasis
         else:
-            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis )
+            gateInFinalBasis = _gate.compose( gateInFinalBasis, gateTermInFinalBasis, basis)
 
     return gateInFinalBasis # a Gate object
 
+def build_gate(stateSpaceDims, stateSpaceLabels, gateExpr, basis="gm", parameterization="full", unitaryEmbedding=False):
+    """
+    DEPRECATED: use :func:`basis_build_gate` instead.
+    """
+    _warnings.warn(("This function is deprecated and will be removed in the"
+                    " future.  Please use `basis_build_gate` instead."))
+    return basis_build_gate(stateSpaceLabels, gateExpr, _Basis(basis, stateSpaceDims), parameterization, unitaryEmbedding)
 
 
+def basis_build_gateset(stateSpaceLabels, basis,
+                        gateLabels, gateExpressions,
+                        prepLabels=('rho0',), prepExpressions=('0',),
+                        effectLabels='standard', effectExpressions='labels',
+                        povmLabels='Mdefault', parameterization="full"):
+    """
+    Build a new GateSet given lists of gate labels and expressions.
 
+    Parameters
+    ----------
+    stateSpaceLabels : a list of tuples
+        Each tuple corresponds to a block of a density matrix in the standard
+        basis (and therefore a component of the direct-sum density matrix
+        space). Elements of a tuple are user-defined labels beginning with "L"
+        (single level) or "Q" (two-level; qubit) which interpret the
+        d-dimensional state space corresponding to a d x d block as a tensor
+        product between qubit and single level systems.
+
+    basis : Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    gateLabels : list of strings
+       A list of labels for each created gate in the final gateset.  To
+        conform with text file parsing conventions these names should begin
+        with a capital G and can be followed by any number of lowercase
+        characters, numbers, or the underscore character.
+
+    gateExpressions : list of strings
+        A list of gate expressions, each corresponding to a gate label in
+        gateLabels, which determine what operation each gate performs (see
+        documentation for :meth:`build_gate`).
+
+    prepLabels : list of string, optional
+        A list of labels for each created state preparation in the final
+        gateset.  To conform with conventions these labels should begin with
+        "rho".
+
+    prepExpressions : list of strings, optional
+        A list of vector expressions for each state preparation vector (see
+        documentation for :meth:`build_vector`).
+
+    effectLabels : list, optional
+        If `povmLabels` is a string, then this is just a list of the effect
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        then `effectLabels` must be a list of lists of effect labels, each
+        list corresponding to a POVM.  If set to the special string `"standard"`
+        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space.
+
+    effectExpressions : list, optional
+        A list or list-of-lists of (string) vector expressions for each POVM
+        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        correspond to labels in `effectLabels`.  If set to the special string
+        `"labels"`, then the values of `effectLabels` are also used as 
+        expressions (which works well for integer-as-a-string labels).
+
+    povmLabels : list or string, optional
+        A list of POVM labels, or a single (string) label.  In the latter case,
+        only a single POVM is created and the format of `effectLabels` and
+        `effectExpressions` is simplified (see above).
+
+    parameterization : {"full","TP","linear","linearTP"}, optional
+        How to parameterize the gates of the resulting GateSet (see
+        documentation for :meth:`build_gate`).
+
+    Returns
+    -------
+    GateSet
+        The created gate set.
+    """
+    dmDim, _, blockDims = basis.dim #don't need gateDim
+    defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
+    ret = _gateset.GateSet(default_param=defP)
+                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G")
+
+    for label,rhoExpr in zip(prepLabels, prepExpressions):
+        ret.preps[label] = basis_build_vector(rhoExpr, basis)
+
+    if _compat.isstr(povmLabels):
+        povmLabels = [ povmLabels ]
+        effectLabels = [ effectLabels ]
+        effectExpressions = [ effectExpressions ]
+
+    for povmLbl, ELbls, EExprs in zip(povmLabels,
+                                      effectLabels, effectExpressions):
+        effects = []
+        
+        if ELbls == "standard":
+            ELbls = list(map(str,range(dmDim))) #standard labels
+        if EExprs == "labels":
+            EExprs = ELbls #use labels as expressions
+
+        for label,EExpr in zip(ELbls,EExprs):
+            effects.append( (label,basis_build_vector(EExpr, basis)) )
+
+        if defP == "TP":
+            ret.povms[povmLbl] = _povm.TPPOVM(effects)
+        else:
+            ret.povms[povmLbl] = _povm.UnconstrainedPOVM(effects)
+
+    for (gateLabel,gateExpr) in zip(gateLabels, gateExpressions):
+        ret.gates[gateLabel] = basis_build_gate(stateSpaceLabels,
+                                          gateExpr, basis, parameterization)
+
+    if len(blockDims) == 1:
+        basisDims = blockDims[0]
+    else:
+        basisDims = blockDims 
+
+    ret.basis = _Basis(basis, basisDims)
+
+    if parameterization == "full":
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
+    elif parameterization == "TP":
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.dim)
+    else:
+        ret.default_gauge_group = None #assume no gauge freedom
+
+    return ret
 
 def build_gateset(stateSpaceDims, stateSpaceLabels,
                   gateLabels, gateExpressions,
-                  prepLabels, prepExpressions,
-                  effectLabels, effectExpressions,
-                  spamdefs, basis="gm", parameterization="full"):
+                  prepLabels=('rho0',), prepExpressions=('0',),
+                  effectLabels='standard', effectExpressions='labels',
+                  povmLabels='Mdefault', basis="auto", parameterization="full"):
     """
-    Build a new GateSet given lists of gate labels and expressions.
+    Build a new GateSet given lists of labels and expressions.
 
     Parameters
     ----------
@@ -894,28 +1021,27 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
         A list of vector expressions for each state preparation vector (see
         documentation for :meth:`build_vector`).
 
-    effectLabels : list of string
-        A list of labels for each created and *parameterized* POVM effect in
-        the final gateset.  To conform with conventions these labels should
-        begin with "E".
+    effectLabels : list, optional
+        If `povmLabels` is a string, then this is just a list of the effect
+        (outcome) labels for the single POVM.  If `povmLabels` is a tuple, 
+        then `effectLabels` must be a list of lists of effect labels, each
+        list corresponding to a POVM.  If set to the special string `"standard"`
+        then the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        is the dimension of the state space.
 
-    effectExpressions : list of strings
-        A list of vector expressions for each POVM effect vector (see
-        documentation for :meth:`build_vector`).
+    effectExpressions : list, optional
+        A list or list-of-lists of (string) vector expressions for each POVM
+        effect vector (see documentation for :meth:`build_vector`).  Expressions
+        correspond to labels in `effectLabels`.  If set to the special string
+        `"labels"`, then the values of `effectLabels` are also used as 
+        expressions (which works well for integer-as-a-string labels).
 
-    spamdefs : dict
-       A dictionary mapping spam labels to (prepLabel,ELabel) 2-tuples
-        associating a particular state preparation and effect vector with a
-        label.  prepLabel and ELabel must be contained in prepLabels and
-        effectLabels respectively except for two special cases:
+    povmLabels : list or string, optional
+        A list of POVM labels, or a single (string) label.  In the latter case,
+        only a single POVM is created and the format of `effectLabels` and
+        `effectExpressions` is simplified (see above).
 
-        1.  ELabel can be set to "remainder" to mean an effect vector that is
-            the identity - (other effect vectors)
-        2.  ELabel and prepLabel can both be "remainder" to mean a spam label
-            that generates probabilities that are 1.0 - (sum of probabilities
-            from all other spam labels).
-
-    basis : {'gm','pp','std','qt'}, optional
+    basis : {'gm','pp','std','qt','auto'}, optional
         the basis of the matrices in the returned GateSet
 
         - "std" = gate matrix operates on density mx expressed as sum of matrix
@@ -926,6 +1052,8 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
           tensor-product of Pauli matrices
         - "qt"  = gate matrix operates on density mx expressed as sum of
           Qutrit basis matrices
+        - "auto" = "pp" if possible (integer num of qubits), "qt" if density
+          matrix dim == 3, and "gm" otherwise.
 
     parameterization : {"full","TP","linear","linearTP"}, optional
         How to parameterize the gates of the resulting GateSet (see
@@ -936,57 +1064,27 @@ def build_gateset(stateSpaceDims, stateSpaceLabels,
     GateSet
         The created gate set.
     """
-    defP = "TP" if (parameterization in ("TP","linearTP")) else "full"
-    ret = _gateset.GateSet(default_param=defP)
-                 #prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 #remainder_label="remainder", identity_label="identity")
+    if basis == "auto":
+        if len(stateSpaceDims) == 1 and \
+           _np.isclose(_np.log2(stateSpaceDims[0]),
+                       round(_np.log2(stateSpaceDims[0]))):
+            basis = "pp"
+        elif len(stateSpaceDims) == 1 and stateSpaceDims[0] == 3:
+            basis = "qt"
+        else: basis = "gm"
 
-    for label,rhoExpr in zip(prepLabels, prepExpressions):
-        ret.preps[label] = build_vector(stateSpaceDims, stateSpaceLabels, rhoExpr, basis)
-    for label,EExpr in zip(effectLabels,effectExpressions):
-        ret.effects[label] = build_vector(stateSpaceDims, stateSpaceLabels, EExpr, basis)
+    return basis_build_gateset(stateSpaceLabels,
+                  _Basis(basis, stateSpaceDims),
+                  gateLabels, gateExpressions,
+                  prepLabels, prepExpressions,
+                  effectLabels, effectExpressions,
+                  povmLabels, parameterization=parameterization)
 
-    ret.povm_identity = build_identity_vec(stateSpaceDims, basis)
-
-    #Note: since a GateSet's spamdefs are an *ordered* dictionary (for correspondence
-    #  to row indices in some bulk_ operations), we need to set the spamdefs in a
-    #  deterministic order -- e.g. we *cannot* iterate over the keys in a standard
-    #  dictionary.  So, unless we're given an ordered dict, add the keys (spam labels)
-    #  in alphabetical order.
-    if isinstance(spamdefs, _collections.OrderedDict):
-        for spamlabel,(rhoLbl,ELbl) in spamdefs.items():
-            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
-    else:
-        for spamlabel in sorted(list(spamdefs.keys())):
-            (rhoLbl,ELbl) = spamdefs[spamlabel]
-            ret.spamdefs[spamlabel] = (rhoLbl,ELbl)
-
-    for (gateLabel,gateExpr) in zip(gateLabels, gateExpressions):
-        ret.gates[gateLabel] = build_gate(stateSpaceDims, stateSpaceLabels,
-                                          gateExpr, basis, parameterization)
-
-    if len(stateSpaceDims) == 1:
-        basisDims = stateSpaceDims[0]
-    else:
-        basisDims = stateSpaceDims
-
-    ret.set_basis(basis, basisDims)
-
-    if parameterization == "full":
-        ret.default_gauge_group = _gg.FullGaugeGroup(ret.dim)
-    elif parameterization == "TP":
-        ret.default_gauge_group = _gg.TPGaugeGroup(ret.dim)
-    else:
-        ret.default_gauge_group = None #assume no gauge freedom
-
-    return ret
-
-
-def build_alias_gateset(gs_primitives,alias_dict):
+def build_alias_gateset(gs_primitives, alias_dict):
     """
     Creates a new gateset by composing the gates of an existing `GateSet`,
     `gs_primitives`, according to a dictionary of `GateString`s, `alias_dict`.
-    The keys of `alias_dict` are the gate labels of the returned `GateSet1.
+    The keys of `alias_dict` are the gate labels of the returned `GateSet`.
     SPAM vectors are unaltered, and simply copied from `gs_primitives`.
 
     Parameters

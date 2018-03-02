@@ -1,10 +1,11 @@
+""" Utility functions for RPE """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Utility functions for RPE """
+
 import numpy as _np
 from scipy import optimize as _opt
 from ...tools import decompose_gate_matrix as _decompose_gate_matrix
@@ -21,10 +22,10 @@ def extract_rotation_hat(xhat,yhat,k,Nx,Ny,angleName="epsilon",
     Parameters
     ----------
     xhat : float
-       The number of plus counts for the sin string being used.
+       The number of 0 counts for the sin string being used.
 
     yhat : float
-       The number of plus counts for the cos string being used.
+       The number of 0 counts for the cos string being used.
 
     k : float
        The generation of experiments that xhat and yhat come from.
@@ -86,8 +87,8 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
-    each generation).  Note: this assumes the dataset contains 'plus' and
-    'minus' SPAM labels.
+    each generation).  Note: this assumes the dataset contains '0' and
+    '1' SPAM labels.
 
     Parameters
     ----------
@@ -119,13 +120,20 @@ def est_angle_list(DS,angleSinStrs,angleCosStrs,angleName="epsilon",lengthList=N
     angleHatList = []
     genNum = len(angleSinStrs)
 
+    up_labels = rpeconfig_inst.up_labels
+    dn_labels = rpeconfig_inst.dn_labels
+
     if lengthList == None:
         lengthList = [2**k for k in range(genNum)]
     for i, length in enumerate(lengthList):
-        xhatTemp = DS[angleSinStrs[i]]['plus']
-        yhatTemp = DS[angleCosStrs[i]]['plus']
-        Nx = xhatTemp + DS[angleSinStrs[i]]['minus']
-        Ny = yhatTemp + DS[angleCosStrs[i]]['minus']
+        xhatTemp = _np.sum(DS[angleSinStrs[i]][up_label] for up_label in up_labels)
+        yhatTemp = _np.sum(DS[angleCosStrs[i]][up_label] for up_label in up_labels)
+        Nx = xhatTemp + _np.sum(DS[angleSinStrs[i]][dn_label] for dn_label in dn_labels)
+        Ny = yhatTemp + _np.sum(DS[angleCosStrs[i]][dn_label] for dn_label in dn_labels)
+#        xhatTemp = DS[angleSinStrs[i]]['0']
+#        yhatTemp = DS[angleCosStrs[i]]['0']
+#        Nx = xhatTemp + DS[angleSinStrs[i]]['1']
+#        Ny = yhatTemp + DS[angleCosStrs[i]]['1']
         angleTemp1 = extract_rotation_hat(xhatTemp,yhatTemp,length,
                                           Nx,Ny,angleName,angleTemp1,rpeconfig_inst)
         angleHatList.append(angleTemp1)
@@ -307,6 +315,7 @@ def extract_theta(gateset,rpeconfig_inst):
 
 
 def consistency_check(angle_k, angle_final, k):
+    """ Check internal consistency """
     wedge_size = _np.pi/(2*k)
     angle_k += _np.pi
     angle_k = angle_k % (2*_np.pi)
@@ -414,13 +423,13 @@ def analyze_rpe_data(inputDataset,trueOrTargetGateset,stringListD,rpeconfig_inst
 
     if do_consistency_check:
         if k_list is None:
-            raise Exception("Consistency check requested, but no k List given!")
+            raise ValueError("Consistency check requested, but no k List given!")
         else:
             num_ks = len(k_list)
             resultsD['alphaCheckMat'] = _np.zeros([num_ks,num_ks],float)
             resultsD['epsilonCheckMat'] = _np.zeros([num_ks,num_ks],float)
             resultsD['thetaCheckMat'] = _np.zeros([num_ks,num_ks],float)
-            for k_final_ind, k_final_val in enumerate(k_list):
+            for k_final_ind,_ in enumerate(k_list):
                 alpha_final_k = alphaHatList[k_final_ind]
                 epsilon_final_k = epsilonHatList[k_final_ind]
                 theta_final_k = thetaHatList[k_final_ind]

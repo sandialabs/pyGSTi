@@ -1,10 +1,11 @@
+""" Functions for creating RPE GateSets and GateString lists """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for creating RPE GateSets and GateString lists """
+
 import numpy as _np
 from . import rpetools as _rpetools
 from ... import construction as _cnst
@@ -66,30 +67,27 @@ def make_parameterized_rpe_gate_set(alphaTrue, epsilonTrue, auxRot, SPAMdepol,
     
     rhoExpressions = rpeconfig_inst.rhoExpressions
     EExpressions = rpeconfig_inst.EExpressions
-    spamLabelDict = rpeconfig_inst.spamLabelDict
+    ELabels = rpeconfig_inst.ELabels
 
     if withId:
         outputGateset = _cnst.build_gateset( 
             [2], [('Q0',)],['Gi',loose_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
-            spamdefs=spamLabelDict)
+            effectLabels=ELabels, effectExpressions=EExpressions)
     else:
         outputGateset = _cnst.build_gateset( 
             [2], [('Q0',)],[loose_axis_gate_label,fixed_axis_gate_label], 
             [ loose_axis_label+"(%s,Q0)" % epsilonTrue, fixed_axis_label+"(%s,Q0)" % alphaTrue],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
-            spamdefs=spamLabelDict)
+            effectLabels=ELabels, effectExpressions=EExpressions)
 
     if auxRot != 0:
         gatesetAux1 = _cnst.build_gateset( 
             [2], [('Q0',)],['Gi',auxiliary_axis_gate_label,fixed_axis_gate_label], 
             [ "I(Q0)", auxiliary_axis_label+"(%s,Q0)" % auxRot, fixed_axis_label+"(pi/2,Q0)"],
             prepLabels=["rho0"], prepExpressions=rhoExpressions,
-            effectLabels=["E0"], effectExpressions=EExpressions, 
-            spamdefs=spamLabelDict)
+            effectLabels=ELabels, effectExpressions=EExpressions)
 
         outputGateset.gates[loose_axis_gate_label] = \
                 _np.dot( _np.dot(_np.linalg.inv(gatesetAux1.gates[auxiliary_axis_gate_label]),
@@ -290,10 +288,10 @@ def make_rpe_data_set(gatesetOrDataset,stringListD,nSamples,sampleError='binomia
         - "binomial" - the number of counts is taken from a binomial
           distribution. Distribution has parameters p = probability of the
           gate string and n = number of samples.  This can only be used when
-          there are exactly two SPAM labels in gatesetOrDataset.
+          there are exactly two outcome labels in gatesetOrDataset.
         - "multinomial" - counts are taken from a multinomial distribution.
           Distribution has parameters p_k = probability of the gate string
-          using the k-th SPAM label and n = number of samples.  This should not
+          using the k-th outcome label and n = number of samples.  This should not
           be used for RPE.
 
     seed : int, optional

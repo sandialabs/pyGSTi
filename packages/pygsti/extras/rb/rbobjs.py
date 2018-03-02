@@ -1,10 +1,10 @@
+""" Defines Randomized Benhmarking support objects """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Defines Randomized Benhmarking support objects """
 
 from ... import drivers as _drivers
 from . import rbutils as _rbutils
@@ -12,8 +12,10 @@ from . import rbutils as _rbutils
 import numpy as _np
 from numpy import random as _rndm
 from functools import reduce as _reduce
-from matplotlib import pyplot as _plt
 from scipy.optimize import curve_fit as _curve_fit
+
+def is_integer(x):
+    return bool(isinstance(x,int) or isinstance(x, _np.integer))
 
 class MatrixGroup(object):
     """
@@ -81,7 +83,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
 
     def get_matrix_inv(self, i):
@@ -97,7 +99,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not isinstance(i,int): i = self.label_indices[i]
+        if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
     def get_inv(self, i):
@@ -115,7 +117,7 @@ class MatrixGroup(object):
             If `i` is an integer, returns the element's index.  Otherwise
             returns the element's label.
         """
-        if isinstance(i,int):
+        if is_integer(i):
             return self.inverse_table[i]
         else:
             i = self.label_indices[i]
@@ -142,7 +144,7 @@ class MatrixGroup(object):
             index.  Otherwise returns the resulting element's label.
         """
         if len(indices) == 0: return None
-        if isinstance(indices[0],int):
+        if is_integer(indices[0]):
             return _reduce(lambda i,j: self.product_table[i,j], indices)
         else:
             indices = [ self.label_indices[i] for i in indices ]
@@ -163,13 +165,13 @@ class RBResults(object):
 
     As in other docstrings, "W&F" refers to Wallman and Flammia's 
     http://iopscience.iop.org/article/10.1088/1367-2630/16/10/103032.
-    """
-    
-    def __init__(self, dataset, result_dicts, basename, weight_data,
-                 infinite_data, one_freq_adjust=False, alias_maps=None,
-                 success_spamlabel='plus', dim=2, pre_avg=True, f0=[0.98],
-                 A0=[0.5], ApB0=[1.], C0=[0.], f_bnd=[0.,1.], A_bnd=[0.,1.],
-                 ApB_bnd=[0.,1.], C_bnd=[-1.,1.]):
+    """    
+    def __init__(self, dataset, results, fit='standard', 
+                 success_outcomelabel='1', fit_parameters_dict=None, dim = 2, 
+                 weight_data=False, pre_avg=True, infinite_data=False, 
+                 one_freq_adjust=False):
+
+
         """
         Constructs a new RBResults object.
 
@@ -177,11 +179,6 @@ class RBResults(object):
         ----------
         dataset : dataset
             The dataset which contains all the experimental RB data.
-
-        result_dicts : dict
-            A dictionary of dictionaries of RB result values.  Keys are 
-            gate-label-sets, e.g. "clifford", "canonical", and "primivitve".
-            Values are dictionaries containing RB input and computed values.
 
         basename : str
             A name given to the "base" gate-label-set, usually "clifford",
@@ -208,8 +205,8 @@ class RBResults(object):
             RB values for each of these gate-label-sets will be present in the 
             returned results object.
 
-        success_spamlabel : str, optional
-            The spam label which denotes the *expected* outcome of preparing,
+        success_outcomelabel : str, optional
+            The outcome label which denotes the *expected* outcome of preparing,
             doing nothing (or the identity), and measuring.  In the ideal case
             of perfect gates, the probability of seeing this outcome when just
             preparing and measuring (no intervening gates) is 100%.
@@ -249,45 +246,32 @@ class RBResults(object):
         f_bnd, A_bnd, ApB_bnd, C_bnd : list, optional
             A 2-element list of floating point numbers. Each list gives the upper
             and lower bounds over which the relevant parameter is minimized. The
-            default values are well-motivated and should be almost always fine
-            with sufficient data.   
+            default values are reasonably well-motivated and should be almost 
+            always fine with sufficient data.   
             
-        """
+        """        
         self.dataset = dataset
-        self.dicts = result_dicts
-        self.basename = basename
-        self.alias_maps = alias_maps
+        self.results = results
+        self.fit = fit
+        self.success_outcomelabel = success_outcomelabel
+        self.fit_parameters_dict = fit_parameters_dict
         self.d = dim
-        self.pre_avg = pre_avg
         self.weight_data = weight_data
+        self.pre_avg = pre_avg
         self.infinite_data = infinite_data
         self.one_freq_adjust= one_freq_adjust,
-        self.success_spamlabel = success_spamlabel
-        self.f0 = f0
-        self.A0 = A0
-        self.ApB0 = ApB0
-        self.C0 = C0
-        self.f_bnd = f_bnd
-        self.A_bnd = A_bnd
-        self.ApB_bnd = ApB_bnd
-        self.C_bnd = C_bnd
-        self.one_freq_adjust = one_freq_adjust
 
-    def detail_str(self, gstyp, order):
+    def detail_str(self):
         """
         Format a string with computed RB values using the given 
-        gate-label-set, `gstyp` and order.  For example, if `gstyp` == "clifford",
-        and order == 'zeroth' then the per-"clifford" zeroth order fit RB error rates 
-        and parameters are given.
+        order.  For example, if order == 'standard' then the standard 
+        fit RB error rates and parameters are given.
         
         Parameters
         ----------
-        gstyp : str
-            The gate-label-set specifying which RB error rates and parameters
-            to extract.
-            
-        order : str
-            Allowed values are 'zeroth' or 'first'. Specifies whether the zeroth or
+        
+        fitting : str, optional
+            Allowed values are 'standard' or 'first order'. Specifies whether the standard or
             first order fitting model results are formatted.
             
         Returns
@@ -295,46 +279,37 @@ class RBResults(object):
         str
         """
         s = ""
-        key_list = ['A','B','f','F_avg','r']
-        key_list_1st_order = ['A1','B1','C1','f1','F_avg1','r1']
-        if gstyp in self.dicts and self.dicts[gstyp] is not None:            
-            #print("For %ss:" % gstyp)
-            if order=='zeroth':
-                s += "%s results \n" % gstyp
-                s += "  - Using %s order fitting function: A + B*f^m  \n" % order
-                if 'A_error_BS' in self.dicts[gstyp]: 
-                    s += "  - with boostrapped-derived error bars (1 sigma):\n"
-                    for key in key_list:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_BS"]))
-                if 'A_error_WF' in self.dicts[gstyp]:
-                    s += "   - with Wallman and Flammia-derived error bars" + \
-                        "(1 sigma):\n"
-                    for key in key_list:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_WF"]))
+        if self.fit == 'standard':
+            key_list = ['A','B','f','r']
+        if self.fit == 'first order':
+            key_list = ['A','B','C','f','r']
 
-                if 'A_error_BS' not in self.dicts[gstyp] and \
-                        'A_error_WF' not in self.dicts[gstyp]:
-                    for key in key_list:            
-                        s += "%s = %s\n" % (key, str(self.dicts[gstyp][key]))
-            if order=='first':
-                s += "%s results \n" % gstyp
-                s += "   - Using %s order fitting function: A1 + (B1+C1m)*f^m \n" % order
-                if 'A1_error_BS' in self.dicts[gstyp]: 
-                    s += "   - with boostrapped-derived error bars (1 sigma):\n"
-                    for key in key_list_1st_order:
-                        s += "%s = %s +/- %s\n" % (key,str(self.dicts[gstyp][key]),
-                                        str(self.dicts[gstyp][key + "_error_BS"]))
-                if 'A1_error_BS' not in self.dicts[gstyp]:
-                    for key in key_list_1st_order:            
-                        s += "%s = %s\n" % (key, str(self.dicts[gstyp][key]))
 
-        else:
-            s += "No %s analysis performed!\n" % gstyp
+        s += "RB results\n"
+        if self.fit == 'standard':
+            s += "\n  - Fitting to the standard function: A + B*f^m."
+        if self.fit == 'first order':
+            s += "\n  - Fitting to the first order fitting function: A + (B+Cm)*f^m."
+            
+        if 'A_error_BS' in self.results: 
+            s += "\n  - Boostrapped-derived error bars (1 sigma).\n\n"
+            for key in key_list:
+                s += "%s = %s +/- %s\n" % (key,str(self.results[key]),
+                                  str(self.results[key + "_error_BS"]))
+        if 'A_error_WF' in self.results:
+            s += "\n  - Wallman and Flammia-derived error bars (1 sigma).\n\n"
+            for key in key_list:
+                s += "%s = %s +/- %s\n" % (key,str(self.results[key]),
+                                    str(self.results[key + "_error_WF"]))
+
+        if 'A_error_BS' not in self.results and 'A_error_WF' not in self.results:
+            s += "\n\n"
+            for key in key_list:            
+                   s += "%s = %s\n" % (key, str(self.results[key]))
+
         return s
 
-    def print_detail(self, gstyp, order='zeroth'):
+    def print_results(self):
         """
         Print computed RB values using the given gate-label-set, `gstyp`,
         and order parameter.
@@ -343,199 +318,18 @@ class RBResults(object):
         the per-"clifford" RB error rates and parameters for both zeroth
         and first order fitting are printed.
 
-        Parameters
-        ----------
-        gstyp : str
-            The gate-label-set specifying which RB error rates and parameters
-            to extract.
-            
-        order : str
-            Allowed values are 'zeroth', 'first' or 'all'. Specifies whether 
-            the zeroth or first order fitting model results are displayed,
-            or both.
         """
-        if order=='all':
-            print(self.detail_str(gstyp, order='zeroth'))
-            print(self.detail_str(gstyp, order='first'))
-                       
-        else:
-            print(self.detail_str(gstyp, order))
+        print(self.detail_str())
 
-    def print_clifford(self,order='zeroth'):
-        """
-        Display per Clifford gate RB error rate.
-        """      
-        self.print_detail('clifford',order)
-
-    def print_primitive(self,order='zeroth'):
-        """
-        Display per primitive gate RB error rate.  The physical
-        interpretation of these numbers may not be reliable; per Clifford 
-        error rates are recommended instead. 
-        """
-        self.print_detail('primitive',order)
-
-    def __str__(self):
-        s = ""
-        for gstyp in self.dicts:
-            s += self.detail_str(gstyp, order='zeroth') + "\n"
-            s += self.detail_str(gstyp, order='first') + "\n"
-        return s
-
-
-    def plot(self,gstyp, xlim=None, ylim=None, save_fig_path=None, 
-             order='zeroth', analytic=None, analytic_params=None, 
-             sys_error_bound=None,legend=True,title=True,loc='upper right'):
-        """
-        Plot RB decay curve, as a function of some the sequence length
-        computed using the `gstyp` gate-label-set.
-
-        Parameters
-        ----------
-        gstyp : str
-            The gate-label-set specifying which translation (i.e. strings with
-            which gate labels) to use when computing sequence lengths.
-
-        xlim : tuple, optional
-            The x-range as (xmin,xmax).
-
-        ylim : tuple, optional
-            The y-range as (ymin,ymax).
-
-        save_fig_path : str, optional
-            If not None, the filename where the resulting plot should be saved.
-            
-        order : str
-            Optional. Allowed values are 'zeroth', 'first' or 'all'. Specifies 
-            whether the zeroth or first order fitting model results are plotted,
-            or both.
-            
-        analytic : str
-            Optional. If not None, allowed values are 'zeroth', 'first' or 'all'.
-            Specifies which analytic decay curves should be plotted. To use this 
-            functionality it is necessary to know the noisy gate set.
-            
-        analytic_params : dictionary
-            Optional, but required if analytic is not None. A dictionary containing
-            the analytic decay parameters for the noisy gate set, as calculated using
-            the 'analytic_rb_parameters' function located in rbutils.py
-            
-        sys_error_bound : str
-            Optional. If not None, allowed values are 'zeroth', 'first' or 'all'.
-            Specifies which systematic error bounds to plot. They can only be plotted
-            if analytic is not None, and analytic_params have been provided.
-            
-        legend : bool
-            Specifies whether a legend is added to the graph
-            
-        loc : str
-            Specifies the location of the legend.
-
-        Returns
-        -------
-        None
-        """
-        if gstyp not in self.dicts:
-            raise ValueError("%s data not found!" % gstyp)
-
-        newplot = _plt.figure(figsize=(8, 4))
-        newplotgca = newplot.gca()
-
-        # Note: minus one to get xdata discounts final Clifford-inverse
-        xdata = _np.asarray(self.dicts[gstyp]['lengths']) - 1
-        ydata = _np.asarray(self.dicts[gstyp]['successes'])
-        A = self.dicts[gstyp]['A']
-        B = self.dicts[gstyp]['B']
-        f = self.dicts[gstyp]['f']
-        A1 = self.dicts[gstyp]['A1']
-        B1 = self.dicts[gstyp]['B1']
-        C1 = self.dicts[gstyp]['C1']
-        f1 = self.dicts[gstyp]['f1']
-        pre_avg = self.pre_avg
-        if (analytic is not None) and (gstyp != 'clifford'):
-            print("Analytical curve is for Clifford decay only. Setting analytic to None.")
-            analytic = None
-        if (analytic is not None) and (analytic_params is None):
-            raise ValueError("No input analytic parameters specified. Please" +
-                           " specify analytic_params, or set analytic to None.")
-        if analytic is not None:
-            f_an = analytic_params['f']
-            A_an = analytic_params['A']
-            B_an = analytic_params['B']
-            A1_an = analytic_params['A1']
-            B1_an = analytic_params['B1']
-            C1_an = analytic_params['C1']
-                
-        if gstyp!='clifford':
-            xlabel = 'Sequence length ({0})'.format(gstyp.capitalize())
-        
-        if gstyp=='clifford':
-            xlabel = 'Sequence length'
-
-        cmap = _plt.cm.get_cmap('Set1')
-        if pre_avg:
-            newplotgca.plot(xdata,ydata,'.', markersize=10, clip_on=False,
-                        color=cmap(30),label='RB average survival probs.')
-        else:
-            newplotgca.plot(xdata,ydata,'.', markersize=3, clip_on=False,
-                        color=cmap(30),label='RB survival probs.')
-        
-        if order=='zeroth' or order=='all':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_WF(_np.arange(max(xdata)),A,B,f),
-                            '-', lw=3, color=cmap(169), label='Zeroth order fit')
-          
-        if order=='first' or order=='all':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),
-                            A1,B1,C1,f1),'-', lw=2, color=cmap(55), 
-                            label='First order fit')
-
-
-        if analytic=='zeroth' or analytic=='all':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
-                            '--', lw=3, color=cmap(125), label='Zeroth order analytic')
-            if sys_error_bound=='zeroth' or sys_error_bound=='all':
-                _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
-                                _rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an),
-                                _np.arange(max(xdata)), analytic_params['delta'], order='zeroth'), 
-                                _rbutils.seb_upper(_rbutils.rb_decay_WF(_np.arange(max(xdata)),A_an,B_an,f_an), 
-                                _np.arange(max(xdata)), analytic_params['delta'], order='zeroth'), alpha=0.5, 
-                                                     edgecolor='#CC4F1B', facecolor='#FF9848')
-        if analytic=='first' or analytic=='all':
-            newplotgca.plot(_np.arange(max(xdata)),
-                            _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                            '--', lw=2, color=cmap(5), label='First order analytic')
-            if sys_error_bound=='first' or sys_error_bound=='all':
-                _plt.fill_between(_np.arange(max(xdata)),_rbutils.seb_lower( 
-                                _rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-                                _np.arange(max(xdata)), analytic_params['delta'], order='first'), 
-                                _rbutils.seb_upper(_rbutils.rb_decay_1st_order(_np.arange(max(xdata)),A1_an,
-                                B1_an,C1_an,f_an), _np.arange(max(xdata)), analytic_params['delta'], order='first'), 
-                                  alpha=0.2, edgecolor='#1B2ACC', facecolor='#089FFF', linewidth=4)
-                 
-
-        newplotgca.set_xlabel(xlabel, fontsize=15)
-        newplotgca.set_ylabel('Survival probability',fontsize=15)
-        if title==True:
-            newplotgca.set_title('RB Decay Curves', fontsize=20)  
-        newplotgca.set_frame_on(False)
-        newplotgca.yaxis.grid(True)
-        newplotgca.tick_params(axis='x', top='off', labelsize=12)
-        newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
-        
-        if legend==True:
-            _plt.legend(loc=loc)
-        if xlim:
-            _plt.xlim(xlim)
-        if ylim:
-            _plt.ylim(ylim)
-        if save_fig_path:
-            newplot.savefig(save_fig_path)
+#    def __str__(self):
+#        s = ""
+#        for gstyp in self.dicts:
+#            s += self.detail_str(gstyp, fitting='standard') + "\n"
+#            s += self.detail_str(gstyp, fitting='first order') + "\n"
+#        return s
     
 
-    def compute_bootstrap_error_bars(self, gstyp_list = "all", resamples = 100,
+    def compute_bootstrap_error_bars(self, gstyp_list = ("clifford",), resamples = 100,
                                     seed=None, randState=None):
         """
         Compute error bars on RB fit parameters, including the RB decay rate
@@ -552,83 +346,60 @@ class RBResults(object):
         resamples : int, optional
             The number of nonparametric bootstrap resamplings
 
-        seed : int, optional
-            Seed for random number generator; optional.
-    
-        randState : numpy.random.RandomState, optional
-            A RandomState object to generate samples from. Can be useful to set
-            instead of `seed` if you want reproducible distribution samples
-            across multiple random function calls but you don't want to bother
-            with manually incrementing seeds between those calls.
+        seed : int or numpy.random.RandomState, optional
+            Seed for random number generator.  A RandomState object to generate
+            samples from, which can be useful if you want reproducible
+            distribution of samples across multiple random function calls but
+            you don't want to bother with manually changing seeds between
+            those calls.
 
         Returns
         -------
         None
         """
-        if randState is None:
-            rndm = _rndm.RandomState(seed) # ok if seed is None
-        else:
-            rndm = randState
-
-        if gstyp_list == "all":
-            gstyp_list = list(self.dicts.keys())
-
         #Setup lists to hold items to take stddev of:
-        A_list = {}; B_list = {}; f_list = {}; A1_list = {}
-        B1_list = {}; C1_list = {}; f1_list = {};
-        for gstyp in gstyp_list:
-            A_list[gstyp] = []; B_list[gstyp] = []; f_list[gstyp] = []; \
-            A1_list[gstyp] = []; B1_list[gstyp] = []; C1_list[gstyp] = [];\
-            f1_list[gstyp] = []
+        A_list = []; B_list = []; f_list = []; 
+        if self.fit == 'first order':
+            C_list = []
 
         #Create bootstrap datasets
         bootstrapped_dataset_list = []
-        for resample in range(resamples):
+        for _ in range(resamples):
             bootstrapped_dataset_list.append(
                 _drivers.bootstrap.make_bootstrap_dataset(
-                    self.dataset,'nonparametric'))
+                    self.dataset,'nonparametric',seed=seed))
 
         #Run RB analysis for each dataset
-        base_gatestrings = self.dicts[self.basename]['gatestrings']
-        alias_maps = { k:mp for k,mp in self.alias_maps.items()
-                       if k in gstyp_list } #only alias maps of requested
+        gatestrings = self.results['gatestrings']
+        #alias_maps = { k:mp for k,mp in self.alias_maps.items()
+        #               if k in gstyp_list } #only alias maps of requested
         from .rbcore import do_rb_base as _do_rb_base
         for dsBootstrap in bootstrapped_dataset_list:
-            resample_results = _do_rb_base(dsBootstrap, base_gatestrings,
-                                           self.basename, self.weight_data,
-                                           self.infinite_data, 
-                                           self.one_freq_adjust, alias_maps,
-                                           self.success_spamlabel, self.d,
-                                           self.pre_avg,self.f0, self.A0,
-                                           self.ApB0, self.C0, self.f_bnd,
-                                           self.A_bnd, self.ApB_bnd, 
-                                           self.C_bnd)
-            for gstyp in gstyp_list:
-                A_list[gstyp].append(resample_results.dicts[gstyp]['A'])
-                B_list[gstyp].append(resample_results.dicts[gstyp]['B'])
-                f_list[gstyp].append(resample_results.dicts[gstyp]['f'])
-                A1_list[gstyp].append(resample_results.dicts[gstyp]['A1'])
-                B1_list[gstyp].append(resample_results.dicts[gstyp]['B1'])
-                C1_list[gstyp].append(resample_results.dicts[gstyp]['C1'])
-                f1_list[gstyp].append(resample_results.dicts[gstyp]['f1'])
+            resample_results = _do_rb_base(dsBootstrap, gatestrings,
+                                           self.fit, 
+                                           self.fit_parameters_dict,
+                                           self.success_outcomelabel,
+                                           self.d,
+                                           self.weight_data,
+                                           self.pre_avg,
+                                           self.infinite_data,
+                                           self.one_freq_adjust)
+                
+            A_list.append(resample_results.results['A'])
+            B_list.append(resample_results.results['B'])
+            f_list.append(resample_results.results['f'])
+            if self.fit == 'first order':
+                C_list.append(resample_results.results['C'])
                
-        for gstyp in gstyp_list:
-            self.dicts[gstyp]['A_error_BS'] = _np.std(A_list[gstyp],ddof=1)
-            self.dicts[gstyp]['B_error_BS'] = _np.std(B_list[gstyp],ddof=1)
-            self.dicts[gstyp]['f_error_BS'] = _np.std(f_list[gstyp],ddof=1)
-            self.dicts[gstyp]['A1_error_BS'] = _np.std(A1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['B1_error_BS'] = _np.std(B1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['C1_error_BS'] = _np.std(C1_list[gstyp],ddof=1)
-            self.dicts[gstyp]['f1_error_BS'] = _np.std(f1_list[gstyp],ddof=1)
-            
-            self.dicts[gstyp]['F_avg_error_BS'] = (self.d-1.) / self.d \
-                                         * self.dicts[gstyp]['f_error_BS']
-            self.dicts[gstyp]['F_avg1_error_BS'] = (self.d-1.) / self.d \
-                                         * self.dicts[gstyp]['f1_error_BS']
-            self.dicts[gstyp]['r_error_BS'] = \
-                self.dicts[gstyp]['F_avg_error_BS']
-            self.dicts[gstyp]['r1_error_BS'] = \
-                self.dicts[gstyp]['F_avg1_error_BS']
+
+        self.results['A_error_BS'] = _np.std(A_list,ddof=1)
+        self.results['B_error_BS'] = _np.std(B_list,ddof=1)
+        self.results['f_error_BS'] = _np.std(f_list,ddof=1)
+        if self.fit == 'first order':
+            self.results['C_error_BS'] = _np.std(C_list,ddof=1)
+
+        self.results['r_error_BS'] = (self.d-1.) / self.d \
+                                         * self.results['f_error_BS']
 
         print("Bootstrapped error bars computed.  Use print methods to access.")
 
@@ -681,13 +452,13 @@ class RBResults(object):
         print('epsilon =',epsilon)
         print('r_0 =',r_0)
 
-        gstyp_list = ['clifford'] 
+        #DEBUG? gstyp_list = ['clifford'] 
           #KENNY: does WF assume clifford-gatestring data?
         
         for gstyp in gstyp_list:
             Ns = _np.array(self.dicts[gstyp]['counts'])
             sigma_list = _np.sqrt(epsilon**2 + 1./Ns)
-            results = _curve_fit(_rbutils.rb_decay_WF,
+            results = _curve_fit(_rbutils.standard_fit_function,
                              self.dicts[gstyp]['lengths'],
                              self.dicts[gstyp]['successes'],
                              p0 = p0, 
@@ -696,9 +467,7 @@ class RBResults(object):
         self.dicts[gstyp]['A_error_WF'] = _np.sqrt(results[1][0,0])
         self.dicts[gstyp]['B_error_WF'] = _np.sqrt(results[1][1,1])
         self.dicts[gstyp]['f_error_WF'] = _np.sqrt(results[1][2,2])
-        self.dicts[gstyp]['F_avg_error_WF'] = (self.d-1.)/self.d  \
+        self.dicts[gstyp]['r_error_WF'] = (self.d-1.)/self.d  \
                                    * self.dicts[gstyp]['f_error_WF']
-        self.dicts[gstyp]['r_error_WF'] = \
-            self.dicts[gstyp]['F_avg_error_WF']
 
         print("Analytic error bars computed.  Use print methods to access.")

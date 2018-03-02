@@ -66,7 +66,7 @@ def runMC2GSTAnalysis(myspecs, mygerms, gsTarget, seed,
 def runOneQubit(comm=None):
     from pygsti.construction import std1Q_XYI as std
 
-    maxLengths = [0,1,2,4,8,16,32,64,128,256,512] #still need to define this manually
+    maxLengths = [1,2,4,8,16,32,64,128,256,512] #still need to define this manually
     specs = pygsti.construction.build_spam_specs(
         std.fiducials, prep_labels=std.gs_target.get_prep_labels(),
         effect_labels=std.gs_target.get_effect_labels())

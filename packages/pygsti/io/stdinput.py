@@ -1,143 +1,62 @@
+""" Text-parsing classes and functions to read input files."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Text-parsering classes and functions to read input files."""
 
+import re as _re
 import os as _os
 import sys as _sys
+import time as _time
 import numpy as _np
 import warnings as _warnings
 from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
-import pyparsing as _pp
 
 from .. import objects as _objs
 from .. import tools as _tools
 
-_pp.ParserElement.enablePackrat()
-_sys.setrecursionlimit(10000)
+from ..baseobjs import GateStringParser as _GateStringParser
+
+
+def get_display_progress_fn(showProgress):
+    """
+    Create and return a progress-displaying function if `showProgress == True`
+    and it's run within an interactive environment.
+    """
+    
+    def _is_interactive():
+        import __main__ as main
+        return not hasattr(main, '__file__')
+
+    if _is_interactive() and showProgress:
+        try:
+            from IPython.display import clear_output
+            def _display_progress(i,N,filename):
+                _time.sleep(0.001); clear_output()
+                print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
+                _sys.stdout.flush()
+        except:
+            def _display_progress(i,N,f): pass
+    else:
+        def _display_progress(i,N,f): pass
+        
+    return _display_progress
+
 
 class StdInputParser(object):
     """
     Encapsulates a text parser for reading GST input files.
-
-    ** Grammar **
-
-    expop   :: '^'
-    multop  :: '*'
-    integer :: '0'..'9'+
-    real    :: ['+'|'-'] integer [ '.' integer [ 'e' ['+'|'-'] integer ] ]
-    reflbl  :: (alpha | digit | '_')+
-
-    nop     :: '{}'
-    gate    :: 'G' [ lowercase | digit | '_' ]+
-    strref  :: 'S' '[' reflbl ']'
-    slcref  :: strref [ '[' integer ':' integer ']' ]
-    expable :: gate | slcref | '(' string ')' | nop
-    expdstr :: expable [ expop integer ]*
-    string  :: expdstr [ [ multop ] expdstr ]*
-
-    dataline :: string [ real ]+
-    dictline :: reflbl string
     """
 
+    #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
+    _string_parser = _GateStringParser()
+
     def __init__(self):
-        """ Creates a new StdInputParser object """
-
-        def push_first( strg, loc, toks ):
-            self.exprStack.append( toks[0] )
-        def push_mult( strg, loc, toks ):
-            self.exprStack.append( '*' )
-        def push_slice( strg, loc, toks ):
-            self.exprStack.append( 'SLICE' )
-        #def push_count( strg, loc, toks ):
-        #    self.exprStack.append( toks[0] )
-        #    self.exprStack.append( 'COUNT' )
-
-        # caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        # lowers = 'abcdefghijklmnopqrstuvwxyz' #caps.lower()
-        digits = _pp.nums #"0123456789"  #same as "nums"
-        #point = _pp.Literal( "." )
-        #e     = _pp.CaselessLiteral( "E" )
-        #real  = _pp.Combine( _pp.Word( "+-"+_pp.nums, _pp.nums ) +
-        #                  _pp.Optional( point + _pp.Optional( _pp.Word( _pp.nums ) ) ) +
-        #                  _pp.Optional( e + _pp.Word( "+-"+_pp.nums, _pp.nums ) ) ).setParseAction(push_first)
-        # real = _pp.Regex(r'[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?') #faster than above
-        nop   = _pp.Literal("{}").setParseAction(push_first)
-
-        expop = _pp.Literal( "^" )
-        lpar  = _pp.Literal( "(" ).suppress()
-        rpar  = _pp.Literal( ")" ).suppress()
-        # lbrk  = _pp.Literal( "[" ).suppress()
-        # rbrk  = _pp.Literal( "]" ).suppress()
-
-        integer = _pp.Word( digits ).setParseAction(push_first)
-        reflbl  = _pp.Word(_pp.alphas+_pp.nums+"_").setParseAction(push_first)
-        #gate   = _pp.Word( "G", lowers + digits + "_" ).setParseAction(push_first)
-        gate    = _pp.Regex(r'G[a-z0-9_]+').setParseAction(push_first) #faster than above
-        strref  = (_pp.Literal("S") + "[" + reflbl + "]" ).setParseAction(push_first)
-        slcref  = (strref + _pp.Optional( ("[" + integer + ":" + integer + "]").setParseAction(push_slice)) )
-
-        #bSimple = False #experimenting with possible parser speedups
-        #if bSimple:
-        #    string  = _pp.Forward()
-        #    gateSeq = _pp.OneOrMore( gate )
-        #    expable = (nop | gateSeq | lpar + gateSeq + rpar)
-        #    expdstr = expable + _pp.Optional( (expop + integer).setParseAction(push_first) )
-        #    string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult))
-        #else:
-        string  = _pp.Forward()
-        expable = (gate | slcref | lpar + string + rpar | nop)
-        expdstr = expable + _pp.ZeroOrMore( (expop + integer).setParseAction(push_first) )
-        string << expdstr + _pp.ZeroOrMore( (_pp.Optional("*") + expdstr).setParseAction(push_mult)) #pylint: disable=expression-not-assigned
-
-        #count = real.copy().setParseAction(push_count)
-        #dataline = string + _pp.OneOrMore( count )
-        dictline = reflbl + string
-
-        self.string_parser = string
-        #self.dataline_parser = dataline #OLD: when data lines had their own parser
-        self.dictline_parser = dictline
-
-
-    def _evaluateStack(self, s):
-        op = s.pop()
-        if op == "*":
-            op2 = self._evaluateStack( s )
-            op1 = self._evaluateStack( s )
-            return op1 + op2 #tuple addition
-
-        elif op == "^":
-            exp = self._evaluateStack( s )
-            op  = self._evaluateStack( s )
-            return op*exp #tuple mulitplication = repeat op exp times
-
-        elif op == "SLICE":
-            upper = self._evaluateStack( s )
-            lower = self._evaluateStack( s )
-            op = self._evaluateStack( s )
-            return op[lower:upper]
-
-        #elif op == 'COUNT':
-        #    cnt = float(s.pop())          # next item on stack is a count
-        #    self.countList.insert(0, cnt) # so add it to countList and eval the rest of the stack
-        #    return self._evaluateStack( s )
-
-        elif op[0] == 'G':
-            return (op,) #as tuple
-
-        elif op[0] == 'S':
-            reflabel = s.pop() # next item on stack is a reference label (keep as a str)
-            return tuple(self.lookup[reflabel]) #lookup dict typically holds GateString objs...
-
-        elif op == '{}': # no-op returns empty tuple
-            return ()
-
-        else:
-            return int(op)
+        """ Create a new standard-input parser object """
+        pass
 
     def parse_gatestring(self, s, lookup={}):
         """
@@ -157,15 +76,11 @@ class StdInputParser(object):
         tuple of gate labels
             Representing the gate string.
         """
-        self.lookup = lookup
-        self.exprStack = []
-        try:
-            self.string_parser.parseString(s)
-        except _pp.ParseException as e:
-            raise ValueError("Parsing error when parsing %s: %s" % (s,str(e)))
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        return self._evaluateStack(self.exprStack)
+        self._string_parser.lookup = lookup
+        gate_tuple = self._string_parser.parse(s)
+        # print "DB: result = ",result
+        # print "DB: stack = ",self.exprStack
+        return gate_tuple
 
     def parse_dataline(self, s, lookup={}, expectedCounts=-1):
         """
@@ -194,18 +109,28 @@ class StdInputParser(object):
         counts : list
             List of counts following the gate string.
         """
-        self.lookup = lookup
-        self.exprStack = []
-        self.countList = []
 
-        #get counts from end of s
-        parts = s.split(); counts = []
+        # get counts from end of s
+        parts = s.split();
+        counts = []
         for p in reversed(parts):
-            try: f = float(p)
-            except: break
-            counts.append( f )
-        counts.reverse() #because we appended them in reversed order
-        totalCounts = len(counts) #in case expectedCounts is less
+            if p == '--':
+                counts.append('--') #special blank symbol
+                continue
+            try: #single float/int format
+                f = float(p)
+                counts.append(f)
+            except:
+                try: # "expanded" ColonContainingLabels:count
+                    t = p.split(':')
+                    assert(len(t) > 1)
+                    f = float(t[-1])
+                    counts.append( (tuple(t[0:-1]),f) )
+                except:
+                    break
+
+        counts.reverse()  # because we appended them in reversed order
+        totalCounts = len(counts)  # in case expectedCounts is less
         if len(counts) > expectedCounts >= 0:
             counts = counts[0:expectedCounts]
 
@@ -218,7 +143,6 @@ class StdInputParser(object):
         gateStringStr = " ".join(parts[0:len(parts)-totalCounts])
         gateStringTuple = self.parse_gatestring(gateStringStr, lookup)
         return gateStringTuple, gateStringStr, counts
-
 
     def parse_dictline(self, s):
         """
@@ -238,13 +162,13 @@ class StdInputParser(object):
         gateStringStr : string
             The gate string as represented as a string in the dictline.
         """
-        self.exprStack = []
-        result = self.dictline_parser.parseString(s)
-        #print "DB: result = ",result
-        #print "DB: stack = ",self.exprStack
-        gateStringLabel = result[0]
-        gateStringTuple = self._evaluateStack(self.exprStack)
-        gateStringStr = s[ s.index(gateStringLabel) + len(gateStringLabel) : ].strip()
+        label = r'\s*([a-zA-Z0-9_]+)\s+'
+        match = _re.match(label, s)
+        if not match:
+            raise ValueError("'{}' is not a valid dictline".format(s))
+        gateStringLabel = match.group(1)
+        gateStringStr = s[match.end():]
+        gateStringTuple = self._string_parser.parse(gateStringStr)
         return gateStringLabel, gateStringTuple, gateStringStr
 
     def parse_stringfile(self, filename):
@@ -292,7 +216,8 @@ class StdInputParser(object):
                 lookupDict[ label ] = _objs.GateString(tup, s)
         return lookupDict
 
-    def parse_datafile(self, filename, showProgress=True, collisionAction="aggregate"):
+    def parse_datafile(self, filename, showProgress=True,
+                       collisionAction="aggregate"):
         """
         Parse a data set file into a DataSet object.
 
@@ -339,14 +264,22 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'plus count', 'count total' ] #  spamLabel (' frequency' | ' count') | 'count total' |  ?? 'T0' | 'Tf' ??
-            spamLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
-            nDataCols = len(colLabels)
+                outcomeLabels,fillInfo = self._extractLabelsFromColLabels(colLabels)
+                nDataCols = len(colLabels)
+            else:
+                outcomeLabels = fillInfo = None
+                nDataCols = -1 # no column count check
+
+            # "default" case when we have no columns and no "expanded-form" counts
+            default_colLabels = [ '1 count', 'count total' ] #  outcomeLabel (' frequency' | ' count') | 'count total'
+            _,default_fillInfo = self._extractLabelsFromColLabels(default_colLabels)
+
+
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(spamLabels=spamLabels,collisionAction=collisionAction,
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels,collisionAction=collisionAction,
                                 comment="\n".join(preamble_comments))
         nLines  = 0
         with open(filename, 'r') as datafile:
@@ -354,27 +287,11 @@ class StdInputParser(object):
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
+        display_progress = get_display_progress_fn(showProgress)
 
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
-
-        countDict = {}
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
@@ -383,59 +300,93 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
+                if (len(dataset) == 0) and (fillInfo is None) and \
+                   (len(valueList) > 0) and (not isinstance(valueList[0],tuple)):
+                    #In order to preserve backward compatibility, if the first
+                    # data-line is not in expanded form and there was no column
+                    # header, then use "default" column label info.
+                    fillInfo = default_fillInfo
+
+                countDict = _OrderedDict()
                 self._fillDataCountDict( countDict, fillInfo, valueList )
                 if all([ (abs(v) < 1e-9) for v in list(countDict.values())]):
                     _warnings.warn( "Dataline for gateString '%s' has zero counts and will be ignored" % gateStringStr)
                     continue #skip lines in dataset file with zero counts (no experiments done)
-                dataset.add_count_dict(gateStringTuple, countDict) #Note: don't use gateStringStr since DataSet currently doesn't hold GateString objs (just tuples)
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
+                dataset.add_count_dict(gateStr, countDict)
 
         dataset.done_adding_data()
         return dataset
 
     def _extractLabelsFromColLabels(self, colLabels ):
-        spamLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = -1
+        outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1,-1)
+
+        def str_to_outcome(x): #always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+        
         for i,colLabel in enumerate(colLabels):
             if colLabel.endswith(' count'):
-                spamLabel = colLabel[:-len(' count')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                countCols.append( (spamLabel,i) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                countCols.append( (outcomeLabel,i) )
 
             elif colLabel.endswith(' frequency'):
                 if 'count total' not in colLabels:
                     raise ValueError("Frequency columns specified without count total")
                 else: iTotal = colLabels.index( 'count total' )
-                spamLabel = colLabel[:-len(' frequency')]
-                if spamLabel not in spamLabels: spamLabels.append( spamLabel )
-                freqCols.append( (spamLabel,i,iTotal) )
+                outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
+                if outcomeLabel not in outcomeLabels: outcomeLabels.append( outcomeLabel )
+                freqCols.append( (outcomeLabel,i,iTotal) )
 
         if 'count total' in colLabels:
-            if 'plus' in spamLabels and 'minus' not in spamLabels:
-                spamLabels.append('minus')
-                impliedCountTotCol1Q = colLabels.index( 'count total' )
+            if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+                outcomeLabels.append( ('0',) )
+                impliedCountTotCol1Q = ('0',), colLabels.index( 'count total' )
+            elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+                outcomeLabels.append( ('1',) )
+                impliedCountTotCol1Q = '1', colLabels.index( 'count total' )
             #TODO - add standard count completion for 2Qubit case?
 
-        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-        return spamLabels, fillInfo
+        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)        
+        return outcomeLabels, fillInfo
 
 
     def _fillDataCountDict(self, countDict, fillInfo, colValues):
-        countCols, freqCols, impliedCountTotCol1Q = fillInfo
+        if fillInfo is not None:
+            countCols, freqCols, impliedCountTotCol1Q = fillInfo
 
-        for spamLabel,iCol in countCols:
-            if colValues[iCol] > 0 and colValues[iCol] < 1:
-                raise ValueError("Count column (%d) contains value(s) " % iCol +
-                                 "between 0 and 1 - could this be a frequency?")
-            countDict[spamLabel] = colValues[iCol]
+            for outcomeLabel,iCol in countCols:
+                if colValues[iCol] == '--': continue #skip blank sentinels
+                if colValues[iCol] > 0 and colValues[iCol] < 1:
+                    _warnings.warn("Count column (%d) contains value(s) " % iCol +
+                                     "between 0 and 1 - could this be a frequency?")
+                assert(not isinstance(colValues[iCol],tuple)), \
+                    "Expanded-format count not allowed with column-key header"
+                countDict[outcomeLabel] = colValues[iCol]
+    
+            for outcomeLabel,iCol,iTotCol in freqCols:
+                if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue #skip blank sentinels
+                if colValues[iCol] < 0 or colValues[iCol] > 1.0:
+                    _warnings.warn("Frequency column (%d) contains value(s) " % iCol +
+                                     "outside of [0,1.0] interval - could this be a count?")
+                assert(not isinstance(colValues[iTotCol],tuple)), \
+                    "Expanded-format count not allowed with column-key header"
+                countDict[outcomeLabel] = colValues[iCol] * colValues[iTotCol]
+    
+            if impliedCountTotCol1Q[1] >= 0:
+                impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
+                if impliedOutcomeLabel == ('0',):
+                    countDict[('0',)] = colValues[impliedCountTotCol] - countDict[('1',)]
+                else:
+                    countDict[('1',)] = colValues[impliedCountTotCol] - countDict[('0',)]
 
-        for spamLabel,iCol,iTotCol in freqCols:
-            if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                raise ValueError("Frequency column (%d) contains value(s) " % iCol +
-                                 "outside of [0,1.0] interval - could this be a count?")
-            countDict[spamLabel] = colValues[iCol] * colValues[iTotCol]
-
-        if impliedCountTotCol1Q >= 0:
-            countDict['minus'] = colValues[impliedCountTotCol1Q] - countDict['plus']
-        #TODO - add standard count completion for 2Qubit case?
+        else: #assume colValues is a list of (outcomeLabel, count) tuples
+            for tup in colValues:
+                assert(isinstance(tup,tuple)), \
+                    ("Outcome labels must be specified with"
+                     "count data when there's no column-key header")
+                assert(len(tup) == 2),"Invalid count! (parsed to %s)" % str(tup)
+                countDict[ tup[0] ] = tup[1]
         return countDict
 
 
@@ -489,57 +440,43 @@ class StdInputParser(object):
             else: lookupDict = { }
             if 'Columns' in preamble_directives:
                 colLabels = [ l.strip() for l in preamble_directives['Columns'].split(",") ]
-            else: colLabels = [ 'dataset1 plus count', 'dataset1 count total' ]
-            dsSpamLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
+            else: colLabels = [ 'dataset1 1 count', 'dataset1 count total' ]
+            dsOutcomeLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         datasets = _OrderedDict()
-        for dsLabel,spamLabels in dsSpamLabels.items():
-            datasets[dsLabel] = _objs.DataSet(spamLabels=spamLabels,
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
+            datasets[dsLabel] = _objs.DataSet(outcomeLabels=outcomeLabels,
                                               collisionAction=collisionAction)
 
         dsCountDicts = _OrderedDict()
-        for dsLabel in dsSpamLabels: dsCountDicts[dsLabel] = {}
+        for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
 
         nLines = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0),1)
 
-        def is_interactive():
-            import __main__ as main
-            return not hasattr(main, '__file__')
-
-        if is_interactive() and showProgress:
-            try:
-                import time
-                from IPython.display import clear_output
-                def display_progress(i,N):
-                    time.sleep(0.001); clear_output()
-                    print("Loading %s: %.0f%%" % (filename, 100.0*float(i)/float(N)))
-                    _sys.stdout.flush()
-            except:
-                def display_progress(i,N): pass
-        else:
-            def display_progress(i,N): pass
+        display_progress = get_display_progress_fn(showProgress)
 
         with open(filename, 'r') as inputfile:
             for (iLine,line) in enumerate(inputfile):
-                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines)
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
 
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
                 try:
-                    gateStringTuple, _, valueList = self.parse_dataline(line, lookupDict, nDataCols)
+                    gateStringTuple, gateStringStr, valueList = self.parse_dataline(line, lookupDict, nDataCols)
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
+                gateStr = _objs.GateString(gateStringTuple, gateStringStr, lookup=lookupDict)
                 self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
-                for dsLabel, countDict in dsCountDicts.items():
-                    datasets[dsLabel].add_count_dict(gateStringTuple, countDict)
+                for dsLabel, countDict in dsCountDicts.items():                    
+                    datasets[dsLabel].add_count_dict(gateStr, countDict)
 
         mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
         for dsLabel,ds in datasets.items():
@@ -548,67 +485,154 @@ class StdInputParser(object):
         return mds
 
 
-    #Note: spam labels must not contain spaces since we use spaces to separate
-    # the spam label from the dataset label
+    #Note: outcome labels must not contain spaces since we use spaces to separate
+    # the outcome label from the dataset label
     def _extractLabelsFromMultiDataColLabels(self, colLabels):
-        dsSpamLabels = _OrderedDict()
+        dsOutcomeLabels = _OrderedDict()
         countCols = []; freqCols = []; impliedCounts1Q = []
         for i,colLabel in enumerate(colLabels):
             wordsInColLabel = colLabel.split() #split on whitespace into words
             if len(wordsInColLabel) < 3: continue #allow other columns we don't recognize
 
             if wordsInColLabel[-1] == 'count':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                countCols.append( (dsLabel,spamLabel,i) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                countCols.append( (dsLabel,outcomeLabel,i) )
 
             elif wordsInColLabel[-1] == 'frequency':
-                spamLabel = wordsInColLabel[-2]
+                outcomeLabel = wordsInColLabel[-2]
                 dsLabel = wordsInColLabel[-3]
                 if '%s count total' % dsLabel not in colLabels:
                     raise ValueError("Frequency columns specified without" +
                                      "count total for dataset '%s'" % dsLabel)
                 else: iTotal = colLabels.index( '%s count total' % dsLabel )
 
-                if dsLabel not in dsSpamLabels:
-                    dsSpamLabels[dsLabel] = [ spamLabel ]
-                else: dsSpamLabels[dsLabel].append( spamLabel )
-                freqCols.append( (dsLabel,spamLabel,i,iTotal) )
+                if dsLabel not in dsOutcomeLabels:
+                    dsOutcomeLabels[dsLabel] = [ outcomeLabel ]
+                else: dsOutcomeLabels[dsLabel].append( outcomeLabel )
+                freqCols.append( (dsLabel,outcomeLabel,i,iTotal) )
 
-        for dsLabel,spamLabels in dsSpamLabels.items():
+        for dsLabel,outcomeLabels in dsOutcomeLabels.items():
             if '%s count total' % dsLabel in colLabels:
-                if 'plus' in spamLabels and 'minus' not in spamLabels:
-                    dsSpamLabels[dsLabel].append('minus')
+                if '1' in outcomeLabels and '0' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('0')
                     iTotal = colLabels.index( '%s count total' % dsLabel )
-                    impliedCounts1Q.append( (dsLabel, iTotal) )
+                    impliedCounts1Q.append( (dsLabel, '0', iTotal) )
+                if '0' in outcomeLabels and '1' not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append('1')
+                    iTotal = colLabels.index( '%s count total' % dsLabel )
+                    impliedCounts1Q.append( (dsLabel, '1', iTotal) )
+
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
-        return dsSpamLabels, fillInfo
+        return dsOutcomeLabels, fillInfo
 
 
     def _fillMultiDataCountDicts(self, countDicts, fillInfo, colValues):
         countCols, freqCols, impliedCounts1Q = fillInfo
 
-        for dsLabel,spamLabel,iCol in countCols:
+        for dsLabel,outcomeLabel,iCol in countCols:
             if colValues[iCol] > 0 and colValues[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) " % iCol +
                                  "between 0 and 1 - could this be a frequency?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol]
 
-        for dsLabel,spamLabel,iCol,iTotCol in freqCols:
+        for dsLabel,outcomeLabel,iCol,iTotCol in freqCols:
             if colValues[iCol] < 0 or colValues[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) " % iCol +
                                  "outside of [0,1.0] interval - could this be a count?")
-            countDicts[dsLabel][spamLabel] = colValues[iCol] * colValues[iTotCol]
+            countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
 
-        for dsLabel,iTotCol in impliedCounts1Q:
-            countDicts[dsLabel]['minus'] = colValues[iTotCol] - countDicts[dsLabel]['plus']
+        for dsLabel,outcomeLabel,iTotCol in impliedCounts1Q:
+            if outcomeLabel == '0':
+                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+            elif outcomeLabel == '1':
+                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+
         #TODO - add standard count completion for 2Qubit case?
         return countDicts
+
+
+    def parse_tddatafile(self, filename, showProgress=True):
+        """ 
+        Parse a data set file into a TDDataSet object.
+
+        Parameters
+        ----------
+        filename : string
+            The file to parse.
+
+        showProgress : bool, optional
+            Whether or not progress should be displayed
+
+        Returns
+        -------
+        TDDataSet
+            A static TDDataSet object.
+        """
+
+        #Parse preamble -- lines beginning with # or ## until first non-# line
+        preamble_directives = _OrderedDict()
+        with open(filename,'r') as f:
+            for line in f:
+                line = line.strip()
+                if len(line) == 0 or line[0] != '#': break
+                if line.startswith("## "):
+                    parts = line[len("## "):].split("=")
+                    if len(parts) == 2: # key = value
+                        preamble_directives[ parts[0].strip() ] = parts[1].strip()
+        
+        #Process premble
+        orig_cwd = _os.getcwd()
+        if len(_os.path.dirname(filename)) > 0: _os.chdir( _os.path.dirname(filename) ) #allow paths relative to datafile path
+        try:
+            if 'Lookup' in preamble_directives: 
+                lookupDict = self.parse_dictfile( preamble_directives['Lookup'] )
+            else: lookupDict = { }
+        finally:
+            _os.chdir(orig_cwd)
+
+        outcomeLabelAbbrevs = _OrderedDict()
+        for key,val in preamble_directives.items():
+            if key == "Lookup": continue 
+            outcomeLabelAbbrevs[key] = val
+        outcomeLabels = outcomeLabelAbbrevs.values()
+
+        #Read data lines of data file
+        dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
+        with open(filename,'r') as f:
+            nLines = sum(1 for line in f)
+        nSkip = int(nLines / 100.0)
+        if nSkip == 0: nSkip = 1
+
+        display_progress = get_display_progress_fn(showProgress)
+
+        with open(filename,'r') as f:
+            for (iLine,line) in enumerate(f):
+                if iLine % nSkip == 0 or iLine+1 == nLines: display_progress(iLine+1, nLines, filename)
+    
+                line = line.strip()
+                if len(line) == 0 or line[0] == '#': continue
+                try:
+                    parts = line.split()
+                    lastpart = parts[-1]
+                    gateStringStr = line[:-len(lastpart)].strip()
+                    gateStringTuple = self.parse_gatestring(gateStringStr, lookupDict)
+                    gateString = _objs.GateString(gateStringTuple, gateStringStr)
+                    timeSeriesStr = lastpart.strip()
+                except ValueError as e:
+                    raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
+    
+                seriesList = [ outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr ] #iter over characters in str
+                timesList = list(range(len(seriesList))) #FUTURE: specify an offset and step??
+                dataset.add_raw_series_data(gateString, seriesList, timesList)
+                
+        dataset.done_adding_data()
+        return dataset
 
 
 
@@ -634,102 +658,196 @@ def read_gateset(filename):
     -------
     GateSet
     """
+    basis = 'pp' #default basis to load as
+    
+    def add_current():
+        """ Adds the current object, described by lots of cur_* variables """
 
-    def add_current_label():
+        qty = None
         if cur_format == "StateVec":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (1,2):
-                spam_vecs[cur_label] = _tools.state_to_pauli_density_vec(ar[0,:])
+                stdmx = _tools.state_to_stdmx(ar[0,:])
+                qty = _tools.stdmx_to_vec(stdmx, basis)
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label,ar.shape))
 
         elif cur_format == "DensityMx":
             ar = _evalRowList( cur_rows, bComplex=True )
             if ar.shape == (2,2) or ar.shape == (4,4):
-                spam_vecs[cur_label] = _tools.stdmx_to_ppvec(ar)
+                qty = _tools.stdmx_to_vec(ar, basis)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label,ar.shape))
 
-        elif cur_format == "PauliVec":
-            spam_vecs[cur_label] = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleVec":
+            qty = _np.transpose( _evalRowList( cur_rows, bComplex=False ) )
 
         elif cur_format == "UnitaryMx":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q(ar))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q(ar))
-            else: raise ValueError("Invalid unitary matrix shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
 
         elif cur_format == "UnitaryMxExp":
             ar = _evalRowList( cur_rows, bComplex=True )
-            if ar.shape == (2,2):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_1q( _expm(-1j * ar) ))
-            elif ar.shape == (4,4):
-                gs.gates[cur_label] = _objs.FullyParameterizedGate(
-                        _tools.unitary_to_pauligate_2q( _expm(-1j * ar) ))
-            else: raise ValueError("Invalid unitary matrix exponent shape for %s: %s" % (cur_label,ar.shape))
+            qty = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j*ar)), 'std', basis)
 
-        elif cur_format == "PauliMx":
-            gs.gates[cur_label] = _objs.FullyParameterizedGate( _evalRowList( cur_rows, bComplex=False ) )
+        elif cur_format == "LiouvilleMx":
+            qty = _evalRowList( cur_rows, bComplex=False )
+
+        assert(qty is not None), "Invalid format: %s" % cur_format
+
+        if cur_typ == "PREP":
+            gs.preps[cur_label] = _objs.FullyParameterizedSPAMVec(qty)
+        elif cur_typ == "TP-PREP":
+            gs.preps[cur_label] = _objs.TPParameterizedSPAMVec(qty)
+        elif cur_typ == "STATIC-PREP":
+            gs.preps[cur_label] = _objs.StaticSPAMVec(qty)
+
+        elif cur_typ in ("EFFECT","TP-EFFECT","STATIC-EFFECT"):
+            if cur_typ == "EFFECT": qty = _objs.FullyParameterizedSPAMVec(qty)
+            elif cur_typ == "TP-EFFECT": qty = _objs.TPParameterizedSPAMVec(qty)
+            elif cur_typ == "STATIC-EFFECT": qty = _objs.StaticSPAMVec(qty)
+            if "effects" in cur_group_info:
+                cur_group_info['effects'].append( (cur_label,qty) )
+            else:  cur_group_info['effects'] = [ (cur_label,qty) ]            
+                
+        elif cur_typ == "GATE":
+            gs.gates[cur_label] = _objs.FullyParameterizedGate(qty)
+        elif cur_typ == "TP-GATE":
+            gs.gates[cur_label] = _objs.TPParameterizedGate(qty)
+        elif cur_typ == "CPTP-GATE":
+            #Similar to gate.convert(...) method
+            J = _tools.fast_jamiolkowski_iso_std(qty, basis) #Choi mx basis doesn't matter
+            RANK_TOL = 1e-6
+            if _np.linalg.matrix_rank(J, RANK_TOL) == 1: 
+                unitary_post = qty # when 'gate' is unitary
+            else: unitary_post = None
+
+            nQubits = _np.log2(qty.shape[0])/2.0
+            bQubits = bool(abs(nQubits-round(nQubits)) < 1e-10) #integer # of qubits?
+
+            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            ham_basis = proj_basis
+            nonham_basis = proj_basis
+            nonham_diagonal_only = False; cptp = True; truncate=True
+            gs.gates[cur_label] = _objs.LindbladParameterizedGate(qty, unitary_post, ham_basis,
+                                                                  nonham_basis, cptp, nonham_diagonal_only,
+                                                                  truncate, basis)
+        elif cur_typ == "STATIC-GATE":
+            gs.gates[cur_label] = _objs.StaticGate(qty)
+
+        elif cur_typ in ("IGATE","STATIC-IGATE"):
+            mxOrGate = _objs.StaticGate(qty) if cur_typ == "STATIC-IGATE" \
+                       else qty #just add numpy array `qty` to matrices list
+                                # and it will be made into a fully-param gate.
+            if "matrices" in cur_group_info:
+                cur_group_info['matrices'].append( (cur_label,mxOrGate) )
+            else:  cur_group_info['matrices'] = [ (cur_label,mxOrGate) ]
+        else:
+            raise ValueError("Unknown type: %s!" % cur_typ)
+
+
+    def add_current_group():
+        """ 
+        Adds the current "group" - either a POVM or Instrument - which contains
+        multiple objects.
+        """
+        if cur_group_typ == "POVM":
+            gs.povms[cur_group] = _objs.UnconstrainedPOVM( cur_group_info['effects'] )
+        elif cur_group_typ == "TP-POVM":
+            assert(len(cur_group_info['effects']) > 1), "TP-POVMs must have at least 2 elements!"
+            gs.povms[cur_group] = _objs.TPPOVM( cur_group_info['effects'] )
+        elif cur_group_typ == "Instrument":
+            gs.instruments[cur_group] = _objs.Instrument( cur_group_info['matrices'] )
+        elif cur_group_typ == "TP-Instrument":
+            gs.instruments[cur_group] = _objs.TPInstrument( cur_group_info['matrices'] )
+        else:
+            raise ValueError("Unknown group type: %s!" % cur_group_typ ) # pragma: no cover
+            # should be unreachable given group-name test below
 
 
     gs = _objs.GateSet()
-    spam_vecs = _OrderedDict(); spam_labels = _OrderedDict(); remainder_spam_label = ""
+    spam_vecs = _OrderedDict();
+    spam_labels = _OrderedDict(); remainder_spam_label = ""
     identity_vec = _np.transpose( _np.array( [ _np.sqrt(2.0), 0,0,0] ) )  #default = 1-QUBIT identity vector
 
     basis_abbrev = "pp" #default assumed basis
     basis_dims = None
+    gaugegroup_name = None
 
-    state = "look for label"
-    cur_label = ""; cur_format = ""; cur_rows = []
+    #First try to find basis:
     with open(filename) as inputfile:
         for line in inputfile:
             line = line.strip()
 
-            if len(line) == 0:
+            if line.startswith("BASIS:"):
+                parts = line[len("BASIS:"):].split()
+                basis_abbrev = parts[0]
+                if len(parts) > 1:
+                    basis_dims = list(map(int, "".join(parts[1:]).split(",")))
+                    if len(basis_dims) == 1: basis_dims = basis_dims[0]
+                else:
+                    basis_dims = None
+            elif line.startswith("GAUGEGROUP:"):
+                gaugegroup_name = line[len("GAUGEGROUP:"):].strip()
+                if gaugegroup_name not in ("Full","TP","Unitary"):
+                    _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
+                                    "group will be set to None") % gaugegroup_name)
+
+    if basis_dims is not None:
+        # then specfy a dimensionful basis at the outset
+        basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        # otherwise we'll try to infer one at the end (and add_current routine
+        # uses basis in a way that can infer a dimension)
+        basis = basis_abbrev
+
+    state = "look for label"
+    cur_label = ""; cur_typ = ""
+    cur_group = ""; cur_group_typ = ""
+    cur_format = ""; cur_rows = []; cur_group_info = {}
+    with open(filename) as inputfile:
+        for line in inputfile:
+            line = line.strip()
+
+            if len(line) == 0 or line.startswith("END"):
+                #Blank lines or "END..." statements trigger the end of objects
                 state = "look for label"
                 if len(cur_label) > 0:
-                    add_current_label()
+                    add_current()
                     cur_label = ""; cur_rows = []
-                continue
 
-            if line[0] == "#":
-                continue
+                #END... ends the current group
+                if line.startswith("END"):
+                    if len(cur_group) > 0:
+                        add_current_group()
+                        cur_group = ""; cur_group_info = {}
 
-            if state == "look for label":
-                if line.startswith("SPAMLABEL "):
-                    eqParts = line[len("SPAMLABEL "):].split('=')
-                    if len(eqParts) != 2: raise ValueError("Invalid spam label line: ", line)
-                    if eqParts[1].strip() == "remainder":
-                        remainder_spam_label = eqParts[0].strip()
-                    else:
-                        spam_labels[ eqParts[0].strip() ] = [ s.strip() for s in eqParts[1].split() ]
+            elif line[0] == "#":
+                pass # skip comments
 
-                elif line.startswith("IDENTITYVEC "):  #Vectorized form of identity density matrix in whatever basis is used
-                    if line != "IDENTITYVEC None":  #special case for designating no identity vector, so default is not used
-                        identity_vec  = _np.transpose( _evalRowList( [ line[len("IDENTITYVEC "):].split() ], bComplex=False ) )
+            elif state == "look for label":
+                parts = line.split(':')
+                assert(len(parts) == 2), "Invalid '<type>: <label>' line: %s" % line
+                typ = parts[0].strip()
+                label = parts[1].strip()
 
-                elif line.startswith("BASIS "): # Line of form "BASIS <abbrev> [<dims>]", where optional <dims> is comma-separated integers
-                    parts = line[len("BASIS "):].split()
-                    basis_abbrev = parts[0]
-                    if len(parts) > 1:
-                        basis_dims = list(map(int, "".join(parts[1:]).split(",")))
-                        if len(basis_dims) == 1: basis_dims = basis_dims[0]
-                    elif gs.get_dimension() is not None:
-                        basis_dims = int(round(_np.sqrt(gs.get_dimension())))
-                    elif len(spam_vecs) > 0:
-                        basis_dims = int(round(_np.sqrt(list(spam_vecs.values())[0].size)))
-                    else:
-                        raise ValueError("BASIS directive without dimension, and cannot infer dimension!")
+                if typ in ("BASIS","GAUGEGROUP"):
+                    pass #handled above
+                
+                elif typ in ("POVM","TP-POVM","Instrument","TP-Instrument"):
+                    # if this is a group type, just record this and continue looking
+                    #  for the next labeled object
+                    cur_group = label
+                    cur_group_typ = typ
                 else:
-                    cur_label = line
-                    state = "expect format"
-
+                    #All other "types" should be objects with formatted data
+                    # associated with them: set cur_label and cur_typ to hold 
+                    # the object label and type - next read it in.
+                    cur_label = label
+                    cur_typ = typ
+                    state = "expect format" # the default next action
+                    
             elif state == "expect format":
                 cur_format = line
-                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "PauliVec", "PauliMx"]:
+                if cur_format not in ["StateVec", "DensityMx", "UnitaryMx", "UnitaryMxExp", "LiouvilleVec", "LiouvilleMx"]:
                     raise ValueError("Expected object format for label %s and got line: %s -- must specify a valid object format" % (cur_label,line))
                 state = "read object"
 
@@ -737,7 +855,9 @@ def read_gateset(filename):
                 cur_rows.append( line.split() )
 
     if len(cur_label) > 0:
-        add_current_label()
+        add_current()
+    if len(cur_group) > 0:
+        add_current_group()
 
     #Try to infer basis dimension if none is given
     if basis_dims is None:
@@ -748,41 +868,20 @@ def read_gateset(filename):
         else:
             raise ValueError("Cannot infer basis dimension!")
 
-    #Set basis
-    gs.set_basis(basis_abbrev, basis_dims)
+        #Set basis (only needed if we didn't set it above)
+        gs.basis = _objs.Basis(basis_abbrev, basis_dims)
+    else:
+        gs.basis = basis # already created a Basis obj above
 
-    #Default SPAMLABEL directive if none are give and rho and E vectors are:
-    if len(spam_labels) == 0 and "rho" in spam_vecs and "E" in spam_vecs:
-        spam_labels['plus'] = [ 'rho', 'E' ]
-        spam_labels['minus'] = [ 'rho', 'remainder' ] #NEW default behavior
-        # OLD default behavior: remainder_spam_label = 'minus'
-    if len(spam_labels) == 0: raise ValueError("Must specify rho and E or spam labels directly.")
-
-    #Make SPAMs
-     #get unique rho and E names
-    rho_names = list(_OrderedDict.fromkeys( [ rho for (rho,E) in list(spam_labels.values()) ] ) ) #if this fails, may be due to malformatted
-    E_names   = list(_OrderedDict.fromkeys( [ E   for (rho,E) in list(spam_labels.values()) ] ) ) #  SPAMLABEL line (not 2 items to right of = sign)
-    if "remainder" in rho_names:
-        del rho_names[ rho_names.index("remainder") ]
-    if "remainder" in E_names:
-        del E_names[ E_names.index("remainder") ]
-
-    #Order E_names and rho_names using spam_vecs ordering
-    #rho_names = sorted(rho_names, key=spam_vecs.keys().index)
-    #E_names = sorted(E_names, key=spam_vecs.keys().index)
-
-     #add vectors to gateset
-    for rho_nm in rho_names: gs.preps[rho_nm] = spam_vecs[rho_nm]
-    for E_nm   in E_names:   gs.effects[E_nm] = spam_vecs[E_nm]
-
-    gs.povm_identity = identity_vec
-
-     #add spam labels to gateset
-    for spam_label in spam_labels:
-        (rho_nm,E_nm) = spam_labels[spam_label]
-        gs.spamdefs[spam_label] = (rho_nm , E_nm)
-
-    if len(remainder_spam_label) > 0:
-        gs.spamdefs[remainder_spam_label] = ('remainder', 'remainder')
-
+    #Add default gauge group -- the full group because
+    # we add FullyParameterizedGates above.
+    if gaugegroup_name == "Full":
+        gs.default_gauge_group = _objs.FullGaugeGroup(gs.dim)
+    elif gaugegroup_name == "TP":
+        gs.default_gauge_group = _objs.TPGaugeGroup(gs.dim)
+    elif gaugegroup_name == "Unitary":
+        gs.default_gauge_group = _objs.UnitaryGaugeGroup(gs.dim, gs.basis)
+    else:
+        gs.default_gauge_group = None
+        
     return gs

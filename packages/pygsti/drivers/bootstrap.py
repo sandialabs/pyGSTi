@@ -1,20 +1,20 @@
+""" Functions for generating bootstrapped error bars """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for generating bootstrapped error bars """
-import numpy as _np
-import matplotlib as _mpl
-from .longsequence import do_long_sequence_gst as _do_long_sequence_gst
 
+import numpy as _np
+#import matplotlib as _mpl #REMOVED
+from . import longsequence as _longseq
 from .. import objects as _obj
 from .. import algorithms as _alg
 from .. import tools as _tools
 
 def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
-                           seed=None,spamLabels=None,verbosity=1):
+                           seed=None,outcomeLabels=None,verbosity=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -39,8 +39,8 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     seed : int, optional
        A seed value for numpy's random number generator.
 
-    spamLabels : list, optional
-       The list of SPAM labels to include in the output dataset.  If None
+    outcomeLabels : list, optional
+       The list of outcome labels to include in the output dataset.  If None
        are specified, defaults to the spam labels of inputDataSet.
 
     verbosity : int, optional
@@ -53,10 +53,12 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
     """
     if generationMethod not in ['nonparametric', 'parametric']:
         raise ValueError("generationMethod must be 'parametric' or 'nonparametric'!")
-    if spamLabels is None:
-        spamLabels = inputDataSet.get_spam_labels()
+    if outcomeLabels is None:
+        outcomeLabels = inputDataSet.get_outcome_labels()
 
-    rndm = _np.random.RandomState(seed)
+    rndm = seed if isinstance(seed, _np.random.RandomState) \
+           else _np.random.RandomState(seed)
+    
     if inputGateSet is None:
         if generationMethod == 'nonparametric':
             print("Generating non-parametric dataset.")
@@ -67,28 +69,30 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
             print("Generating parametric dataset.")
         elif generationMethod == 'nonparametric':
             raise ValueError("For 'nonparametric', inputGateSet must be None")
-        possibleSpamLabels = inputGateSet.get_spam_labels()
-        assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
+        firstPOVMLbl = list(inputGateSet.povms.keys())[0]
+          # TODO: allow outcomes from multiple POVMS? (now just consider *first* POVM)
+        possibleOutcomeLabels = [ (eLbl,) for eLbl in inputGateSet.povms[firstPOVMLbl].keys() ] 
+        assert( all([ol in possibleOutcomeLabels for ol in outcomeLabels]) )
 
-    possibleSpamLabels = inputDataSet.get_spam_labels()
-    assert( all([sl in possibleSpamLabels for sl in spamLabels]) )
+    possibleOutcomeLabels = inputDataSet.get_outcome_labels()
+    assert( all([ol in possibleOutcomeLabels for ol in outcomeLabels]) )
 
     #create new dataset
-    simDS = _obj.DataSet(spamLabels=spamLabels, 
+    simDS = _obj.DataSet(outcomeLabels=outcomeLabels, 
                          collisionAction=inputDataSet.collisionAction)
     gatestring_list = list(inputDataSet.keys())
     for s in gatestring_list:
-        nSamples = inputDataSet[s].total()
+        nSamples = inputDataSet[s].total
         if generationMethod == 'parametric':
             ps = inputGateSet.probs(s)
         elif generationMethod == 'nonparametric':
-            ps = { sl: inputDataSet[s].fraction(sl) for sl in spamLabels }
-        pList = _np.array([_np.clip(ps[spamLabel],0,1) for spamLabel in spamLabels])
+            ps = { ol: inputDataSet[s].fraction(ol) for ol in outcomeLabels }
+        pList = _np.array([_np.clip(ps[outcomeLabel],0,1) for outcomeLabel in outcomeLabels])
           #Truncate before normalization; bad extremal values shouldn't
           # screw up not-bad values, yes?
         pList = pList / sum(pList)
         countsArray = rndm.multinomial(nSamples, pList, 1)
-        counts = { sl: countsArray[0,i] for i,sl in enumerate(spamLabels) }
+        counts = { ol: countsArray[0,i] for i,ol in enumerate(outcomeLabels) }
         simDS.add_count_dict(s, counts)
     simDS.done_adding_data()
     return simDS
@@ -96,7 +100,7 @@ def make_bootstrap_dataset(inputDataSet,generationMethod,inputGateSet=None,
 def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
                             fiducialPrep, fiducialMeasure, germs, maxLengths,
                             inputGateSet=None, targetGateSet=None, startSeed=0,
-                            spamLabels=None, lsgstLists=None,
+                            outcomeLabels=None, lsgstLists=None,
                             returnData=False, verbosity=2):
     """
     Creates a series of "bootstrapped" GateSets form a single DataSet (and
@@ -151,9 +155,9 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
        generating data sets.  For each succesive dataset (and gateset)
        that are generated, the seed is incremented by one.
 
-    spamLabels : list, optional
-       The list of SPAM labels to include in the output dataset.  If None
-       are specified, defaults to the spam labels of inputDataSet.
+    outcomeLabels : list, optional
+       The list of Outcome labels to include in the output dataset.  If None
+       are specified, defaults to the effect labels of `inputDataSet`.
 
     lsgstLists : list of gate string lists, optional
         Provides explicit list of gate string lists to be used in analysis;
@@ -196,17 +200,22 @@ def make_bootstrap_gatesets(numGateSets, inputDataSet, generationMethod,
         datasetList.append(
             make_bootstrap_dataset(inputDataSet,generationMethod,
                                    inputGateSet, startSeed+run,
-                                   spamLabels)
+                                   outcomeLabels)
             )
-
+        
     gatesetList = []
     print("Creating GateSets: ")
     for run in range(numGateSets):
         print("Running MLGST Iteration %d " % run)
-        results = _do_long_sequence_gst(
-            datasetList[run], targetGateSet, fiducialPrep, fiducialMeasure,
-            germs, maxLengths, lsgstLists=lsgstLists, verbosity=verbosity)
-        gatesetList.append(results.gatesets['final estimate'])
+        if lsgstLists is not None:
+            results = _longseq.do_long_sequence_gst_base(
+                datasetList[run], targetGateSet, lsgstLists, verbosity=verbosity)
+        else:
+            results = _longseq.do_long_sequence_gst(
+                datasetList[run], targetGateSet,
+                fiducialPrep, fiducialMeasure, germs, maxLengths,
+                verbosity=verbosity)
+        gatesetList.append(results.estimates['default'].gatesets['go0'])
 
     if not returnData:
         return gatesetList
@@ -289,21 +298,22 @@ def gauge_optimize_gs_list(gsList, targetGateset,
         gateMean.append(_np.mean(gsStdevVecGates))
 
     if plot:
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMean,'b-o')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMin,'b--+')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMax,'b--x')
-
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMean,'r-o')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMin,'r--+')
-        _mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMax,'r--x')
-
-        _mpl.pyplot.xlabel('SPAM weight in gauge optimization')
-        _mpl.pyplot.ylabel('Per element error bar size')
-        _mpl.pyplot.title('Per element error bar size vs. ${\\tt spamWeight}$')
-        _mpl.pyplot.xlim(1e-4,1)
-        _mpl.pyplot.legend(['SPAM-mean','SPAM-min','SPAM-max',
-                            'gates-mean','gates-min','gates-max'],
-                           bbox_to_anchor=(1.4, 1.))
+        raise NotImplementedError("plot removed b/c matplotlib support dropped")
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMean,'b-o')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMin,'b--+')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),SPAMMax,'b--x')
+        #
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMean,'r-o')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMin,'r--+')
+        #_mpl.pyplot.loglog(_np.logspace(-4,0,13),gateMax,'r--x')
+        #
+        #_mpl.pyplot.xlabel('SPAM weight in gauge optimization')
+        #_mpl.pyplot.ylabel('Per element error bar size')
+        #_mpl.pyplot.title('Per element error bar size vs. ${\\tt spamWeight}$')
+        #_mpl.pyplot.xlim(1e-4,1)
+        #_mpl.pyplot.legend(['SPAM-mean','SPAM-min','SPAM-max',
+        #                    'gates-mean','gates-min','gates-max'],
+        #                   bbox_to_anchor=(1.4, 1.))
 
     # gateTimesSPAMMean = _np.array(SPAMMean) * _np.array(gateMean)
 
@@ -325,27 +335,81 @@ def gauge_optimize_gs_list(gsList, targetGateset,
 
 
 ################################################################################
-#TODO: need to add docstrings and perhaps relocate the utility functions below #
+# Utility functions (perhaps relocate?)
 ################################################################################
 
 #For metrics that evaluate gateset with single scalar:
-def gs_stdev(gsFunc, gsEnsemble, ddof=1, **kwargs):
-    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],ddof=ddof)
+def gs_stdev(gsFunc, gsEnsemble, ddof=1, axis=None, **kwargs):
+    """ 
+    Standard deviation of `gsFunc` over an ensemble of gate sets.
 
-def gs_mean(gsFunc, gsEnsemble, axis = 0,**kwargs):
-    return _np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble])
+    Parameters
+    ----------
+    gsFunc : function
+        A function that takes a :class:`GateSet` as its first argument, and
+        whose additional arguments may be given by keyword arguments.
 
-#For metrics that evaluate gateset with scalar for each gate
-def gs_stdev1(gsFunc, gsEnsemble, ddof=1,axis=0, **kwargs):
-    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis,ddof=ddof)
+    gsEnsemble : list
+        A list of `GateSet` objects.
 
-def gs_mean1(gsFunc, gsEnsemble, axis = 0,**kwargs):
-    return _np.mean([gsFunc(gs,**kwargs) for gs in gsEnsemble],axis=axis)
+    ddof : int, optional
+       As in numpy.std
 
-def to_vector(gs):
-    return gs.to_vector()
+    axis : int or None, optional
+       As in numpy.std
+
+    Returns
+    -------
+    numpy.ndarray
+        The output of numpy.std
+    """
+    return _np.std([gsFunc(gs, **kwargs) for gs in gsEnsemble],axis=axis, ddof=ddof)
+
+def gs_mean(gsFunc, gsEnsemble, axis=None, **kwargs):
+    """ 
+    Mean of `gsFunc` over an ensemble of gate sets.
+
+    Parameters
+    ----------
+    gsFunc : function
+        A function that takes a :class:`GateSet` as its first argument, and
+        whose additional arguments may be given by keyword arguments.
+
+    gsEnsemble : list
+        A list of `GateSet` objects.
+
+    axis : int or None, optional
+       As in numpy.mean
+
+    Returns
+    -------
+    numpy.ndarray
+        The output of numpy.mean
+    """
+    return _np.mean([gsFunc(gs, **kwargs) for gs in gsEnsemble], axis=axis)
+
+#Note: for metrics that evaluate gateset with scalar for each gate, use axis=0
+# argument to above functions
 
 def to_mean_gateset(gsList,target_gs):
+    """ 
+    Return the :class:`Gateset` constructed from the mean parameter
+    vector of the gate sets in `gsList`, that is, the mean of the
+    parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    Returns
+    -------
+    GateSet
+    """        
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -355,6 +419,27 @@ def to_mean_gateset(gsList,target_gs):
     return output_gs
 
 def to_std_gateset(gsList,target_gs,ddof=1):
+    """ 
+    Return the :class:`Gateset` constructed from the standard-deviation
+    parameter vector of the gate sets in `gsList`, that is, the standard-
+    devaiation of the parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    ddof : int, optional
+       As in numpy.std
+
+    Returns
+    -------
+    GateSet
+    """
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -364,6 +449,24 @@ def to_std_gateset(gsList,target_gs,ddof=1):
     return output_gs
 
 def to_rms_gateset(gsList,target_gs):
+    """ 
+    Return the :class:`Gateset` constructed from the root-mean-squared
+    parameter vector of the gate sets in `gsList`, that is, the RMS
+    of the parameter vectors of each gate set in `gsList`.
+
+    Parameters
+    ----------
+    gsList : list
+        A list of :class:`GateSet` objects.
+
+    target_gs : GateSet
+        A template gate set used to specify the parameterization
+        of the returned `GateSet`.
+
+    Returns
+    -------
+    GateSet
+    """
     numResamples = len(gsList)
     gsVecArray = _np.zeros([numResamples],dtype='object')
     for i in range(numResamples):
@@ -372,50 +475,51 @@ def to_rms_gateset(gsList,target_gs):
     output_gs.from_vector(_np.mean(gsVecArray))
     return output_gs
 
-def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.jtracedist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
-#    print output
-    return output
-
-def gateset_process_fidelity(gs,gs_target):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
-    return output
-
-def gateset_decomp_angle(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('pi rotations',0)
-    return output
-
-def gateset_decomp_decay_diag(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of diagonal rotation terms',0)
-    return output
-
-def gateset_decomp_decay_offdiag(gs):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs.gates.keys()):
-        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of off diagonal rotation terms',0)
-    return output
-
-#def gateset_fidelity(gs,gs_target,mxBasis="gm"):
+#Unused?
+#def gateset_jtracedist(gs,gs_target,mxBasis="gm"):
 #    output = _np.zeros(3,dtype=float)
 #    for i, gate in enumerate(gs_target.gates.keys()):
-#        output[i] = _tools.fidelity(gs.gates[gate],gs_target.gates[gate])
+#        output[i] = _tools.jtracedist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
+##    print output
 #    return output
-
-def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
-    output = _np.zeros(3,dtype=float)
-    for i, gate in enumerate(gs_target.gates.keys()):
-        output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
-    return output
-
-def spamrameter(gs):
-    firstRho = list(gs.preps.keys())[0]
-    firstE = list(gs.effects.keys())[0]
-    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]
+#
+#def gateset_process_fidelity(gs,gs_target):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs_target.gates.keys()):
+#        output[i] = _tools.process_fidelity(gs.gates[gate],gs_target.gates[gate])
+#    return output
+#
+#def gateset_decomp_angle(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('pi rotations',0)
+#    return output
+#
+#def gateset_decomp_decay_diag(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of diagonal rotation terms',0)
+#    return output
+#
+#def gateset_decomp_decay_offdiag(gs):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs.gates.keys()):
+#        output[i] = _tools.decompose_gate_matrix(gs.gates[gate]).get('decay of off diagonal rotation terms',0)
+#    return output
+#
+##def gateset_fidelity(gs,gs_target,mxBasis="gm"):
+##    output = _np.zeros(3,dtype=float)
+##    for i, gate in enumerate(gs_target.gates.keys()):
+##        output[i] = _tools.fidelity(gs.gates[gate],gs_target.gates[gate])
+##    return output
+#
+#def gateset_diamonddist(gs,gs_target,mxBasis="gm"):
+#    output = _np.zeros(3,dtype=float)
+#    for i, gate in enumerate(gs_target.gates.keys()):
+#        output[i] = _tools.diamonddist(gs.gates[gate],gs_target.gates[gate],mxBasis=mxBasis)
+#    return output
+#
+#def spamrameter(gs):
+#    firstRho = list(gs.preps.keys())[0]
+#    firstE = list(gs.effects.keys())[0]
+#    return _np.dot(gs.preps[firstRho].T,gs.effects[firstE])[0,0]

@@ -4,6 +4,7 @@ import warnings
 import pygsti
 import sys
 import os
+#import psutil
 
 temp_files    = 'temp_test_files'
 compare_files = 'cmp_chk_files'
@@ -18,7 +19,12 @@ class BaseTestCase(unittest.TestCase):
 
     def setUp(self):
         # move working directories
-        self.old = os.getcwd()
+        try:
+            self.old = os.getcwd()
+        except OSError as e:
+            #print("PSUTIL open files (%d) = " % len(psutil.Process().open_files()), psutil.Process().open_files())
+            raise e
+        
         # This will result in the same directory, even though when another module calls this, file points to toolsBaseCase.py
         # However, the result is the same..
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
@@ -28,6 +34,9 @@ class BaseTestCase(unittest.TestCase):
 
         #Set GateSet objects to "strict" mode for testing
         pygsti.objects.GateSet._strict = True
+
+        #enable extra paramter-vector integrity checking
+        pygsti.objects.GateSet._pcheck = True
 
         try:
             basestring #Only defined in Python 2
@@ -39,8 +48,8 @@ class BaseTestCase(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.old)
 
-    def assertArraysAlmostEqual(self,a,b):
-        self.assertAlmostEqual( np.linalg.norm(a-b), 0 )
+    def assertArraysAlmostEqual(self,a,b,places=7):
+        self.assertAlmostEqual( np.linalg.norm(a-b), 0, places=places )
 
 
     def assertWarns(self, callable, *args, **kwds):
@@ -57,7 +66,7 @@ class BaseTestCase(unittest.TestCase):
         # Ex given an array [[ 0.095 ]] and 0.095, call assertAlmostEqual(0.095, 0.095)
         if a.size > 1:
             raise ValueError('assertSingleElemArrayAlmostEqual should only be used on single element arrays')
-        self.assertAlmostEqual(float(a), b)
+        self.assertAlmostEqual(float(a), float(b))
 
     def assertNoWarnings(self, callable, *args, **kwds):
         with warnings.catch_warnings(record=True) as warning_list:
@@ -86,5 +95,7 @@ class BaseTestCase(unittest.TestCase):
     def assertEqualDatasets(self, ds1, ds2):
         self.assertEqual(len(ds1),len(ds2))
         for gatestring in ds1:
-            self.assertAlmostEqual( ds1[gatestring]['plus'], ds2[gatestring]['plus'], places=3 )
-            self.assertAlmostEqual( ds1[gatestring]['minus'], ds2[gatestring]['minus'], places=3 )
+            for ol,cnt in ds1[gatestring].counts.items():
+                self.assertTrue( abs(cnt - ds2[gatestring].counts[ol]) < 1.5 )
+                #Let counts be off by 1 b/c of rounding
+                #self.assertAlmostEqual( cnt, ds2[gatestring].counts[ol], places=3 )

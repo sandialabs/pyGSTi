@@ -1,110 +1,43 @@
+""" Defines the ReportTable class """
 from __future__ import division, print_function, absolute_import, unicode_literals
-import pickle as _pickle
-import matplotlib
-import matplotlib.pyplot as _plt
-import tempfile          as _tempfile
-import shutil            as _shutil
 
-from contextlib import contextmanager
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
 
-import os
-
-@contextmanager
-def temp_backend(backend):
-    oldBackend = matplotlib.get_backend()
-    _plt.switch_backend(backend)
-    yield # User code goes here
-    _plt.switch_backend(oldBackend)
+from collections  import OrderedDict   as _OrderedDict
+from .row         import Row
+from .convert import convertDict as _convertDict
 
 class ReportFigure(object):
-    """
-    Encapsulates a single report figure.
-
-    Essentially a matplotlib figure, but with better persistence.  In
-    particular, the figure can be held in memory or on disk and saved
-    in different formats independently of the state of the "matplotlib
-    cloud".
-    """
-
-    def __init__(self, axes, extraInfo=None, imageformats=['png', 'pdf']):
-        """
-        Create a new ReportFigure.
+    '''
+    A report figure, encapsulating a plotly figure and related metadata that
+    can be rendered in a variety of formats.
+    '''
+    def __init__(self, plotlyfig, colormap=None, pythonValue=None, **kwargs):
+        '''
+        Create a table object
 
         Parameters
         ----------
-        axes : Axes
-           Matplotlib axes of the figure.
+        plotlyfig : plotly.Figure
+            The plotly figure to encapsulate
+        
+        colormap : ColorMap, optional
+            A pygsti color map object used for this figure.
 
-        extraInfo : object
-           Any extra information you want to
-           associate with this figure.
-        """
+        pythonValue : object, optional
+            A python object to be used as the Python-version of
+            this figure (usually the data being plotted in some 
+            convenient format).
 
-        self.extraInfo   = extraInfo
-        self.pickledAxes = _pickle.dumps(axes)
-
-        self.tempFileDict = { }
-
-        for fmt in imageformats:
-            tf = _tempfile.TemporaryFile()
-            _plt.savefig(tf, format=fmt, bbox_extra_artists=(axes,),
-                         bbox_inches='tight') #need extra artists otherwise
-            tf.seek(0) #rewind to beginning of file
-            self.tempFileDict[fmt] = bytearray(tf.read())
-            tf.close()
-
-
-    def _save_axes(self, filename):
-        axes = _pickle.loads(self.pickledAxes)
-          #this creates a new (current) figure in matplotlib
-        curFig = _plt.gcf() # gcf == "get current figure"
-        curFig.callbacks.callbacks = {}
-          # initialize fig's CallbackRegistry, which doesn't
-          # unpickle properly in matplotlib 1.5.1 (bug?)
-        _plt.savefig(filename, bbox_extra_artists=(axes,),
-                     bbox_inches='tight') #need extra artists otherwise
-                                          #axis labels get clipped
-        _plt.close(curFig) # closes the figure created by unpickling
-
-    def save_to(self, filename):
-        if filename is not None and len(filename) > 0:
-            try:
-                self._save_axes(filename)
-            except Exception as e:
-                print('Warning: unpickling to save figure %s failed:\n  %s' % (filename, str(e)))
-                ext = os.path.splitext(filename)[1][1:] # remove .
-                if ext in self.tempFileDict:
-                    tf = _tempfile.NamedTemporaryFile()
-                    tf.write(self.tempFileDict[ext])
-                    _shutil.copy2(tf.name, filename)
-                    tf.close()
-                    print("  --> Successfully used cached %s format" % ext)
-                else:
-                    print('Extension not in cached files and unpickling failed. Trying experimental backend switching. Your machine may catch fire..')
-                    # Subprocess didn't work without auxillary file (cannot import parent module '') -> we weren't desperate enough to do the auxillary file, so no promises that works either
-                    # multiprocessing didn't work (it used the same matplotlib import/backend :( )
-                    # tempfile with jpeg didn't work (we needed diverse formats)
-                    try:
-                        with temp_backend('agg'):
-                            self._save_axes(filename)
-                    except:
-                        raise ValueError("ReportFigure unpickling error!  This " +
-                                         "could be caused by using matplotlib or " +
-                                         "pylab magic functions ('%pylab inline' or " +
-                                         "'%matplotlib inline') within an iPython " +
-                                         "notebook, so if you used either of these " +
-                                         "please remove it and all should be well.")
-
-    def set_extra_info(self, extraInfo):
-        self.extraInfo = extraInfo
-
-    def get_extra_info(self):
-        return self.extraInfo
-
-    def check(self):
-        pass
-        #axes = _pickle.loads(self.pickledAxes) #pylint: disable=unused-variable
-          #this creates a new (current) figure in matplotlib
-        #curFig = _plt.gcf() # gcf == "get current figure"
-        #curFig.callbacks.callbacks = {} # initialize fig's CallbackRegistry...
-        #_plt.close(curFig) # closes the figure created by unpickling
+        kwargs : dict
+            Additional meta-data relevant to this figure
+        '''
+        self.plotlyfig = plotlyfig
+        self.colormap = colormap
+        self.pythonvalue = pythonValue
+        self.metadata = dict(kwargs).copy()
+        

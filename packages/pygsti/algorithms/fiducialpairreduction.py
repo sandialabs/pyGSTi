@@ -1,10 +1,11 @@
+""" Functions for reducing the number of required fiducial pairs for analysis."""
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
 #    This Software is released under the GPL license detailed
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
-""" Functions for reducing the number of required fiducial pairs for analysis."""
+
 
 import numpy      as _np
 import itertools  as _itertools
@@ -12,6 +13,7 @@ import random     as _random
 import scipy.misc as _spmisc
 from ..construction import gatestringconstruction as _gsc
 from ..tools        import remove_duplicates      as _remove_duplicates
+from ..tools        import slicetools             as _slct
 
 from ..             import objects as _objs
 
@@ -30,7 +32,7 @@ def _random_combination(indices_tuple, r):
     return tuple(indices_tuple[i] for i in iis)
 
 def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList,
-                                   testLs=(256,2048), spamLabels="all", tol=0.75,
+                                   testLs=(256,2048), prepovmTuples="first", tol=0.75,
                                    searchMode="sequential", nRandom=100, seed=None,
                                    verbosity=0, testPairList=None, memLimit=None,
                                    minimumPairs=1):
@@ -66,10 +68,11 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
         A tuple of integers specifying the germ-power lengths to use when
         checking for amplificational completeness.
 
-    spamLabels : list or "all", optional
-        A list of the SPAM labels to consider when checking for completeness.
-        Usually this should be left as the special (and default) value "all",
-        which considers all of the SPAM labels.
+    prepovmTuples : list or "first", optional
+        A list of `(prepLabel, povmLabel)` tuples to consider when
+        checking for completeness.  Usually this should be left as the special
+        (and default) value "first", which considers the first prep and POVM
+        contained in `targetGateset`.
 
     tol : float, optional
         The tolerance for the fraction of the expected amplification that must
@@ -116,55 +119,62 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
     #trim LSGST list of all f1+germ^exp+f2 strings to just those needed to get full rank jacobian. (compressed sensing like)
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
-    if spamLabels == "all":
-        spamLabels = targetGateset.get_spam_labels()
+    if prepovmTuples == "first":
+        firstRho = list(targetGateset.preps.keys())[0]
+        firstPOVM = list(targetGateset.povms.keys())[0]
+        prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
 
     nGatesetParams = targetGateset.num_params()
 
-    #Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> where i = composite EVec & fiducial index and j similar
     def get_derivs(L):
-        dP = _np.empty( (len(germList),len(spamLabels),len(effectStrs)*len(prepStrs), nGatesetParams) )
-           #indexed by [iGerm,iSpamLabel,iFiducialPair,iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
+        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
+            where i = composite EVec & fiducial index and j similar """
+
+        st=0 #running row count over to-be-concatenated dPall matrix
+        elIndicesForPair = [ [] for i in range(len(prepStrs)*len(effectStrs))]
+          #contains lists of final leading-dim indices corresponding to each fiducial pair
+          
+        dPall = [] # one element per germ, concatenate later
 
         for iGerm,germ in enumerate(germList):
             expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
-            lst = _gsc.create_gatestring_list("f0+expGerm+f1", f0=prepStrs, f1=effectStrs,
-                                                         expGerm=expGerm, order=('f0','f1'))
-            evTree = targetGateset.bulk_evaltree(lst)
-            blkSz = None
+            lst = _gsc.create_gatestring_list(
+                "pp[0]+f0+expGerm+f1+pp[1]", f0=prepStrs, f1=effectStrs,
+                expGerm=expGerm, pp=prepovmTuples, order=('f0','f1','pp'))
 
-            if memLimit is not None:
-                #nSpam = targetGateset.num_preps() * targetGateset.num_effects()
-                dim = targetGateset.get_dimension()
-                nParams = targetGateset.num_params()
-                memEstimate = 8.0*len(evTree)*dim**2*nParams #*nSPAM
-                if memEstimate > memLimit:
-                    printer.log("Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
-                        (iGerm+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3)))
-                    if memEstimate/nParams < memLimit:
-                        blkSz = int(nParams * memLimit / memEstimate)
-                        printer.log(" --> Setting max block size = %s" % blkSz)
-                    else:
-                        # Tree and deriv splitting method
-                        blkSz = 1
-                        maxTreeLength = len(evTree) * memLimit / (memEstimate / nParams)
-                        evTree.split(maxTreeLength) # Often fails because maxTreeLength is too small
-                        printer.log(" --> Setting max subtree size = %s" % maxTreeLength)
-                        evTree.print_analysis()
+            evTree,blkSz,_,lookup,_ = targetGateset.bulk_evaltree_from_resources(
+                lst, memLimit=memLimit, distributeMethod="deriv",
+                subcalls=['bulk_fill_dprobs'], verbosity=0)
+            #FUTURE: assert that no instruments are allowed?
 
-            dprobs = targetGateset.bulk_dprobs(evTree, wrtBlockSize=blkSz)
-            for iSpamLabel,spamLabel in enumerate(spamLabels):
-                dP[iGerm, iSpamLabel, :,:] = dprobs[spamLabel]
-        return dP
+            dP = _np.empty( (evTree.num_final_elements(),targetGateset.num_params()), 'd' )
+            targetGateset.bulk_fill_dprobs(dP, evTree, wrtBlockSize=blkSz) # num_els x num_params
+            dPall.append(dP)
+
+            #Add this germ's element indices for each fiducial pair (final gate string of evTree)
+            nPrepPOVM = len(prepovmTuples)
+            for k in range(len(prepStrs)*len(effectStrs)):
+                for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
+                    elArray = _slct.as_array(lookup[o]) + st
+                    elIndicesForPair[k].extend( list(elArray) )
+            st += evTree.num_final_elements() # b/c we'll concatenate tree's elements later
+                
+        return _np.concatenate( dPall, axis=0 ), elIndicesForPair
+            #indexed by [iElement, iGatesetParam] : gives d(<SP|f0+exp_iGerm+f1|AM>)/d(iGatesetParam)
+            # where iGerm, f0, f1, and SPAM are all bundled into iElement (but elIndicesForPair
+            # provides the necessary indexing for picking out certain pairs)
 
     def get_number_amplified(M0,M1,L0,L1,verb):
+        """ Return the number of amplified parameters """
         printer = _objs.VerbosityPrinter.build_printer(verb)
         L_ratio = float(L1)/float(L0)
         try:
             s0 = _np.linalg.svd(M0, compute_uv=False)
             s1 = _np.linalg.svd(M1, compute_uv=False)
-        except:
-            printer.warning("SVD error!!"); return 0
+        except:                                       # pragma: no cover
+            printer.warning("SVD error!!"); return 0  # pragma: no cover
             #SVD did not converge -> just say no amplified params...
 
         numAmplified = 0
@@ -182,10 +192,10 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     printer.log("------  Fiducial Pair Reduction --------")
 
-    L0 = testLs[0]; dP0 = get_derivs(L0)
-    L1 = testLs[1]; dP1 = get_derivs(L1)
-    fullTestMx0 = dP0.view(); fullTestMx0.shape = ( (len(germList)*len(spamLabels)*len(prepStrs)*len(effectStrs), nGatesetParams) )
-    fullTestMx1 = dP1.view(); fullTestMx1.shape = ( (len(germList)*len(spamLabels)*len(prepStrs)*len(effectStrs), nGatesetParams) )
+    L0 = testLs[0]; dP0, elIndices0 = get_derivs(L0)
+    L1 = testLs[1]; dP1, elIndices1 = get_derivs(L1)
+    fullTestMx0 = dP0
+    fullTestMx1 = dP1
 
     #Get number of amplified parameters in the "full" test matrix: the one we get when we use all possible fiducial pairs
     if testPairList is None:
@@ -197,21 +207,15 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
     nPossiblePairs = len(prepStrs)*len(effectStrs)
     allPairIndices = list(range(nPossiblePairs))
-
     nRhoStrs, nEStrs = len(prepStrs), len(effectStrs)
-    germFctr = len(spamLabels)*len(prepStrs)*len(effectStrs); nGerms = len(germList)
-    spamLabelFctr = len(prepStrs)*len(effectStrs); nSpamLabels = len(spamLabels)
-    gateStringIndicesForPair = []
-    for i in allPairIndices:
-        indices = [ iGerm*germFctr + iSpamLabel*spamLabelFctr + i  for iGerm in range(nGerms) for iSpamLabel in range(nSpamLabels) ]
-        gateStringIndicesForPair.append(indices)
 
     if testPairList is not None: #special mode for testing/debugging single pairlist
-        gateStringIndicesForPairs = []
-        for iRhoStr,iEStr in testPairList:
-            gateStringIndicesForPairs.extend( gateStringIndicesForPair[iRhoStr*nEStrs + iEStr] )
-        testMx0 = _np.take( fullTestMx0, gateStringIndicesForPairs, axis=0 )
-        testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
+        pairIndices0 = _np.concatenate( [ elIndices0[iRhoStr*nEStrs + iEStr]
+                                         for iRhoStr,iEStr in testPairList ] )
+        pairIndices1 = _np.concatenate( [ elIndices1[iRhoStr*nEStrs + iEStr]
+                                         for iRhoStr,iEStr in testPairList ] )
+        testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
+        testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
         nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
         printer.log("Number of amplified parameters = %s" % nAmplified)
         return None
@@ -234,11 +238,10 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
                 pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         for pairIndicesToTest in pairIndicesToIterateOver:
-            gateStringIndicesForPairs = []
-            for i in pairIndicesToTest:
-                gateStringIndicesForPairs.extend( gateStringIndicesForPair[i] )
-            testMx0 = _np.take( fullTestMx0, gateStringIndicesForPairs, axis=0 )
-            testMx1 = _np.take( fullTestMx1, gateStringIndicesForPairs, axis=0 )
+            pairIndices0 = _np.concatenate( [ elIndices0[i] for i in pairIndicesToTest ] )
+            pairIndices1 = _np.concatenate( [ elIndices1[i] for i in pairIndicesToTest ] )            
+            testMx0 = _np.take( fullTestMx0, pairIndices0, axis=0 )
+            testMx1 = _np.take( fullTestMx1, pairIndices1, axis=0 )
             nAmplified = get_number_amplified(testMx0, testMx1, L0, L1, verbosity)
             bestAmplified = max(bestAmplified, nAmplified)
             if printer.verbosity > 1:
@@ -268,7 +271,7 @@ def find_sufficient_fiducial_pairs(targetGateset, prepStrs, effectStrs, germList
 
 
 def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
-                                            germList, spamLabels="all",
+                                            germList, prepovmTuples="first",
                                             searchMode="sequential", constrainToTP=True,
                                             nRandom=100, seed=None, verbosity=0,
                                             memLimit=None):
@@ -304,10 +307,11 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     prepStrs, effectStrs, germList : list of GateStrings
         The (full) fiducial and germ gate sequences.
 
-    spamLabels : list or "all", optional
-        A list of the SPAM labels to consider when checking for completeness.
-        Usually this should be left as the special (and default) value "all",
-        which considers all of the SPAM labels.
+    prepovmTuples : list or "first", optional
+        A list of `(prepLabel, povmLabel)` tuples to consider when
+        checking for completeness.  Usually this should be left as the special
+        (and default) value "first", which considers the first prep and POVM
+        contained in `targetGateset`.
 
     searchMode : {"sequential","random"}, optional
         If "sequential", then all potential fiducial pair sets of a given length
@@ -344,8 +348,13 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
 
     printer = _objs.VerbosityPrinter.build_printer(verbosity)
 
-    if spamLabels == "all":
-        spamLabels = targetGateset.get_spam_labels()
+    if prepovmTuples == "first":
+        firstRho = list(targetGateset.preps.keys())[0]
+        firstPOVM = list(targetGateset.povms.keys())[0]
+        prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
+    
 
     pairListDict = {} # dict of lists of 2-tuples: one pair list per germ
 
@@ -374,35 +383,22 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
             #   j is similar, and derivs are wrt the "eigenvalues" of the germ
             #  (i.e. the parameters of the gsGerm gate set).
             lst = _gsc.create_gatestring_list(
-                "f0+germ+f1", f0=prepStrs, f1=effectStrs,
-                germ=_objs.GateString(("Ggerm",)), order=('f0','f1'))
+                "pp[0]+f0+germ+f1+pp[1]", f0=prepStrs, f1=effectStrs,
+                germ=_objs.GateString(("Ggerm",)), pp=prepovmTuples,
+                order=('f0','f1','pp'))
 
-            evTree = gsGerm.bulk_evaltree(lst)
+            evTree,blkSz,_,lookup,_ = gsGerm.bulk_evaltree_from_resources(
+                lst, memLimit=memLimit, distributeMethod="deriv",
+                subcalls=['bulk_fill_dprobs'], verbosity=0)
 
-             #Memory limit stuff -- TODO: move this within evalTree given
-             # some kind of MemoryEstimator object to compute estimates?
-            blkSz = None
-            if memLimit is not None:
-                dim = gsGerm.get_dimension()
-                nParams = gsGerm.num_params()
-                memEstimate = 8.0*len(evTree)*dim**2*nParams #*nSPAM
-                if memEstimate > memLimit:
-                    printer.log("Germ %d/%d: Memory estimate = %.1fGB > %.1fGB" % \
-                        (i+1,len(germList),memEstimate/(1024.0**3),memLimit/(1024.0**3)))
-                    if memEstimate/nParams < memLimit:
-                        blkSz = int(nParams * memLimit / memEstimate)
-                        printer.log(" --> Setting max block size = %s" % blkSz)
-                    else:
-                        # Tree and deriv splitting method
-                        blkSz = 1
-                        maxTreeLength = len(evTree) * memLimit / (memEstimate / nParams)
-                        evTree.split(maxTreeLength) # Often fails because maxTreeLength is too small
-                        printer.log(" --> Setting max subtree size = %s" % maxTreeLength)
-                        evTree.print_analysis()
-            
-            dprobs = gsGerm.bulk_dprobs(evTree, wrtBlockSize=blkSz)
-            dP = _np.concatenate([dprobs[sl] for sl in spamLabels],axis=0)
-              #concat along spam labels (just seen as additional fiducials)
+            elIndicesForPair = [ [] for i in range(len(prepStrs)*len(effectStrs)) ]
+            nPrepPOVM = len(prepovmTuples)
+            for k in range(len(prepStrs)*len(effectStrs)):
+                for o in range(k*nPrepPOVM,(k+1)*nPrepPOVM): # "original" indices into lst for k-th fiducial pair
+                    elIndicesForPair[k].extend( list(_slct.indices(lookup[o])) )
+
+            dPall = _np.empty( (evTree.num_final_elements(),gsGerm.num_params()), 'd' )
+            gsGerm.bulk_fill_dprobs(dPall, evTree, wrtBlockSize=blkSz) # num_els x num_params
 
             # Construct sum of projectors onto the directions (1D spaces)
             # corresponding to varying each parameter (~eigenvalue) of the
@@ -412,11 +408,11 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
             # each of the germ parameters (~eigenvalues), which is *all* we
             # want sensitivity to.
             RANK_TOL = 1e-7
-            rank = _np.linalg.matrix_rank( _np.dot(dP, dP.T), RANK_TOL )
+            rank = _np.linalg.matrix_rank( _np.dot(dPall, dPall.T), RANK_TOL )
             if rank < gsGerm.num_params(): # full fiducial set should work!
                 raise ValueError("Incomplete fiducial-pair set!")
 
-              #Below will take a *subset* of the rows in dprobs[spamLbl]
+              #Below will take a *subset* of the rows in dPall
               # depending on which (of all possible) fiducial pairs
               # are being considered.
 
@@ -440,7 +436,7 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
                         pairIndicesToIterateOver = [ _random_combination(allPairIndices, nNeededPairs) for i in range(nRandom) ]
                     else:
                         pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
-
+                        
                 for pairIndicesToTest in pairIndicesToIterateOver:
     
                     #Get list of pairs as tuples for printing & returning
@@ -451,9 +447,8 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
     
                     # Same computation of rank as above, but with only a 
                     # subset of the total fiducial pairs.
-                    dps = { sl: _np.take(dprobs[sl],pairIndicesToTest, axis=0)
-                            for sl in spamLabels } 
-                    dP = _np.concatenate([dps[sl] for sl in spamLabels],axis=0)
+                    elementIndicesToTest = _np.concatenate([ elIndicesForPair[i] for i in pairIndicesToTest])
+                    dP = _np.take(dPall, elementIndicesToTest, axis=0) # subset_of_num_elements x num_params
                     rank = _np.linalg.matrix_rank( _np.dot(dP, dP.T), RANK_TOL )
                     maxRank = max(maxRank,rank)
     
@@ -470,20 +465,139 @@ def find_sufficient_fiducial_pairs_per_germ(targetGateset, prepStrs, effectStrs,
                 if goodPairList is not None:
                     break #exit another loop level if a solution was found
 
-            if goodPairList is not None:
-                pairListDict[germ] = goodPairList # add to final list of per-germ pairs
-            else:
-                #we tried all the way to nPossiblePairs-1 and no success,
-                # just return all the pairs
-                printer.log(" --> Highest number amplified = %d of %d" %
-                            (maxRank, gsGerms.num_params()))
-                listOfAllPairs = [ (iRhoStr,iEStr)
-                                   for iRhoStr in range(nRhoStrs)
-                                   for iEStr in range(nEStrs) ]
-                pairListDict[germ] = listOfAllPairs
+            assert(goodPairList is not None)
+            pairListDict[germ] = goodPairList # add to final list of per-germ pairs
+
+            #TODO REMOVE: should never be called b/c of ValueError catch above for insufficient fidicials
+            #else:
+            #    #we tried all the way to nPossiblePairs-1 and no success,
+            #    # just return all the pairs
+            #    printer.log(" --> Highest number amplified = %d of %d" %
+            #                (maxRank, gsGerms.num_params()))
+            #    listOfAllPairs = [ (iRhoStr,iEStr)
+            #                       for iRhoStr in range(nRhoStrs)
+            #                       for iEStr in range(nEStrs) ]
+            #    pairListDict[germ] = listOfAllPairs
 
     return pairListDict
 
+
+def test_fiducial_pairs(fidPairs, targetGateset, prepStrs, effectStrs, germList,
+                        testLs=(256,2048), prepovmTuples="first", tol=0.75,
+                        verbosity=0, memLimit=None):
+    """
+    Tests a set of global or per-germ fiducial pairs.
+
+    Determines how many gate set parameters (of `targetGateset`) are
+    amplified by the fiducial pairs given by `fidPairs`, which can be
+    either a list of 2-tuples (for global-FPR) or a dictionary (for
+    per-germ FPR).
+
+    Parameters
+    ----------
+    fidPairs : list or dict
+        Either a single list of fiducial-index pairs (2-tuples) that is applied
+        to every germ (global FPR) OR a per-germ dictionary of lists, each
+        containing the fiducial-index pairs (2-tuples) for that germ (for
+        per-germ FPR).
+
+    targetGateset : GateSet
+        The target gateset used to determine amplificational completeness.
+
+    prepStrs, effectStrs, germList : list of GateStrings
+        The (full) fiducial and germ gate sequences.
+
+    testLs : (L1,L2) tuple of ints, optional
+        A tuple of integers specifying the germ-power lengths to use when
+        checking for amplificational completeness.
+
+    prepovmTuples : list or "first", optional
+        A list of `(prepLabel, povmLabel)` tuples to consider when
+        checking for completeness.  Usually this should be left as the special
+        (and default) value "first", which considers the first prep and POVM
+        contained in `targetGateset`.
+
+    tol : float, optional
+        The tolerance for the fraction of the expected amplification that must
+        be observed to call a parameter "amplified".
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    memLimit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    numAmplified : int
+    """
+    printer = _objs.VerbosityPrinter.build_printer(verbosity)
+
+    if prepovmTuples == "first":
+        firstRho = list(targetGateset.preps.keys())[0]
+        firstPOVM = list(targetGateset.povms.keys())[0]
+        prepovmTuples = [ (firstRho, firstPOVM) ]
+    prepovmTuples = [ (_objs.GateString((prepLbl,)), _objs.GateString((povmLbl,)))
+                      for prepLbl,povmLbl in prepovmTuples ]
+
+
+    nGatesetParams = targetGateset.num_params()
+
+    def get_derivs(L):
+        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j> 
+            where i = composite EVec & fiducial index and j similar """
+
+        gatestrings = []
+        for germ in germList:
+            expGerm = _gsc.repeat_with_max_length(germ,L) # could pass exponent and set to germ**exp here
+            pairList = fidPairs[germ] if isinstance(fidPairs,dict) else fidPairs
+            gatestrings += _gsc.create_gatestring_list("pp[0]+p[0]+expGerm+p[1]+pp[1]",
+                                                       p=[ (prepStrs[i],effectStrs[j]) for i,j in pairList ],
+                                                       pp=prepovmTuples, expGerm=expGerm, order=['p','pp'])
+        gatestrings = _remove_duplicates(gatestrings)
+
+        evTree,wrtSize,_,_,_ = targetGateset.bulk_evaltree_from_resources(
+            gatestrings, memLimit=memLimit, distributeMethod="deriv",
+            subcalls=['bulk_fill_dprobs'], verbosity=0)
+
+        dP = _np.empty( (evTree.num_final_elements(), nGatesetParams) )
+           #indexed by [iSpamLabel,iGateString,iGatesetParam] : gives d(<SP|GateString|AM>)/d(iGatesetParam)
+        
+        targetGateset.bulk_fill_dprobs(dP, evTree, wrtBlockSize=wrtSize)
+        return dP
+
+    def get_number_amplified(M0,M1,L0,L1):
+        """ Return the number of amplified parameters """
+        L_ratio = float(L1)/float(L0)
+        try:
+            s0 = _np.linalg.svd(M0, compute_uv=False)
+            s1 = _np.linalg.svd(M1, compute_uv=False)
+        except:                                       # pragma: no cover
+            printer.warning("SVD error!!"); return 0  # pragma: no cover
+            #SVD did not converge -> just say no amplified params...
+
+        numAmplified = 0
+        printer.log("Amplified parameter test: matrices are %s and %s." % (M0.shape, M1.shape), 4)
+        printer.log("Index : SV(L=%d)  SV(L=%d)  AmpTest ( > %g ?)" % (L0,L1,tol), 4)
+        for i,(v0,v1) in enumerate(zip(sorted(s0,reverse=True),sorted(s1,reverse=True))):
+            if abs(v0) > 0.1 and (v1/v0)/L_ratio > tol:
+                numAmplified += 1
+                printer.log("%d: %g  %g  %g YES" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+            printer.log("%d: %g  %g  %g NO" % (i,v0,v1, (v1/v0)/L_ratio ), 4)
+        return numAmplified
+
+    L0,L1 = testLs
+    
+    printer.log("----------  Testing Fiducial Pairs ----------")
+    printer.log("Getting jacobian at L=%d" % L0,2)
+    dP0 = get_derivs(L0)
+    printer.log("Getting jacobian at L=%d" % L1,2)
+    dP1 = get_derivs(L1)
+    printer.log("Computing number amplified",2)
+    nAmplified = get_number_amplified(dP0, dP1, L0, L1)
+    printer.log("Number of amplified parameters = %s" % nAmplified)
+    
+    return nAmplified
 
 
 
