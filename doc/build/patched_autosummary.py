@@ -148,7 +148,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 50):
+                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 30):
                             # skip imported members if expected
                             #if dbcount < 17:
                             items.append(name)
