@@ -32,6 +32,15 @@ for hdlr in logger.handlers:
 if warningHandler:
     logger.removeHandler(hdlr)
     print("*********** REMOVED SPHINX WARNING HANDLER ***********")
+else:
+    logger = logging.getLogger() # try root logger (default arg = None)
+    for hdlr in logger.handlers:
+        if hdlr.level == logging.WARNING:
+            warningHandler = hdlr; break
+    if warningHandler:
+        logger.removeHandler(hdlr)
+        print("*********** REMOVED ROOT WARNING HANDLER ***********")
+    
 
 print("*********** MONKEY-PATCHING AUTOSUMMARY ***************")
 sys.path.insert(0, os.path.abspath('.'))
