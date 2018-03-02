@@ -153,7 +153,8 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                             if dbcount < 15:
                                 items.append(name)
                             else:
-                                print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ)
+                                print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
+                                      file=os.stdout)
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
                           if x in include_public or not x.startswith('_')]
