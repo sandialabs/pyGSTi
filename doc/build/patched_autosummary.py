@@ -152,6 +152,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                             # skip imported members if expected
                             if dbcount < 15:
                                 items.append(name)
+                                assert(False),"HERE"
                             else:
                                 print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
                                       file=sys.stdout)
