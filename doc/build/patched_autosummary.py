@@ -30,6 +30,7 @@
  or package being documented.
 """
 
+import sys, os
 from sphinx.ext.autosummary.generate import *
 from sphinx.ext.autosummary.generate import _simple_warn, _simple_info, _underline
 from sphinx.util import logger, display_chunk
@@ -154,7 +155,7 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                                 items.append(name)
                             else:
                                 print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
-                                      file=os.stdout)
+                                      file=sys.stdout)
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
                           if x in include_public or not x.startswith('_')]
