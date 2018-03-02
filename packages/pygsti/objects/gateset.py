@@ -874,9 +874,49 @@ class GateSet(object):
     
     def compile_gatestrings(self, gatestrings):
         """ 
-        Returns an OrderedDict with:
-            keys = raw gate sequences (containing just "compiled" gates)
-            values = lists of (preplbl, effectlbl) tuples.
+        Compiles a list of :class:`GateString`s.
+
+        Gate strings must be "compiled" before probabilities can be computed for
+        them. Each string corresponds to some number of "outcomes", indexed by an
+        "outcome label" that is a tuple of POVM-effect or instrument-element
+        labels like "0".  Compiling creates maps between gate strings and their
+        outcomes and the structures used in probability computation (see return
+        values below).  
+
+        Parameters
+        ----------
+        gatestrings : list of GateStrings
+            The list to compile. 
+
+        Returns
+        -------
+        raw_spamTuples_dict : collections.OrderedDict
+            A dictionary whose keys are raw gate sequences (containing just
+            "compiled" gates, i.e. not instruments), and whose values are
+            lists of (preplbl, effectlbl) tuples.  The effectlbl names a 
+            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            corresponds to a single "final element" of the computation, e.g. a
+            probability.  The ordering is important - and is why this needs to be
+            an ordered dictionary - when the lists of tuples are concatenated (by
+            key) the resulting tuple orderings corresponds to the final-element
+            axis of an output array that is being filled (computed).
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestrings` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements.  Thus, to get the final elements corresponding to 
+            `gatestrings[i]`, use `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestrings` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th gate strings's final elements 
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+
+        nTotElements : int
+            The total number of "final elements" - this is how big of an array
+            is need to hold all of the probabilities `gatestrings` generates.
         """
         # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
@@ -1009,9 +1049,30 @@ class GateSet(object):
 
     def compile_gatestring(self, gatestring):
         """ 
-        Returns an OrderedDict with:
-            keys = raw gate sequences (containing just "compiled" gates)
-            values = lists of (preplbl, effectlbl) tuples.
+        Compiles a single :class:`GateString`.
+        
+        Parameters
+        ----------
+        gatestring : GateString
+            The gate string to compile
+
+        Returns
+        -------
+        raw_spamTuples_dict : collections.OrderedDict
+            A dictionary whose keys are raw gate sequences (containing just
+            "compiled" gates, i.e. not instruments), and whose values are
+            lists of (preplbl, effectlbl) tuples.  The effectlbl names a 
+            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            corresponds to a single "final element" of the computation for this
+            gate string.  The ordering is important - and is why this needs to be
+            an ordered dictionary - when the lists of tuples are concatenated (by
+            key) the resulting tuple orderings corresponds to the final-element
+            axis of an output array that is being filled (computed).
+
+        outcomes : list
+            A list of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels), corresponding to 
+            the final elements.
         """
         raw_dict,_,outcomes,nEls = self.compile_gatestrings([gatestring])
         assert(len(outcomes[0]) == nEls)
