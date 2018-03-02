@@ -44,6 +44,7 @@ from sphinx.util.console import bold
 #rst_escape
 #find_autosummary_in_files(sources)
 
+dbcount = 0
 def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                                     warn=_simple_warn, info=_simple_info,
                                     base_path=None, builder=None, template_dir=None,
@@ -146,8 +147,9 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                     if documenter.objtype == typ:
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
+                        if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
                             # skip imported members if expected
+                            dbcount += 1
                             items.append(name)
                         #else: print("SKIPPED: ",imported, getattr(value, '__module__', None), obj.__name__)
                 public = [x for x in items
