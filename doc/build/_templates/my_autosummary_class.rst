@@ -10,10 +10,9 @@
        :noindex:
 
    {% if methods %}
-   .. rubric:: Methods
-
    .. autosummary::
       :toctree:
+      :hidden:
    {% for item in methods %}
       ~{{ name }}.{{ item }}
    {%- endfor %}
@@ -22,10 +21,9 @@
 
    {% block attributes %}
    {% if attributes %}
-   .. rubric:: Attributes
-
    .. autosummary::
       :toctree:
+      :hidden:
    {% for item in attributes %}
       ~{{ name }}.{{ item }}
    {%- endfor %}

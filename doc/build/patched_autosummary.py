@@ -151,11 +151,11 @@ def generate_autosummary_docs_patch(sources, output_dir=None, suffix='.rst',
                         objname_parts = obj.__name__.split(".")
                         #OLD if imported or getattr(value, '__module__', None) == obj.__name__:
                         #DEBUG if imported or getattr(value, '__module__', None) == obj.__name__ or obj.__name__ == "pygsti":
-                        #if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        #DEBUG if imported or (getattr(value, '__module__', None).startswith( obj.__name__ ) and dbcount < 100):
+                        #if imported or getattr(value, '__module__', None).startswith( obj.__name__ ):
                         if imported or valmod == obj.__name__ or \
                            (len(valmod_parts) > 2 and len(objname_parts) == 2 and valmod_parts[0:2] == objname_parts):
                             # skip imported members if expected
-                            #if dbcount < 17:
                             items.append(name)
                             #else:
                             #    print("EXTRA: ", name, " valmod=",getattr(value, '__module__', None), " parent=",obj.__name__, " typ=",typ,
