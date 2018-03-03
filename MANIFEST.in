@@ -1,9 +1,16 @@
 include README COPYING license.txt
 include install_locally.py 
-include ipython_notebooks/Tutorials/*.ipynb
-include ipython_notebooks/Tutorials/tutorial_files/.placeholder
-include test/test*.py
-include test/*.sh
-include test/cmp_chk_files/*
-include test/temp_test_files/.placeholder
+include jupyter_notebooks/Tutorials/*.ipynb
+include jupyter_notebooks/Examples/*.ipynb
+include jupyter_notebooks/FAQ.ipynb
+include juptyer_notebooks/Tutorials/tutorial_files/.placeholder
+include jupyter_notebooks/Examples/example_files/.git_placeholder
+include test/runTests.py
+include test/travisTests.py
+include test/__init__.py
+include test/output/.placeholder
+include test/test_packages/*/*.py
+include test/test_packages/extras/*.py
+include test/test_packages/cmp_chk_files/*
+include test/test_packages/temp_test_files/.placeholder
 recursive-include doc/html *
