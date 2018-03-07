@@ -227,12 +227,12 @@ def merge_outcomes(dataset,label_merge_dict):
     if sorted([outcome for sublist in label_merge_dict.values() for outcome in sublist]) != sorted(dataset.get_outcome_labels()):
         print('Warning: There is a mismatch between original outcomes in label_merge_dict and outcomes in original dataset.')
     for key in dataset.keys():
-        dataline = dataset[key]
+        linecounts = dataset[key].counts
         count_dict = {}
         for new_outcome in new_outcomes:
             count_dict[new_outcome] = 0
             for old_outcome in label_merge_dict[new_outcome]:
-                count_dict[new_outcome] += dataline[old_outcome]
+                count_dict[new_outcome] += linecounts[old_outcome]
         merged_dataset.add_count_dict(key,count_dict)
     merged_dataset.done_adding_data()
     return merged_dataset
