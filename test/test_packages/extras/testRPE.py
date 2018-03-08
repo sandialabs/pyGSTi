@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from ..testutils import BaseTestCase
+from ..testutils import BaseTestCase, temp_files, compare_files
 import unittest
 import pygsti as gst
 import numpy as np
@@ -11,7 +11,7 @@ RPE = rpe
 RPEConstr = rpe.rpeconstruction
 rpeconfig_GxPi2_GyPi2_00 = rpe.rpeconfig_GxPi2_GyPi2_00
 
-DS = gst.io.load_dataset('rpe_test_ds.txt')
+
 
 class TestRPEMethods(BaseTestCase):
 
@@ -45,6 +45,7 @@ class TestRPEMethods(BaseTestCase):
         #Load pre-simulated dataset
 #        N=100
 #        DS = gst.construction.generate_fake_data(gs_real,stringListsRPE['totalStrList'],N,sampleError='binomial',seed=1)
+        DS = gst.io.load_dataset(compare_files + '/rpe_test_ds.txt')
         
         #Analyze dataset
         resultsRPE = RPE.analyze_rpe_data(DS,gs_real,stringListsRPE,rpeconfig_inst)

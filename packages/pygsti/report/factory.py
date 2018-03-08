@@ -295,7 +295,6 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
             if L in results.gatestring_structs['final'].Ls:
                 k = results.gatestring_structs['final'].Ls.index(L)
                 switchBd.gss[d,iL] = results.gatestring_structs['iteration'][k]
-        #OLD switchBd.gss[d,:] = results.gatestring_structs['iteration']
         switchBd.gssAllL[d] = results.gatestring_structs['iteration']
         
         for i,lbl in enumerate(est_labels):
@@ -365,7 +364,6 @@ def _create_master_switchboard(ws, results_dict, confidenceLevel,
                     k = results.gatestring_structs['final'].Ls.index(L)
                     switchBd.gsL[d,i,iL] = est.gatesets['iteration estimates'][k]
                     switchBd.gsL_modvi[d,i,iL] = est_modvi.gatesets['iteration estimates'][k]
-            #OLD switchBd.gsL[d,i,:] = est.gatesets['iteration estimates']
             switchBd.gsAllL[d,i] = est.gatesets['iteration estimates']
             switchBd.gsAllL_modvi[d,i] = est_modvi.gatesets['iteration estimates']
 
@@ -709,13 +707,19 @@ def create_standard_report(results, filename, title="auto",
         raise ValueError("PDF reports can only show a *single* dataset," +
                          " estimate, and gauge optimization.")
 
+    if len(Ls) > 0 and Ls[0] == 0:
+        _warnings.warn(("Setting the first 'max-length' to zero, e.g. using"
+                        " [0,1,2,4] instead of [1,2,4], is deprecated and"
+                        " may cause 'no data to plot' errors when creating"
+                        " this report.  Please remove this leading zero."))
+
     # Generate Tables
     printer.log("*** Generating tables ***")
         
     if confidenceLevel is not None:
         #TODO: make plain text fields which update based on switchboards?
         for some_cri in switchBd.cri.flat: #can have only some confidence regions
-            if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable): # OLD: switchBd.cri[0,0,0]
+            if some_cri is not None and not isinstance(some_cri, _ws.NotApplicable):
                 qtys['confidenceIntervalScaleFctr'] = "%.3g" % some_cri.intervalScaling
                 qtys['confidenceIntervalNumNonGaugeParams'] = "%d" % some_cri.nNonGaugeParams
 

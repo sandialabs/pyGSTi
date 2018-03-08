@@ -534,6 +534,9 @@ def gatestring_color_boxplot(gatestring_structure, subMxs, colormap,
     yvals = g.used_yvals()
     inner_xvals = g.minor_xvals()
     inner_yvals = g.minor_yvals()
+    
+    if addl_hover_subMxs is None:
+        addl_hover_subMxs = {}
 
     # Note: invert == True case not handled yet, and the below hover label
     # routines assume L,germ structure in particular
@@ -869,7 +872,7 @@ def gatestring_color_histogram(gatestring_structure, subMxs, colormap,
 
     xbins_for_numpy = _np.linspace(minval-binsize/2.0,maxval+binsize/2.0,nbins+1)
     hist_values, np_bins = _np.histogram(ys, nbins, range=(minval-binsize/2.0,
-                                                     maxval+binsize/2.0))
+                                                           maxval+binsize/2.0))
     if len(hist_values) > 0 and len(hist_values[hist_values>0]) > 0:
         minlog = _np.log10(max( _np.min(hist_values[hist_values > 0])/10.0, 1e-3 ))
         maxlog = _np.log10(1.5*_np.max(hist_values) )
@@ -1482,7 +1485,6 @@ class ColorBoxPlot(WorkspacePlot):
                 directGSTgatesets, dscomparator, driftresults, submatrices,
                 typ, scale):
 
-        #OLD: maps = _ph._computeGateStringMaps(gss, dataset)
         probs_precomp_dict = None
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
@@ -1650,46 +1652,36 @@ class ColorBoxPlot(WorkspacePlot):
                     return _ph.dscompare_llr_matrices(plaq, dscomparator)                
 
             elif ptyp == "driftpv":
-                precomp=False
-                colormapType = "linlog"
-                linlog_color = "green"
-                ytitle="1 / pvalue"
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
                 assert(driftresults.indices_to_sequences is not None), \
                     "The `driftresults` must contain the mapping between indices and GateStrings!"
+                precomp=False
+                colormapType = "manuallinlog"
+                linlog_color = "green"
+                linlog_trans = 1/(1-driftresults.confidence)
+                ytitle="1 / pvalue"
                     
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_oneoverpvalue_matrices(plaq, driftresults)
-                
-                # Erik: The threshold value, above which it should be colored and log-spaced
-                # is:
-                # 1/(1-driftresults.confidence)
-            
+                            
             elif ptyp == "driftpwr":
-                precomp=False
-                colormapType = "linlog"
-                linlog_color = "green"
-                ytitle="Maximum power in spectrum"
                 assert(driftresults is not None), \
                     "Must specify `driftresults` argument to create `driftpv` plot!"
                 assert(driftresults.indices_to_sequences is not None), \
                     "The `driftresults` must contain the mapping between indices and GateStrings!"
+                precomp=False
+                colormapType = "manuallinlog"
+                linlog_color = "green"
+                linlog_trans = driftresults.ps_significance_threshold
+                ytitle="Maximum power in spectrum"
                 
                 def _mx_fn(plaq,x,y):
                     return _ph.drift_maxpower_matrices(plaq, driftresults)
-                
-                # Erik: The threshold value, above which it should be colored and log-spaced
-                # is:
-                # driftresults.ps_significance_threshold
-            
+                            
             elif (submatrices is not None) and ptyp in submatrices:
                 precomp = False; ytitle = ptyp
-                if ptyp + ".colormap" in submatrices:
-                    colormapType = submatrices[ptyp + ".colormap"]
-                else:
-                    colormapType = "seq"
-            
+                colormapType = submatrices.get(ptyp + ".colormap","seq")            
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
 
@@ -1728,7 +1720,10 @@ class ColorBoxPlot(WorkspacePlot):
 
             if colormapType == "linlog":
                 colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,
-                                    linlg_pcntle, dof_per_box, linlog_color)
+                                                     linlg_pcntle, dof_per_box, linlog_color)
+            elif colormapType == "manuallinlog":
+                colormap = _colormaps.LinlogColormap.manual_transition_pt(
+                    0, dataMax, linlog_trans, linlog_color)
 
             elif colormapType == "trivial":
                 colormap = _colormaps.SequentialColormap(vmin=0, vmax=1)
@@ -2078,10 +2073,10 @@ class PolarEigenvaluePlot(WorkspacePlot):
         # sure this data is filled in with undisplayed data here (because we
         # don't want to see the residual data!).
         for trace in data:
-            if len(trace['r']) < 4:
-                extra = 4-len(trace['r'])
-                trace['r'] += [1e3]*extra
-                trace['t'] += [0.0]*extra
+            if len(trace['r']) < 4:  #hopefully never needed
+                extra = 4-len(trace['r'])  # pragma: no cover
+                trace['r'] += [1e3]*extra  # pragma: no cover
+                trace['t'] += [0.0]*extra  # pragma: no cover
         while len(data) < 3:
             data.append( go.Scatter(
                 r = [1e3]*4,
@@ -2426,7 +2421,12 @@ class FitComparisonBarPlot(WorkspacePlot):
         xtics = []; ys = []; colors = []; texts=[]
 
         if NpByX is None:
-            NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            try:
+                NpByX = [ gs.num_nongauge_params() for gs in gatesetByX ]
+            except: #numpy can throw a LinAlgError
+                _warnings.warn(("FigComparisonBarPlot could not obtain number of"
+                                " *non-gauge* parameters - using total params instead"))
+                NpByX = [ gs.num_params() for gs in gatesetByX ]
 
         if isinstance(datasetByX, _objs.DataSet):
             datasetByX = [datasetByX]*len(gatesetByX)
@@ -2937,8 +2937,8 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         A = rbR.results['A']
         B = rbR.results['B']
         f = rbR.results['f']
-        #if fit == 'first order':
-        #    C = rbR.dicts[gstyp]['C1']
+        if fit == 'first order':
+            C = rbR.results['C']
         pre_avg = rbR.pre_avg
         
         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
@@ -2984,8 +2984,6 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         xlabel = 'Sequence length'
 
-        #OLD cmap = _plt.cm.get_cmap('Set1')
-        
         data = [] # list of traces
         data.append( go.Scatter(
             x = xdata, y = ydata,
@@ -3021,7 +3019,7 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         if fit=='first order':
             data.append( go.Scatter(
                 x = _np.arange(max(xdata)),
-                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1,B1,C1,f1),
+                y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A,B,C,f),
                 mode = 'lines',
                 line = dict(width=1, color=color2),
                 name = fit_label_2,

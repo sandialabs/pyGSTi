@@ -482,9 +482,6 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
 
     #Hardcoded
     title=""
-
-    #OLD xlabel="$\\rho_i$"
-    #OLD ylabel="$E_i$",
     prepStrs, effectStrs, xlabel, ylabel = pygsti_fig.metadata['args']
 
     fig, axes = _plt.subplots()

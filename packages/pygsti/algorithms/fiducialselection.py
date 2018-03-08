@@ -85,15 +85,8 @@ def generate_fiducials(gs_target, omitIdentity=True, eqThresh=1e-6,
     fidGates = [gate for gate in gs_target.gates if gate not in gatesToOmit]
 
     if omitIdentity:
+        # we assume identity gate is always the identity mx regardless of basis
         Identity = _np.identity(gs_target.get_dimension(), 'd')
-
-        #OLD - we assume identity gate is always the identity mx regardless of basis
-        #stateSpaceDims = _np.repeat(1, gs_target.get_dimension())
-        #stateSpaceLabels = [('L{}'.format(n),)
-        #                    for n in range(gs_target.get_dimension())]
-        #Identity = _constr.build_gate(stateSpaceDims, stateSpaceLabels,
-        #                              'I(L0)',
-        #                              basis=gs_target.basis.name)
         
         for gate in fidGates:
             if frobeniusdist2(gs_target.gates[gate], Identity) < eqThresh:

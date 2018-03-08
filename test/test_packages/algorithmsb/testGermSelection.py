@@ -1,5 +1,7 @@
 from pygsti.construction import std1Q_XYI as std
 import pygsti
+import pygsti.algorithms.germselection as germsel
+import pygsti.algorithms.scoring as scoring
 
 import numpy as np
 import sys, os
@@ -44,9 +46,15 @@ class GermSelectionTestCase(AlgorithmTestCase):
             fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4,
             force=False) #don't force any strings (default would have been "singletons"
 
+        with self.assertRaises(ValueError):
+            pygsti.alg.optimize_integer_germs_slack(
+                self.gs_target_noisy, germsToTest2, initialWeights=np.ones( len(germsToTest2)+10, 'd' ),
+                fixedSlack=False, slackFrac=0.1, returnAll=True, tol=1e-6, verbosity=4,
+                force=forceStrs) # initialWeights has bad length (+10)
+
         self.runSilent(pygsti.alg.optimize_integer_germs_slack,
-                       self.gs_target_noisy, germsToTest,
-                       initialWeights=np.ones( len(germsToTest), 'd' ),
+                       self.gs_target_noisy, germsToTest2,
+                       initialWeights=np.ones( len(germsToTest2), 'd' ),
                        fixedSlack=False, slackFrac=0.1,
                        returnAll=True, tol=1e-6, verbosity=4, maxIter=1)
                        # test hitting max iterations
@@ -120,6 +128,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
         max_length   = 6
         gates        = std.gs_target.gates.keys()
         superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
+        tinyGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, 1)
 
         #Depth first
         pygsti.alg.build_up(gatesetNeighborhood, superGermSet,
@@ -130,6 +139,10 @@ class GermSelectionTestCase(AlgorithmTestCase):
                             randomize=False, seed=2014, scoreFunc='all',
                             threshold=threshold, verbosity=1, gatePenalty=1.0,
                             force=forceStrs)
+        tiny = pygsti.alg.build_up(gatesetNeighborhood, tinyGermSet,
+                                   randomize=False, seed=2014, scoreFunc='all',
+                                   threshold=threshold, verbosity=1, gatePenalty=1.0) #incomplete initial set
+        self.assertTrue(tiny is None)
 
 
         #Breadth first
@@ -212,7 +225,6 @@ class GermSelectionTestCase(AlgorithmTestCase):
 
 
     def test_scoring(self):
-        import pygsti.algorithms.scoring as scoring
         eigenvalue_array = np.array([1e-6,1e-4,1.0,2.0])
         s0 = scoring.list_score(eigenvalue_array)
         self.assertEqual(s0, 1010001.5)
@@ -247,3 +259,52 @@ class GermSelectionTestCase(AlgorithmTestCase):
         N = pygsti.alg.num_non_spam_gauge_params(std.gs_target)
         self.assertEqual(gs_reduced.num_gauge_params(), N)
         self.assertNotEqual(std.gs_target.num_gauge_params(), N)
+
+    def test_helper_functions(self):
+        """ Mostly test boundary cases of helper fns """
+        germsToTest = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(
+            list(std.gs_target.gates.keys()), 2)
+
+        maxscore = pygsti.alg.calculate_germset_score(germsToTest, std.gs_target,
+                                                      neighborhoodSize=5, 
+                                                      randomizationStrength=1e-2, scoreFunc='all', 
+                                                      gatePenalty=0.0, l1Penalty=0.0)
+
+        #Test failures in get_gateset_params:
+        gs1 = std.gs_target.copy()
+        gs2 = std.gs_target.copy()
+        gs3 = std.gs_target.copy()
+        gs4 = std.gs_target.copy()
+        gs1.set_all_parameterizations("full")
+        gs2.set_all_parameterizations("TP")
+        gs3.set_all_parameterizations("full")
+        gs4.set_all_parameterizations("full")
+        gs3.gates['Gi2'] = np.identity(4,'d') #adds non-gauge params but not gauge params
+        gs4.gates['Gi2'] = pygsti.obj.StaticGate(np.identity(4,'d')) # keeps param counts the same but adds gate
+
+        with self.assertRaises(ValueError):
+            germsel.get_gateset_params([gs1,gs2]) # different number of gauge params
+        with self.assertRaises(ValueError):
+            germsel.get_gateset_params([gs1,gs3]) # different number of non-gauge params
+        with self.assertRaises(ValueError):
+            germsel.get_gateset_params([gs1,gs4]) # different number of gates
+
+
+        self.assertWarns(germsel.setup_gateset_list, [gs1,gs1], randomize=False, randomizationStrength=0, 
+                         numCopies=3, seed=0) # warns b/c list len > 1 and numCopies specified
+
+        scoreFn = lambda x: scoring.list_score(x, scoreFunc="all")
+        with self.assertRaises(ValueError):
+            germsel.compute_composite_germ_score(scoreFn) #need to provide partialDerivDaggerDeriv or partialGermsList
+
+        germsel.compute_composite_germ_score(scoreFn, gateset=gs1, partialGermsList=germsToTest,
+                                             eps=1e-5, germLengths=np.array([len(g) for g in germsToTest]))
+        
+        pDDD = np.zeros( (len(germsToTest),gs1.num_params(),gs1.num_params()), 'd')
+        with self.assertRaises(ValueError):
+            germsel.compute_composite_germ_score(scoreFn, partialDerivDaggerDeriv=pDDD) # must specify gateset ro numGaugeParams
+        with self.assertRaises(ValueError):
+            germsel.compute_composite_germ_score(scoreFn, gateset=gs1, partialDerivDaggerDeriv=pDDD,
+                                                 gatePenalty=1.0) # must specify partialGermLists or germLengths
+        germsel.compute_composite_germ_score(scoreFn, gateset=gs1, partialDerivDaggerDeriv=pDDD,
+                                             partialGermsList=germsToTest, gatePenalty=1.0) # OK

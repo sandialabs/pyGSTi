@@ -848,10 +848,15 @@ def test_MPI_germsel(comm):
     gates        = std.gs_target.gates.keys()
     superGermSet = pygsti.construction.list_all_gatestrings_without_powers_and_cycles(gates, max_length)
 
-    germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
-                                        randomize=False, seed=2018, scoreFunc='all',
-                                        threshold=1e6, verbosity=1, gatePenalty=1.0,
-                                        memLimit=3*(1024**3), comm=comm)
+    #germs = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+    #                                    randomize=False, seed=2018, scoreFunc='all',
+    #                                    threshold=1e6, verbosity=1, gatePenalty=1.0,
+    #                                    memLimit=3*(1024**3), comm=comm)
+    
+    germs_lowmem = pygsti.alg.build_up_breadth(gatesetNeighborhood, superGermSet,
+                                               randomize=False, seed=2018, scoreFunc='all',
+                                               threshold=1e6, verbosity=1, gatePenalty=1.0,
+                                               memLimit=3*(1024**2), comm=comm) # force "single-Jac" mode
 
 @mpitest(4)
 def test_MPI_profiler(comm):
@@ -977,11 +982,12 @@ def test_MPI_tools(comm):
         loc_indices = pygsti.tools.slicetools.as_array(loc_slice)
         my_array3 = np.zeros(100,'d')
         my_array3[loc_indices] = master[loc_indices] # ~ computation (just copy from "master")
-        mpit.gather_indices(indices, owners, myarray3, arToFillInds=[], axes=0,
+        mpit.gather_indices(indices, owners, my_array3, arToFillInds=[], axes=0,
                             comm=comm, max_buffer_size=maxbuf)
         assert(np.linalg.norm(my_array3[slc] - master[slc]) < 1e-6)
 
     test(slice(0,8)) #more indices than processors
+    test(slice(0,8),False) #more indices than processors w/out split comm
     test(slice(0,3)) #fewer indices than processors
     test(slice(0,3),False) #fewer indices than processors w/out split comm
     test(slice(0,10),maxbuf=12) #with max-buffer
@@ -1035,6 +1041,7 @@ def test_MPI_tools(comm):
 
     # convenience method to avoid importing mpi4py at the top level
     c = mpit.get_comm()
+
     
 @mpitest(4)
 def test_MPI_printer(comm):

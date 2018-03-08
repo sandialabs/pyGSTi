@@ -262,9 +262,13 @@ class SPAMVecTestCase(BaseTestCase):
     def test_povms(self):
         gateset = pygsti.construction.build_gateset(
             [2], [('Q0',)],['Gi'], ["I(Q0)"])
+        gateset2Q = pygsti.construction.build_gateset(
+            [4], [('Q0','Q1')],['Gi'], ["I(Q0)"])
+
         povm = gateset.povms['Mdefault'].copy()
         E0 = povm['0']
         E1 = povm['1']
+        gateset.povms['Munconstrained'] = povm # so gpindices get setup
 
         with self.assertRaises(ValueError):
             pygsti.obj.povm.convert(povm, "foobar", gateset.basis)
@@ -276,11 +280,13 @@ class SPAMVecTestCase(BaseTestCase):
         tp_povm['0'] = E0 # ok
         with self.assertRaises(KeyError):
             tp_povm['1'] = E0 # can't assign complement vector
+        gateset.povms['Mtp'] = tp_povm # so gpindices get setup
 
         factorPOVMs = [povm, povm.copy()]
         tensor_povm = pygsti.obj.TensorProdPOVM( factorPOVMs )
-        
-        for p in [povm, tp_povm, tensor_povm]:
+        gateset2Q.povms['Mtensor'] = tensor_povm # so gpindices get setup
+
+        for i,p in enumerate([povm, tp_povm, tensor_povm]):
             print("Testing POVM of type ", type(p))
             Nels = p.num_elements()
             cpy = p.copy()
@@ -295,6 +301,13 @@ class SPAMVecTestCase(BaseTestCase):
 
             v = p.to_vector()
             p.from_vector(v)
+
+            v = gateset.to_vector() if i < 2 else gateset2Q.to_vector()
+            effects = p.compile_effects(prefix="ABC")
+            for Evec in effects.values():
+                print("inds = ",Evec.gpindices, len(v))
+                Evec.from_vector(v[Evec.gpindices]) # gpindices should be setup relative to GateSet's param vec
+
 
             try:
                 p.transform(T)

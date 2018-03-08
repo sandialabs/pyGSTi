@@ -15,11 +15,67 @@
 import sys
 import os
 import shlex
+import importlib
+
+print("**** conf.py executed from within %s ****" % os.getcwd())
+
+print("*********** REDIRECTING stderr -> /dev/null ***************")
+sys.stderr = open(os.devnull, 'w')
+
+import logging
+logger = logging.getLogger("sphinx") # get root sphinx logger
+#logger.setLevel(logging.ERROR) # I don't think this works...
+warningHandler = None
+for hdlr in logger.handlers:
+    if hdlr.level == logging.WARNING:
+        warningHandler = hdlr; break
+if warningHandler:
+    logger.removeHandler(hdlr)
+    print("*********** REMOVED SPHINX WARNING HANDLER ***********")
+else:
+    logger = logging.getLogger() # try root logger (default arg = None)
+    for hdlr in logger.handlers:
+        if hdlr.level == logging.WARNING:
+            warningHandler = hdlr; break
+    if warningHandler:
+        logger.removeHandler(hdlr)
+        print("*********** REMOVED ROOT WARNING HANDLER ***********")
+    
+
+print("*********** MONKEY-PATCHING AUTOSUMMARY ***************")
+sys.path.insert(0, os.path.abspath('.'))
+import patched_autosummary
+import sphinx.ext.autosummary
+sphinx.ext.autosummary.generate_autosummary_docs = \
+            patched_autosummary.generate_autosummary_docs_patch
+sphinx.ext.autosummary.generate.generate_autosummary_docs = \
+            patched_autosummary.generate_autosummary_docs_patch
+
+#print("*********** MONKEY-PATCHING STATUS ITERATORS ***************")
+#import sphinx.util
+#import sphinx.environment
+#import sphinx.builders
+#sphinx.util.old_status_iterator = patched_autosummary.quiet_old_status_iterator
+#sphinx.util.status_iterator = patched_autosummary.quiet_status_iterator
+#importlib.reload(sphinx.environment)
+#importlib.reload(sphinx.builders)
+#importlib.reload(sphinx.application)
+#importlib.reload(sphinx.cmdline)
+
+#Alternate way, but doesn't get called soon enough to do monkey-patch
+#def patch_autosummary(_):
+#    import sphinx.ext.autosummary
+#    sphinx.ext.autosummary.generate_autosummary_docs = \
+#            patched_autosummary.generate_autosummary_docs_patch
+#
+#def setup(app):
+#    app.connect('builder-inited', patch_autosummary)
+
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.join(os.path.abspath('.'),'../../packages')) # so can import 'pygsti'
 
 # -- General configuration ------------------------------------------------
 
@@ -35,6 +91,7 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
+    'numpydoc'
 ]
 #    'sphinx.ext.mathjax',
 autosummary_generate = True
@@ -148,7 +205,7 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+#html_static_path = ['_static']
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied

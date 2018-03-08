@@ -123,13 +123,13 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         Jnorm = _np.linalg.norm(Jac)
         printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |J|=%g" % (k,norm_f,mu,Jnorm))
 
-        assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
-        assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
+        #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
+        #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
         scaleFctr = 1.0 #_np.linalg.norm(Jac)
         Jac /= scaleFctr
         f /= scaleFctr
-        assert(_np.isfinite(Jac).all()), "Post-scaled non-finite Jacobian!" # NaNs tracking
-        assert(_np.isfinite(_np.linalg.norm(Jac))), "Post-scaled Jacobian has inf norm!" # NaNs tracking
+        #assert(_np.isfinite(Jac).all()), "Post-scaled non-finite Jacobian!" # NaNs tracking
+        #assert(_np.isfinite(_np.linalg.norm(Jac))), "Post-scaled Jacobian has inf norm!" # NaNs tracking
 
         tm = _time.time()
         if my_cols_slice is None:
@@ -137,10 +137,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         JTJ = _mpit.mpidot(Jac.T,Jac,my_cols_slice,comm)   #_np.dot(Jac.T,Jac)
         JTf = _np.dot(Jac.T,f)
         if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
-        assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
-        assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
-        assert(_np.isfinite(JTJ).all()), "Non-finite JTJ!" # NaNs tracking
-        assert(_np.isfinite(JTf).all()), "Non-finite JTf!" # NaNs tracking
+        #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
+        #assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
+        #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ!" # NaNs tracking
+        #assert(_np.isfinite(JTf).all()), "Non-finite JTf!" # NaNs tracking
 
         idiag = _np.diag_indices_from(JTJ)
         norm_JTf = _np.linalg.norm(JTf,ord=_np.inf)
@@ -163,8 +163,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             JTJ[idiag] += mu / scaleFctr**2 # augment normal equations
             #JTJ[idiag] *= (1.0 + mu) # augment normal equations
 
-            assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
-            assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
+            #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
+            #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
 
             try:
                 if profiler: profiler.mem_check("custom_leastsq: before linsolve")
@@ -220,8 +220,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     printer.log("      Accepted! gain ratio=%g  mu * %g => %g"
                                 % (dF/dL,max(t,1.0/3.0),mu), 2)
 
-                    assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                    assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
+                    #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
+                    #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
 
                     ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
                     #new_Jac = jac_fn(new_x)

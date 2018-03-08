@@ -227,7 +227,7 @@ class Workspace(object):
 
         #print("FACTORY FN DEF = \n",new_func)
         exec_globals = {'cls' : cls, 'self': self}
-        if _sys.version_info > (3, 0):
+        if PY3:
             exec(factory_func_def, exec_globals) #Python 3
         else:
             exec("""exec factory_func_def in exec_globals""") #Python 2
@@ -1502,7 +1502,6 @@ class WorkspaceOutput(object):
         #                                disabled=False)
         self.set_render_options(global_requirejs=True) # b/c jupyter uses require.js
         out = self.render("html")
-        #OLD: content = "<script>\n%s\n</script>\n\n%s" % (js,html)
         content = "<script>\n" + \
                   "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
@@ -1792,137 +1791,6 @@ class WorkspaceOutput(object):
         return {'html':html, 'js':js}
 
 
-#def _render_html_dir(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
-#                     switchboards, switchIndices, output_dir, div_css_classes=None,
-#                     link_to=None):
-#    """
-#    TODO REMOVE
-#    """
-#    #Build list of CSS classes for the created divs
-#    classes = ['single_switched_value'] 
-#    if div_css_classes is not None:
-#        classes.extend(div_css_classes)
-#    cls = ' '.join(classes)
-#    
-#    #build HTML as container div containing one or more plot divs
-#    # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
-#    html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID  # style='display: none' or 'visibility: hidden'
-#    html += "\n".join([ "<div class='%s' id='%s'></div>\n" %
-#                         (cls,divID) for divID in div_ids ]) + "\n</div>\n"
-#
-#    #build a list of filenames based on the divIDs
-#    div_filenames = [ (divID+".html") for divID in div_ids ] # "figures/"+
-#    
-#    #build javascript to map switch positions to div_ids
-#    js = "var switchmap_%s = new Array();\n" % ID
-#    for switchPositions, iDiv in switchpos_map.items():
-#        #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
-#        div_id = div_ids[iDiv]
-#        flatPositions = []
-#        for singleBoardSwitchPositions in switchPositions:
-#            flatPositions.extend( singleBoardSwitchPositions )                
-#        js += "switchmap_%s[ [%s] ] = '%s';\n" % \
-#                (ID, ",".join(map(str,flatPositions)), div_id)
-#
-#    js += "window.switchmap_%s = switchmap_%s;\n" % (ID,ID) #ensure a *global* variable
-#    js += "\n"
-#
-#
-#    cnd = " && ".join([ "$('#switchbd%s_%d').hasClass('initializedSwitch')"
-#                        % (sb.ID,switchIndex)
-#                        for sb, switchInds in zip(switchboards, switchIndices)
-#                        for switchIndex in switchInds ])
-#    if len(cnd) == 0: cnd = "true"
-#
-#    #define fn to "connect" output object to switchboard, i.e.
-#    #  register event handlers for relevant switches so output object updates
-#    js += "function connect_%s_to_switches(){\n" % ID
-#    js += "  if(%s) {\n" % cnd  # "if switches are ready"
-#    # loop below adds event bindings to the body of this if-block
-#
-#    #build a handler function to get all of the relevant switch positions,
-#    # build a (flattened) position array, and perform the lookup.  Note that
-#    # this function does the same thing regardless of *which* switch was
-#    # changed, and so is called by all relevant switch change handlers.
-#    onchange_name = "%s_onchange" % ID
-#    handler_js = "function %s() {\n" % onchange_name
-#    handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
-#    handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n" # short-circuit
-#    handler_js += "  var curSwitchPos = new Array();\n"
-#    for sb, switchInds in zip(switchboards, switchIndices):
-#        for switchIndex in switchInds:
-#            handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
-#    handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
-#    handler_js += "  $( '#%s' ).children().hide();\n" % ID
-#    handler_js += "  divToShow = $( '#' + idToShow );\n"
-#    handler_js += "  if( divToShow.children().length == 0 ) {\n"
-#    handler_js += "    loadLocal('figures/' + idToShow + '.html', '#' + idToShow, function() {\n"
-#    handler_js += "        divToShow = $( '#' + idToShow );\n"
-#    handler_js += "        divToShow.show();\n"
-#    handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
-#    if link_to and ('tex' in link_to):
-#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-#        handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
-#    if link_to and ('pdf' in link_to):
-#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-#        handler_js += " + idToShow + '.pdf\" target=\"_blank\">&#9660;PDF</a>');\n"
-#    if link_to and ('pkl' in link_to):
-#        handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
-#        handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
-#    handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-#    handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n" 
-#    handler_js += "    });\n" # end load-complete handler
-#    handler_js += "  }\n"
-#    handler_js += "  else {\n"        
-#    handler_js += "    divToShow.show();\n"
-#    handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
-#    handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-#    handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
-#    handler_js += "  }\n"
-#    handler_js += "}\n"
-#      #Note: caption resizing also occurs after table & plot creation within 
-#      # pygsti_plotly_ex.js trigger_* functions.
-#    
-#    
-#    #build change event listener javascript
-#    for sb, switchInds in zip(switchboards, switchIndices):
-#        # switchInds is a tuple containing the "used" switch indices of sb
-#        for switchIndex in switchInds:
-#            # part of if-block ensuring switches are ready (i.e. created)
-#            js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
-#                          "%s(); });\n" % onchange_name
-#
-#    #bind onchange call to custom 'tabchange' event that we trigger when tab changes
-#    js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
-#    js +=                         "%s(); });\n" % onchange_name
-#    js += "    %s();\n" % onchange_name # call onchange function *once* at end to update visibility
-#
-#    # end if-block
-#    js += "    console.log('Switches initialized: %s handlers set');\n" % ID
-#    js += "    $( '#%s' ).show()\n" % ID  #visibility updates are done: show parent container
-#    js += "  }\n" #ends if-block
-#    js += "  else {\n"  # switches aren't ready - so wait
-#    js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
-#    js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
-#    js += "  }\n"
-#    js += "};\n" #end of connect function
-#    
-#    #on-ready handler starts trying to connect to switches
-#    js += "$(document).ready(function() {\n" #
-#    js += "  connect_%s_to_switches();\n" % ID        
-#    js += "});\n\n" # end on-ready handler
-#    js += handler_js
-#
-#    ret = {'html':html, 'js':js}
-#    for divID,divHTML,divJS,divFN in zip(div_ids, div_htmls, div_jss, div_filenames):
-#        # OLD: ret[divID] = { 'html': divHTML, 'js': divJS, 'filename': divFN }
-#        v = { 'html': divHTML, 'js': divJS }
-#        with open(_os.path.join(output_dir,divFN),'w') as f:
-#            f.write( "<script>\n%(js)s\n</script>\n\n%(html)s" % v )
-#        
-#    return ret
-
-
 class NotApplicable(WorkspaceOutput):
     """
     Class signifying that an given set of arguments is not applicable
@@ -2132,6 +2000,9 @@ class WorkspaceTable(WorkspaceOutput):
                 raise ValueError("Invalid `switched_item_mode` render option: %s" %
                                  switched_item_mode)
 
+            if render_dir is not None and not _os.path.exists(render_dir):
+                _os.mkdir(render_dir)
+
             cwd = _os.getcwd()
             latex_list = []
             for i, table in enumerate(self.tables):
@@ -2261,9 +2132,10 @@ class WorkspaceTable(WorkspaceOutput):
         N = len(self.tables)
         
         if filename.endswith(".html"):
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspaceTable")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceTable")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2580,7 +2452,7 @@ class WorkspacePlot(WorkspaceOutput):
                 plotDivID = plotID + "_%d" % i
                 if i in overrideIDs: plotDivID = overrideIDs[i]
                 if isinstance(fig,NotApplicable): continue
-                
+
                 if fig.pythonvalue is not None:
                     data = {'value': fig.pythonvalue }
                     if "pythonErrorBar" in fig.metadata:
@@ -2640,9 +2512,10 @@ class WorkspacePlot(WorkspaceOutput):
         
         if filename.endswith(".html"):
             #Note: Same as WorkspaceTable except for N
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspacePlot")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspacePlot")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards
@@ -2960,9 +2833,10 @@ class WorkspaceText(WorkspaceOutput):
         N = len(self.texts)
         
         if filename.endswith(".html"):
-            if index is None and N==1: index = 0
-            else: raise ValueError("Must supply `index` argument for a" +
-                                   "non-trivially-switched WorkspaceText")
+            if index is None:
+                if N==1: index = 0
+                else: raise ValueError("Must supply `index` argument for a" +
+                                       "non-trivially-switched WorkspaceText")
 
             saved_switchposmap = self.switchpos_map
             saved_switchboards = self.switchboards

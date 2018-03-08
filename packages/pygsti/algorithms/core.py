@@ -240,13 +240,6 @@ def do_lgst(dataset, prepStrs, effectStrs, targetGateset, gateLabels=None, gateL
         rhoVec_p = _np.dot(invABMat_p,rhoVec_p)
         lgstGateset.preps[prepLabel] = rhoVec_p
 
-    #OLD
-    ## Add SPAM label info to gateset
-    ##  Note: this must be done in a *deterministic* order, which it is
-    ##    here because spamDict is an OrderedDict (cf. get_reverse_spam_defs())
-    #for (prepLabel, ELabel) in spamDict.keys():
-    #    lgstGateset.spamdefs[spamDict[(prepLabel,ELabel)]] = (prepLabel, ELabel)
-
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the gateset
     if guessGatesetForGauge is not None:
@@ -384,13 +377,6 @@ def _constructAB(prepStrs, effectStrs, gateset, dataset, gateLabelAliases=None):
             AB[eoff:eoff+povmLen,j] = [ dsRow.fraction(ol) for ol in outcomes ]
         eoff += povmLen
 
-        #OLD
-            #gateLabelString = rhospec.str + espec.str # LEXICOGRAPHICAL VS MATRIX ORDER
-            #dsStr = _tools.find_replace_tuple(gateLabelString,gateLabelAliases)
-            #spamLabel = spamDict[ (rhospec.lbl,espec.lbl) ]
-            #dsRow = dataset[dsStr]
-            #AB[i,j] = dsRow.fraction(outcome)
-            ##print "DEBUG: AB[%d,%d] = (" % (i,j), espec + rhospec, ") = ", AB[i,j] #DEBUG
     return AB
 
 def _constructXMatrix(prepStrs, effectStrs, gateset, gateLabelTuple, dataset, gateLabelAliases=None):
@@ -421,15 +407,6 @@ def _constructXMatrix(prepStrs, effectStrs, gateset, gateLabelTuple, dataset, ga
                 ooff += len(spamtups)
         eoff += povmLen
                 
-            #OLD
-            #spamLabel = spamDict[ (rhospec.lbl,espec.lbl) ]
-            #try:
-            #    dsRow = dataset[dsStr]
-            #except:
-            #    raise KeyError("Missing data needed to construct X matrix for " + str(gateLabelTuple) \
-            #                       + ": gate string %s + %s + %s = %s" %
-            #                   (str(rhospec.str),str(gateLabelTuple), str(espec.str), str(dsStr)))
-            #X[i,j] = dsRow.fraction(spamLabel)
     return X
 
 def _constructA(effectStrs, gs):
@@ -444,8 +421,6 @@ def _constructA(effectStrs, gs):
     for k,(estr,povmLbl,povmLen) in enumerate(zip(effectStrs,povmLbls,povmLens)):
         #Build fiducial < E_k | := < EVec[ effectSpec[0] ] | Gatestring(effectSpec[1:])
         #st = dot(Ek.T, Estr) = ( dot(Estr.T,Ek)  ).T
-        #OLD (matrix version only): st = _np.dot( _np.transpose(
-        #  gs.effects[ espec.lbl ] ), gs.product(espec.str) ) # 1xN vector
         #A[k,:] = st[0,:] # E_k == kth row of A                    
         for i in range(dim): # propagate each basis initial state
             basis_st[i] = 1.0
@@ -456,11 +431,6 @@ def _constructA(effectStrs, gs):
             basis_st[i] = 0.0
 
         eoff += povmLen
-            #OLD
-            #custom_spamLabel = (basis_st, gs.effects[ espec.lbl ])
-            #st[i] = gs.pr( custom_spamLabel, espec.str )
-            #basis_st[i] = 0.0
-        #A[k,:] = st # E_k == kth row of A
     return A
 
 def _constructB(prepStrs, gs):
@@ -480,18 +450,11 @@ def _constructB(prepStrs, gs):
 
     for k,rhostr in enumerate(prepStrs):
         #Build fiducial | rho_k > := Gatestring(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
-        #OLD (matrix version only): st = _np.dot( gs.product(rhospec.str),
-        #                           gs.preps[ rhospec.lbl ] ) # Nx1 vector
         # B[:,k] = st[:,0] # rho_k == kth column of B
         probs = gs.probs( rhostr + _objs.GateString(('M_LGST_tmp_povm',)) )
         B[:, k] = [ probs[("E%d" % i,)] for i in range(dim) ] #CHECK will this work?
 
     del gs.povms['M_LGST_tmp_povm']
-    #OLD
-    #    custom_spamLabel = (gs.preps[ rhospec.lbl ], basis_st)
-    #    st[i] = gs.pr( custom_spamLabel, rhospec.str )
-    #    basis_st[i] = 0.0
-    #B[:,k] = st # rho_k == kth column of B
     return B
 
 
@@ -511,10 +474,6 @@ def _constructTargetAB(prepStrs, effectStrs, targetGateset):
                 # since no instruments are allowed in fiducial strings.
         eoff += povmLen
 
-    #OLD
-    #        gateLabelString = rhospec.str + espec.str # LEXICOGRAPHICAL VS MATRIX ORDER
-    #        spamLabel = spamDict[ (rhospec.lbl,espec.lbl) ]
-    #        AB[i,j] = targetGateset.pr(spamLabel, gateLabelString)
     return AB
 
 
@@ -756,8 +715,6 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
                 jac = _np.concatenate( (jac, gsVecGrad), axis=0 )  # shape == nGateStrings*nFlatGate+nDerivCols, nDerivCols
                 if check_jacobian: _opt.check_jac(_objective_func, vectorGS, jac, tol=1e-3, eps=1e-6, errType='abs')
                 return jac
-            #OLD return _np.concatenate( [ gs.dproduct(gateStr, flat=True) \
-            #                           for gateStr in gateStringsToUseInEstimation ], axis=0 )
 
     else:
         def _jacobian(vectorGS):
@@ -779,8 +736,6 @@ def do_exlgst(dataset, startGateset, gateStringsToUseInEstimation, prepStrs,
                     printer.log(" ==> max err/max = ", max([ x[2]/maxabs for x in errs ]), 3) # pragma: no cover
 
             return jac
-            #OLD return _np.concatenate( [ gs.dproduct(gateStr, flat=True) \
-            #                           for gateStr in gateStringsToUseInEstimation ], axis=0 )
 
 
     #def checked_jacobian(vectorGS):
@@ -1142,15 +1097,6 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
 
-    #OLD
-    # permute (if needed) gate string list for efficient subtree division
-    # Note: cannot rely on order of gateStringsToUse above this point --
-    #   (using len(gateStringsToUse) is fine though).
-    #REMOVE: gateStringsToUse = evTree.generate_gatestring_list(permute=False)
-    #if gatestringWeights is not None:
-    #    gatestringWeights = \
-    #        evTree.permute_original_to_computation(gatestringWeights)
-
     #Expand gate label aliases used in DataSet lookups
     dsGateStringsToUse = _tools.find_replace_tuple_list(
         gateStringsToUse, gateLabelAliases)
@@ -1480,7 +1426,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     if printer.verbosity > 0:
         nGateStrings = len(gateStringsToUse)
         nDataParams  = dataset.get_degrees_of_freedom(dsGateStringsToUse) #number of independent parameters
-          # OLD: nGateStrings*(len(dataset.get_spam_labels())-1)          # in dataset (max. model # of params)
+                                                                          # in dataset (max. model # of params)
                                                                      
         #Don't compute num gauge params if it's expensive (>10% of mem limit)
         memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
@@ -2107,41 +2053,6 @@ def do_iterative_mc2gst_with_model_selection(
 #                 Maximum Likelihood Estimation GST (MLGST)
 ##################################################################################
 
-#OLD args: method='leastsq', constrainToCP=False, constrainToValidSpam=False, constrainType='wall',
-#    method : string, optional
-#        The method used to optimize the log-likelihood function.  Can be any method
-#        known by scipy.optimize.minimize such as 'BFGS', 'Nelder-Mead', 'CG', 'L-BFGS-B',
-#        or additionally:
-#
-#        - 'leastsq' -- least squares minimization of logl term by term
-#        - 'custom' -- custom CG that often works better than 'CG'
-#        - 'supersimplex' -- repeated application of 'Nelder-Mead' to converge it
-#        - 'basinhopping' -- scipy.optimize.basinhopping using L-BFGS-B as a local optimizer
-#        - 'swarm' -- particle swarm global optimization algorithm
-#        - 'evolve' -- evolutionary global optimization algorithm using DEAP
-#        - 'brute' -- Experimental: scipy.optimize.brute using 4 points along each dimensions
-#
-#    constrainToCP : bool, optional
-#        Whether to constrain the optimization over gatesets to CP gatesets only. Note
-#        that to constraining to TP also is accomplished by setting opt_G0 to False and
-#        using with a TP startingGateset.
-#
-#    constrainToValidSpam : bool, optional
-#        Whether to constrain the optimization to valid surface preparation and measurements.
-#        This means the prepared density matrix must be positive semidefinite with trace 1, and
-#        the effects must have eigenvalues between 0 and 1.
-#
-#    constrainType : string, optional
-#        How constraint violations are implemented.  Can be:
-#
-#        - 'wall' -- objective function gets crazy large when a constraint is violated
-#        - 'projection' -- objective function projects solution back into valid space
-#           and returns the value there when a constraint is violated
-#
-#    verbosity : int, optional
-#        How much detail to send to stdout.
-
-
 def do_mlgst(dataset, startGateset, gateStringsToUse,
              maxiter=100000, maxfev=None, tol=1e-6,
              cptp_penalty_factor=0, spam_penalty_factor=0,
@@ -2363,15 +2274,6 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
     
-    #OLD
-    # permute (if needed) gate string list for efficient subtree division
-    # Note: cannot rely on order of gateStringsToUse above this point --
-    #   (using len(gateStringsToUse) is fine though).
-    #gateStringsToUse = evTree.generate_gatestring_list(permute=False)
-    #if gatestringWeights is not None:
-    #    gatestringWeights = \
-    #        evTree.permute_original_to_computation(gatestringWeights)
-
     #Expand gate label aliases used in DataSet lookups
     dsGateStringsToUse = _tools.find_replace_tuple_list(
         gateStringsToUse, gateLabelAliases)
@@ -2665,7 +2567,7 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
         if _np.isfinite(deltaLogL):
             nGateStrings = len(gateStringsToUse)
             nDataParams  = dataset.get_degrees_of_freedom(dsGateStringsToUse) #number of independent parameters
-            # OLD: nGateStrings*(len(dataset.get_spam_labels())-1)          # in dataset (max. model # of params)
+                                                                              # in dataset (max. model # of params)
 
             #Don't compute num gauge params if it's expensive (>10% of mem limit)
             memForNumGaugeParams = gs.num_elements() * (gs.num_params()+gs.dim**2) \
@@ -2695,43 +2597,6 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
     profiler.add_time("do_mlgst: post-opt",tm)
     profiler.add_time("do_mlgst: total time",tStart)
     return (logL_upperbound - deltaLogL), gs
-
-#SCRATCH - used for debugging logl objective function
-            #if len( (v < 0).nonzero()[0] ) > 0:
-            #  raise ValueError("B: v < 0!! min/max of v = %g,%g" % (_np.min(v), _np.max(v)) )
-
-            #v = _np.sqrt( _np.where( probs < min_p, v + totalCntVec[None,:]*(min_p - probs), v) ) #OLD
-
-            # Let p_min be a small number > 0
-            #if p >= p_min then term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )
-            #if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
-            #  where S := deriv (slope) of -logl at p_min = N_{i,sl} * -1/p_min + N[i]
-
-            #v = _np.sqrt(cntVecMx * _np.log(freqs/probs) + totalCntVec[None,:]*(probs-freqs) ) # dims K x M (K = nSpamLabels, M = nGateStrings)
-
-            #DEBUG
-            #beforeSqrt = freqTerm + minusCntVecMx * _np.log(probs) + totalCntVec[None,:]*probs
-            #oob = (beforeSqrt < 0.0)
-            #nbelowZero = len(oob.nonzero()[0])
-            #nan = _np.isnan(v)
-            #nNan = len(nan.nonzero()[0])
-            #print "%d terms < 0, %d terms NAN" % (nbelowZero,nNan)
-            #k,l= nan.nonzero()[0][0],nan.nonzero()[1][0]
-            #print k,l,v[k,l],beforeSqrt[k,l]
-
-            #DEBUG - comment out line above, set probs to something larger than the [0,1] range, and uncomment lines below
-            #oob = _np.logical_or(probs < 0, probs > 1)  #boolean array masking out-of-bound probabilities
-            #clipped_probs =  _np.clip(probs,1e-6,1.0-1e-6)
-            #v = _np.sqrt(minusCntVecMx * _np.log(clipped_probs) + totalCntVec[None,:]*clipped_probs) # dims K x M (K = nSpamLabels, M = nGateStrings)
-            #v[ oob ] = 1e3 #penalty terms for out of bounds probabilities
-            #nClipped = len(oob.nonzero()[0])
-            #nClipped0 = len((probs < 0).nonzero()[0])
-            #nClipped1 = len((probs > 1).nonzero()[0])
-            #nz = (probs < 0).nonzero()
-            #firstProbBelow = probs[ nz[0][0], nz[1][0] ] if nClipped0 > 0 else None
-            #nz = (probs > 1).nonzero()
-            #firstProbAbove = probs[ nz[0][0], nz[1][0] ] if nClipped1 > 0 else None
-            #print "DB: logl = ", -1.0*sum([x**2 for x in v.reshape([KM])]), " outside [0,1] = ",(nClipped0,nClipped1), " below = ", firstProbBelow, " above = ", firstProbAbove
 
 
 

@@ -546,17 +546,7 @@ class GateSet(object):
             the number of gauge gateset parameters.
         """
         dPG = self._calc()._buildup_dPG()
-        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions
-        
-        #OLD DEBUG
-        #print("Svals of dPG:")
-        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(dPG, compute_uv=False))] ))
-        #print("----")
-        #print("DB: gaugeDirs = ",gaugeDirs.shape, ", nP =",self.num_params())
-        #print("DIRS = \n",gaugeDirs[0:self.num_params(),0:3])
-        #print("Svals = ")
-        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(_np.linalg.svd(gaugeDirs[0:self.num_params(),:], compute_uv=False))] ))
-        
+        gaugeDirs = _mt.nullspace_qr(dPG) #cols are gauge directions        
         return _np.linalg.matrix_rank(gaugeDirs[0:self.num_params(),:])
 
 
@@ -638,7 +628,7 @@ class GateSet(object):
             v = _np.delete(v, indices_to_remove)
             get_shift = lambda j: _bisect.bisect_left(indices_to_remove, j)
             memo = set() #keep track of which object's gpindices have been set
-            for _,obj in self.iter_objs():
+            for lbl,obj in self.iter_objs():
                 if obj.gpindices is not None:
                     if id(obj) in memo: continue #already processed
                     if isinstance(obj.gpindices, slice):
@@ -884,9 +874,49 @@ class GateSet(object):
     
     def compile_gatestrings(self, gatestrings):
         """ 
-        Returns an OrderedDict with:
-            keys = raw gate sequences (containing just "compiled" gates)
-            values = lists of (preplbl, effectlbl) tuples.
+        Compiles a list of :class:`GateString`s.
+
+        Gate strings must be "compiled" before probabilities can be computed for
+        them. Each string corresponds to some number of "outcomes", indexed by an
+        "outcome label" that is a tuple of POVM-effect or instrument-element
+        labels like "0".  Compiling creates maps between gate strings and their
+        outcomes and the structures used in probability computation (see return
+        values below).  
+
+        Parameters
+        ----------
+        gatestrings : list of GateStrings
+            The list to compile. 
+
+        Returns
+        -------
+        raw_spamTuples_dict : collections.OrderedDict
+            A dictionary whose keys are raw gate sequences (containing just
+            "compiled" gates, i.e. not instruments), and whose values are
+            lists of (preplbl, effectlbl) tuples.  The effectlbl names a 
+            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            corresponds to a single "final element" of the computation, e.g. a
+            probability.  The ordering is important - and is why this needs to be
+            an ordered dictionary - when the lists of tuples are concatenated (by
+            key) the resulting tuple orderings corresponds to the final-element
+            axis of an output array that is being filled (computed).
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestrings` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements.  Thus, to get the final elements corresponding to 
+            `gatestrings[i]`, use `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestrings` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th gate strings's final elements 
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
+
+        nTotElements : int
+            The total number of "final elements" - this is how big of an array
+            is need to hold all of the probabilities `gatestrings` generates.
         """
         # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
@@ -962,7 +992,8 @@ class GateSet(object):
                             if i not in elIndicesByParent[iParent]: #don't duplicate existing indices
                                 elIndicesByParent[iParent].append(i)
                                 outcomesByParent[iParent].append(tup)
-                            else: assert(tup in outcomesByParent) # double-check - could REMOVE for speed in future
+                            else: assert(tup in outcomesByParent) # pragma: no check
+                                    # double-check - could REMOVE for speed in future
                 else:
                     assert(action == "add") # s should have been added in "add" process!
                     raw_spamTuples_dict[s] = spamtuples
@@ -1018,44 +1049,34 @@ class GateSet(object):
 
     def compile_gatestring(self, gatestring):
         """ 
-        Returns an OrderedDict with:
-            keys = raw gate sequences (containing just "compiled" gates)
-            values = lists of (preplbl, effectlbl) tuples.
+        Compiles a single :class:`GateString`.
+        
+        Parameters
+        ----------
+        gatestring : GateString
+            The gate string to compile
+
+        Returns
+        -------
+        raw_spamTuples_dict : collections.OrderedDict
+            A dictionary whose keys are raw gate sequences (containing just
+            "compiled" gates, i.e. not instruments), and whose values are
+            lists of (preplbl, effectlbl) tuples.  The effectlbl names a 
+            "compiled" effect vector; preplbl is just a prep label. Each tuple
+            corresponds to a single "final element" of the computation for this
+            gate string.  The ordering is important - and is why this needs to be
+            an ordered dictionary - when the lists of tuples are concatenated (by
+            key) the resulting tuple orderings corresponds to the final-element
+            axis of an output array that is being filled (computed).
+
+        outcomes : list
+            A list of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels), corresponding to 
+            the final elements.
         """
         raw_dict,_,outcomes,nEls = self.compile_gatestrings([gatestring])
         assert(len(outcomes[0]) == nEls)
         return raw_dict,outcomes[0]
-
-
-    #OLD
-    #def compile_gatestrings(self, gatestring_list, return_lookup=False):
-    #    ret = _collections.OrderedDict()
-    #    for i,gstr in enumerate(gatestring_list):
-    #        self.compile_gatestring(gstr, ret, i if return_lookup else None)
-    #        
-    #    if return_lookup:
-    #        # return a dict of final-element index-arrays, indexed by
-    #        # `gatestring_list` index.  Spamtuples have been marked with
-    #        # parent indices, so we need to remove these markers as we
-    #        # process the final dictionary.
-    #        lookup = _collections.OrderedDict(
-    #            [ i:[] for i in range(len(gatestring_list))] )
-    #
-    #        iEl = 0
-    #        for raw_str, spamTuples in ret.items():
-    #            unmarked_spamTuples = []
-    #            for iParent,rhoLbl,ELbl in spamTuples:
-    #                lookup[iParent].append(iEl); iEl += 1
-    #                unmarked_spamTuples.append( (rhoLbl,ELbl) )
-    #            ret[raw_str][:] = unmarked_spamTuples # [:] is essential so doesn't assign new odict item
-    #
-    #        #convert lists -> integer arrays (for user convenience)
-    #        lookup = _collections.OrderedDict( 
-    #            [ (i,_np.array(v,'i')) for i,v in lookup.items()])
-    #        
-    #        return ret, lookup
-    #    else:
-    #        return ret
 
 
     def product(self, gatestring, bScale=False):
@@ -1444,22 +1465,11 @@ class GateSet(object):
             printer.log("Evaltree generation (%s) w/mem limit = %.2fGB"
                         % (distributeMethod, memLimit*C))
 
-        def prime_factors(n):  #TODO: move this fn somewhere else
-            """ GCD algorithm to produce prime factors of `n` """
-            i = 2; factors = []
-            while i * i <= n:
-                if n % i:
-                    i += 1
-                else:
-                    n //= i
-                    factors.append(i)
-            if n > 1:
-                factors.append(n)
-            return factors
-
         def memEstimate(ng,np1,np2,Ng,fastCacheSz=False,verb=0,cacheSize=None):
             """ Returns a memory estimate based on arguments """
             tm = _time.time()
+
+            nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
             
             if cacheSize is None:
                 #Get cache size
@@ -1472,7 +1482,6 @@ class GateSet(object):
                     nFinalStrs = max([s.num_final_strings() for s in evt_cache[ng][0].get_sub_trees()])
                 else:
                     #heuristic (but fast)
-                    nFinalStrs = int(round(len(gatestring_list) / ng)) #may not need to be an int...
                     cacheSize = calc.estimate_cache_size(nFinalStrs)
                     
 
@@ -1506,23 +1515,23 @@ class GateSet(object):
             distributeMethod = calc.default_distribute_method()
 
         if distributeMethod == "gatestrings":
-            np1 = 1; np2 = 1; Ng = nprocs
-            ng = nprocs
             Nstrs = len(gatestring_list)
+            np1 = 1; np2 = 1; Ng = min(nprocs,Nstrs)
+            ng = Ng
             if memLimit is not None:
                 #Increase ng in amounts of Ng (so ng % Ng == 0).  Start
                 # with fast cacheSize computation then switch to slow
-                while memEstimate(ng,np1,np2,Ng,True) > memLimit:
+                while memEstimate(ng,np1,np2,Ng,False) > memLimit:
                     ng += Ng
                     if ng >= Nstrs:
                         # even "maximal" splitting (num trees == num strings)
-                        # won't help - see if we can squeeze "ng==nprocs" cached tree
+                        # won't help - see if we can squeeze the this maximally-split tree
                         # to have zero cachesize
-                        if nprocs not in evt_cache:
-                            memEstimate(nprocs,np1,np2,Ng,verb=1)
-                        if hasattr(evt_cache[nprocs],"squeeze") and \
-                           memEstimate(nprocs,np1,np2,nG,cacheSize=0) <= memLimit:
-                            evt_cache[nprocs].squeeze(0)
+                        if Nstrs not in evt_cache:
+                            memEstimate(Nstrs,np1,np2,Ng,verb=1)
+                        if hasattr(evt_cache[Nstrs],"squeeze") and \
+                           memEstimate(Nstrs,np1,np2,Ng,cacheSize=0) <= memLimit:
+                            evt_cache[Nstrs].squeeze(0) #To get here, need to use higher-dim gatesets
                         else:
                             raise MemoryError("Cannot split or squeeze tree to achieve memory limit")
                         
@@ -1549,7 +1558,7 @@ class GateSet(object):
                 if desired_Ng >= nprocs:
                     return nprocs * int(_np.ceil(1.*desired_Ng/nprocs))
                 else:
-                    fctrs = sorted(prime_factors(nprocs)); i=1
+                    fctrs = sorted(_mt.prime_factors(nprocs)); i=1
                     if int(_np.ceil(desired_Ng)) in fctrs:
                         return int(_np.ceil(desired_Ng)) #we got lucky
                     while _np.product(fctrs[0:i]) < desired_Ng: i+=1
@@ -1601,11 +1610,6 @@ class GateSet(object):
                         if next >= mem_estimate:
                             raise MemoryError("Not enough memory: splitting unproductive")
                         mem_estimate = next                    
-
-                    #OLD
-                    #np1 = num_params
-                    #np2 = num_params if bNp2Matters else 1
-                    #ng = Ng = max(nprocs // (np1*np2), 1)
             else:
                 memEstimate(ng,np1,np2,Ng) # to compute & cache final EvalTree
 
@@ -1721,11 +1725,13 @@ class GateSet(object):
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
+                evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
                 lookup = evalTree.split(lookup, None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
+                    evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
                     lookup = evalTree.split(lookup, maxTreeSize, None) # fall back to split for max size
         
         if maxTreeSize is not None or minSubtrees is not None:
@@ -2108,11 +2114,8 @@ class GateSet(object):
     def bulk_probs(self, gatestring_list,
                    clipTo=None, check=False, comm=None):
         """
-        TODO: fix doc strings for all bulk_* functions
-        Construct a dictionary containing the bulk-probabilities
-        for every spam label (each possible initialization &
-        measurement pair) for each gate sequence given by
-        evalTree.
+        Construct a dictionary containing the probabilities
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2136,9 +2139,9 @@ class GateSet(object):
         Returns
         -------
         probs : dictionary
-            A dictionary such that
-            probs[SL] = bulk_pr(SL,evalTree,clipTo,check)
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, p)` tuples, where `outcome` is a tuple of labels
+            and `p` is the corresponding probability.
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
@@ -2149,10 +2152,8 @@ class GateSet(object):
                     check=False,comm=None,wrtBlockSize=None):
 
         """
-        Construct a dictionary containing the bulk-probability-
-        derivatives for every spam label (each possible
-        initialization & measurement pair) for each gate
-        sequence given by evalTree.
+        Construct a dictionary containing the probability-derivatives
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2189,9 +2190,12 @@ class GateSet(object):
         Returns
         -------
         dprobs : dictionary
-            A dictionary such that
-            ``dprobs[SL] = bulk_dpr(SL,evalTree,gates,G0,SPAM,SP0,returnPr,clipTo,check)``
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, and `dp` is an array containing
+            the derivative of `p` with respect to each parameter.  If `returnPr`
+            if False, then `p` is not included in the tuples (so they're just
+            `(outcome, dp)`).
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
@@ -2204,10 +2208,8 @@ class GateSet(object):
                     wrtBlockSize1=None, wrtBlockSize2=None):
 
         """
-        Construct a dictionary containing the bulk-probability-
-        Hessians for every spam label (each possible
-        initialization & measurement pair) for each gate
-        sequence given by evalTree.
+        Construct a dictionary containing the probability-Hessians
+        for an entire list of gate sequences.
 
         Parameters
         ----------
@@ -2246,9 +2248,13 @@ class GateSet(object):
         Returns
         -------
         hprobs : dictionary
-            A dictionary such that
-            ``hprobs[SL] = bulk_hpr(SL,evalTree,returnPr,returnDeriv,clipTo,check)``
-            for each spam label (string) SL.
+            A dictionary such that `probs[gstr]` is an ordered dictionary of
+            `(outcome, hp, dp, p)` tuples, where `outcome` is a tuple of labels,
+            `p` is the corresponding probability, `dp` is a 1D array containing
+            the derivative of `p` with respect to each parameter, and `hp` is a
+            2D array containing the Hessian of `p` with respect to each parameter.
+            If `returnPr` if False, then `p` is not included in the tuples.
+            If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
@@ -2259,29 +2265,29 @@ class GateSet(object):
 
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False, comm=None):
         """
-        Identical to bulk_probs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probabilities for an entire tree of gate strings.
 
-        Specifically, the probabilities for all gate strings
-        and a given SPAM label are placed into the row of
-        mxToFill specified by spam_label_rows[spamLabel].
+        This routine fills a 1D array, `mxToFill` with the probabilities
+        corresponding to the *compiled* gate strings found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        objects is *compiled* into a lists of gate-only sequences along with
+        a mapping of final elements (i.e. probabilities) to gate-only sequence
+        and prep/effect pairs.  The evaluation tree organizes how to efficiently
+        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        must have length equal to the number of final elements (this can be 
+        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        correspond to which strings and outcomes, you'll need the mappings 
+        generated when the original list of `GateStrings` was compiled.
 
         Parameters
         ----------
         mxToFill : numpy ndarray
-          an already-allocated KxS numpy array, where K is larger
-          than the maximum value in spam_label_rows and S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings())
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+          an already-allocated 1D numpy array of length equal to the
+          total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -2308,43 +2314,30 @@ class GateSet(object):
     def bulk_fill_dprobs(self, mxToFill, evalTree, prMxToFill=None,clipTo=None,
                          check=False,comm=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
-
         """
-        Identical to bulk_dprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-derivatives for an entire tree of gate
+        strings.
 
-        Specifically, the probability derivatives for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ]
+        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
+        probability-derivatives for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M is the 
+          number of gate set parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
         clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -2372,7 +2365,6 @@ class GateSet(object):
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
 
-
         Returns
         -------
         None
@@ -2390,47 +2382,35 @@ class GateSet(object):
                          gatherMemLimit=None):
 
         """
-        Identical to bulk_hprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-Hessians for an entire tree of gate
+        strings.
 
-        Specifically, the probability hessians for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities and/or derivatives can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ] and
-        derivMxToFill[ spam_label_rows[spamLabel] ] respectively.
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        probability-Hessians for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxMxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExMxM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
-        derivMxToFill : numpy array, optional
-          when not None, an already-allocated KxSxM numpy array that is filled
-          with the probability derivatives as per spam_label_rows, similar to
-          bulk_fill_dprobs(...).
+        derivMxToFill1, derivMxToFill2 : numpy array, optional
+          when not None, an already-allocated ExM numpy array that is filled
+          with probability derivatives, similar to bulk_fill_dprobs(...), but
+          where M is the number of gateset parameters selected for the 1st and 2nd
+          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
-        clipTo : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+        clipTo : 2-tuple, optional
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -2441,7 +2421,7 @@ class GateSet(object):
            When not None, an MPI communicator for distributing the computation
            across multiple processors.  Distribution is first performed over
            subtrees of evalTree (if it is split), and then over blocks (subsets)
-           of the parameters being second-differentiated with respect to (see
+           of the parameters being differentiated with respect to (see
            wrtBlockSize).
 
         wrtBlockSize2, wrtBlockSize2 : int or float, optional
@@ -2453,10 +2433,12 @@ class GateSet(object):
           wrtFilter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
         gatherMemLimit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
-
 
         Returns
         -------
@@ -3248,12 +3230,3 @@ class GateSet(object):
                 [ev.real for ev in _np.linalg.eigvals(
                         _jt.jamiolkowski_iso(gate))] ),"\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_evals(self)))
-
-        #OLD
-        #prep_penalty = sum( [ _lf.prep_penalty(rhoVec,self.basis)
-        #                        for rhoVec in list(self.preps.values()) ] )
-        #effect_penalty   = sum( [ _lf.effect_penalty(EVec,self.basis)
-        #                        for EVec in list(self.effects.values()) ] )
-        #print(("rhoVec Penalty (>0 if invalid rhoVecs) = ", prep_penalty))
-        #print(("EVec Penalty (>0 if invalid EVecs) = ", effect_penalty))
-

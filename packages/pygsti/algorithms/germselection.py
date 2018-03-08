@@ -322,7 +322,6 @@ def setup_gateset_list(gatesetList, randomize, randomizationStrength,
     if len(gatesetList) > 1 and numCopies is not None:
         _warnings.warn("Ignoring numCopies={} since multiple gatesets were "
                        "supplied.".format(numCopies))
-        assert(False)
 
     if randomize:
         gatesetList = randomizeGatesetList(gatesetList, randomizationStrength,
@@ -803,7 +802,7 @@ def bulk_twirled_deriv(gateset, gatestrings, eps=1e-6, check=False, comm=None):
                 _warnings.warn("bulk twirled derivative norm mismatch = "
                                "%g - %g = %g"
                                % (_nla.norm(ret[i]), _nla.norm(chk_ret),
-                                  _nla.norm(ret[i] - chk_ret)))
+                                  _nla.norm(ret[i] - chk_ret))) # pragma: no cover
 
     return ret # nCompiledGateStrings x flattened_gate_dim x vec_gateset_dim
 
@@ -987,8 +986,7 @@ def build_up(gatesetList, germsList, randomize=True,
                                                          threshold)
     if undercompleteGatesetNum > -1:
         printer.warning("Complete initial germ set FAILS on gateset "
-                        + str(undercompleteGatesetNum) + ".")
-        printer.warning("Aborting search.")
+                        + str(undercompleteGatesetNum) + ". Aborting search.")
         return None
 
     printer.log("Complete initial germ set succeeds on all input gatesets.", 1)
@@ -1245,7 +1243,8 @@ def build_up_breadth(gatesetList, germsList, randomize=True,
                 currentDDDList[k][:,:] = result[:,:]
                 result = None #free mem
 
-    else: raise ValueError("Invalid mode: %s" % mode)
+    else: # should be unreachable since we set 'mode' internally above
+        raise ValueError("Invalid mode: %s" % mode) # pragma: no cover
 
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
@@ -1874,10 +1873,7 @@ def grasp_germ_set_optimization(gatesetList, germsList, alpha, randomize=True,
                     iteration + 1, iterations), 1)
             except Exception as e:
                 failCount += 1
-                if failCount == 10:
-                    raise e
-                else:
-                    printer.warning(e)
+                raise e if (failCount == 10) else printer.warning(e)
 
     finalScores = _np.array([finalScoreFn(localSoln)
                              for localSoln in localSolns])

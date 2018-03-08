@@ -1,0 +1,7 @@
+####### Read-the-docs requirements (for building documentation) #######
+numpy
+scipy
+plotly
+ply
+numpydoc
+

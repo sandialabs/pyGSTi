@@ -43,7 +43,7 @@ formatDict = dict()
 # Numbers following 'rho' -> subscripts
 formatDict['Rho'] = {
     'html'  : _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
-    'latex' : _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')), #OLD formatstring='$%s$'),
+    'latex' : _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')),
     'python' : _no_format}
 
 # 'E' (POVM) effect formatting
@@ -53,7 +53,7 @@ formatDict['Effect'] = {
     'html'  : _Formatter(stringreturn=('Ec', 'E<sub>C</sub>'),
                          regexreplace=('E([0-9]+)$', 'E<sub>%s</sub>')),
     'latex' : _Formatter(stringreturn=('Ec', '$E_C$'),
-                         regexreplace=('E([0-9]+)$', '$E_{%s}$')), #OLD formatstring='$%s$'),
+                         regexreplace=('E([0-9]+)$', '$E_{%s}$')), 
     'python' : _no_format}
 
 NormalHTML = _Formatter(html, 

@@ -359,18 +359,6 @@ def fill_std_qtys(qtys, connected, renderMath, CSSnames):
                 '});\n'
                 '</script>' )
 
-#OLD: auto-render entire document
-#        qtys['katexLIB'] += ('\n<script>'
-#                'document.addEventListener("DOMContentLoaded", function() {'
-#                'renderMathInElement(document.body, { delimiters: ['
-#                '{left: "$$", right: "$$", display: true},'
-#                '{left: "$", right: "$", display: false},'
-#                '] } ); });'
-#                '</script>')
-        # removed so parens work:
-        # '{left: "\\[", right: "\\]", display: true},'
-        # '{left: "\\(", right: "\\)", display: false}'
-
     if 'plotlyexLIB' not in qtys:
         qtys['plotlyexLIB'] = insert_resource(
             connected, None, "pygsti_plotly_ex.js")

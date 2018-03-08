@@ -15,122 +15,6 @@ from .. import objects   as _objs
 from ..baseobjs import smart_cached
 
 
-#OLD: gatestring "maps"
-#def get_gatestring_map(gateString, dataset, strs, fidpair_filter=None,
-#                       gatestring_filter=None, gateLabelAliases=None):
-#    """ 
-#    Pre-compute a list of (i,j,gstr) tuples for use in other matrix-
-#    generation functions.  
-#
-#    This consolidates all the logic for selecting a subset (via fidpairs_filter,
-#    gatestring_filter, or  dataset membership) of prep + base + effect
-#    strings to compute.  The element (i,j,gstr) means that the (i,j)-th
-#    element of a resulting matrix corresponds to the gate string gstr.
-#    Typically gstr = prep[j] + gateString + effect[i].  Matrix indices that
-#    are absent correspond to Nan entries in a resulting matrix.
-#
-#    Parameters
-#    ----------
-#    gateString : tuple of gate labels
-#        The base gate sequence that is sandwiched between each effectStr
-#        and prepStr.
-#
-#    dataset : DataSet
-#        The data used to test for gate sequence membership
-#
-#    strs : 2-tuple
-#        A (prepStrs,effectStrs) tuple of fiducial string lists.
-#
-#    fidpair_filter : list, optional
-#        If not None, a list of (iRhoStr,iEStr) tuples specifying a subset of
-#        all the prepStr,effectStr pairs to include in a result matrix.
-#
-#    gatestring_filter : list, optional
-#        If not None, a list of GateString objects specifying which elements of
-#        result matrices should be computed.  Any matrix entry corresponding to
-#        an gate string *not* in this list is set to NaN.  When both
-#        fidpair_filter and gatesetring_filter are non-None, gatestring_filter
-#        is given precedence.
-#
-#    gateLabelAliases : dictionary, optional
-#        Dictionary whose keys are gate label "aliases" and whose values are tuples
-#        corresponding to what that gate label should be expanded into when checking
-#        for membership in the dataset.
-#
-#
-#    Returns
-#    -------
-#    tuples : list
-#        A list of (i,j,gstr) tuples.
-#    rows : int
-#        The number of rows in resulting matrices
-#    cols : int
-#        The number of columns in resulting matrices
-#    """
-#    tuples = []
-#    prepStrs, effectStrs = strs # LEXICOGRAPHICAL VS MATRIX ORDER
-#    if gateString is None: 
-#        return tuples, len(effectStrs),len(prepStrs) #all-NaN mxs
-#
-#    if gatestring_filter is not None:
-#        gs_filter_dict = { gs: True for gs in gatestring_filter } #fast lookups
-#
-#    #No filtering -- just fiducial pair check
-#    for i,effectStr in enumerate(effectStrs):
-#        for j,prepStr in enumerate(prepStrs):
-#            gstr = prepStr + gateString + effectStr
-#            ds_gstr = _tools.find_replace_tuple(gstr,gateLabelAliases)
-#            if dataset is None or ds_gstr in dataset:
-#                #Note: gatestring_filter trumps fidpair_filter
-#                if gatestring_filter is None:
-#                    if fidpair_filter is None or (j,i) in fidpair_filter:
-#                        tuples.append((i,j,gstr))
-#                elif gstr in gs_filter_dict:
-#                    tuples.append((i,j,gstr))
-#
-#    return tuples,len(effectStrs),len(prepStrs)
-#
-#
-#
-#def expand_aliases_in_map(gatestring_map, gateLabelAliases):
-#    """
-#    Returns a new gate string map whose strings have been 
-#    modified to expand any aliases given by `gateLabelAliases`.
-#
-#    Parameters
-#    ----------
-#    gatestring_map : list of tuples
-#        the original gate string map, typically obtained by 
-#        calling :func:`get_gatestring_map`.
-#
-#    gateLabelAliases : dictionary
-#        Dictionary whose keys are gate label "aliases" and whose values are tuples
-#        corresponding to what that gate label should be expanded into.
-#        e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
-#
-#    Returns
-#    -------
-#    list
-#        A list of (i,j,gstr) tuples.
-#    rows : int
-#        The number of rows in resulting matrices
-#    cols : int
-#        The number of columns in resulting matrices
-#    """    
-#    if gateLabelAliases is None: return gatestring_map
-#
-#    gatestring_tuples, rows, cols = gatestring_map
-#    
-#    #find & replace aliased gate labels with their expanded form
-#    new_gatestring_tuples = []
-#    for (i,j,s) in gatestring_tuples:
-#        new_gatestring_tuples.append(
-#            (i,j, _tools.find_replace_tuple(s,gateLabelAliases)) )
-#
-#    return new_gatestring_tuples, rows, cols
-
-
-
 def total_count_matrix(gsplaq, dataset):
     """
     Computes the total count matrix for a base gatestring.
@@ -159,13 +43,6 @@ def total_count_matrix(gsplaq, dataset):
           # OR should it sum only over outcomes, i.e.
           # = sum([dataset[gstr][ol] for ol in outcomes])
     return ret
-
-    #OLD
-    #ret = _np.nan * _np.ones( (gsplaq.rows,gsplaq.cols), 'd')
-    #for i,j,gstr in gsplaq:
-    #    ret[i,j] = dataset[ gstr ].total
-    #return ret
-
 
 
 def count_matrices(gsplaq, dataset):
@@ -499,22 +376,6 @@ def _eformat(f, prec):
     else:
         return "%g" % f #fallback to general format
 
-#OLD
-#
-#def _computeGateStringMaps(gss, dataset):
-##    xvals, yvals, xyGateStringDict
-##    strs, fidpair_filters, gatestring_filters,
-##                           gateLabelAliases
-#    """ 
-#    Return a dictionary of all the gatestring maps,
-#    indexed by base string. 
-#    """
-#    return { gss.gsDict[(x,y)] :
-#                 get_gatestring_map(gss.gsDict[(x,y)], dataset, (gss.prepStrs, gss.effectStrs),
-#                                    gss.get_fidpair_filter(x,y), gss.get_gatestring_filter(x,y),
-#                                    gss.aliases)
-#             for x in gss.used_xvals for y in gss.used_yvals }
-
 
 def _num_non_nan(array):
     ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]
@@ -551,7 +412,6 @@ def _compute_num_boxes_dof(subMxs, sumUp, element_dof):
 
         if n_boxes > 0:
             # Each box is a chi2_(sum) random variable
-            # dof_per_box = dof_each_box[0] #OLD
             dof_per_box = _np.average(dof_each_box)
         else:
             dof_per_box = None #unknown, since there are no boxes
@@ -900,8 +760,7 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     ds_gstrs = _tools.find_replace_tuple_list(gstrs, gss.aliases)
     
     if Np is None: Np = gateset.num_nongauge_params()
-    Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters
-      #OLD Ns = len(gstrs)*(len(dataset.get_spam_labels())-1) #number of independent parameters in dataset
+    Ns = dataset.get_degrees_of_freedom(ds_gstrs) #number of independent parameters in dataset
     k = max(Ns-Np,1) #expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitQty-k)/_np.sqrt(2*k)
     if Ns <= Np: _warnings.warn("Max-model params (%d) <= gate set params (%d)!  Using k == 1." % (Ns,Np))
@@ -912,13 +771,6 @@ def ratedNsigma(dataset, gateset, gss, objective, Np=None, returnAll=False):
     elif Nsig <= 100: rating = 3
     elif Nsig <= 500: rating = 2
     else: rating = 1
-
-    #OLD:
-    #if (fitQty-k) < _np.sqrt(2*k):  rating = 5
-    #elif (fitQty-k) < 2*k:          rating = 4
-    #elif (fitQty-k) < 5*k:          rating = 3
-    #elif (fitQty-k) < 10*k:         rating = 2
-    #else:                           rating = 1
 
     if returnAll:
         return Nsig, rating, fitQty, k, Ns, Np

@@ -518,18 +518,9 @@ def do_long_sequence_gst_base(dataFilenameOrSet, targetGateFilenameOrSet,
         #In LGST case, gauge optimimize starting point to the target
         # (historical; sometimes seems to help in practice, since it's gauge
         # optimizing to physical gates (e.g. something in CPTP)
-        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, comm=comm) 
+        tol = gaugeOptParams.get('tol',1e-8) if gaugeOptParams else 1e-8
+        gs_start = _alg.gaugeopt_to_target(gs_start, gs_target, tol=tol, comm=comm) 
           #Note: use *default* gauge-opt params when optimizing
-
-        #OLD  -- this should be unnecessary since identity shouldn't be changed for TP gatesets...
-        ## Also reset the POVM identity to that of the target.  Essentially,
-        ## we declare that this basis (gauge) has the same identity as the
-        ## target (typically the first basis element).
-        #for lbl,Evec in gs_start.effects.items():
-        #    if isinstance(Evec, _objs.ComplementSPAMVec):
-        #        Evec.identity = gs_target.effects[lbl].identity.copy()
-        #        Evec._construct_vector() #rebuild after setting identity TODO: make identity a *property* of Evec
-        #        gs_start._update_paramvec(Evec) #TODO: better way to tell GateSet?
 
     elif startingPt == "target":
         gs_start = gs_target.copy()
@@ -950,9 +941,6 @@ def gaugeopt_suite_to_dictionary(gaugeOptSuite, gs_target, advancedOptions=None,
 
         for suiteName in gaugeOptSuites:
             if suiteName == "single":
-                #OLD
-                #gaugeOptSuite_dict['single'] = {'itemWeights': {'gates':1, 'spam':1e-3},
-                #                                'verbosity': printer}
                 
                 stages = [ ] #multi-stage gauge opt
                 gg = gs_target.default_gauge_group
@@ -1189,9 +1177,10 @@ def _post_opt_processing(callerName, ds, gs_target, gs_start, lsgstLists,
         if "targetGateset" not in gaugeOptParams:
             gaugeOptParams["targetGateset"] = gs_target
 
-        #TODO REMOVE: redundant given add_gaugeoptimized behavior
-        #if "comm" not in gaugeOptParams: 
-        #    gaugeOptParams["comm"] = comm 
+        # somewhat redundant given add_gaugeoptimized behavior - but
+        #  if not here won't do parallel gaugeopt_to_target below
+        if "comm" not in gaugeOptParams: 
+            gaugeOptParams["comm"] = comm 
 
         gaugeOptParams['returnAll'] = True # so we get gaugeEl to save
         gaugeOptParams['gateset'] = gs_lsgst_list[-1] #starting gate set

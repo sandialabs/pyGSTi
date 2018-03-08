@@ -279,7 +279,7 @@ class GateMapCalc(GateCalc):
     def _compute_pr_cache(self, rholabel, elabels, evalTree, comm, scratch=None):
         #tStart = _time.time()
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size()
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
         
@@ -305,13 +305,8 @@ class GateMapCalc(GateCalc):
             for j,E in enumerate(EVecs):
                 ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
                 #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-
                 # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
                 
-            #HERE - need to decide on expected shape for acton(...)
-
-        #OLD: pCache = _np.dot(E,rho_cache.T) # (1,cacheSize)
-        #OLD: return _np.squeeze(pCache, axis=0) # shape (cacheSize,)
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
 
@@ -323,18 +318,13 @@ class GateMapCalc(GateCalc):
         nDerivCols = len(param_indices) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
+        cacheSize = evalTree.cache_size()
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
         if scratch is None:
             rho_cache  = _np.zeros((cacheSize, dim), 'd')
-            #OLDdpr_cache  = _np.zeros((len(evalTree), nDerivCols),'d')
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache  = scratch
-            #OLD
-            #assert(scratch.shape == (cacheSize,nDerivCols + dim))
-            #rho_cache  = scratch[:,nDerivCols:nDerivCols+dim]
-            #dpr_cache  = scratch[:,0:nDerivCols]
             
         eps = 1e-7 #hardcoded?
         pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
@@ -378,8 +368,7 @@ class GateMapCalc(GateCalc):
         nDerivCols2 = len(param_indices2) # *all*, not just locally computed ones
         
         dim = self.dim
-        cacheSize = evalTree.cache_size() #OLD: len(evalTree)
-        #OLD: dpr_scratch = _np.zeros((cacheSize,nDerivCols2 + dim), 'd')
+        cacheSize = evalTree.cache_size()
         dpr_scratch = _np.zeros((cacheSize,dim),'d')
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
             
@@ -489,9 +478,6 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         wrtLen1 = (self.Np+np1-1) // np1 # ceiling(num_params / np1)
         wrtLen2 = (self.Np+np2-1) // np2 # ceiling(num_params / np2)
-        num_final_strs = max(num_final_strs,cache_size)
-          # if cache_size happens to be larger than num_final_strs then
-          # we'll need to store at least that many resulting elements.
 
         mem = 0
         for fnName in subcalls:
@@ -518,31 +504,30 @@ class GateMapCalc(GateCalc):
     
     def bulk_fill_probs(self, mxToFill, evalTree, clipTo=None, check=False,
                         comm=None):
-
         """
-        Identical to bulk_probs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probabilities for an entire tree of gate strings.
 
-        Specifically, the probabilities for all gate strings
-        and a given SPAM label are placed into the row of
-        mxToFill specified by spam_label_rows[spamLabel].
+        This routine fills a 1D array, `mxToFill` with the probabilities
+        corresponding to the *compiled* gate strings found in an evaluation
+        tree, `evalTree`.  An initial list of (general) :class:`GateString`
+        objects is *compiled* into a lists of gate-only sequences along with
+        a mapping of final elements (i.e. probabilities) to gate-only sequence
+        and prep/effect pairs.  The evaluation tree organizes how to efficiently
+        compute the gate-only sequences.  This routine fills in `mxToFill`, which
+        must have length equal to the number of final elements (this can be 
+        obtained by `evalTree.num_final_elements()`.  To interpret which elements
+        correspond to which strings and outcomes, you'll need the mappings 
+        generated when the original list of `GateStrings` was compiled.
 
         Parameters
         ----------
         mxToFill : numpy ndarray
-          an already-allocated KxS numpy array, where K is larger
-          than the maximum value in spam_label_rows and S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings())
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+          an already-allocated 1D numpy array of length equal to the
+          total number of computed elements (i.e. evalTree.num_final_elements())
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         clipTo : 2-tuple, optional
            (min,max) to clip return value if not None.
@@ -557,10 +542,12 @@ class GateMapCalc(GateCalc):
            across multiple processors.  Distribution is performed over
            subtrees of evalTree (if it is split).
 
+
         Returns
         -------
         None
         """
+
         #get distribution across subtrees (groups if needed)
         subtrees = evalTree.get_sub_trees()
         mySubTreeIndices, subTreeOwners, mySubComm = evalTree.distribute(comm)
@@ -600,43 +587,30 @@ class GateMapCalc(GateCalc):
                          prMxToFill=None,clipTo=None,check=False,
                          comm=None, wrtFilter=None, wrtBlockSize=None,
                          profiler=None, gatherMemLimit=None):
-
         """
-        Identical to bulk_dprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-derivatives for an entire tree of gate
+        strings.
 
-        Specifically, the probability derivatives for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ]
+        Similar to `bulk_fill_probs(...)`, but fills a 2D array with
+        probability-derivatives for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M is the 
+          number of gate set parameters.
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
         clipTo : 2-tuple, optional
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -802,51 +776,36 @@ class GateMapCalc(GateCalc):
                          prMxToFill=None, deriv1MxToFill=None, deriv2MxToFill=None, 
                          clipTo=None, check=False,comm=None, wrtFilter1=None, wrtFilter2=None,
                          wrtBlockSize1=None, wrtBlockSize2=None, gatherMemLimit=None):
-
         """
-        Identical to bulk_hprobs(...) except results are
-        placed into rows of a pre-allocated array instead
-        of being returned in a dictionary.
+        Compute the outcome probability-Hessians for an entire tree of gate
+        strings.
 
-        Specifically, the probability hessians for all gate
-        strings and a given SPAM label are placed into
-        mxToFill[ spam_label_rows[spamLabel] ].
-        Optionally, probabilities and/or derivatives can be placed into
-        prMxToFill[ spam_label_rows[spamLabel] ] and
-        derivMxToFill[ spam_label_rows[spamLabel] ] respectively.
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        probability-Hessians for each "final element" of `evalTree`.
 
         Parameters
         ----------
-        mxToFill : numpy array
-          an already-allocated KxSxMxM numpy array, where K is larger
-          than the maximum value in spam_label_rows, S is equal
-          to the number of gate strings (i.e. evalTree.num_final_strings()),
-          and M is the length of the vectorized gateset.
-
-        spam_label_rows : dictionary
-          a dictionary with keys == spam labels and values which
-          are integer row indices into mxToFill, specifying the
-          correspondence between rows of mxToFill and spam labels.
+        mxToFill : numpy ndarray
+          an already-allocated ExMxM numpy array where E is the total number of
+          computed elements (i.e. evalTree.num_final_elements()) and M1 & M2 are
+          the number of selected gate-set parameters (by wrtFilter1 and wrtFilter2).
 
         evalTree : EvalTree
-           given by a prior call to bulk_evaltree.  Specifies the gate strings
-           to compute the bulk operation on.
+           given by a prior call to bulk_evaltree.  Specifies the *compiled* gate
+           strings to compute the bulk operation on.
 
         prMxToFill : numpy array, optional
-          when not None, an already-allocated KxS numpy array that is filled
-          with the probabilities as per spam_label_rows, similar to
-          bulk_fill_probs(...).
+          when not None, an already-allocated length-E numpy array that is filled
+          with probabilities, just like in bulk_fill_probs(...).
 
-        deriv1MxToFill, deriv2MxToFill : numpy array, optional
-          when not None, an already-allocated KxSxM numpy array that is filled
-          with the probability derivatives as per spam_label_rows, similar to
-          bulk_fill_dprobs(...), but where M is the number of gateset parameters
-          selected for the 1st and 2nd differentiation, respectively (i.e. by
-          wrtFilter1 and wrtFilter2).
+        derivMxToFill1, derivMxToFill2 : numpy array, optional
+          when not None, an already-allocated ExM numpy array that is filled
+          with probability derivatives, similar to bulk_fill_dprobs(...), but
+          where M is the number of gateset parameters selected for the 1st and 2nd
+          differentiation, respectively (i.e. by wrtFilter1 and wrtFilter2).
 
-        clipTo : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
+        clipTo : 2-tuple, optional
+           (min,max) to clip return value if not None.
 
         check : boolean, optional
           If True, perform extra checks within code to verify correctness,
@@ -874,15 +833,18 @@ class GateMapCalc(GateCalc):
           wrtFilter is not None.  Set this to non-None to reduce amount of
           intermediate memory required.
 
+        profiler : Profiler, optional
+          A profiler object used for to track timing and memory usage.
+
         gatherMemLimit : int, optional
           A memory limit in bytes to impose upon the "gather" operations
           performed as a part of MPI processor syncronization.
-
 
         Returns
         -------
         None
         """
+
         if wrtFilter1 is not None:
             assert(wrtBlockSize1 is None and wrtBlockSize2 is None) #Cannot specify both wrtFilter and wrtBlockSize
             wrtSlice1 = _slct.list_to_slice(wrtFilter1) #for now, require the filter specify a slice

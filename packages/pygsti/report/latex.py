@@ -55,24 +55,26 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
                  else formatted_cell) for formatted_cell in formatted_rowData ]
             latex += " & ".join(formatted_rowData_latex)
 
-            multirows = [ ("multirow" in el) for el in formatted_rowData_latex ]
-            if any(multirows):
-                latex += " \\\\ "
-                last = True; lineStart = None; col = 1
-                for multi,data in zip(multirows,formatted_rowData_latex):
-                    if last == True and multi == False:
-                        lineStart = col #line start
-                    elif last == False and multi == True:
-                        latex += "\cline{%d-%d} " % (lineStart,col) #line end
-                    last=multi
-                    res = _re.search("multicolumn{([0-9])}",data)
-                    if res: col += int(res.group(1))
-                    else:   col += 1
-                if last == False: #need to end last line
-                    latex += "\cline{%d-%d} "%(lineStart,col-1)
-                latex += "\n"
-            else:
-               latex += " \\\\ \hline\n"
+            #MULTI-ROW support for *data* (non-col-header) rows of table.  Currently
+            # unused (unneeded) - see multirow formatter that is commented out in formatters.py
+            #multirows = [ ("multirow" in el) for el in formatted_rowData_latex ]
+            #if any(multirows):
+            #    latex += " \\\\ "
+            #    last = True; lineStart = None; col = 1
+            #    for multi,data in zip(multirows,formatted_rowData_latex):
+            #        if last == True and multi == False:
+            #            lineStart = col #line start
+            #        elif last == False and multi == True:
+            #            latex += "\cline{%d-%d} " % (lineStart,col) #line end
+            #        last=multi
+            #        res = _re.search("multicolumn{([0-9])}",data)
+            #        if res: col += int(res.group(1))
+            #        else:   col += 1
+            #    if last == False: #need to end last line
+            #        latex += "\cline{%d-%d} "%(lineStart,col-1)
+            #    latex += "\n"
+            #else:
+            latex += " \\\\ \hline\n"
 
     latex += "\end{%s}\n" % table
     return {'latex' : latex}
@@ -239,10 +241,12 @@ def value(el, specs, mathmode=False):
 
     if _compat.isstr(el):
         return el
-    if type(el) in (int,_np.int64):
+    if isinstance(el, (int,_np.int64)):
         return "%d" % el
-    if el is None or _np.isnan(el): return "--"
-
+    try:
+        if el is None or _np.isnan(el): return "--"
+    except TypeError: pass # if isnan fails b/c a non-numeric type, just proceed
+        
     try:
         if abs(el.real) > TOL:
             if abs(el.imag) > TOL:

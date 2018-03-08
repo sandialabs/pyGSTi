@@ -36,8 +36,6 @@ def as_rgb_array(colorStr):
         rgb = [float(x) for x in tupstr.split(',')]
     elif colorStr.startswith('rgba(') and colorStr.endswith(')'):
         tupstr = colorStr[len('rgba('):-1]
-        #OLD: rgba = tupstr.split(',')
-        #OLD: rgb = [float(x)/256.0 for x in rgba[0:3]] + [float(rgba[3])]
         rgb = [float(x) for x in tupstr.split(',')[0:3] ] #ignore alpha
     else:
         raise ValueError("Cannot convert colorStr = ", colorStr)
@@ -288,7 +286,6 @@ class LinlogColormap(Colormap):
         self.vmin = vmin
         self.vmax = max(vmax,self.trans) #so linear portion color scale ends at trans
 
-
         # Colors ranging from white to gray on [0.0, 0.5) and pink to red on
         # [0.5, 1.0] such that the perceived brightness of the pink matches the
         # gray.
@@ -311,6 +308,33 @@ class LinlogColormap(Colormap):
         super(LinlogColormap, self).__init__(
             [ [0.0, (1.,1.,1.)], [0.499999999, gray],
               [0.5, c], [1.0, mx] ], hmin,hmax)
+
+    @classmethod
+    def manual_transition_pt(cls, vmin, vmax, trans, color="red"):
+        """
+        Create a new LinlogColormap with a manually-specified transition point.
+
+        Parameters
+        ----------
+        vmin, vmax : float
+            The min and max values of the data being colormapped.
+
+        trans : float
+            The transition-point value between the linear grayscale and
+            logarithmic colorscale.
+
+        color : {"red","blue","green","cyan","yellow","purple"}
+            the color to use for the non-grayscale part of the color scale.
+
+        Returns
+        -------
+        LinlogColormap
+        """
+        n_boxes = 1; pcntle = 0.5; dof_per_box=1
+        cmap = cls(vmin, vmax, n_boxes, pcntle, dof_per_box, color)
+        cmap.trans = trans # override __init__'s value
+        cmap.vmax = max(cmap.vmax,trans) # repeat of line in __init__ that depends on trans
+        return cmap
 
 
     @smart_cached

@@ -185,7 +185,6 @@ class Basis(object):
 
             if otherIsBasis:
                 return all([ sparse_equal(A,B) for A,B in zip(self._matrices, other._matrices)])
-                #OLD return not any([ (A!=B).nnz for A,B in zip(self._matrices, other._matrices)])
             else:
                 return all([ sparse_equal(A,B) for A,B in zip(self._matrices, other)])
         else:
@@ -504,11 +503,7 @@ def _build_block_matrices(name=None, dim=None, matrices=None, sparse=False):
             name          = basis.name
             sparse        = basis.sparse
     else:
-        if matrices is None: # built by name and dim, ie Basis('pp', 4)
-            #OLD: require either name or matrices
-            #assert name is not None, \
-            #        'If matrices is none, name must be supplied to Basis.__init__'
-            
+        if matrices is None: # built by name and dim, ie Basis('pp', 4)            
             if name is not None: 
                 matrices = _build_default_block_matrices(name, dim, sparse)
             else: # if name and matrices are none -> "Empty" basis

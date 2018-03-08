@@ -65,6 +65,14 @@ class GenericFormatterTests(FormatterBaseTestCase):
                '$\%\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\Diamond$ \checkmark \\bigstar$')
         self.assertEqual(formatter.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\end{tabular}')
 
+    def test_value_fns(self):
+        from pygsti.report.latex import value as latex_value
+        specs = {'precision': 2, 'sciprecision': 2, 'polarprecision': 2, 'complexAsPolar': True}
+        self.assertEqual(latex_value("Hello", specs), "Hello")
+        latex_value({"Weird type": "to get value of!"}, specs)
+        #More variants?
+        
+
 if __name__ == '__main__':
     import unittest
     unittest.main(verbosity=1)
