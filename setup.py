@@ -87,6 +87,6 @@ setup(name='pyGSTi',
       url = 'http://www.pygsti.info',
       download_url = 'https://github.com/pyGSTio/pyGSTi/tarball/master',
       keywords = ['pygsti', 'tomography', 'gate set', 'pigsty', 'pig', 'quantum', 'qubit'],
-      classifiers = filter(None, classifiers.split("\n")),
+      classifiers = list(filter(None, classifiers.split("\n"))),
       ext_modules=ext_modules,
      )
