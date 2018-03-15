@@ -23,7 +23,10 @@ class Gate(object):
             the 'direction' of the gate.
         
         """        
-        assert(type(label) is unicode), "The gate label should be a unicode string!"
+        
+        # Todo : add some kind of check back in here -- this fails on python 3, as that
+        # seems to not know what unicode is.
+        #assert(type(label) is unicode), "The gate label should be a unicode string!"
         #
         # To do: add this back in after appropriate fix. Currently, it raises an error
         # if it is handed a type of integer that is not a plain python int.

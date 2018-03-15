@@ -181,7 +181,7 @@ class DeviceSpec(object):
                             self.gatesonqubits[q1,q2].append(_cir.Gate(glabel,(q1,q2)))
                             
             else:
-                raise ValueError, "Gates on > 2 qubits not currently recorded!"
+                raise ValueError("Gates on > 2 qubits not currently recorded!")
         
         # A matrix that stores whether there is any two-qubit gate between a pair of qubits
         self.connectivity = _np.zeros((n,n),int)
@@ -299,21 +299,5 @@ class DeviceSpec(object):
     def simulate(self,circuit,modelname,inputstate=None,store=True,returnall=False):        
         """
         A wrap-around for the circuit simulators in simulators.py 
-        """        
-        #model = self.model[modelname]
-        #        
-        #if model.mtype == 'mixedstate':
-        #    out = _sim.mixedstate_simulator(circuit, model, input_bitstring=inputstate, store=store, returnall=returnall)
-        #
-        #elif model.mtype == 'purestate':
-        #    out = _sim.vectorstate_simulator(circuit, model, inputstate=inputstate, store=store, returnall=returnall)
-        #
-        #elif model.mtype == 'pauli-clifford':
-        #    out = _sim.pauliclifford_simulator(circuit, model, inputstate=inputstate, store=store, returnall=returnall)
-        #
-        #else:
-        #    raise ValueError, "Model type not understood by the simulator."
-        #
-        #return out
-    
+        """       
         return _sim.simulate(circuit,model[modelname],inputstate=inputstate,store=store,returnall=returnall)

@@ -20,7 +20,7 @@ def simulate(circuit,model,inputstate=None,store=True,returnall=False):
         out = pauliclifford_simulator(circuit, model, inputstate=inputstate, store=store, returnall=returnall)
                 
     else:
-        raise ValueError, "Model type not understood/supported"
+        raise ValueError("Model type not understood/supported")
         
     return out
     

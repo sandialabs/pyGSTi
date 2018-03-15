@@ -88,26 +88,30 @@ def compile_symplectic(s, ds=None, algorithm='GGE', depth_compression=True):
     
     elif algorithm == 'AG+GE':
         
+        # Todo : write this function
         circuit = aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'GE', 
                                                    depth_compression=depth_compression)   
         
     elif algorithm == 'AG+PMH':
         
+        # Todo : write this function
         circuit = aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'PMH', 
                                                    depth_compression=depth_compression)   
         
     elif algorithm == 'improvedAG+GE':
-        
-         circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'GE', 
+         
+        # Todo : write this function
+        circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'GE', 
                                                              depth_compression=depth_compression)   
         
     elif algorithm == 'improvedAG+PMH':
         
-         circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'PMH',
+        # Todo : write this function
+        circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'PMH',
                                                              depth_compression=depth_compression)   
         
     else:
-        raise ValueError, "..."
+        raise ValueError("Compiler type not understood")
     
     return circuit
 
