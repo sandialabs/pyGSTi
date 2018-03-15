@@ -204,7 +204,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % 
                             (norm_new_f,dL,dF,dL/norm_f,dF/norm_f),2)
 
-                if dL/norm_f < rel_ftol and dF/norm_f < rel_ftol and dF/dL < 2.0:
+                if dL/norm_f < rel_ftol and dF >= 0 and dF/norm_f < rel_ftol and dF/dL < 2.0:
                     msg = "Both actual and predicted relative reductions in the" + \
                         " sum of squares are at most %g" % rel_ftol
                     converged = True; break
