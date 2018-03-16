@@ -551,7 +551,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
-def stabilizer_measurement_preparation_circuit(s,p,ds):
+def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -563,7 +563,16 @@ def stabilizer_measurement_preparation_circuit(s,p,ds):
     
     n = len(s[0,:])//2
     sin, pin = _symp.inverse_clifford(s,p)
-    circuit, check_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
+    
+    min_twoqubit_gatecount = _np.inf
+    
+    for i in range(0,iterations):
+        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
+        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        if twoqubit_gatecount  < min_twoqubit_gatecount :
+            circuit = _copy.deepcopy(trialcircuit)
+            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            min_2QGcount = twoqubit_gatecount
     
     circuit.reverse()
     check_circuit.reverse()
@@ -607,11 +616,20 @@ def stabilizer_measurement_preparation_circuit(s,p,ds):
     return circuit #, check_circuit
    
     
-def stabilizer_state_preparation_circuit(s,p,ds):
+def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     
     n = len(s[0,:])//2
-    circuit, check_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
     
+    min_twoqubit_gatecount = _np.inf
+    
+    for i in range(0,iterations):
+        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
+        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        if twoqubit_gatecount  < min_twoqubit_gatecount :
+            circuit = _copy.deepcopy(trialcircuit)
+            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            min_2QGcount = twoqubit_gatecount
+            
     circuit.change_gate_library(ds.compilations.paulieq)
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 

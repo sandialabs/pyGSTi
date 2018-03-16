@@ -139,7 +139,7 @@ def circuit_sampler(ds,length,sampler='weights',sampler_args={'two_qubit_weighti
 
 def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
                           twirled=True, stabilizer=True, algorithm='GGE', depth_compression=True, 
-                          return_partitioned = False):
+                          return_partitioned = False,iterations=1):
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
     random_circuit = circuit_sampler(ds=ds, length=length, sampler=sampler,
@@ -157,7 +157,8 @@ def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         
         if stabilizer:
-            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds)            
+            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds, 
+                                                                         iterations=iterations)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, ds, 
                                                            depth_compression=depth_compression, 
@@ -177,7 +178,8 @@ def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit
     #
     
     if stabilizer:
-        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds)   
+        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds, 
+                                                                             iterations=iterations)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
                                                         depth_compression=depth_compression,
