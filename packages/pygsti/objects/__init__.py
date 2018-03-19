@@ -45,11 +45,13 @@ from .povm import TensorProdPOVM
 from .instrument import Instrument
 from .instrument import TPInstrument
 
+from .label import Label
 from .gateset import GateSet
 from .gatestring import GateString
 from .gatestring import WeightedGateString
 from .gatestringstructure import GatestringStructure
 from .gatestringstructure import LsGermsStructure
+from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
 

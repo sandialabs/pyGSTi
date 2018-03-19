@@ -20,6 +20,7 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .matrixevaltree import MatrixEvalTree as _MatrixEvalTree
 from .gatecalc import GateCalc
+from .label import Label as _Label
 
 _dummy_profiler = _DummyProfiler()
 
@@ -543,7 +544,7 @@ class GateMatrixCalc(GateCalc):
 
         else: #no scaling -- faster but susceptible to overflow
             G = self.product(gatestring, False)
-            p = float(_np.dot(E, _np.dot(G, rho) ))
+            p = float(_np.dot(E, _np.dot(G, rho)))
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -1591,7 +1592,7 @@ class GateMatrixCalc(GateCalc):
 
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if _compat.isstr(spamTuple[0]):
+        if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
             rho = self.preps[rholabel].toarray()
             E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))

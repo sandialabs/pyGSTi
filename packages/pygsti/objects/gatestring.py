@@ -7,13 +7,14 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
-import uuid  as _uuid
+#import uuid  as _uuid
 from ..tools import compattools as _compat
 from ..baseobjs import GateStringParser as _GateStringParser
+from .label import Label as _Label
 
 def _gateSeqToStr(seq):
     if len(seq) == 0: return "{}" #special case of empty gate string
-    return ''.join(seq)
+    return ''.join(map(str,seq))
 
 class GateString(object):
     """
@@ -51,7 +52,7 @@ class GateString(object):
             A dictionary with keys == labels and values == tuples of gate labels
             which can be used for substitutions using the S<label> syntax.
         """
-        self.uuid = _uuid.uuid4()
+        #self.uuid = _uuid.uuid4()
 
         if tupleOfGateLabels is None and stringRepresentation is None:
             raise ValueError("tupleOfGateLabels and stringRepresentation cannot both be None");
@@ -76,6 +77,15 @@ class GateString(object):
                 self.str = stringRepresentation
 
         else:
+            #If we weren't given a GateString, convert all the elements of the tuple
+            # to Labels.  Note that this post-processer parser output too, since the
+            # parser returns a *tuple* not a GateString
+            def convert_to_label(l):
+                if isinstance(l, _Label): return l
+                elif _compat.isstr(l): return _Label(l,None)
+                else: return _Label(l[0],l[1:]) #assume label is an iterable of (name, stateSpcLbl0, stateSpcLbl1, ...)
+            tupleOfGateLabels = tuple(map(convert_to_label,tupleOfGateLabels))
+
             if stringRepresentation is None:
                 stringRepresentation = _gateSeqToStr( tupleOfGateLabels )
 

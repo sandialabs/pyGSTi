@@ -248,7 +248,7 @@ class _BasePOVM(POVM):
         -------
         OrderedDict of SPAMVecs
         """
-        if prefix: prefix += "_"
+        if prefix: prefix = prefix + "_"
         compiled = _collections.OrderedDict()
         for lbl,effect in self.items():
             if lbl == self.complement_label: continue

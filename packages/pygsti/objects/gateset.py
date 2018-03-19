@@ -32,6 +32,7 @@ from . import instrument as _instrument
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
+from .label import Label as _Label
 #from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -202,6 +203,7 @@ class GateSet(object):
         these quantities to "unkown" and None, respectively.
         """
         self.basis = _Basis('unknown', None)
+        self.stateSpaceLabels = None
 
     def get_prep_labels(self):
         """
@@ -346,16 +348,18 @@ class GateSet(object):
         """
         if GateSet._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
-
-        if label.startswith(self.preps._prefix):
+        
+        if not isinstance(label, _Label): label = _Label(label)
+        
+        if label.name.startswith(self.preps._prefix):
             self.preps[label] = value
-        elif label.startswith(self.povms._prefix):
+        elif label.name.startswith(self.povms._prefix):
             self.povms[label] = value
-        #elif label.startswith(self.effects._prefix):
+        #elif label.name.startswith(self.effects._prefix):
         #    self.effects[label] = value
-        elif label.startswith(self.gates._prefix):
+        elif label.name.startswith(self.gates._prefix):
             self.gates[label] = value
-        elif label.startswith(self.instruments._prefix):
+        elif label.name.startswith(self.instruments._prefix):
             self.instruments[label] = value
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
@@ -656,10 +660,11 @@ class GateSet(object):
                 #Assume all parameters of obj are new independent parameters
                 num_new_params = obj.allocate_gpindices( off, self )
                 objvec = obj.to_vector() #may include more than "new" indices
-                new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
-                assert(len(objvec[new_local_inds]) == num_new_params)
-                v = _np.insert(v, off, objvec[new_local_inds])
-                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices," loc=",new_local_inds)
+                if num_new_params > 0:
+                    new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off,off+num_new_params))
+                    assert(len(objvec[new_local_inds]) == num_new_params)
+                    v = _np.insert(v, off, objvec[new_local_inds])
+                #print("objvec len = ",len(objvec), "num_new_params=",num_new_params," gpinds=",obj.gpindices) #," loc=",new_local_inds)
                 
                 #obj.set_gpindices( slice(off, off+obj.num_params()), self )
                 #shift += obj.num_params()
@@ -920,7 +925,9 @@ class GateSet(object):
         """
         # gateset.compile -> odict[raw_gstr] = spamTuples, elementIndices, nElements
         # dataset.compile -> outcomeLabels[i] = list_of_ds_outcomes, elementIndices, nElements
-        # compile all gsplaq strs -> elementIndices[(i,j)], 
+        # compile all gsplaq strs -> elementIndices[(i,j)],
+
+        gatestrings = [ _gs.GateString(gs) for gs in gatestrings ] # cast to GateStrings
 
         #Indexed by raw gate string
         raw_spamTuples_dict = _collections.OrderedDict()  # final
@@ -1106,6 +1113,7 @@ class GateSet(object):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().product(gatestring, bScale)
 
 
@@ -1140,6 +1148,7 @@ class GateSet(object):
               and deriv[i,j] holds the derivative of the i-th entry of the flattened
               product with respect to the j-th gateset parameter.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().dproduct(gatestring, flat)
 
 
@@ -1174,6 +1183,7 @@ class GateSet(object):
               and hessian[i,j,k] holds the derivative of the i-th entry of the flattened
               product with respect to the k-th then k-th gateset parameters.
         """
+        gatestring = _gs.GateString(gatestring) # cast to GateString
         return self._calc().hproduct(gatestring, flat)
 
 
@@ -2143,6 +2153,7 @@ class GateSet(object):
             `(outcome, p)` tuples, where `outcome` is a tuple of labels
             and `p` is the corresponding probability.
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_probs(gatestring_list, evalTree, elIndices,
                                        outcomes, clipTo, check, comm)
@@ -2197,6 +2208,7 @@ class GateSet(object):
             if False, then `p` is not included in the tuples (so they're just
             `(outcome, dp)`).
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_dprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr,clipTo,
@@ -2256,6 +2268,7 @@ class GateSet(object):
             If `returnPr` if False, then `p` is not included in the tuples.
             If `returnDeriv` if False, then `dp` is not included in the tuples.
         """
+        gatestring_list = [ _gs.GateString(gs) for gs in gatestring_list]  # cast to GateStrings
         evalTree, elIndices, outcomes = self.bulk_evaltree(gatestring_list)
         return self._calc().bulk_hprobs(gatestring_list, evalTree, elIndices,
                                         outcomes, returnPr, returnDeriv,
@@ -2756,6 +2769,7 @@ class GateSet(object):
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
         newGateset.basis = self.basis.copy()
+        newGateset.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
         if GateSet._pcheck: self._check_paramvec()
         
         return newGateset

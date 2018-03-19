@@ -4887,7 +4887,7 @@ class EmbeddedGateMap(GateMap):
     subspace of its contained gate, where it acts as the contained gate does.
     """
     
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
         """
         Initialize an EmbeddedGateMap object.
 
@@ -4912,54 +4912,41 @@ class EmbeddedGateMap(GateMap):
             The gate object that is to be contained within this gate, and
             that specifies the only non-trivial action of the EmbeddedGateMap.
 
-        basis : Basis
-            Specifies the basis to be used for the *entire* density-matrix
-            space described by `stateSpaceLabels`.  Thus, this basis must
-            have the same dimension and direct-sum structure given by
-            the `stateSpaceLabels`.
+        basisdim : Dim, optional
+            Specifies the basis dimension for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this must be the
+            same dimension and direct-sum structure given by the
+            `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
-        dmDim, gateDim, blockDims = basis.dim #cast to basis first?
-        self.stateSpaceLabels = stateSpaceLabels
+        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
+        self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
         self.targetLabels = targetLabels
         self.embedded_gate = gate_to_embed
-        self.basis = basis
+        self.basisdim = basisdim
 
         labels = targetLabels
         gatemx = gate_to_embed
 
-        dmDim, gateDim, blockDims = basis.dim
-        #fullOpDim = dmDim**2
-        #Store each tensor product blocks start index (within the density matrix), which tensor product block
-        #  each label is in, and check to make sure dimensions match stateSpaceDims
-        tensorBlkIndices = {}; startIndex = []; M = 0
-        assert( len(blockDims) == len(stateSpaceLabels) )
-        for k, blockDim in enumerate(blockDims):
-            startIndex.append(M); M += blockDim
-    
-            #Make sure tensor-product interpretation agrees with given dimension
-            tensorBlkDim = 1 #dimension of this coherent block of the *density matrix*
-            for s in stateSpaceLabels[k]:
-                tensorBlkIndices[s] = k
-                if s.startswith('Q'): tensorBlkDim *= 2
-                elif s.startswith('L'): tensorBlkDim *= 1
-                else: raise ValueError("Invalid state space specifier: %s" % s)
-            if tensorBlkDim != blockDim:
-                raise ValueError("State labels %s for tensor product block %d have dimension %d != given dimension %d" \
-                                     % (stateSpaceLabels[k], k, tensorBlkDim, blockDim))
-    
-            
-        iTensorProdBlks = [ tensorBlkIndices[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
+        blockDims = self.stateSpaceLabels.dim.blockDims
+        if basisdim: 
+            if blockDims != basisdim.blockdims:
+                raise ValueError("State labels %s for tensor product blocks have dimensions %s != given dimensions %s" \
+                                 % (stateSpaceLabels, str(blockDims), str(basisdim.blockdims)))
+            dmDim, gateDim, _ = basisdim
+        else:
+            dmDim = sum(blockDims)
+            gateDim = sum([bd**2 for bd in blockDims])
+
+        iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
             raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
                              " same tensor-product-block of the state space -- checked previously") # pragma: no cover
     
         iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-        tensorProdBlkLabels = stateSpaceLabels[iTensorProdBlk]
+        tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
         basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
-            assert(l[0] in ('L','Q')) #should have already been checked
-            if l.startswith('L'): basisInds.append([0]) # I
-            elif l.startswith('Q'): basisInds.append([0,1,2,3])  # I, X, Y, Z
+            basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
         basisInds_noop = basisInds[:]
@@ -4976,8 +4963,7 @@ class EmbeddedGateMap(GateMap):
         self.divisors = []
         for l in labels:
             self.divisors.append(divisor)
-            if l.startswith('Q'): divisor *= 4
-            elif l.startswith('L'): divisor *= 1
+            divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
@@ -5214,7 +5200,7 @@ class EmbeddedGateMap(GateMap):
     
     def _acton_other_blocks_trivially(self, output_state,state):
         offset = 0
-        _, _, blockDims = self.basis.dim # dmDim, gateDim, blockDims
+        _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
             blockSize = blockDim**2
             if i != self.iTensorProdBlk:
@@ -5277,7 +5263,7 @@ class EmbeddedGateMap(GateMap):
 
     def as_sparse_matrix(self):
         """ Return the gate as a sparse matrix """
-        dmDim, gateDim, blockDims = self.basis.dim
+        dmDim, gateDim, blockDims = self.basisdim
         finalGate = _sps.identity( gateDim, 'd', format='lil' )
 
         #fill in embedded_gate contributions (always overwrites the diagonal
@@ -5291,7 +5277,7 @@ class EmbeddedGateMap(GateMap):
     
     def as_matrix(self):
         """ Return the gate as a sparse matrix """
-        dmDim, gateDim, blockDims = self.basis.dim
+        dmDim, gateDim, blockDims = self.basisdim
         finalGate = _np.identity( gateDim, 'd' ) # operates on entire state space (direct sum of tensor prod. blocks)
 
         #fill in embedded_gate contributions (always overwrites the diagonal
@@ -5357,7 +5343,7 @@ class EmbeddedGateMap(GateMap):
         """
         return self._copy_gpindices( EmbeddedGateMap(self.stateSpaceLabels,
                                                      self.targetLabels,
-                                                     self.embedded_gate, self.basis), parent )
+                                                     self.embedded_gate, self.basisdim), parent )
 
 
 
@@ -5463,7 +5449,7 @@ class EmbeddedGateMap(GateMap):
 
     def __str__(self):
         """ Return string representation """
-        _, gateDim, _ = self.basis.dim
+        _, gateDim, _ = self.basisdim
         s = "Embedded gate map with dimension %d, embedding:\n" % gateDim
         s += str(self.embedded_gate)
         return s
@@ -5476,7 +5462,7 @@ class EmbeddedGate(GateMatrix):
     An EmbeddedGate acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basis):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
         """
         Initialize a EmbeddedGate object.
 
@@ -5501,14 +5487,14 @@ class EmbeddedGate(GateMatrix):
             The gate object that is to be contained within this gate, and
             that specifies the only non-trivial action of the EmbeddedGate.
 
-        basis : Basis
-            Specifies the basis to be used for the *entire* density-matrix
-            space described by `stateSpaceLabels`.  Thus, this basis must
-            have the same dimension and direct-sum structure given by
-            the `stateSpaceLabels`.
+        basisdim : Dim, optional
+            Specifies the basis dimension for the *entire* density-matrix
+            space described by `stateSpaceLabels`.  Thus, this must be the
+            same dimension and direct-sum structure given by the
+            `stateSpaceLabels`.  If None, then this dimension is assumed.
         """
-        _,gateDim,_ = basis.dim #cast to basis first?
-        self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basis)
+        _,gateDim,_ = basisdim
+        self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basisdim)
         GateMatrix.__init__(self, _np.identity(gateDim,'d'))
         self._construct_matrix()
 
@@ -5634,7 +5620,7 @@ class EmbeddedGate(GateMatrix):
             Array of derivatives with shape (dimension^2, num_params)
         """
         # Note: this function exploits knowledge of EmbeddedGateMap internals!!
-        dmDim, gateDim, blockDims = self.embedded_map.basis.dim
+        dmDim, gateDim, blockDims = self.embedded_map.basisdim
 
         derivMx = _np.zeros((self.dim**2,self.num_params()),'d')
         embedded_deriv = self.embedded_map.embedded_gate.deriv_wrt_params(wrtFilter)
@@ -5676,7 +5662,7 @@ class EmbeddedGate(GateMatrix):
         return self._copy_gpindices( EmbeddedGate(
             self.embedded_map.stateSpaceLabels,
             self.embedded_map.targetLabels,
-            self.embedded_map.embedded_gate, self.embedded_map.basis), parent )
+            self.embedded_map.embedded_gate, self.embedded_map.basisdim), parent )
     
 
     def transform(self, S):

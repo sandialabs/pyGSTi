@@ -8,12 +8,15 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import collections as _collections
 import numpy as _np
 import copy as _copy
+import numbers as _numbers
 import warnings as _warnings
 
 from . import spamvec as _sv
 from . import gate as _gate
 from . import gatesetmember as _gm
+from .label import Label as _Label
 from ..tools import compattools as _compat
+from ..baseobjs import Dim as _Dim
 
 class PrefixOrderedDict(_collections.OrderedDict):
     """ 
@@ -28,7 +31,8 @@ class PrefixOrderedDict(_collections.OrderedDict):
         super(PrefixOrderedDict,self).__init__(items)
 
     def __setitem__(self, key, val):
-        if not key.startswith(self._prefix):
+        """ Assumes key is a Label object """
+        if not key.name.startswith(self._prefix):
             raise KeyError("All keys must be strings, " +
                            "beginning with the prefix '%s'" % self._prefix)
         super(PrefixOrderedDict,self).__setitem__(key, val)
@@ -130,16 +134,32 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         #if self.parent is not None:
         #    #print("DEBUG: cleaning paramvec before getting ", key)
         #    self.parent._clean_paramvec()
+        if not isinstance(key, _Label): key = _Label(key,None)
         return super(OrderedMemberDict,self).__getitem__(key)
 
+    def _auto_embed(self, key_label, value):
+        if self.parent is not None and key_label.sslbls is not None:
+            if self.typ == "gate":
+                if self.parent.dim is None:
+                    raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
+                if self.parent.stateSpaceLabels is None:
+                    raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
+                return _gate.EmbeddedGateMap(self.parent.stateSpaceLabels, key_label.sslbls, value)
+            else:
+                raise NotImplementedError("Cannot auto-embed objects other than gates yet.")
+        else:
+            return value
+        
 
     def __setitem__(self, key, value):
+        if not isinstance(key, _Label): key = _Label(key)
+        value = self._auto_embed(key,value) # automatically create an embedded gate if needed
         self._check_dim(value)
 
         if isinstance(value, _gm.GateSetMember):  #if we're given an object, just replace
             #When self has a valid parent (as it usually does, except when first initializing)
             # we copy and reset the gpindices & parent of GateSetMember values which either:
-            # 1) belong to a different parent (indices would be inapplicable if the exist)
+            # 1) belong to a different parent (indices would be inapplicable if they exist)
             # 2) have indices but no parent (indices are inapplicable to us)
             # Note that we don't copy and reset the case when a value's parent and gpindices
             #  are both None, as gpindices==None indicates that the value may not have had
@@ -276,3 +296,87 @@ class OutcomeLabelDict(_collections.OrderedDict):
     def __reduce__(self):
         items = [(k,v) for k,v in self.items()]
         return (OutcomeLabelDict, (items,), None)
+
+
+class StateSpaceLabels(object):
+    """
+    A labeling of the decomposition of a state space (Hilbert Space).
+
+    A StateSpaceLabels object describes, using string/int labels, how an entire
+    Hilbert state space is decomposed into the direct sum of terms which
+    themselves are tensor products of smaller (typically qubit-sized) Hilber
+    spaces.
+    """
+
+    def __init__(self, labelList, dims=None):
+        """
+        Creates a new StateSpaceLabels object.
+
+        Parameters
+        ----------
+        labelList : str or int or iterable
+
+        TODO: docstring
+        """
+
+        #Allow initialization via another StateSpaceLabels object
+        if isinstance(labelList, StateSpaceLabels):
+            labelList = labelList.labels
+
+        #Step1: convert labelList (and dims, if given) to a list of 
+        # elements describing each "tensor product block" - each of
+        # which is a tuple of string labels.
+        def isLabel(x):
+            """ Return whether x is a valid space-label """
+            return _compat.isstr(x) or isinstance(x,_numbers.Integral)
+        
+        if isLabel(labelList):
+            labelList = [ (labelList,) ]
+            if dims is not None: dims = [ (dims,) ]
+        else:
+            #labelList must be iterable if it's not a string
+            labelList = list(labelList)
+                
+        if len(labelList) > 0 and isLabel(labelList[0]):
+            # assume we've just been give the labels for a single tensor-prod-block 
+            labelList = [ labelList ]
+            if dims is not None: dims = [ dims ]
+            
+        self.labels = tuple([ tuple(tpbLabels) for tpbLabels in labelList])
+
+        #Type check - labels must be strings or ints
+        for tpbLabels in self.labels: #loop over tensor-prod-blocks
+            for lbl in tpbLabels:
+                if not isLabel(lbl):
+                    raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
+
+        # Get the dimension of each labeled space
+        self.labeldims = {} 
+        if dims is None: # try to determine dims from label naming conventions
+            for tpbLabels in self.labels: #loop over tensor-prod-blocks
+                for lbl in tpbLabels:
+                    if isinstance(lbl,_numbers.Integral): d = 2 # ints = qubits
+                    elif lbl.startswith('T'): d = 3 # qutrit
+                    elif lbl.startswith('Q'): d = 2 # qubits
+                    elif lbl.startswith('L'): d = 1 # single level
+                    else: raise ValueError("Cannot determine state-space dimension from '%s'" % lbl)
+                    self.labeldims[lbl] = d
+        else:
+            for tpbLabels,tpbDims in zip(self.labels,dims):
+                for lbl,dim in zip(tpbLabels,tpbDims):
+                    assert(isinstance(lbl,_numbers.Integral)), "Dimensions must be integers!"
+                    self.labeldims[lbl] = dim
+
+        # Store the starting index (within the density matrix / state vec) of
+        # each tensor-product-block (TPB), and which labels belong to which TPB
+        self.tpb_index = {}
+
+        tpb_dims = []
+        for iTPB, tpbLabels in enumerate(self.labels):
+            tpb_dims.append(_np.product( [ self.labeldims[lbl] for lbl in tpbLabels ] ))
+            self.tpb_index.update( { lbl: iTPB for lbl in tpbLabels } )
+
+        self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
+
+    def product_dim(self, labels):
+        return int( _np.product([self.labeldims[l] for l in labels]) )
