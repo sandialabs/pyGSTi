@@ -763,16 +763,25 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     
     min_twoqubit_gatecount = _np.inf
     
-    for i in range(0,iterations):
-        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
-        trialcircuit.reverse()
-        trialcircuit.change_gate_library(ds.compilations.paulieq)
-        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-        if twoqubit_gatecount  < min_twoqubit_gatecount :
-            circuit = _copy.deepcopy(trialcircuit)
-            check_circuit = _copy.deepcopy(trialcheck_circuit)
-            min_twoqubit_gatecount = twoqubit_gatecount
-        
+    failcount = 0
+    i = 0
+    # Todo : remove this try-except method once compiler always works.
+    while i < iterations:
+        try:
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
+            i += 1
+            trialcircuit.reverse()
+            trialcircuit.change_gate_library(ds.compilations.paulieq)
+            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+            if twoqubit_gatecount  < min_twoqubit_gatecount :
+                circuit = _copy.deepcopy(trialcircuit)
+                check_circuit = _copy.deepcopy(trialcheck_circuit)
+                min_twoqubit_gatecount = twoqubit_gatecount
+        except:
+            failcount += 1
+            
+        assert(failcount <= 5*iterations), "Compiler is failing too often!"
+         
     check_circuit.reverse()    
     check_circuit.change_gate_library(ds.compilations.paulieq)
         
@@ -817,14 +826,26 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     
     min_twoqubit_gatecount = _np.inf
     
-    for i in range(0,iterations):
-        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
-        trialcircuit.change_gate_library(ds.compilations.paulieq)
-        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-        if twoqubit_gatecount  < min_twoqubit_gatecount :
-            circuit = _copy.deepcopy(trialcircuit)
-            check_circuit = _copy.deepcopy(trialcheck_circuit)
-            min_twoqubit_gatecount = twoqubit_gatecount
+    failcount = 0
+    i = 0
+    # Todo : remove this try-except method once compiler always works.
+    while i < iterations:
+        
+        try:
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
+            i += 1
+            trialcircuit.change_gate_library(ds.compilations.paulieq)
+            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+            if twoqubit_gatecount  < min_twoqubit_gatecount :
+                circuit = _copy.deepcopy(trialcircuit)
+                check_circuit = _copy.deepcopy(trialcheck_circuit)
+                min_twoqubit_gatecount = twoqubit_gatecount
+        except:
+            failcount += 1
+        
+        assert(failcount <= 5*iterations), "Compiler is failing too often!"
+            
+        
                 
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
