@@ -61,6 +61,7 @@ class GateMapCalc(GateCalc):
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
+        self.unitary_evolution = False
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
@@ -146,7 +147,10 @@ class GateMapCalc(GateCalc):
         """
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
-        p = float(_np.dot(E,rho))
+        if self.unitary_evolution:
+            p = float(abs(_np.dot(E,rho))**2)
+        else:
+            p = float(_np.dot(E,rho))
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -303,10 +307,14 @@ class GateMapCalc(GateCalc):
             final_state = self.propagate_state(init_state, remainder)
             if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
 
-            for j,E in enumerate(EVecs):
-                ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
-                #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-                # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
+            if self.unitary_evolution:
+                for j,E in enumerate(EVecs):
+                    ret[i,j] = _np.abs(_np.vdot(E.toarray(Escratch),final_state))**2
+            else:
+                for j,E in enumerate(EVecs):
+                    ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
+                    #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
+                    # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
                 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
@@ -997,3 +1005,11 @@ class GateMapCalc(GateCalc):
         #if check:
         #    self._check(evalTree, spam_label_rows,
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
+
+
+class UnitaryGateMapCalc(GateMapCalc):
+    """ TODO: docstring """
+    def __init__(self, dim, gates, preps, effects, paramvec):
+        """ TODO: docstring """
+        super(UnitaryGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
+        self.unitary_evolution = True
