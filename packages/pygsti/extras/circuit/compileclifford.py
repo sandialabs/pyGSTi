@@ -1095,6 +1095,11 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,ds=None,returnall=Fals
     circuit = _cir.Circuit(gate_list=main_instructions,n=n)
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit)
     
+    # Import the single-qubit up-to-Pauli algebra
+    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    # Do the circuit-depth compression, using this algebra.
+    circuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+    
     # Check for success
     check_circuit = _cir.Circuit(gate_list=precircuit_instructions,n=n)
     check_circuit.append_circuit(circuit)
