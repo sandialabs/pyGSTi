@@ -10,7 +10,7 @@ import matplotlib.pyplot as _plt
 from scipy.optimize import minimize as _minimize
 
 
-def simulate_full_grb_experiment(ds, mname, lengths, circuits_per_length, sampler='weights', 
+def simulate_prb_experiment(ds, mname, lengths, circuits_per_length, sampler='weights', 
                                  sampler_args = {'two_qubit_weighting' :0.5},
                                  twirled=True, stabilizer=True, verbosity=1, plot=False, 
                                  store=True):
@@ -66,7 +66,7 @@ def simulate_full_grb_experiment(ds, mname, lengths, circuits_per_length, sample
             # Sample a generator RB circuit, and add the circuit to the circuit list
             if verbosity > 0:
                 print(" - Sampling and compiling an RB circuit...",end='')
-            sampled_circuit = _samp.construct_grb_circuit(ds, lengths[i], sampler=sampler, 
+            sampled_circuit = _samp.sampler_prb_circuit(ds, lengths[i], sampler=sampler, 
                                                           sampler_args=sampler_args, twirled=twirled,
                                                           stabilizer=stabilizer)
             circuits[lengths[i]].append(sampled_circuit)
@@ -128,7 +128,7 @@ def simulate_full_grb_experiment(ds, mname, lengths, circuits_per_length, sample
     return ASPs, fit_parameters, auxillary_out 
 
 
-def simulate_full_cliffordrb_experiment(ds, mname, lengths, circuits_per_length, verbosity=1,
+def simulate_crb_experiment(ds, mname, lengths, circuits_per_length, verbosity=1,
                                         plot=False, store=True):
    
     """
@@ -177,7 +177,7 @@ def simulate_full_cliffordrb_experiment(ds, mname, lengths, circuits_per_length,
             if verbosity > 0:
                 print(" - Sampling and compiling an RB circuit...")
             # Sample a generator RB circuit, and add the circuit to the circuit list
-            sampled_circuit = _samp.construct_cliffordrb_circuit(ds, lengths[i])
+            sampled_circuit = _samp.sampler_crb_circuit(ds, lengths[i])
             circuits[lengths[i]].append(sampled_circuit)
             if verbosity > 0:    
                 print("Complete.")
