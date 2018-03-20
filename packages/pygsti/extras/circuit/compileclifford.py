@@ -757,7 +757,8 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     could easily be improved to allow for any computational basis state.
  
     """
-    
+    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
+
     n = len(s[0,:])//2
     sin, pin = _symp.inverse_clifford(s,p)
     
@@ -780,7 +781,7 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
         except:
             failcount += 1
             
-        assert(failcount <= 5*iterations), "Compiler is failing too often!"
+        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
          
     check_circuit.reverse()    
     check_circuit.change_gate_library(ds.compilations.paulieq)
@@ -822,13 +823,13 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     
 def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     
-    n = len(s[0,:])//2
+    assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
+    n = len(s[0,:])//2
     min_twoqubit_gatecount = _np.inf
     
     failcount = 0
     i = 0
-    # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         
         try:
@@ -843,7 +844,7 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
         except:
             failcount += 1
         
-        assert(failcount <= 5*iterations), "Compiler is failing too often!"
+        assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
             
         
                 

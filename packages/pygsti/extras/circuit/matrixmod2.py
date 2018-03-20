@@ -5,8 +5,25 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 
 def dotmod2(m1,m2):
-
+    """
+    Returns the product over the itegers modulo 2 of
+    two matrices.
+    """
     return _np.dot(m1,m2) % 2
+
+def multidotmod2(mlist):
+    """
+    Returns the product over the itegers modulo 2 of
+    a list of matrices.
+    """
+    return _np.linalg.multi_dot(mlist) % 2
+
+def detmod2(m):
+    """
+    Returns the determinant of a matrix over the itegers
+    modulo 2 (GL(n,2)).
+    """
+    return _np.round(_np.linalg.det(m)) % 2
 
 # A utility function used by the random symplectic matrix sampler.
 def matrix_directsum(m1,m2):
@@ -21,134 +38,13 @@ def matrix_directsum(m1,m2):
     
     return output
 
-def diagonal_as_vec(m):
+def inv_mod2(m):
     """
-    Returns a 1D array containing the diagonal of the input square 2D array m.
-    
+    Finds the inverse of a matrix over GL(n,2)
     """
-    l = _np.shape(m)[0]
-    vec = _np.zeros(l,int)        
-    for i in range(0,l):
-        vec[i] = m[i,i]        
-    return vec
-    
-def strictly_upper_triangle(m):
-    """
-    Returns a matrix containing the strictly upper triangle of m and zeros elsewhere. This
-    function does not alter the input m
-    
-    """
-    l = _np.shape(m)[0]
-    out = m.copy()
-        
-    for i in range(0,l):
-        for j in range(0,i+1):
-            out[i,j] = 0
-     
-    return out
-    
-def diagonal_as_matrix(m):
-    """
-    Returns a diagonal matrix containing the diagonal of m. This function does not alter the 
-    input m
-    
-    """
-    l = _np.shape(m)[0]
-    out = _np.zeros((l,l))
-        
-    for i in range(0,l):
-        out[i,i] = m[i,i]
-     
-    return out
-
-   
-###
-#
-# Factorize a symmetric matrix A = F F.T over GL(n,2)
-
-
-# The algorithm mostly follows the proof in
-
-# *Orthogonal Matrices Over Finite Fields* by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76, No. 2 (Feb., 1969), pp. 152-164
-
-#
-# Todo : go through the code below and find / removing anything that duplicates other parts of 
-# the code
-#
-
-def random_bitstring(n, p, failcount = 0):
-    """
-    Constructs a random bitstring of length n with parity p
-    
-    """
-    bitstring = _np.random.randint(0,2,size=n)
-    if _np.mod(sum(bitstring),2) == p:
-        return bitstring
-    elif failcount < 100:
-        return _np.array(random_bitstring(n,p, failcount+1),dtype='int')
-
-def create_M(n, failcount=0):
-    """
-    Finds a random invertable matrix M over GL(n,2)
-    
-    """
-    M = _np.array([random_bitstring(n,_np.random.randint(0,2)) for x in range(n)])
-    if _np.isclose(_np.mod(_np.round(_np.linalg.det(M)),2),0.):
-        if failcount<100:
-            return create_M(n,failcount+1)
-    else:
-        return M
-
-def create_D(n):
-    """
-    Creates a random, symmetric, invertible matrix from GL(n,2)
-    
-    """
-    M = create_M(n)
-    return _np.mod(_np.round_(_np.dot(M,M.T)),2)
-
-def multidot(x):
-    """
-    Takes the dot product mod 2 of a sequence of matrices
-    
-    """
-    return _np.mod(_np.round_(_np.linalg.multi_dot(x)),2)
-
-def binmat(stringy):
-    return _np.array(list([[int(x) for x in y] for y in stringy.split(',')]))
-
-def onesify(A, failcount=0):
-    """
-    Returns M such that M A M.T has ones along the main diagonal
-    
-    """
-    # This is probably the slowest function since it just tries things
-    t = len(A)
-    count = 0
-    test_string = _np.diag(A)
-
-    M = []
-    while len(M) < t and count < 10:
-        bitstr = random_bitstring(t, _np.random.randint(0,2))
-        if multidot([bitstr, test_string]) == 1:
-            if not _np.any([_np.array_equal(bitstr, m) for m in M]):
-                M += [bitstr]
-            else:
-                count += 1
-    M = _np.array(M, dtype='int')
-    if _np.array_equal(multidot([M,inv_mod2(M)]), _np.eye(t)):
-        return _np.array(M)
-    else:
-        if failcount<100:
-            return onesify(A,failcount+1)
-
-def inv_mod2(A):
-    """
-    
-    """
-    t = len(A)
-    C = _np.append(A,_np.eye(t),1)
-    return _np.array(rref_mod2(C)[:,t:])
+    t = len(m)
+    c = _np.append(m,_np.eye(t),1)
+    return _np.array(gaussian_elimination_mod2(c)[:,t:])
 
 def Axb_mod2(A,b):
     """
@@ -157,11 +53,11 @@ def Axb_mod2(A,b):
     """
     b = _np.array([b]).T
     C = _np.append(A,b,1)
-    return _np.array([rref_mod2(C)[:,-1]]).T
+    return _np.array([gaussian_elimination_mod2(C)[:,-1]]).T
 
-def rref_mod2(A):
+def gaussian_elimination_mod2(A):
     """
-    Gaussian elimination mod2
+    Gaussian elimination mod2 of A.
     
     """
     
@@ -181,6 +77,152 @@ def rref_mod2(A):
         j += 1
     return A
 
+
+def diagonal_as_vec(m):
+    """
+    Returns a 1D array containing the diagonal of the input square 2D array m.
+    
+    """
+    l = _np.shape(m)[0]
+    vec = _np.zeros(l,int)        
+    for i in range(0,l):
+        vec[i] = m[i,i]        
+    return vec
+    
+def strictly_upper_triangle(m):
+    """
+    Returns a matrix containing the strictly upper triangle of m and zeros elsewhere.
+    
+    """
+    l = _np.shape(m)[0]
+    out = m.copy()
+        
+    for i in range(0,l):
+        for j in range(0,i+1):
+            out[i,j] = 0
+     
+    return out
+    
+def diagonal_as_matrix(m):
+    """
+    Returns a diagonal matrix containing the diagonal of m. 
+    
+    """
+    l = _np.shape(m)[0]
+    out = _np.zeros((l,l),int)
+        
+    for i in range(0,l):
+        out[i,i] = m[i,i]
+     
+    return out
+
+  
+
+# Code for factorizing a symmetric matrix invertable matrix A over GL(n,2) into
+# the form A = F F.T. The algorithm mostly follows the proof in *Orthogonal Matrices 
+# Over Finite Fields* by Jessie MacWilliams in The American Mathematical Monthly, 
+# Vol. 76, No. 2 (Feb., 1969), pp. 152-164
+
+
+# Todo : go through the code below and find / removing anything that duplicates other parts of 
+# the code
+def albert_factor(D, failcount = 0):
+    """
+    Returns a matrix M such that D = M M.T
+    
+    """
+    D = _np.array(D, dtype='int')
+
+    proper= False
+    while not proper:
+        N = onesify(D)
+        aa = multidotmod2([N,D,N.T])
+        P = proper_permutation(aa)
+        A = multidotmod2([P,aa,P.T])
+        proper = check_proper_permutation(A)
+
+    t = len(A)
+
+    # Start in lower right
+    L = _np.array([[1]])
+
+    for ind in range(t-2,-1,-1):
+        block = A[ind:,ind:].copy()
+        z = block[0,1:]
+        B = block[1:,1:]
+        n = Axb_mod2(B, z).T
+        x = _np.array(_np.dot(n,L), dtype='int')
+        zer = _np.zeros([t-ind-1,1])
+        L = _np.array(_np.bmat([[_np.eye(1), x],[zer, L]]), dtype='int')
+
+    Qinv = inv_mod2(dotmod2(P,N))
+    L = dotmod2(_np.array(Qinv), L)
+
+    return L
+
+
+def random_bitstring(n, p, failcount = 0):
+    """
+    Constructs a random bitstring of length n with parity p
+    
+    """
+    bitstring = _np.random.randint(0,2,size=n)
+    if _np.mod(sum(bitstring),2) == p:
+        return bitstring
+    elif failcount < 100:
+        return _np.array(random_bitstring(n,p, failcount+1),dtype='int')
+
+def random_invertable_matrix(n, failcount=0):
+    """
+    Finds a random invertable matrix M over GL(n,2)
+    
+    """
+    M = _np.array([random_bitstring(n,_np.random.randint(0,2)) for x in range(n)])
+    if detmod2(M) == 0:
+        if failcount<100:
+            return random_invertable_matrix(n,failcount+1)
+    else:
+        return M
+
+def random_symmetric_invertable_matrix(n):
+    """
+    Creates a random, symmetric, invertible matrix from GL(n,2)
+    
+    """
+    M = random_invertable_matrix(n)
+    return dotmod2(M,M.T)
+
+def onesify(A, failcount=0, maxfailcount=100):
+    """
+    Returns M such that M A M.T has ones along the main diagonal
+    
+    """
+    assert(failcount < maxfailcount), "The function has failed too many times! Perhaps the input is invalid."
+    
+    # This is probably the slowest function since it just tries things
+    t = len(A)
+    count = 0
+    test_string = _np.diag(A)
+
+    M = []
+    while (len(M) < t) and (count < 40):
+        bitstr = random_bitstring(t, _np.random.randint(0,2))
+        if dotmod2(bitstr, test_string) == 1:
+            if not _np.any([_np.array_equal(bitstr, m) for m in M]):
+                M += [bitstr]
+            else:
+                count += 1
+           
+    if len(M) < t:
+        return onesify(A,failcount+1)
+    
+    M = _np.array(M, dtype='int')
+
+    if _np.array_equal(dotmod2(M,inv_mod2(M)), _np.identity(t,int)):
+        return _np.array(M)
+    else:
+        return onesify(A,failcount+1,maxfailcount=maxfailcount)
+
 def permute_top(A,i):
     """
     Permutes the first row & col with the i'th row & col
@@ -192,8 +234,7 @@ def permute_top(A,i):
     P[i,i] = 0
     P[0,i] = 1
     P[i,0] = 1
-    return multidot([P,A,P]), P
-
+    return multidotmod2([P,A,P]), P
 
 def fix_top(A):
     """
@@ -214,16 +255,15 @@ def fix_top(A):
         z = aa[0,1:]
         B = _np.round_(aa[1:,1:])
 
-        if _np.isclose(_np.mod(_np.round_(_np.linalg.det(B)),2),0.):
+        if detmod2(B) == 0:
             continue
         else:
             found_B = True
             break
+    
+    # Todo : put a more meaningful fail message here #
+    assert(found_B), "Algorithm failed!"
 
-    if not found_B:
-        print("FAILED")
-        print(A)
-        return A
     return P
 
 def proper_permutation(A):
@@ -240,64 +280,31 @@ def proper_permutation(A):
         perm = fix_top(A[ind:,ind:])
         zer = _np.zeros([ind, t-ind])
         full_perm = _np.array(_np.bmat([[_np.eye(ind), zer],[zer.T, perm]]))
-        A = multidot([full_perm,A,full_perm.T])
+        A = multidotmod2([full_perm,A,full_perm.T])
         Ps += [full_perm]
 #     return Ps
-    return _np.linalg.multi_dot(list(reversed(Ps)))
-
-def albert_factor(D, failcount = 0):
-    """
-    Return matrix M such that D = M M.T
-    
-    """
-    D = _np.array(D, dtype='int')
-
-    proper= False
-    while not proper:
-        N = onesify(D)
-        aa = multidot([N,D,N.T])
-        P = proper_permutation(aa)
-        A = multidot([P,aa,P.T])
-        proper = check_proper_permutation(A)
-
-    t = len(A)
-
-    # Start in lower right
-    L = _np.array([[1]])
-
-    for ind in range(t-2,-1,-1):
-        block = A[ind:,ind:].copy()
-        z = block[0,1:]
-        B = block[1:,1:]
-        # n = np.array([np.dot(np.array(Matrix(B).inv_mod(2)),z)])
-        n = Axb_mod2(B, z).T
-        x = _np.array(_np.dot(n,L), dtype='int')
-        zer = _np.zeros([t-ind-1,1])
-        L = _np.array(_np.bmat([[_np.eye(1), x],[zer, L]]), dtype='int')
-
-    # A = P N D N.T P.T = L L.T
-    # D = inv(P N) L L.T inv(N.T P.T)
-    Qinv = _np.array(inv_mod2(multidot([P,N])))
-    L = _np.array(multidot([_np.array(Qinv), L]),dtype='int')
-
-    return L
+    return multidotmod2(list(reversed(Ps)))
+    #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 def check_proper_permutation(A):
     """
     Check to see if the matrix has been properly permuted
     This should be redundent to what is already built into
-    'fix_top'
+    'fix_top'.
     
     """
     t = len(A)
     for ind in range(0,t):
         b = A[ind:,ind:]
-        if _np.isclose(_np.mod(_np.round(_np.linalg.det(b)),2),0.):
+        if detmod2(b) == 0:
             return False
     return True
 
-# Tim has no idea what this does.
-if __name__ == '__main__':
-    D = create_D(20)
-    L = albert_factor(D)
-    _np.allclose(D,multidot([L,L.T]))
+#def binmat(stringy):
+#    # Todo: what does this do?
+#    return _np.array(list([[int(x) for x in y] for y in stringy.split(',')]))
+
+#if __name__ == '__main__':
+#    D = random_symmetric_invertable_matrix(20)
+#    L = albert_factor(D)
+#    _np.allclose(D,dotmod2([L,L.T]))
