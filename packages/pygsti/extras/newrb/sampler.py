@@ -8,7 +8,7 @@ from ..circuit import circuit as _cir
 from ..circuit import compileclifford as _comp
 
 
-def circuit_layer_sampler_2QW(ds,two_qubit_weighting=0.5):
+def sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=0.5):
 
     available_gates_1q = _copy.deepcopy(ds.allgates)
     available_gates_2q = _copy.deepcopy(ds.allgates)
@@ -88,7 +88,7 @@ def circuit_layer_sampler_2QW(ds,two_qubit_weighting=0.5):
     
     return sampled_layer
 
-def circuit_layer_sampler_sectors(ds, sectors, two_qubit_prob):
+def sample_circuit_layer_by_sectors(ds, sectors, two_qubit_prob):
     
     twoqubitgates = sectors[_np.random.randint(0,len(sectors))]    
     remaining_qubits = list(_np.arange(0,ds.number_of_qubits))
@@ -111,7 +111,7 @@ def circuit_layer_sampler_sectors(ds, sectors, two_qubit_prob):
 
 # Todo : better name for this function
 #
-def circuit_sampler(ds,length,sampler='weights',sampler_args={'two_qubit_weighting' : 0.5}):
+def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5}):
     
     if sampler == 'weights':
         two_qubit_weighting = sampler_args['two_qubit_weighting']
@@ -125,10 +125,10 @@ def circuit_sampler(ds,length,sampler='weights',sampler_args={'two_qubit_weighti
     for i in range(0,length):
         
         if sampler == 'weights':
-            layer = circuit_layer_sampler_2QW(ds,two_qubit_weighting=two_qubit_weighting)
+            layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
             
         elif sampler == 'sectors':
-            layer = circuit_layer_sampler_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
+            layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
         else:
             layer = sampler(ds, length, sampler_args)
             
@@ -137,12 +137,12 @@ def circuit_sampler(ds,length,sampler='weights',sampler_args={'two_qubit_weighti
     return circuit
 
 
-def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
-                          twirled=True, stabilizer=True, algorithm='GGE', depth_compression=True, 
-                          return_partitioned = False):
+def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
+                         twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
+                         return_partitioned = False, iterations=100):
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
-    random_circuit = circuit_sampler(ds=ds, length=length, sampler=sampler,
+    random_circuit = sample_primitives_circuit(ds=ds, length=length, sampler=sampler,
                                      sampler_args=sampler_args)
     
     sl = ds.gateset.smatrix
@@ -157,7 +157,8 @@ def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         
         if stabilizer:
-            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds)            
+            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds, 
+                                                                         iterations=iterations)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, ds, 
                                                            depth_compression=depth_compression, 
@@ -177,7 +178,8 @@ def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit
     #
     
     if stabilizer:
-        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds)   
+        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds, 
+                                                                             iterations=iterations)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
                                                         depth_compression=depth_compression,
@@ -209,9 +211,9 @@ def construct_grb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit
 # construct_std_practice_interleaved_clifford_rb_experiment()
 # construct_std_practice_primitive_clifford_rb_experiment()
 #
-def construct_cliffordrb_circuit(ds, length, algorithm='GGE', depth_compression=True):
-    
-   
+def sample_crb_circuit(ds, length, algorithms=['DGGE','RGGE'],costfunction='2QGC',
+                       iterations={'RGGE':100}, depth_compression=True):
+
     sl = ds.gateset.smatrix
     pl = ds.gateset.svector
     n = ds.number_of_qubits
@@ -224,8 +226,9 @@ def construct_cliffordrb_circuit(ds, length, algorithm='GGE', depth_compression=
     for i in range(0,length):
     
         s, p = _symp.random_clifford(n)
-        circuit = _comp.compile_clifford(s, p, ds, depth_compression=depth_compression, 
-                                                  algorithm=algorithm, prefix_paulis=True)
+        circuit = _comp.compile_clifford(s, p, ds, depth_compression=depth_compression, algorithms=algorithms, 
+                                         costfunction=costfunction, iterations=iterations, prefix_paulis=True)
+        
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit(circuit)
@@ -233,13 +236,9 @@ def construct_cliffordrb_circuit(ds, length, algorithm='GGE', depth_compression=
     
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
     
-    #
-    # Put something here that allows for a random Pauli at the end of the circuit?
-    #
-    
-    inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
-                                                         depth_compression=depth_compression, 
-                                                  algorithm=algorithm, prefix_paulis=True)
+    inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, depth_compression=depth_compression, 
+                                               algorithms=algorithms, costfunction=costfunction, 
+                                               iterations=iterations, prefix_paulis=True)
     
     full_circuit.append_circuit(inversion_circuit)
     
