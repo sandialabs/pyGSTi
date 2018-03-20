@@ -1210,7 +1210,6 @@ def symplectic_action(m, glabel, qlist, optype='row'):
     #
     # Todo: add the option of also updating a phase vector
     # Todo: add all other 'standard' gate actions here
-    # Todo: add column action
     #
     
     d = _np.shape(m)[0]//2         
@@ -1224,8 +1223,10 @@ def symplectic_action(m, glabel, qlist, optype='row'):
             i = qlist[0]
             out[i,:] = m[i+d,:]   
             out[i+d,:] = m[i,:]
-        else:
-            assert(False),"This functionality has not yet been added!"
+        if optype == 'column':
+            i = qlist[0]
+            out[:,i] = m[:,i+d]   
+            out[:,i+d] = m[:,i]       
             
     elif glabel == 'P':
         
@@ -1233,8 +1234,8 @@ def symplectic_action(m, glabel, qlist, optype='row'):
         
         if optype == 'row':
             out[i+d,:] = m[i,:] ^ m[i+d,:]
-        else:
-            assert(False),"This functionality has not yet been added!"
+        if optype == 'column':
+            out[:,i+d] = m[:,i] ^ m[:,i+d]
             
     elif glabel == 'CNOT':
         
@@ -1244,8 +1245,9 @@ def symplectic_action(m, glabel, qlist, optype='row'):
         if optype == 'row':
             out[j,:] = m[j,:] ^ m[i,:]    
             out[i+d,:] = m[j+d,:] ^ m[i+d,:]        
-        else:
-            assert(False),"This functionality has not yet been added!"
+        if optype == 'column':
+            out[:,j] = m[:,j] ^ m[:,i]    
+            out[:,i+d] = m[:,j+d] ^ m[:,i+d]    
                             
     elif glabel == 'SWAP':
         
@@ -1257,10 +1259,13 @@ def symplectic_action(m, glabel, qlist, optype='row'):
             out[i,:] = m[j,:] 
             out[i+d,:] = m[j+d,:] 
             out[j+d,:] = m[i+d,:]
-        else:
-            assert(False),"This functionality has not yet been added!"   
+        if optype == 'column':
+            out[:,j] = m[:,i]
+            out[:,i] = m[:,j] 
+            out[:,i+d] = m[:,j+d] 
+            out[:,j+d] = m[:,i+d]  
     
     else:
-        assert(False),"Label is not valid or currently supported"
+        raise ValueError,"Label is not valid or currently supported"
         
     return out
