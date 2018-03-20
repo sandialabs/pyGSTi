@@ -1266,6 +1266,6 @@ def symplectic_action(m, glabel, qlist, optype='row'):
             out[:,j+d] = m[:,i+d]  
     
     else:
-        raise ValueError,"Label is not valid or currently supported"
+        raise ValueError("Label is not valid or currently supported")
         
     return out
