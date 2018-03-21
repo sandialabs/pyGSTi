@@ -788,13 +788,17 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
             
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
          
-    check_circuit.reverse()    
-    check_circuit.change_gate_library(ds.compilations.paulieq)
-    
+    #check_circuit.reverse()
+    #check_circuit.change_gate_library(ds.compilations.paulieq)
+
     if relations is not None:
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0) 
+    
+    check_circuit.reverse()
+    check_circuit.change_gate_library(ds.compilations.paulieq)
+    check_circuit.prefix_circuit(circuit)
     
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
@@ -868,11 +872,13 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
-                
+    
+    check_circuit.change_gate_library(ds.compilations.paulieq)
+    check_circuit.append_circuit(circuit)
+    
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
                                                                                   p_dict=ds.gateset.svector)
-    check_circuit.change_gate_library(ds.compilations.paulieq)
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
                                                                                   p_dict=ds.gateset.svector)
@@ -1118,12 +1124,17 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,ds=None,returnall=Fals
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit)
             
     # Check for success
-    check_circuit = _cir.Circuit(gate_list=precircuit_instructions,n=n)
+    #check_circuit = _cir.Circuit(gate_list=precircuit_instructions,n=n)
+    #check_circuit.append_circuit(circuit)
+    CNOT_pre_circuit = _cir.Circuit(gate_list=precircuit_instructions,n=n)
+    check_circuit = _copy.deepcopy(CNOT_pre_circuit)
     check_circuit.append_circuit(circuit)
     scheck, pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit)
     assert(_np.array_equal(scheck[:,n:2*n],s[:,n:2*n])), "Compiler has failed!"
 
     if returnall:
-        return circuit, check_circuit
+        #return circuit, check_circuit
+        return circuit, CNOT_pre_circuit
     else:
-        return circuit, check_circuit
+        #return circuit, check_circuit
+        return circuit, CNOT_pre_circuit
