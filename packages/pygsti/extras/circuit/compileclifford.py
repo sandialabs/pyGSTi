@@ -764,6 +764,9 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     
     min_twoqubit_gatecount = _np.inf
     
+    #Import the single-qubit Cliffords up-to-Pauli algebra
+    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    
     failcount = 0
     i = 0
     # Todo : remove this try-except method once compiler always works.
@@ -772,6 +775,8 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
             trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
             i += 1
             trialcircuit.reverse()
+            # Do the depth-compression *after* the circuit is reversed
+            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
             trialcircuit.change_gate_library(ds.compilations.paulieq)
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -828,6 +833,9 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     n = len(s[0,:])//2
     min_twoqubit_gatecount = _np.inf
     
+    #Import the single-qubit Cliffords up-to-Pauli algebra
+    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    
     failcount = 0
     i = 0
     while i < iterations:
@@ -835,6 +843,8 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
         try:
             trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
             i += 1
+            # Do the depth-compression *before* changing gate library
+            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
             trialcircuit.change_gate_library(ds.compilations.paulieq)
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -1094,12 +1104,7 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,ds=None,returnall=Fals
     n = len(s[0,:])//2
     circuit = _cir.Circuit(gate_list=main_instructions,n=n)
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit)
-    
-    # Import the single-qubit up-to-Pauli algebra
-    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
-    # Do the circuit-depth compression, using this algebra.
-    circuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
-    
+            
     # Check for success
     check_circuit = _cir.Circuit(gate_list=precircuit_instructions,n=n)
     check_circuit.append_circuit(circuit)
