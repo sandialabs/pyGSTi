@@ -26,6 +26,7 @@ from . import gaugegroup as _gaugegroup
 from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
+from ..baseobjs import Dim as _Dim
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -271,7 +272,7 @@ def finite_difference_deriv_wrt_params(gate, eps=1e-7):
     dim = gate.get_dimension()
     gate2 = gate.copy()
     p = gate.to_vector()
-    fd_deriv = _np.empty((dim,dim,gate.num_params()), 'd') #assume real (?)
+    fd_deriv = _np.empty((dim,dim,gate.num_params()), gate.dtype)
 
     for i in range(gate.num_params()):
         p_plus_dp = p.copy()
@@ -647,6 +648,8 @@ class GateMatrix(Gate):
             dim = M.dim
             matrix = _np.asarray(M).copy()
               # Gate objs should also derive from ndarray
+        elif isinstance(M, _np.ndarray):
+            matrix = M.copy()
         else:
             try:
                 dim = len(M)
@@ -661,7 +664,6 @@ class GateMatrix(Gate):
                 matrix = _np.array(ar.real, 'd')
             else:
                 matrix = _np.array(ar, 'complex')
-
 
         if len(matrix.shape) != 2:
             raise ValueError("%s has %d dimensions when 2 are expected"
@@ -772,7 +774,7 @@ class StaticGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.zeros((self.dim**2,0),'d')
+        derivMx = _np.zeros((self.dim**2,0),self.base.dtype)
         if wrtFilter is None:
             return derivMx
         else:
@@ -972,7 +974,8 @@ class FullyParameterizedGate(GateMatrix):
         int
            the number of independent parameters.
         """
-        return self.dim**2
+        return 2*self.dim**2 if _np.iscomplexobj(self.base) \
+               else self.dim**2
 
 
     def to_vector(self):
@@ -984,7 +987,10 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        return self.base.flatten() #.real in case of complex matrices?
+        if np.iscomplexobj(self.base):
+            return _np.concatenate( (self.base.real.flatten(), self.base.imag.flatten()), axis=0)
+        else:
+            return self.base.flatten()
 
 
     def from_vector(self, v):
@@ -1002,7 +1008,11 @@ class FullyParameterizedGate(GateMatrix):
         None
         """
         assert(self.base.shape == (self.dim, self.dim))
-        self.base[:,:] = v.reshape( (self.dim,self.dim) )
+        if _np.iscomplexobj(self.base):
+            self.base[:,:] = v[0:self.dim**2].reshape( (self.dim,self.dim) ) + \
+                             1j*v[self.dim**2:].reshape( (self.dim,self.dim) )
+        else:
+            self.base[:,:] = v.reshape( (self.dim,self.dim) )
         self.dirty = True
 
 
@@ -1018,7 +1028,13 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.identity( self.dim**2, 'd' )
+        if np.iscomplexobj(self.base):
+            derivMx = _np.concatenate( (_np.identity( self.dim**2, 'complex' ),
+                                        1j*_np.identity( self.dim**2,'complex')),
+                                        axis=1 )
+        else:
+            derivMx = _np.identity( self.dim**2, self.base.dtype )
+            
         if wrtFilter is None:
             return derivMx
         else:
@@ -1275,7 +1291,7 @@ class TPParameterizedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.identity( self.dim**2, 'd' )
+        derivMx = _np.identity( self.dim**2, 'd' ) # TP gates are assumed to be real
         derivMx = derivMx[:,self.dim:] #remove first gate_dim cols ( <=> first-row parameters )
 
         if wrtFilter is None:
@@ -1514,7 +1530,7 @@ class LinearlyParameterizedGate(GateMatrix):
         self.numParams = len(parameterArray)
         self.elementExpressions = elementExpressions
 
-        I = _np.identity(self.baseMatrix.shape[0],'d')
+        I = _np.identity(self.baseMatrix.shape[0],'d') # LinearlyParameterizedGates are currently assumed to be real
         self.leftTrans = leftTransform if (leftTransform is not None) else I
         self.rightTrans = rightTransform if (rightTransform is not None) else I
         self.enforceReal = real
@@ -2205,7 +2221,7 @@ class EigenvalueParameterizedGate(GateMatrix):
         #  (and only linearly), so:
         # d(matrix)/d(param) = B * d(diag)/d(param) * Bi
 
-        derivMx = _np.zeros( (self.dim**2, self.num_params()), 'd' )
+        derivMx = _np.zeros( (self.dim**2, self.num_params()), 'd' ) # EigenvalueParameterizedGates are assumed to be real
 
         # Compute d(diag)/d(param) for each params, then apply B & Bi
         for k,pdesc in enumerate(self.params):
@@ -4087,7 +4103,7 @@ class TPInstrumentGate(GateMatrix):
         """
         self.param_gates = param_gates
         self.index = index
-        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d')) #Note: sets self.gpindices
+        GateMatrix.__init__(self, _np.identity(param_gates[0].dim,'d')) #Note: sets self.gpindices; TP assumed real
         self._construct_matrix()
 
         #Set our own parent and gpindices based on param_gates
@@ -4270,7 +4286,7 @@ class ComposedGate(GateMatrix):
         assert(all([dim == gate.dim for gate in gates_to_compose])), \
             "All gates must have the same dimension!"
 
-        GateMatrix.__init__(self, _np.identity(dim,'d'))
+        GateMatrix.__init__(self, _np.identity(dim)) #type doesn't matter here - just a dummy
         self._construct_matrix()
 
     def allocate_gpindices(self, startingIndex, parent):
@@ -4422,7 +4438,8 @@ class ComposedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), 'd')
+        typ = complex if any([np.iscomplexobj(gate) for gate in self.factorgates]) else 'd'
+        derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), typ)
         
         #Product rule to compute jacobian
         for i,gate in enumerate(self.factorgates): # loop over the gate we differentiate wrt
@@ -4580,7 +4597,7 @@ class ComposedGate(GateMatrix):
 
     def __str__(self):
         """ Return string representation """
-        s = "Composed gate:\n"
+        s = "Composed gate of %d factors:\n" % len(self.factorgates)
         s += _mt.mx_to_string(self.base, width=4, prec=2)
         return s
 
@@ -4874,8 +4891,10 @@ class ComposedGateMap(GateMap):
 
     def __str__(self):
         """ Return string representation """
-        s = "Composed gate map:\n"
-        s += str(self.as_sparse_matrix())
+        s = "Composed gate map of %d factors:\n" % len(self.factorgates)
+        for i,gate in enumerate(self.factorgates):
+            s += "Factor %d:\n" % i
+            s += str(gate)
         return s
 
 
@@ -4887,7 +4906,7 @@ class EmbeddedGateMap(GateMap):
     subspace of its contained gate, where it acts as the contained gate does.
     """
     
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None, mode="superop"):
         """
         Initialize an EmbeddedGateMap object.
 
@@ -4917,12 +4936,20 @@ class EmbeddedGateMap(GateMap):
             space described by `stateSpaceLabels`.  Thus, this must be the
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
+
+        mode : {"superop", "unitary"}
+            Whether the `gate_to_embed` represents the unitary action on
+            a (complex) state vector or the superoperator action on a (real)
+            vectorized density matrix.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
         self.targetLabels = targetLabels
         self.embedded_gate = gate_to_embed
         self.basisdim = basisdim
+
+        assert(mode in ("superop", "unitary")), "Invalid mode: %s" % mode
+        self.mode = mode
 
         labels = targetLabels
         gatemx = gate_to_embed
@@ -4932,10 +4959,9 @@ class EmbeddedGateMap(GateMap):
             if blockDims != basisdim.blockdims:
                 raise ValueError("State labels %s for tensor product blocks have dimensions %s != given dimensions %s" \
                                  % (stateSpaceLabels, str(blockDims), str(basisdim.blockdims)))
-            dmDim, gateDim, _ = basisdim
         else:
-            dmDim = sum(blockDims)
-            gateDim = sum([bd**2 for bd in blockDims])
+            self.basisdim = _Dim(blockDims)
+        dmDim, superOpDim, _ = self.basisdim
 
         iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
         if len(set(iTensorProdBlks)) != 1:
@@ -4946,7 +4972,10 @@ class EmbeddedGateMap(GateMap):
         tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
         basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
         for l in tensorProdBlkLabels:
-            basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
+            if mode == "superop":
+                basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
+            else: # mode == "unitary"
+                basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
 
         # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
         basisInds_noop = basisInds[:]
@@ -4957,13 +4986,19 @@ class EmbeddedGateMap(GateMap):
             basisInds_noop_blankaction[labelIndex] = [0]
                     
         #offset into "active" tensor product block
-        self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+        if mode == "superop":
+            self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+        else: #  mode == "unitary"
+            self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
 
         divisor = 1
         self.divisors = []
         for l in labels:
             self.divisors.append(divisor)
-            divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
+            if mode == "superop":
+                divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
+            else: # mode == "unitary"
+                divisor *= self.stateSpaceLabels.labeldims[l] # e.g. 2 for qubits
 
         # multipliers to go from per-label indices to tensor-product-block index
         # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
@@ -5013,7 +5048,8 @@ class EmbeddedGateMap(GateMap):
         #print("noop incrementers = ",self.noop_incrementers," dim=",gateDim)
         #print("baseinds = ",self.baseinds)
         self._set_acton()
-            
+
+        gateDim = superOpDim if mode == "superop" else dmDim
         GateMap.__init__(self, gateDim)
 
     def _set_acton(self):
@@ -5023,9 +5059,11 @@ class EmbeddedGateMap(GateMap):
             self.acton = self._slow_acton
         elif isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
              self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
-            self.acton = self._fast_acton_sp1 # "special case #1"
+            self.acton = self._fast_acton_sp1 if self.mode == "superop" \
+                         else self._fast_acton_sp1_complex # "special case #1"
         elif isinstance(self.embedded_gate, GateMatrix):
-            self.acton = self._fast_acton_sp2 # "special case #2"
+            self.acton = self._fast_acton_sp2 if self.mode == "superop" \
+                         else self._fast_acton_sp2_complex # "special case #2"
         else:
             #DEBUG TO REMOVE
             #if not isinstance(self.embedded_gate, LindbladParameterizedGateMap):
@@ -5036,7 +5074,9 @@ class EmbeddedGateMap(GateMap):
             #    print("Can't use special case b/c embedded Lind. gate has postfactor")
             #else:
             #    print("Can't use special case for some other reason (????)")
-            self.acton = self._fast_acton
+            self.acton = self._fast_acton if self.mode == "superop" \
+                         else self._fast_acton_complex
+            
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see gatesetmember implementation)
@@ -5163,7 +5203,7 @@ class EmbeddedGateMap(GateMap):
     
     def _slow_acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _np.zeros( state.shape, 'd')
+        output_state = _np.zeros( state.shape, state.dtype)
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
         
         #LATER: Maybe a faster way for dense mxs based on this, which is very slow:
@@ -5202,7 +5242,7 @@ class EmbeddedGateMap(GateMap):
         offset = 0
         _, _, blockDims = self.basisdim # dmDim, gateDim, blockDims
         for i,blockDim in enumerate(blockDims):
-            blockSize = blockDim**2
+            blockSize = blockDim**2 if self.mode == "superop" else blockDim
             if i != self.iTensorProdBlk:
                 output_state[offset:offset+blockSize] = state[offset:offset+blockSize] #identity op
             offset += blockSize
@@ -5261,10 +5301,68 @@ class EmbeddedGateMap(GateMap):
         return output_state
 
 
+    def _fast_acton_sp1_complex(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, complex)
+                
+        #FAST Special Case #1 - a sparse LindbladParameterizedGateMap with no unitary postfactor
+        A, mu, m_star, s, eta = self.embedded_gate.err_gen_prep
+        #More of a performance hit than a gain:
+        #  if A.nnz == 0: return state # embedded gate is identity, so entire gate is
+        _fastcalc.embedded_fast_acton_sparse_spc1_complex(
+            A.data, A.indptr, A.indices,
+            mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
+            output_state[:,0], state[:,0],
+            self.noop_incrementers,
+            self.numBasisEls_noop_blankaction,
+            self.baseinds)
+
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            self._acton_other_blocks_trivially(output_state,state)
+        return output_state
+
+    
+    def _fast_acton_sp2_complex(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, complex)
+                
+        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
+        _fastcalc.embedded_fast_acton_sparse_spc2_complex(
+            self.embedded_gate.base,
+            output_state[:,0], state[:,0],
+            self.noop_incrementers,
+            self.numBasisEls_noop_blankaction,
+            self.baseinds)
+
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            self._acton_other_blocks_trivially(output_state,state)
+        return output_state
+
+
+    def _fast_acton_complex(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, complex)
+        _fastcalc.embedded_fast_acton_sparse_complex(
+            self.embedded_gate.acton,
+            output_state[:,0], state[:,0],
+            self.noop_incrementers,
+            self.numBasisEls_noop_blankaction,
+            self.baseinds)
+                                 
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            self._acton_other_blocks_trivially(output_state,state)
+        return output_state
+
+
     def as_sparse_matrix(self):
         """ Return the gate as a sparse matrix """
-        dmDim, gateDim, blockDims = self.basisdim
-        finalGate = _sps.identity( gateDim, 'd', format='lil' )
+        dmDim, superOpDim, blockDims = self.basisdim
+        typ = 'd' if self.mode == "superop" else complex
+        dim = superOpDim if self.mode == "superop" else dmDim
+        finalGate = _sps.identity( dim, typ, format='lil' )
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
@@ -5277,8 +5375,10 @@ class EmbeddedGateMap(GateMap):
     
     def as_matrix(self):
         """ Return the gate as a sparse matrix """
-        dmDim, gateDim, blockDims = self.basisdim
-        finalGate = _np.identity( gateDim, 'd' ) # operates on entire state space (direct sum of tensor prod. blocks)
+        dmDim, superOpDim, blockDims = self.basisdim
+        typ = 'd' if self.mode == "superop" else complex
+        dim = superOpDim if self.mode == "superop" else dmDim
+        finalGate = _np.identity( dim, typ ) # operates on entire state space (direct sum of tensor prod. blocks)
 
         #fill in embedded_gate contributions (always overwrites the diagonal
         # of finalGate where appropriate, so OK it starts as identity)
@@ -5449,8 +5549,9 @@ class EmbeddedGateMap(GateMap):
 
     def __str__(self):
         """ Return string representation """
-        _, gateDim, _ = self.basisdim
-        s = "Embedded gate map with dimension %d, embedding:\n" % gateDim
+        s = "Embedded gate map with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
+             % (self.embedded_gate.dim, str(self.targetLabels))
         s += str(self.embedded_gate)
         return s
 
@@ -5462,7 +5563,7 @@ class EmbeddedGate(GateMatrix):
     An EmbeddedGate acts as the identity on all of its domain except the 
     subspace of its contained gate, where it acts as the contained gate does.
     """
-    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None):
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed, basisdim=None, mode="superop"):
         """
         Initialize a EmbeddedGate object.
 
@@ -5492,10 +5593,14 @@ class EmbeddedGate(GateMatrix):
             space described by `stateSpaceLabels`.  Thus, this must be the
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
+
+        mode : {"superop", "unitary"}
+            Whether the `gate_to_embed` represents the unitary action on
+            a (complex) state vector or the superoperator action on a (real)
+            vectorized density matrix.
         """
-        _,gateDim,_ = basisdim
-        self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basisdim)
-        GateMatrix.__init__(self, _np.identity(gateDim,'d'))
+        self.embedded_map = EmbeddedGateMap(stateSpaceLabels, targetLabels, gate_to_embed, basisdim, mode)
+        GateMatrix.__init__(self, _np.identity(self.embedded_map.dim)) # type irrelevant - just a dummy
         self._construct_matrix()
 
     def _construct_matrix(self):
@@ -5620,10 +5725,9 @@ class EmbeddedGate(GateMatrix):
             Array of derivatives with shape (dimension^2, num_params)
         """
         # Note: this function exploits knowledge of EmbeddedGateMap internals!!
-        dmDim, gateDim, blockDims = self.embedded_map.basisdim
 
-        derivMx = _np.zeros((self.dim**2,self.num_params()),'d')
         embedded_deriv = self.embedded_map.embedded_gate.deriv_wrt_params(wrtFilter)
+        derivMx = _np.zeros((self.dim**2,self.num_params()),embedded_deriv.dtype)
         M = self.embedded_map.embedded_gate.dim
 
         #fill in embedded_gate contributions (always overwrites the diagonal
@@ -5769,8 +5873,11 @@ class EmbeddedGate(GateMatrix):
 
     def __str__(self):
         """ Return string representation """
-        s = "Embedded gate with shape %s\n" % str(self.base.shape)
-        s += _mt.mx_to_string(self.base, width=4, prec=2)
+        s = "Embedded gate map with shape %s and state space %s\n" % (self.base.shape, self.embedded_map.stateSpaceLabels)
+        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
+             % (self.embedded_map.embedded_gate.dim, str(self.embedded_map.targetLabels))
+        s += str(self.embedded_map.embedded_gate)
+        #s += _mt.mx_to_string(self.base, width=4, prec=2) #show *entire* matrix
         return s
 
 

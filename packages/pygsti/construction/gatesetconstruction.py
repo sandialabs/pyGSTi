@@ -22,6 +22,7 @@ from ..objects import povm as _povm
 from ..objects import gateset as _gateset
 from ..objects import gaugegroup as _gg
 from ..objects import labeldicts as _ld
+from ..objects import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
 
@@ -1078,6 +1079,117 @@ def build_alias_gateset(gs_primitives, alias_dict):
           #Creates fully parameterized gates by default...
     return gs_new
 
+
+def build_nqubit_gateset(nQubits, gatedict, availability=None,
+                         parameterization='static', sim_type="dmmap"):
+    """ TODO: docstring """
+    
+    if availability is None: availability = {}
+
+    if sim_type.startswith("dm"):
+        basis1Q = _Basis("pp",2)
+        v0 = basis_build_vector("0", basis1Q)
+        v1 = basis_build_vector("1", basis1Q)
+    else:
+        v0 = _np.array([[1],[0]],complex)
+        v1 = _np.array([[0],[1]],complex)
+
+    if parameterization == "full":
+        PrepVec = _spamvec.FullyParameterizedSPAMVec
+        EVec = _spamvec.FullyParameterizedSPAMVec
+        POVM = _povm.UnconstrainedPOVM
+        Gate = _gate.FullyParameterizedGate
+    elif parameterization == "TP":
+        PrepVec = _spamvec.TPParameterizedSPAMVec
+        EVec = _spamvec.FullyParameterizedSPAMVec
+        POVM = _povm.UnconstrainedPOVM
+        Gate = _gate.FullyParameterizedGate
+    elif parameterization == "static":
+        PrepVec = _spamvec.StaticSPAMVec
+        EVec = _spamvec.StaticSPAMVec
+        POVM = _povm.UnconstrainedPOVM
+        Gate = _gate.StaticGate
+    # elif parameterization == "CPTP": TODO
+    # elif parameterization == "H+S": TODO
+    #More??
+    else:
+        raise ValueError("Invalid parameterization: %s" % parameterization)
+
+    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static"
+                          sim_type = sim_type)              # "dmmatrix", "dmmap", "svmatrix", "svmap", "clifford"
+    gs.stateSpaceLabels = tuple(range(nQubits))
+    gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep',
+        [PrepVec(v0) for i in range(nQubits)] )
+    gs.povms['Mdefault'] = _povm.TensorProdPOVM( 
+        [ POVM([('0',EVec(v0)),('1',EVec(v1))] ) for i in range(nQubits) ] )
+
+    for gateName, gate in gatedict.items():
+        if not isinstance(gate, _gate.Gate):
+            gate = Gate(gate)
+
+        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if sim_type.startswith("dm") \
+                       else int(round(_np.log2(gate.dim)))
+        
+        availList = availability.get(gateName, 'all-permutations')
+        if availList == 'all-combinations': 
+            availList = list(_itertools.combinations(list(range(nQubits)), gate_nQubits))
+        elif availList == 'all-permutations': 
+            availList = list(_itertools.permutations(list(range(nQubits)), gate_nQubits))
+            
+        for inds in availList:
+            gs[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+            
+    return gs
+
+
+def get_standard_gate_unitaries():
+    std_unitaries = {}
+    
+    # The idle gate.
+    std_unitaries['Gi'] = _np.array([[1.,0.],[0.,1.]],complex)
+
+    # Non-idle single qubit gates
+    std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
+    std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
+    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)    
+    
+    H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
+    P = _np.array([[1.,0.],[0.,1j]],complex)
+    
+    std_unitaries['Gh'] =  H  
+    std_unitaries['Gp'] = P
+    std_unitaries['Ghp'] = _np.dot(H,P)
+    std_unitaries['Gph'] = _np.dot(P,H)
+    std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
+ 
+    # Two-qubit gates
+    std_unitaries['Gcphase'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,1.,0.],[0.,0.,0.,-1.]],complex)
+    std_unitaries['Gcnot'] = _np.array([[1.,0.,0.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.],[0.,0.,1.,0.]],complex)
+    std_unitaries['Gswap'] = _np.array([[1.,0.,0.,0.],[0.,0.,1.,0.],[0.,1.,0.,0.],[0.,0.,0.,1.]],complex)
+    return std_unitaries
+
+
+def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
+                                  availability=None, parameterization='static', sim_type="dmmap"):
+    """ TODO: docstring """
+    if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+    std_unitaries = get_standard_gate_unitaries()
+    
+    gatedict = _collections.OrderedDict()
+    for name in gate_names:
+        #TODO?
+        #if name == "Gi" and availability.get("Gi",None) is None:
+        #    # special global identity construction
+        #    availability['Gi'] = None #all qubits
+        #    gatedict['Gi'] = XXX
+            
+        U = nonstd_gate_unitaries.get(name, std_unitaries[name]) # KeyError if unitary can't be found
+        if sim_type in ("dmmap","dmmatrix"):
+            gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
+        else: #we just store the unitaries
+            gatedict[name] = U
+            
+    return build_nqubit_gateset(nQubits, gatedict, availability, parameterization, sim_type)
 
 
 

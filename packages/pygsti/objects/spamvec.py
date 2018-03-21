@@ -345,6 +345,8 @@ class SPAMVec(_gatesetmember.GateSetMember):
         """
         if isinstance(V, SPAMVec):
             vector = _np.asarray(V).copy()
+        elif isinstance(V, _np.ndarray):
+            vector = V.copy()
         else:
             try:
                 dim = len(V) #pylint: disable=unused-variable
@@ -585,7 +587,7 @@ class StaticSPAMVec(DenseSPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        derivMx = _np.zeros((self.dim,0),'d')
+        derivMx = _np.zeros((self.dim,0),self.base.dtype)
         if wrtFilter is None:
             return derivMx
         else:
@@ -741,7 +743,7 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
         int
            the number of independent parameters.
         """
-        return self.dim
+        return 2*self.dim if _np.iscomplexobj(self.base) else self.dim
 
 
     def to_vector(self):
@@ -753,7 +755,10 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
         numpy array
             The parameters as a 1D array with length num_params().
         """
-        return self.base.flatten() #.real in case of complex matrices
+        if _np.iscomplexobj(self.base):
+            return _np.concatenate((self.base.real.flatten(),self.base.imag.flatten()), axis=0)
+        else:
+            return self.base.flatten()
 
 
     def from_vector(self, v):
@@ -770,7 +775,10 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
         -------
         None
         """
-        self.base[:,0] = v
+        if _np.iscomplexobj(self.base):
+            self.base[:,0] = v[0:self.dim] + 1j*v[self.dim:]
+        else:
+            self.base[:,0] = v
         self.dirty = True
 
 
@@ -785,7 +793,12 @@ class FullyParameterizedSPAMVec(DenseSPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        derivMx = _np.identity( self.dim, 'd' )
+        if _np.iscomplexobj(self.base):
+            derivMx = _np.concatenate( (_np.identity( self.dim, complex ),
+                                        1j*_np.identity( self.dim, complex )), axis=1)
+        else:
+            derivMx = _np.identity( self.dim, 'd' )
+            
         if wrtFilter is None:
             return derivMx
         else:
@@ -1021,7 +1034,7 @@ class TPParameterizedSPAMVec(DenseSPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        derivMx = _np.identity( self.dim, 'd' )
+        derivMx = _np.identity( self.dim, 'd' ) # TP vecs assumed real
         derivMx = derivMx[:,1:] #remove first col ( <=> first-el parameters )
         if wrtFilter is None:
             return derivMx
@@ -1132,7 +1145,7 @@ class ComplementSPAMVec(DenseSPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        if len(self.other_vecs) == 0: return _np.zeros((self.dim,0), 'd')
+        if len(self.other_vecs) == 0: return _np.zeros((self.dim,0), 'd') # Complement vecs assumed real
         Np = len(self.gpindices_as_array())
         neg_deriv = _np.zeros( (self.dim, Np), 'd')
         for ovec in self.other_vecs:
@@ -1607,9 +1620,12 @@ class TensorProdSPAMVec(SPAMVec):
         self.Np = sum([fct.num_params() for fct in factors])
         if typ == "effect":
             self.effectLbls = _np.array(povmEffectLbls)
+            self._complex = any([ any([_np.iscomplexobj(Evec) for Evec in fct.values()]) for fct in factors])
         elif typ == "prep":
             assert(povmEffectLbls is None), '`povmEffectLbls` must be None when `typ != "effects"`'
             self.effectLbls = None
+            self._complex = any([_np.iscomplexobj(v) for v in factors])
+                        
         else: raise ValueError("Invalid `typ` argument: %s" % typ)
         
         SPAMVec.__init__(self, _np.product([fct.dim for fct in factors]))
@@ -1641,7 +1657,7 @@ class TensorProdSPAMVec(SPAMVec):
 
         #Memory for speeding up kron product in toarray()
         max_factor_dim = max(fct.dim for fct in factors)
-        self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), 'd')
+        self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), complex if self._complex else 'd')
         self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
         self._fill_fast_kron()
 
@@ -1662,7 +1678,7 @@ class TensorProdSPAMVec(SPAMVec):
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
-        if len(self.factors) == 0: return _np.empty(0,'d')
+        if len(self.factors) == 0: return _np.empty(0,complex if self._complex else 'd')
         if scratch is not None and _fastcalc is not None:
             assert(scratch.shape[0] == self.dim)
             # use faster kron that avoids memory allocation.
@@ -1864,7 +1880,15 @@ class TensorProdSPAMVec(SPAMVec):
 
 
     def __str__(self):
-        ar = self.toarray()
-        s = "Tensor product spam vector with length %d\n" % len(ar)
-        s += _mt.mx_to_string(ar, width=4, prec=2)
+        s = "Tensor product %s vector with length %d\n" % (self.typ,self.dim)
+        #ar = self.toarray()
+        #s += _mt.mx_to_string(ar, width=4, prec=2)
+
+        if self.typ == "prep":
+            # factors are just other SPAMVecs
+            s += " x ".join([_mt.mx_to_string(fct.toarray().flatten(), width=4, prec=2) for fct in self.factors])
+        else:
+            # factors are POVMs
+            s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].toarray().flatten(), width=4, prec=2)
+                             for i,fct in enumerate(self.factors)])
         return s

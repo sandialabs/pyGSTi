@@ -140,11 +140,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
     def _auto_embed(self, key_label, value):
         if self.parent is not None and key_label.sslbls is not None:
             if self.typ == "gate":
-                if self.parent.dim is None:
-                    raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
-                if self.parent.stateSpaceLabels is None:
-                    raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
-                return _gate.EmbeddedGateMap(self.parent.stateSpaceLabels, key_label.sslbls, value)
+                return self.parent._embedGate(key_label.sslbls, value)
             else:
                 raise NotImplementedError("Cannot auto-embed objects other than gates yet.")
         else:
@@ -379,4 +375,10 @@ class StateSpaceLabels(object):
         self.dim = _Dim(tpb_dims) #Note: access tensor-prod-block dims via self.dim.blockDims
 
     def product_dim(self, labels):
+        """ TODO: docstring """
         return int( _np.product([self.labeldims[l] for l in labels]) )
+
+    def __str__(self):
+        if len(self.labels) == 0: return "(Null state space)"
+        elif len(self.labels) == 1: return str(self.labels[0])
+        else: return str(self.labels)

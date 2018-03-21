@@ -31,9 +31,9 @@ from . import povm as _povm
 from . import instrument as _instrument
 from . import labeldicts as _ld
 from . import gaugegroup as _gg
-from .gatematrixcalc import GateMatrixCalc as _GateMatrixCalc
+from . import gatematrixcalc as _gatematrixcalc
+from . import gatemapcalc as _gatemapcalc
 from .label import Label as _Label
-#from .gatemapcalc import GateMapCalc as _GateMapCalc
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
 from ..baseobjs import Basis as _Basis
@@ -55,7 +55,7 @@ class GateSet(object):
 
     def __init__(self, default_param="full",
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
-                 povm_prefix="M", instrument_prefix="I"):
+                 povm_prefix="M", instrument_prefix="I", sim_type="dmmatrix"):
         """
         Initialize a gate set.
 
@@ -100,14 +100,35 @@ class GateSet(object):
         self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
-        self._default_gauge_group = None
-        self._calcClass = _GateMatrixCalc
-        #self._calcClass = _GateMapCalc
+        #Calculator selection based on simulation type
+        if sim_type == "dmmatrix":     c = _gatematrixcalc.GateMatrixCalc
+        elif sim_type == "dmmap":      c = _gatemapcalc.GateMapCalc
+        elif sim_type == "svmatrix":   c = _gatematrixcalc.UnitaryGateMatrixCalc
+        elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
+        else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
+        self._default_gauge_group = None
+        self._calcClass = c
+        self._sim_type = sim_type
+        
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
 
         super(GateSet, self).__init__()
+
+    def _embedGate(self, gateTargetLabels, gateVal):
+        """ TODO: docstring """
+        if self.dim is None:
+            raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
+        if self.stateSpaceLabels is None:
+            raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
+        
+        mode = "superop" if self._sim_type.startswith("dm") else "unitary"
+        if self._sim_type in ("svmatrix","dmmatrix"):
+            return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
+        elif self._sim_type in ("svmap","dmmap"):
+            return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
+        assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
 
 
     @property
@@ -2777,13 +2798,13 @@ class GateSet(object):
     def __str__(self):
         s = ""
         for lbl,vec in self.preps.items():
-            s += "%s = " % lbl + _mt.mx_to_string(_np.transpose(vec)) + "\n"
+            s += "%s = " % lbl + str(vec) + "\n"
         s += "\n"
         for lbl,povm in self.povms.items():
             s += "%s = " % lbl + str(povm) + "\n"
         s += "\n"
         for lbl,gate in self.gates.items():
-            s += "%s = \n" % lbl + _mt.mx_to_string(gate) + "\n\n"
+            s += "%s = \n" % lbl + str(gate) + "\n\n"
         for lbl,inst in self.instruments.items():
             s += "%s = " % lbl + str(inst) + "\n"
         s += "\n"
