@@ -601,10 +601,15 @@ class Circuit(object):
         # by this method.
         flag = False
         
+        # ---------------- --------------- --------------- --------------- --------------- ---------- #      
+        # -------- This is a change Tim has made since Erik was put in charge of this bit of code ---#
+        # ---------------- --------------- --------------- ---------- --------------- --------------- #
         def single_qubit_gate_combined(glabel_1,glabel_2):
             # Combines two gate labels, using the provided rules on how the labels combine.
-            assert((glabel_1,glabel_2) in list(gate_relations.keys())), "Gate relations provided are invalid!"  
-            return gate_relations[glabel_1,glabel_2]
+            try:
+                return gate_relations[glabel_1,glabel_2], 'I'
+            except:
+                return glabel_1, glabel_2
         
         # Loop through all the qubits
         for q in range(0,self.number_of_qubits):
@@ -617,20 +622,21 @@ class Circuit(object):
                             j += 1
                             break
                         else:
-                            # Flag set to True if a non-trivial shift/combination is to be implemented.
-                            if not self.circuit[q][i].label == 'I':
-                                flag = True
-                                
+                            # ---------------- --------------- --------------- --------------- --------------- ---------- #      
+                            # -------- This is a change Tim has made since Erik was put in charge of this bit of code ---#
+                            # ---------------- --------------- --------------- ---------- --------------- --------------- #
                             # Find the new label of the gate, according to the combination rules.
                             gl1 = self.circuit[q][k].label
                             gl2 = self.circuit[q][i].label
-                            new_label = single_qubit_gate_combined(gl1,gl2)
+                            #print(gl1,gl2)
+                            newgl1, newgl2 = single_qubit_gate_combined(gl1,gl2)
+                            #print(newgl1,newgl2)
+                            self.circuit[q][k] = Gate(newgl1,q)
+                            self.circuit[q][i] = Gate(newgl2,q)
                             
-                            # Becuase of the way hashing is defining for the Gate object, we could
-                            # just change the gates labels. But it seems like better practice to make
-                            # new Gate objects.
-                            self.circuit[q][k] = Gate(new_label,q)
-                            self.circuit[q][i] = Gate('I',q)
+                            # Flag set to True if a non-trivial combination is implemented.
+                            if (newgl1 != gl1) or (newgl2 != gl2):
+                                flag = True
                             j += 1
                 else:
                     j += 1                    

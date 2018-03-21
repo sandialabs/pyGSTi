@@ -109,9 +109,33 @@ def sample_circuit_layer_by_sectors(ds, sectors, two_qubit_prob):
 
     return sampled_layer
 
-# Todo : better name for this function
-#
-def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5}):
+def sample_circuit_layer_of_1Q_gates(ds, gtype = 'primitives'):
+    
+    assert(gtype == 'primitives' or gtype == 'paulis'), "gtype must be'primitives' or 'paulis'"
+    sampled_layer = []
+    
+    if gtype == 'primitives':
+        for i in range(0,ds.number_of_qubits):
+            try:
+                gate = ds.gatesonqubits[i][_np.random.randint(0,len(ds.gatesonqubits[i]))]
+                sampled_layer.append(gate)
+            
+            except:
+                raise ValueError ("There are no available 1Q gates on qubit {}. Check the DeviceSpec is correctly initialized".format(i))
+                
+    if gtype == 'paulis':
+        plist = ['I','X','Y','Z']
+        for pgl in plist:
+            assert(pgl in ds.gateset.names), "Currently, the Pauli gates must be natively available to use this method!"
+            
+        for i in range(0,ds.number_of_qubits):
+            sampled_pauli = plist[_np.random.randint(0,4)]
+            sampled_layer.append(_cir.Gate(sampled_pauli,i))
+
+    return sampled_layer
+
+def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5},
+                              alternatewithlocal = False, localtype = 'primitives'):
     
     if sampler == 'weights':
         two_qubit_weighting = sampler_args['two_qubit_weighting']
@@ -122,28 +146,51 @@ def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_
         
     circuit = _cir.Circuit(n=ds.number_of_qubits)
     
-    for i in range(0,length):
-        
-        if sampler == 'weights':
-            layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
+    if not alternatewithlocal:
+        for i in range(0,length):
+  
+            if sampler == 'weights':
+                layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
             
-        elif sampler == 'sectors':
-            layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
-        else:
-            layer = sampler(ds, length, sampler_args)
+            elif sampler == 'sectors':
+                layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
+            else:
+                layer = sampler(ds, length, sampler_args)
             
-        circuit.insert_layer(layer,0)
-             
+            circuit.insert_layer(layer,0)
+            
+    if alternatewithlocal:
+         for i in range(0,length):
+                
+                # For odd layers, we do local gates only.
+                local = not bool(i % 2)
+                if local:
+                    layer = sample_circuit_layer_of_1Q_gates(ds, gtype = localtype)
+                
+                # For even layers, we sample according to the given distribution
+                else:
+                    if sampler == 'weights':
+                        layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
+            
+                    elif sampler == 'sectors':
+                        layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
+                    else:
+                        layer = sampler(ds, length, sampler_args)
+                        
+                circuit.insert_layer(layer,0)
+                
     return circuit
 
 
 def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
-                         return_partitioned = False, iterations=100):
+                         alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
+                       iterations=100,relations=None):
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
     random_circuit = sample_primitives_circuit(ds=ds, length=length, sampler=sampler,
-                                     sampler_args=sampler_args)
+                                     sampler_args=sampler_args, alternatewithlocal = alternatewithlocal, 
+                                               localtype = localtype)
     
     sl = ds.gateset.smatrix
     pl = ds.gateset.svector
@@ -158,7 +205,8 @@ def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_we
         
         if stabilizer:
             initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds, 
-                                                                         iterations=iterations)            
+                                                                         iterations=iterations,
+                                                                        relations=relations)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, ds, 
                                                            depth_compression=depth_compression, 
@@ -179,7 +227,8 @@ def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_we
     
     if stabilizer:
         inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds, 
-                                                                             iterations=iterations)   
+                                                                             iterations=iterations,
+                                                                            relations=relations)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
                                                         depth_compression=depth_compression,

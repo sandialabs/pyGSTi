@@ -2,6 +2,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import copy as _copy
+import sys
+
+if sys.version_info >= (3,):
+    long = int
 
 from . import matrixmod2 as _mtx
 
@@ -1262,6 +1266,6 @@ def symplectic_action(m, glabel, qlist, optype='row'):
             out[:,j+d] = m[:,i+d]  
     
     else:
-        raise ValueError,"Label is not valid or currently supported"
+        raise ValueError("Label is not valid or currently supported")
         
     return out

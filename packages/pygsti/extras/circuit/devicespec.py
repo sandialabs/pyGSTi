@@ -243,10 +243,14 @@ class DeviceSpec(object):
             for q2 in range(0,self.number_of_qubits):
                 if self.connectivity[q1,q2] == 1:
                     
-                    # This method is currently a bit of a hack.
-                    circuit = self.compilations.add_CNOT_for_connected_qubits((q1,q2),self.gateset, 
+                    # ---------------- --------------- --------------- --------------- --------------- ---------- #      
+                    # -------- This is a change Tim has made since Erik was put in charge of this bit of code ---#
+                    # ---------------- --------------- --------------- ---------- --------------- --------------- #
+                    if _cir.Gate('CNOT',(q1,q2)) not in list(self.compilations.paulieq.keys()):
+                        # This method is currently a bit of a hack.
+                        circuit = self.compilations.add_CNOT_for_connected_qubits((q1,q2),self.gateset, 
                                                                        ctype='paulieq', verbosity=verbosity)
-                    self.compilations.paulieq[_cir.Gate('CNOT',(q1,q2))] = circuit
+                        self.compilations.paulieq[_cir.Gate('CNOT',(q1,q2))] = circuit
 
                      
         for q1 in range(0,self.number_of_qubits):
