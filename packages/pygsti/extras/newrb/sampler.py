@@ -139,7 +139,7 @@ def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_
 
 def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
-                         return_partitioned = False, iterations=100):
+                         return_partitioned = False, iterations=100,relations=None):
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
     random_circuit = sample_primitives_circuit(ds=ds, length=length, sampler=sampler,
@@ -158,7 +158,8 @@ def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_we
         
         if stabilizer:
             initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds, 
-                                                                         iterations=iterations)            
+                                                                         iterations=iterations,
+                                                                        relations=relations)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, ds, 
                                                            depth_compression=depth_compression, 
@@ -179,7 +180,8 @@ def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_we
     
     if stabilizer:
         inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds, 
-                                                                             iterations=iterations)   
+                                                                             iterations=iterations,
+                                                                            relations=relations)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
                                                         depth_compression=depth_compression,

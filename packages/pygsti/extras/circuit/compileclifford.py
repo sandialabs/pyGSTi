@@ -748,7 +748,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
-def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
+def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=None):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -790,7 +790,12 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
          
     check_circuit.reverse()    
     check_circuit.change_gate_library(ds.compilations.paulieq)
-        
+    
+    if relations is not None:
+        # Do more depth-compression on the chosen circuit. Todo: This should used something already
+        # constructed in DeviceSpec, instead of this ad-hoc method.
+        circuit.compress_depth(relations,max_iterations=1000,verbosity=0) 
+    
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
                                                                                   p_dict=ds.gateset.svector)
@@ -821,12 +826,13 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1):
     paulicircuit = _cir.Circuit(gate_list=pauli_layer,n=n)
     paulicircuit.change_gate_library(ds.compilations.absolute)
     circuit.prefix_circuit(paulicircuit)
+    circuit.compress_depth(max_iterations=10,verbosity=0) 
     #check_circuit.prefix_circuit(paulicircuit)
     
     return circuit #, check_circuit
    
     
-def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
+def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -839,13 +845,15 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     failcount = 0
     i = 0
     while i < iterations:
-        
         try:
             trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
             i += 1
+            #
+            # Todo: work out how much this all makes sense.
+            #
             # Do the depth-compression *before* changing gate library
             trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
-            trialcircuit.change_gate_library(ds.compilations.paulieq)
+            trialcircuit.change_gate_library(ds.compilations.paulieq)        
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
                 circuit = _copy.deepcopy(trialcircuit)
@@ -856,7 +864,10 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
         
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
             
-        
+    if relations is not None:
+        # Do more depth-compression on the chosen circuit. Todo: This should used something already
+        # constructed in DeviceSpec, instead of this ad-hoc method.
+        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
                 
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
@@ -890,6 +901,7 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1):
     paulicircuit = _cir.Circuit(gate_list=pauli_layer,n=n)
     paulicircuit.change_gate_library(ds.compilations.absolute)
     circuit.append_circuit(paulicircuit)
+    circuit.compress_depth(max_iterations=10,verbosity=0)
     #check_circuit.append_circuit(paulicircuit)
     
     return circuit #, check_circuit
