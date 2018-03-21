@@ -765,7 +765,7 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     min_twoqubit_gatecount = _np.inf
     
     #Import the single-qubit Cliffords up-to-Pauli algebra
-    gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
+    #gate_relations_1q = _symp.single_qubit_clifford_symplectic_group_relations()
     
     failcount = 0
     i = 0
@@ -776,7 +776,7 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
             i += 1
             trialcircuit.reverse()
             # Do the depth-compression *after* the circuit is reversed
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            #trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
             trialcircuit.change_gate_library(ds.compilations.paulieq)
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -791,18 +791,28 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     #check_circuit.reverse()
     #check_circuit.change_gate_library(ds.compilations.paulieq)
 
-    if relations is not None:
-        # Do more depth-compression on the chosen circuit. Todo: This should used something already
-        # constructed in DeviceSpec, instead of this ad-hoc method.
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0) 
+    #if relations is not None:
+    #    # Do more depth-compression on the chosen circuit. Todo: This should used something already
+    #    # constructed in DeviceSpec, instead of this ad-hoc method.
+    #    sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,s_dict=ds.gateset.smatrix, 
+    #                                                                              p_dict=ds.gateset.svector)
+    #    circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+    #    spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,s_dict=ds.gateset.smatrix, 
+    #                                                                              p_dict=ds.gateset.svector)
+    #    assert(_np.array_equal(sprecompression,spostcompression))
     
     check_circuit.reverse()
-    check_circuit.change_gate_library(ds.compilations.paulieq)
+    #check_circuit.change_gate_library(ds.compilations.paulieq)
     check_circuit.prefix_circuit(circuit)
     
+    s_dict = ds.gateset.smatrix.copy()
+    s_dict['CNOT'] = _np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int)    
+    p_dict = ds.gateset.svector.copy()
+    p_dict['CNOT'] = _np.array([0,0,0,0],int)
+    
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, 
-                                                                                  s_dict=ds.gateset.smatrix, 
-                                                                                  p_dict=ds.gateset.svector)
+                                                                                  s_dict=s_dict,
+                                                                                  p_dict=p_dict)
     
     implemented_sin_check, implemented_pin_check =  _symp.inverse_clifford(implemented_scheck, implemented_pcheck) 
     
@@ -831,9 +841,8 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     paulicircuit.change_gate_library(ds.compilations.absolute)
     circuit.prefix_circuit(paulicircuit)
     circuit.compress_depth(max_iterations=10,verbosity=0) 
-    #check_circuit.prefix_circuit(paulicircuit)
     
-    return circuit #, check_circuit
+    return circuit
    
     
 def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
@@ -856,7 +865,11 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            #print("---UNCOMPRESSED---")
+            #print(trialcircuit)
+            #trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
+            #print("---COMPRESSED---")
+            #print(trialcircuit)
             trialcircuit.change_gate_library(ds.compilations.paulieq)        
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
@@ -868,20 +881,35 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
         
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
             
-    if relations is not None:
-        # Do more depth-compression on the chosen circuit. Todo: This should used something already
-        # constructed in DeviceSpec, instead of this ad-hoc method.
-        circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
-    
-    check_circuit.change_gate_library(ds.compilations.paulieq)
+    #if relations is not None:
+    #    # Do more depth-compression on the chosen circuit. Todo: This should used something already
+    #    # constructed in DeviceSpec, instead of this ad-hoc method.
+    #    sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,s_dict=ds.gateset.smatrix, 
+    #                                                                              p_dict=ds.gateset.svector)
+    #    circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
+    #    spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,s_dict=ds.gateset.smatrix, 
+    #                                                                              p_dict=ds.gateset.svector)
+    #    assert(_np.array_equal(sprecompression,spostcompression))
+        
+    #check_circuit.change_gate_library(ds.compilations.paulieq)
+    #print("CNOT CIRCUIT")
+    #print(check_circuit)
     check_circuit.append_circuit(circuit)
+    #print("CHECK CIRCUIT")
+    #print(check_circuit)
+    
+    # Add CNOT into the dictionary, in case it isn't there.
+    s_dict = ds.gateset.smatrix.copy()
+    s_dict['CNOT'] = _np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int)    
+    p_dict = ds.gateset.svector.copy()
+    p_dict['CNOT'] = _np.array([0,0,0,0],int)
     
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit, 
                                                                                   s_dict=ds.gateset.smatrix, 
                                                                                   p_dict=ds.gateset.svector)
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, 
-                                                                                  s_dict=ds.gateset.smatrix, 
-                                                                                  p_dict=ds.gateset.svector)
+                                                                                  s_dict=s_dict, 
+                                                                                  p_dict=p_dict)
     
     # Find the needed Pauli at the end
     s_form = _symp.symplectic_form(n)
@@ -908,9 +936,8 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     paulicircuit.change_gate_library(ds.compilations.absolute)
     circuit.append_circuit(paulicircuit)
     circuit.compress_depth(max_iterations=10,verbosity=0)
-    #check_circuit.append_circuit(paulicircuit)
     
-    return circuit #, check_circuit
+    return circuit
    
 
 def symplectic_as_conditional_clifford_circuit_over_CHP(s,ds=None,returnall=False):
