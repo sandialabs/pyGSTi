@@ -83,6 +83,8 @@ class Circuit(_gstr.GateString):
             
             if gatestring is not None:
                 self.initialize_circuit_from_gatestring(gatestring)
+            else:
+                self.initialize_empty_circuit()
 
         self._reinit_base()
 
