@@ -8,9 +8,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 
-def bonferoni_correction(confidence,numtests):
+def bonferroni_correction(confidence,numtests):
     """
-    Calculates the standard Bonferoni correction, for raising the 
+    Calculates the standard Bonferroni correction, for raising the 
     confidence level of statistical tests when implementing more
     than a single test. This is as described on wiki.
     
@@ -40,8 +40,8 @@ def sidak_correction(confidence,numtests):
       
     return adjusted_confidence
 
-def generalized_bonferoni_correction(confidence, weights, numtests=None,
-                                     nested_method='bonferoni'):
+def generalized_bonferroni_correction(confidence, weights, numtests=None,
+                                     nested_method='bonferroni'):
     """
     Todo: docstring
     
@@ -57,8 +57,8 @@ def generalized_bonferoni_correction(confidence, weights, numtests=None,
         assert(len(numtests) == len(weights)), "The number of tests must be specified for each weight!"
         for i in range(0,len(weights)):
             
-            if nested_method == 'bonferoni':
-                adjusted_confidence[i] = bonferoni_correction(adjusted_confidence[i],numtests[i])
+            if nested_method == 'bonferroni':
+                adjusted_confidence[i] = bonferroni_correction(adjusted_confidence[i],numtests[i])
                 
             if nested_method == 'sidak':
                 adjusted_confidence[i] = sidak_correction(adjusted_confidence[i],numtests[i])
