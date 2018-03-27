@@ -16,3 +16,4 @@ from .fiducialpairreduction import *
 from .fiducialselection import *
 from .gaugeopt import *
 from .contract import *
+from .compileclifford import *
