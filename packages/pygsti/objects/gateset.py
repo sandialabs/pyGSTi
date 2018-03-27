@@ -125,7 +125,7 @@ class GateSet(object):
             raise ValueError("Must set gateset dimension before adding auto-embedded gates.")
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
-        
+
         mode = "superop" if self._sim_type.startswith("dm") else "unitary"
         if self._sim_type in ("svmatrix","dmmatrix"):
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
@@ -2793,6 +2793,10 @@ class GateSet(object):
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
         newGateset._calcClass = self._calcClass
+
+        if not hasattr(self,"_sim_type"): #for backward compatibility
+            self._sim_type = "dmmatrix"
+        newGateset._sim_type = self._sim_type
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
