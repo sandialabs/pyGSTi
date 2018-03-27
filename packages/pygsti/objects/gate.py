@@ -4958,7 +4958,7 @@ class EmbeddedGateMap(GateMap):
 
         blockDims = self.stateSpaceLabels.dim.blockDims
         if basisdim: 
-            if blockDims != basisdim.blockdims:
+            if blockDims != basisdim.blockDims:
                 raise ValueError("State labels %s for tensor product blocks have dimensions %s != given dimensions %s" \
                                  % (stateSpaceLabels, str(blockDims), str(basisdim.blockdims)))
         else:

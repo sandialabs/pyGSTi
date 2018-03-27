@@ -136,16 +136,50 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         #    self.parent._clean_paramvec()
         if not isinstance(key, _Label): key = _Label(key,None)
         return super(OrderedMemberDict,self).__getitem__(key)
+    
 
     def _auto_embed(self, key_label, value):
         if self.parent is not None and key_label.sslbls is not None:
             if self.typ == "gate":
-                return self.parent._embedGate(key_label.sslbls, value)
+                return self.parent._embedGate(key_label.sslbls, self.cast_to_obj(value))
             else:
                 raise NotImplementedError("Cannot auto-embed objects other than gates yet.")
         else:
             return value
-        
+
+    def cast_to_obj(self, value):
+        """
+        Creates an object from `value` with a type given by the the
+        default parameterization if it isn't a :class:`GateSetMember`.
+
+        Parameters
+        ----------
+        value : object
+
+        Returns
+        -------
+        object
+        """
+        if isinstance(value, _gm.GateSetMember): return value
+
+        obj = None
+        if self.default_param == "TP":
+            if self.typ == "spamvec": obj = _sv.TPParameterizedSPAMVec(value)
+            if self.typ == "gate": obj = _gate.TPParameterizedGate(value)
+        elif self.default_param == "full":
+            if self.typ == "spamvec":  obj = _sv.FullyParameterizedSPAMVec(value)
+            if self.typ == "gate":  obj = _gate.FullyParameterizedGate(value)
+        elif self.default_param == "static":
+            if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
+            if self.typ == "gate":  obj = _gate.StaticGate(value)
+        elif self.default_param == "clifford":
+            if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
+            if self.typ == "gate":  obj = _gate.CliffordGate(value)
+        else:
+            raise ValueError("Invalid default_param: %s" % self.default_param)
+
+        return obj
+
 
     def __setitem__(self, key, value):
         if not isinstance(key, _Label): key = _Label(key)
@@ -168,6 +202,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if self.parent is not None and (wrongParent or inappInds):
                 value = value.copy()  # copy value (so we don't mess up other parent) and
                 value.set_gpindices(None, self.parent) # erase gindices don't apply to us
+
             super(OrderedMemberDict,self).__setitem__(key, value)
 
         elif key in self: #if a object already exists...
@@ -177,25 +212,12 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         else:
             #otherwise, we've been given a non-GateSetMember-object that doesn't
             # exist yet, so use default creation flags to make one:
-            obj = None
-            if self.default_param == "TP":
-                if self.typ == "spamvec": obj = _sv.TPParameterizedSPAMVec(value)
-                if self.typ == "gate": obj = _gate.TPParameterizedGate(value)
-            elif self.default_param == "full":
-                if self.typ == "spamvec":  obj = _sv.FullyParameterizedSPAMVec(value)
-                if self.typ == "gate":  obj = _gate.FullyParameterizedGate(value)
-            elif self.default_param == "static":
-                if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
-                if self.typ == "gate":  obj = _gate.StaticGate(value)
-            elif self.default_param == "clifford":
-                if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
-                if self.typ == "gate":  obj = _gate.CliffordGate(value)
-            else:
-                raise ValueError("Invalid default_param: %s" % self.default_param)
-            
+            obj = cast_to_obj(value)
+
             if obj is None:
                 raise ValueError("Cannot set a value of type: ",type(value))
 
+            
             if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict,self).__setitem__(key, obj)
 
