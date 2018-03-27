@@ -1,7 +1,11 @@
 """A python implementation of Gate Set Tomography"""
 
-from distutils.core import setup
-from distutils.extension import Extension
+try:
+    from setuptools import setup
+    from setuptools import Extension
+except ImportError:
+    from distutils.core import setup
+    from distutils.extension import Extension
 
 #execfile("packages/pygsti/_version.py")
 
@@ -59,7 +63,7 @@ setup(name='pyGSTi',
       long_description=descriptionTxt,
       author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
       author_email='pygsti@sandia.gov',
-      packages=['pygsti', 'pygsti.algorithms', 'pygsti.baseobjs', 'pygsti.construction', 'pygsti.drivers', 'pygsti.extras', 'pygsti.extras.rb', 'pygsti.extras.rpe', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
+      packages=['pygsti', 'pygsti.algorithms', 'pygsti.baseobjs', 'pygsti.construction', 'pygsti.drivers', 'pygsti.extras', 'pygsti.extras.rb', 'pygsti.extras.rpe', 'pygsti.extras.drift', 'pygsti.io', 'pygsti.objects', 'pygsti.optimize', 'pygsti.report', 'pygsti.tools'],
       package_dir={'': 'packages'},
       package_data={'pygsti.tools': ['fastcalc.pyx'],
                     'pygsti.report': ['templates/*.tex', 'templates/*.html', 'templates/*.json',
@@ -71,6 +75,7 @@ setup(name='pyGSTi',
                                       'templates/offline/fonts/*',
                                       'templates/offline/images/*']},
       requires=['numpy','scipy','plotly','ply'],
+      install_requires=['numpy','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
