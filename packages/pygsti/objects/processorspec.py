@@ -84,18 +84,14 @@ class ProcessorSpec(object):
             if len(self.compilations) > 0:
                 self.construct_compiler_costs()
 
-        if len(construct_models) > 0:
+        if 'clifford' in self.models:
             # Compute the gate labels that act on an entire set of qubits
-            self.gates_on_qubits =  _collections.defaultdict(list)
-            
-            model_to_use = construct_models[0]
-            if model_to_use == 'clifford' and len(construct_models) > 1:
-                model_to_use = construct_models[0] # avoid using the 'clifford' model if possible since it may be missing gates...
-            for gl in self.models[model_to_use].gates:
+            self.clifford_gates_on_qubits =  _collections.defaultdict(list)
+            for gl in self.models['clifford'].gates:
                 for p in _itertools.permutations(gl.qubits):
-                    self.gates_on_qubits[p].append(gl)
+                    self.clifford_gates_on_qubits[p].append(gl)
         else:
-            self.gates_on_qubits = None
+            self.clifford_gates_on_qubits = None
                     
 
                 
