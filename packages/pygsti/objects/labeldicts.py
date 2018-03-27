@@ -91,7 +91,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         # explicit insertions.  Since calling the base class __init__ will
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
-        self.default_param = default_param  # "TP", "full", or "static"
+        self.default_param = default_param  # "TP", "full", "static", or "clifford"
         self.typ = typ
 
         PrefixOrderedDict.__init__(self, prefix, items)
@@ -187,6 +187,9 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             elif self.default_param == "static":
                 if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
                 if self.typ == "gate":  obj = _gate.StaticGate(value)
+            elif self.default_param == "clifford":
+                if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
+                if self.typ == "gate":  obj = _gate.CliffordGate(value)
             else:
                 raise ValueError("Invalid default_param: %s" % self.default_param)
             

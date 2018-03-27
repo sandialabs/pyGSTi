@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numbers as _numbers
 import numpy as _np
+import copy as _copy
 
 from . import gatestring as _gstr
 from .label import Label as _Label
@@ -265,15 +266,11 @@ class Circuit(_gstr.GateString):
         j : int
             The depth at which to insert the circuit layer.
             
-        """
-        # Copy the input circuit, so that there is no chance of altering it, 
-        # although I don't think this is actually necessary.
-        in_circuit = _copy.deepcopy(circuit)
-        
+        """        
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
-            self.line_items[q] = self.line_items[q][0:j] + in_circuit.circuit[q] + self.line_items[q][j:]
+            self.line_items[q] = self.line_items[q][0:j] + circuit.line_items[q][:] + self.line_items[q][j:]
             
         self._reinit_base() #REINIT
                             
@@ -286,15 +283,11 @@ class Circuit(_gstr.GateString):
         circuit : A Circuit object
             The circuit to be appended.
  
-        """
-        # Copy the input circuit, so that there is no chance of altering it, 
-        # although I don't think this is actually necessary.
-        in_circuit = _copy.deepcopy(circuit)
-        
-        assert(self.number_of_lines == in_circuit.number_of_lines), "The circuits must act on the same number of qubits!"
+        """        
+        assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
-            self.line_items[q] = self.line_items[q] + in_circuit.circuit[q]
+            self.line_items[q] = self.line_items[q] + circuit.line_items[q][:]
         self._reinit_base() #REINIT
             
     def prefix_circuit(self,circuit):
@@ -306,17 +299,14 @@ class Circuit(_gstr.GateString):
         circuit : A Circuit object
             The circuit to be prefixed.
  
-        """   
-        # Copy the input circuit, so that there is no chance of altering it, 
-        # although I don't think this is actually necessary.
-        in_circuit = _copy.deepcopy(circuit)
-        
+        """           
         assert(self.number_of_lines == circuit.number_of_lines), "The circuits must act on the same number of qubits!"
         
         for q in range(0,self.number_of_lines):
-            self.line_items[q] = in_circuit.circuit[q] + self.line_items[q]
+            self.line_items[q] = circuit.line_items[q][:] + self.line_items[q]
         self._reinit_base() #REINIT
-            
+
+        
     def replace_gate_with_circuit(self,circuit,q,j):
         """
         Replace a gate with a circuit. As other gates in the
@@ -433,7 +423,7 @@ class Circuit(_gstr.GateString):
             
  
         """        
-        in_compilation = _copy.deepcopy(compilation)
+        in_compilation = compilation # _copy.deepcopy(compilation)
         
         d = self.depth()
         n = self.number_of_lines
@@ -443,11 +433,11 @@ class Circuit(_gstr.GateString):
                 # We ignore idle gates, and do not compile them.
                 # To do: is this the behaviour we want?
                 if gate.name != IDENT:
-                    if gate in list(in_compilation.keys()):
+                    if gate in in_compilation.keys():
                         self.replace_gate_with_circuit(in_compilation[gate],q,d-1-l)
                     else:
                         # To do: replace with a suitable assert somewhere.
-                        print('Error!')
+                        print('Error: could not find ', gate, ' in ', list(in_compilation.keys()))
         
         # If specified, perform the depth compression.
         if depth_compression:            

@@ -26,6 +26,7 @@ from ..objects import label as _label
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
 
+
 #############################################
 # Build gates based on "standard" gate names
 ############################################
@@ -1109,6 +1110,13 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         EVec = _spamvec.StaticSPAMVec
         POVM = _povm.UnconstrainedPOVM
         Gate = _gate.StaticGate
+    elif parameterization == "clifford":
+        PrepVec = _spamvec.StaticSPAMVec
+        EVec = _spamvec.StaticSPAMVec
+        POVM = _povm.UnconstrainedPOVM
+        Gate = _gate.CliffordGate
+        assert(sim_type == 'clifford'), "clifford parameterization only works with clifford simulation"
+
     # elif parameterization == "CPTP": TODO
     # elif parameterization == "H+S": TODO
     #More??
@@ -1117,7 +1125,7 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
 
     gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static"
                           sim_type = sim_type)              # "dmmatrix", "dmmap", "svmatrix", "svmap", "clifford"
-    gs.stateSpaceLabels = tuple(range(nQubits))
+    gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
     gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep',
         [PrepVec(v0) for i in range(nQubits)] )
     gs.povms['Mdefault'] = _povm.TensorProdPOVM( 
@@ -1183,7 +1191,8 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         #    availability['Gi'] = None #all qubits
         #    gatedict['Gi'] = XXX
             
-        U = nonstd_gate_unitaries.get(name, std_unitaries[name]) # KeyError if unitary can't be found
+        U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
+        if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
         if sim_type in ("dmmap","dmmatrix"):
             gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         else: #we just store the unitaries

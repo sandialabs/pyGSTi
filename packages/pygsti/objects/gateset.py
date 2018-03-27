@@ -33,6 +33,7 @@ from . import labeldicts as _ld
 from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
+from . import gatecliffordcalc as _gatecliffordcalc
 from .label import Label as _Label
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -61,13 +62,14 @@ class GateSet(object):
 
         Parameters
         ----------
-        default_param : {"full", "TP", "static"}, optional
+        default_param : {"full", "TP", "static", "clifford"}, optional
             Specifies the default gate and SPAM vector parameterization type.
             "full" : by default gates and vectors are fully parameterized.
             "TP" : by default the first row of gates and the first element of
             vectors is not parameterized and fixed so gate set is trace-
             preserving.
             "static" : by default gates and vectors are not parameterized.
+            "clifford" : by default gates are stored as Clifford symplectics.
 
         prep_prefix, effect_prefix, gate_prefix,
         povm_prefix, instrument_prefix : string, optional
@@ -75,7 +77,7 @@ class GateSet(object):
             gates, POVM, and instruments respectively.  These prefixes allow
             the GateSet to determine what type of object a key corresponds to.
         """
-        assert(default_param in ('full','TP','static'))
+        assert(default_param in ('full','TP','static','clifford'))
         #default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
@@ -105,6 +107,7 @@ class GateSet(object):
         elif sim_type == "dmmap":      c = _gatemapcalc.GateMapCalc
         elif sim_type == "svmatrix":   c = _gatematrixcalc.UnitaryGateMatrixCalc
         elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
+        elif sim_type == "clifford":   c = _gatecliffordcalc.GateCliffordCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._default_gauge_group = None
@@ -128,6 +131,8 @@ class GateSet(object):
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
         elif self._sim_type in ("svmap","dmmap"):
             return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
+        elif self._sim_type in ("clifford",):
+            return _gate.EmbeddedCliffordGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
         assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
 
 
@@ -397,15 +402,17 @@ class GateSet(object):
         if GateSet._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
-        if label.startswith(self.preps._prefix):
+        if not isinstance(label, _Label): label = _Label(label)
+        
+        if label.name.startswith(self.preps._prefix):
             return self.preps[label]
-        elif label.startswith(self.povms._prefix):
+        elif label.name.startswith(self.povms._prefix):
             return self.povms[label]
-        #elif label.startswith(self.effects._prefix):
+        #elif label.name.startswith(self.effects._prefix):
         #    return self.effects[label]
-        elif label.startswith(self.gates._prefix):
+        elif label.name.startswith(self.gates._prefix):
             return self.gates[label]
-        elif label.startswith(self.instruments._prefix):
+        elif label.name.startswith(self.instruments._prefix):
             return self.instruments[label]
         else:
             raise KeyError("Key %s has an invalid prefix" % label)

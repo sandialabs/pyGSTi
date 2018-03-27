@@ -30,6 +30,8 @@ from .gate import EmbeddedGateMap
 from .gate import EmbeddedGate
 from .gate import ComposedGateMap
 from .gate import ComposedGate
+from .gate import CliffordGate
+from .gate import EmbeddedCliffordGate
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec
@@ -54,6 +56,8 @@ from .gatestringstructure import LsGermsStructure
 from .circuit import Circuit
 from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
+from .compilationlibrary import CompilationLibrary
+from .processorspec import ProcessorSpec
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement

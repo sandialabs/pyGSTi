@@ -22,11 +22,13 @@ from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
+from ..tools import symplectic as _symp
 from . import gaugegroup as _gaugegroup
 from . import gatesetmember as _gatesetmember
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import Dim as _Dim
+
 
 IMAG_TOL = 1e-7 #tolerance for imaginary part being considered zero
 
@@ -987,7 +989,7 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             The gate parameters as a 1D array with length num_params().
         """
-        if np.iscomplexobj(self.base):
+        if _np.iscomplexobj(self.base):
             return _np.concatenate( (self.base.real.flatten(), self.base.imag.flatten()), axis=0)
         else:
             return self.base.flatten()
@@ -1028,7 +1030,7 @@ class FullyParameterizedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        if np.iscomplexobj(self.base):
+        if _np.iscomplexobj(self.base):
             derivMx = _np.concatenate( (_np.identity( self.dim**2, 'complex' ),
                                         1j*_np.identity( self.dim**2,'complex')),
                                         axis=1 )
@@ -5881,3 +5883,392 @@ class EmbeddedGate(GateMatrix):
         return s
 
 
+class CliffordGate(Gate):
+    """
+    A Clifford gate, represented via a symplectic
+    """
+    
+    def __init__(self, unitary=None, symplecticrep=None):
+        """
+        Creates a new CliffordGate
+        TODO: docstring
+
+        Parameters
+        ----------
+        """
+        #self.superop = superop
+        self.unitary = unitary
+        
+        #if self.superop is not None:
+        #    assert(unitary is None and symplecticrep is None),"Only supply one argument to __init__"
+        #    raise NotImplementedError("Superop -> Unitary calc not implemented yet")
+        if self.unitary is not None:
+            assert(symplecticrep is None),"Only supply one argument to __init__"
+            self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
+        elif symplecticrep is not None:
+            self.smatrix, self.svector = symplecticrep
+        else:
+            raise ValueError("Must supply one (and only one) argument to __init__")
+
+        nQubits = len(self.svector) // 2
+        dim = 2**nQubits # assume "unitary evoluation"-type mode?
+        Gate.__init__(self, dim)
+
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        raise NotImplementedError()
+    
+    
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0 #static clifford
+
+    
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        return _np.array([], 'd') # no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        return self._copy_gpindices( CliffordGate(symplecticrep=(self.smatrix,self.svector)), parent )
+
+
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case any TP gauge transformation is possible,
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        corresponds to a TP-like transform matrix.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        raise ValueError("Cannot transform a CliffordGate")
+
+            
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Can't depolarize a CliffordGate")
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Can't rotate a CliffordGate")
+
+
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate, which *must be another CliffordGate*.
+
+        Parameters
+        ----------
+        otherGate : CliffordGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        CliffordGate
+        """
+        raise NotImplementedError("TODO Later")
+
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Clifford gate with matrix:\n"
+        s += _mt.mx_to_string(self.smatrix, width=2, prec=0)
+        s += " and vector " + _mt.mx_to_string(self.svector, width=2, prec=0)
+        return s
+
+
+
+class EmbeddedCliffordGate(Gate):
+    """
+    A gate containing an embedded CliffordGate (represented via a symplectic)
+    """
+    
+    def __init__(self, stateSpaceLabels, targetLabels, gate_to_embed):
+        """
+        Creates a new EmbeddedCliffordGate
+        TODO: docstring
+
+        Parameters
+        ----------
+        """
+        from .labeldicts import StateSpaceLabels as _StateSpaceLabels
+        assert(isinstance(gate_to_embed, CliffordGate))
+        
+        self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
+        self.targetLabels = targetLabels
+        self.embedded_gate = gate_to_embed
+        self.basisdim = _Dim(self.stateSpaceLabels.dim.blockDims)
+        
+        dmDim, superOpDim, blockDims = self.basisdim
+        dim = dmDim # assume "unitary evoluation"-type mode
+        Gate.__init__(self, dim)
+
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        raise NotImplementedError()
+    
+    
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return self.embedded_gate.num_params()
+
+    
+    def to_vector(self):
+        """
+        Get the gate parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The gate parameters as a 1D array with length num_params().
+        """
+        return self.embedded_gate.to_vector()
+
+    
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.embedded_gate.from_vector(v)
+        self.dirty = True
+
+
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        return self._copy_gpindices( EmbeddedCliffordGate(
+            self.stateSpaceLabels, self.targetLabels, self.embedded_gate), parent )
+
+
+    def transform(self, S):
+        """
+        Update gate matrix G with inv(S) * G * S,
+
+        Generally, the transform function updates the *parameters* of 
+        the gate such that the resulting gate matrix is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        In this particular case any TP gauge transformation is possible,
+        i.e. when `S` is an instance of `TPGaugeGroupElement` or 
+        corresponds to a TP-like transform matrix.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+        """
+        raise ValueError("Cannot transform an EmbeddedCliffordGate")
+
+            
+    def depolarize(self, amount):
+        """
+        Depolarize this gate by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the gate such that the resulting gate matrix is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. In standard
+            bases, depolarization corresponds to multiplying the gate matrix
+            by a diagonal matrix whose first diagonal element (corresponding
+            to the identity) equals 1.0 and whose subsequent elements 
+            (corresponding to non-identity basis elements) equal
+            `1.0 - amount[i]` (or just `1.0 - amount` if `amount` is a
+            float).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Can't depolarize an EmbeddedCliffordGate")
+
+
+    def rotate(self, amount, mxBasis="gm"):
+        """
+        Rotate this gate by the given `amount`.
+
+        Generally, the rotate function updates the *parameters* of 
+        the gate such that the resulting gate matrix is rotated.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : tuple of floats, optional
+            Specifies the rotation "coefficients" along each of the non-identity
+            Pauli-product axes.  The gate's matrix `G` is composed with a
+            rotation operation `R`  (so `G` -> `dot(R, G)` ) where `R` is the
+            unitary superoperator corresponding to the unitary operator 
+            `U = exp( sum_k( i * rotate[k] / 2.0 * Pauli_k ) )`.  Here `Pauli_k`
+            ranges over all of the non-identity un-normalized Pauli operators.
+
+        mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Can't rotate an EmbeddedCliffordGate")
+
+
+    def compose(self, otherGate):
+        """
+        Create and return a new gate that is the composition of this gate
+        followed by otherGate, which *must be another CliffordGate*.
+
+        Parameters
+        ----------
+        otherGate : CliffordGate
+            The gate to compose to the right of this one.
+
+        Returns
+        -------
+        CliffordGate
+        """
+        raise NotImplementedError("TODO Later")
+
+
+    def __str__(self):
+        """ Return string representation """
+        s = "Embedded Clifford gate with full dimension %d and state space %s\n" % (self.dim,self.stateSpaceLabels)
+        s += " that embeds the following %d-dimensional gate into acting on the %s space\n" \
+             % (self.embedded_gate.dim, str(self.targetLabels))
+        s += str(self.embedded_gate)
+        return s
