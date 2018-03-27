@@ -1,7 +1,11 @@
 """A python implementation of Gate Set Tomography"""
 
-from distutils.core import setup
-from distutils.extension import Extension
+try:
+    from setuptools import setup
+    from setuptools import Extension
+except ImportError:
+    from distutils.core import setup
+    from distutils.extension import Extension
 
 #execfile("packages/pygsti/_version.py")
 
@@ -71,6 +75,7 @@ setup(name='pyGSTi',
                                       'templates/offline/fonts/*',
                                       'templates/offline/images/*']},
       requires=['numpy','scipy','plotly','ply'],
+      install_requires=['numpy','scipy','plotly','ply'],
       extras_require = {
            'diamond norm computation':  ['cvxpy', 'cvxopt'],
            'nose testing' : ['nose'],
