@@ -35,7 +35,7 @@ def relabel_qubits(circuit,order):
     return relabelled_circuit
 
 def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE','RGGE'], 
-                     costfunction='2QGC', iterations={'RGGE':100}, prefix_paulis=False):
+                     costfunction='2QGC', iterations={'RGGE':4}, prefix_paulis=False):
     """
     Compiles a Clifford gate, described by the symplectic matrix s and vector p, into
     a circuit over the specified gateset, or, a standard gateset.
@@ -104,7 +104,7 @@ def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE
     
     return circuit
 
-def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':100},
+def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':4},
                        depth_compression=True):    
     """
     
@@ -122,7 +122,7 @@ def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='
         try:
             iterations = iterations['RGGE']
         except:
-            iterations = 100
+            iterations = 4
         circuit = randomized_global_gaussian_elimination(s, pspec=pspec, ctype = 'basic',
                                                          costfunction=costfunction, iterations = iterations, 
                                                          depth_compression=depth_compression) 
@@ -754,7 +754,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
-def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=1,relations=None):
+def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=None):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -846,7 +846,7 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=1,relations=
     return circuit
    
     
-def stabilizer_state_preparation_circuit(s,p,pspec,iterations=1,relations=None):
+def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -923,7 +923,7 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=1,relations=None):
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.append_circuit(paulicircuit)
-    circuit.compress_depth(max_iterations=10,verbosity=0)
+    circuit.compress_depth(max_iterations=100,verbosity=0)
     
     return circuit
    
