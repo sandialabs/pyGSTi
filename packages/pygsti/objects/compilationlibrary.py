@@ -14,7 +14,6 @@ from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from ..tools import symplectic as _symp
 from .label import Label as _Label
-from .gate import EmbeddedCliffordGate as _EmbeddedCliffordGate
 from .circuit import Circuit as _Circuit
 
 
@@ -92,26 +91,6 @@ class CompilationLibrary(_collections.OrderedDict):
                                # gates currently compiled in library (key=gate_name)                        
         super(CompilationLibrary,self).__init__(items)
 
-    def get_symplectic_reps(self, gatelabel_filter=None):
-        """TODO: docstring """
-        if gatelabel_filter is None:
-            gatelabels = list(self.gateset.gates.keys())
-        else:
-            gatelabels = gatelabel_filter
-              # could check that all these are in self.gateset.gates.keys (FUTURE?)
-
-        srep_dict = {}
-        for gl in gatelabels:
-            assert(isinstance(self.gateset.gates[gl], _EmbeddedCliffordGate))
-            srep = (self.gateset.gates[gl].embedded_gate.smatrix,
-                    self.gateset.gates[gl].embedded_gate.svector)
-            if gl.name in srep_dict:
-                assert(srep == srep_dict[gl.name]), "Inconsistent symplectic reps for %s root!" % gl.name
-            else:
-                srep_dict[gl.name] = srep
-
-        return srep_dict
-
 
     def add_local_compilation_of(self, gatelabel, unitary=None, srep=None, max_iterations=10, force=False, verbosity=1):
 
@@ -163,7 +142,7 @@ class CompilationLibrary(_collections.OrderedDict):
             available_glabels = list( filter(lambda gl: set(gl.qubits).issubset(gatelabel.qubits),
                                              self.gateset.gates.keys()) )
             available_template_labels = set(map(to_template_label, available_glabels))
-            available_srep_dict = self.get_symplectic_reps(available_glabels)
+            available_srep_dict = self.gateset.get_clifford_symplectic_reps(available_glabels)
                 
             if is_local_compilation_feasible(available_template_labels):
                 template_to_use = self.add_clifford_compilation_template(
@@ -457,7 +436,7 @@ class CompilationLibrary(_collections.OrderedDict):
         if check:
             # Calculate the symplectic matrix implemented by this circuit, to check the compilation
             # is ok, below.
-            sreps = self.get_symplectic_reps()
+            sreps = self.gateset.get_clifford_symplectic_reps()
             s, p = _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
             
             # Construct the symplectic rep of CNOT between this pair of qubits, to compare to s.

@@ -59,7 +59,7 @@ def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','
     # Create a circuit that implements a Clifford with symplectic matrix s.
     circuit = compile_symplectic(s, ds=ds, algorithms=algorithms,  costfunction= costfunction, 
                                  iterations=iterations, depth_compression=depth_compression)
-    sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     temp_s, temp_p = _symp.composite_clifford_from_clifford_circuit(circuit,  sreps)
         
     assert(_np.array_equal(s,temp_s))
@@ -95,7 +95,7 @@ def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','
     else:
         circuit.append_circuit(pauli_circuit)
 
-    sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     s_out, p_out = _symp.composite_clifford_from_clifford_circuit(circuit, sreps)
     
     assert(_symp.check_valid_clifford(s_out,p_out))
@@ -800,7 +800,7 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     if relations is not None:
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
@@ -810,7 +810,7 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     #check_circuit.change_gate_library(ds.compilations['paulieq'])
     check_circuit.prefix_circuit(circuit)
 
-    sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     sreps['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
     
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, sreps)
@@ -881,7 +881,7 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     if relations is not None:
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
@@ -892,7 +892,7 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     
     
     # Add CNOT into the dictionary, in case it isn't there.
-    sreps = ds.compilations['paulieq'].get_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     sreps2 = sreps.copy()
     sreps2['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
     

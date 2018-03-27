@@ -1082,7 +1082,8 @@ def build_alias_gateset(gs_primitives, alias_dict):
 
 
 def build_nqubit_gateset(nQubits, gatedict, availability=None,
-                         parameterization='static', sim_type="dmmap"):
+                         parameterization='static', sim_type="dmmap",
+                         on_construction_error='raise'):
     """ TODO: docstring """
     
     if availability is None: availability = {}
@@ -1133,7 +1134,14 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
 
     for gateName, gate in gatedict.items():
         if not isinstance(gate, _gate.Gate):
-            gate = Gate(gate)
+            try:
+                gate = Gate(gate)
+            except Exception as e:
+                if on_construction_error == 'warn':
+                    _warnings.warn("Failed to create %s gate %s. Dropping it." %
+                                   (parameterization, gateName))
+                if on_construction_error in ('warn','ignore'): continue
+                else: raise e
 
         gate_nQubits = int(round(_np.log2(gate.dim)/2)) if sim_type.startswith("dm") \
                        else int(round(_np.log2(gate.dim)))
@@ -1145,7 +1153,14 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
             availList = list(_itertools.permutations(list(range(nQubits)), gate_nQubits))
             
         for inds in availList:
-            gs[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+            try:
+                gs[_label.Label(gateName,inds)] = gate # uses automatic-embedding
+            except Exception as e:
+                if on_construction_error == 'warn':
+                    _warnings.warn("Failed to embed %s gate %s. Dropping it." %
+                                   (parameterization, str(_label.Label(gateName,inds))))
+                if on_construction_error in ('warn','ignore'): continue
+                else: raise e
             
     return gs
 
@@ -1178,7 +1193,8 @@ def get_standard_gate_unitaries():
 
 
 def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=None,
-                                  availability=None, parameterization='static', sim_type="dmmap"):
+                                  availability=None, parameterization='static',
+                                  sim_type="dmmap", on_construction_error='raise'):
     """ TODO: docstring """
     if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
     std_unitaries = get_standard_gate_unitaries()
@@ -1198,7 +1214,8 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
         else: #we just store the unitaries
             gatedict[name] = U
             
-    return build_nqubit_gateset(nQubits, gatedict, availability, parameterization, sim_type)
+    return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,
+                                sim_type,on_construction_error)
 
 
 

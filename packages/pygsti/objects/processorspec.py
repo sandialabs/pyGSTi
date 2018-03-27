@@ -8,6 +8,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 
 import numpy as _np
 import itertools as _itertools
+import collections as _collections
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from .compilationlibrary import CompilationLibrary as _CompilationLibrary
@@ -18,8 +19,8 @@ class ProcessorSpec(object):
     """ TODO: docstring """
     
     def __init__(self, nQubits, gate_names, nonstd_gate_unitaries=None,
-                 availability=None, parameterization='static', sim_type="dmmap",
-                 construct_std_compilations=True,verbosity=1):
+                 availability=None, construct_models=('clifford','target'), 
+                 construct_clifford_compilations=('paulieq','absolute'), verbosity=1):
         """
         An object that can be used to encapsulate the device specification for a one or more qubit 
         quantum computer.
@@ -48,67 +49,88 @@ class ProcessorSpec(object):
 
         TODO: docstring
         """
-        from .. import construction as _cnst
         assert(type(nQubits) is int), "The number of qubits, n, should be an integer!"
-        
+
+        #Store inputs for adding models later
         self.number_of_qubits = nQubits
-        self.gateset = _cnst.build_nqubit_standard_gateset(
-            nQubits, gate_names, nonstd_gate_unitaries, availability,
-            parameterization, sim_type)
+        self.root_gate_names = gate_names
+        self.nonstd_gate_unitaries = None if (nonstd_gate_unitaries is None) \
+                                     else nonstd_gate_unitaries.copy()        
+        self.availability = None if (availability is None) \
+                            else availability.copy()
 
-        # *** Done in build_nqubit_standard_gateset ***
-        ## A list of all available gates, in terms of Gate objects
-        #self.allgates = []
-        #
-        ## A dictionary of all available gates on each qubit, and each pair of qubits
-        #self.gatesonqubits = {}
-        #
-        ## Initilizes these dictionaries
-        #for q1 in range (0,self.number_of_qubits):
-        #    self.gatesonqubits[q1] = []
-        #    for q2 in range (0,self.number_of_qubits):
-        #        self.gatesonqubits[q1,q2] = []
-        #
-        ## Populates these dictionaries.
-        #for glabel in self.gateset.names:
-        #    
-        #    # Adds the one-qubit gates.
-        #    if self.gateset.size[glabel] == 1:
-        #        for q in range(0,self.number_of_qubits):
-        #            if self.gateset.availability[glabel][q] == 1:
-        #                self.allgates.append(_cir.Gate(glabel,q))
-        #                self.gatesonqubits[q].append(_cir.Gate(glabel,q))
-        #    
-        #    # Adds the two-qubit gates.
-        #    elif self.gateset.size[glabel] == 2:
-        #        for q1 in range(0,self.number_of_qubits):
-        #            for q2 in range(0,self.number_of_qubits):
-        #                if self.gateset.availability[glabel][q1,q2] == 1:
-        #                    self.allgates.append(_cir.Gate(glabel,(q1,q2)))
-        #                    self.gatesonqubits[q1,q2].append(_cir.Gate(glabel,(q1,q2)))
-        #                    
-        #    else:
-        #        raise ValueError("Gates on > 2 qubits not currently recorded!")
-
-        # Construct matrices related to the cost of doing a two-qubit gate between a pair
-        # of qubits. This makes default values which compilers will use. But, this is a
-        # function so that the user can call it and update them.
-        self.construct_compiler_costs()
-
-        # Compilations are stored here. This initalizes empty CompilationLibrary objects
-        self.compilations = {'absolute': _CompilationLibrary(self.gateset, 'absolute'),
-                             'paulieq':  _CompilationLibrary(self.gateset, 'paulieq') }
-        
         # A dictionary of models for the device (e.g., imperfect unitaries, process matrices etc).
-        self.models = {} # TODO: just other gatesets??
-        
-        # Constructs the standard compilations, if requested.
-        if construct_std_compilations:        
-            self.construct_std_compilations(verbosity=verbosity)
+        self.models = _collections.OrderedDict()
 
+        # Compilations are stored here.
+        self.compilations = _collections.OrderedDict()
+
+        #Compiler-cost variables (set in construct_compiler_costs)
+        self.connectivity = None
+        self.distance = None
+        self.shortestpath = None
+        self.qubitcosts = None
+        self.costorderedqubits = None
+
+        # Add initial models
+        for model_name in construct_models:
+            self.add_std_model(model_name)
+
+        # Add initial compilations
+        if 'clifford' in construct_models:
+            for ctype in construct_clifford_compilations: # E.g. 'absolute' or 'paulieq'
+                self.add_std_compilation(ctype, verbosity)
             
-    def construct_std_compilations(self,verbosity=1):
+            if len(self.compilations) > 0:
+                self.construct_compiler_costs()
+                
+        return # done with __init__(...)
 
+                
+    def construct_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        """ TODO: docstring """
+        from .. import construction as _cnst
+        
+        if model_name == 'clifford':
+            assert(parameterization in ('auto','clifford')), "Clifford model must use 'clifford' parameterizations"
+            assert(sim_type in ('auto','clifford')), "Clifford model must use 'clifford' simulation type"
+            model = _cnst.build_nqubit_standard_gateset(
+                self.number_of_qubits, self.root_gate_names,
+                self.nonstd_gate_unitaries, self.availability,
+                parameterization='clifford', sim_type='clifford',
+                on_construction_error='warn') # *drop* gates that aren't cliffords
+
+        elif model_name in ('target','Target','static','TP','full'):
+            sim_type = 'svmap' if (sim_type == 'auto') else sim_type
+            param = model_name if (parameterization == 'auto') \
+                    else parameterization
+            if param in ('target','Target'): param = 'static' # special case for 'target' model
+            
+            model = _cnst.build_nqubit_standard_gateset(
+                self.number_of_qubits, self.root_gate_names,
+                self.nonstd_gate_unitaries, self.availability,
+                param, sim_type)
+            
+        else: # unknown model name, so require parameterization
+            if parameterization == 'auto':
+                raise ValueError("Non-std model name '%s' means you must specify `parameterization` argument!" % model_name)
+            sim_type = 'svmap' if (sim_type == 'auto') else sim_type
+            model = _cnst.build_nqubit_standard_gateset(
+                self.number_of_qubits, self.root_gate_names,
+                self.nonstd_gate_unitaries, self.availability,
+                parameterization, sim_type)
+            
+        return model
+
+    def add_std_model(self, model_name, parameterization='auto', sim_type='auto'):
+        """ TODO: docstring """
+        self.models[model_name] = self.construct_std_model(model_name,
+                                                           parameterization,
+                                                           sim_type)
+        
+            
+    def construct_std_compilation(self,compile_type,verbosity=1):
+        """ TODO: docstring """
         #Hard-coded gates we need to compile from the native (clifford) gates in order to compile
         # arbitrary (e.g. random) cliffords, since our Clifford compiler outputs circuits in terms
         # of these elements.
@@ -119,46 +141,60 @@ class ProcessorSpec(object):
         descs = {'paulieq': 'up to Pauli gates',
                  'absolute': '' }
 
-        for compile_type in ('paulieq','absolute'):
-            desc = descs[compile_type]
+        if 'clifford' not in self.models:
+            raise ValueError("Cannot create standard compilations without a 'clifford' model")
+        library = _CompilationLibrary(self.models['clifford'], compile_type) # empty library to fill
+        desc = descs[compile_type]
             
-            #Stage1:
-            # Compile 1Q gates "locally" - i.e., out of native gates which act only
-            #  on the target qubit of the gate being compiled.
-            for q in range(0,self.number_of_qubits):
-                for gname in singlequbit[compile_type]:
-                    if verbosity > 0:
-                        print("Creating a circuit to implement {} {} on qubit {}...".format(gname,desc,q))
-                    self.compilations[compile_type].add_local_compilation_of(
-                        _Label(gname,q), verbosity=verbosity)
+        #Stage1:
+        # Compile 1Q gates "locally" - i.e., out of native gates which act only
+        #  on the target qubit of the gate being compiled.
+        for q in range(0,self.number_of_qubits):
+            for gname in singlequbit[compile_type]:
+                if verbosity > 0:
+                    print("Creating a circuit to implement {} {} on qubit {}...".format(gname,desc,q))
+                library.add_local_compilation_of(
+                    _Label(gname,q), verbosity=verbosity)
 
-                if verbosity > 0: print("Complete.")
-                
-            #Stage2:
-            # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
-            not_locally_compilable = []
+            if verbosity > 0: print("Complete.")
             
-            for q1 in range(0,self.number_of_qubits):
-                for q2 in range(0,self.number_of_qubits):
-                    if q1 == q2: continue # 2Q gates must be on different qubits!
-                    for gname in twoqubit[compile_type]:
-                        if verbosity > 0:
-                            print("Creating a circuit to implement {} {} on qubits {}...".format(gname,desc,(q1,q2)))
-                        try:
-                            self.compilations[compile_type].add_local_compilation_of(
-                                _Label(gname,(q1,q2)), verbosity=verbosity)
-                        except _CompilationError:
-                            not_locally_compilable.append( (gname,q1,q2) )
-                            
-            #Stage3:
-            # Try to compile remaining 2Q gates non-locally using specific algorithms
-            non_compilable = []
-            for gname,q1,q2 in not_locally_compilable:
-                # This method is currently a bit of a hack.
-                self.compilations[compile_type].add_nonlocal_compilation_of(_Label(gname,(q1,q2)),
-                                                                            verbosity=verbosity)
+        #Stage2:
+        # Compile 2Q gates locally, if possible.  Keep track of what can't be compiled.
+        not_locally_compilable = []
+        
+        for q1 in range(0,self.number_of_qubits):
+            for q2 in range(0,self.number_of_qubits):
+                if q1 == q2: continue # 2Q gates must be on different qubits!
+                for gname in twoqubit[compile_type]:
+                    if verbosity > 0:
+                        print("Creating a circuit to implement {} {} on qubits {}...".format(gname,desc,(q1,q2)))
+                    try:
+                        library.add_local_compilation_of(
+                            _Label(gname,(q1,q2)), verbosity=verbosity)
+                    except _CompilationError:
+                        not_locally_compilable.append( (gname,q1,q2) )
+                        
+        #Stage3:
+        # Try to compile remaining 2Q gates non-locally using specific algorithms
+        non_compilable = []
+        for gname,q1,q2 in not_locally_compilable:
+            library.add_nonlocal_compilation_of(_Label(gname,(q1,q2)),
+                                                verbosity=verbosity)
+
+        return library
+
+    
+    def add_std_compilation(self,compile_type,verbosity=1):
+        """ TODO: docstring """
+        self.compilations[compile_type] = \
+            self.construct_std_compilation(compile_type,verbosity)
+        
                                  
     def construct_compiler_costs(self, custom_connectivity=None):
+        """ TODO: docstring """
+
+        if 'clifford' not in self.models:
+            raise ValueError("Cannot construct compiler costs without a 'clifford' model")
 
         # A matrix that stores whether there is any gate between a pair of qubits
         if custom_connectivity is not None:
@@ -166,7 +202,7 @@ class ProcessorSpec(object):
             self.connectivity = custom_connectivity
         else:
             self.connectivity = _np.zeros((self.number_of_qubits,self.number_of_qubits),dtype=bool)
-            for gatelabel in self.gateset.gates:
+            for gatelabel in self.models['clifford'].gates:
                 if gatelabel.number_of_qubits > 1:
                     for p in _itertools.permutations(gatelabel.qubits, 2):
                         self.connectivity[p] = True
@@ -206,6 +242,7 @@ class ProcessorSpec(object):
             
     def simulate(self,circuit,modelname):
         """
+        TODO: docstring
         A wrap-around for the circuit simulators in simulators.py 
         """       
         return self.models[modelname].probs(circuit)
