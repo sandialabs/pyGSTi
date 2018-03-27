@@ -212,7 +212,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         else:
             #otherwise, we've been given a non-GateSetMember-object that doesn't
             # exist yet, so use default creation flags to make one:
-            obj = cast_to_obj(value)
+            obj = self.cast_to_obj(value)
 
             if obj is None:
                 raise ValueError("Cannot set a value of type: ",type(value))
