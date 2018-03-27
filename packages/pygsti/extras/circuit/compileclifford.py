@@ -6,7 +6,8 @@ import copy as _copy
 from . import circuit as _cir
 from . import devicespec as _ds
 from . import symplectic as _symp
-from . import matrixmod2 as _mtx
+#from . import matrixmod2 as _mtx
+from ...tools import matrixmod2 as _mtx
 
 def relabel_qubits(circuit,order):
     """

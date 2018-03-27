@@ -7,7 +7,8 @@ import sys
 if sys.version_info >= (3,):
     long = int
 
-from . import matrixmod2 as _mtx
+#from . import matrixmod2 as _mtx
+from ...tools import matrixmod2 as _mtx
 
 def symplectic_form(n,convention='standard'):
     """
