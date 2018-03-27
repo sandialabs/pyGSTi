@@ -34,7 +34,7 @@ def relabel_qubits(circuit,order):
         
     return relabelled_circuit
 
-def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','RGGE'], 
+def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE','RGGE'], 
                      costfunction='2QGC', iterations={'RGGE':100}, prefix_paulis=False):
     """
     Compiles a Clifford gate, described by the symplectic matrix s and vector p, into
@@ -53,13 +53,13 @@ def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','
     assert(_symp.check_valid_clifford(s,p)), "Input is not a valid Clifford!"
     n = _np.shape(s)[0]//2
     
-    if ds is not None:
-        assert(n == ds.number_of_qubits), "...."
+    if pspec is not None:
+        assert(n == pspec.number_of_qubits), "...."
     
     # Create a circuit that implements a Clifford with symplectic matrix s.
-    circuit = compile_symplectic(s, ds=ds, algorithms=algorithms,  costfunction= costfunction, 
+    circuit = compile_symplectic(s, pspec=pspec, algorithms=algorithms,  costfunction= costfunction, 
                                  iterations=iterations, depth_compression=depth_compression)
-    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     temp_s, temp_p = _symp.composite_clifford_from_clifford_circuit(circuit,  sreps)
         
     assert(_np.array_equal(s,temp_s))
@@ -87,15 +87,15 @@ def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','
     pauli_circuit = _Circuit(gatestring=pauli_layer,num_lines=n)
     
     # Only change gate library if we have a DeviceSpec with compilations.
-    if ds is not None:
-        pauli_circuit.change_gate_library(ds.compilations['absolute'])
+    if pspec is not None:
+        pauli_circuit.change_gate_library(pspec.compilations['absolute'])
     
     if prefix_paulis:
         circuit.prefix_circuit(pauli_circuit)
     else:
         circuit.append_circuit(pauli_circuit)
 
-    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     s_out, p_out = _symp.composite_clifford_from_clifford_circuit(circuit, sreps)
     
     assert(_symp.check_valid_clifford(s_out,p_out))
@@ -104,7 +104,7 @@ def compile_clifford(s, p, ds=None, depth_compression=True, algorithms=['DGGE','
     
     return circuit
 
-def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':100},
+def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':100},
                        depth_compression=True):    
     """
     
@@ -113,7 +113,7 @@ def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QG
     
     if 'DGGE' in algorithms:
         
-        circuit = ordered_global_gaussian_elimination(s, ds=ds, iterations=1, ctype = 'basic', 
+        circuit = ordered_global_gaussian_elimination(s, pspec=pspec, iterations=1, ctype = 'basic', 
                                                depth_compression=depth_compression)
         circuits.append(circuit)      
     
@@ -123,7 +123,7 @@ def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QG
             iterations = iterations['RGGE']
         except:
             iterations = 100
-        circuit = randomized_global_gaussian_elimination(s, ds=ds, ctype = 'basic',
+        circuit = randomized_global_gaussian_elimination(s, pspec=pspec, ctype = 'basic',
                                                          costfunction=costfunction, iterations = iterations, 
                                                          depth_compression=depth_compression) 
         circuits.append(circuit) 
@@ -131,28 +131,28 @@ def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QG
     if 'AGvGE' in algorithms:
         
         # Todo : write this function
-        circuit = aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'GE', 
+        circuit = aaronson_gottesman_on_symplectic(s, pspec=pspec, cnotmethod = 'GE', 
                                                    depth_compression=depth_compression)   
         circuits.append(circuit) 
         
     if 'AGvPMH' in algorithms:
         
         # Todo : write this function
-        circuit = aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'PMH', 
+        circuit = aaronson_gottesman_on_symplectic(s, pspec=pspec, cnotmethod = 'PMH', 
                                                    depth_compression=depth_compression)   
         circuits.append(circuit) 
         
     if 'iAGvGE' in algorithms:
          
         # Todo : write this function
-        circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'GE', 
+        circuit = improved_aaronson_gottesman_on_symplectic(s, pspec=pspec, cnotmethod = 'GE', 
                                                              depth_compression=depth_compression)   
         circuits.append(circuit) 
         
     if 'iAGvPMH' in algorithms:
         
         # Todo : write this function
-        circuit = improved_aaronson_gottesman_on_symplectic(s, ds=ds, cnotmethod = 'PMH',
+        circuit = improved_aaronson_gottesman_on_symplectic(s, pspec=pspec, cnotmethod = 'PMH',
                                                              depth_compression=depth_compression)   
         circuits.append(circuit) 
     
@@ -167,9 +167,9 @@ def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QG
             elif costfunction == 'gcosts':
                 # Todo : make this work - .gatecosts is currently not a property of a DeviceSpec object,
                 # and circuit.cost() is currently not a method of circuit.
-                c_cost = circuit.cost(ds.gatecosts)
+                c_cost = circuit.cost(pspec.gatecosts)
             else:
-                c_cost = costfunction(circuit,ds)
+                c_cost = costfunction(circuit,pspec)
             if c_cost < cost:
                 circuit = _copy.deepcopy(c)
                 cost = c_cost
@@ -181,7 +181,7 @@ def compile_symplectic(s, ds=None, algorithms=['DGGE','RGGE'], costfunction='2QG
 
 
 
-def randomized_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunction='2QGC', 
+def randomized_global_gaussian_elimination(s, pspec=None, ctype = 'basic', costfunction='2QGC', 
                                            iterations=10, depth_compression=True, returncosts=False):
     
     lowestcost = _np.inf
@@ -207,15 +207,15 @@ def randomized_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunc
         
         if ctype == 'advanced':
             print("This method is not yet written!")
-            circuit = advanced_global_gaussian_elimination(permuted_s ,ds.shortestpaths,depth_compression=depth_compression)
+            circuit = advanced_global_gaussian_elimination(permuted_s ,pspec.shortestpaths,depth_compression=depth_compression)
         
         if ctype == 'basic':
             circuit = basic_global_gaussian_elimination(permuted_s ,depth_compression=depth_compression)
         
         circuit = relabel_qubits(circuit,eliminationorder)
         
-        if ds is not None:
-            circuit.change_gate_library(ds.compilations['paulieq'])
+        if pspec is not None:
+            circuit.change_gate_library(pspec.compilations['paulieq'])
             
         # Find the cost of the circuit
         if costfunction == '2QGC':
@@ -225,9 +225,9 @@ def randomized_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunc
         elif costfunction == 'gcosts':
             # Todo : make this work - .gatecosts is currently not a property of a DeviceSpec object,
             # and circuit.cost() is currently not a method of circuit.
-            circuit_cost = circuit.cost(ds.gatecosts)
+            circuit_cost = circuit.cost(pspec.gatecosts)
         else:
-            circuit_cost = costfunction(circuit,ds)
+            circuit_cost = costfunction(circuit,pspec)
             
         allcosts.append(circuit_cost)
             
@@ -240,7 +240,7 @@ def randomized_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunc
     else:
         return bestcircuit
     
-def ordered_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunction='2QGC', iterations=1,
+def ordered_global_gaussian_elimination(s, pspec=None, ctype = 'basic', costfunction='2QGC', iterations=1,
                                         depth_compression=True, returncosts=False):
     
     lowestcost = _np.inf
@@ -248,7 +248,7 @@ def ordered_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunctio
     allcosts = []
     
     # Get a list of lists of ordered qubits
-    orderedqubits = ds.costorderedqubits
+    orderedqubits = pspec.costorderedqubits
     
     for i in range(0,iterations):
                
@@ -267,15 +267,15 @@ def ordered_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunctio
         
         if ctype == 'advanced':
             print("This method is not yet written!")
-            circuit = advanced_global_gaussian_elimination(permuted_s ,ds.shortestpaths,depth_compression=depth_compression)
+            circuit = advanced_global_gaussian_elimination(permuted_s ,pspec.shortestpaths,depth_compression=depth_compression)
         
         if ctype == 'basic':
             circuit = basic_global_gaussian_elimination(permuted_s ,depth_compression=depth_compression)
         
         circuit = relabel_qubits(circuit,eliminationorder)
         
-        if ds is not None:
-            circuit.change_gate_library(ds.compilations['paulieq'])
+        if pspec is not None:
+            circuit.change_gate_library(pspec.compilations['paulieq'])
         
         if iterations == 1:
             return circuit
@@ -288,9 +288,9 @@ def ordered_global_gaussian_elimination(s, ds=None, ctype = 'basic', costfunctio
         elif costfunction == 'gcosts':
             # Todo : make this work - .gatecosts is currently not a property of a DeviceSpec object,
             # and circuit.cost() is currently not a method of circuit.
-            circuit_cost = circuit.cost(ds.gatecosts)
+            circuit_cost = circuit.cost(pspec.gatecosts)
         else:
-            circuit_cost = costfunction(circuit,ds)
+            circuit_cost = costfunction(circuit,pspec)
             
         allcosts.append(circuit_cost)
             
@@ -754,7 +754,7 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
-def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=None):
+def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=1,relations=None):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -778,12 +778,12 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
     # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,ds,returnall=True)
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,pspec,returnall=True)
             i += 1
             trialcircuit.reverse()
             # Do the depth-compression *after* the circuit is reversed
             trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)
-            trialcircuit.change_gate_library(ds.compilations['paulieq'])
+            trialcircuit.change_gate_library(pspec.compilations['paulieq'])
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
                 circuit = _copy.deepcopy(trialcircuit)
@@ -795,22 +795,22 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
          
     #check_circuit.reverse()
-    #check_circuit.change_gate_library(ds.compilations['paulieq'])
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
 
     if relations is not None:
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "Gate relations are incorrect!"
     
     check_circuit.reverse()
-    #check_circuit.change_gate_library(ds.compilations['paulieq'])
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
     check_circuit.prefix_circuit(circuit)
 
-    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     sreps['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
     
     implemented_scheck, implemented_pcheck = _symp.composite_clifford_from_clifford_circuit(check_circuit, sreps)
@@ -839,14 +839,14 @@ def stabilizer_measurement_preparation_circuit(s,p,ds,iterations=1,relations=Non
             pauli_layer.append(_Label('Y',q))
             
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
-    paulicircuit.change_gate_library(ds.compilations['absolute'])
+    paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.prefix_circuit(paulicircuit)
     circuit.compress_depth(max_iterations=10,verbosity=0) 
     
     return circuit
    
     
-def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
+def stabilizer_state_preparation_circuit(s,p,pspec,iterations=1,relations=None):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -860,14 +860,14 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     i = 0
     while i < iterations:
         try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,ds,returnall=True)
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec,returnall=True)
             i += 1
             #
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library            
             trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
-            trialcircuit.change_gate_library(ds.compilations['paulieq'])        
+            trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
             twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
             if twoqubit_gatecount  < min_twoqubit_gatecount :
                 circuit = _copy.deepcopy(trialcircuit)
@@ -881,18 +881,18 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
     if relations is not None:
         # Do more depth-compression on the chosen circuit. Todo: This should used something already
         # constructed in DeviceSpec, instead of this ad-hoc method.
-        sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+        sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
         sprecompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "The gate relations provided are incorrect!"
         
-    #check_circuit.change_gate_library(ds.compilations['paulieq'])
+    #check_circuit.change_gate_library(pspec.compilations['paulieq'])
     check_circuit.append_circuit(circuit)
     
     
     # Add CNOT into the dictionary, in case it isn't there.
-    sreps = ds.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
+    sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     sreps2 = sreps.copy()
     sreps2['CNOT'] = (_np.array([[1,0,0,0],[1,1,0,0],[0,0,1,1],[0,0,0,1]],int), _np.array([0,0,0,0],int))
     
@@ -921,14 +921,14 @@ def stabilizer_state_preparation_circuit(s,p,ds,iterations=1,relations=None):
 
             
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
-    paulicircuit.change_gate_library(ds.compilations['absolute'])
+    paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.append_circuit(paulicircuit)
     circuit.compress_depth(max_iterations=10,verbosity=0)
     
     return circuit
    
 
-def symplectic_as_conditional_clifford_circuit_over_CHP(s,ds=None,returnall=False):
+def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False):
     """
     
     """
