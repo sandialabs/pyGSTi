@@ -398,6 +398,20 @@ class Circuit(_gstr.GateString):
         for i in range(1,depth):
             layer = circuit.get_circuit_layer(i)
             self.insert_layer(layer,j)
+            
+            
+    def replace_gatename(self,old_gatename,new_gatename):
+        """
+        Changes the name of a gate. E.g., can change all instances
+        of 'I' to 'Gi'.
+        """
+        depth = self.depth()
+        for q in range(self.number_of_lines):
+            for l in range(depth):
+                if self.line_items[q][l].name == old_gatename:
+                    self.line_items[q][l].name = new_gatename #_Label(new_gatename, self.line_items[q][l].qubits)
+        
+        self._reinit_base() #REINIT
         
     def change_gate_library(self,compilation,depth_compression=True,
                             gate_relations_1q=None):
