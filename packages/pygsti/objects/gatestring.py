@@ -70,9 +70,9 @@ class GateString(object):
 
         # if tupleOfGateLabels is a GateString, then copy it
         if isinstance(tupleOfGateLabels, GateString):
-            self._tup = tupleOfGateLabels._tup
+            self._tup = tupleOfGateLabels.tup
             if stringRepresentation is None:
-                self._str = tupleOfGateLabels._str
+                self._str = tupleOfGateLabels.str
             else:
                 self._str = stringRepresentation
 
