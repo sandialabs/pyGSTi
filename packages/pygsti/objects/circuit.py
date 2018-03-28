@@ -445,8 +445,8 @@ class Circuit(_gstr.GateString):
             for l in range(depth):
                 if self.line_items[q][l].name == old_gatename:
                     self.line_items[q][l].name = new_gatename #_Label(new_gatename, self.line_items[q][l].qubits)
-        
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
+
         
     def change_gate_library(self,compilation,depth_compression=True,
                             gate_relations_1q=None):
