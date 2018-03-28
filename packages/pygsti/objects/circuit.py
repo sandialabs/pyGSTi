@@ -86,14 +86,23 @@ class Circuit(_gstr.GateString):
             else:
                 self.initialize_empty_circuit()
 
-        self._reinit_base()
+            """ Initialize the members of the GateString base class """
+            tup = self._flatten_to_tup()
+            strRep = None  #don't worry about string representation currently - just auto-compute it.
+            super(Circuit, self).__init__(tup, strRep)
+
+            self._tup_dirty = False # keep track of when we need to _flatten_to_tup
 
     def _reinit_base(self):
-        """ Re-initialize the members of the GateString base class """
-
+        if self._tup_dirty:
+            self._tup = self._flatten_to_tup()
+            self._str = _gstr._gateSeqToStr(self._tup)
+            self._tup_dirty = False
+        
+    def _flatten_to_tup(self):
+        #print("DB: flattening to tuple!!")
         if self.number_of_lines <= 0:
-            super(Circuit, self).__init__(())
-            return
+            return ()
 
         label_list = []
         nlayers = max( [len(line) for line in self.line_items] )
@@ -110,9 +119,35 @@ class Circuit(_gstr.GateString):
                     label_list.append( line[j] ) # don't include exact identities
                 actson = lbl.qubits if (lbl.qubits is not None) else self.line_labels # None == "all lines"
                 processed_lines.update(actson)
+                
+        return tuple(label_list)
 
-        strRep = None #don't worry about string representation currently - just auto-compute it.
-        super(Circuit, self).__init__(tuple(label_list), strRep)
+    @property
+    def tup(self):
+        """ TODO: docstring -- overrides GateString method so we can compute tuple in on-demand way """
+        #print("Circuit.tup accessed")
+        self._reinit_base()
+        return self._tup
+
+    @tup.setter
+    def tup(self, value):
+        """ TODO: docstring """
+        #print("Circuit.tup setter accessed")
+        self._reinit_base()
+        self._tup = value
+
+    @property
+    def str(self):
+        #print("Circuit.str accessed")
+        self._reinit_base()
+        return self._str
+
+    @str.setter
+    def str(self, value):
+        #print("Circuit.str setter accessed")
+        self._reinit_base()
+        self._str = value
+
 
     def __hash__(self):
         if self._static:
@@ -220,8 +255,8 @@ class Circuit(_gstr.GateString):
         # Put the gate in
         for i in gate.qubits:
             self.line_items[i][j] = gate
-            
-        self._reinit_base() #REINIT
+
+        self._tup_dirty = True
 
         
     def insert_layer(self,circuit_layer,j):
@@ -254,7 +289,7 @@ class Circuit(_gstr.GateString):
                 if line_label in gate_qubits:
                     self.line_items[i][j] = gate
                     
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
                     
     def insert_circuit(self,circuit,j):
         """
@@ -274,7 +309,7 @@ class Circuit(_gstr.GateString):
         for q in range(0,self.number_of_lines):
             self.line_items[q] = self.line_items[q][0:j] + circuit.line_items[q][:] + self.line_items[q][j:]
             
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
                             
     def append_circuit(self,circuit):
         """
@@ -290,7 +325,7 @@ class Circuit(_gstr.GateString):
         
         for q in range(0,self.number_of_lines):
             self.line_items[q] = self.line_items[q] + circuit.line_items[q][:]
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
             
     def prefix_circuit(self,circuit):
         """
@@ -306,7 +341,7 @@ class Circuit(_gstr.GateString):
         
         for q in range(0,self.number_of_lines):
             self.line_items[q] = circuit.line_items[q][:] + self.line_items[q]
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
 
         
     def replace_gate_with_circuit(self,circuit,q,j):
@@ -372,7 +407,7 @@ class Circuit(_gstr.GateString):
             for qq in range(0,len(circuit_layer)):
                 if q in circuit_layer[qq].qubits:
                     self.line_items[q][j] = circuit_layer[qq]
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
 
         
     def replace_layer_with_circuit(self,circuit,j):
@@ -458,8 +493,9 @@ class Circuit(_gstr.GateString):
         """
         for q in range(0,self.number_of_lines):
             del self.line_items[q][j]
-        self._reinit_base() #REINIT
-                    
+        self._tup_dirty = True
+
+        
     def get_circuit_layer(self,j):
         """
         Returns the layer at depth j.
@@ -480,8 +516,9 @@ class Circuit(_gstr.GateString):
         """         
         for q in range(0,self.number_of_lines):
             self.line_items[q].reverse()
-        self._reinit_base() #REINIT
-    
+        self._tup_dirty = True
+
+        
     def depth(self):
         """
         Returns the circuit depth.
@@ -650,7 +687,7 @@ class Circuit(_gstr.GateString):
                 else:
                     j += 1
 
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
         return flag
     
     def shift_1q_gates_forward(self):
@@ -679,7 +716,7 @@ class Circuit(_gstr.GateString):
                             flag = True
                             self.line_items[q][j-k] = self.line_items[q][j]
                             self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
         return flag
     
     def shift_2q_gates_forward(self):
@@ -713,7 +750,7 @@ class Circuit(_gstr.GateString):
                             self.line_items[q][j] = _Label(IDENT,self.line_labels[q])
                             self.line_items[target_label][j] = _Label(IDENT,self.line_labels[int(target_label)])
 
-        self._reinit_base() #REINIT
+        self._tup_dirty = True
         return flag
     
     
