@@ -562,6 +562,55 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
     #assert(sz == N)
 
 
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
+                      np.ndarray[np.complex128_t, ndim=2, mode="c"] fastArray not None,
+                      np.ndarray[int, ndim=1, mode="c"] fastArraySizes not None):
+    
+    cdef int nFactors = fastArray.shape[0]
+    cdef int N = outvec.shape[0]
+    cdef int i
+    cdef int j
+    cdef int k
+    cdef int sz
+    cdef int off
+    cdef int endoff
+    cdef double complex mult
+    
+    #Put last factor at end of outvec
+    k = nFactors-1  #last factor
+    off = N-fastArraySizes[k] #offset into outvec
+    for i in range(fastArraySizes[k]):
+        outvec[off+i] = fastArray[k,i]
+    sz = fastArraySizes[k]
+
+    #Repeatedly scale&copy last "sz" elements of outputvec forward
+    # (as many times as there are elements in the current factor array)
+    # - but multiply *in-place* the last "sz" elements.
+    for k in range(nFactors-2,-1,-1): #for all but the last factor
+        off = N-sz*fastArraySizes[k]
+        endoff = N-sz
+
+        #For all but the final element of fastArray[k,:],
+        # mult&copy final sz elements of outvec into position
+        for j in range(fastArraySizes[k]-1):
+            mult = fastArray[k,j]
+            for i in range(sz):
+                outvec[off+i] = mult*outvec[endoff+i]
+            off += sz
+
+        #Last element: in-place mult
+        #assert(off == endoff)
+        mult = fastArray[k, fastArraySizes[k]-1]
+        for i in range(sz):
+            outvec[endoff+i] = outvec[endoff+i] * mult
+              # Note: in-place multiplication doesn't compile correctly with complex type
+        sz *= fastArraySizes[k]
+        
+    #assert(sz == N)
+
+
 #Manually inline to avoid overhead of argument passing
 #@cython.boundscheck(False) # turn off bounds-checking for entire function
 #@cython.wraparound(False)  # turn off negative index wrapping for entire function

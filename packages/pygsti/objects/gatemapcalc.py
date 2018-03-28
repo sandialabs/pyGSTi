@@ -77,8 +77,10 @@ class GateMapCalc(GateCalc):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
+            typ = complex if self.unitary_evolution else 'd'
+            scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
+            rho = self.preps[rholabel].toarray(scratch)
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -287,9 +289,12 @@ class GateMapCalc(GateCalc):
         cacheSize = evalTree.cache_size()
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
+
+        #Scratch type (for holding spam/state vectors)
+        typ = complex if self.unitary_evolution else 'd'
         
         if scratch is None:
-            rho_cache = _np.zeros((cacheSize, dim), 'd')
+            rho_cache = _np.zeros((cacheSize, dim), typ)
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache = scratch #to avoid recomputation
@@ -297,8 +302,8 @@ class GateMapCalc(GateCalc):
         #comm is currently ignored
         #TODO: if evalTree is split, distribute among processors
 
-        rho = rhoVec.toarray()
-        Escratch = _np.empty(rho.shape[0],'d') # memory for E.toarray() if it wants it
+        Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
+        rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
         for i in evalTree.get_evaluation_order():
             iStart,remainder,iCache = evalTree[i]
             if iStart is None:  init_state = rho #[:,0]
@@ -329,8 +334,9 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         cacheSize = evalTree.cache_size()
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+        typ = complex if self.unitary_evolution else 'd'
         if scratch is None:
-            rho_cache  = _np.zeros((cacheSize, dim), 'd')
+            rho_cache  = _np.zeros((cacheSize, dim), typ)
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache  = scratch

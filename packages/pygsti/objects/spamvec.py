@@ -1685,7 +1685,10 @@ class TensorProdSPAMVec(SPAMVec):
             # Note: this uses more memory b/c all self.factors.toarray() results
             #  are present in memory at the *same* time - could add a flag to
             #  disable fast-kron-array when memory is extra tight(?).
-            _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
+            if self._complex:
+                _fastcalc.fast_kron_complex(scratch, self._fast_kron_array, self._fast_kron_factordims)
+            else:
+                _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
             return scratch[:,None] if scratch.ndim == 1 else scratch
             
         if self.typ == "prep":
