@@ -41,13 +41,13 @@ def sidak_correction(confidence,numtests):
     return adjusted_confidence
 
 def generalized_bonferroni_correction(confidence, weights, numtests=None,
-                                     nested_method='bonferroni'):
+                                     nested_method='bonferroni',tol=1e-10):
     """
     Todo: docstring
     
     """
     weights = _np.array(weights)
-    assert(_np.sum(weights) == 1.), "Invalid weighting! The weights must add up to 1."
+    assert(np.abs(_np.sum(weights) - 1.)<tol), "Invalid weighting! The weights must add up to 1."
     
     adjusted_confidence = _np.zeros(len(weights),float)
     adjusted_confidence = 1 - (1 - confidence)*weights
