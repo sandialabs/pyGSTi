@@ -13,6 +13,7 @@ import numpy as _np
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
+from ..tools import basistools as _bt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..baseobjs import Basis as _Basis
@@ -1894,4 +1895,200 @@ class TensorProdSPAMVec(SPAMVec):
             # factors are POVMs
             s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].toarray().flatten(), width=4, prec=2)
                              for i,fct in enumerate(self.factors)])
+        return s
+
+
+
+class PureStateSPAMVec(SPAMVec):
+    """
+    Encapsulates a SPAM vector that is completely fixed, or "static", meaning
+      that is contains no parameters.
+    """
+
+    def __init__(self, pure_state_vec, dm_basis='pp'):
+        """
+        Initialize a PureStateSPAMVec object.
+
+        Parameters
+        ----------
+        pure_state_vec : array_like or SPAMVec
+            a 1D numpy array or object representing the pure state.  This object
+            sets the parameterization and dimension of this SPAM vector (if 
+            `pure_state_vec`'s dimension is `d`, then this SPAM vector's
+            dimension is `d^2`).  Assumed to be a complex vector in the 
+            standard computational basis.
+
+        dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for this SPAM vector - that is, for the *density matrix*
+            corresponding to `pure_state_vec`.  Allowed values are Matrix-unit
+            (std),  Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+            (or a custom basis object).
+        """
+        if not isinstance(SPAMVec):
+            pure_state_vec = StaticSPAMVec(pure_state_vec)
+        elif not isinstance(DenseSPAMVec):
+            raise ValueError("Currently can only construct PureStateSPAMVecs from *dense* state vectors")
+        self.pure_state_vec = SPAMVec.convert_to_vector(pure_state_vec)
+        self.basis = dm_basis
+        self._construct_vector()
+        
+        SPAMVec.__init__(self, self.pure_state_vec.dim**2)
+
+    def _construct_vector(self):
+        dmMx_std = _np.dot( self.pure_state_vec, self.pure_state_vec.conjugate().T )
+        dmVec = _bt.change_basis(dmMx_std.flatten(), 'std', self.basis)
+        
+    def set_value(self, vec):
+        """
+        Attempts to modify SPAMVec parameters so that the specified raw
+        SPAM vector becomes vec.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            A numpy array representing a SPAM vector, or a SPAMVec object.
+
+        Returns
+        -------
+        None
+        """
+        self.pure_state_vec.set_value(vec)
+        self.dirty = True
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Cannot transform a PureStateSPAMVec")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a PureStateSPAMVec")
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return self.pure_state_vec.num_params()
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return self.pure_state_vec.to_vector()
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        self.pure_state_vec.from_vector(v)
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
+        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        raise NotImplementedError("Still need to work out derivative calculation of PureStateSPAMVec")
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return self.pure_state_vec.has_nonzero_hessian()
+
+
+    def copy(self, parent=None):
+        """
+        Copy this SPAM vector.
+
+        Returns
+        -------
+        StaticSPAMVec
+            A copy of this SPAM operation.
+        """
+        return self._copy_gpindices( PureStateSPAMVec(self.pure_state_vec, self.basis), parent )
+
+
+    def __str__(self):
+        s = "Pure-state spam vector with length %d holding:\n" % self.dim
+        s += "  " + str(self.pure_state_vec)
         return s

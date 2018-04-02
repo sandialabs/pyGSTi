@@ -372,6 +372,10 @@ class Gate(_gatesetmember.GateSetMember):
         """ Act this gate map on an input state """
         raise NotImplementedError("acton(...) not implemented!")
 
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        raise NotImplementedError("acton(...) not implemented!")
+
     def transform(self, S):
         """ Update gate G with inv(S) * G * S."""
         raise NotImplementedError("This gate cannot be transform()'d")
@@ -449,6 +453,10 @@ class GateMatrix(Gate):
     def acton(self, state):
         """ Act this gate matrix on an input state (left-multiply w/matrix) """
         return _np.dot(self.base, state) #TODO: return a SPAMVec?
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        return _np.dot(self.base.conjugate().T, state) #TODO: return a SPAMVec?
 
     def frobeniusdist2(self, otherGate, transform=None, inv_transform=None):
         """ 
@@ -2435,7 +2443,7 @@ class LindbladBase(object):
 
         if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
             self.other_basis = _Basis(nonham_basis,d,sparse=self.sparse)
-        else: # ham_basis is a list of matrices
+        else: # nonham_basis is a list of matrices
             self.other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=self.sparse)
         
         self.matrix_basis = _Basis(mxBasis,d,sparse=self.sparse)
@@ -2979,6 +2987,11 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        # adj( exp(errgen)*U ) = adj(U) * adj(exp(errgen)) ...
+        raise NotImplementedError("No adjoint action implemented for LindbladParameterizedGateMaps")
 
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
@@ -4713,6 +4726,11 @@ class ComposedGateMap(GateMap):
             state = gate.acton(state)
         return state
 
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate matrix on an input state """
+        for gate in reversed(self.factorgates):
+            state = gate.adjoint_acton(state)
+        return state
 
     def as_sparse_matrix(self):
         """ Return the gate as a sparse matrix """
@@ -5056,16 +5074,24 @@ class EmbeddedGateMap(GateMap):
 
     def _set_acton(self):
         """ Set the self.acton() method """
-        #Set self.acton appropriately:
+        #Set self.acton and self.adjoint_action appropriately:
+        # NOTE: there are only several cases of fast adjoint_acton's that
+        #       are implemented so far (FUTURE UPDATE?)
         if _fastcalc is None:
             self.acton = self._slow_acton
+            self.adjoint_acton = self._slow_adjoint_acton
         elif isinstance(self.embedded_gate, LindbladParameterizedGateMap) and \
              self.embedded_gate.sparse and self.embedded_gate.unitary_postfactor is None:
             self.acton = self._fast_acton_sp1 if self.mode == "superop" \
                          else self._fast_acton_sp1_complex # "special case #1"
+            self.adjoint_action = self._slow_adjoint_acton if self.mode == "superop" \
+                         else self._fast_adjoint_acton_complex # NO SPECIAL case implemented
         elif isinstance(self.embedded_gate, GateMatrix):
             self.acton = self._fast_acton_sp2 if self.mode == "superop" \
                          else self._fast_acton_sp2_complex # "special case #2"
+            self.adjoint_action = self._slow_adjoint_acton if self.mode == "superop" \
+                         else self._fast_adjoint_acton_sp2_complex # "special case #2"
+
         else:
             #DEBUG TO REMOVE
             #if not isinstance(self.embedded_gate, LindbladParameterizedGateMap):
@@ -5078,7 +5104,8 @@ class EmbeddedGateMap(GateMap):
             #    print("Can't use special case for some other reason (????)")
             self.acton = self._fast_acton if self.mode == "superop" \
                          else self._fast_acton_complex
-            
+            self.acton = self._slow_adjoint_acton if self.mode == "superop" \
+                         else self._fast_adjoint_acton_complex
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see gatesetmember implementation)
@@ -5202,29 +5229,22 @@ class EmbeddedGateMap(GateMap):
              "method *should* have been replaced by an appropriate "
              "implementation based on Cython availability")) # pragma: no cover
 
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        raise NotImplementedError(
+            ("EmbeddedGateMap not intialized properly, as this adjoint_acton(...) "
+             "method *should* have been replaced by an appropriate "
+             "implementation based on Cython availability")) # pragma: no cover
+
     
     def _slow_acton(self, state):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, state.dtype)
         offset = 0 #if relToBlock else self.offset (relToBlock == False here)
         
-        #LATER: Maybe a faster way for dense mxs based on this, which is very slow:
-        #if isinstance(self.embedded_gate, GateMatrix):
-        #    embedded_base = self.embedded_gate.base
-        #
-        #    #SLOWEST
-        #    #act on active block as: w[i] = sum_j offset_gateBlk[i,j] * v[j]
-        #    for i,j,gi,gj in self._iter_matrix_elements():
-        #        output_state[i] += embedded_base[gi,gj] * state[j]
-        #
-        #else:
-
-        # SLOW (but in pure python)
         for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
             vec_index_noop = _np.dot(self.multipliers, tuple(b))
             inds = []
-            #for gate_i in range(self.embedded_gate.dim):
-            #    gate_b = self._decomp_gate_index(gate_i) # gate_b? are lists of dm basis indices, one index per
             for gate_b in _itertools.product(*self.basisInds_action):
                 vec_index = vec_index_noop
                 for i,bInd in zip(self.actionInds,gate_b):
@@ -5232,6 +5252,29 @@ class EmbeddedGateMap(GateMap):
                     vec_index += self.multipliers[i]*bInd
                 inds.append(offset + vec_index)
             output_state[ inds ] += self.embedded_gate.acton( state[inds] )
+
+        #act on other blocks trivially:
+        self._acton_other_blocks_trivially(output_state,state)
+
+        assert(output_state.shape == state.shape)
+        return output_state
+
+    def _slow_adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        #NOTE: Same as _slow_acton except uses 'adjoint_acton(...)' below
+        output_state = _np.zeros( state.shape, state.dtype)
+        offset = 0 #if relToBlock else self.offset (relToBlock == False here)
+
+        for b in _itertools.product(*self.basisInds_noop_blankaction): #zeros in all action-index locations
+            vec_index_noop = _np.dot(self.multipliers, tuple(b))
+            inds = []
+            for gate_b in _itertools.product(*self.basisInds_action):
+                vec_index = vec_index_noop
+                for i,bInd in zip(self.actionInds,gate_b):
+                    #b[i] = bInd #don't need to do this; just update vec_index:
+                    vec_index += self.multipliers[i]*bInd
+                inds.append(offset + vec_index)
+            output_state[ inds ] += self.embedded_gate.adjoint_acton( state[inds] )
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state,state)
@@ -5348,6 +5391,40 @@ class EmbeddedGateMap(GateMap):
         output_state = _np.zeros( state.shape, complex)
         _fastcalc.embedded_fast_acton_sparse_complex(
             self.embedded_gate.acton,
+            output_state[:,0], state[:,0],
+            self.noop_incrementers,
+            self.numBasisEls_noop_blankaction,
+            self.baseinds)
+                                 
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            self._acton_other_blocks_trivially(output_state,state)
+        return output_state
+
+
+    def _fast_adjoint_acton_sp2_complex(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, complex)
+                
+        #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
+        _fastcalc.embedded_fast_acton_sparse_spc2_complex(
+            self.embedded_gate.base.conjugate().T,
+            output_state[:,0], state[:,0],
+            self.noop_incrementers,
+            self.numBasisEls_noop_blankaction,
+            self.baseinds)
+
+        #act on other blocks trivially:
+        if self.nBasisBlocks > 1:
+            self._acton_other_blocks_trivially(output_state,state)
+        return output_state
+
+
+    def _fast_adjoint_acton_complex(self, state):
+        """ Act this gate map on an input state """
+        output_state = _np.zeros( state.shape, complex)
+        _fastcalc.embedded_fast_acton_sparse_complex(
+            self.embedded_gate.adjoint_acton,
             output_state[:,0], state[:,0],
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
@@ -6272,3 +6349,390 @@ class EmbeddedCliffordGate(Gate):
              % (self.embedded_gate.dim, str(self.targetLabels))
         s += str(self.embedded_gate)
         return s
+
+
+# STRATEGY:
+# - maybe create an abstract base TermGate class w/get_order_terms(...) function?
+# - Note: if/when terms return a *polynomial* coefficient the poly's 'variables' should
+#    reference the *global* GateSet-level parameters, not just the local gate ones.
+# - create an EmbeddedTermGate class to handle embeddings, which holds a
+#    LindbladTermGate (or other in the future?) and essentially wraps it's
+#    terms in EmbeddedGateMap or EmbeddedClifford objects.
+# - similarly create an ComposedTermGate class...
+# - so LindbladTermGate doesn't need to deal w/"kite-structure" bases of terms;
+#    leave this to some higher level constructor which can create compositions
+#    of multiple LindbladTermGates based on kite structure (one per kite block).
+
+        #OLD - when we were going to try to process embedded gates and kite-structure here -- maybe use somewhere else...
+        ##try to find block-structure of "other" terms when nonham_diagonal_only == False
+        #lblDict = OrderedDict()
+        #if not nonham_diagonal_only:
+        #    #Pass 1: get number of different basis elements used and assign an index to each
+        #    for termLbl,coeff in Ltermdict.items():
+        #        if termType == "S": # Stochastic
+        #            assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+        #            if termLbl[1] not in lblDict:
+        #                lblDict[termLbl[1]] = nextIndx; nextIndx += 1
+        #            if termLbl[2] not in lblDict:
+        #                lblDict[termLbl[2]] = nextIndx; nextIndx += 1
+        #
+        #    #Pass 2: fill in which off-diagonal terms are present
+        #    coeffsPresent = _np.zeros((nextIndx,nextIndx),dtype=bool)
+        #    for termLbl,coeff in Ltermdict.items():
+        #        if termType == "S": # Stochastic
+        #            coeffsPresent[ lblDict[termLbl[1]], lblDict[termLbl[2]] ] = True # maybe order these so only upper triangle is filled?
+        #    
+        #
+        ## go through lindblad terms and figure out how many parameters we need
+        #hamParams = []; numHamParams = 0
+        #otherParams = []; numOtherParams = 0
+        #otherParamBlks = [] # list of ints, one per full *block* of "other" params (when nonham_diagonal_only == False)
+        #for termLbl,coeff in Ltermdict.items():
+        #    termType = termLbl[0]
+        #    if termType == "H": # Hamiltonian
+        #        assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
+        #        numHamParams += 1
+        #        hamParams.append(coeff)
+        #    elif termType == "S": # Stochastic
+        #        if nonham_diagonal_only:
+        #            assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
+        #        
+        #        else:
+        #            assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+        #            coeffsPresent[ termLbl[1]],termLbl[2] ] = True
+        #            
+        #            Lm, Ln = basisDict[termLbl[1]],basisDict[termLbl[2]]
+
+
+class TermGate(Gate):
+    pass
+
+class EmbeddedTermGate(TermGate):
+    pass
+
+class ComposedTermGate(TermGate):
+    pass
+
+class LindbladTermGate(TermGate):
+    """ A Lindblad-parameterized gate that is expandable into terms """
+
+    # TODO: init & basis specification; maybe breakout an OrderedTermGate base class?
+
+    def __init__(self, dim, baseunitary=None, Lterms=None, cptp=True, nonham_diagonal_only=False, max_order=1, paramvals=None)
+        """
+        Initialize a LindbladTermGateBase object.
+        TODO: docstring
+        """
+        self.cptp = cptp
+        self.nonham_diagonal_only = nonham_diagonal_only
+        self.max_order = max_order
+
+        #create terms for each order from Lterms and base action -- MAYBE move this to __init__ and pass init Lterms?
+        terms[0] = RankOneTerm(1.0, baseunitary, baseunitary.conjugate().T)
+        for order in range(max_order): # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
+            # expand 1/n! L^n into a list of rank-1 terms
+            pass # TODO - fill self.terms
+
+        Gate.__init__(self, dim) #sets self.dim
+                
+
+    @classmethod
+    def from_error_generator(cls, baseunitary, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
+                             nonham_diagonal_only=False, truncate=True, mxBasis="pp", max_order=1):
+        # This looks like a from_errgen constructor; we want a from_rates constructor that
+        # takes a dict(?) of rate coeffs (0 by default) associated with lindblad terms (ham_i terms and other_ij terms...)
+        # --> add same construction methods to other lindblad gates, which currently just have "from_errgen"-type __init__ functions?
+        """
+        TODO: docstring (similar to other Lindblad gates above)
+        """
+
+        d2 = errgen.shape[0]
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+        
+        #Determine whether we're using sparse bases or not
+        sparse = None
+        if ham_basis is not None:
+            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
+            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
+            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
+        if sparse is None and nonham_basis is not None:
+            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
+            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
+            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
+        if sparse is None: sparse = False #the default
+
+        #Get matrices (possibly sparse ones) from the bases
+        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
+            ham_basis = _Basis(ham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
+        
+        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
+            other_basis = _Basis(nonham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
+        
+        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
+
+        
+        hamC, otherC = \
+            _gt.lindblad_errgen_projections(
+                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
+                return_generators=False, other_diagonal_only=nonham_diagonal_only,
+                sparse=sparse)
+
+        Ltermdict = {}; basisdict = {}
+        
+        ham_mxs = ham_basis.get_composite_matrices()
+        assert(len(ham_mxs[1:]) == len(hamC))
+        nextLbl = 0
+        for coeff, bmx in zip(hamC,ham_mxs[1:]): # skip identity
+            Ltermdict[('H',nextLbl)] = coeff
+            basisdict[nextLbl] = bmx
+            nextLbl += 1
+            
+        other_mxs = other_basis.get_composite_matrices()
+        if nonham_diagonal_only:
+            assert(len(other_mxs[1:]) == len(otherC))
+            for coeff, bmx in zip(otherC,other_mxs[1:]): # skip identity
+                Ltermdict[('S',nextLbl)] = coeff
+                basisdict[nextLbl] = bmx
+                nextLbl += 1
+        else:
+            off = nextLbl
+            for i,bmx in enumerate(other_mxs[1:]): # skip identity
+                basisdict[i+off] = bmx
+            nextLbl += len(other_mxs[1:]) # not really needed since we're done adding labels now
+                
+            assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherC.shape)
+            for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
+                for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
+                    Ltermdict[('S',i+off,j+off)] = coeff
+
+        cls.from_lindblad_terms(baseunitary, Ltermdict, basisdict, max_order,
+                                None, cptp, nonham_diagonal_only) # stateSpaceLabels=None b/c doesn't use embedded labels.
+
+
+
+        
+    @classmethod
+    def from_lindblad_terms(cls, baseunitary, Ltermdict, basisdict=None, max_order=1,
+                            stateSpaceLabels=None, cptp=True, nonham_diagonal_only=False, truncate=True):
+        """
+        TODO: docstring
+        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
+        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
+                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
+         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
+                 format when can assume single-letter labels.
+        """
+
+        #Enumerate the basis elements used for Hamiltonian and Stochasitic
+        # error terms (separately)
+        hamBasisLabels = OrderedDict()  # holds index of each basis element
+        otherBasisLabels = OrderedDict()
+        for termLbl,coeff in Ltermdict.items():
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
+                if termLbl[1] not in hamBasisLabels:
+                    hamBasisLabels[ termLbl[1] ] = len(hamBasisLabels)
+                    
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only == 'auto':
+                    nonham_diagonal_only = bool(len(termLbl) == 2)
+                    
+                if nonham_diagonal_only:
+                    assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
+                    if termLbl[1] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                else:
+                    assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                    if termLbl[1] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                    if termLbl[2] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[2] ] = len(otherBasisLabels)
+
+        #Get parameter counts based on # of basis elements
+        numHamParams = len(hamBasisLabels)
+        if nonham_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisLabels) == 0
+            numOtherParams = len(otherBasisLabels)
+        else:
+            numOtherBasisEls = len(otherBasisLabels)
+            numOtherParams = numOtherBasisEls**2
+            otherCoeffs = _np.zeros((numOtherParams,numOtherParams),'complex')
+        nTotalParams = numHamParams + numOtherParams
+
+
+        #Create & fill parameter array
+        params = _np.zeros(nTotalParams, 'd') # ham params, then "other"
+        for termLbl,coeff in Ltermdict.items():
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                params[k] = coeff
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only:
+                    k = numHamParams + hamBasisLabels[termLbl[1]] #index of parameter
+                    assert(abs(_np.imag(coeff)) < IMAG_TOL)
+                    if self.cptp:
+                        params[k] = _np.sqrt(_np.real_if_close(coeff))
+                    else:
+                        params[k] = _np.real_if_close(coeff)
+                else:
+                    k = hamBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = hamBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    otherCoeffs[k,j] = coeff
+                    
+        if not nonham_diagonal_only:
+            #Finish up filling parameters for "other" terms - need to take
+            # cholesky decomp of otherCoeffs matrix:
+            otherParams = _np.empty((numOtherBasisEls,numOtherBasisEls),'d')
+
+            #ROBIN: is this necessary? -- or just need otherCoeffs to be positive semidefinite?
+            assert(_np.isclose(_np.linalg.norm(otherCoeffs-otherCoeffs.T.conjugate())
+                               ,0)), "other coeff mx is not Hermitian!"
+
+            if self.cptp: #otherParams mx stores Cholesky decomp
+    
+                #push any slightly negative evals of otherC positive so that
+                # the Cholesky decomp will work.
+                evals,U = _np.linalg.eig(otherCoeffs)
+                Ui = _np.linalg.inv(U)
+    
+                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+                    "Given error germs are not CPTP (truncate == False)!"
+    
+                pos_evals = evals.clip(1e-16,1e100)
+                otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                try:
+                    Lmx = _np.linalg.cholesky(otherCoeffs)
+
+                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                except _np.linalg.LinAlgError:                              # pragma: no cover
+                    pos_evals = evals.clip(1e-12,1e100)                     # pragma: no cover
+                    otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
+                    Lmx = _np.linalg.cholesky(otherCoeffs)                  # pragma: no cover
+    
+                for i in range(numOtherParams):
+                    assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = Lmx[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = Lmx[i,j].real
+                        otherParams[j,i] = Lmx[i,j].imag
+    
+            else: #otherParams mx stores otherC (hermitian) directly
+                for i in range(bsO-1):
+                    assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = otherC[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = otherC[i,j].real
+                        otherParams[j,i] = otherC[i,j].imag
+
+            params[numHamParams:] = otherParams.flatten()
+
+        
+        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
+        # coeffs (w/ *local* variable indices) that get converted to per-order
+        # terms later.
+        IDENT = None # sentinel for the do-nothing identity op
+        Lterms = []
+        for termLbl,coeff in Ltermdict.items():
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                Lterms.append( RankOneTerm(Polynomial( nTotalParams, {(k,): 1j} ), basisDict[termLbl[1]], IDENT) )
+                Lterms.append( RankOneTerm(Polynomial( nTotalParams, {(k,): -1j} ), IDENT, basisDict[termLbl[1]]) )
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only:
+                    k = numHamParams + hamBasisLabels[termLbl[1]] #index of parameter
+                    Lm = Ln = basisDict[termLbl[1]]
+                    pw = 2 if self.cptp else 1 # power to raise parameter to in order to get coeff
+
+                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Lterms.append( RankOneTerm(Polynomial( nTotalParams, {(k,)*pw:  1.0} ), Ln, Lm_dag) )
+                    Lterms.append( RankOneTerm(Polynomial( nTotalParams, {(k,)*pw: -0.5} ), IDENT, _np.dot(Lm_dag,Ln) ) )
+                    Lterms.append( RankOneTerm(Polynomial( nTotalParams, {(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
+                else:
+                    i = hamBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = hamBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    Lm, Ln = basisDict[termLbl[1]],basisDict[termLbl[2]]
+
+                    # TODO: create these polys and place below...
+                    if self.cptp:
+                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
+                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
+                        def iRe(a,b): return numHamParams + (a*numOtherParams + b)
+                        def iIm(a,b): return numHamParams + (b*numOtherParams + a)
+                        polyTerms = {}
+                        for k in range(0,min(i,j)):
+                            if k <= i and k <= j:
+                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
+                            if k <= i and k < j:
+                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
+                            if k < i and k <= j:
+                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
+                            if k < i and k < j:
+                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
+                        base_poly = Polynomial(nTotalParams, polyTerms)
+                                        
+                    Lm_dag = Lm.conjugate().T
+                    Lterms.append( RankOneTerm(1.0*base_poly, Ln, Lm_dag) )
+                    Lterms.append( RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Lm_dag,Ln) ) )
+                    Lterms.append( RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT ) )
+
+                #TODO: check normalization of these terms vs those used in projections.
+
+        return cls(d2, cptp, nonham_diagonal_only, max_order, Lterms, params)
+        
+
+        
+
+    def get_order_terms(self, order):
+        assert(order <= self.max_order)
+        return self.terms[order]
+        
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this gate.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        self._construct_errgen()
+        self.dirty = True
