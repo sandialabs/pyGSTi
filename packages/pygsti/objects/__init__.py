@@ -32,6 +32,7 @@ from .gate import ComposedGateMap
 from .gate import ComposedGate
 from .gate import CliffordGate
 from .gate import EmbeddedCliffordGate
+from .gate import LindbladTermGate
 from .spamvec import SPAMVec
 from .spamvec import DenseSPAMVec
 from .spamvec import FullyParameterizedSPAMVec

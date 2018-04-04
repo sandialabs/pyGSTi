@@ -7,12 +7,74 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 
+def compose_terms(terms):
+    if len(terms) == 0: return RankOneTerm(1.0,None,None)
+    ret = terms[0].copy()
+    for t in terms[1:]:
+        ret.compose(t)
+    return ret
+
+def exp_terms(terms, orders, postunitary=None):
+    """ postunitary is "post" in the matrix-order sense,
+        which means it's applied *first* """ 
+    #create terms for each order from Lterms and base action
+    terms = {}
+    if postunitary is not None:
+        Uterm_tup = ( RankOneTerm(1.0, postunitary, postunitary), )
+    else: Uterm_tup = ()
+    
+    for order in orders: # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
+        if order == 0:
+            terms[order] = list(Uterm_tup); continue
+            
+        # expand 1/n! L^n into a list of rank-1 terms
+        termLists = [Lterms]*order
+        terms[order] = []
+        for factors in _itertools.product(*termLists):
+            terms[order].append( 1/_np.factorial(order) * composeTerms(Uterm_tup + factors) ) # apply Uterm first
+            
+    return terms
+
+
 
 class RankOneTerm(object):
     def __init__(self, coeff, pre_op, post_op):
+        """ TODO docstring
+        NOTE: the post_ops hold the *adjoints* of the actual post-rho-operators, so that
+        evolving a bra with the post_ops can be accomplished by flipping the bra -> ket and
+        applying the stored adjoints in the order stored in self.post_ops (similar to 
+        acting with pre_ops in-order on a ket
+        """
         self.coeff = coeff # potentially a Polynomial
-        self.pre_op = pre_op
-        self.post_op = post_op
+        self.pre_ops = [] # list of ops to perform - in order of operation to a ket
+        self.post_ops = [] # list of ops to perform - in order of operation to a bra
+        if pre_op is not None: self.pre_ops.append(pre_op)
+        if post_op is not None: self.post_ops.append(post_op)
+
+    def __mul__(self,x):
+        """ Multiply by scalar """
+        ret = self.copy()
+        self.coeff *= x
+        return ret
+    
+    def __rmul__(self, x):
+        return self.__mul__(x)
+        
+    def compose(self, term):
+        """ 
+        Compose with `term`, which since it occurs to the *right*
+        of this term, is applied *after* this term.
+        """
+        self.coeff *= term.coeff
+        self.pre_ops.extend(term.pre_ops)
+        self.post_ops.extend(term.post_ops)
+
+    def copy(self):
+        copy_of_me = RankOneTerm(self.coeff.copy(), None, None)
+        copy_of_me.pre_ops = self.pre_ops[:]
+        copy_of_me.post_ops = self.post_ops[:]
+        return copy_of_me
+        
         
 
 
