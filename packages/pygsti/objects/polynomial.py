@@ -75,7 +75,7 @@ class Polynomial(dict):
             newpoly = Polynomial(self.num_variables)
             for k1,v1 in self.items():
                 for k2,v2 in x.items():
-                    k = sorted(k1+k2)
+                    k = tuple(sorted(k1+k2))
                     if k in newpoly: newpoly[k] += v1*v2
                     else: newpoly[k] = v1*v2 
         else: # assume a scalar that can multiply values

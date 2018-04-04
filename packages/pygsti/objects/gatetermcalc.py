@@ -16,6 +16,7 @@ import operator as _operator
 from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
+from ..tools import listtools as _lt
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .mapevaltree import MapEvalTree as _MapEvalTree
@@ -87,7 +88,7 @@ class GateTermCalc(GateCalc):
         #No support for "custom" spamlabel stuff here
         return rho,Es
 
-    def propagate_state(self, rho, factors, adjoint):
+    def propagate_state(self, rho, factors, adjoint=False):
         # TODO UPDATE
         """ 
         State propagation by GateMap objects which have 'acton'
@@ -148,7 +149,7 @@ class GateTermCalc(GateCalc):
         
         p = 0 # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(max_order):
-            for p in partition_into(order, len(gatestring)):
+            for p in _lt.partition_into(order, len(gatestring)):
                 factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
                 for factors in _itertools.product(*factor_lists):
                     coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
@@ -156,26 +157,28 @@ class GateTermCalc(GateCalc):
                     pRight = self.unitary_sim(rho,E, factors, 'post') \
                              if not self.unitary_evolution else 1
                     p += coeff * pLeft * pRight
+
+        if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )        
         return p
 
     def unitary_sim(self, rho, E, complete_factors, typ):
-        factors = None
+        ops = None
         if typ == 'pre':
-            factors = [f.pre_op  for f in complete_factors]
+            ops = list(_itertools.chain(*[f.pre_ops for f in complete_factors]))
             adjoint = False
 
         elif typ == 'post':
-            factors = [f.post_op for f in complete_factors]
+            ops = list(_itertools.chain(*[f.post_ops for f in complete_factors]))
             adjoint = True # need to act w/adjoint
 
-        assert(factors is not None), "Logic Error!"
+        assert(ops is not None), "Logic Error!"
         
         if not self.unitary_evolution:
             # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
             rho = rho.pure_state_vec
             E = E.pure_state_vec
             
-        rho = self.propagate_state(rho, factors, adjoint)
+        rho = self.propagate_state(rho, ops) #, adjoint)  # UPDATE: no need b/c terms old adjoints in post_ops 
         ampl = complex(_np.dot(E.conjugate().T,rho))**2) # Assumes dense state/POVM vecs
         if adjoint: ampl = _np.conjugate(ampl)
         return ampl

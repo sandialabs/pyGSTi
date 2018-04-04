@@ -13,57 +13,11 @@ import itertools as _itertools
 from scipy.sparse.csgraph import floyd_warshall as _fw
 
 from ..tools import symplectic as _symp
+from ..tools import listtools as _lt
 from .label import Label as _Label
 from .circuit import Circuit as _Circuit
 
 
-def sorted_partitions(n):
-    """ Interator over all sorted (decreasing) partitions of integer n """
-
-    p = _np.zeros(n,'i')
-    k = 0    # Index of last element in a partition
-    p[k] = n # Initialize first partition as number itself
- 
-    # This loop first yields current partition, then generates next
-    # partition. The loop stops when the current partition has all 1s
-    while True:
-        yield p[0:k+1]
- 
-        # Find the rightmost non-one value in p[]. Also, update the
-        # rem_val so that we know how much value can be accommodated
-        rem_val = 0;
-        while k >= 0 and p[k] == 1:
-            rem_val += p[k]
-            k -= 1
- 
-        # if k < 0, all the values are 1 so there are no more partitions
-        if k < 0: return
- 
-        # Decrease the p[k] found above and adjust the rem_val
-        p[k] -= 1
-        rem_val += 1
- 
-        # If rem_val is more, then the sorted order is violated.  Divide
-        # rem_val in different values of size p[k] and copy these values at
-        # different positions after p[k]
-        while rem_val > p[k]:
-            p[k+1] = p[k]
-            rem_val -= p[k]
-            k += 1
- 
-        # Copy rem_val to next position and increment position
-        p[k+1] = rem_val
-        k += 1
-
-def partitions(n):
-    """ Interator over all partitions of integer n """
-    for p in sorted_partitions(n):
-        previous = tuple()
-        for pp in _itertools.permutations(p):
-            if pp > previous: # only *unique* permutations
-                previous = pp # (relies in itertools implementatin detail that
-                yield pp      # any permutations of a sorted iterable are in
-                # sorted order unless they are duplicates of prior permutations
 
 class CompilationError(Exception):
     pass
@@ -212,7 +166,7 @@ class CompilationLibrary(_collections.OrderedDict):
         all_layers = []
 
         #Loop over all partitions of the nqubits
-        for p in partitions(nqubits):
+        for p in _lt.partitions(nqubits):
             pi = _np.concatenate(([0],_np.cumsum(p)))
             to_iter_over = [ available_glabels_by_qubit[tuple(range(pi[i],pi[i+1]))] for i in range(len(p)) ]
             for gls_in_layer in _itertools.product(*to_iter_over):

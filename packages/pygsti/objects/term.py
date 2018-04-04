@@ -6,6 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import numpy as _np
+import itertools as _itertools
+import numbers as _numbers
 
 def compose_terms(terms):
     if len(terms) == 0: return RankOneTerm(1.0,None,None)
@@ -17,23 +20,23 @@ def compose_terms(terms):
 def exp_terms(terms, orders, postunitary=None):
     """ postunitary is "post" in the matrix-order sense,
         which means it's applied *first* """ 
-    #create terms for each order from Lterms and base action
-    terms = {}
+    #create terms for each order from terms and base action
+    final_terms = {}
     if postunitary is not None:
         Uterm_tup = ( RankOneTerm(1.0, postunitary, postunitary), )
     else: Uterm_tup = ()
-    
+
     for order in orders: # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
         if order == 0:
-            terms[order] = list(Uterm_tup); continue
+            final_terms[order] = list(Uterm_tup[0]); continue
             
         # expand 1/n! L^n into a list of rank-1 terms
-        termLists = [Lterms]*order
-        terms[order] = []
+        termLists = [terms]*order
+        final_terms[order] = []
         for factors in _itertools.product(*termLists):
-            terms[order].append( 1/_np.factorial(order) * composeTerms(Uterm_tup + factors) ) # apply Uterm first
+            final_terms[order].append( 1/_np.math.factorial(order) * compose_terms(Uterm_tup + factors) ) # apply Uterm first
             
-    return terms
+    return final_terms
 
 
 
@@ -70,7 +73,9 @@ class RankOneTerm(object):
         self.post_ops.extend(term.post_ops)
 
     def copy(self):
-        copy_of_me = RankOneTerm(self.coeff.copy(), None, None)
+        coeff = self.coeff if isinstance(self.coeff, _numbers.Number) \
+                else self.coeff.copy()
+        copy_of_me = RankOneTerm(coeff, None, None)
         copy_of_me.pre_ops = self.pre_ops[:]
         copy_of_me.post_ops = self.post_ops[:]
         return copy_of_me

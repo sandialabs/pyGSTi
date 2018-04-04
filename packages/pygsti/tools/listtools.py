@@ -152,6 +152,68 @@ def find_replace_tuple_list(list_of_tuples,aliasDict):
     return [ find_replace_tuple(t,aliasDict) for t in list_of_tuples ]
 
 
+def sorted_partitions(n):
+    """ TODO: docstring
+    Iterator over all sorted (decreasing) partitions of integer n """
+
+    p = _np.zeros(n,'i')
+    k = 0    # Index of last element in a partition
+    p[k] = n # Initialize first partition as number itself
+ 
+    # This loop first yields current partition, then generates next
+    # partition. The loop stops when the current partition has all 1s
+    while True:
+        yield p[0:k+1]
+ 
+        # Find the rightmost non-one value in p[]. Also, update the
+        # rem_val so that we know how much value can be accommodated
+        rem_val = 0;
+        while k >= 0 and p[k] == 1:
+            rem_val += p[k]
+            k -= 1
+ 
+        # if k < 0, all the values are 1 so there are no more partitions
+        if k < 0: return
+ 
+        # Decrease the p[k] found above and adjust the rem_val
+        p[k] -= 1
+        rem_val += 1
+ 
+        # If rem_val is more, then the sorted order is violated.  Divide
+        # rem_val in different values of size p[k] and copy these values at
+        # different positions after p[k]
+        while rem_val > p[k]:
+            p[k+1] = p[k]
+            rem_val -= p[k]
+            k += 1
+ 
+        # Copy rem_val to next position and increment position
+        p[k+1] = rem_val
+        k += 1
+
+def partitions(n):
+    """ TODO: docstring Interator over all partitions of integer n """
+    for p in sorted_partitions(n):
+        previous = tuple()
+        for pp in _itertools.permutations(p[::-1]): # flip p so it's in *ascending* order
+            if pp > previous: # only *unique* permutations
+                previous = pp # (relies in itertools implementatin detail that
+                yield pp      # any permutations of a sorted iterable are in
+                # sorted order unless they are duplicates of prior permutations
+
+
+def partition_into(n, nbins):
+    """ Interator over all partitions of integer n into `nbins` bins """
+    for p in sorted_partitions(n):
+        if len(p) > nbins: continue # don't include partitions of length > nbins
+        previous = tuple()
+        p = _np.concatenate( (p, (0,)*(nbins-len(p))) ) # pad with zeros
+        for pp in _itertools.permutations(p[::-1]):
+            if pp > previous: # only *unique* permutations 
+                previous = pp # (relies in itertools implementatin detail that
+                yield pp      # any permutations of a sorted iterable are in
+                # sorted order unless they are duplicates of prior permutations      
+
 
 # ------------------------------------------------------------------------------
 # Machinery initially designed for an in-place take operation, which computes

@@ -6744,9 +6744,8 @@ class LindbladTermGate(TermGate):
 
     def get_order_terms(self, order):
         if order not in self.terms:
-            terms[order] = _terms.exp_terms(self.Lterms, [order], self.baseunitary)
+            self.terms[order] = _term.exp_terms(self.Lterms, [order], self.baseunitary)[order]
         return self.terms[order]
-
     
     def num_params(self):
         """
