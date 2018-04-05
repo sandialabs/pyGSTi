@@ -55,7 +55,11 @@ class ProcessorSpec(object):
         self.number_of_qubits = nQubits
         self.root_gate_names = gate_names
         self.nonstd_gate_unitaries = None if (nonstd_gate_unitaries is None) \
-                                     else nonstd_gate_unitaries.copy()        
+                                     else nonstd_gate_unitaries.copy()
+        # Add in the gate names of the nonstd gates
+        if self.nonstd_gate_unitaries != None:
+            self.root_gate_names += list(self.nonstd_gate_unitaries.keys())
+            
         self.availability = None if (availability is None) \
                             else availability.copy()
 
