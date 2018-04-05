@@ -158,12 +158,12 @@ def sample_circuit_layer_of_1Q_gates(pspec, gtype = 'primitives'):
 
     return sampled_layer
 
-def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5},
+def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.5,None,'single'],
                               alternatewithlocal = False, localtype = 'primitives'):
     
     if sampler == 'weights':
-        two_qubit_weighting = sampler_args['two_qubit_weighting']
-               
+        two_qubit_weighting = sampler_args[0]
+                       
         gates1q = list(pspec.models['clifford'].gates.keys())
         gates2q = list(pspec.models['clifford'].gates.keys())
         d = len(gates1q)   
@@ -174,8 +174,20 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
                  del gates2q[d-1-i]
         
     elif sampler == 'sectors':
-        two_qubit_prob = sampler_args['two_qubit_prob']
-        sectors = sampler_args['sectors']
+        
+        twoqubitprob = sampler_args[0]
+        customsectors = sampler_args[1]
+        stdsectors = sampler_args[2]
+        
+        if customsectors is not None:
+            sectors = customsectors
+        else:
+            assert(stdsectors == 'single')
+            
+            sectors = []           
+            for gate in pspec.models['clifford'].gates:
+                if gate.number_of_qubits == 2:
+                    sectors.append([gate,])
                        
     circuit = _cir.Circuit(gatestring=[],num_lines=pspec.number_of_qubits)
     
@@ -188,7 +200,7 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
                                                             two_qubit_weighting=two_qubit_weighting)
             
             elif sampler == 'sectors':
-                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=two_qubit_prob)
+                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob)
             else:
                 layer = sampler(pspec, length, sampler_args)
             
@@ -218,7 +230,7 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
     return circuit
 
 
-def sample_prb_circuit(pspec, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
+def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'single'],  
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
                          alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
                        iterations=1,relations=None):

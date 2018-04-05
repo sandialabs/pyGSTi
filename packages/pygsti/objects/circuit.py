@@ -669,7 +669,7 @@ class Circuit(_gstr.GateString):
         
         def single_qubit_gate_combined(glabel_1,glabel_2):
             # Combines two gate labels, using the provided rules on how the labels combine.
-            assert((glabel_1,glabel_2) in list(gate_relations.keys())), "Gate relations provided are invalid!"  
+            assert((glabel_1,glabel_2) in list(gate_relations.keys())), "Gate relations provided are invalid! Does not contain the required relations for {} and {}".format(glabel_1,glabel_2)  
             return gate_relations[glabel_1,glabel_2]
         
         # Loop through all the qubits
