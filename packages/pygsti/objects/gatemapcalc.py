@@ -79,7 +79,7 @@ class GateMapCalc(GateCalc):
             rholabel,elabel = spamTuple
             typ = complex if self.unitary_evolution else 'd'
             scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
-            rho = self.preps[rholabel].toarray(scratch)
+            rho = self.preps[rholabel].toarray(scratch).copy() # copy b/c use scratch again (next line)
             E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
