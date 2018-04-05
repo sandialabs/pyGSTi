@@ -1924,11 +1924,11 @@ class PureStateSPAMVec(SPAMVec):
             (std),  Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
             (or a custom basis object).
         """
-        if not isinstance(SPAMVec):
-            pure_state_vec = StaticSPAMVec(pure_state_vec)
-        elif not isinstance(DenseSPAMVec):
+        if not isinstance(pure_state_vec,SPAMVec):
+            pure_state_vec = StaticSPAMVec(SPAMVec.convert_to_vector(pure_state_vec))
+        elif not isinstance(pure_state_vec,DenseSPAMVec):
             raise ValueError("Currently can only construct PureStateSPAMVecs from *dense* state vectors")
-        self.pure_state_vec = SPAMVec.convert_to_vector(pure_state_vec)
+        self.pure_state_vec = pure_state_vec
         self.basis = dm_basis
         self._construct_vector()
         

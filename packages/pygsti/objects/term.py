@@ -9,6 +9,7 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import itertools as _itertools
 import numbers as _numbers
+from .polynomial import Polynomial as _Polynomial
 
 def compose_terms(terms):
     if len(terms) == 0: return RankOneTerm(1.0,None,None)
@@ -17,18 +18,18 @@ def compose_terms(terms):
         ret.compose(t)
     return ret
 
-def exp_terms(terms, orders, postunitary=None):
-    """ postunitary is "post" in the matrix-order sense,
+def exp_terms(terms, orders, postterm=None):
+    """ postterm is "post" in the matrix-order sense,
         which means it's applied *first* """ 
     #create terms for each order from terms and base action
     final_terms = {}
-    if postunitary is not None:
-        Uterm_tup = ( RankOneTerm(1.0, postunitary, postunitary), )
+    if postterm is not None:
+        Uterm_tup = (postterm,)
     else: Uterm_tup = ()
 
     for order in orders: # expand exp(L) = I + L + 1/2! L^2 + ... (n-th term 1/n! L^n)
         if order == 0:
-            final_terms[order] = list(Uterm_tup[0]); continue
+            final_terms[order] = [ Uterm_tup[0] ]; continue
             
         # expand 1/n! L^n into a list of rank-1 terms
         termLists = [terms]*order
@@ -48,11 +49,18 @@ class RankOneTerm(object):
         applying the stored adjoints in the order stored in self.post_ops (similar to 
         acting with pre_ops in-order on a ket
         """
+        from . import gate as _gate
         self.coeff = coeff # potentially a Polynomial
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
         self.post_ops = [] # list of ops to perform - in order of operation to a bra
-        if pre_op is not None: self.pre_ops.append(pre_op)
-        if post_op is not None: self.post_ops.append(post_op)
+        if pre_op is not None:
+            if not isinstance(pre_op,_gate.Gate):
+                pre_op = _gate.StaticGate(pre_op)                
+            self.pre_ops.append(pre_op)
+        if post_op is not None:
+            if not isinstance(post_op,_gate.Gate):
+                post_op = _gate.StaticGate(post_op)
+            self.post_ops.append(post_op)
 
     def __mul__(self,x):
         """ Multiply by scalar """

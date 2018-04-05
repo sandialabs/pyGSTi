@@ -30,10 +30,10 @@ class Polynomial(dict):
 
     def __str__(self):
         def fmt(x):
-            if _np.imag(x) > 1e-6:
-                if _np.real(x) > 1e-6: return "(%.2f+%.2fj)" % (x.real, x.imag)
-                else: return "(%.2fj)" % x.imag
-            else: return "%.2f" % x.real
+            if abs(_np.imag(x)) > 1e-6:
+                if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
+                else: return "(%.3fj)" % x.imag
+            else: return "%.3f" % x.real
             
         termstrs = []
         sorted_keys = sorted(list(self.keys()))

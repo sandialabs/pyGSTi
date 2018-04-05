@@ -6736,7 +6736,7 @@ class LindbladTermGate(TermGate):
         self.Lterms = Lterms
         self.baseunitary = baseunitary
         self.terms = {}
-        Gate.__init__(self, dim) #sets self.dim
+        Gate.__init__(self, dim**2) #sets self.dim
 
     def get_max_order(self):
         if len(self.Lterms) > 0: return 2**32 # ~inf
@@ -6744,7 +6744,8 @@ class LindbladTermGate(TermGate):
 
     def get_order_terms(self, order):
         if order not in self.terms:
-            self.terms[order] = _term.exp_terms(self.Lterms, [order], self.baseunitary)[order]
+            postTerm = _term.RankOneTerm(_Polynomial(len(self.paramvals), {(): 1.0}), self.baseunitary, self.baseunitary)
+            self.terms[order] = _term.exp_terms(self.Lterms, [order], postTerm)[order]
         return self.terms[order]
     
     def num_params(self):

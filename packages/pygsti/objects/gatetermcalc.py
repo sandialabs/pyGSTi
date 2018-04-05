@@ -32,7 +32,7 @@ class GateTermCalc(GateCalc):
     that can be expanded into terms of different orders and PureStateSPAMVecs.
     """
 
-    def __init__(self, dim, gates, preps, effects, paramvec):
+    def __init__(self, dim, gates, preps, effects, paramvec, max_order):
         """
         Construct a new GateTermCalc object.
 
@@ -58,7 +58,8 @@ class GateTermCalc(GateCalc):
             The parameter vector of the GateSet.
         """
         #self.unitary_evolution = False
-        self.max_order = 2 # TODO MAKE AN ARGUMENT?
+        self.max_order = max_order
+        self.unitary_evolution = False
         super(GateTermCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
@@ -117,7 +118,7 @@ class GateTermCalc(GateCalc):
         return rho
 
 
-    def pr(self, spamTuple, gatestring, clipTo, max_order=1):
+    def pr(self, spamTuple, gatestring, clipTo, bScale):
         """
         Compute probability of a single "outcome" (spam-tuple) for a single
         gate string.
@@ -145,21 +146,27 @@ class GateTermCalc(GateCalc):
         -------
         probability: float
         """
+        print("DB: pr(",spamTuple,gatestring,clipTo,self.max_order,")")
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         
-        p = 0 # an array in "bulk" mode? or Polynomial in "symbolic" mode?
-        for order in range(max_order):
+        prp = None # an array in "bulk" mode? or Polynomial in "symbolic" mode?
+        for order in range(self.max_order+1):
+            print("DB: pr order=",order)
             for p in _lt.partition_into(order, len(gatestring)):
+                print("DB: pr   partition=",p)
                 factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
                 for factors in _itertools.product(*factor_lists):
                     coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
                     pLeft  = self.unitary_sim(rho,E, factors, 'pre')
                     pRight = self.unitary_sim(rho,E, factors, 'post') \
                              if not self.unitary_evolution else 1
-                    p += coeff * pLeft * pRight
+                    res = coeff * (pLeft * pRight)
+                    #print("DB: pr     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
+                    prp = res if (prp is None) else prp+res
+                    #print("DB running prp =",prp)
 
-        if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )        
-        return p
+        if clipTo is not None:  prp = _np.clip( prp, clipTo[0], clipTo[1] )        
+        return prp # can be a poly
 
     def unitary_sim(self, rho, E, complete_factors, typ):
         ops = None
@@ -172,6 +179,7 @@ class GateTermCalc(GateCalc):
             adjoint = True # need to act w/adjoint
 
         assert(ops is not None), "Logic Error!"
+        #print("DB: OPS = ", list(map(str,ops)))
         
         if not self.unitary_evolution:
             # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
@@ -179,7 +187,7 @@ class GateTermCalc(GateCalc):
             E = E.pure_state_vec
             
         rho = self.propagate_state(rho, ops) #, adjoint)  # UPDATE: no need b/c terms old adjoints in post_ops 
-        ampl = complex(_np.dot(E.conjugate().T,rho))**2) # Assumes dense state/POVM vecs
+        ampl = complex(_np.dot(E.conjugate().T,rho)) # Assumes dense state/POVM vecs
         if adjoint: ampl = _np.conjugate(ampl)
         return ampl
 

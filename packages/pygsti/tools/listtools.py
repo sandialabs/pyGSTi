@@ -6,6 +6,9 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #    in the file "license.txt" in the top-level pyGSTi directory
 #*****************************************************************
 
+import numpy as _np
+import itertools as _itertools
+
 def remove_duplicates_in_place(l,indexToTest=None):
     """
     Remove duplicates from the list passed as an argument.
@@ -156,6 +159,9 @@ def sorted_partitions(n):
     """ TODO: docstring
     Iterator over all sorted (decreasing) partitions of integer n """
 
+    if n == 0: #special case
+        yield _np.zeros(0,'i'); return
+        
     p = _np.zeros(n,'i')
     k = 0    # Index of last element in a partition
     p[k] = n # Initialize first partition as number itself
@@ -207,7 +213,7 @@ def partition_into(n, nbins):
     for p in sorted_partitions(n):
         if len(p) > nbins: continue # don't include partitions of length > nbins
         previous = tuple()
-        p = _np.concatenate( (p, (0,)*(nbins-len(p))) ) # pad with zeros
+        p = _np.concatenate( (p, _np.zeros(nbins-len(p),'i')) ) # pad with zeros
         for pp in _itertools.permutations(p[::-1]):
             if pp > previous: # only *unique* permutations 
                 previous = pp # (relies in itertools implementatin detail that

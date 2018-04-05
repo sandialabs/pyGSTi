@@ -1,4 +1,4 @@
-""" Defines the MapEvalTree class which implements an evaluation tree. """
+""" Defines the TermEvalTree class which implements an evaluation tree. """
 from __future__ import division, print_function, absolute_import, unicode_literals
 #*****************************************************************
 #    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
@@ -15,7 +15,7 @@ from .evaltree import EvalTree
 
 import time as _time #DEBUG TIMERS
 
-class MapEvalTree(EvalTree):
+class TermEvalTree(EvalTree):
     """
     An Evaluation Tree.  Instances of this class specify how to
       perform bulk GateSet operations.
@@ -29,10 +29,11 @@ class MapEvalTree(EvalTree):
     """
     def __init__(self, items=[]):
         """ Create a new, empty, evaluation tree. """
-        super(MapEvalTree, self).__init__(items)
+        super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
+    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None, calc=None):
         """
+          TODO: docstring -- and other tree's initialize methods?
           Initialize an evaluation tree using a set of gate strings.
           This function must be called before using an EvalTree.
 
@@ -88,81 +89,15 @@ class MapEvalTree(EvalTree):
         self.num_final_strs = len(gatestring_list)
         self[:] = [None]*self.num_final_strs
 
-        #Sort the gate strings "alphabetically", so that it's trivial to find common prefixes
+        #Sort the gate strings "alphabetically" - not needed now, but may
+        # be useful later for prefixing...
         sorted_strs = sorted(list(enumerate(gatestring_list)),key=lambda x: x[1])
 
-        #DEBUG
-        #print("SORTED"); print("\n".join(map(str,sorted_strs)))
-
-
-        #PASS1: figure out what's worth keeping in the cache:
-        curCacheSize = 0
-        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
-        dummy_self = [None]*self.num_final_strs; cache_hits = {}
         for k,(iStr,gateString) in enumerate(sorted_strs):
-            L = len(gateString)
-            for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
-                candidate = gatestring_list[ cacheIndices[i] ]
-                Lc = len(candidate)
-                if L >= Lc > 0 and gateString[0:Lc] == candidate:
-                    iStart = i
-                    remaining = gateString[Lc:]
-                    if iStr in cache_hits: cache_hits[cacheIndices[i]] += 1  #tally cache hit
-                    else: cache_hits[cacheIndices[i]] = 1  #TODO: use default dict?
-                    break
-            else: #no break => no prefix
-                iStart = None
-                remaining = gateString[:]
-
-            cacheIndices.append(iStr)
-            iCache = curCacheSize
-            curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
-            dummy_self[iStr] = (iStart, remaining, iCache)
-            
-        #PASS #2: for real this time: construct tree but only cache items w/hits
-        curCacheSize = 0
-        cacheIndices = [] #indices into gatestring_list/self of the strings to cache
-          # (store persistently as prefixes of other string -- this need not be all
-          #  of the strings in the tree)
-
-        for k,(iStr,gateString) in enumerate(sorted_strs):
-            L = len(gateString)
-            
-            #find longest existing prefix for gateString by working backwards
-            # and finding the first string that *is* a prefix of this string
-            # (this will necessarily be the longest prefix, given the sorting)
-            for i in range(curCacheSize-1,-1,-1): #from curCacheSize-1 -> 0
-                candidate = gatestring_list[ cacheIndices[i] ]
-                Lc = len(candidate)
-                if L >= Lc > 0 and gateString[0:Lc] == candidate: # ">=" allows for duplicates 
-                    iStart = i # NOTE: this is an index into the *cache*, not necessarily self
-                    remaining = gateString[Lc:]
-                    break
-            else: #no break => no prefix
-                iStart = None
-                remaining = gateString[:]
-
-            # if/where this string should get stored in the cache
-            if (maxCacheSize is None or curCacheSize < maxCacheSize) and cache_hits.get(iStr,0) > 0:
-                cacheIndices.append(iStr)
-                iCache = curCacheSize
-                curCacheSize += 1; assert(len(cacheIndices) == curCacheSize)
-            else: #don't store in the cache
-                iCache = None
-
             #Add info for this string
-            self[iStr] = (iStart, remaining, iCache)
+            self[iStr] = gateString
             self.eval_order.append(iStr)
             
-        #FUTURE: could perform a second pass, and if there is
-        # some threshold number of elements which share the
-        # *same* iStart and the same beginning of the
-        # 'remaining' part then add a new "extra" element
-        # (beyond the #gatestrings index) which computes
-        # the shared prefix and insert this into the eval
-        # order.
-
-        self.cachesize = curCacheSize
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
         self.parentIndexMap = None
@@ -170,137 +105,6 @@ class MapEvalTree(EvalTree):
         self.subTrees = [] #no subtrees yet
         assert(self.generate_gatestring_list() == gatestring_list)
         assert(None not in gatestring_list)
-
-
-    def _remove_from_cache(self,indx):
-        """ Removes self[indx] from cache (if it's in it)"""
-        remStart, remRemain, remCache = self[indx]
-          # iStart, remaining string, and iCache of element to remove
-        if remCache is None: return # not in cache to begin with!
-
-        for i in range(len(self)):
-            iStart, remainingStr, iCache = self[i]
-            if iCache == remCache:
-                assert(i == indx)
-                self[i] = (iStart, remainingStr, None) #not in cache anymore
-                continue
-
-            if iCache is not None and iCache > remCache:
-                iCache -= 1 #shift left all cache indices after one removed
-            if iStart == remCache:
-                iStart = remStart
-                remainingStr = remRemain + remainingStr
-            elif iStart is not None and iStart > remCache:
-                iStart -= 1 #shift left all cache indices after one removed
-            self[i] = (iStart, remainingStr, iCache)
-        self.cachesize -= 1
-
-        
-    def squeeze(self, maxCacheSize):
-        """ 
-        Remove items from cache (if needed) so it contains less than or equal
-        to `maxCacheSize` elements.
-
-        Paramteters
-        -----------
-        maxCacheSize : int
-
-        Returns
-        -------
-        None
-        """
-        assert(maxCacheSize >= 0)
-        
-        if maxCacheSize == 0: #special but common case
-            curCacheSize = self.cache_size()            
-            cacheinds = [None]*curCacheSize
-            for i in self.get_evaluation_order():
-                iStart, remainingStr, iCache = self[i]
-                if iStart is not None:
-                    remainingStr = self[cacheinds[iStart]][1] + remainingStr
-                if iCache is not None:
-                    cacheinds[iCache] = i
-                self[i] = (None, remainingStr, None)
-            self.cachesize = 0
-            return
-
-        #Otherwise, if maxCacheSize > 0, remove cache elements one at a time:
-        while self.cache_size() > maxCacheSize:
-
-            #Figure out what's in cache and # of times each one is hit
-            curCacheSize = self.cache_size()            
-            hits = [0]*curCacheSize
-            cacheinds = [None]*curCacheSize
-            for i in range(len(self)):
-                iStart, remainingStr, iCache = self[i]
-                if iStart is not None: hits[iStart] += 1
-                if iCache is not None: cacheinds[iCache] = i
-
-            #Find a min-cost item to remove
-            minCost = None; iMinTree = None; iMinCache = None
-            for i in range(curCacheSize):
-                cost = hits[i]*len(self[cacheinds[i]][1])
-                  # hits * len(remainder) ~= # more applies if we
-                  # remove i-th cache element.
-                if iMinTree is None or cost < minCost:
-                    minCost = cost; iMinTree = cacheinds[i]
-                    iMinCache = i # in cache
-            assert(self[iMinTree][2] == iMinCache) #sanity check
-
-            #Remove references to iMin element
-            self._remove_from_cache(iMinTree)
-            
-
-    def trim_nonfinal_els(self):
-        """ 
-        Removes from this tree all non-final elements (used to facilitate
-        computation sometimes)
-        """
-        nFinal = self.num_final_strings()
-        self._delete_els(list(range(nFinal,len(self))))
-
-        #remove any unreferenced cache elements
-        curCacheSize = self.cache_size()            
-        hits = [0]*curCacheSize
-        cacheinds = [None]*curCacheSize
-        for i in range(len(self)):
-            iStart, remainingStr, iCache = self[i]
-            if iStart is not None: hits[iStart] += 1
-            if iCache is not None: cacheinds[iCache] = i
-        for hits,i in zip(hits,cacheinds):
-            if hits == 0: self._remove_from_cache(i)
-
-        
-    def _delete_els(self, elsToRemove):
-        """ 
-        Delete a self[i] for i in elsToRemove.
-        """
-        if len(elsToRemove) == 0: return
-        
-        last = elsToRemove[0]
-        for i in elsToRemove[1:]:
-            assert(i > last), "elsToRemove *must* be sorted in ascending order!"
-            last = i
-        
-        #remove from cache
-        for i in elsToRemove:
-             self._remove_from_cache(i)
-
-        order = self.eval_order
-        for i in reversed(elsToRemove):
-            del self[i] #remove from self
-            
-            #remove & update eval order
-            order = [ ((k-1) if k>i else k) for k in order if k != i ]
-        self.eval_order = order
-
-        
-    def cache_size(self):
-        """ 
-        Returns the size of the persistent "cache" of partial results
-        used during the computation of all the strings in this tree.
-        """
-        return self.cachesize
 
     def generate_gatestring_list(self, permute=True):
         """
@@ -336,9 +140,8 @@ class MapEvalTree(EvalTree):
         
         #Build rest of strings
         for i in self.get_evaluation_order():
-            iStart, remainingStr, iCache = self[i]
-            if iStart is None:
-                gateStrings[i] = remainingStr
+            gstr = self[i]
+            gateStrings[i] = remainingStr
             else:
                 gateStrings[i] = cachedStrings[iStart] + remainingStr
                 

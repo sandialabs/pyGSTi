@@ -34,6 +34,7 @@ from . import gaugegroup as _gg
 from . import gatematrixcalc as _gatematrixcalc
 from . import gatemapcalc as _gatemapcalc
 from . import gatecliffordcalc as _gatecliffordcalc
+from . import gatetermcalc as _gatetermcalc
 from .label import Label as _Label
 
 from ..baseobjs import VerbosityPrinter as _VerbosityPrinter
@@ -103,16 +104,20 @@ class GateSet(object):
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
         #Calculator selection based on simulation type
+        simtype_and_args = sim_type.split(":")
+        sim_type = simtype_and_args[0]
         if sim_type == "dmmatrix":     c = _gatematrixcalc.GateMatrixCalc
         elif sim_type == "dmmap":      c = _gatemapcalc.GateMapCalc
         elif sim_type == "svmatrix":   c = _gatematrixcalc.UnitaryGateMatrixCalc
         elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
         elif sim_type == "clifford":   c = _gatecliffordcalc.GateCliffordCalc
+        elif sim_type == "termorder":  c = _gatetermcalc.GateTermCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._default_gauge_group = None
         self._calcClass = c
         self._sim_type = sim_type
+        self._sim_args = simtype_and_args[1:]
         
         self._paramvec = _np.zeros(0, 'd')
         self._rebuild_paramvec()
@@ -851,9 +856,13 @@ class GateSet(object):
         for inst_lbl,inst in self.instruments.items():
             for k,g in inst.compile_gates(inst_lbl).items():
                 compiled_gates[k] = g
-        
+
+        kwargs = {}
+        if self._sim_type == "termorder":
+            kwargs['max_order'] = int(self._sim_args[0])
+            
         return self._calcClass(self._dim, compiled_gates, self.preps,
-                               compiled_effects, self._paramvec)
+                               compiled_effects, self._paramvec, **kwargs)
 
     def split_gatestring(self, gatestring, erroron=('prep','povm')):
         """
@@ -2796,7 +2805,9 @@ class GateSet(object):
 
         if not hasattr(self,"_sim_type"): #for backward compatibility
             self._sim_type = "dmmatrix"
+            self._sim_args = []
         newGateset._sim_type = self._sim_type
+        newGateset._sim_args = self._sim_args
 
         if not hasattr(self,"basis") and hasattr(self,'_basisNameAndDim'): #for backward compatibility
             self.basis = _Basis(self._basisNameAndDim[0],self._basisNameAndDim[1])
