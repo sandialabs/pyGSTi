@@ -31,7 +31,7 @@ class TermEvalTree(EvalTree):
         """ Create a new, empty, evaluation tree. """
         super(TermEvalTree, self).__init__(items)
 
-    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None, calc=None):
+    def initialize(self, gateLabels, compiled_gatestring_list, numSubTreeComms=1, maxCacheSize=None):
         """
           TODO: docstring -- and other tree's initialize methods?
           Initialize an evaluation tree using a set of gate strings.
@@ -97,7 +97,13 @@ class TermEvalTree(EvalTree):
             #Add info for this string
             self[iStr] = gateString
             self.eval_order.append(iStr)
-            
+
+        #Storage for polynomial expressions for probabilities and
+        # their derivatives
+        self.p_polys = None
+        self.dp_polys = None
+        self.hp_polys = None
+
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
         self.parentIndexMap = None
@@ -136,17 +142,9 @@ class TermEvalTree(EvalTree):
         """
         gateStrings = [None]*len(self)
 
-        cachedStrings = [None]*self.cache_size()
-        
         #Build rest of strings
         for i in self.get_evaluation_order():
-            gstr = self[i]
-            gateStrings[i] = remainingStr
-            else:
-                gateStrings[i] = cachedStrings[iStart] + remainingStr
-                
-            if iCache is not None:
-                cachedStrings[iCache] = gateStrings[i]
+            gateStrings[i] = self[i]
             
         #Permute to get final list:
         nFinal = self.num_final_strings()
@@ -160,21 +158,7 @@ class TermEvalTree(EvalTree):
             assert(None not in gateStrings[0:nFinal])
             return gateStrings[0:nFinal]
 
-
-    def get_num_applies(self):
-        """
-        Gets the number of "apply" operations required to compute this tree.
-
-        Returns
-        -------
-        int
-        """
-        ops = 0
-        for _,remainder,_ in self:
-            ops += len(remainder)
-        return ops
-
-
+        
     def split(self, elIndicesDict, maxSubTreeSize=None, numSubTrees=None, verbosity=0):
         """
         Split this tree into sub-trees in order to reduce the
@@ -304,66 +288,23 @@ class TermEvalTree(EvalTree):
         ##################################################################
         # Part I: find a list of where the current tree should be broken #
         ##################################################################
-                        
+
+        subTreeSetList = []
         if numSubTrees is not None:
 
-            #OLD METHOD: optimize max-cost to get the right number of trees
-            # (but this can yield trees with unequal lengths or cache sizes,
-            # which is what we're often after for memory reasons)
-            costMet = "size" #cost metric
-            if costMet == "applies":
-                maxCost = self.get_num_applies() / numSubTrees
-            else: maxCost = len(self) / numSubTrees
-            maxCostLowerBound, maxCostUpperBound = maxCost, None
-            maxCostRate, rateLowerBound, rateUpperBound = 0, -1.0/len(self), +1.0/len(self)
-            resultingSubtrees = numSubTrees+1 #just to prime the loop
-            iteration = 0
-
-            #Iterate until the desired number of subtrees have been found.
-            while resultingSubtrees != numSubTrees:
-                subTreeSetList, totalCost = create_subtrees(maxCost, maxCostRate, costMet)
-                resultingSubtrees = len(subTreeSetList)
-                #print("DEBUG: resulting numTrees = %d (cost %g) w/maxCost = %g [%s,%s] & rate = %g [%g,%g]" % \
-                #     (resultingSubtrees, totalCost, maxCost, str(maxCostLowerBound), str(maxCostUpperBound),
-                #      maxCostRate, rateLowerBound, rateUpperBound))
-
-                #DEBUG
-                #totalSet = set()
-                #for s in subTreeSetList:
-                #    totalSet.update(s)
-                #print("DB: total set length = ",len(totalSet))
-                #assert(len(totalSet) == len(self))
-
-                #Perform binary search in maxCost then maxCostRate to find
-                # desired final subtree count.
-                if maxCostUpperBound is None or abs(maxCostLowerBound-maxCostUpperBound) > 1.0:
-                    last_maxCost = maxCost
-                    if resultingSubtrees <= numSubTrees: #too few trees: reduce maxCost
-                        maxCost = (maxCost + maxCostLowerBound)/2.0
-                        maxCostUpperBound = last_maxCost
-                    else: #too many trees: raise maxCost
-                        if maxCostUpperBound is None:
-                            maxCost = totalCost #/ numSubTrees
-                        else:
-                            maxCost = (maxCost + maxCostUpperBound)/2.0
-                            maxCostLowerBound = last_maxCost
-                else:
-                    last_maxRate = maxCostRate
-                    if resultingSubtrees <= numSubTrees: # too few trees reduce maxCostRate
-                        maxCostRate = (maxCostRate + rateLowerBound)/2.0
-                        rateUpperBound = last_maxRate
-                    else: # too many trees: increase maxCostRate
-                        maxCostRate = (maxCostRate + rateUpperBound)/2.0
-                        rateLowerBound = last_maxRate
-                        
-                iteration += 1
-                assert(iteration < 100), "Unsuccessful splitting for 100 iterations!"
-                        
+            subTreeSize = len(self) // numSubTrees
+            for i in range(numSubTrees):
+                end = (i+1)*subTreeSize if (i < numSubTrees-1) else len(self)
+                subTreeSetList.append( set(range(i*subTreeSize,end)) )
 
         else: # maxSubTreeSize is not None
-            subTreeSetList, totalCost = create_subtrees(
-                maxSubTreeSize, maxCostRate=0, costMetric="size")
+            k = 0
+            while k < len(self):
+                end = min(k+maxSubTreeSize,len(self))
+                subTreeSetList.append( set(range(k,end)) )
+                k = end
 
+                
         ##########################################################
         # Part II: create subtrees from index sets
         ##########################################################
@@ -372,8 +313,7 @@ class TermEvalTree(EvalTree):
         def permute_parent_element(perm, el):
             """Applies a permutation to an element of the tree """
             # perm[oldIndex] = newIndex
-            #return (perm[el[0]] if (el[0] is not None) else None, el[1], el[2])
-            return (el[0], el[1], el[2]) # no need to permute the cache element ([0])
+            return el # no need to permute gate string
     
         def create_subtree(parentIndices, numFinal, fullEvalOrder, sliceIntoParentsFinalArray, parentTree):
             """ 
@@ -404,10 +344,13 @@ class TermEvalTree(EvalTree):
             parentTree : EvalTree
                 The parent tree itself.
             """
-            subTree = MapEvalTree()
+            subTree = TermEvalTree()
             subTree.myFinalToParentFinalMap = sliceIntoParentsFinalArray
             subTree.num_final_strs = numFinal
             subTree[:] = [None]*len(parentIndices)
+            subTree.p_polys = None
+            subTree.dp_polys = None
+            subTree.hp_polys = None
 
             mapParentIndxToSubTreeIndx = { k: ik for ik,k in enumerate(parentIndices) }
             curCacheSize = 0
@@ -415,24 +358,11 @@ class TermEvalTree(EvalTree):
     
             for ik in fullEvalOrder: #includes any initial indices
                 k = parentIndices[ik] #original tree index
-
-                oStart,remainder,oCache = self[k] #original tree data
-
-                if oCache is not None: # this element was in parent's cache, 
-                    subTreeCacheIndices[oCache] = curCacheSize #maps parent's cache indices to subtree's
-                    iCache = curCacheSize
-                    curCacheSize += 1
-                else:
-                    iCache = None
-
-                iStart  = None if (oStart is None) else \
-                          subTreeCacheIndices[ oStart ]
+                gatestring = self[k] #original tree data
                 subTree.eval_order.append(ik)
-
                 assert(subTree[ik] is None)
-                subTree[ik] = (iStart,remainder,iCache)
+                subTree[ik] = gatestring
 
-            subTree.cachesize = curCacheSize
             subTree.parentIndexMap = parentIndices #parent index of each subtree index
             subTree.compiled_gatestring_spamTuples = [ self.compiled_gatestring_spamTuples[k]
                                                        for k in _slct.indices(subTree.myFinalToParentFinalMap) ]
@@ -451,8 +381,6 @@ class TermEvalTree(EvalTree):
             subTree.num_final_els = sum([len(v) for v in subTree.compiled_gatestring_spamTuples])
             subTree.recompute_spamtuple_indices(bLocal=False)
 
-            subTree.trim_nonfinal_els()
-
             return subTree
     
         updated_elIndices = self._finish_split(elIndicesDict, subTreeSetList,
@@ -463,6 +391,5 @@ class TermEvalTree(EvalTree):
 
     def copy(self):
         """ Create a copy of this evaluation tree. """
-        cpy = self._copyBase( MapEvalTree(self[:]) )
-        cpy.cachesize = self.cachesize # member specific to MapEvalTree
+        cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy

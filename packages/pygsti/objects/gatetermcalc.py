@@ -118,7 +118,7 @@ class GateTermCalc(GateCalc):
         return rho
 
 
-    def pr(self, spamTuple, gatestring, clipTo, bScale):
+    def pr_as_poly(self, spamTuple, gatestring, comm=None, memLimit=None):
         """
         Compute probability of a single "outcome" (spam-tuple) for a single
         gate string.
@@ -146,7 +146,7 @@ class GateTermCalc(GateCalc):
         -------
         probability: float
         """
-        print("DB: pr(",spamTuple,gatestring,clipTo,self.max_order,")")
+        print("DB: pr(",spamTuple,gatestring,self.max_order,")")
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         
         prp = None # an array in "bulk" mode? or Polynomial in "symbolic" mode?
@@ -157,18 +157,17 @@ class GateTermCalc(GateCalc):
                 factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
                 for factors in _itertools.product(*factor_lists):
                     coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
-                    pLeft  = self.unitary_sim(rho,E, factors, 'pre')
-                    pRight = self.unitary_sim(rho,E, factors, 'post') \
+                    pLeft  = self.unitary_sim(rho,E, factors, 'pre', comm, memLimit)
+                    pRight = self.unitary_sim(rho,E, factors, 'post', comm, memLimit) \
                              if not self.unitary_evolution else 1
                     res = coeff * (pLeft * pRight)
                     #print("DB: pr     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
                     prp = res if (prp is None) else prp+res
                     #print("DB running prp =",prp)
 
-        if clipTo is not None:  prp = _np.clip( prp, clipTo[0], clipTo[1] )        
         return prp # can be a poly
 
-    def unitary_sim(self, rho, E, complete_factors, typ):
+    def unitary_sim(self, rho, E, complete_factors, typ, comm, memLimit):
         ops = None
         if typ == 'pre':
             ops = list(_itertools.chain(*[f.pre_ops for f in complete_factors]))
@@ -191,6 +190,14 @@ class GateTermCalc(GateCalc):
         if adjoint: ampl = _np.conjugate(ampl)
         return ampl
 
+    def pr(self, spamTuple, gatestring, clipTo, bScale):
+        """TOD: docstring
+        """
+        poly = self.pr_as_poly(spamTuple, gatestring, comm=None, memLimit=None)
+        p = poly.evaluate(self.paramvec)
+        if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )        
+        return p
+    
 #HERE        
 #    def dpr(self, spamTuple, gatestring, returnPr, clipTo):
 #        """

@@ -19,11 +19,15 @@ class Polynomial(dict):
         if coeffs is not None:
             self.update(coeffs)
 
-    def deriv(self):
+    def deriv(self, wrtParam):
         pass # TODO - returns another polynomial
 
     def evaluate(self, variable_values):
-        pass # TODO
+        """ TODO: docstring -- and make this function smarter (Russian peasant) """
+        ret = 0
+        for ivar,coeff in self.items():
+            ret += coeff * _np.product( [variable_values[i] for i in ivar] )
+        return ret
 
     def copy(self):
         return Polynomial(self.num_variables, self)
