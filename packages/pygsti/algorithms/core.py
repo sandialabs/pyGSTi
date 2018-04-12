@@ -935,7 +935,8 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
               regularizeFactor=0, verbosity=0, check=False,
               check_jacobian=False, gatestringWeights=None,
               gateLabelAliases=None, memLimit=None, comm=None,
-              distributeMethod = "deriv", profiler=None):
+              distributeMethod = "deriv", profiler=None,
+              evaltree_cache=None):
     """
     Performs Least-Squares Gate Set Tomography on the dataset.
 
@@ -1033,6 +1034,13 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
+        `comm`, and `distributeMethod`.
+
 
     Returns
     -------
@@ -1089,10 +1097,25 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
         printer.log("Cur, Persist, Gather = %.2f, %.2f, %.2f GB" %
                     (curMem*C, persistentMem*C, gthrMem*C))
     else: gthrMem = mlim = None
-    
-    evTree, wrtBlkSize,_, lookup, outcomes_lookup = gs.bulk_evaltree_from_resources(
-        gateStringsToUse, comm, mlim, distributeMethod,
-        ["bulk_fill_probs","bulk_fill_dprobs"], printer-1) 
+
+    if evaltree_cache and 'evTree' in evaltree_cache \
+       and 'wrtBlkSize' in evaltree_cache:
+        evTree = evaltree_cache['evTree']
+        wrtBlkSize = evaltree_cache['wrtBlkSize']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        evTree, wrtBlkSize,_, lookup, outcomes_lookup = gs.bulk_evaltree_from_resources(
+            gateStringsToUse, comm, mlim, distributeMethod,
+            ["bulk_fill_probs","bulk_fill_dprobs"], printer-1)
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['wrtBlkSize'] = wrtBlkSize
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+        
     profiler.add_time("do_mc2gst: pre-opt treegen",tStart)
 
     KM = evTree.num_final_elements() #shorthand for combined spam+gatestring dimension
@@ -1412,7 +1435,7 @@ def do_mc2gst(dataset, startGateset, gateStringsToUse,
 
     full_minErrVec = _objective_func(opt_x)  #note: calls gs.from_vector(opt_x,...) so don't need to call this again
     minErrVec = full_minErrVec[0:-ex] if (ex > 0) else full_minErrVec  #don't include "extra" regularization terms
-    soln_gs = gs.copy();
+    soln_gs = gs.copy()
     profiler.add_time("do_mc2gst: leastsq",tm)
 
     #soln_gs.log("MC2GST", { 'method': "leastsq", 'tol': tol,  'maxiter': maxiter } )
@@ -1688,7 +1711,7 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
                         check=False, check_jacobian=False,
                         gatestringWeightsDict=None, gateLabelAliases=None,
                         memLimit=None, profiler=None, comm=None, 
-                        distributeMethod = "deriv"):
+                        distributeMethod = "deriv", evaltree_cache=None):
     """
     Performs Iterative Minimum Chi^2 Gate Set Tomography on the dataset.
 
@@ -1796,6 +1819,10 @@ def do_iterative_mc2gst(dataset, startGateset, gateStringSetsToUseInEstimation,
         How to distribute calculation amongst processors (only has effect
         when comm is not None).  "gatestrings" will divide the list of
         gatestrings; "deriv" will divide the columns of the jacobian matrix.
+
+    evaltree_cache : dict, optional
+        An empty dictionary which gets filled with the *final* computed EvalTree
+        (and supporting info) used in this computation.
 
 
     Returns
@@ -2060,7 +2087,8 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
              poissonPicture=True, verbosity=0, check=False,
              gatestringWeights=None, gateLabelAliases=None,
              memLimit=None, comm=None,
-             distributeMethod = "deriv", profiler=None):
+             distributeMethod = "deriv", profiler=None,
+             evaltree_cache=None):
 
     """
     Performs Maximum Likelihood Estimation Gate Set Tomography on the dataset.
@@ -2146,6 +2174,13 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
+        `comm`, and `distributeMethod`.
+
 
     Returns
     -------
@@ -2158,7 +2193,7 @@ def do_mlgst(dataset, startGateset, gateStringsToUse,
                           maxfev, tol,cptp_penalty_factor, spam_penalty_factor, minProbClip,
                           probClipInterval, radius, poissonPicture, verbosity,
                           check, gatestringWeights, gateLabelAliases, memLimit,
-                          comm, distributeMethod, profiler, None, None)
+                          comm, distributeMethod, profiler, evaltree_cache, None)
 
 
 def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
@@ -2169,20 +2204,12 @@ def _do_mlgst_base(dataset, startGateset, gateStringsToUse,
                    gatestringWeights=None, gateLabelAliases=None,
                    memLimit=None, comm=None,
                    distributeMethod = "deriv", profiler=None,
-                   evaltree_cache=None, forcefn_grad=None,
-                   shiftFctr=100):
+                   evaltree_cache=None, forcefn_grad=None, shiftFctr=100):
     """ 
     Same args and behavior as do_mlgst, but with additional:
     
     Parameters
-    ----------
-    evaltree_cache : dict, optional
-        A dictionary which server as a cache for the computed EvalTree used
-        in this computation.  If an empty dictionary is supplied, it is filled
-        with cached values to speed up subsequent executions of this function
-        which use the *same* `startGateset`, `gateStringsToUse`, `memLimit`,
-        `comm`, and `distributeMethod`.
-       
+    ----------       
     forcefn_grad : numpy array, optional
         An array of shape `(D,nParams)`, where `D` is the dimension of the
         (unspecified) forcing function and `nParams=startGateset.num_params()`.
@@ -2609,7 +2636,7 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                        verbosity=0, check=False, gatestringWeightsDict=None,
                        gateLabelAliases=None, memLimit=None, 
                        profiler=None, comm=None, distributeMethod = "deriv",
-                       alwaysPerformMLE=False):
+                       alwaysPerformMLE=False, evaltree_cache=None):
     """
     Performs Iterative Maximum Liklihood Estimation Gate Set Tomography on the dataset.
 
@@ -2723,6 +2750,10 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
         not just the final one.  When False, chi2 minimization is used for all
         except the final iteration (for improved numerical stability).
 
+    evaltree_cache : dict, optional
+        An empty dictionary which gets filled with the *final* computed EvalTree
+        (and supporting info) used in this computation.
+
 
     Returns
     -------
@@ -2774,20 +2805,22 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             mleGateset.basis = startGateset.basis 
               #set basis in case of CPTP constraints
 
+            evt_cache = {} # get the eval tree that's created so we can reuse it
             _, mleGateset = do_mc2gst(dataset, mleGateset, stringsToEstimate,
                                       maxiter, maxfev, tol, cptp_penalty_factor,
                                       spam_penalty_factor, minProbClip, probClipInterval,
                                       useFreqWeightedChiSq, 0,printer-1, check,
                                       check, gatestringWeights, gateLabelAliases,
-                                      memLimit, comm, distributeMethod, profiler)
-
+                                      memLimit, comm, distributeMethod, profiler, evt_cache)
+            
             if alwaysPerformMLE:
                 _, mleGateset = do_mlgst(dataset, mleGateset, stringsToEstimate,
                                          maxiter, maxfev, tol,
                                          cptp_penalty_factor, spam_penalty_factor,
                                          minProbClip, probClipInterval, radius,
                                          poissonPicture, printer-1, check, gatestringWeights,
-                                         gateLabelAliases, memLimit, comm, distributeMethod, profiler)
+                                         gateLabelAliases, memLimit, comm, distributeMethod,
+                                         profiler, evt_cache)
 
 
             tNxt = _time.time();
@@ -2795,8 +2828,8 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
             tRef2=tNxt
 
             logL_ub = _tools.logl_max(mleGateset, dataset, stringsToEstimate, poissonPicture, check, gateLabelAliases)
-            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval,
-                                  radius, poissonPicture, check, gateLabelAliases)  #get maxLogL from chi2 estimate
+            maxLogL = _tools.logl(mleGateset, dataset, stringsToEstimate, minProbClip, probClipInterval, 
+                                  radius, poissonPicture, check, gateLabelAliases, evt_cache)  #get maxLogL from chi2 estimate
 
             printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL)),2)
 
@@ -2812,10 +2845,10 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 mleGateset.basis = startGateset.basis 
     
                 maxLogL_p, mleGateset_p = do_mlgst(
-                  dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
-                  cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
-                  poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
-                  memLimit, comm, distributeMethod, profiler)
+                    dataset, mleGateset, stringsToEstimate, maxiter, maxfev, tol,
+                    cptp_penalty_factor, spam_penalty_factor, minProbClip, probClipInterval, radius,
+                    poissonPicture, printer-1, check, gatestringWeights, gateLabelAliases,
+                    memLimit, comm, distributeMethod, profiler, evt_cache)
 
                 printer.log("2*Delta(log(L)) = %g" % (2*(logL_ub - maxLogL_p)),2)
 
@@ -2831,9 +2864,12 @@ def do_iterative_mlgst(dataset, startGateset, gateStringSetsToUseInEstimation,
                 printer.log('',2) #extra newline
                 tRef=tNxt
 
+                if evaltree_cache is not None:
+                    evaltree_cache.update(evt_cache) # final evaltree cache
+
             if returnAll:
                 mleGatesets.append(mleGateset)
-                maxLogLs.append(maxLogL)
+                maxLogLs.append(maxLogL)                
 
     printer.log('Iterative MLGST Total Time: %.1fs' % (_time.time()-tStart))
     profiler.add_time('do_iterative_mlgst: total time', tStart)

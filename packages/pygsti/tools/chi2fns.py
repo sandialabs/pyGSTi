@@ -12,7 +12,8 @@ from . import listtools as _lt
 def chi2_terms(gateset, dataset, gateStrings=None,
                minProbClipForWeighting=1e-4, clipTo=None,
                useFreqWeightedChiSq=False, check=False,
-               memLimit=None, gateLabelAliases=None):
+               memLimit=None, gateLabelAliases=None,
+               evaltree_cache=None):
     """
     Computes the chi^2 contributions from a set of gate strings.
 
@@ -39,9 +40,20 @@ def chi2_terms(gateset, dataset, gateStrings=None,
     if gateStrings is None:
         gateStrings = list(dataset.keys())
 
-    evTree, blkSize1, blkSize2, lookup, outcomes_lookup = \
-        gateset.bulk_evaltree_from_resources(
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        evTree = evaltree_cache['evTree']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        evTree, _,_, lookup, outcomes_lookup = \
+            gateset.bulk_evaltree_from_resources(
             gateStrings, None, memLimit, "deriv", ['bulk_fill_probs'])
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
 
     #Memory allocation
     nEls = evTree.num_final_elements()
@@ -88,7 +100,8 @@ def chi2(gateset, dataset, gateStrings=None,
          returnGradient=False, returnHessian=False,
          minProbClipForWeighting=1e-4, clipTo=None,
          useFreqWeightedChiSq=False, check=False,
-         memLimit=None, gateLabelAliases=None):
+         memLimit=None, gateLabelAliases=None,
+         evaltree_cache=None):
     """
     Computes the total chi^2 for a set of gate strings.
 
@@ -137,6 +150,12 @@ def chi2(gateset, dataset, gateStrings=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. gateLabelAliases['Gx^3'] = ('Gx','Gx','Gx')
 
+    evaltree_cache : dict, optional
+        A dictionary which server as a cache for the computed EvalTree used
+        in this computation.  If an empty dictionary is supplied, it is filled
+        with cached values to speed up subsequent executions of this function
+        which use the *same* `gateset` and `gatestring_list`.
+
 
     Returns
     -------
@@ -165,7 +184,19 @@ def chi2(gateset, dataset, gateStrings=None,
     if gateStrings is None:
         gateStrings = list(dataset.keys())
 
-    evTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gateStrings)
+    if evaltree_cache and 'evTree' in evaltree_cache:
+        evTree = evaltree_cache['evTree']
+        lookup = evaltree_cache['lookup']
+        outcomes_lookup = evaltree_cache['outcomes_lookup']
+    else:
+        evTree,lookup,outcomes_lookup = gateset.bulk_evaltree(gateStrings)
+
+        #Fill cache dict if one was given
+        if evaltree_cache is not None:
+            evaltree_cache['evTree'] = evTree
+            evaltree_cache['lookup'] = lookup
+            evaltree_cache['outcomes_lookup'] = outcomes_lookup
+
 
     #Memory allocation
     nEls = evTree.num_final_elements()

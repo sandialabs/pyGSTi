@@ -161,7 +161,7 @@ class GateTermCalc(GateCalc):
         global DEBUG_FCOUNT
         db_part_cnt = 0
         db_factor_cnt = 0
-        #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+        print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
         
         prp = None # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(self.max_order+1):
@@ -186,7 +186,7 @@ class GateTermCalc(GateCalc):
                 db_factor_cnt += db_totfactors
                 DEBUG_FCOUNT += db_totfactors
                 db_part_cnt += 1
-                #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+                print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
 
         #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
         return prp # can be a poly

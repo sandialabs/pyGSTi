@@ -636,7 +636,7 @@ class GateSet(object):
             if obj is modified_obj: continue
             if modified_indices.intersection(obj.gpindices_as_array()):
                 obj.from_vector(self._paramvec[obj.gpindices])
-        
+                
     
     def _rebuild_paramvec(self):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
@@ -845,7 +845,7 @@ class GateSet(object):
     def _calc(self):
         if not hasattr(self,"_calcClass"): #for backward compatibility
             self._calcClass = _GateMatrixCalc
-            
+                        
         compiled_effects = _collections.OrderedDict()
         for povm_lbl,povm in self.povms.items():
             for k,e in povm.compile_effects(povm_lbl).items():
@@ -863,6 +863,7 @@ class GateSet(object):
             
         return self._calcClass(self._dim, compiled_gates, self.preps,
                                compiled_effects, self._paramvec, **kwargs)
+
 
     def split_gatestring(self, gatestring, erroron=('prep','povm')):
         """
