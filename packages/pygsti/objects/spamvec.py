@@ -1937,7 +1937,11 @@ class PureStateSPAMVec(SPAMVec):
     def _construct_vector(self):
         dmMx_std = _np.dot( self.pure_state_vec, self.pure_state_vec.conjugate().T )
         dmVec = _bt.change_basis(dmMx_std.flatten(), 'std', self.basis)
-        
+
+    @property
+    def size(self):
+        return self.dim
+    
     def set_value(self, vec):
         """
         Attempts to modify SPAMVec parameters so that the specified raw

@@ -61,6 +61,8 @@ class GateString(object):
             gsparser = _GateStringParser()
             gsparser.lookup = lookup
             chkTuple = gsparser.parse(stringRepresentation)
+            if tupleOfGateLabels and isinstance(tupleOfGateLabels[0],_Label):
+                chkTuple = tuple(map(_Label,chkTuple)) # TEMPORARY: until parser returns Label-tuples
 
             if tupleOfGateLabels is None: tupleOfGateLabels = chkTuple
             elif tuple(tupleOfGateLabels) != chkTuple:

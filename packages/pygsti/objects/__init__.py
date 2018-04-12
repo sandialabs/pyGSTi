@@ -15,6 +15,7 @@ from .dataset import DataSet
 from .evaltree import EvalTree
 from .matrixevaltree import MatrixEvalTree
 from .mapevaltree import MapEvalTree
+from .termevaltree import TermEvalTree
 from .gate import Gate
 from .gate import GateMatrix
 from .gate import GateMap

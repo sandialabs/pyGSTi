@@ -103,7 +103,16 @@ class Label(object):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
+        if _compat.isstr(other):
+            if self.sslbls: return False # tests for None and len > 0
+            return self.name == other
         return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
-    
+
+    def __lt__(self,x):
+        return tuple(self) < tuple(x)
+
+    def __gt__(self,x):
+        return tuple(self) > tuple(x)
+
     def __hash__(self):        
         return hash(tuple(self))

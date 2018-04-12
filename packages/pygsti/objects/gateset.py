@@ -1747,8 +1747,22 @@ class GateSet(object):
 
         Returns
         -------
-        EvalTree
+        evt : EvalTree
             An evaluation tree object.
+
+        elIndices : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestring_list` and
+            whose values are slices and/or integer-arrays into the space/axis of
+            final elements returned by the 'bulk fill' routines.  Thus, to get the
+            final elements corresponding to `gatestrings[i]`, use
+            `filledArray[ elIndices[i] ]`.
+
+        outcomes : collections.OrderedDict
+            A dictionary whose keys are integer indices into `gatestring_list` and
+            whose values are lists of outcome labels (an outcome label is a tuple
+            of POVM-effect and/or instrument-element labels).  Thus, to obtain
+            what outcomes the i-th gate strings's final elements 
+            (`filledArray[ elIndices[i] ]`)  correspond to, use `outcomes[i]`.
         """
         tm = _time.time()
         printer = _VerbosityPrinter.build_printer(verbosity)
@@ -1757,7 +1771,7 @@ class GateSet(object):
         for inst_lbl,inst in self.instruments.items():
             compiled_gate_labels.extend(list(inst.compile_gates(inst_lbl).keys()))
 
-        compiled_gatestrings, lookup, outcome_lookup, nEls = \
+        compiled_gatestrings, elIndices, outcomes, nEls = \
                             self.compile_gatestrings(gatestring_list)
             
         evalTree = self._calc().construct_evaltree()
@@ -1768,25 +1782,25 @@ class GateSet(object):
                     (len(gatestring_list),_time.time()-tm)); tm = _time.time()
 
         if maxTreeSize is not None:
-            lookup = evalTree.split(lookup, maxTreeSize, None, printer) # won't split if unnecessary
+            elIndices = evalTree.split(elIndices, maxTreeSize, None, printer) # won't split if unnecessary
 
         if minSubtrees is not None:
             if not evalTree.is_split() or len(evalTree.get_sub_trees()) < minSubtrees:
                 evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                lookup = evalTree.split(lookup, None, minSubtrees, printer)
+                elIndices = evalTree.split(elIndices, None, minSubtrees, printer)
                 if maxTreeSize is not None and \
                         any([ len(sub)>maxTreeSize for sub in evalTree.get_sub_trees()]):
                     _warnings.warn("Could not create a tree with minSubtrees=%d" % minSubtrees
                                    + " and maxTreeSize=%d" % maxTreeSize)
                     evalTree.original_index_lookup = None # reset this so we can re-split TODO: cleaner
-                    lookup = evalTree.split(lookup, maxTreeSize, None) # fall back to split for max size
+                    elIndices = evalTree.split(elIndices, maxTreeSize, None) # fall back to split for max size
         
         if maxTreeSize is not None or minSubtrees is not None:
             printer.log("bulk_evaltree: split tree (%d subtrees) in %.0fs" 
                         % (len(evalTree.get_sub_trees()),_time.time()-tm))
 
         assert(evalTree.num_final_elements() == nEls)
-        return evalTree, lookup, outcome_lookup
+        return evalTree, elIndices, outcomes
 
 
     def bulk_product(self, evalTree, bScale=False, comm=None):

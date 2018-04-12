@@ -6411,7 +6411,10 @@ class EmbeddedCliffordGate(Gate):
 
 
 class TermGate(Gate):
-    pass
+
+    @property
+    def size(self):
+        return self.dim**2
 
 class EmbeddedTermGate(TermGate):
     pass
@@ -6579,6 +6582,7 @@ class LindbladTermGate(TermGate):
                     k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
                     assert(abs(_np.imag(coeff)) < IMAG_TOL)
                     if cptp:
+                        if -1e-12 < coeff < 0: coeff = 0.0 # avoid sqrt warning due to small negative numbers
                         params[k] = _np.sqrt(_np.real_if_close(coeff))
                     else:
                         params[k] = _np.real_if_close(coeff)
@@ -6647,8 +6651,8 @@ class LindbladTermGate(TermGate):
             termType = termLbl[0]
             if termType == "H": # Hamiltonian
                 k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial( nTotalParams, {(k,): 1j} ), basisdict[termLbl[1]], IDENT) )
-                Lterms.append( _term.RankOneTerm(_Polynomial( nTotalParams, {(k,): -1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
                 print("DB: H term w/index %d= " % k, " len=",len(Lterms))
                 print("  coeff: ", list(Lterms[-1].coeff.keys()) )
                 print("  coeff: ", list(Lterms[-2].coeff.keys()) )
@@ -6661,9 +6665,9 @@ class LindbladTermGate(TermGate):
 
                     Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial( nTotalParams, {(k,)*pw:  1.0} ), Ln, Lm_dag) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial( nTotalParams, {(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm) ) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial( nTotalParams, {(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm) ) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
                 else:
                     i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
                     j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
@@ -6692,7 +6696,7 @@ class LindbladTermGate(TermGate):
                         jiIndx = numHamParams + (j*numOtherBasisEls + i)
                         polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
 
-                    base_poly = _Polynomial(nTotalParams, polyTerms)
+                    base_poly = _Polynomial(polyTerms)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
                     Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm) )
                     Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm)) ) # adjoint(_np.dot(Lm_dag,Ln))
@@ -6738,14 +6742,47 @@ class LindbladTermGate(TermGate):
         self.terms = {}
         Gate.__init__(self, dim**2) #sets self.dim
 
-    def get_max_order(self):
-        if len(self.Lterms) > 0: return 2**32 # ~inf
-        else: return 1
+    #def get_max_order(self):
+    #    if len(self.Lterms) > 0: return 2**32 # ~inf
+    #    else: return 1
+
+    def set_gpindices(self, gpindices, parent, memo=None):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        self.terms = {} # clear terms cache since param indices have changed now
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+
+    def _compose_poly_indices(self, terms):
+        for term in terms:
+            term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
+                self.gpindices, _np.array(x,'i'))) )
+        return terms
+        
 
     def get_order_terms(self, order):
         if order not in self.terms:
-            postTerm = _term.RankOneTerm(_Polynomial(len(self.paramvals), {(): 1.0}), self.baseunitary, self.baseunitary)
-            self.terms[order] = _term.exp_terms(self.Lterms, [order], postTerm)[order]
+            assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary)
+            loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
+            self.terms[order] = self._compose_poly_indices(loc_terms)
         return self.terms[order]
     
     def num_params(self):
@@ -6788,5 +6825,19 @@ class LindbladTermGate(TermGate):
         """
         assert(len(v) == self.num_params())
         self.paramvals = v
-        self._construct_errgen() # HERE - construct terms
         self.dirty = True
+
+        
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        return self._copy_gpindices( LindbladTermGate(
+            self.baseunitary, self.paramvals, self.Lterms, self.cptp,
+            self.nonham_diagonal_only), parent)
+

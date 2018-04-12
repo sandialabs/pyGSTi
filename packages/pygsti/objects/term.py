@@ -40,7 +40,6 @@ def exp_terms(terms, orders, postterm=None):
     return final_terms
 
 
-
 class RankOneTerm(object):
     def __init__(self, coeff, pre_op, post_op):
         """ TODO docstring
@@ -87,6 +86,12 @@ class RankOneTerm(object):
         copy_of_me.pre_ops = self.pre_ops[:]
         copy_of_me.post_ops = self.post_ops[:]
         return copy_of_me
+
+    def map_indices(self, mapfn):
+        """ TODO: docstring - mapfn should map old->new variable-index-tuples """
+        assert(hasattr(self.coeff, 'map_indices')), \
+            "Coefficient (type %s) must implements `map_indices`" % str(type(self.coeff))
+        self.coeff.map_indices(mapfn)
         
         
 

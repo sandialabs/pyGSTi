@@ -100,9 +100,10 @@ class TermEvalTree(EvalTree):
 
         #Storage for polynomial expressions for probabilities and
         # their derivatives
-        self.p_polys = None
-        self.dp_polys = None
-        self.hp_polys = None
+        self.raw_polys = {}
+        self.p_polys = {}
+        self.dp_polys = {}
+        self.hp_polys = {}
 
         self.myFinalToParentFinalMap = None #this tree has no "children",
         self.myFinalElsToParentFinalElsMap = None # i.e. has not been created by a 'split'
@@ -389,7 +390,100 @@ class TermEvalTree(EvalTree):
                     (_time.time()-tm)); tm = _time.time()
         return updated_elIndices
 
+    def cache_size(self):
+        """ 
+        Returns the size of the persistent "cache" of partial results
+        used during the computation of all the strings in this tree.
+        """
+        return 0
+
     def copy(self):
         """ Create a copy of this evaluation tree. """
         cpy = self._copyBase( TermEvalTree(self[:]) )
         return cpy
+
+    def get_raw_polys(self, calc, rholabel, elabels, comm):
+        #Check if everything is computed already
+        if all([ ((rholabel,elabel) in self.raw_polys) for elabel in elabels]):
+            return [self.raw_polys[(rholabel,elabel)] for elabel in elabels]
+
+        print("DB: **** COMPUTING RAW POLYS FOR: ",rholabel,elabels, " **********")
+        #Otherwise compute poly -- FUTURE: do this faster w/
+        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+        ret = []
+        for elabel in elabels:
+            if (rholabel,elabel) not in self.raw_polys:
+                polys = [ calc.pr_as_poly((rholabel,elabel), gstr, comm)
+                          for gstr in self.generate_gatestring_list(permute=False) ]
+                self.raw_polys[ (rholabel,elabel) ] = polys
+            ret.append( self.raw_polys[ (rholabel,elabel) ] )
+        return ret
+
+    
+    def get_p_polys(self, calc, rholabel, elabels, comm):
+        #Check if everything is computed already
+        if all([ ((rholabel,elabel) in self.p_polys) for elabel in elabels]):
+            return [self.p_polys[(rholabel,elabel)] for elabel in elabels]
+
+        #Otherwise compute poly -- FUTURE: do this faster w/
+        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+        ret = []
+        polys = self.get_raw_polys(calc, rholabel, elabels, comm)
+        for i,elabel in enumerate(elabels):
+            if (rholabel,elabel) not in self.p_polys:
+                tapes = [ poly.compact() for poly in polys[i] ]
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                self.p_polys[ (rholabel,elabel) ] = (vtape, ctape)
+            ret.append( self.p_polys[ (rholabel,elabel) ] )
+        return ret
+
+
+    def get_dp_polys(self, calc, rholabel, elabels, wrtSlice, comm):
+        slcTup = (wrtSlice.start,wrtSlice.stop,wrtSlice.step) \
+                 if (wrtSlice is not None) else (None,None,None)
+        slcInds = _slct.indices(wrtSlice if (wrtSlice is not None) else slice(0,calc.Np))
+            
+        #Check if everything is computed already
+        if all([ ((rholabel,elabel,slcTup) in self.dp_polys) for elabel in elabels]):
+            return [self.dp_polys[(rholabel,elabel,slcTup)] for elabel in elabels]
+
+        #Otherwise compute poly -- FUTURE: do this faster w/
+        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+        ret = []
+        polys = self.get_raw_polys(calc, rholabel, elabels, comm)
+        for i,elabel in enumerate(elabels):
+            if (rholabel,elabel,slcTup) not in self.dp_polys:
+                tapes = [ p.deriv(k).compact() for p in polys[i] for k in slcInds ]
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                self.dp_polys[ (rholabel,elabel,slcTup) ] = (vtape, ctape)
+            ret.append( self.dp_polys[ (rholabel,elabel,slcTup) ] )
+        return ret
+
+    def get_hp_polys(self, calc, rholabel, elabels, wrtSlice1, wrtSlice2, comm):
+        slcTup1 = (wrtSlice1.start,wrtSlice1.stop,wrtSlice1.step) \
+                 if (wrtSlice1 is not None) else (None,None,None)
+        slcTup2 = (wrtSlice2.start,wrtSlice2.stop,wrtSlice2.step) \
+                 if (wrtSlice2 is not None) else (None,None,None)
+        slcInds1 = _slct.indices(wrtSlice1 if (wrtSlice1 is not None) else slice(0,calc.Np))
+        slcInds2 = _slct.indices(wrtSlice2 if (wrtSlice2 is not None) else slice(0,calc.Np))
+            
+        #Check if everything is computed already
+        if all([ ((rholabel,elabel,slcTup1,slcTup2) in self.hp_polys) for elabel in elabels]):
+            return [self.hp_polys[(rholabel,elabel,slcTup1,slcTup2)] for elabel in elabels]
+
+        #Otherwise compute poly -- FUTURE: do this faster w/
+        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+        ret = []
+        for elabel in elabels:
+            if (rholabel,elabel,slcTup1,slcTup2) not in self.hp_polys:
+                polys = [ calc.pr_as_poly((rholabel,elabel), gstr, comm)
+                          for gstr in self.generate_gatestring_list(permute=False) ]
+                dpolys = [ p.deriv(k) for p in polys for k in slcInds2 ]
+                tapes = [ dp.deriv(k).compact() for p in dpolys for k in slcInds1 ]
+                vtape = _np.concatenate( [ t[0] for t in tapes ] )
+                ctape = _np.concatenate( [ t[1] for t in tapes ] )
+                self.hp_polys[ (rholabel,elabel,slcTup1,slcTup2) ] = (vtape, ctape)
+            ret.append( self.hp_polys[ (rholabel,elabel,slcTup1,slcTup2) ] )
+        return ret
