@@ -408,14 +408,14 @@ class TermEvalTree(EvalTree):
             return [self.raw_polys[(rholabel,elabel)] for elabel in elabels]
 
         print("DB: **** COMPUTING RAW POLYS FOR: ",rholabel,elabels, " **********")
-        #Otherwise compute poly -- FUTURE: do this faster w/
-        # some self.prs_as_polys(rholabel, elabels, gatestring, ...) function
+
+        #Otherwise compute polys
+        polys = [ calc.prs_as_polys(rholabel,elabels, gstr, comm)
+                  for gstr in self.generate_gatestring_list(permute=False) ]
         ret = []
-        for elabel in elabels:
+        for i,elabel in enumerate(elabels):
             if (rholabel,elabel) not in self.raw_polys:
-                polys = [ calc.pr_as_poly((rholabel,elabel), gstr, comm)
-                          for gstr in self.generate_gatestring_list(permute=False) ]
-                self.raw_polys[ (rholabel,elabel) ] = polys
+                self.raw_polys[ (rholabel,elabel) ] = [p[i] for p in polys]
             ret.append( self.raw_polys[ (rholabel,elabel) ] )
         return ret
 

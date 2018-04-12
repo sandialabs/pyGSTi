@@ -79,6 +79,32 @@ class RankOneTerm(object):
         self.pre_ops.extend(term.pre_ops)
         self.post_ops.extend(term.post_ops)
 
+    def collapse(self):
+        """
+        Returns a copy of this term with all pre & post ops by reduced
+        ("collapsed") by matrix composition, so that resulting
+        term has only a single pre/post op. Ops must be compatible with numpy
+        dot products.
+
+        Returns
+        -------
+        RankOneTerm
+        """
+        
+        if len(self.pre_ops) >= 1:
+            pre = self.pre_ops[0]
+            for B in self.pre_ops[1:]:
+                pre = _np.dot(B,pre)
+        else: pre = None
+            
+        if len(self.post_ops) >= 1:
+            post = self.post_ops[0]
+            for B in self.post_ops[1:]:
+                post = _np.dot(B,post)
+        else: post = None
+            
+        return RankOneTerm(self.coeff, pre, post)
+
     def copy(self):
         coeff = self.coeff if isinstance(self.coeff, _numbers.Number) \
                 else self.coeff.copy()

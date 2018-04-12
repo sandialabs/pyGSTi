@@ -23,6 +23,7 @@ from .termevaltree import TermEvalTree as _TermEvalTree
 from .polynomial import bulk_eval_compact_polys as _bulk_eval_compact_polys
 from .gatecalc import GateCalc
 from .label import Label as _Label
+from .term import compose_terms as _compose_terms
 from .polynomial import Polynomial as _Polynomial
 
 DEBUG_FCOUNT = 0
@@ -121,6 +122,81 @@ class GateTermCalc(GateCalc):
                 rho = f.acton(rho) # LEXICOGRAPHICAL VS MATRIX ORDER
         return rho
 
+    def prs_as_polys(self, rholabel, elabels, gatestring, comm=None, memLimit=None):
+        """
+        TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
+        """
+        #print("DB: prs_as_polys(",spamTuple,gatestring,self.max_order,")")
+        rho,Es = self._rhoEs_from_labels(rholabel, elabels)
+
+        #Prepare rho and E vecs as much as possible for unitary_sim
+        if not self.unitary_evolution:
+            # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
+            rho = rho.pure_state_vec
+            Es = [ E.pure_state_vec.conjugate().T for E in Es ]
+        else:
+            # rhoVec unaltered
+            Es = [ E.conjugate().T for E in Es ]
+
+        if len(gatestring) == 0: #special case - at least for now until SPAM vecs have factors...
+            pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
+            pLeft = self.unitary_sim_pre(rho,Es, [], comm, memLimit, pLeft) # pre/post doesn't matter
+            return [ _Polynomial( {(): abs(p)**2} ) for p in pLeft ] # poly w/single constant term
+
+        #HERE DEBUG
+        global DEBUG_FCOUNT
+        db_part_cnt = 0
+        db_factor_cnt = 0
+        #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+
+        pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
+        pRight = _np.empty(len(Es),complex) #lots of allocs in inner loop
+
+        fastmode = False
+        
+        prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
+        for order in range(self.max_order+1):
+            #print("DB: pr_as_poly order=",order)
+            db_npartitions = 0
+            for p in _lt.partition_into(order, len(gatestring)):
+                factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
+                if any([len(fl)==0 for fl in factor_lists]): continue
+
+                #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
+                if fastmode: # filter factor_lists to matrix-compose all length-1 lists
+                    reduced_factor_lists = []; curTerm = []
+                    for fl in factor_lists:
+                        if len(fl) == 1: curTerm.append(fl[0])
+                        else: # len(fl) > 1:
+                            if len(curTerm) > 0:
+                                reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
+                            reduced_factor_lists.append(fl); curTerm = []
+                    if len(curTerm) > 0:
+                        reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
+                    factor_lists = reduced_factor_lists
+                    #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
+
+                for factors in _itertools.product(*factor_lists):
+                    coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
+                    pLeft  = self.unitary_sim_pre(rho,Es, factors, comm, memLimit, pLeft)
+                    pRight = self.unitary_sim_post(rho,Es, factors, comm, memLimit, pRight) \
+                             if not self.unitary_evolution else 1
+                    for i in range(len(Es)):
+                        res = coeff * (pLeft[i] * pRight[i])
+                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
+                        if prps[i] is None:  prps[i] = res
+                        else:                prps[i].addin(res) # assumes a Polynomial - use += for numeric types...
+                        #print("DB running prp =",prp)
+                db_nfactors = [len(l) for l in factor_lists]
+                db_totfactors = _np.product(db_nfactors)
+                db_factor_cnt += db_totfactors
+                DEBUG_FCOUNT += db_totfactors
+                db_part_cnt += 1
+                #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+
+        #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
+        return prps # can be a list of polys
+        
 
     def pr_as_poly(self, spamTuple, gatestring, comm=None, memLimit=None):
         """
@@ -135,84 +211,36 @@ class GateTermCalc(GateCalc):
         gatestring : GateString or tuple
             A tuple-like object of *compiled* gates (e.g. may include
             instrument elements like 'Imyinst_0')
-
-        clipTo : 2-tuple
-          (min,max) to clip returned probability to if not None.
-          Only relevant when prMxToFill is not None.
-
-        bUseScaling : bool, optional
-          Whether to use a post-scaled product internally.  If False, this
-          routine will run slightly faster, but with a chance that the
-          product will overflow and the subsequent trace operation will
-          yield nan as the returned probability.
-
+        
+        TODO: docstring
+        
         Returns
         -------
         probability: float
         """
-        #print("DB: pr_as_poly(",spamTuple,gatestring,self.max_order,")")
-        rho,E = self._rhoE_from_spamTuple(spamTuple)
+        return self.prs_as_polys(spamTuple[0], [spamTuple[1]], gatestring,
+                                 comm, memLimit)[0]
+    
 
-        if len(gatestring) == 0: #special case - at least for now until SPAM vecs have factors...
-            pLeft = self.unitary_sim(rho,E, [], 'pre', comm, memLimit)
-            return _Polynomial( {(): abs(pLeft)**2} ) # poly w/single constant term
+    def unitary_sim_pre(self, rhoVec, EVecTs, complete_factors, comm, memLimit, out):
+        ops = _itertools.chain(*[f.pre_ops for f in complete_factors])
+        rho = self.propagate_state(rhoVec, ops) #, adjoint)  # UPDATE: no need b/c terms hold adjoints in post_ops
 
-        #HERE
-        global DEBUG_FCOUNT
-        db_part_cnt = 0
-        db_factor_cnt = 0
-        print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
-        
-        prp = None # an array in "bulk" mode? or Polynomial in "symbolic" mode?
-        for order in range(self.max_order+1):
-            #print("DB: pr_as_poly order=",order)
-            db_npartitions = 0
-            for p in _lt.partition_into(order, len(gatestring)):
-                factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
-                for factors in _itertools.product(*factor_lists):
-                    coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
-                    pLeft  = self.unitary_sim(rho,E, factors, 'pre', comm, memLimit)
-                    pRight = self.unitary_sim(rho,E, factors, 'post', comm, memLimit) \
-                             if not self.unitary_evolution else 1
-                    res = coeff * (pLeft * pRight)
-                    #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
-                    if (prp is None):
-                        prp = res
-                    else:
-                        prp.addin(res)
-                    #print("DB running prp =",prp)
-                db_nfactors = [len(l) for l in factor_lists]
-                db_totfactors = _np.product(db_nfactors)
-                db_factor_cnt += db_totfactors
-                DEBUG_FCOUNT += db_totfactors
-                db_part_cnt += 1
-                print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+        for i,EconjT in enumerate(EVecTs):
+            out[i] = _np.dot(EconjT,rho) # *Amplitude!* -- Assumes dense state/POVM vecs
+        return out # complex amplitudes, *not* real probabilities
 
-        #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
-        return prp # can be a poly
+    
+    def unitary_sim_post(self, rhoVec, EVecTs, complete_factors, comm, memLimit, out):
+        ops = _itertools.chain(*[f.post_ops for f in complete_factors])
+        rho = self.propagate_state(rhoVec, ops) #, adjoint=True)  # UPDATE: no need b/c terms hold adjoints in post_ops
 
-    def unitary_sim(self, rho, E, complete_factors, typ, comm, memLimit):
-        ops = None
-        if typ == 'pre':
-            ops = list(_itertools.chain(*[f.pre_ops for f in complete_factors]))
-            adjoint = False
+        for i,EconjT in enumerate(EVecTs):
+            out[i] = _np.dot(EconjT,rho) # *Amplitude!* -- Assumes dense state/POVM vecs
 
-        elif typ == 'post':
-            ops = list(_itertools.chain(*[f.post_ops for f in complete_factors]))
-            adjoint = True # need to act w/adjoint
-
-        assert(ops is not None), "Logic Error!"
-        #print("DB: OPS = ", list(map(str,ops)))
-        
-        if not self.unitary_evolution:
-            # rho and E should be PureStateSPAMVec objects (density matrices but which encode pure states)
-            rho = rho.pure_state_vec
-            E = E.pure_state_vec
-            
-        rho = self.propagate_state(rho, ops) #, adjoint)  # UPDATE: no need b/c terms old adjoints in post_ops 
-        ampl = complex(_np.dot(E.conjugate().T,rho)) # Assumes dense state/POVM vecs
-        if adjoint: ampl = _np.conjugate(ampl)
-        return ampl
+        # conjugate to map what we do: "acting with adjoint ops on a ket"
+        # to what we want to return:   "acting with opt in rev order on a bra"
+        return _np.conjugate(out) # complex amplitudes, *not* real probabilities
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):
         """TOD: docstring
