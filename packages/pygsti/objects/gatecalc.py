@@ -158,6 +158,7 @@ class GateCalc(object):
          # param, creating a weird inconsistency...) SKIP
         if bSkipEcs:
             newSelf = self.copy()
+            newSelf.effects = self.effects.copy() # b/c GateCalc.__init__ doesn't copy members (for efficiency)
             for effectlbl,EVec in self.effects.items():
                 if isinstance(EVec, _sv.ComplementSPAMVec):
                     del newSelf.effects[effectlbl]
