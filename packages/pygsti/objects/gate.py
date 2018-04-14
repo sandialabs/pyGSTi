@@ -6654,8 +6654,10 @@ class LindbladTermGate(TermGate):
                 Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT) )
                 Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
                 print("DB: H term w/index %d= " % k, " len=",len(Lterms))
-                print("  coeff: ", list(Lterms[-1].coeff.keys()) )
-                print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-1].coeff.inds) )
+                #print("  coeff: ", list(Lterms[-2].coeff.inds) )
 
             elif termType == "S": # Stochastic
                 if nonham_diagonal_only:
@@ -6782,6 +6784,8 @@ class LindbladTermGate(TermGate):
             assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary)
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
+            for t in loc_terms:
+                t.collapse() # collapse terms for speed
             self.terms[order] = self._compose_poly_indices(loc_terms)
         return self.terms[order]
     

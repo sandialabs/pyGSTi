@@ -210,6 +210,39 @@ def partitions(n):
 
 def partition_into(n, nbins):
     """ Interator over all partitions of integer n into `nbins` bins """
+    if n == 0:
+        a = _np.zeros(nbins,'i')
+        yield tuple(a)
+
+    elif n == 1:
+        a = _np.zeros(nbins,'i')
+        for i in range(nbins):
+            a[i] = 1
+            yield tuple(a)
+            a[i] = 0
+            
+    elif n == 2:
+        a = _np.zeros(nbins,'i')
+        for i in range(nbins):
+            a[i] = 2
+            yield tuple(a)
+            a[i] = 0
+
+        for i in range(nbins):
+            a[i] = 1
+            for j in range(i+1,nbins):
+                a[j] = 1
+                yield tuple(a)
+                a[j] = 0
+            a[i] = 0
+
+    else:
+        for p in partition_into_slow(n, nbins):
+            yield p
+
+                
+def partition_into_slow(n, nbins):
+    """ Interator over all partitions of integer n into `nbins` bins """
     for p in sorted_partitions(n):
         if len(p) > nbins: continue # don't include partitions of length > nbins
         previous = tuple()

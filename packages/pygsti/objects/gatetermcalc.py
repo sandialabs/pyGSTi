@@ -25,6 +25,14 @@ from .gatecalc import GateCalc
 from .label import Label as _Label
 from .term import compose_terms as _compose_terms
 from .polynomial import Polynomial as _Polynomial
+from .polynomial import FastPolynomial as _FastPolynomial
+
+#try:
+#import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
+from . import fastgatecalc as _fastgatecalc
+#except ImportError:
+#    _fastgatecalc = None
+_fastgatecalc.test_map("Hi")
 
 DEBUG_FCOUNT = 0
 
@@ -126,6 +134,26 @@ class GateTermCalc(GateCalc):
         """
         TODO: docstring - computes polynomials of the probabilities for multiple spam-tuples of `gatestring`
         """
+
+        #Precomp to fast polys:
+        gate_terms = {};
+        max_poly_vars = self.Np
+        max_poly_order = self.max_order*2
+        for glbl,gate in self.gates.items():
+            gate_terms[glbl] = []
+            
+            for order in range(self.max_order+1):
+                orig_terms = gate.get_order_terms(order)
+                               
+                new_terms = []
+                for term in orig_terms:
+                    t = term.copy()
+                    t.coeff = _FastPolynomial(term.coeff, max_poly_vars, max_poly_order)
+                    new_terms.append(t)
+                    
+                gate_terms[glbl].append(new_terms)
+
+                
         #print("DB: prs_as_polys(",spamTuple,gatestring,self.max_order,")")
         rho,Es = self._rhoEs_from_labels(rholabel, elabels)
 
@@ -143,6 +171,14 @@ class GateTermCalc(GateCalc):
             pLeft = self.unitary_sim_pre(rho,Es, [], comm, memLimit, pLeft) # pre/post doesn't matter
             return [ _Polynomial( {(): abs(p)**2} ) for p in pLeft ] # poly w/single constant term
 
+        def dict_to_fastpoly(d):
+            ret = _FastPolynomial(None, max_poly_vars, max_poly_order)
+            ret.update(d)
+            return ret
+        
+        prps_fast = _fastgatecalc.fast_prs_as_polys(gatestring, rho, Es, gate_terms, self.max_order) # returns list of dicts
+        return [ dict_to_fastpoly(p) for p in prps_fast ] 
+
         #HERE DEBUG
         global DEBUG_FCOUNT
         db_part_cnt = 0
@@ -159,33 +195,46 @@ class GateTermCalc(GateCalc):
             #print("DB: pr_as_poly order=",order)
             db_npartitions = 0
             for p in _lt.partition_into(order, len(gatestring)):
-                factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
+                #factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
+                factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(gatestring,p) ]
                 if any([len(fl)==0 for fl in factor_lists]): continue
 
                 #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
+                rhoLeft = rhoRight = rho
                 if fastmode: # filter factor_lists to matrix-compose all length-1 lists
                     reduced_factor_lists = []; curTerm = []
-                    for fl in factor_lists:
-                        if len(fl) == 1: curTerm.append(fl[0])
+                    for i,fl in enumerate(factor_lists):
+                        if len(fl) == 1:
+                            curTerm.append(fl[0])
                         else: # len(fl) > 1:
                             if len(curTerm) > 0:
                                 reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
                             reduced_factor_lists.append(fl); curTerm = []
                     if len(curTerm) > 0:
                         reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
+
+                    #This doesn't do much, so leave it out for now
+                    #if reduced_factor_lists:
+                    #    if len(reduced_factor_lists[0]) == 1:
+                    #        t = reduced_factor_lists[0][0] # single term
+                    #        rhoLeft = self.propagate_state(rho, t.pre_ops)
+                    #        rhoRight = self.propagate_state(rho, t.post_ops)
+                    #        del reduced_factor_lists[0]
+
                     factor_lists = reduced_factor_lists
                     #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
 
                 for factors in _itertools.product(*factor_lists):
-                    coeff = _functools.reduce(_operator.mul, [f.coeff for f in factors])                        
-                    pLeft  = self.unitary_sim_pre(rho,Es, factors, comm, memLimit, pLeft)
-                    pRight = self.unitary_sim_post(rho,Es, factors, comm, memLimit, pRight) \
+                    coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+                    pLeft  = self.unitary_sim_pre(rhoLeft,Es, factors, comm, memLimit, pLeft)
+                    pRight = self.unitary_sim_post(rhoRight,Es, factors, comm, memLimit, pRight) \
                              if not self.unitary_evolution else 1
                     for i in range(len(Es)):
-                        res = coeff * (pLeft[i] * pRight[i])
+                        #coeff.multin_scalar(pLeft[i] * pRight[i]); res = coeff
+                        res = coeff.mult_scalar( (pLeft[i] * pRight[i]) )
                         #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
                         if prps[i] is None:  prps[i] = res
-                        else:                prps[i].addin(res) # assumes a Polynomial - use += for numeric types...
+                        else:                prps[i] += res #prps[i].addin(res) # assumes a Polynomial - use += for numeric types...
                         #print("DB running prp =",prp)
                 db_nfactors = [len(l) for l in factor_lists]
                 db_totfactors = _np.product(db_nfactors)
@@ -195,6 +244,18 @@ class GateTermCalc(GateCalc):
                 #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
 
         #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
+
+        #CHECK with fast version
+        for slow,fast in zip(prps,prps_fast):
+            #print("Slow: ",slow)
+            #print("Fast: ",fast)            
+            for k,v in slow.items():
+                if abs(v) > 1e-12:
+                    assert(abs(fast[k]-v) < 1e-6)
+            for k,v in fast.items():
+                if abs(v) > 1e-12:
+                    assert(abs(slow[k]-v) < 1e-6)
+        
         return prps # can be a list of polys
         
 
@@ -223,20 +284,20 @@ class GateTermCalc(GateCalc):
     
 
     def unitary_sim_pre(self, rhoVec, EVecTs, complete_factors, comm, memLimit, out):
-        ops = _itertools.chain(*[f.pre_ops for f in complete_factors])
-        rho = self.propagate_state(rhoVec, ops) #, adjoint)  # UPDATE: no need b/c terms hold adjoints in post_ops
+        for f in _itertools.chain(*[f.pre_ops for f in complete_factors]):
+            rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
         for i,EconjT in enumerate(EVecTs):
-            out[i] = _np.dot(EconjT,rho) # *Amplitude!* -- Assumes dense state/POVM vecs
+            out[i] = _np.dot(EconjT,rhoVec) # *Amplitude!* -- Assumes dense state/POVM vecs
         return out # complex amplitudes, *not* real probabilities
 
     
     def unitary_sim_post(self, rhoVec, EVecTs, complete_factors, comm, memLimit, out):
-        ops = _itertools.chain(*[f.post_ops for f in complete_factors])
-        rho = self.propagate_state(rhoVec, ops) #, adjoint=True)  # UPDATE: no need b/c terms hold adjoints in post_ops
+        for f in _itertools.chain(*[f.post_ops for f in complete_factors]):
+            rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
 
         for i,EconjT in enumerate(EVecTs):
-            out[i] = _np.dot(EconjT,rho) # *Amplitude!* -- Assumes dense state/POVM vecs
+            out[i] = _np.dot(EconjT,rhoVec) # *Amplitude!* -- Assumes dense state/POVM vecs
 
         # conjugate to map what we do: "acting with adjoint ops on a ket"
         # to what we want to return:   "acting with opt in rev order on a bra"
