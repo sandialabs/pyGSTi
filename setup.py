@@ -22,6 +22,13 @@ try:
                   #define_macros = [('CYTHON_TRACE','1')], #for profiling
                   include_dirs=['.', np.get_include()]
                   #libraries=['m'] #math lib?
+                  ),
+        Extension("pygsti.objects.fastgatecalc",
+                  sources=["packages/pygsti/objects/fastgatecalc.pyx"], 
+                  include_dirs=['.', np.get_include()],
+                  language="c++",
+                  extra_compile_args=["-std=c++11"], #,"-stdlib=libc++"
+                  extra_link_args=["-std=c++11"]
                   )
         ]
     ext_modules = cythonize(ext_modules)

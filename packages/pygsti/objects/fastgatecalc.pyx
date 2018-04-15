@@ -53,7 +53,6 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
 
     cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
     cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
-    cdef int fastmode = 0 # False
     cdef int N = len(gatestring)
     cdef int numEs = len(Es)
     cdef int* p = <int*>malloc(N * sizeof(int))
@@ -86,7 +85,7 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
     assert(max_order <= 2) # only support this partitioning below (so far)
 
     cdef vector[ unordered_map[int, complex] ] prps = vector[ unordered_map[int, complex] ](numEs)
-    prps_chk = [None]*len(Es)
+    #prps_chk = [None]*len(Es)
     for order in range(max_order+1):
         #print("DB: pr_as_poly order=",order)
         
@@ -104,7 +103,7 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
                 coeff_lists[k] = gate_term_coeffs[gn][p[k]]
                 if len(factor_lists[k]) == 0: continue
             #print("Part0 ",p)
-            pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps, prps_chk)
+            pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
 
             
         elif order == 1:
@@ -117,7 +116,7 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
                     coeff_lists[k] = gate_term_coeffs[gn][p[k]]
                     if len(factor_lists[k]) == 0: continue
                 #print("Part1 ",p)
-                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps, prps_chk)
+                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
                 p[i] = 0
             
         elif order == 2:
@@ -130,7 +129,7 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
                     coeff_lists[k] = gate_term_coeffs[gn][p[k]]
                     if len(factor_lists[k]) == 0: continue
                 #print("Part2a ",p)
-                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps, prps_chk)
+                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
                 p[i] = 0
 
             for i in range(N):
@@ -144,7 +143,7 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
                         coeff_lists[k] = gate_term_coeffs[gn][p[k]]
                         if len(factor_lists[k]) == 0: continue
                     #print("Part2b ",p)
-                    pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight, max_poly_vars, max_poly_order, &prps, prps_chk)
+                    pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight, max_poly_vars, max_poly_order, &prps) #, prps_chk)
                     p[j] = 0
                 p[i] = 0
         else:
@@ -155,43 +154,83 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
                 
 
 cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double complex* pLeft, double complex* pRight,
-                          int max_poly_vars, int max_poly_order, vector[ unordered_map[int, complex] ]* prps, prps_chk):
+                          int max_poly_vars, int max_poly_order, vector[ unordered_map[int, complex] ]* prps): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
+    cdef int i,j
+    cdef int fastmode = 1 # False
+    cdef unordered_map[int, complex].iterator it1, it2, itk
+    cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
+    cdef double complex scale, val, newval
+    cdef vector[vector[unordered_map[int, complex]]] reduced_coeff_lists
 
     
     rhoLeft = rhoRight = rho
-    #FASTMODE
-    #if fastmode: # filter factor_lists to matrix-compose all length-1 lists
-    #    reduced_factor_lists = []; curTerm = []
-    #    for i,fl in enumerate(factor_lists):
-    #        if len(fl) == 1:
-    #            curTerm.append(fl[0])
-    #        else: # len(fl) > 1:
-    #            if len(curTerm) > 0:
-    #                reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
-    #            reduced_factor_lists.append(fl); curTerm = []
-    #    if len(curTerm) > 0:
-    #        reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
-    #
-    #    #This doesn't do much, so leave it out for now
-    #    #if reduced_factor_lists:
-    #    #    if len(reduced_factor_lists[0]) == 1:
-    #    #        t = reduced_factor_lists[0][0] # single term
-    #    #        rhoLeft = self.propagate_state(rho, t.pre_ops)
-    #    #        rhoRight = self.propagate_state(rho, t.post_ops)
-    #    #        del reduced_factor_lists[0]
-    #
-    #    factor_lists = reduced_factor_lists
-    #    #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
+    if fastmode: # filter factor_lists to matrix-compose all length-1 lists
 
-    cdef int i,j
+        reduced_coeff_lists = vector[vector[unordered_map[int, complex]]]()
+        reduced_factor_lists = []; curTerm = None
+        
+        #for i,fl in enumerate(factor_lists):
+        for i in range(len(factor_lists)):
+            fl = factor_lists[i]
+            if len(fl) == 1:
+                if curTerm is None:
+                    curTerm = fl[0].copy()
+                    curCoeff = factor_coeff_lists[i][0] # an unordered_map
+                else:
+                    curTerm.compose(fl[0])
+                    # curCoeff *= factor_coeff_lists[i][0]
+                    result = unordered_map[int,complex]()
+                    coeff2 = factor_coeff_lists[i][0]
+                    it1 = curCoeff.begin()
+                    while it1 != curCoeff.end():
+                        it2 = coeff2.begin()
+                        while it2 != coeff2.end():
+                            k = mult_vinds_ints(deref(it1).first, deref(it2).first, max_poly_vars, max_poly_order) #key to add
+                            itk = result.find(k)
+                            val = deref(it1).second * deref(it2).second
+                            if itk != result.end():
+                                deref(itk).second = deref(itk).second + val
+                            else: result[k] = val
+                            inc(it2)
+                        inc(it1)
+                    curCoeff = result
+                    
+            else: # len(fl) > 1:
+                if curTerm is not None:
+                    reduced_factor_lists.append([curTerm.collapse()])
+                    vec_curCoeff = vector[unordered_map[int,complex]](1)
+                    vec_curCoeff[0] = curCoeff
+                    reduced_coeff_lists.push_back(vec_curCoeff)
+                reduced_factor_lists.append(fl); curTerm = None
+                reduced_coeff_lists.push_back( factor_coeff_lists[i] )
+
+        if curTerm is not None:
+            reduced_factor_lists.append([curTerm.collapse()])
+            vec_curCoeff = vector[unordered_map[int,complex]](1)
+            vec_curCoeff[0] = curCoeff
+            reduced_coeff_lists.push_back(vec_curCoeff)
+
+        if reduced_factor_lists:
+            if len(reduced_factor_lists[0]) == 1: # AND coeff == 1.0?
+                t = reduced_factor_lists[0][0] # single term
+                #rhoLeft = self.propagate_state(rho, t.pre_ops)
+                for j in range(len(t.pre_ops)):
+                    rhoLeft = t.pre_ops[j].acton(rhoLeft)
+                #rhoRight = self.propagate_state(rho, t.post_ops)
+                for j in range(len(t.post_ops)):
+                    rhoRight = t.post_ops[j].acton(rhoRight)
+                del reduced_factor_lists[0]
+                reduced_coeff_lists.erase(reduced_coeff_lists.begin()) # ASSUMES coeff is 1.0 and can just be removed
+    
+        factor_lists = reduced_factor_lists
+        factor_coeff_lists = reduced_coeff_lists
+        #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
+
     cdef int nFactorLists = len(factor_lists) # may need to recompute this after fast-mode
     cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
-    cdef unordered_map[int, complex].iterator it1, it2, itk
-    cdef unordered_map[int, complex] result, coeff, coeff2
-    cdef double complex scale, val, newval
-    
+
     for i in range(nFactorLists):
         factorListLens[i] = len(factor_lists[i])
     
@@ -204,8 +243,12 @@ cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double comp
         
 #        print "Inner loop", b
 
-        ##coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])            
-        coeff = factor_coeff_lists[0][b[0]] # an unordered_map (copies to new "coeff" variable)
+        ##coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+        if nFactorLists == 0:
+            #coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order)
+            coeff = unordered_map[int,complex](); coeff[0] = 1.0
+        else:
+            coeff = factor_coeff_lists[0][b[0]] # an unordered_map (copies to new "coeff" variable)
 
         # CHECK POLY MATH
         #print "\n----- PRE MULT ---------"
@@ -215,7 +258,7 @@ cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double comp
         for i in range(1,nFactorLists):
             result = unordered_map[int,complex]()
             coeff2 = factor_coeff_lists[i][b[i]]
-            
+
             # multiply coeff by current factor
             it1 = coeff.begin()
             while it1 != coeff.end():
@@ -224,9 +267,10 @@ cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double comp
                     k = mult_vinds_ints(deref(it1).first, deref(it2).first, max_poly_vars, max_poly_order) #key to add
                     
                     itk = result.find(k)
+                    val = deref(it1).second * deref(it2).second
                     if itk != result.end():
-                        deref(itk).second += deref(it1).second * deref(it2).second
-                    else: result[k] = deref(it1).second * deref(it2).second
+                        deref(itk).second = deref(itk).second + val
+                    else: result[k] = val
                     inc(it2)
                 inc(it1)
             coeff = result

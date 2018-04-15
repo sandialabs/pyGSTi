@@ -188,7 +188,7 @@ class GateTermCalc(GateCalc):
         pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
         pRight = _np.empty(len(Es),complex) #lots of allocs in inner loop
 
-        fastmode = False
+        fastmode = True
         
         prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(self.max_order+1):
@@ -213,19 +213,19 @@ class GateTermCalc(GateCalc):
                     if len(curTerm) > 0:
                         reduced_factor_lists.append([_compose_terms(curTerm).collapse()])
 
-                    #This doesn't do much, so leave it out for now
-                    #if reduced_factor_lists:
-                    #    if len(reduced_factor_lists[0]) == 1:
-                    #        t = reduced_factor_lists[0][0] # single term
-                    #        rhoLeft = self.propagate_state(rho, t.pre_ops)
-                    #        rhoRight = self.propagate_state(rho, t.post_ops)
-                    #        del reduced_factor_lists[0]
+                    if reduced_factor_lists:
+                        if len(reduced_factor_lists[0]) == 1: 
+                            t = reduced_factor_lists[0][0] # single term
+                            rhoLeft = self.propagate_state(rho, t.pre_ops)
+                            rhoRight = self.propagate_state(rho, t.post_ops)
+                            del reduced_factor_lists[0]
 
                     factor_lists = reduced_factor_lists
                     #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
 
                 for factors in _itertools.product(*factor_lists):
-                    coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+                    if len(factors) == 0: coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order)
+                    else: coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
                     pLeft  = self.unitary_sim_pre(rhoLeft,Es, factors, comm, memLimit, pLeft)
                     pRight = self.unitary_sim_post(rhoRight,Es, factors, comm, memLimit, pRight) \
                              if not self.unitary_evolution else 1
