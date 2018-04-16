@@ -1,14 +1,21 @@
+""" Symplectic representation utility functions """
 from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
 
 import numpy as _np
 import copy as _copy
 import sys
 
+
 if sys.version_info >= (3,):
     long = int
 
-#from . import matrixmod2 as _mtx
-from ...tools import matrixmod2 as _mtx
+from . import matrixmod2 as _mtx
 
 def symplectic_form(n,convention='standard'):
     """
@@ -345,7 +352,7 @@ def compose_cliffords(s1,p1,s2,p2):
     
     return s, p
 
-def symplectic_representation(gllist=None):
+def standard_symplectic_representations(gllist=None):
     """
     Returns dictionaries containing the symplectic matrices and phase vectors that represent
     the specified 'standard' Clifford gates, or the representations of all the standard gates
@@ -363,12 +370,10 @@ def symplectic_representation(gllist=None):
 
     Returns
     -------
-    s_dict : dictionary of numpy arrays
-        The symplectic matrices representing the requested standard gates.
-        
-    p_dict : dictionary of numpy arrays
-        The phase vectors representing the requested standard gates.
-
+    srep_dict : dict
+        dictionary of `(smatrix,svector)` tuples, where `smatrix` and `svector`
+        are numpy arrays containing the symplectic matrix and phase vector
+        representing the gate label given by the key.
     """    
     # Full dictionaries, containing the symplectic representations of *all* gates
     # that are hard-coded, and which have a specific meaning to the code.
@@ -411,20 +416,16 @@ def symplectic_representation(gllist=None):
     complete_p_dict['SWAP'] = _np.array([0,0,0,0],int)
     
     if gllist is None:
-        s_dict = complete_s_dict
-        p_dict = complete_p_dict
-    
-    else:    
-        s_dict = {}
-        p_dict = {}
-    
-        for glabel in gllist:
-            s_dict[glabel] = complete_s_dict[glabel]
-            p_dict[glabel] = complete_s_dict[glabel]
-    
-    return s_dict, p_dict
+        keys = list(complete_s_dict.keys())
+        assert(set(keys) == set(complete_p_dict.keys()))    
+    else:
+        keys = gllist
 
-def composite_clifford_from_clifford_circuit(circuit, s_dict=None, p_dict=None):
+    srep_dict = { k: (complete_s_dict[k],complete_p_dict[k]) for k in keys }
+    return srep_dict
+
+
+def composite_clifford_from_clifford_circuit(circuit, srep_dict=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by 
     the specified Clifford circuit.
@@ -434,21 +435,13 @@ def composite_clifford_from_clifford_circuit(circuit, s_dict=None, p_dict=None):
     circuit : Circuit
         The Clifford circuit to calculate the global action of, input as a
         Circuit object.
-        
-    s_dict : dict, optional
-        If not None, a dictionary providing the symplectic matrix associated with
-        each gate label (i.e., the 'phase vector' component of the symplectic 
-        representation of that gate). If the circuit is contains only gates from 
-        the 'standard' gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
-        
-    p_dict : dict, optional
-        If not None, a dictionary providing the phase vector associated with
-        each gate label (i.e., the 'phase vector' component of the symplectic 
-        representation of that gate). If the circuit is contains only gates from the 
+
+    srep_dict : dict, optional
+        If not None, a dictionary providing the (symplectic matrix, phase vector)
+        tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Otherwise it must be specified.
-
+        
     Returns
     -------
     s : numpy array
@@ -457,13 +450,9 @@ def composite_clifford_from_clifford_circuit(circuit, s_dict=None, p_dict=None):
     p : dictionary of numpy arrays
         The phase vector representing the Clifford implement by the input circuit
         
-    """    
-    n = circuit.number_of_qubits
+    """
+    n = circuit.number_of_lines
     depth = circuit.depth()
-    
-    if (s_dict is None) or (p_dict is None):        
-        # Get the symplectic representation for all gates that are in-built into the code
-        s_dict, p_dict = symplectic_representation()
     
     # The initial action of the circuit before any layers are applied.
     s = _np.identity(2*n,int)
@@ -471,33 +460,29 @@ def composite_clifford_from_clifford_circuit(circuit, s_dict=None, p_dict=None):
     
     for i in range(0,depth):        
         layer = circuit.get_circuit_layer(i)
-        layer_s, layer_p = clifford_layer_in_symplectic_rep(layer, n, s_dict,  p_dict)
+        layer_s, layer_p = clifford_layer_in_symplectic_rep(layer, n, srep_dict)
         s, p = compose_cliffords(s, p, layer_s, layer_p)
     
     return s, p
 
-def clifford_layer_in_symplectic_rep(layer, n, s_dict=None, p_dict=None):
+
+def clifford_layer_in_symplectic_rep(layer, n, srep_dict=None):
     """
     Returns the symplectic representation of the n-qubit Clifford implemented by a
-    single quantum circuit layer.
+    single quantum circuit layer (gates in layer must act on disjoint sets of qubits).
     
     Parameters
     ----------
-    layer : list    
-        The Clifford circuit layer to calculate the global action of, input as a
-        list of Gate objects.
+    layer : list/tuple of gate labels
+        The Clifford gates to calculate the global action of, input as a
+        list of Label objects.
+
+    n : int
+        The total number of qubits.
         
-    s_dict : dict, optional
-        If not None, a dictionary providing the symplectic matrix associated with
-        each gate label (i.e., the 'phase vector' component of the symplectic 
-        representation of that gate). If the circuit layer contains only 'standard' 
-        gates which have a hard-coded symplectic representation this 
-        may be None. Otherwise it must be specified.
-        
-    p_dict : dict, optional
-        If not None, a dictionary providing the phase vector associated with
-        each gate label (i.e., the 'phase vector' component of the symplectic 
-        representation of that gate). If the circuit layer contains only
+    srep_dict : dict, optional
+        If not None, a dictionary providing the (symplectic matrix, phase vector)
+        tuples associated with each gate label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this 
         may be None. Otherwise it must be specified.
 
@@ -507,39 +492,46 @@ def clifford_layer_in_symplectic_rep(layer, n, s_dict=None, p_dict=None):
         The symplectic matrix representing the Clifford implement by specified 
         circuit layer
         
-    p : dictionary of numpy arrays
+    p : numpy array
         The phase vector representing the Clifford implement by specified 
         circuit layer
-        
     """ 
+    from ..objects.label import Label as _Label #TODO: move label.py to baseobjs??
     
     #
     # Todo: this method is currently pretty stupid. It is probably useful to keep it, but for
     # the circuit function above to not use it, and instead just perform the action of each 
     # gate.
     #
+    sreps = standard_symplectic_representations()
+
+    #WRONG
+    # sreps = {} #list of available symplectic reps for gates
+    # # add template integer qubit labels to standard gate names
+    # #  so, e.g. "CNOT" => Label("CNOT",(0,1))
+    # std_sreps = standard_symplectic_representations()
+    # for gname, srep in std_sreps.items(): 
+    #     nQ = len(srep[1]) // 2 # number of qubits
+    #     sreps[_Label(gname, tuple(range(nQ)))] = srep
     
-    if (s_dict is None) or (p_dict is None):        
-        # Get the symplectic representation for all gates that are in-built into the code
-        s_dict, p_dict = symplectic_representation()
+    if srep_dict is not None: sreps.update(srep_dict)
             
     s = _np.identity(2*n,int)
     p = _np.zeros(2*n,int)
-    
-    for gate in layer:
+
+    for gatelbl in layer:
         
         # Checks below are commented out as they are very inefficient, so it is probably
         # better to just allow a key error.
         #assert(gate.label in list(s_dict.keys())), "Symplectic matrix for some gate labels not provided!"
         #assert(gate.label in list(p_dict.keys())), "Phase vector for some gate labels not provided!"
-        matrix = s_dict[gate.label]
-        phase = p_dict[gate.label]
+        matrix, phase = sreps[gatelbl.name]
         
-        assert(gate.number_of_qubits == 1 or gate.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
+        assert(gatelbl.number_of_qubits == 1 or gatelbl.number_of_qubits == 2), "Only 1 and 2 qubit gates are allowed!"
         
-        if gate.number_of_qubits == 1:
+        if gatelbl.number_of_qubits == 1:
             
-            q = gate.qubits[0]
+            q = gatelbl.qubits[0]
             s[q,q] = matrix[0,0]
             s[q,q+n] = matrix[0,1]
             s[q+n,q] = matrix[1,0]
@@ -549,8 +541,8 @@ def clifford_layer_in_symplectic_rep(layer, n, s_dict=None, p_dict=None):
             
         else:
             
-            q1 = gate.qubits[0]
-            q2 = gate.qubits[1]
+            q1 = gatelbl.qubits[0]
+            q2 = gatelbl.qubits[1]
             for i in [0,1]:
                 for j in [0,1]:
                     s[q1+i*n,q1+j*n] = matrix[0+2*i,0+2*j]

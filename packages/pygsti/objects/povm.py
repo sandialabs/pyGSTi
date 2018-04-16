@@ -248,7 +248,7 @@ class _BasePOVM(POVM):
         -------
         OrderedDict of SPAMVecs
         """
-        if prefix: prefix += "_"
+        if prefix: prefix = prefix + "_"
         compiled = _collections.OrderedDict()
         for lbl,effect in self.items():
             if lbl == self.complement_label: continue
@@ -416,7 +416,7 @@ class UnconstrainedPOVM(_BasePOVM):
     def __str__(self):
         s = "Unconstrained POVM with effect vectors:\n"
         for lbl,effect in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
+            s += "%s: %s\n" % (lbl, str(effect))
         return s
 
 
@@ -473,7 +473,7 @@ class TPPOVM(_BasePOVM):
     def __str__(self):
         s = "TP-POVM with effect vectors:\n"
         for lbl,effect in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(effect.base, width=4, prec=2))
+            s += "%s:\n%s\n" % (lbl, str(effect))
         return s
 
 
@@ -498,6 +498,7 @@ class TensorProdPOVM(POVM):
         #  Copy each POVM and set it's parent and gpindices.
         #  Assume each one's parameters are independent.
         self.factorPOVMs = [povm.copy() for povm in factorPOVMs]
+        
         off = 0
         for povm in self.factorPOVMs:
             N = povm.num_params()
@@ -662,9 +663,15 @@ class TensorProdPOVM(POVM):
         return self._copy_gpindices( TensorProdPOVM(self.factorPOVMs), parent )
 
     def __str__(self):
-        s = "Tensor-product POVM with effect labels:\n"
-        s += ", ".join(self.keys()) + "\n"
-        s += " Effects (one per column):\n"
-        s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
-                                           axis=1), width=6, prec=2)
+        s = "Tensor-product POVM with %d factor POVMs\n" % len(self.factorPOVMs)
+        #s += " and final effect labels " + ", ".join(self.keys()) + "\n"
+        for i,povm in enumerate(self.factorPOVMs):
+            s += "Factor %d: " % i
+            s += str(povm)
+        
+        #s = "Tensor-product POVM with effect labels:\n"
+        #s += ", ".join(self.keys()) + "\n"
+        #s += " Effects (one per column):\n"
+        #s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
+        #                                   axis=1), width=6, prec=2)
         return s

@@ -18,6 +18,7 @@ from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
+from .label import Label as _Label
 
 _dummy_profiler = _DummyProfiler()
 
@@ -60,6 +61,7 @@ class GateMapCalc(GateCalc):
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
+        self.unitary_evolution = False
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
@@ -73,10 +75,12 @@ class GateMapCalc(GateCalc):
     #Same as GateMatrixCalc, but not general enough to be in base class
     def _rhoE_from_spamTuple(self, spamTuple):
         assert( len(spamTuple) == 2 )
-        if _compat.isstr(spamTuple[0]):
+        if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
+            typ = complex if self.unitary_evolution else 'd'
+            scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
+            rho = self.preps[rholabel].toarray(scratch).copy() # copy b/c use scratch again (next line)
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -145,7 +149,10 @@ class GateMapCalc(GateCalc):
         """
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
-        p = float(_np.dot(E,rho))
+        if self.unitary_evolution:
+            p = float(abs(_np.dot(E,rho))**2)
+        else:
+            p = float(_np.dot(E,rho))
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -282,9 +289,12 @@ class GateMapCalc(GateCalc):
         cacheSize = evalTree.cache_size()
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
+
+        #Scratch type (for holding spam/state vectors)
+        typ = complex if self.unitary_evolution else 'd'
         
         if scratch is None:
-            rho_cache = _np.zeros((cacheSize, dim), 'd')
+            rho_cache = _np.zeros((cacheSize, dim), typ)
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache = scratch #to avoid recomputation
@@ -292,8 +302,8 @@ class GateMapCalc(GateCalc):
         #comm is currently ignored
         #TODO: if evalTree is split, distribute among processors
 
-        rho = rhoVec.toarray()
-        Escratch = _np.empty(rho.shape[0],'d') # memory for E.toarray() if it wants it
+        Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
+        rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
         for i in evalTree.get_evaluation_order():
             iStart,remainder,iCache = evalTree[i]
             if iStart is None:  init_state = rho #[:,0]
@@ -302,10 +312,14 @@ class GateMapCalc(GateCalc):
             final_state = self.propagate_state(init_state, remainder)
             if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
 
-            for j,E in enumerate(EVecs):
-                ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
-                #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
-                # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
+            if self.unitary_evolution:
+                for j,E in enumerate(EVecs):
+                    ret[i,j] = _np.abs(_np.vdot(E.toarray(Escratch),final_state))**2
+            else:
+                for j,E in enumerate(EVecs):
+                    ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
+                    #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
+                    # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
                 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
@@ -320,8 +334,9 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         cacheSize = evalTree.cache_size()
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
+        typ = complex if self.unitary_evolution else 'd'
         if scratch is None:
-            rho_cache  = _np.zeros((cacheSize, dim), 'd')
+            rho_cache  = _np.zeros((cacheSize, dim), typ)
         else:
             assert(scratch.shape == (cacheSize,dim))
             rho_cache  = scratch
@@ -996,3 +1011,11 @@ class GateMapCalc(GateCalc):
         #if check:
         #    self._check(evalTree, spam_label_rows,
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
+
+
+class UnitaryGateMapCalc(GateMapCalc):
+    """ TODO: docstring """
+    def __init__(self, dim, gates, preps, effects, paramvec):
+        """ TODO: docstring """
+        super(UnitaryGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
+        self.unitary_evolution = True

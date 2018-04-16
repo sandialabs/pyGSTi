@@ -3,62 +3,38 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import copy as _copy
 from scipy import mod as _mod
+from ..circuit import symplectic as _symp
+from ..circuit import circuit as _cir
+from ..circuit import compileclifford as _comp
 
-from ...algorithms import compileclifford as _comp
-from ...objects import circuit as _cir
-from ...objects import label as _lbl
-from ...tools import symplectic as _symp
 
-#from ... import symplectic as _symp
-#from ..circuit import circuit as _cir
-#from ..circuit import compileclifford as _comp
+def sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=0.5):
 
-# Todo : make these methods work when the qubits have labels other than integers on 0,...,n-1.
-
-def sample_circuit_layer_by_2Qweighting(pspec,gates1Q=None,gates2Q=None,two_qubit_weighting=0.5):
-
+    available_gates_1q = _copy.deepcopy(ds.allgates)
+    available_gates_2q = _copy.deepcopy(ds.allgates)
+    xx = len(available_gates_1q)
+    for i in range(0,xx):
+        if available_gates_1q[xx-1-i].number_of_qubits != 1:
+            del available_gates_1q[xx-1-i]
+    for i in range(0,xx):
+        if available_gates_2q[xx-1-i].number_of_qubits != 2:
+            del available_gates_2q[xx-1-i]
+            
+    sampled_layer = []
     
-    if gates1Q != None:
-        available_gates_1q = _copy.copy(gates1Q)
-    
-    else:
-        assert('clifford' in list(pspec.models.keys())), "The provided ProcessorSpec object `pspec` must contain a 'clifford' gateset."
-        available_gates_1q = list(pspec.models['clifford'].gates.keys())
-        d = len(available_gates_1q)
-    
-        for i in range(0,d):
-            if available_gates_1q[d-1-i].number_of_qubits != 1:
-                del available_gates_1q[d-1-i]
-    
-    if gates2Q != None:
-        available_gates_2q = _copy.copy(gates2Q)
-    
-    else:
-        assert('clifford' in list(pspec.models.keys())), "The provided ProcessorSpec object `pspec` must contain a 'clifford' gateset."
-        available_gates_2q = list(pspec.models['clifford'].gates.keys())
-        d = len(available_gates_2q)               
-                        
-        for i in range(0,d):
-            if available_gates_2q[d-1-i].number_of_qubits != 2:
-                del available_gates_2q[d-1-i]
-    
-    
-    sampled_layer = [] 
-    
-    if two_qubit_weighting != None: 
+    if two_qubit_weighting is not None:
         weighting = [1-two_qubit_weighting,two_qubit_weighting]
     
-    l = pspec.number_of_qubits
-    remaining_qubits = list(_np.arange(0,pspec.number_of_qubits))
+    l = ds.number_of_qubits
+    remaining_qubits = list(_np.arange(0,ds.number_of_qubits))
     qubits_used = 0
-    
     while qubits_used < l:
                
         # Pick a random qubit
-        r = _np.random.randint(0,pspec.number_of_qubits-qubits_used)
+        r = _np.random.randint(0,ds.number_of_qubits-qubits_used)
         q = remaining_qubits[r]
         del remaining_qubits[r]
-                
+        
         remaining_containing_q_1q = []
         ll = len(available_gates_1q)
         for i in range(0,ll):
@@ -112,10 +88,10 @@ def sample_circuit_layer_by_2Qweighting(pspec,gates1Q=None,gates2Q=None,two_qubi
     
     return sampled_layer
 
-def sample_circuit_layer_by_sectors(pspec, sectors, two_qubit_prob):
+def sample_circuit_layer_by_sectors(ds, sectors, two_qubit_prob):
     
     twoqubitgates = sectors[_np.random.randint(0,len(sectors))]    
-    remaining_qubits = list(_np.arange(0,pspec.number_of_qubits))
+    remaining_qubits = list(_np.arange(0,ds.number_of_qubits))
     sampled_layer = []
     
     for i in range(0,len(twoqubitgates)):
@@ -127,123 +103,100 @@ def sample_circuit_layer_by_sectors(pspec, sectors, two_qubit_prob):
             
     for i in range(0,len(remaining_qubits)):
         qubit = remaining_qubits[i]        
-        possiblegates = pspec.clifford_gates_on_qubits[(qubit,)]
+        possiblegates = ds.gatesonqubits[qubit]
         gate = possiblegates[_np.random.randint(0,len(possiblegates))]
         sampled_layer.append(gate)
 
     return sampled_layer
 
-def sample_circuit_layer_of_1Q_gates(pspec, gtype = 'primitives'):
+def sample_circuit_layer_of_1Q_gates(ds, gtype = 'primitives'):
     
     assert(gtype == 'primitives' or gtype == 'paulis'), "gtype must be'primitives' or 'paulis'"
     sampled_layer = []
     
     if gtype == 'primitives':
-        for i in range(0,pspec.number_of_qubits):
+        for i in range(0,ds.number_of_qubits):
             try:
-                gate = pspec.clifford_gates_on_qubits[i][_np.random.randint(0,len(pspec.clifford_gates_on_qubits[i]))]
+                gate = ds.gatesonqubits[i][_np.random.randint(0,len(ds.gatesonqubits[i]))]
                 sampled_layer.append(gate)
             
             except:
-                raise ValueError ("There are no available 1Q gates on qubit {}. Check the ProcessorSpec is correctly initialized".format(i))
+                raise ValueError ("There are no available 1Q gates on qubit {}. Check the DeviceSpec is correctly initialized".format(i))
                 
     if gtype == 'paulis':
         plist = ['I','X','Y','Z']
         for pgl in plist:
-            assert(pgl in list(pspec.models['clifford'].gates.keys())), "Currently, the Pauli gates must be natively available to use this method!"
+            assert(pgl in ds.gateset.names), "Currently, the Pauli gates must be natively available to use this method!"
             
-        for i in range(0,pspec.number_of_qubits):
+        for i in range(0,ds.number_of_qubits):
             sampled_pauli = plist[_np.random.randint(0,4)]
-            sampled_layer.append(_lbl.Label(sampled_pauli,i))
+            sampled_layer.append(_cir.Gate(sampled_pauli,i))
 
     return sampled_layer
 
-def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.5,None,'single'],
+def sample_primitives_circuit(ds, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5},
                               alternatewithlocal = False, localtype = 'primitives'):
     
     if sampler == 'weights':
-        two_qubit_weighting = sampler_args[0]
-                       
-        gates1q = list(pspec.models['clifford'].gates.keys())
-        gates2q = list(pspec.models['clifford'].gates.keys())
-        d = len(gates1q)   
-        for i in range(0,d):
-            if gates1q[d-1-i].number_of_qubits != 1:
-                del gates1q[d-1-i]
-            if gates2q[d-1-i].number_of_qubits != 2:
-                 del gates2q[d-1-i]
+        two_qubit_weighting = sampler_args['two_qubit_weighting']
         
     elif sampler == 'sectors':
+        two_qubit_prob = sampler_args['two_qubit_prob']
+        sectors = sampler_args['sectors']
         
-        twoqubitprob = sampler_args[0]
-        customsectors = sampler_args[1]
-        stdsectors = sampler_args[2]
-        
-        if customsectors is not None:
-            sectors = customsectors
-        else:
-            assert(stdsectors == 'single')
-            
-            sectors = []           
-            for gate in pspec.models['clifford'].gates:
-                if gate.number_of_qubits == 2:
-                    sectors.append([gate,])
-                       
-    circuit = _cir.Circuit(gatestring=[],num_lines=pspec.number_of_qubits)
+    circuit = _cir.Circuit(n=ds.number_of_qubits)
     
     if not alternatewithlocal:
         for i in range(0,length):
   
-            if sampler == 'weights':       
-                        
-                layer = sample_circuit_layer_by_2Qweighting(pspec, gates1Q=gates1q, gates2Q=gates2q, 
-                                                            two_qubit_weighting=two_qubit_weighting)
+            if sampler == 'weights':
+                layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
             
             elif sampler == 'sectors':
-                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob)
+                layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
             else:
-                layer = sampler(pspec, length, sampler_args)
+                layer = sampler(ds, length, sampler_args)
             
             circuit.insert_layer(layer,0)
             
     if alternatewithlocal:
          for i in range(0,length):
                 
-                # For odd layers, we uniformly sample the specified type of local gates.
+                # For odd layers, we do local gates only.
                 local = not bool(i % 2)
                 if local:
-                    layer = sample_circuit_layer_of_1Q_gates(pspec, gtype = localtype)
+                    layer = sample_circuit_layer_of_1Q_gates(ds, gtype = localtype)
                 
                 # For even layers, we sample according to the given distribution
                 else:
                     if sampler == 'weights':
-                        layer = sample_circuit_layer_by_2Qweighting(pspec,two_qubit_weighting=two_qubit_weighting)
+                        layer = sample_circuit_layer_by_2Qweighting(ds,two_qubit_weighting=two_qubit_weighting)
             
                     elif sampler == 'sectors':
-                        layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=two_qubit_prob)
+                        layer = sample_circuit_layer_by_sectors(ds, sectors=sectors, two_qubit_prob=two_qubit_prob)
                     else:
-                        layer = sampler(pspec, length, sampler_args)
+                        layer = sampler(ds, length, sampler_args)
                         
                 circuit.insert_layer(layer,0)
-    
-    circuit.done_editing()
+                
     return circuit
 
 
-def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'single'],  
+def sample_prb_circuit(ds, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
                          alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
-                       iterations=1,relations=None):
+                       iterations=100,relations=None):
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
-    random_circuit = sample_primitives_circuit(pspec=pspec, length=length, sampler=sampler,
+    random_circuit = sample_primitives_circuit(ds=ds, length=length, sampler=sampler,
                                      sampler_args=sampler_args, alternatewithlocal = alternatewithlocal, 
                                                localtype = localtype)
     
-    sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
-    n = pspec.number_of_qubits
+    sl = ds.gateset.smatrix
+    pl = ds.gateset.svector
+    n = ds.number_of_qubits
     
-    s_rc, p_rc = _symp.composite_clifford_from_clifford_circuit(random_circuit,srep_dict=sreps)
+    s_rc, p_rc = _symp.composite_clifford_from_clifford_circuit(random_circuit,s_dict=sl,p_dict=pl)
     
     if twirled:
         
@@ -251,11 +204,11 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'
         s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc, p_rc)
         
         if stabilizer:
-            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, pspec, 
+            initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, ds, 
                                                                          iterations=iterations,
                                                                         relations=relations)            
         else:
-            initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, 
+            initial_circuit = _comp.compile_clifford(s_initial, p_initial, ds, 
                                                            depth_compression=depth_compression, 
                                                            algorithm=algorithm,
                                                            prefix_paulis=True)
@@ -273,11 +226,11 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'
     #
     
     if stabilizer:
-        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, pspec, 
+        inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, ds, 
                                                                              iterations=iterations,
                                                                             relations=relations)   
     else:
-        inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, 
+        inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, 
                                                         depth_compression=depth_compression,
                                                         algorithm=algorithm,
                                                         prefix_paulis=False)
@@ -291,17 +244,13 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'
         else:
             full_circuit = _copy.deepcopy(random_circuit)
             full_circuit.append_circuit(inversion_circuit)
-         
-        full_circuit.done_editing()        
+            
         return full_circuit
     
     else:
         if twirled:
-            initial_circuit.done_editing()
-            inversion_circuit.done_editing()
             return initial_circuit, random_circuit, inversion_circuit
         else:
-            inversion_circuit.done_editing()
             return random_circuit, inversion_circuit
         
 #
@@ -311,21 +260,22 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,None,'
 # construct_std_practice_interleaved_clifford_rb_experiment()
 # construct_std_practice_primitive_clifford_rb_experiment()
 #
-def sample_crb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2QGC',
+def sample_crb_circuit(ds, length, algorithms=['DGGE','RGGE'],costfunction='2QGC',
                        iterations={'RGGE':100}, depth_compression=True):
 
-    #sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
-    n = pspec.number_of_qubits
+    sl = ds.gateset.smatrix
+    pl = ds.gateset.svector
+    n = ds.number_of_qubits
        
     s_composite = _np.identity(2*n,int)
     p_composite = _np.zeros((2*n),int)
     
-    full_circuit = _cir.Circuit(gatestring=[],num_lines=n)
+    full_circuit = _cir.Circuit(n=n)
     
     for i in range(0,length):
     
         s, p = _symp.random_clifford(n)
-        circuit = _comp.compile_clifford(s, p, pspec, depth_compression=depth_compression, algorithms=algorithms, 
+        circuit = _comp.compile_clifford(s, p, ds, depth_compression=depth_compression, algorithms=algorithms, 
                                          costfunction=costfunction, iterations=iterations, prefix_paulis=True)
         
         # Keeps track of the current composite Clifford
@@ -335,11 +285,11 @@ def sample_crb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2
     
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
     
-    inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, depth_compression=depth_compression, 
+    inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, ds, depth_compression=depth_compression, 
                                                algorithms=algorithms, costfunction=costfunction, 
                                                iterations=iterations, prefix_paulis=True)
     
     full_circuit.append_circuit(inversion_circuit)
-    full_circuit.done_editing()
+    
             
     return full_circuit

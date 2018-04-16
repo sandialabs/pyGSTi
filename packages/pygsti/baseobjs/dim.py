@@ -92,3 +92,7 @@ class Dim(object):
 
     def __hash__(self):
         return hash(tuple(self.blockDims))
+
+    def __eq__(self, other):
+        return bool((self.dmDim == other.dmDim) and (self.gateDim == other.gateDim)
+                    and (self.blockDims == other.blockDims))
