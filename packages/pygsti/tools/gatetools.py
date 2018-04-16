@@ -366,8 +366,13 @@ def process_fidelity(A, B, mxBasis=None):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
     """
-    if A[0,0] == 1.0 and B[0,0] == 1.0: #then assume TP-like gates & use simpler formula
-        TrLambda = _np.trace( _np.dot(A, _np.linalg.inv(B)) )
+    d2 = A.shape[0]
+    def isTP(x): return _np.isclose(x[0,0],1.0) and all(
+                            [ _np.isclose(x[0,i],0) for i in range(d2)] )
+    def isUnitary(x): return _np.allclose(_np.identity(d2,'d'), _np.dot(x,x.conjugate().T))
+    
+    if isTP(A) and isTP(B) and isUnitary(B): #then assume TP-like gates & use simpler formula
+        TrLambda = _np.trace( _np.dot(A, B.conjugate().T) ) # same as using _np.linalg.inv(B)
         d2 = A.shape[0]
         return TrLambda / d2
     
