@@ -67,18 +67,6 @@ class Polynomial(dict):
         self.clear()
         self.update(new_items)
 
-    def addin(self,x):
-        """ Does self += x more efficiently """
-        if isinstance(x, Polynomial):
-            for k,v in x.items():
-                try:
-                    self[k] += v
-                except KeyError:
-                    self[k] = v
-        else: # assume a scalar that can be added to values
-            for k in self:
-                self[k] += x
-
     def mult_poly(self,x):
         """ Does self * x where x is a polynomial """
         newpoly = Polynomial()
@@ -139,7 +127,19 @@ class Polynomial(dict):
             for k in newpoly:
                 newpoly[k] += x
         return newpoly
-                
+
+    def __iadd__(self,x):
+        """ Does self += x more efficiently """
+        if isinstance(x, Polynomial):
+            for k,v in x.items():
+                try:
+                    self[k] += v
+                except KeyError:
+                    self[k] = v
+        else: # assume a scalar that can be added to values
+            for k in self:
+                self[k] += x
+        return self
 
     def __mul__(self,x):
         #if isinstance(x, Polynomial):

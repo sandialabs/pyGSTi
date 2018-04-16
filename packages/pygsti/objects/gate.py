@@ -6734,6 +6734,7 @@ class LindbladTermGate(TermGate):
             try:
                 dim = baseunitary.dim # if a gate
             except:
+                baseunitary = GateMatrix.convert_to_matrix(baseunitary)
                 dim = baseunitary.shape[0] # otherwise try to treat as array
         
         self.cptp = cptp
@@ -6742,7 +6743,7 @@ class LindbladTermGate(TermGate):
         self.Lterms = Lterms
         self.baseunitary = baseunitary
         self.terms = {}
-        Gate.__init__(self, dim**2) #sets self.dim
+        TermGate.__init__(self, dim**2) #sets self.dim
 
     #def get_max_order(self):
     #    if len(self.Lterms) > 0: return 2**32 # ~inf
@@ -6784,8 +6785,7 @@ class LindbladTermGate(TermGate):
             assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
             postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary)
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
-            for t in loc_terms:
-                t.collapse() # collapse terms for speed
+            #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             self.terms[order] = self._compose_poly_indices(loc_terms)
         return self.terms[order]
     

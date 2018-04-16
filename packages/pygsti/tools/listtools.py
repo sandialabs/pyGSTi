@@ -251,7 +251,39 @@ def partition_into_slow(n, nbins):
             if pp > previous: # only *unique* permutations 
                 previous = pp # (relies in itertools implementatin detail that
                 yield pp      # any permutations of a sorted iterable are in
-                # sorted order unless they are duplicates of prior permutations      
+                # sorted order unless they are duplicates of prior permutations
+
+
+def incd_product(*args):
+    """ 
+    Like itertools product but returns the first modified index (which was
+    incremented) along with the product tuple itself.
+    TODO: docstring
+    """
+    lists = [list(a) for a in args] # so we can get new iterators to each argument
+    iters = [iter(l) for l in lists]
+    N = len(lists)
+    incr = 0 # the first index that was changed (incremented) since the last iteration
+    try:
+        t = [ next(i) for i in iters ]
+    except StopIteration: # at least one list is empty 
+        yield incr, () #just yield one item w/empty tuple, like itertools.product
+        return
+    yield incr, tuple(t) # first yield is special b/c establishes baseline (incr==0)
+    
+    incr = N-1
+    while incr >= 0:
+        try: # to increment index incr
+            t[incr] = next(iters[incr])
+        except StopIteration: # if exhaused, increment iterator to left
+            incr -= 1
+        else: # reset all iterators to right of incremented one and yield
+            for i in range(incr+1,N):
+                iters[i]= iter(lists[i])
+                t[i] = next(iters[i]) #won't raise error b/c all lists have len >= 1
+            yield incr, tuple(t)
+            incr = N-1 #next time try to increment the last index again
+    return
 
 
 # ------------------------------------------------------------------------------

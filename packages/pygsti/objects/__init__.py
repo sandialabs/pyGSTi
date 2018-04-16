@@ -43,6 +43,7 @@ from .spamvec import ComplementSPAMVec
 from .spamvec import StaticSPAMVec
 from .spamvec import TensorProdSPAMVec
 from .spamvec import PureStateSPAMVec
+from .spamvec import LindbladTermSPAMVec
 from .povm import POVM
 from .povm import TPPOVM
 from .povm import UnconstrainedPOVM

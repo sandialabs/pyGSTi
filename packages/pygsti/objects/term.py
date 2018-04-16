@@ -48,17 +48,25 @@ class RankOneTerm(object):
         applying the stored adjoints in the order stored in self.post_ops (similar to 
         acting with pre_ops in-order on a ket
         """
+        from . import gatesetmember as _gsm
         from . import gate as _gate
+        from . import spamvec as _spamvec
         self.coeff = coeff # potentially a Polynomial
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
         self.post_ops = [] # list of ops to perform - in order of operation to a bra
         if pre_op is not None:
-            if not isinstance(pre_op,_gate.Gate):
-                pre_op = _gate.StaticGate(pre_op)                
+            if not isinstance(pre_op,_gsm.GateSetMember):
+                try:
+                    pre_op = _gate.StaticGate(pre_op) #default to static gates
+                except ValueError: # raised when size/shape is wrong
+                    pre_op = _spamvec.StaticSPAMVec(pre_op) # ... or spam vecs
             self.pre_ops.append(pre_op)
         if post_op is not None:
-            if not isinstance(post_op,_gate.Gate):
-                post_op = _gate.StaticGate(post_op)
+            if not isinstance(post_op,_gsm.GateSetMember):
+                try:
+                    post_op = _gate.StaticGate(post_op) #default to static gates
+                except ValueError: # raised when size/shape is wrong
+                    post_op = _spamvec.StaticSPAMVec(post_op) # ... or spam vecs
             self.post_ops.append(post_op)
 
     def __mul__(self,x):

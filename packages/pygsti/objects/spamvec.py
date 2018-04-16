@@ -10,6 +10,10 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 #*****************************************************************
 
 import numpy as _np
+import scipy.sparse as _sps
+import collections as _collections
+import numbers as _numbers
+
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
@@ -19,6 +23,10 @@ from ..tools import compattools as _compat
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import gatesetmember as _gatesetmember
+
+from . import term as _term
+from .polynomial import Polynomial as _Polynomial
+
 
 try:
     #import pyximport; pyximport.install(setup_args={'include_dirs': _np.get_include()}) # develop-mode
@@ -2096,3 +2104,438 @@ class PureStateSPAMVec(SPAMVec):
         s = "Pure-state spam vector with length %d holding:\n" % self.dim
         s += "  " + str(self.pure_state_vec)
         return s
+
+
+class TermSPAMVec(SPAMVec):
+
+    @property
+    def size(self):
+        return self.dim
+
+
+class LindbladTermSPAMVec(TermSPAMVec):
+    """ A Lindblad-parameterized SPAMVec that is expandable into terms """
+
+    # TODO: init & basis specification; maybe breakout an OrderedTermGate base class?
+
+    #NOTE: These methods share a lot in common with those of LindbladTermGate - maybe can consolidate in FUTURE?
+    # - mostly just change baseunitary => basepurestate
+    #  (maybe add a termtools.py or add more helper functions to term.py?)
+    @classmethod
+    def from_error_generator(cls, basepurestate, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
+                             nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+        # This looks like a from_errgen constructor; we want a from_rates constructor that
+        # takes a dict(?) of rate coeffs (0 by default) associated with lindblad terms (ham_i terms and other_ij terms...)
+        # --> add same construction methods to other lindblad gates, which currently just have "from_errgen"-type __init__ functions?
+        """
+        TODO: docstring (similar to other Lindblad gates above)
+        """
+
+        d2 = errgen.shape[0]
+        d = int(round(_np.sqrt(d2)))
+        assert(d*d == d2), "Gate dim must be a perfect square"
+        
+        #Determine whether we're using sparse bases or not
+        sparse = None
+        if ham_basis is not None:
+            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
+            elif _compat.isstr(ham_basis): sparse = _sps.issparse(errgen)
+            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
+        if sparse is None and nonham_basis is not None:
+            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
+            elif _compat.isstr(nonham_basis): sparse = _sps.issparse(errgen)
+            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
+        if sparse is None: sparse = False #the default
+
+        #Get matrices (possibly sparse ones) from the bases
+        if isinstance(ham_basis, _Basis) or _compat.isstr(ham_basis):
+            ham_basis = _Basis(ham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            ham_basis = _Basis(matrices=ham_basis,dim=d,sparse=sparse)
+        
+        if isinstance(nonham_basis, _Basis) or _compat.isstr(nonham_basis):
+            other_basis = _Basis(nonham_basis,d,sparse=sparse)
+        else: # ham_basis is a list of matrices
+            other_basis = _Basis(matrices=nonham_basis,dim=d,sparse=sparse)
+        
+        matrix_basis = _Basis(mxBasis,d,sparse=sparse)
+
+        
+        hamC, otherC = \
+            _gt.lindblad_errgen_projections(
+                errgen, ham_basis, other_basis, matrix_basis, normalize=False,
+                return_generators=False, other_diagonal_only=nonham_diagonal_only,
+                sparse=sparse)
+        print("DB: ham projections = ",hamC)
+        print("DB: sto projections = ",otherC)        
+
+        Ltermdict = _collections.OrderedDict()
+        basisdict = _collections.OrderedDict(); nextLbl = 0
+        def get_basislbl(bmx):
+            for l,b in basisdict.items():
+                if _np.allclose(b,bmx): return l
+            blbl = nextLbl
+            basisdict[blbl] = bmx
+            nextLbl += 1
+            return blbl
+        
+        ham_mxs = ham_basis.get_composite_matrices()
+        assert(len(ham_mxs[1:]) == len(hamC))
+
+        for coeff, bmx in zip(hamC,ham_mxs[1:]): # skip identity
+            Ltermdict[('H',nextLbl)] = coeff
+            basisdict[nextLbl] = bmx
+            nextLbl += 1
+            
+        other_mxs = other_basis.get_composite_matrices()
+        if nonham_diagonal_only:
+            assert(len(other_mxs[1:]) == len(otherC))
+            for coeff, bmx in zip(otherC,other_mxs[1:]): # skip identity
+                blbl = get_basislbl(bmx)
+                Ltermdict[('S',blbl)] = coeff
+        else:
+            assert((len(other_mxs[1:]),len(other_mxs[1:])) == otherC.shape)
+            for i, bmx1 in enumerate(other_mxs[1:]): # skip identity
+                blbl1 = get_basislbl(bmx1)
+                for j, bmx2 in enumerate(other_mxs[1:]): # skip identity
+                    blbl2 = get_basislbl(bmx2)
+                    Ltermdict[('S',blbl1,blbl2)] = otherC[i,j]
+
+        print("DB: Ltermdict = ",Ltermdict)
+        print("DB: basisdict = ")
+        for k,v in basisdict.items():
+            print(k,":")
+            print(v)
+        return cls.from_lindblad_terms(basepurestate, Ltermdict, basisdict,
+                                       cptp, nonham_diagonal_only, truncate)
+
+
+
+        
+    @classmethod
+    def from_lindblad_terms(cls, basepurestate, Ltermdict, basisdict=None,
+                            cptp=True, nonham_diagonal_only=False, truncate=True):
+        """
+        TODO: docstring
+        Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
+        basisdict keys are string/int basis element "names"; values are numpy matrices or an "embedded matrix",
+                i.e. a *list* of (matrix, state_space_label) elements -- e.g. [(sigmaX,'Q1'), (sigmaY,'Q4')]
+         -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
+                 format when can assume single-letter labels.
+        """
+
+        #Enumerate the basis elements used for Hamiltonian and Stochasitic
+        # error terms (separately)
+        hamBasisLabels = _collections.OrderedDict()  # holds index of each basis element
+        otherBasisLabels = _collections.OrderedDict()
+        for termLbl,coeff in Ltermdict.items():
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                assert(len(termLbl) == 2),"Hamiltonian term labels should have form ('H',<basis element label>)"
+                if termLbl[1] not in hamBasisLabels:
+                    hamBasisLabels[ termLbl[1] ] = len(hamBasisLabels)
+                    
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only == 'auto':
+                    nonham_diagonal_only = bool(len(termLbl) == 2)
+                    
+                if nonham_diagonal_only:
+                    assert(len(termLbl) == 2),"Stochastic term labels should have form ('S',<basis element label>)"
+                    if termLbl[1] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                else:
+                    assert(len(termLbl) == 3),"Stochastic term labels should have form ('S',<bel1>, <bel2>)"
+                    if termLbl[1] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[1] ] = len(otherBasisLabels)
+                    if termLbl[2] not in otherBasisLabels:
+                        otherBasisLabels[ termLbl[2] ] = len(otherBasisLabels)
+
+        #Get parameter counts based on # of basis elements
+        numHamParams = len(hamBasisLabels)
+        if nonham_diagonal_only:  # OK if this runs for 'auto' too since then len(otherBasisLabels) == 0
+            numOtherParams = len(otherBasisLabels)
+        else:
+            numOtherBasisEls = len(otherBasisLabels)
+            numOtherParams = numOtherBasisEls**2
+            otherCoeffs = _np.zeros((numOtherParams,numOtherParams),'complex')
+        nTotalParams = numHamParams + numOtherParams
+        print("DB: hamBasisLabels = ",hamBasisLabels)
+        print("DB: otherBasisLabels = ",otherBasisLabels)
+
+
+        #Create & fill parameter array
+        params = _np.zeros(nTotalParams, 'd') # ham params, then "other"
+        for termLbl,coeff in Ltermdict.items():
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                assert(abs(_np.imag(coeff)) < IMAG_TOL)
+                params[k] = _np.real_if_close(coeff)
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only:
+                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                    assert(abs(_np.imag(coeff)) < IMAG_TOL)
+                    if cptp:
+                        if -1e-12 < coeff < 0: coeff = 0.0 # avoid sqrt warning due to small negative numbers
+                        params[k] = _np.sqrt(_np.real_if_close(coeff))
+                    else:
+                        params[k] = _np.real_if_close(coeff)
+                else:
+                    k = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    otherCoeffs[k,j] = coeff
+                    
+        if not nonham_diagonal_only:
+            #Finish up filling parameters for "other" terms - need to take
+            # cholesky decomp of otherCoeffs matrix:
+            otherParams = _np.empty((numOtherBasisEls,numOtherBasisEls),'d')
+
+            #ROBIN: is this necessary? -- or just need otherCoeffs to be positive semidefinite?
+            # Assume for now this must be true, as code for parameterizing otherCoeffs
+            # depends upon it (and parameter counting indicates this probably is a valid condition)
+            assert(_np.isclose(_np.linalg.norm(otherCoeffs-otherCoeffs.T.conjugate())
+                               ,0)), "other coeff mx is not Hermitian!"
+
+            if cptp: #otherParams mx stores Cholesky decomp
+    
+                #push any slightly negative evals of otherC positive so that
+                # the Cholesky decomp will work.
+                evals,U = _np.linalg.eig(otherCoeffs)
+                Ui = _np.linalg.inv(U)
+    
+                assert(truncate or all([ev >= -1e-12 for ev in evals])), \
+                    "Given error germs are not CPTP (truncate == False)!"
+    
+                pos_evals = evals.clip(1e-16,1e100)
+                otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))
+                try:
+                    Lmx = _np.linalg.cholesky(otherCoeffs)
+
+                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                except _np.linalg.LinAlgError:                              # pragma: no cover
+                    pos_evals = evals.clip(1e-12,1e100)                     # pragma: no cover
+                    otherCoeffs = _np.dot(U,_np.dot(_np.diag(pos_evals),Ui))# pragma: no cover
+                    Lmx = _np.linalg.cholesky(otherCoeffs)                  # pragma: no cover
+    
+                for i in range(numOtherBasisEls):
+                    assert(_np.linalg.norm(_np.imag(Lmx[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = Lmx[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = Lmx[i,j].real
+                        otherParams[j,i] = Lmx[i,j].imag
+    
+            else: #otherParams mx stores otherC (hermitian) directly
+                for i in range(numOtherBasisEls):
+                    assert(_np.linalg.norm(_np.imag(otherC[i,i])) < IMAG_TOL)
+                    otherParams[i,i] = otherC[i,i].real
+                    for j in range(i):
+                        otherParams[i,j] = otherC[i,j].real
+                        otherParams[j,i] = otherC[i,j].imag
+
+            params[numHamParams:] = otherParams.flatten()
+
+        
+        # Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
+        # coeffs (w/ *local* variable indices) that get converted to per-order
+        # terms later.
+        IDENT = None # sentinel for the do-nothing identity op
+        Lterms = []
+        for termLbl in Ltermdict:
+            print("DB: processing ",termLbl)
+            termType = termLbl[0]
+            if termType == "H": # Hamiltonian
+                k = hamBasisLabels[termLbl[1]] #index of parameter
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
+                print("DB: H term w/index %d= " % k, " len=",len(Lterms))
+                #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                #print("  coeff: ", list(Lterms[-1].coeff.inds) )
+                #print("  coeff: ", list(Lterms[-2].coeff.inds) )
+
+            elif termType == "S": # Stochastic
+                if nonham_diagonal_only:
+                    k = numHamParams + otherBasisLabels[termLbl[1]] #index of parameter
+                    Lm = Ln = basisdict[termLbl[1]]
+                    pw = 2 if cptp else 1 # power to raise parameter to in order to get coeff
+
+                    Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
+                    Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm) ) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
+                else:
+                    i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
+                    j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
+                    Lm, Ln = basisdict[termLbl[1]],basisdict[termLbl[2]]
+                    print("DB: S indices = ",i,j)
+
+                    # TODO: create these polys and place below...
+                    polyTerms = {}
+                    if cptp:
+                        # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+                        # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
+                        #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
+                        def iRe(a,b): return numHamParams + (a*numOtherBasisEls + b)
+                        def iIm(a,b): return numHamParams + (b*numOtherBasisEls + a)
+                        for k in range(0,min(i,j)+1):
+                            if k <= i and k <= j:
+                                polyTerms[ (iRe(i,k),iRe(j,k)) ] = 1.0
+                            if k <= i and k < j:
+                                polyTerms[ (iRe(i,k),iIm(j,k)) ] = -1.0j
+                            if k < i and k <= j:
+                                polyTerms[ (iIm(i,k),iRe(j,k)) ] = 1.0j
+                            if k < i and k < j:
+                                polyTerms[ (iIm(i,k),iIm(j,k)) ] = 1.0
+                    else: # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
+                        ijIndx = numHamParams + (i*numOtherBasisEls + j)
+                        jiIndx = numHamParams + (j*numOtherBasisEls + i)
+                        polyTerms = { (ijIndx,): 1.0, (jiIndx,): 1.0j }
+
+                    base_poly = _Polynomial(polyTerms)
+                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
+                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm) )
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm)) ) # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT ) )
+                    print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
+                    print("  coeff: ", list(Lterms[-1].coeff.keys()) )
+                    print("  coeff: ", list(Lterms[-2].coeff.keys()) )
+                    print("  coeff: ", list(Lterms[-3].coeff.keys()) )
+
+
+                #TODO: check normalization of these terms vs those used in projections.
+
+        print("DB: params = ", list(enumerate(params)))
+        print("DB: Lterms = ")
+        for i,lt in enumerate(Lterms):
+            print("Term %d:" % i)
+            print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
+            print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
+            print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
+        return cls(basepurestate, params, Lterms, cptp, nonham_diagonal_only)
+
+    
+    def __init__(self, basepurestate=None, initial_paramvals=None, Lterms=None, cptp=True, nonham_diagonal_only=False):
+        """
+        Initialize a LindbladTermGateBase object.
+        TODO: docstring
+        """
+        # 'basepurestate' can just be a dimension
+        if isinstance(basepurestate,_numbers.Integral): 
+            dim = basepurestate
+            basepurestate = None
+        else:
+            try:
+                dim = basepurestate.dim # if a SPAMVec
+            except:
+                # otherwise try to treat as array-like
+                basepurestate = SPAMVec.convert_to_vector(basepurestate)
+                dim = basepurestate.shape[0] 
+        
+        self.cptp = cptp
+        self.nonham_diagonal_only = nonham_diagonal_only
+        self.paramvals = _np.array(initial_paramvals,'d')
+        self.Lterms = Lterms
+        self.basepurestate = basepurestate
+        self.terms = {}
+        TermSPAMVec.__init__(self, dim**2) #sets self.dim
+
+    #def get_max_order(self):
+    #    if len(self.Lterms) > 0: return 2**32 # ~inf
+    #    else: return 1
+
+    def set_gpindices(self, gpindices, parent, memo=None):
+        """
+        Set the parent and indices into the parent's parameter vector that
+        are used by this GateSetMember object.
+
+        Parameters
+        ----------
+        gpindices : slice or integer ndarray
+            The indices of this objects parameters in its parent's array.
+
+        parent : GateSet or GateSetMember
+            The parent whose parameter array gpindices references.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        self.terms = {} # clear terms cache since param indices have changed now
+        _gatesetmember.GateSetMember.set_gpindices(self, gpindices, parent)
+
+    def _compose_poly_indices(self, terms):
+        for term in terms:
+            term.map_indices(lambda x: tuple(_gatesetmember._compose_gpindices(
+                self.gpindices, _np.array(x,'i'))) )
+        return terms
+        
+
+    def get_order_terms(self, order):
+        if order not in self.terms:
+            assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), StaticSPAMVec(self.basepurestate), StaticSPAMVec(self.basepurestate))
+            loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
+            #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed - resulting in terms with just a single pre/post op, each == a pure state
+            self.terms[order] = self._compose_poly_indices(loc_terms)
+        return self.terms[order]
+    
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.paramvals)
+
+    #TODO: Are these to/from vector fns needed??? -- maybe calc only needs to get terms & construct polys...
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this gate.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return self.paramvals
+
+
+    def from_vector(self, v):
+        """
+        Initialize the gate using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == self.num_params())
+        self.paramvals = v
+        self.dirty = True
+
+        
+    def copy(self, parent=None):
+        """
+        Copy this gate.
+
+        Returns
+        -------
+        Gate
+            A copy of this gate.
+        """
+        return self._copy_gpindices( LindbladTermSPAMVec(
+            self.basepurestate, self.paramvals, self.Lterms, self.cptp,
+            self.nonham_diagonal_only), parent)
