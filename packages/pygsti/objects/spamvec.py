@@ -1790,6 +1790,34 @@ class TensorProdSPAMVec(SPAMVec):
         """
         raise ValueError("Cannot depolarize a TensorProdSPAMVec")
 
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+        terms = []
+        for p in _lt.partition_into(order, len(self.factors)):
+            # create COLLAPSED factor_lists so each factor has just a single
+            # (SPAMVec) pre & post op, which can be formed into the new terms'
+            # TensorProdSPAMVec ops.
+            if self.typ == "prep":
+                factor_lists = [ [t.collapse_vec() for t in self.factors[i].get_order_terms(pi)]
+                                 for i,pi in enumerate(p) ]
+            else:
+                factorPOVMs = self.factors
+                factor_lists = [ [t.collapse_vec() for t in factorPOVMs[i][Elbl].get_order_terms(pi)]
+                                 for i,(pi,Elbl) in enumerate(zip(p,self.effectLbls)) ]
+                
+            for factors in _itertools.product(*factor_lists):
+                # create a term with a TensorProdSPAMVec - Note we always create
+                # "prep"-mode vectors, since even when self.typ == "effect" these
+                # vectors are created with factor SPAMVecs not factor POVMs
+                coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+                pre_op = TensorProdSPAMVec("prep", [f.pre_ops[0] for f in factors
+                                                      if (f.pre_ops[0] is not None)])
+                post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors
+                                                       if (f.post_ops[0] is not None)])
+                terms.append( _terms.RankOneTerm(coeff, pre_op, post_op) )
+                    
+        return terms # Cache terms in FUTURE?
+
     
     def num_params(self):
         """

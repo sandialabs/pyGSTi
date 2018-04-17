@@ -39,6 +39,17 @@ def exp_terms(terms, orders, postterm=None):
             
     return final_terms
 
+def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None):
+    """ TODO docstring - converts a term's gate operators to embedded gate ops"""
+    from . import gate as _gate
+    mode="unitary" # not an argument currently, since there's no reason this should be "superop"
+    ret = RankOneTerm(term.coeff, None, None)
+    ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
+                    for op in term.pre_ops ]
+    ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
+                    for op in term.post_ops ]
+    return ret
+
 
 class RankOneTerm(object):
     def __init__(self, coeff, pre_op, post_op):
@@ -100,9 +111,9 @@ class RankOneTerm(object):
         """
         
         if len(self.pre_ops) >= 1:
-            pre = self.pre_ops[0]
+            pre = self.pre_ops[0] #.to_matrix() FUTURE??
             for B in self.pre_ops[1:]:
-                pre = _np.dot(B,pre)
+                pre = _np.dot(B,pre) # FUTURE - something more general (compose function?)
         else: pre = None
             
         if len(self.post_ops) >= 1:
@@ -113,6 +124,35 @@ class RankOneTerm(object):
             
         return RankOneTerm(self.coeff, pre, post)
 
+    #FUTURE: maybe have separate GateRankOneTerm and SPAMRankOneTerm which
+    # derive from RankOneTerm, and only one collapse() function (also
+    # this would avoid try/except logic elsewhere).
+    def collapse_vec(self):
+        """
+        Returns a copy of this term with all pre & post ops by reduced
+        ("collapsed") by action of Gate ops on an initial SPAMVec.  This results
+        in a term with only a single pre/post op which are SPAMVecs.
+
+        Returns
+        -------
+        RankOneTerm
+        """
+        
+        if len(self.pre_ops) >= 1:
+            pre = self.pre_ops[0].toarray() # first op is a SPAMVec
+            for B in self.pre_ops[1:]: # and the rest are Gates 
+                pre = B.acton(pre)
+        else: pre = None
+            
+        if len(self.post_ops) >= 1:
+            post = self.post_ops[0].toarray() # first op is a SPAMVec
+            for B in self.post_ops[1:]: # and the rest are Gates 
+                post = B.acton(post)
+        else: post = None
+            
+        return RankOneTerm(self.coeff, pre, post)
+
+    
     def copy(self):
         coeff = self.coeff if isinstance(self.coeff, _numbers.Number) \
                 else self.coeff.copy()
@@ -127,10 +167,7 @@ class RankOneTerm(object):
             "Coefficient (type %s) must implements `map_indices`" % str(type(self.coeff))
         self.coeff.map_indices(mapfn)
         
-        
-
-
-    
+           
 
 
     

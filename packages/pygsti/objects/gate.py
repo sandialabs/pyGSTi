@@ -22,6 +22,7 @@ from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import jamiolkowski as _jt
 from ..tools import basistools as _bt
+from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
@@ -4745,6 +4746,14 @@ class ComposedGateMap(GateMap):
             mx = gate.as_sparse_matrix().dot(mx)
         return mx
 
+    def get_order_terms(self, order):
+        terms = []
+        for p in _lt.partition_into(order, len(self.factorgates)):
+            factor_lists = [ self.factorgates[i].get_order_terms(pi) for i,pi in enumerate(p) ]
+            for factors in _itertools.product(*factor_lists):
+                terms.append( _term.compose_terms(factors) )
+        return terms # Cache terms in FUTURE?
+
     
     #def as_matrix(self):
     #    """ Return the gate as a sparse matrix """
@@ -4963,10 +4972,13 @@ class EmbeddedGateMap(GateMap):
             same dimension and direct-sum structure given by the
             `stateSpaceLabels`.  If None, then this dimension is assumed.
 
-        mode : {"superop", "unitary"}
+        mode : {"superop", "unitary", "termsonly"}
             Whether the `gate_to_embed` represents the unitary action on
             a (complex) state vector or the superoperator action on a (real)
-            vectorized density matrix.
+            vectorized density matrix.  If "termsonly" is specified, then
+            the `gate_to_embed` can be a unitary or superoperator gate, but
+            only calling :method:`acton` is *not* supported (only 
+            :method:`get_order_terms`.
         """
         from .labeldicts import StateSpaceLabels as _StateSpaceLabels
         self.stateSpaceLabels = _StateSpaceLabels(stateSpaceLabels)
@@ -4974,7 +4986,7 @@ class EmbeddedGateMap(GateMap):
         self.embedded_gate = gate_to_embed
         self.basisdim = basisdim
 
-        assert(mode in ("superop", "unitary")), "Invalid mode: %s" % mode
+        assert(mode in ("superop", "unitary", "termsonly")), "Invalid mode: %s" % mode
         self.mode = mode
 
         labels = targetLabels
@@ -4989,83 +5001,103 @@ class EmbeddedGateMap(GateMap):
             self.basisdim = _Dim(blockDims)
         dmDim, superOpDim, _ = self.basisdim
 
-        iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
-        if len(set(iTensorProdBlks)) != 1:
-            raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
-                             " same tensor-product-block of the state space -- checked previously") # pragma: no cover
+        if mode != "termsonly":
+            iTensorProdBlks = [ self.stateSpaceLabels.tpb_index[label] for label in labels ] # index of tensor product block (of state space) a bit label is part of
+            if len(set(iTensorProdBlks)) != 1:
+                raise ValueError("All qubit labels of a multi-qubit gate must correspond to the" + \
+                                 " same tensor-product-block of the state space -- checked previously") # pragma: no cover
+        
+            iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
+            tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
+            basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
+            for l in tensorProdBlkLabels:
+                if mode == "superop":
+                    basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
+                else: # mode == "unitary"
+                    basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
     
-        iTensorProdBlk = iTensorProdBlks[0] #because they're all the same (tested above)
-        tensorProdBlkLabels = self.stateSpaceLabels.labels[iTensorProdBlk]
-        basisInds = [] # list of possible *density-matrix-space* indices of each component of the tensor product block
-        for l in tensorProdBlkLabels:
+            # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
+            basisInds_noop = basisInds[:]
+            basisInds_noop_blankaction = basisInds[:]
+            labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
+            for labelIndex in sorted(labelIndices,reverse=True):
+                del basisInds_noop[labelIndex]
+                basisInds_noop_blankaction[labelIndex] = [0]
+                        
+            #offset into "active" tensor product block
             if mode == "superop":
-                basisInds.append( list(range(self.stateSpaceLabels.labeldims[l]**2)) ) # e.g. [0,1,2,3] for qubits (I, X, Y, Z)
-            else: # mode == "unitary"
-                basisInds.append( list(range(self.stateSpaceLabels.labeldims[l])) ) # e.g. [0,1] for qubits (std *complex* basis)
+                self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+            else: #  mode == "unitary"
+                self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+    
+            divisor = 1
+            self.divisors = []
+            for l in labels:
+                self.divisors.append(divisor)
+                if mode == "superop":
+                    divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
+                else: # mode == "unitary"
+                    divisor *= self.stateSpaceLabels.labeldims[l] # e.g. 2 for qubits
+    
+            # multipliers to go from per-label indices to tensor-product-block index
+            # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+            self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
+                reversed(list(map(len,basisInds[:-1]))))) ), 'i')
+    
+            self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
+              # for inserting target-qubit basis indices into list of noop-qubit indices
+    
+            self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
+    
+            #Members for speeding up time-critical functions (e.g. acton)
+            self.nBasisBlocks = len(blockDims) #store this separately for faster
+                                               #shortcuts in common 1-block case
+            #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
+            self.basisInds_noop = basisInds_noop
+            self.basisInds_noop_blankaction = basisInds_noop_blankaction
+            self.actionInds = _np.array(labelIndices,'i')
+            self.basisInds_action = [ basisInds[i] for i in labelIndices ]
+            self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
+            self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
+    
+              # self.noop_incrementers[i] specifies how much the overall vector index
+              #  is incremented when the i-th "component" digit is advanced
+            nParts = len(basisInds) # number of components in "active" tensor block
+            self.noop_incrementers = _np.empty(nParts,'i'); dec = 0
+            for i in range(nParts-1,-1,-1):
+                self.noop_incrementers[i] = self.multipliers[i] - dec
+                dec += (self.numBasisEls_noop_blankaction[i]-1)*self.multipliers[i]
+    
+              # self.baseinds specifies the contribution from the "active
+              #  component" digits to the overall vector index.
+            inds = []
+            for gate_b in _itertools.product(*self.basisInds_action):
+                vec_index = self.offset
+                for i,bInd in zip(self.actionInds,gate_b):
+                    #b[i] = bInd #don't need to do this; just update vec_index:
+                    vec_index += self.multipliers[i]*bInd
+                inds.append(vec_index)
+            self.baseinds = _np.array(inds,'i')
+            
+        else: # term-mode doesn't need any of the following members (precomputed for acton optimization)
 
-        # Separate the components of the tensor product that are not operated on, i.e. that our final map just acts as identity w.r.t.
-        basisInds_noop = basisInds[:]
-        basisInds_noop_blankaction = basisInds[:]
-        labelIndices = [ tensorProdBlkLabels.index(label) for label in labels ]
-        for labelIndex in sorted(labelIndices,reverse=True):
-            del basisInds_noop[labelIndex]
-            basisInds_noop_blankaction[labelIndex] = [0]
-                    
-        #offset into "active" tensor product block
-        if mode == "superop":
-            self.offset = sum( [ blockDims[i]**2 for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
-        else: #  mode == "unitary"
-            self.offset = sum( [ blockDims[i] for i in range(0,iTensorProdBlk) ] ) #number of basis elements preceding our block's elements
+            self.offset = None
+            self.multipliers = None
+            self.divisors = None
+            
+            self.sorted_bili = None
+            self.iTensorProdBlk = None
+            self.nBasisBlocks = None
+            
+            self.basisInds_noop = None
+            self.basisInds_noop_blankaction = None
+            self.actionInds = None
+            self.basisInds_action = None
+            self.numBasisEls_noop_blankaction = None
+            self.numBasisEls_action = None
 
-        divisor = 1
-        self.divisors = []
-        for l in labels:
-            self.divisors.append(divisor)
-            if mode == "superop":
-                divisor *= self.stateSpaceLabels.labeldims[l]**2 # e.g. 4 for qubits
-            else: # mode == "unitary"
-                divisor *= self.stateSpaceLabels.labeldims[l] # e.g. 2 for qubits
-
-        # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        self.multipliers = _np.array( _np.flipud( _np.cumprod([1] + list(
-            reversed(list(map(len,basisInds[:-1]))))) ), 'i')
-
-        self.sorted_bili = sorted( list(enumerate(labelIndices)), key=lambda x: x[1])
-          # for inserting target-qubit basis indices into list of noop-qubit indices
-
-        self.iTensorProdBlk = iTensorProdBlk #save which block is "active" one
-
-        #Members for speeding up time-critical functions (e.g. acton)
-        self.nBasisBlocks = len(blockDims) #store this separately for faster
-                                           #shortcuts in common 1-block case
-        #tensorBlkEls_noop = list(_itertools.product(*basisInds_noop)) #dm-space basis for noop-indices only (unneeded)
-        self.basisInds_noop = basisInds_noop
-        self.basisInds_noop_blankaction = basisInds_noop_blankaction
-        self.actionInds = _np.array(labelIndices,'i')
-        self.basisInds_action = [ basisInds[i] for i in labelIndices ]
-        self.numBasisEls_noop_blankaction = _np.array([len(inds) for inds in self.basisInds_noop_blankaction], 'i')
-        self.numBasisEls_action = _np.array([len(inds) for inds in self.basisInds_action], 'i')
-
-          # self.noop_incrementers[i] specifies how much the overall vector index
-          #  is incremented when the i-th "component" digit is advanced
-        nParts = len(basisInds) # number of components in "active" tensor block
-        self.noop_incrementers = _np.empty(nParts,'i'); dec = 0
-        for i in range(nParts-1,-1,-1):
-            self.noop_incrementers[i] = self.multipliers[i] - dec
-            dec += (self.numBasisEls_noop_blankaction[i]-1)*self.multipliers[i]
-
-          # self.baseinds specifies the contribution from the "active
-          #  component" digits to the overall vector index.
-        inds = []
-        for gate_b in _itertools.product(*self.basisInds_action):
-            vec_index = self.offset
-            for i,bInd in zip(self.actionInds,gate_b):
-                #b[i] = bInd #don't need to do this; just update vec_index:
-                vec_index += self.multipliers[i]*bInd
-            inds.append(vec_index)
-        self.baseinds = _np.array(inds,'i')
-
+            self.noop_incrementers = None
+            self.baseinds = None
 
         #DEBUG TO REMOVE
         #print("self.numBasisEls_noop_blankaction = ",self.numBasisEls_noop_blankaction)
@@ -5471,6 +5503,12 @@ class EmbeddedGateMap(GateMap):
             finalGate[i,j] = self.embedded_gate[gi,gj]
 
         return finalGate
+
+    def get_order_terms(self, order):
+        """ TODO: docstring """
+        return [ _term.embed_term(t, self.stateSpaceLabels,
+                                  self.targetLabels, self.basisdim)
+                 for t in self.embedded_gate.get_order_terms(order) ]
 
     
     def num_params(self):
