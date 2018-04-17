@@ -200,8 +200,12 @@ class GateTermCalc(GateCalc):
             ret = _FastPolynomial(None, max_poly_vars, max_poly_order)
             ret.update(d)
             return ret
-        
-        prps_fast = _fastgatecalc.fast_prs_as_polys(gatestring, rho_terms, gate_terms,
+
+        #Convert gate Label object to integers for faster/easier cython
+        glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
+        cgatestring = tuple( (glmap[gl] for gl in gatestring) )
+        cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
+        prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
                                                     E_terms, E_indices, len(Es), self.max_order) # returns list of dicts
         return [ dict_to_fastpoly(p) for p in prps_fast ] 
 

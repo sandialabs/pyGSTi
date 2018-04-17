@@ -49,7 +49,11 @@ def test_map(s):
 #        print my_map[x]
 
 def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order):
+    #NOTE: gatestring and gate_terms use *integers* as gate labels, not Label objects, to speed
+    # lookups and avoid weird string conversion stuff with Cython
+    
     #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+    
 
     #cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
     #cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
@@ -57,18 +61,18 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
     cdef int* p = <int*>malloc((N+2) * sizeof(int))
     cdef int i,j,k,order,nTerms
     cdef int max_poly_order=-1, max_poly_vars=-1
-    cdef string gn
+    cdef int gn
 
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
     #gate_term_prefactors = _np.empty( (nGates,max_order+1,dim,dim)
-    cdef unordered_map[string, vector[vector[unordered_map[int, complex]]]] gate_term_coeffs
+    cdef unordered_map[int, vector[vector[unordered_map[int, complex]]]] gate_term_coeffs
     cdef vector[vector[unordered_map[int, complex]]] rho_term_coeffs
     cdef vector[vector[unordered_map[int, complex]]] E_term_coeffs
     cdef vector[vector[int]] E_indices
     cdef vector[int] Einds
 
     for gl in gate_terms.keys():
-        gn = gl.name.encode('UTF-8')
+        gn = gl
         gate_term_coeffs[gn] = extract_term_coeffs(gate_terms[gl], max_order, 
                                                    max_poly_vars, max_poly_order)
     rho_term_coeffs = extract_term_coeffs(rho_terms, max_order,
@@ -119,7 +123,7 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
             factor_lists[0] = rho_terms[p[0]]
             coeff_lists[0] = rho_term_coeffs[p[0]]
             for k in range(N):
-                gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                gn = gatestring[k]
                 factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
                 coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                 if len(factor_lists[k+1]) == 0: continue
@@ -138,7 +142,7 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 factor_lists[0] = rho_terms[p[0]]
                 coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                    gn = gatestring[k]
                     factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
                     coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                     if len(factor_lists[k+1]) == 0: continue
@@ -157,7 +161,7 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 factor_lists[0] = rho_terms[p[0]]
                 coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                    gn = gatestring[k]
                     factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
                     coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                     if len(factor_lists[k+1]) == 0: continue
@@ -177,7 +181,7 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                     factor_lists[0] = rho_terms[p[0]]
                     coeff_lists[0] = rho_term_coeffs[p[0]]
                     for k in range(N):
-                        gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                        gn = gatestring[k]
                         factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
                         coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
                         if len(factor_lists[k+1]) == 0: continue
