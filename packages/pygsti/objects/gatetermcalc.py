@@ -202,8 +202,9 @@ class GateTermCalc(GateCalc):
             ret.update(d)
             return ret
         
-        #prps_fast = _fastgatecalc.fast_prs_as_polys(gatestring, rho, Es, gate_terms, self.max_order) # returns list of dicts
-        #return [ dict_to_fastpoly(p) for p in prps_fast ] 
+        prps_fast = _fastgatecalc.fast_prs_as_polys(gatestring, rho_terms, gate_terms,
+                                                    E_terms, E_indices, len(Es), self.max_order) # returns list of dicts
+        return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
         #HERE DEBUG
         global DEBUG_FCOUNT
@@ -239,7 +240,7 @@ class GateTermCalc(GateCalc):
                     coeffSaved = [None]*(len(factor_lists)-1)
                     last_index = len(factor_lists)-1
                     
-                    for incd,fi in _lt.incd_product(*[range(len(l)) for l in factor_lists]):
+                    for incd,fi in _lt.incd_product(*[range(l) for l in factor_list_lens]):
                         factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                         
                         if incd == 0: # need to re-evaluate rho vector
@@ -294,9 +295,8 @@ class GateTermCalc(GateCalc):
                         else:                prps[Ei] += res
                         
                 else: # non-fast mode
-                    #for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                     last_index = len(factor_lists)-1
-                    for incd,fi in _lt.incd_product(*[range(len(l)) for l in factor_lists]):
+                    for fi in _itertools.product(*[range(l) for l in factor_list_lens]):
                         #if len(factors) == 0: coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order) #never happens TODO REMOVE
                         factors = [factor_lists[i][factorInd] for i,factorInd in enumerate(fi)]
                         coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
@@ -306,10 +306,10 @@ class GateTermCalc(GateCalc):
                         res = coeff.mult_scalar( (pLeft * pRight) )
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
+                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
                         if prps[Ei] is None:  prps[Ei]  = res
                         else:                prps[Ei] += res
-                        #print("DB running prp =",prp)
+                        #print("DB running prps[",Ei,"] =",prps[Ei])
                     
                 db_nfactors = [len(l) for l in factor_lists]
                 db_totfactors = _np.product(db_nfactors)
@@ -321,15 +321,15 @@ class GateTermCalc(GateCalc):
         #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
 
         #CHECK with fast version
-        #for slow,fast in zip(prps,prps_fast):
-        #    #print("Slow: ",slow)
-        #    #print("Fast: ",fast)            
-        #    for k,v in slow.items():
-        #        if abs(v) > 1e-12:
-        #            assert(abs(fast[k]-v) < 1e-6)
-        #    for k,v in fast.items():
-        #        if abs(v) > 1e-12:
-        #            assert(abs(slow[k]-v) < 1e-6)
+        for slow,fast in zip(prps,prps_fast):
+            #print("Slow: ",slow)
+            #print("Fast: ",fast)            
+            for k,v in slow.items():
+                if abs(v) > 1e-12:
+                    assert(abs(fast[k]-v) < 1e-6)
+            for k,v in fast.items():
+                if abs(v) > 1e-12:
+                    assert(abs(slow[k]-v) < 1e-6)
         
         return prps # can be a list of polys
         
@@ -370,7 +370,7 @@ class GateTermCalc(GateCalc):
         return _np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
     
     def unitary_sim_post(self, complete_factors, comm, memLimit):
-        rhoVec = complete_factors[0].post_ops[0]
+        rhoVec = complete_factors[0].post_ops[0].toarray()
         for f in complete_factors[0].post_ops[1:]:
             rhoVec = f.acton(rhoVec)
         for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):

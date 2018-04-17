@@ -48,14 +48,13 @@ def test_map(s):
 #        print x.first
 #        print my_map[x]
 
-def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
+def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order):
     #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
 
-    cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
-    cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
+    #cdef double complex *pLeft = <double complex*>malloc(len(Es) * sizeof(double complex))
+    #cdef double complex *pRight = <double complex*>malloc(len(Es) * sizeof(double complex))
     cdef int N = len(gatestring)
-    cdef int numEs = len(Es)
-    cdef int* p = <int*>malloc(N * sizeof(int))
+    cdef int* p = <int*>malloc((N+2) * sizeof(int))
     cdef int i,j,k,order,nTerms
     cdef int max_poly_order=-1, max_poly_vars=-1
     cdef string gn
@@ -63,87 +62,131 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
     #extract raw data from gate_terms dictionary-of-lists for faster lookup
     #gate_term_prefactors = _np.empty( (nGates,max_order+1,dim,dim)
     cdef unordered_map[string, vector[vector[unordered_map[int, complex]]]] gate_term_coeffs
+    cdef vector[vector[unordered_map[int, complex]]] rho_term_coeffs
+    cdef vector[vector[unordered_map[int, complex]]] E_term_coeffs
+    cdef vector[vector[int]] E_indices
+    cdef vector[int] Einds
+
     for gl in gate_terms.keys():
         gn = gl.name.encode('UTF-8')
-        gate_term_coeffs[gn] = vector[vector[unordered_map[int, complex] ]](max_order+1)
-        for order in range(max_order+1):
-            nTerms = len(gate_terms[gl][order])
-            gate_term_coeffs[gn][order] = vector[unordered_map[int, complex]](nTerms)
-            for i,term in enumerate(gate_terms[gl][order]):
-                #gate_term_coeffs[gn][order][i] = fastpoly_to_unorderedmap(term.coeff)
-                polymap = unordered_map[int, complex]()
-                poly = term.coeff
-                if max_poly_order == -1: max_poly_order = poly.max_order
-                else: assert(max_poly_order == poly.max_order)
-                if max_poly_vars == -1: max_poly_vars = poly.max_num_vars
-                else: assert(max_poly_vars == poly.max_num_vars)
-                for k,v in poly.items(): polymap[k] = v
-                gate_term_coeffs[gn][order][i] = polymap
+        gate_term_coeffs[gn] = extract_term_coeffs(gate_terms[gl], max_order, 
+                                                   max_poly_vars, max_poly_order)
+    rho_term_coeffs = extract_term_coeffs(rho_terms, max_order,
+                                          max_poly_vars, max_poly_order)
+    E_term_coeffs = extract_term_coeffs(E_terms, max_order,
+                                        max_poly_vars, max_poly_order)
+
+    k = len(E_indices_py)
+    E_indices = vector[vector[int]](k)
+    for ii,inds in enumerate(E_indices_py):
+        k = len(inds)
+        E_indices[ii] = vector[int](k)
+        for jj,indx in enumerate(inds):
+            k = indx; E_indices[ii][jj] = k
+
+    #OLD
+    #    for order in range(max_order+1):
+    #        nTerms = len(gate_terms[gl][order])
+    #        gate_term_coeffs[gn][order] = vector[unordered_map[int, complex]](nTerms)
+    #        for i,term in enumerate(gate_terms[gl][order]):
+    #            #gate_term_coeffs[gn][order][i] = fastpoly_to_unorderedmap(term.coeff)
+    #            polymap = unordered_map[int, complex]()
+    #            poly = term.coeff
+    #            if max_poly_order == -1: max_poly_order = poly.max_order
+    #            else: assert(max_poly_order == poly.max_order)
+    #            if max_poly_vars == -1: max_poly_vars = poly.max_num_vars
+    #            else: assert(max_poly_vars == poly.max_num_vars)
+    #            for k,v in poly.items(): polymap[k] = v
+    #            gate_term_coeffs[gn][order][i] = polymap
 
     #        gate_term_prefactors[igl][order] = vector( GateObj(term.pre_ops[0]).acton_fn for term in gate_terms[gl][order] ) # assume all terms collapsed?
     
     assert(max_order <= 2) # only support this partitioning below (so far)
 
     cdef vector[ unordered_map[int, complex] ] prps = vector[ unordered_map[int, complex] ](numEs)
-    #prps_chk = [None]*len(Es)
+    #prps_chk = [None]*numEs
     for order in range(max_order+1):
         #print("DB: pr_as_poly order=",order)
         
         #for p in partition_into(order, N):
-        for i in range(N): p[i] = 0 # clear p
-        factor_lists = [None]*N
-        coeff_lists = vector[vector[unordered_map[int, complex]]](N)
+        for i in range(N+2): p[i] = 0 # clear p
+        factor_lists = [None]*(N+2)
+        coeff_lists = vector[vector[unordered_map[int, complex]]](N+2)
         
         if order == 0:
             #inner loop(p)
             #factor_lists = [ gate_terms[glbl][pi] for glbl,pi in zip(gatestring,p) ]
+            factor_lists[0] = rho_terms[p[0]]
+            coeff_lists[0] = rho_term_coeffs[p[0]]
             for k in range(N):
-                gn = <string> gatestring[k].name.encode('UTF-8')
-                factor_lists[k] = gate_terms[gatestring[k]][p[k]]
-                coeff_lists[k] = gate_term_coeffs[gn][p[k]]
-                if len(factor_lists[k]) == 0: continue
+                gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
+                if len(factor_lists[k+1]) == 0: continue
+            factor_lists[N+1] = E_terms[p[N+1]]
+            coeff_lists[N+1] = E_term_coeffs[p[N+1]]
+            Einds = E_indices[p[N+1]]
+        
             #print("Part0 ",p)
-            pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+            pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
 
             
         elif order == 1:
-            for i in range(N):
+            for i in range(N+2):
                 p[i] = 1
                 #inner loop(p)
+                factor_lists[0] = rho_terms[p[0]]
+                coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn =  <string> gatestring[k].name.encode('UTF-8')
-                    factor_lists[k] = gate_terms[gatestring[k]][p[k]]
-                    coeff_lists[k] = gate_term_coeffs[gn][p[k]]
-                    if len(factor_lists[k]) == 0: continue
+                    gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                    factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                    coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
+                    if len(factor_lists[k+1]) == 0: continue
+                factor_lists[N+1] = E_terms[p[N+1]]
+                coeff_lists[N+1] = E_term_coeffs[p[N+1]]
+                Einds = E_indices[p[N+1]]
+
                 #print("Part1 ",p)
-                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
                 p[i] = 0
             
         elif order == 2:
-            for i in range(N):
+            for i in range(N+2):
                 p[i] = 2
                 #inner loop(p)
+                factor_lists[0] = rho_terms[p[0]]
+                coeff_lists[0] = rho_term_coeffs[p[0]]
                 for k in range(N):
-                    gn = <string> gatestring[k].name.encode('UTF-8')
-                    factor_lists[k] = gate_terms[gatestring[k]][p[k]]
-                    coeff_lists[k] = gate_term_coeffs[gn][p[k]]
-                    if len(factor_lists[k]) == 0: continue
+                    gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                    factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                    coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
+                    if len(factor_lists[k+1]) == 0: continue
+                factor_lists[N+1] = E_terms[p[N+1]]
+                coeff_lists[N+1] = E_term_coeffs[p[N+1]]
+                Einds = E_indices[p[N+1]]
+
                 #print("Part2a ",p)
-                pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
                 p[i] = 0
 
-            for i in range(N):
+            for i in range(N+2):
                 p[i] = 1
-                for j in range(i+1,N):
+                for j in range(i+1,N+2):
                     p[j] = 1
                     #inner loop(p)
+                    factor_lists[0] = rho_terms[p[0]]
+                    coeff_lists[0] = rho_term_coeffs[p[0]]
                     for k in range(N):
-                        gn = <string> gatestring[k].name.encode('UTF-8')
-                        factor_lists[k] = gate_terms[gatestring[k]][p[k]]
-                        coeff_lists[k] = gate_term_coeffs[gn][p[k]]
-                        if len(factor_lists[k]) == 0: continue
+                        gn = <string> gatestring[k].name.encode('UTF-8') # TODO: update later - replace gate names w/ints
+                        factor_lists[k+1] = gate_terms[gatestring[k]][p[k+1]]
+                        coeff_lists[k+1] = gate_term_coeffs[gn][p[k+1]]
+                        if len(factor_lists[k+1]) == 0: continue
+                    factor_lists[N+1] = E_terms[p[N+1]]
+                    coeff_lists[N+1] = E_term_coeffs[p[N+1]]
+                    Einds = E_indices[p[N+1]]
+
                     #print("Part2b ",p)
-                    pr_as_poly_innerloop(rho,Es,factor_lists,coeff_lists,pLeft,pRight, max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                    pr_as_poly_innerloop(factor_lists,coeff_lists,Einds, max_poly_vars, max_poly_order, &prps) #, prps_chk)
                     p[j] = 0
                 p[i] = 0
         else:
@@ -153,83 +196,22 @@ def fast_prs_as_polys(gatestring, rho, Es, gate_terms, int max_order):
 
                 
 
-cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double complex* pLeft, double complex* pRight,
+cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                           int max_poly_vars, int max_poly_order, vector[ unordered_map[int, complex] ]* prps): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef int i,j
-    cdef int fastmode = 1 # False
+    cdef int fastmode = 1 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
     cdef unordered_map[int, complex].iterator it1, it2, itk
     cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
-    cdef double complex scale, val, newval
+    cdef double complex scale, val, newval, pLeft, pRight
     cdef vector[vector[unordered_map[int, complex]]] reduced_coeff_lists
 
-    
-    rhoLeft = rhoRight = rho
-    if fastmode: # filter factor_lists to matrix-compose all length-1 lists
-
-        reduced_coeff_lists = vector[vector[unordered_map[int, complex]]]()
-        reduced_factor_lists = []; curTerm = None
-        
-        #for i,fl in enumerate(factor_lists):
-        for i in range(len(factor_lists)):
-            fl = factor_lists[i]
-            if len(fl) == 1:
-                if curTerm is None:
-                    curTerm = fl[0].copy()
-                    curCoeff = factor_coeff_lists[i][0] # an unordered_map
-                else:
-                    curTerm.compose(fl[0])
-                    # curCoeff *= factor_coeff_lists[i][0]
-                    result = unordered_map[int,complex]()
-                    coeff2 = factor_coeff_lists[i][0]
-                    it1 = curCoeff.begin()
-                    while it1 != curCoeff.end():
-                        it2 = coeff2.begin()
-                        while it2 != coeff2.end():
-                            k = mult_vinds_ints(deref(it1).first, deref(it2).first, max_poly_vars, max_poly_order) #key to add
-                            itk = result.find(k)
-                            val = deref(it1).second * deref(it2).second
-                            if itk != result.end():
-                                deref(itk).second = deref(itk).second + val
-                            else: result[k] = val
-                            inc(it2)
-                        inc(it1)
-                    curCoeff = result
-                    
-            else: # len(fl) > 1:
-                if curTerm is not None:
-                    reduced_factor_lists.append([curTerm.collapse()])
-                    vec_curCoeff = vector[unordered_map[int,complex]](1)
-                    vec_curCoeff[0] = curCoeff
-                    reduced_coeff_lists.push_back(vec_curCoeff)
-                reduced_factor_lists.append(fl); curTerm = None
-                reduced_coeff_lists.push_back( factor_coeff_lists[i] )
-
-        if curTerm is not None:
-            reduced_factor_lists.append([curTerm.collapse()])
-            vec_curCoeff = vector[unordered_map[int,complex]](1)
-            vec_curCoeff[0] = curCoeff
-            reduced_coeff_lists.push_back(vec_curCoeff)
-
-        if reduced_factor_lists:
-            if len(reduced_factor_lists[0]) == 1: # AND coeff == 1.0?
-                t = reduced_factor_lists[0][0] # single term
-                #rhoLeft = self.propagate_state(rho, t.pre_ops)
-                for j in range(len(t.pre_ops)):
-                    rhoLeft = t.pre_ops[j].acton(rhoLeft)
-                #rhoRight = self.propagate_state(rho, t.post_ops)
-                for j in range(len(t.post_ops)):
-                    rhoRight = t.post_ops[j].acton(rhoRight)
-                del reduced_factor_lists[0]
-                reduced_coeff_lists.erase(reduced_coeff_lists.begin()) # ASSUMES coeff is 1.0 and can just be removed
-    
-        factor_lists = reduced_factor_lists
-        factor_coeff_lists = reduced_coeff_lists
-        #print("DB post fastmode listlens = ",[len(fl) for fl in factor_lists])
+    cdef int incd
 
     cdef int nFactorLists = len(factor_lists) # may need to recompute this after fast-mode
     cdef int* factorListLens = <int*>malloc(nFactorLists * sizeof(int))
+    cdef int last_index = nFactorLists-1
 
     for i in range(nFactorLists):
         factorListLens[i] = len(factor_lists[i])
@@ -237,116 +219,249 @@ cdef pr_as_poly_innerloop(rho, Es, factor_lists, factor_coeff_lists, double comp
     cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
     for i in range(nFactorLists): b[i] = 0
 
-    #for factors in _itertools.product(*factor_lists):
-    while(True):
-        # In this loop, b holds "current" indices into factor_lists
-        
-#        print "Inner loop", b
+    #DEBUG
+    #if debug > 0:
+    #    print "nLists = ", nFactorLists
+    #    for i in range(nFactorLists):
+    #        print factorListLens[i]
+    
+    if fastmode: # filter factor_lists to matrix-compose all length-1 lists
 
-        ##coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
-        if nFactorLists == 0:
-            #coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order)
-            coeff = unordered_map[int,complex](); coeff[0] = 1.0
-        else:
-            coeff = factor_coeff_lists[0][b[0]] # an unordered_map (copies to new "coeff" variable)
+        leftSaved = [None]*(nFactorLists-1)  # saved[i] is state after i-th
+        rightSaved = [None]*(nFactorLists-1) # factor has been applied
+        coeffSaved = [None]*(nFactorLists-1)
+        incd = 0
 
-        # CHECK POLY MATH
-        #print "\n----- PRE MULT ---------"
-        #coeff_check = factor_lists[0][b[0]].coeff
-        #checkpolys(coeff, coeff_check)
-        
-        for i in range(1,nFactorLists):
-            result = unordered_map[int,complex]()
-            coeff2 = factor_coeff_lists[i][b[i]]
+        #for factors in _itertools.product(*factor_lists):
+        #for incd,fi in incd_product(*[range(len(l)) for l in factor_lists]):
+        while(True):
+            #if debug > 0: # DEBUG
+            #    debug += 1
+            #    print "DEBUG iter", debug, " b="
+            #    for i in range(nFactorLists): print b[i]
+            # In this loop, b holds "current" indices into factor_lists
 
-            # multiply coeff by current factor
-            it1 = coeff.begin()
-            while it1 != coeff.end():
-                it2 = coeff2.begin()
-                while it2 != coeff2.end():
-                    k = mult_vinds_ints(deref(it1).first, deref(it2).first, max_poly_vars, max_poly_order) #key to add
-                    
-                    itk = result.find(k)
-                    val = deref(it1).second * deref(it2).second
-                    if itk != result.end():
-                        deref(itk).second = deref(itk).second + val
-                    else: result[k] = val
-                    inc(it2)
-                inc(it1)
-            coeff = result
+            if incd == 0: # need to re-evaluate rho vector
+                factor = factor_lists[0][b[0]]
+                rhoVecL = factor.pre_ops[0].toarray()
+                for j in range(1,len(factor.pre_ops)):
+                    rhoVecL = factor.pre_ops[j].acton(rhoVecL)
+                leftSaved[0] = rhoVecL
 
-            #CHECK POLY MATH
-            #print "\n----- MULT ---------"
-            #coeff_check = coeff_check.mult_poly(factor_lists[i][b[i]].coeff) # DEBUG
-            #checkpolys(coeff, coeff_check)
-
-            
-        #pLeft  = self.unitary_sim_pre(rhoLeft,Es, factors, comm, memLimit, pLeft)
-        #pRight = self.unitary_sim_post(rhoRight,Es, factors, comm, memLimit, pRight) \
-        #         if not self.unitary_evolution else 1
-        #NOTE: no unitary_evolution == 1 support yet...
-        rhoVec = rhoLeft
-        for i in range(nFactorLists):
-            factor = factor_lists[i][b[i]]
-            for j in range(len(factor.pre_ops)):
-                rhoVec = factor.pre_ops[j].acton(rhoVec)
-        for i in range(len(Es)):
-            pLeft[i] = np.dot(Es[i],rhoVec)
-
-        rhoVec = rhoRight
-        for i in range(nFactorLists):
-            factor = factor_lists[i][b[i]]
-            for j in range(len(factor.post_ops)):
-                rhoVec = factor.post_ops[j].acton(rhoVec)
-        for i in range(len(Es)):
-            pRight[i] = np.conjugate(np.dot(Es[i],rhoVec))
-
-        for i in range(len(Es)):
-            scale = pLeft[i] * pRight[i]
-            result = coeff # copies so different Es start with same coeff
-            it1 = result.begin()
-            while it1 != result.end():
-                deref(it1).second = deref(it1).second * scale # note: *= doesn't work here (complex Cython?)
-                inc(it1)
-
-            #CHECK POLY MATH
-            #res = coeff_check.mult_scalar( (pLeft[i] * pRight[i]) ) #DEBUG
-            #print "\n----- Post SCALE by ",scale,"---------"
-            #checkpolys(result, res)
-            #if prps_chk[i] is None:  prps_chk[i] = res
-            #else:                    prps_chk[i] += res #prps[i].addin(res) # assumes a Polynomial - use += for numeric types...
-            
-            it1 = result.begin()
-            while it1 != result.end():
-                k = deref(it1).first # key
-                val = deref(it1).second # value
-                itk = deref(prps)[i].find(k)
-                if itk != deref(prps)[i].end():
-                    newval = deref(itk).second + val
-                    if abs(newval) > 1e-12:
-                        deref(itk).second = newval # note: += doens't work here (complex Cython?)
-                    else: deref(prps)[i].erase(itk)
-                elif abs(val) > 1e-12:
-                    deref(prps)[i][k] = val
-                inc(it1)
-
-            #CHECK POLY MATH
-            #print "\n---------- PRPS Check ----------",i
-            #checkpolys(deref(prps)[i], prps_chk[i])
-
-            #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
-
-        #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
-        for i in range(nFactorLists-1,-1,-1):
-            if b[i]+1 < factorListLens[i]:
-                b[i] += 1
-                break
+                rhoVecR = factor.post_ops[0].toarray()
+                for j in range(1,len(factor.post_ops)):
+                    rhoVecR = factor.post_ops[j].acton(rhoVecR)
+                rightSaved[0] = rhoVecR
+                
+                coeff = factor_coeff_lists[0][b[0]]
+                coeffSaved[0] = coeff
+                incd += 1
             else:
-                b[i] = 0
-        else:
-            break # can't increment anything - break while(True) loop
+                rhoVecL = leftSaved[incd-1]
+                rhoVecR = rightSaved[incd-1]
+                coeff = coeffSaved[incd-1]
+
+            # propagate left and right states, saving as we go
+            for i in range(incd,last_index):
+                factor = factor_lists[i][b[i]]
+                for j in range(len(factor.pre_ops)):
+                    rhoVecL = factor.pre_ops[j].acton(rhoVecL)
+                leftSaved[i] = rhoVecL
+                            
+                for j in range(len(factor.post_ops)):
+                    rhoVecR = factor.post_ops[j].acton(rhoVecR)
+                rightSaved[i] = rhoVecR
+
+                coeff = mult_polys(coeff, factor_coeff_lists[i][b[i]],
+                                   max_poly_vars, max_poly_order)
+                coeffSaved[i] = coeff
+
+            # for the last index, no need to save, and need to construct
+            # and apply effect vector
+            factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+            EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+            for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
+                EVec = factor.post_ops[j].acton(EVec)
+            pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
+
+            EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+            for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
+                EVec = factor.pre_ops[j].acton(EVec)
+            pRight = np.conjugate(np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
+
+            result = mult_polys(coeff, factor_coeff_lists[last_index][b[last_index]],
+                               max_poly_vars, max_poly_order)
+            scale_poly(result, (pLeft * pRight) )
+            final_factor_indx = b[last_index]
+            Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
+            add_polys_inplace(deref(prps)[Ei], result)
+
+            #assert(debug < 100) #DEBUG
+            
+            #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+            for i in range(nFactorLists-1,-1,-1):
+                if b[i]+1 < factorListLens[i]:
+                    b[i] += 1; incd = i
+                    break
+                else:
+                    b[i] = 0
+            else:
+                break # can't increment anything - break while(True) loop
+
+
+    else: # "slow" mode
+        #for factors in _itertools.product(*factor_lists):
+        while(True):
+            # In this loop, b holds "current" indices into factor_lists
+            
+    #        print "Inner loop", b
+
+            #OLD - now that spams are factors to, nFactorLists should always be >= 2
+            ##coeff = _functools.reduce(lambda x,y: x.mult_poly(y), [f.coeff for f in factors])
+            #if nFactorLists == 0:
+            #    #coeff = _FastPolynomial({(): 1.0}, max_poly_vars, max_poly_order)
+            #    coeff = unordered_map[int,complex](); coeff[0] = 1.0
+            #else:
+            coeff = factor_coeff_lists[0][b[0]] # an unordered_map (copies to new "coeff" variable)
+    
+            # CHECK POLY MATH
+            #print "\n----- PRE MULT ---------"
+            #coeff_check = factor_lists[0][b[0]].coeff
+            #checkpolys(coeff, coeff_check)
+            
+            for i in range(1,nFactorLists):
+                coeff = mult_polys(coeff, factor_coeff_lists[i][b[i]],
+                                   max_poly_vars, max_poly_order)
+    
+                #CHECK POLY MATH
+                #print "\n----- MULT ---------"
+                #coeff_check = coeff_check.mult_poly(factor_lists[i][b[i]].coeff) # DEBUG
+                #checkpolys(coeff, coeff_check)
+    
+                
+            #pLeft  = self.unitary_sim_pre(rhoLeft,Es, factors, comm, memLimit, pLeft)
+            #pRight = self.unitary_sim_post(rhoRight,Es, factors, comm, memLimit, pRight) \
+            #         if not self.unitary_evolution else 1
+            #NOTE: no unitary_evolution == 1 support yet...
+
+            #pLeft / "pre" sim
+            factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
+            rhoVec = factor.pre_ops[0].toarray()
+            for j in range(1,len(factor.pre_ops)):
+                rhoVec = factor.pre_ops[j].acton(rhoVec)
+            for i in range(1,last_index):
+                factor = factor_lists[i][b[i]]
+                for j in range(len(factor.pre_ops)):
+                    rhoVec = factor.pre_ops[j].acton(rhoVec)
+            factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+            EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+            for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
+                EVec = factor.post_ops[j].acton(EVec)
+            pLeft = np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
+                
+            #pRight / "post" sim
+            factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
+            rhoVec = factor.post_ops[0].toarray()
+            for j in range(1,len(factor.post_ops)):
+                rhoVec = factor.post_ops[j].acton(rhoVec)
+            for i in range(1,last_index):
+                factor = factor_lists[i][b[i]]
+                for j in range(len(factor.post_ops)):
+                    rhoVec = factor.post_ops[j].acton(rhoVec)
+            factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+            EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+            for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
+                EVec = factor.pre_ops[j].acton(EVec)
+            pRight = np.conjugate(np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
+
+            #Add result to appropriate poly
+            result = coeff  # use a reference?
+            scale_poly(result, (pLeft * pRight) )
+            final_factor_indx = b[last_index]
+            Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
+
+            #CHECK POLY MATH
+            #res = coeff_check.mult_scalar( (pLeft * pRight) ) #DEBUG
+            #print "\n----- Post SCALE by ",(pLeft * pRight),"---------"
+            #print "pLeft, pRight = ",pLeft,pRight
+            #checkpolys(result, res)
+            #if prps_chk[Ei] is None:  prps_chk[Ei] = res
+            #else:                    prps_chk[Ei] += res 
+            
+            add_polys_inplace(deref(prps)[Ei], result)
+            
+            #CHECK POLY MATH
+            #print "\n---------- PRPS Check ----------",Ei
+            #checkpolys(deref(prps)[Ei], prps_chk[Ei])
+    
+            #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res,str(type(res)))
+    
+            #increment b ~ itertools.product & update vec_index_noop = _np.dot(self.multipliers, b)
+            for i in range(nFactorLists-1,-1,-1):
+                if b[i]+1 < factorListLens[i]:
+                    b[i] += 1
+                    break
+                else:
+                    b[i] = 0
+            else:
+                break # can't increment anything - break while(True) loop
 
         #print("DB: pr_as_poly   partition=",p,"(cnt ",db_part_cnt," with ",db_nfactors," factors (cnt=",db_factor_cnt,")")
+
+cdef unordered_map[int, complex] mult_polys(unordered_map[int, complex]& poly1,
+                                            unordered_map[int, complex]& poly2,
+                                            int max_poly_vars, int max_poly_order):
+    cdef unordered_map[int, complex].iterator it1, it2
+    cdef unordered_map[int, complex].iterator itk
+    cdef unordered_map[int, complex] result = unordered_map[int,complex]()
+    cdef double complex val
+
+    it1 = poly1.begin()
+    while it1 != poly1.end():
+        it2 = poly2.begin()
+        while it2 != poly2.end():
+            k = mult_vinds_ints(deref(it1).first, deref(it2).first, max_poly_vars, max_poly_order) #key to add
+            itk = result.find(k)
+            val = deref(it1).second * deref(it2).second
+            if itk != result.end():
+                deref(itk).second = deref(itk).second + val
+            else: result[k] = val
+            inc(it2)
+        inc(it1)
+    return result
+
+
+cdef void add_polys_inplace(unordered_map[int, complex]& poly1,
+                            unordered_map[int, complex]& poly2):
+    """ poly1 += poly2 """
+    cdef unordered_map[int, complex].iterator it2, itk
+    cdef double complex val, newval
+
+    it2 = poly2.begin()
+    while it2 != poly2.end():
+        k = deref(it2).first # key
+        val = deref(it2).second # value
+        itk = poly1.find(k)
+        if itk != poly1.end():
+            newval = deref(itk).second + val
+            if abs(newval) > 1e-12:
+                deref(itk).second = newval # note: += doens't work here (complex Cython?)
+            else: poly1.erase(itk)
+        elif abs(val) > 1e-12:
+            poly1[k] = val
+        inc(it2)
+    return
+
+
+cdef void scale_poly(unordered_map[int, complex]& poly,
+                     double complex scale):
+    """" poly *= scale """
+    cdef unordered_map[int, complex].iterator it
+    it = poly.begin()
+    while it != poly.end():
+        deref(it).second = deref(it).second * scale # note: *= doesn't work here (complex Cython?)
+        inc(it)
+    return
 
 
 cdef vinds_to_int(vector[int] vinds, int max_num_vars, int max_order):
@@ -392,6 +507,23 @@ def checkpolys(unordered_map[int,complex] coeff, coeff_check):
         print deref(it); inc(it)
     print "coeff_check=",coeff_check
     #    assert(0),"Mismatch!"
+
+cdef vector[vector[unordered_map[int, complex] ]] extract_term_coeffs(python_terms, int max_order, int& max_poly_vars, int& max_poly_order):
+    ret = vector[vector[unordered_map[int, complex] ]](max_order+1)
+    for order in range(max_order+1):
+        nTerms = len(python_terms[order])
+        ret[order] = vector[unordered_map[int, complex]](nTerms)
+        for i,term in enumerate(python_terms[order]):
+            #ret[order][i] = fastpoly_to_unorderedmap(term.coeff)
+            polymap = unordered_map[int, complex]()
+            poly = term.coeff
+            if max_poly_order == -1: (&max_poly_order)[0] = poly.max_order #reference assignment workaround (known Cython bug)
+            else: assert(max_poly_order == poly.max_order)
+            if max_poly_vars == -1: (&max_poly_vars)[0] = poly.max_num_vars
+            else: assert(max_poly_vars == poly.max_num_vars)
+            for k,v in poly.items(): polymap[k] = v
+            ret[order][i] = polymap
+    return ret
 
     
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):
