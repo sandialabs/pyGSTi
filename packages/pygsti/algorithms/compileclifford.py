@@ -780,7 +780,8 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
 def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
-                                              improved_CNOT_compiler=True,randomize_ICC=False):
+                                              improved_CNOT_compiler=True,ICC_custom_ordering=None, 
+                                               ICC_std_ordering='connectivity',ICC_qubitshuffle = False):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -804,7 +805,7 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=
     # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, randomize_ICC=randomize_ICC)
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
             i += 1
             trialcircuit.reverse()
             # Do the depth-compression *after* the circuit is reversed
@@ -885,7 +886,8 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=
    
     
 def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
-                                        improved_CNOT_compiler=True,randomize_ICC=False):
+                                        improved_CNOT_compiler=True,ICC_custom_ordering=None,
+                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -898,23 +900,22 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None,p
     failcount = 0
     i = 0
     while i < iterations:
-        try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                                    improved_CNOT_compiler=improved_CNOT_compiler,
-                                                                                                   randomize_ICC=randomize_ICC)
-            i += 1
+        #try:
+        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                         improved_CNOT_compiler = improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+        i += 1
             #
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library            
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
-            trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
-            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-            if twoqubit_gatecount  < min_twoqubit_gatecount :
-                circuit = _copy.deepcopy(trialcircuit)
-                check_circuit = _copy.deepcopy(trialcheck_circuit)
-                min_twoqubit_gatecount = twoqubit_gatecount
-        except:
-            failcount += 1
+        trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
+        trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
+        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        if twoqubit_gatecount  < min_twoqubit_gatecount :
+            circuit = _copy.deepcopy(trialcircuit)
+            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            min_twoqubit_gatecount = twoqubit_gatecount
+        #except:
+        #    failcount += 1
         
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
             
@@ -981,7 +982,8 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None,p
    
 
 def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False,improved_CNOT_compiler=True,
-                                                       randomize_ICC=False):
+                                                       ICC_custom_ordering=None,
+                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
     """
     
     """
@@ -1195,7 +1197,8 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
         # Let's replace the instructions for 4 with a better CNOT circuit compiler
         CNOTcircuit = _Circuit(gatestring= instructions4,num_lines=n)
         CNOTs, CNOTp = _symp.composite_clifford_from_clifford_circuit(CNOTcircuit)
-        improved_instructions4 = compile_CNOT_circuit(CNOTs[:n,:n],pspec,randomize=randomize_ICC)
+        improved_instructions4 = compile_CNOT_circuit(CNOTs[:n,:n],pspec,custom_ordering=ICC_custom_ordering,
+                                                      std_ordering=ICC_std_ordering,qubitshuffle=ICC_qubitshuffle)
         main_instructions =  instructions7 + instructions6 + improved_instructions4 + instructions3 + instructions1
         #print(CNOTs)
         nws, nwp = _symp.composite_clifford_from_clifford_circuit(_Circuit(gatestring=improved_instructions4,num_lines=n))
@@ -1221,29 +1224,41 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
         return circuit, CNOT_pre_circuit
     
 
-def compile_CNOT_circuit(mcnot,ds,randomize=False):
+def compile_CNOT_circuit(mcnot,ds,custom_ordering=None,std_ordering='connectivity',
+                        qubitshuffle=False):
     
+    assert(qubitshuffle == False), "qubitshuffle set to True is currently not working"
     n = ds.number_of_qubits
     rowaction_instructionlist = []
     columnaction_instructionlist = []
-
-    costs = _np.sum(ds.distance,axis=0)
     remainingqubits = list(range(n))
     sout = mcnot.copy()
     
-    if randomize:
-        qubitorder = list(range(n))
-        _np.random.shuffle(qubitorder)
-        
-    else:
-        qubitorder = []
-        for k in range(0,n):
+    if custom_ordering is not None:
+        qubitorder = _copy.copy(custom_ordering)
     
-            # Find the most-expensive qubit
-            i = _np.argmax(costs)
-            qubitorder.append(i)
-            costs[i] = -1
-            
+    else:
+        if std_ordering == 'connectivity':
+            #print('std con')
+            costs = _np.sum(ds.distance,axis=0)
+            qubitorder = []
+            for k in range(0,n):
+
+                # Find the most-expensive qubit
+                i = _np.argmax(costs)
+                qubitorder.append(i)
+                costs[i] = -1
+
+        elif std_ordering == 'random':
+            #print('random')
+            qubitorder = list(range(n))
+            _np.random.shuffle(qubitorder)
+
+        else:
+            print("std_ordering is not understood!")
+    
+    #print(qubitorder)
+    
     for k in range(0,n):
 
         # Find the most-expensive qubit
@@ -1263,18 +1278,23 @@ def compile_CNOT_circuit(mcnot,ds,randomize=False):
             #print(remainingqubits)
             found = False
             dis = list(distances_to_qubit_i.copy())
-            del dis[i]
-            cccc = 0
+            counter = 0
             while not found:
-                cccc += 1
-                if cccc>20:
+                counter += 1
+                if counter>n:
+                    print('Fail!')
+                    #print("Remaining qubits:",remainingqubits)
+                    #print(sout)
+                    #print(i)
+                    #print(k+1)
                     break
                 #print(dis)
                 ii = dis.index(min(dis))
                 dis[ii] = 999999
-                if ii in remainingqubits:
+                if ii in remainingqubits and ii != i:
                     #print('     - Considering using qubit {} to rectify this'.format(ii))
-                    if sout[ii,ii] == 1:
+                    # Only do this option if qubitshuffle
+                    if sout[ii,ii] == 1 and qubitshuffle:
                         #print('     - Using qubit {} instead of qubit {}'.format(ii,i))
                         found = True
                         qindex = ii
@@ -1316,8 +1336,6 @@ def compile_CNOT_circuit(mcnot,ds,randomize=False):
         
         #print(remainingqubits)
 
-        # Set the cost of that qubit to -1, so we don't pick it again
-        costs[i] = -1
 
         qubits = _copy.copy(remainingqubits)
         del qubits[qubits.index(i)]

@@ -254,7 +254,8 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
                          alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
                        iterations=5,relations=None,prep_measure_pauli_randomize=False,
-                      improved_CNOT_compiler=True):
+                      improved_CNOT_compiler=True, ICC_custom_ordering=None, ICC_std_ordering='connectivity',
+                      ICC_qubitshuffle=False):
     
     #
     # Todo : allow for pauli-twirling in the prep/measure circuits
@@ -280,7 +281,10 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',
                                                                          iterations=iterations,
                                                                         relations=relations,
                                                                         pauli_randomize=prep_measure_pauli_randomize,
-                                                                        improved_CNOT_compiler=improved_CNOT_compiler)            
+                                                                        improved_CNOT_compiler=improved_CNOT_compiler,
+                                                                        ICC_custom_ordering=ICC_custom_ordering,
+                                                                         ICC_std_ordering=ICC_std_ordering,
+                                                                        ICC_qubitshuffle=ICC_qubitshuffle)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, 
                                                            depth_compression=depth_compression, 
@@ -305,7 +309,10 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',
                                                                              iterations=iterations,
                                                                             relations=relations,
                                                                              pauli_randomize=prep_measure_pauli_randomize,
-                                                                        improved_CNOT_compiler=improved_CNOT_compiler)   
+                                                                        improved_CNOT_compiler=improved_CNOT_compiler, 
+                                                                             ICC_custom_ordering=ICC_custom_ordering,
+                                                                         ICC_std_ordering=ICC_std_ordering,
+                                                                            ICC_qubitshuffle=ICC_qubitshuffle)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, 
                                                         depth_compression=depth_compression,
