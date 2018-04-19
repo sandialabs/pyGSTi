@@ -35,7 +35,8 @@ def relabel_qubits(circuit,order):
     return relabelled_circuit
 
 def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE','RGGE'], 
-                     costfunction='2QGC', iterations={'RGGE':4}, prefix_paulis=False):
+                     costfunction='2QGC', iterations={'RGGE':4}, prefix_paulis=False, 
+                     pauli_randomize=False):
     """
     Compiles a Clifford gate, described by the symplectic matrix s and vector p, into
     a circuit over the specified gateset, or, a standard gateset.
@@ -58,7 +59,21 @@ def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE
     
     # Create a circuit that implements a Clifford with symplectic matrix s.
     circuit = compile_symplectic(s, pspec=pspec, algorithms=algorithms,  costfunction= costfunction, 
-                                 iterations=iterations, depth_compression=depth_compression)
+                                 iterations=iterations, pauli_randomize=pauli_randomize, 
+                                 depth_compression=depth_compression)
+    
+    # If we did Pauli randomization, remove the random Pauli at the end that we will add a determinstic
+    # Pauli.
+    #
+    # Todo : put this back in -- it should be there.
+    #
+    #if pauli_randomize:
+    #    if prefix_paulis:
+    #        circuit.delete_layer(0)
+    #    else:
+    #        circuit.delete_layer(circuit.depth()-1)
+     
+    
     sreps = pspec.models['clifford'].get_clifford_symplectic_reps() # doesn't matter which compilation, just a fn of the contained gateset
     temp_s, temp_p = _symp.composite_clifford_from_clifford_circuit(circuit,  sreps)
         
@@ -105,7 +120,7 @@ def compile_clifford(s, p, pspec=None, depth_compression=True, algorithms=['DGGE
     return circuit
 
 def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='2QGC', iterations={'RGGE':4},
-                       depth_compression=True):    
+                       depth_compression=True, pauli_randomize=False):    
     """
     
     """                            
@@ -177,6 +192,16 @@ def compile_symplectic(s, pspec=None, algorithms=['DGGE','RGGE'], costfunction='
     else:
         circuit = circuits[0]
         
+    if pauli_randomize:
+        
+        n = pspec.number_of_qubits
+        paulilist = ['I','X','Y','Z']
+        d = circuit.depth()
+        for i in range(0,d+1):
+            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
+            pcircuit.change_gate_library(pspec.compilations['absolute'])
+            circuit.insert_circuit(pcircuit,d-i)
+            
     return circuit
 
 
@@ -754,7 +779,9 @@ def convert_invertible_to_reduced_echelon_form(matrixin,optype='row',position='u
 #    if connectivity is 'complete':
 #        connectivity = _np.ones((d,d),int) - _np.identity(d,int)
  
-def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=None):
+def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
+                                              improved_CNOT_compiler=True,ICC_custom_ordering=None, 
+                                               ICC_std_ordering='connectivity',ICC_qubitshuffle = False):
     """
     Compiles a circuit that, when followed by a projection onto <0,0,...|,
     is equivalent to implementing the Clifford C defined by the pair (s,p) followed by a
@@ -778,7 +805,7 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=
     # Todo : remove this try-except method once compiler always works.
     while i < iterations:
         try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin,pspec,returnall=True)
+            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(sin, pspec, returnall=True, improved_CNOT_compiler=improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
             i += 1
             trialcircuit.reverse()
             # Do the depth-compression *after* the circuit is reversed
@@ -805,6 +832,16 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "Gate relations are incorrect!"
+        
+    if pauli_randomize:
+        
+        n = pspec.number_of_qubits
+        paulilist = ['I','X','Y','Z']
+        d = circuit.depth()
+        for i in range(0,d):
+            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
+            pcircuit.change_gate_library(pspec.compilations['absolute'])
+            circuit.insert_circuit(pcircuit,d-i)
     
     check_circuit.reverse()
     #check_circuit.change_gate_library(pspec.compilations['paulieq'])
@@ -841,12 +878,16 @@ def stabilizer_measurement_preparation_circuit(s,p,pspec,iterations=5,relations=
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.prefix_circuit(paulicircuit)
-    circuit.compress_depth(max_iterations=10,verbosity=0) 
+    
+    if not pauli_randomize:
+        circuit.compress_depth(max_iterations=10,verbosity=0) 
     
     return circuit
    
     
-def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None):
+def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None,pauli_randomize=False,
+                                        improved_CNOT_compiler=True,ICC_custom_ordering=None,
+                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
     
     assert(_symp.check_valid_clifford(s,p)), "The input s and p are not a valid clifford."
     
@@ -859,22 +900,22 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None):
     failcount = 0
     i = 0
     while i < iterations:
-        try:
-            trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec,returnall=True)
-            i += 1
+        #try:
+        trialcircuit, trialcheck_circuit = symplectic_as_conditional_clifford_circuit_over_CHP(s, pspec, returnall=True,                                                                         improved_CNOT_compiler = improved_CNOT_compiler, ICC_custom_ordering=ICC_custom_ordering, ICC_std_ordering=ICC_std_ordering, ICC_qubitshuffle = ICC_qubitshuffle)
+        i += 1
             #
             # Todo: work out how much this all makes sense.
             #
             # Do the depth-compression *before* changing gate library            
-            trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
-            trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
-            twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
-            if twoqubit_gatecount  < min_twoqubit_gatecount :
-                circuit = _copy.deepcopy(trialcircuit)
-                check_circuit = _copy.deepcopy(trialcheck_circuit)
-                min_twoqubit_gatecount = twoqubit_gatecount
-        except:
-            failcount += 1
+        trialcircuit.compress_depth(gate_relations_1q,max_iterations=1000,verbosity=0)            
+        trialcircuit.change_gate_library(pspec.compilations['paulieq'])        
+        twoqubit_gatecount = trialcircuit.twoqubit_gatecount()
+        if twoqubit_gatecount  < min_twoqubit_gatecount :
+            circuit = _copy.deepcopy(trialcircuit)
+            check_circuit = _copy.deepcopy(trialcheck_circuit)
+            min_twoqubit_gatecount = twoqubit_gatecount
+        #except:
+        #    failcount += 1
         
         assert(failcount <= 5*iterations), "Randomized compiler is failing unexpectedly often. Perhaps input DeviceSpec is not valid or does not contain the neccessary information."
             
@@ -886,6 +927,16 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None):
         circuit.compress_depth(relations,max_iterations=1000,verbosity=0)    
         spostcompression, junk =  _symp.composite_clifford_from_clifford_circuit(circuit,sreps)
         assert(_np.array_equal(sprecompression,spostcompression)), "The gate relations provided are incorrect!"
+        
+    if pauli_randomize:
+        
+        n = pspec.number_of_qubits
+        paulilist = ['I','X','Y','Z']
+        d = circuit.depth()
+        for i in range(1,d+1):
+            pcircuit = _Circuit(gatestring=[_Label(paulilist[_np.random.randint(4)],k) for k in range(n)],num_lines=n)
+            pcircuit.change_gate_library(pspec.compilations['absolute'])
+            circuit.insert_circuit(pcircuit,d-i)
         
     #check_circuit.change_gate_library(pspec.compilations['paulieq'])
     check_circuit.append_circuit(circuit)
@@ -923,12 +974,16 @@ def stabilizer_state_preparation_circuit(s,p,pspec,iterations=5,relations=None):
     paulicircuit = _Circuit(gatestring=pauli_layer,num_lines=n)
     paulicircuit.change_gate_library(pspec.compilations['absolute'])
     circuit.append_circuit(paulicircuit)
-    circuit.compress_depth(max_iterations=100,verbosity=0)
+    
+    if not pauli_randomize:        
+        circuit.compress_depth(max_iterations=100,verbosity=0)
     
     return circuit
    
 
-def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False):
+def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=False,improved_CNOT_compiler=True,
+                                                       ICC_custom_ordering=None,
+                                                       ICC_std_ordering='connectivity', ICC_qubitshuffle=False):
     """
     
     """
@@ -1054,7 +1109,7 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
         MU = s[0:n,n:2*n].copy()
         ML = s[n:2*n,n:2*n].copy()
     
-        MUout, success, instructions, MLout = convert_invertible_to_reduced_echelon_form(MU, optype='column', 
+        MUout, success, instructions, MLout = convert_invertible_to_reduced_echelon_form(MU,optype='column', 
                                                                                      position='upper', 
                                                                                      paired_matrix=True,
                                                                                      pmatrixin=ML)
@@ -1135,6 +1190,20 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
     precircuit_instructions = instructions2 + instructions5
     
     n = len(s[0,:])//2
+    
+    
+    
+    if improved_CNOT_compiler:
+        # Let's replace the instructions for 4 with a better CNOT circuit compiler
+        CNOTcircuit = _Circuit(gatestring= instructions4,num_lines=n)
+        CNOTs, CNOTp = _symp.composite_clifford_from_clifford_circuit(CNOTcircuit)
+        improved_instructions4 = compile_CNOT_circuit(CNOTs[:n,:n],pspec,custom_ordering=ICC_custom_ordering,
+                                                      std_ordering=ICC_std_ordering,qubitshuffle=ICC_qubitshuffle)
+        main_instructions =  instructions7 + instructions6 + improved_instructions4 + instructions3 + instructions1
+        #print(CNOTs)
+        nws, nwp = _symp.composite_clifford_from_clifford_circuit(_Circuit(gatestring=improved_instructions4,num_lines=n))
+        #print(nws)
+    
     circuit = _Circuit(gatestring=main_instructions,num_lines=n)
     implemented_s, implemented_p = _symp.composite_clifford_from_clifford_circuit(circuit)
             
@@ -1153,3 +1222,265 @@ def symplectic_as_conditional_clifford_circuit_over_CHP(s,pspec=None,returnall=F
     else:
         #return circuit, check_circuit
         return circuit, CNOT_pre_circuit
+    
+
+def compile_CNOT_circuit(mcnot,ds,custom_ordering=None,std_ordering='connectivity',
+                        qubitshuffle=False):
+    
+    assert(qubitshuffle == False), "qubitshuffle set to True is currently not working"
+    n = ds.number_of_qubits
+    rowaction_instructionlist = []
+    columnaction_instructionlist = []
+    remainingqubits = list(range(n))
+    sout = mcnot.copy()
+    
+    if custom_ordering is not None:
+        qubitorder = _copy.copy(custom_ordering)
+    
+    else:
+        if std_ordering == 'connectivity':
+            #print('std con')
+            costs = _np.sum(ds.distance,axis=0)
+            qubitorder = []
+            for k in range(0,n):
+
+                # Find the most-expensive qubit
+                i = _np.argmax(costs)
+                qubitorder.append(i)
+                costs[i] = -1
+
+        elif std_ordering == 'random':
+            #print('random')
+            qubitorder = list(range(n))
+            _np.random.shuffle(qubitorder)
+
+        else:
+            print("std_ordering is not understood!")
+    
+    #print(qubitorder)
+    
+    for k in range(0,n):
+
+        # Find the most-expensive qubit
+        i = qubitorder[0]
+        qindex = i
+        
+        #print('----- ROUND {} ------'.format(k))
+        #print(sout)
+        #print('- Remaing qubits are:', remainingqubits)
+        #print('- Qubit scheduled to be eliminated:', i)
+        
+        distances_to_qubit_i = ds.distance[:,i].copy()
+        
+        if sout[i,i] == 0:
+            #print('- s[{},{}] = 0, so addressing this...'.format(i,i))
+            #print(sout)
+            #print(remainingqubits)
+            found = False
+            dis = list(distances_to_qubit_i.copy())
+            counter = 0
+            while not found:
+                counter += 1
+                if counter>n:
+                    print('Fail!')
+                    #print("Remaining qubits:",remainingqubits)
+                    #print(sout)
+                    #print(i)
+                    #print(k+1)
+                    break
+                #print(dis)
+                ii = dis.index(min(dis))
+                dis[ii] = 999999
+                if ii in remainingqubits and ii != i:
+                    #print('     - Considering using qubit {} to rectify this'.format(ii))
+                    # Only do this option if qubitshuffle
+                    if sout[ii,ii] == 1 and qubitshuffle:
+                        #print('     - Using qubit {} instead of qubit {}'.format(ii,i))
+                        found = True
+                        qindex = ii
+                    elif sout[ii,i] == 1:
+                        #print('     - Using row-action qubit {}'.format(ii))
+                        rowaction_instructionlist.append(_Label('CNOT',(ii,i)))
+                        #rowaction_instructionlist.append(_Label('CNOT',(i,ii)))
+                        #rowaction_instructionlist.append(_Label('CNOT',(ii,i)))  
+
+                        sout[i,:] = sout[i,:] ^ sout[ii,:]
+                        #sout[ii,:] = sout[i,:] ^ sout[ii,:]
+                        #sout[i,:] = sout[i,:] ^ sout[ii,:]
+                                         
+                        found = True
+                        qindex = i
+                                                         
+                    elif sout[i,ii] == 1:
+                        #print('     - Using col-action qubit {}'.format(ii))
+                        columnaction_instructionlist.append(_Label('CNOT',(i,ii)))
+                        #rowaction_instructionlist.append(_Label('CNOT',(ii,i)))
+                        #rowaction_instructionlist.append(_Label('CNOT',(i,ii)))
+                        sout[:,i] = sout[:,i] ^ sout[:,ii]
+                        #sout[:,ii] = sout[:,i] ^ sout[:,ii]
+                        #sout[:,i] = sout[:,i] ^ sout[:,ii]
+                        found = True
+                        qindex = i
+                        
+        #while sout[i,i] == 0:
+        #    qindex += 1
+        #i = qubitorder[qindex]
+        i = qindex
+        del qubitorder[qubitorder.index(qindex)]
+        #print('- Qubit to be eliminated:'.format(i))
+                                                        
+        assert(sout[i,i]==1)
+        #print("WARNING s[i,i] == 0 !!!!!!!!!!!!")
+        #    #sout[i,i] = 1
+        #print(sout)
+        
+        #print(remainingqubits)
+
+
+        qubits = _copy.copy(remainingqubits)
+        del qubits[qubits.index(i)]
+        
+
+        while len(qubits) > 0:
+
+            # Find the most distant remaining qubit
+            farthest_qubit_found = False
+            while not farthest_qubit_found:
+                farthest_qubit = _np.argmax(distances_to_qubit_i)
+                if farthest_qubit in qubits:
+                    farthest_qubit_found = True
+                else:
+                    distances_to_qubit_i[farthest_qubit] = -1
+
+            #print("  - Farthest qubit is", farthest_qubit)
+            # Check to see if that qubits needs to a gate on it or not.         
+            # Qubit does need to have a gate on it.
+            #print(sout)
+            if sout[farthest_qubit,i] == 1:
+                #print('  - Farthest qubit needs row eliminating...')
+
+                # Find the shortest path out from i to farthest_qubit, and do CNOTs to make that
+                # all 1s.
+                includes_eliminated_qubits = False
+                currentqubit = i       
+                while currentqubit != farthest_qubit:
+                    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                    if nextqubit not in remainingqubits:
+                        includes_eliminated_qubits = True
+                        #print("  - Resorting to CNOT via SWAPs!!!")
+                        break
+                    currentqubit = nextqubit
+                
+                if not includes_eliminated_qubits:
+                    currentqubit = i       
+                    while currentqubit != farthest_qubit:
+
+                        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                        #print(currentqubit,nextqubit)
+
+                        if sout[nextqubit,i] == 0:
+                            rowaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
+                            sout[nextqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
+                        currentqubit = nextqubit
+
+                    assert(currentqubit == farthest_qubit)
+
+                    # Set the farthest qubit s-matrix element to 0 (but don't change the others)
+                    quse = ds.shortestpath[i,farthest_qubit]
+                    #print(quse,i,farthest_qubit)
+                    rowaction_instructionlist.append(_Label('CNOT',(quse,farthest_qubit)))
+                    sout[farthest_qubit,:] =  sout[quse,:] ^ sout[farthest_qubit,:]
+
+                    currentqubit = farthest_qubit
+                    while currentqubit != i:
+
+                        nextqubit = ds.shortestpath[i,currentqubit]
+
+                        if currentqubit not in remainingqubits:
+                            rowaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
+                            sout[currentqubit,:] = sout[nextqubit,:] ^ sout[currentqubit,:]
+
+                        currentqubit = nextqubit
+                              
+                else:
+                    rowaction_instructionlist.append(_Label('CNOT',(i,farthest_qubit)))
+                    sout[farthest_qubit,:] =  sout[i,:] ^ sout[farthest_qubit,:]                    
+                     
+                #print(sout)
+
+
+            if sout[i,farthest_qubit] == 1:
+                #print('  - Farthest qubit needs column eliminating...')
+                
+                # Find the shortest path out from i to farthest_qubit, and do CNOTs to make that
+                # all 1s.
+                
+                includes_eliminated_qubits = False
+                currentqubit = i       
+                while currentqubit != farthest_qubit:
+                    nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                    if nextqubit not in remainingqubits:
+                        includes_eliminated_qubits = True
+                        #print("  - Resorting to CNOT via SWAPs!!!")
+                        break
+                    currentqubit = nextqubit
+                
+                if not includes_eliminated_qubits:
+                
+                    currentqubit = i       
+                    while currentqubit != farthest_qubit:
+
+                        nextqubit = ds.shortestpath[farthest_qubit,currentqubit]
+                        #print(currentqubit,nextqubit)
+
+                        if sout[i,nextqubit] == 0:
+                            columnaction_instructionlist.append(_Label('CNOT',(nextqubit,currentqubit)))
+                            sout[:,nextqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
+                        currentqubit = nextqubit
+
+                    assert(currentqubit == farthest_qubit)
+
+                    # Set the farthest qubit s-matrix element to 0 (but don't change the others)
+                    quse = ds.shortestpath[i,farthest_qubit]
+                    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,quse)))
+                    sout[:,farthest_qubit] =  sout[:,quse] ^ sout[:,farthest_qubit]
+
+                    currentqubit = farthest_qubit
+                    while currentqubit != i:
+
+                        nextqubit = ds.shortestpath[i,currentqubit]
+
+                        if currentqubit not in remainingqubits:
+                            columnaction_instructionlist.append(_Label('CNOT',(currentqubit,nextqubit)))
+                            sout[:,currentqubit] = sout[:,nextqubit] ^ sout[:,currentqubit]
+                        currentqubit = nextqubit
+                        
+                else:
+                    columnaction_instructionlist.append(_Label('CNOT',(farthest_qubit,i)))
+                    sout[:,farthest_qubit] = sout[:,i] ^ sout[:,farthest_qubit]
+                    
+                 
+                #print(sout)
+
+            # Delete the farthest qubit from the list -- it has been eliminated for this column.    
+            del qubits[qubits.index(farthest_qubit)]
+
+            # And set it's distance to -1, so that in the next round we find the next farthest qubit.
+            distances_to_qubit_i[farthest_qubit] = -1
+
+            #print(qubits)
+            #print(instructionlist)
+
+
+            # Remove from te remaining qubits list
+        #print(remainingqubits)
+        del remainingqubits[remainingqubits.index(i)]
+
+        #print(sout)
+        #print(len(rowaction_instructionlist),len(columnaction_instructionlist))
+
+    rowaction_instructionlist.reverse()
+    columnaction_instructionlist
+    full_instructionlist =  columnaction_instructionlist + rowaction_instructionlist
+
+    return full_instructionlist

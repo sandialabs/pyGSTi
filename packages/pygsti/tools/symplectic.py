@@ -1430,8 +1430,10 @@ def symplectic_action(m, glabel, qlist, optype='row'):
         
         if optype == 'row':
             out[j,:] = m[j,:] ^ m[i,:]    
-            out[i+d,:] = m[j+d,:] ^ m[i+d,:]        
+            out[i+d,:] = m[j+d,:] ^ m[i+d,:]  
+            # IS THIS WRONG? POSSIBLY.
         if optype == 'column':
+            print("WARNING : TIM THINGS THIS IS CURRENTLY WRONG! IT NEEDS CHECKING")
             out[:,j] = m[:,j] ^ m[:,i]    
             out[:,i+d] = m[:,j+d] ^ m[:,i+d]    
                             

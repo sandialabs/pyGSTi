@@ -112,7 +112,7 @@ def sample_circuit_layer_by_2Qweighting(pspec,gates1Q=None,gates2Q=None,two_qubi
     
     return sampled_layer
 
-def sample_circuit_layer_by_sectors(pspec, sectors, two_qubit_prob):
+def sample_circuit_layer_by_sectors(pspec, sectors, two_qubit_prob, singlequbitgates='all'):
     
     twoqubitgates = sectors[_np.random.randint(0,len(sectors))]    
     remaining_qubits = list(_np.arange(0,pspec.number_of_qubits))
@@ -128,6 +128,13 @@ def sample_circuit_layer_by_sectors(pspec, sectors, two_qubit_prob):
     for i in range(0,len(remaining_qubits)):
         qubit = remaining_qubits[i]        
         possiblegates = pspec.clifford_gates_on_qubits[(qubit,)]
+        
+        if singlequbitgates != 'all':
+            numgates = len(possiblegates)
+            for k in range(1,numgates+1):
+                if possiblegates[numgates-k].name not in singlequbitgates:
+                    del possiblegates[numgates-k]
+                
         gate = possiblegates[_np.random.randint(0,len(possiblegates))]
         sampled_layer.append(gate)
 
@@ -141,16 +148,19 @@ def sample_circuit_layer_of_1Q_gates(pspec, gtype = 'primitives'):
     if gtype == 'primitives':
         for i in range(0,pspec.number_of_qubits):
             try:
-                gate = pspec.clifford_gates_on_qubits[i][_np.random.randint(0,len(pspec.clifford_gates_on_qubits[i]))]
+                gate = pspec.clifford_gates_on_qubits[(i,)][_np.random.randint(0,len(pspec.clifford_gates_on_qubits[(i,)]))]
                 sampled_layer.append(gate)
             
             except:
                 raise ValueError ("There are no available 1Q gates on qubit {}. Check the ProcessorSpec is correctly initialized".format(i))
                 
     if gtype == 'paulis':
-        plist = ['I','X','Y','Z']
-        for pgl in plist:
-            assert(pgl in list(pspec.models['clifford'].gates.keys())), "Currently, the Pauli gates must be natively available to use this method!"
+        
+        # Todo : currently this method breaks if the pauli gates are not in the gateset.
+        
+        plist = ['Gi','Gxpi','Gypi','Gzpi']
+        #for pgl in plist:
+        #    assert(pgl in list(pspec.models['clifford'].gates.keys())), "Currently, the Pauli gates must be natively available to use this method!"
             
         for i in range(0,pspec.number_of_qubits):
             sampled_pauli = plist[_np.random.randint(0,4)]
@@ -158,24 +168,44 @@ def sample_circuit_layer_of_1Q_gates(pspec, gtype = 'primitives'):
 
     return sampled_layer
 
-def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'two_qubit_weighting' : 0.5},
+def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args=[0.5,'all',None,'single'],
                               alternatewithlocal = False, localtype = 'primitives'):
     
     if sampler == 'weights':
-        two_qubit_weighting = sampler_args['two_qubit_weighting']
-               
+        two_qubit_weighting = sampler_args[0]
+        singlequbitgates = sampler_args[1]
+        
         gates1q = list(pspec.models['clifford'].gates.keys())
         gates2q = list(pspec.models['clifford'].gates.keys())
         d = len(gates1q)   
         for i in range(0,d):
-            if gates1q[d-1-i].number_of_qubits != 1:
-                del gates1q[d-1-i]
+            
+            if singlequbitgates == 'all':
+                if gates1q[d-1-i].number_of_qubits != 1:
+                    del gates1q[d-1-i]
+            else:
+                if gates1q[d-1-i].name not in singlequbitgates:
+                    del gates1q[d-1-i]
+                    
             if gates2q[d-1-i].number_of_qubits != 2:
                  del gates2q[d-1-i]
         
     elif sampler == 'sectors':
-        two_qubit_prob = sampler_args['two_qubit_prob']
-        sectors = sampler_args['sectors']
+        
+        twoqubitprob = sampler_args[0]
+        singlequbitgates = sampler_args[1]
+        customsectors = sampler_args[2]
+        stdsectors = sampler_args[3]
+        
+        if customsectors is not None:
+            sectors = customsectors
+        else:
+            assert(stdsectors == 'single')
+            
+            sectors = []           
+            for gate in pspec.models['clifford'].gates:
+                if gate.number_of_qubits == 2:
+                    sectors.append([gate,])
                        
     circuit = _cir.Circuit(gatestring=[],num_lines=pspec.number_of_qubits)
     
@@ -188,14 +218,16 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
                                                             two_qubit_weighting=two_qubit_weighting)
             
             elif sampler == 'sectors':
-                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=two_qubit_prob)
+                layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob,
+                                                       singlequbitgates=singlequbitgates)
             else:
                 layer = sampler(pspec, length, sampler_args)
             
             circuit.insert_layer(layer,0)
             
     if alternatewithlocal:
-         for i in range(0,length):
+        
+         for i in range(0,2*length+1):
                 
                 # For odd layers, we uniformly sample the specified type of local gates.
                 local = not bool(i % 2)
@@ -208,7 +240,7 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
                         layer = sample_circuit_layer_by_2Qweighting(pspec,two_qubit_weighting=two_qubit_weighting)
             
                     elif sampler == 'sectors':
-                        layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=two_qubit_prob)
+                        layer = sample_circuit_layer_by_sectors(pspec, sectors=sectors, two_qubit_prob=twoqubitprob)
                     else:
                         layer = sampler(pspec, length, sampler_args)
                         
@@ -218,10 +250,16 @@ def sample_primitives_circuit(pspec, length, sampler='weights', sampler_args={'t
     return circuit
 
 
-def sample_prb_circuit(pspec, length, sampler='weights',sampler_args={'two_qubit_weighting' : 0.5,},  
+def sample_prb_circuit(pspec, length, sampler='weights',sampler_args=[0.5,'all',None,'single'],  
                          twirled=True, stabilizer=True, compiler_algorithm='GGE', depth_compression=True, 
                          alternatewithlocal = False, localtype = 'primitives', return_partitioned = False, 
-                       iterations=1,relations=None):
+                       iterations=5,relations=None,prep_measure_pauli_randomize=False,
+                      improved_CNOT_compiler=True, ICC_custom_ordering=None, ICC_std_ordering='connectivity',
+                      ICC_qubitshuffle=False):
+    
+    #
+    # Todo : allow for pauli-twirling in the prep/measure circuits
+    #
     
     # Sample random circuit, and find the symplectic matrix / phase vector it implements    
     random_circuit = sample_primitives_circuit(pspec=pspec, length=length, sampler=sampler,
@@ -241,12 +279,18 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args={'two_qubit
         if stabilizer:
             initial_circuit = _comp.stabilizer_state_preparation_circuit(s_initial, p_initial, pspec, 
                                                                          iterations=iterations,
-                                                                        relations=relations)            
+                                                                        relations=relations,
+                                                                        pauli_randomize=prep_measure_pauli_randomize,
+                                                                        improved_CNOT_compiler=improved_CNOT_compiler,
+                                                                        ICC_custom_ordering=ICC_custom_ordering,
+                                                                         ICC_std_ordering=ICC_std_ordering,
+                                                                        ICC_qubitshuffle=ICC_qubitshuffle)            
         else:
             initial_circuit = _comp.compile_clifford(s_initial, p_initial, pspec, 
                                                            depth_compression=depth_compression, 
                                                            algorithm=algorithm,
-                                                           prefix_paulis=True)
+                                                           prefix_paulis=True,
+                                                             pauli_randomize=prep_measure_pauli_randomize)
         
         
     else:
@@ -263,12 +307,18 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args={'two_qubit
     if stabilizer:
         inversion_circuit = _comp.stabilizer_measurement_preparation_circuit(s_inverse, p_inverse, pspec, 
                                                                              iterations=iterations,
-                                                                            relations=relations)   
+                                                                            relations=relations,
+                                                                             pauli_randomize=prep_measure_pauli_randomize,
+                                                                        improved_CNOT_compiler=improved_CNOT_compiler, 
+                                                                             ICC_custom_ordering=ICC_custom_ordering,
+                                                                         ICC_std_ordering=ICC_std_ordering,
+                                                                            ICC_qubitshuffle=ICC_qubitshuffle)   
     else:
         inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, 
                                                         depth_compression=depth_compression,
                                                         algorithm=algorithm,
-                                                        prefix_paulis=False)
+                                                        prefix_paulis=False,
+                                                       pauli_randomize=prep_measure_pauli_randomize)
 
     if not return_partitioned:
         
@@ -300,7 +350,7 @@ def sample_prb_circuit(pspec, length, sampler='weights',sampler_args={'two_qubit
 # construct_std_practice_primitive_clifford_rb_experiment()
 #
 def sample_crb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2QGC',
-                       iterations={'RGGE':100}, depth_compression=True):
+                       iterations={'RGGE':4}, depth_compression=True, pauli_randomize=False):
 
     #sreps = pspec.models['clifford'].get_clifford_symplectic_reps()
     n = pspec.number_of_qubits
@@ -314,7 +364,8 @@ def sample_crb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2
     
         s, p = _symp.random_clifford(n)
         circuit = _comp.compile_clifford(s, p, pspec, depth_compression=depth_compression, algorithms=algorithms, 
-                                         costfunction=costfunction, iterations=iterations, prefix_paulis=True)
+                                         costfunction=costfunction, iterations=iterations, prefix_paulis=True,
+                                        pauli_randomize=pauli_randomize)
         
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
@@ -325,7 +376,8 @@ def sample_crb_circuit(pspec, length, algorithms=['DGGE','RGGE'],costfunction='2
     
     inversion_circuit = _comp.compile_clifford(s_inverse, p_inverse, pspec, depth_compression=depth_compression, 
                                                algorithms=algorithms, costfunction=costfunction, 
-                                               iterations=iterations, prefix_paulis=True)
+                                               iterations=iterations, prefix_paulis=True, 
+                                               pauli_randomize=pauli_randomize)
     
     full_circuit.append_circuit(inversion_circuit)
     full_circuit.done_editing()
