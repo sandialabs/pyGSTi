@@ -2567,3 +2567,383 @@ class LindbladTermSPAMVec(TermSPAMVec):
         return self._copy_gpindices( LindbladTermSPAMVec(
             self.basepurestate, self.paramvals, self.Lterms, self.cptp,
             self.nonham_diagonal_only), parent)
+
+
+class StabilizerSPAMVec(SPAMVec):
+    """
+    TODO: docstring
+    """
+
+    def __init__(self, nqubits, zvals=None):
+        """
+        Initialize a StabilizerSPAMVec object.
+
+        Parameters
+        ----------
+        nqubits : int 
+            Number of qubits
+
+        zvals : iterable, optional
+            An iterable over anything that can be cast as True/False
+            to indicate the 0/1 value of each qubit in the Z basis.
+            If None, the all-zeros state is created.
+        """
+        self.smatrix, self.phasevec = _symp.prep_stabilizer_state(nqubits, zvals)
+        dim = 2**nQubits # assume "unitary evolution"-type mode?
+        SPAMVec.__init__(self, dim)
+
+    @property
+    def size(self):
+        return self.dim
+    
+    def set_value(self, vec):
+        """
+        Attempts to modify SPAMVec parameters so that the specified raw
+        SPAM vector becomes vec.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            A numpy array representing a SPAM vector, or a SPAMVec object.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a StabilizerSPAMVec")
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Cannot transform a StabilizerSPAMVec")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StabilizerSPAMVec")
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return _np.array([], 'd') # no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
+        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        raise ValueError("Cannot take derivative of StabilizerSPAMVec")
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True
+
+
+    def copy(self, parent=None):
+        """
+        Copy this SPAM vector.
+
+        Returns
+        -------
+        StaticSPAMVec
+            A copy of this SPAM operation.
+        """
+        nQubits = len(self.phasevec) // 2
+        ret = self._copy_gpindices( StabilizerSPAMVec(nQubits, None), parent )
+        ret.smatrix = self.smatrix.copy()
+        ret.phasevec = self.phasevec.copy()
+        return ret
+
+    def toarray(self, scratch=None):
+        """
+        Return this SPAM vector as a (dense) numpy array.  The memory
+        in `scratch` maybe used when it is not-None.
+        """
+        return (self.smatrix,self.phasevec)  # need to concat?
+
+
+    def __str__(self):
+        nQubits = len(self.phasevec) // 2
+        s = "Stabilizer spam vector for %d qubits with rep:\n" % nQubits
+        s += "  " + _mt.mx_to_string(self.smatrix) + ", " + _mt.mx_to_string(self.phasevec) + "\n"
+        return s
+
+
+class StabilizerEffectVec(SPAMVec):
+    """
+    A dummy SPAM vector that points to a set/product of 1-qubit POVM 
+    outcomes from stabilizer-state measurements.
+    """
+
+    def __init__(self, outcomes, stabilizerPOVM):
+        """
+        Initialize a StabilizerEffectVec object.
+
+        Parameters
+        ----------
+        outcomes : iterable
+            A list or other iterable of integer 0 or 1 outcomes specifying
+            which POVM effect vector this object represents within the 
+            full `stabilizerPOVM`
+
+        stabilizerPOVM : StabilizerZPOVM
+            The parent POVM object, used to cache 1Q-factor-POVM outcomes
+            to avoid repeated calculations.
+        """
+        self.outcomes = _np.array(outcomes,int)
+        self.parent_povm = stabilizerPOVM
+        nqubits = len(outcomes)
+        dim = 2**nqubits # assume "unitary evolution"-type mode?
+        SPAMVec.__init__(self, dim)
+
+    @property
+    def size(self):
+        return self.dim
+    
+    def set_value(self, vec):
+        """
+        Attempts to modify SPAMVec parameters so that the specified raw
+        SPAM vector becomes vec.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        vec : array_like or SPAMVec
+            A numpy array representing a SPAM vector, or a SPAMVec object.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot set the value of a StabilizerEffectVec")
+
+    def transform(self, S, typ):
+        """
+        Update SPAM (column) vector V as inv(S) * V or S^T * V for prep and
+        effect SPAM vectors, respectively (depending on the value of `typ`). 
+
+        Note that this is equivalent to state preparation vectors getting 
+        mapped: `rho -> inv(S) * rho` and the *transpose* of effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Generally, the transform function updates the *parameters* of 
+        the SPAM vector such that the resulting vector is altered as 
+        described above.  If such an update cannot be done (because
+        the gate parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.
+            
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+        """
+        raise ValueError("Cannot transform a StabilizerEffectVec")
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this SPAM vector by the given `amount`.
+
+        Generally, the depolarize function updates the *parameters* of 
+        the SPAMVec such that the resulting vector is depolarized.  If
+        such an update cannot be done (because the gate parameters do not
+        allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of the spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StabilizerEffectVec")
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0
+
+
+    def to_vector(self):
+        """
+        Get the SPAM vector parameters as an array of values.
+
+        Returns
+        -------
+        numpy array
+            The parameters as a 1D array with length num_params().
+        """
+        return _np.array([], 'd') # no parameters
+
+
+    def from_vector(self, v):
+        """
+        Initialize the SPAM vector using a 1D array of parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params()
+
+        Returns
+        -------
+        None
+        """
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+
+    def deriv_wrt_params(self, wrtFilter=None):
+        """
+        Construct a matrix whose columns are the derivatives of the SPAM vector
+        with respect to a single param.  Thus, each column is of length
+        get_dimension and there is one column per SPAM vector parameter.
+        An empty 2D array in the StaticSPAMVec case (num_params == 0).
+
+        Returns
+        -------
+        numpy array
+            Array of derivatives, shape == (dimension, num_params)
+        """
+        raise ValueError("Cannot take derivative of StabilizerEffectVec")
+
+
+    def has_nonzero_hessian(self):
+        """ 
+        Returns whether this SPAM vector has a non-zero Hessian with
+        respect to its parameters, i.e. whether it only depends
+        linearly on its parameters or not.
+
+        Returns
+        -------
+        bool
+        """
+        return True
+
+
+    def copy(self, parent=None):
+        """
+        Copy this SPAM vector.
+
+        Returns
+        -------
+        StaticSPAMVec
+            A copy of this SPAM operation.
+        """
+        return self._copy_gpindices( StabilizerEffectVec(self.outcomes, self.parent_povm), parent )
+    
+
+    def __str__(self):
+        nQubits = len(self.outcomes)
+        s = "Stabilizer effect vector for %d qubits with outcome %s" % (nQubits, str(self.outcomes))
+        return s

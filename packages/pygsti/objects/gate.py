@@ -6032,7 +6032,7 @@ class CliffordGate(Gate):
             raise ValueError("Must supply one (and only one) argument to __init__")
 
         nQubits = len(self.svector) // 2
-        dim = 2**nQubits # assume "unitary evoluation"-type mode?
+        dim = 2**nQubits # assume "unitary evolution"-type mode?
         Gate.__init__(self, dim)
 
 

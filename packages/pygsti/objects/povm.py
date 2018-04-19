@@ -675,3 +675,167 @@ class TensorProdPOVM(POVM):
         #s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
         #                                   axis=1), width=6, prec=2)
         return s
+
+
+
+class StabilizerZPOVM(POVM):
+    """ 
+    A POVM that "measures" stabilizer states in the computational "Z" basis.
+    """
+    def __init__(self, nqubits, qubit_filter=None):
+        """
+        Creates a new StabilizerZPOVM object.
+
+        Parameters
+        ----------
+        nqubits : int
+            The number of qubits
+
+        qubit_filter : list, optional
+            An optional list of integers specifying a subset
+            of the qubits to be measured.
+        """
+        if qubit_filter is not None:
+            raise NotImplementedError("Still need to implement qubit_filter functionality")
+
+        self.nqubits = nqubits
+        self.qubit_filter = qubit_filter
+        self.cached_probs = None
+        self.cached_state = None
+        dim = 2**nqubits # assume "unitary evolution"-type mode?
+
+        #LATER - do something with qubit_filter here
+        # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
+        
+        iterover = [0,1]*nqubits
+        items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
+                  for outcomes in _itertools.product(iterover) ]
+        super(StabilizerZPOVM, self).__init__(dim, items)
+
+    def __reduce__(self):
+        """ Needed for OrderedDict-derived classes (to set dict items) """
+        return (StabilizerZPOVM, (self.nqubits,self.qubit_filter),
+                {'_gpindices': self._gpindices} ) #preserve gpindices (but not parent)
+
+
+    def compile_effects(self, prefix=""):
+        """
+        Returns a dictionary of effect SPAMVecs that belong to the POVM's parent
+        `GateSet` - that is, whose `gpindices` are set to all or a subset of
+        this POVM's gpindices.  Such effect vectors are used internally within
+        computations involving the parent `GateSet`.
+
+        Parameters
+        ----------
+        prefix : str
+            A string, usually identitying this POVM, which may be used
+            to prefix the compiled gate keys.
+
+        Returns
+        -------
+        OrderedDict of SPAMVecs
+        """
+        # Create "compiled" effect vectors, which infer their parent and
+        # gpindices from the set of "factor-POVMs" they're constructed with.
+        if prefix: prefix += "_"
+        compiled = _collections.OrderedDict(
+            [ (prefix + k, Evec) for k,Evec in self.items() ] )
+        return compiled
+
+
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this POVM.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return 0
+
+
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this POVM.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        return _np.array([], 'd') # no parameters
+
+
+    def from_vector(self, v):
+        assert(len(v) == 0) #should be no parameters, and nothing to do
+
+        
+    def transform(self, S):
+        """
+        Update each POVM effect E as S^T * E.
+
+        Note that this is equivalent to the *transpose* of the effect vectors
+        being mapped as `E^T -> E^T * S`.
+
+        Parameters
+        ----------
+        S : GaugeGroupElement
+            A gauge group element which specifies the "S" matrix 
+            (and it's inverse) used in the above similarity transform.            
+        """
+        raise ValueError("Cannot transform a StabilizerZPOVM")
+        #self.dirty = True
+
+
+    def depolarize(self, amount):
+        """
+        Depolarize this POVM by the given `amount`.
+
+        Parameters
+        ----------
+        amount : float or tuple
+            The amount to depolarize by.  If a tuple, it must have length
+            equal to one less than the dimension of the gate. All but the
+            first element of each spam vector (often corresponding to the 
+            identity element) are multiplied by `amount` (if a float) or
+            the corresponding `amount[i]` (if a tuple).
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError("Cannot depolarize a StabilizerZPOVM!")
+        #self.dirty = True
+
+
+    def num_elements(self):
+        """
+        Return the number of total spam vector elements in this povm.
+        This is in general different from the number of *parameters*,
+        which are the number of free variables used to generate all of
+        the vector *elements*.
+
+        Returns
+        -------
+        int
+        """
+        return sum([ E.dim for E in self.values() ])
+          #Note: Use .dim instead of .size b/c TensorProdSPAMVec's
+          # are not DenseSPAMVec-derived
+        
+    def copy(self, parent=None):
+        """
+        Copy this POVM.
+
+        Returns
+        -------
+        StabilizerZPOVM
+            A copy of this POVM
+        """
+        #Note: factorPOVMs will get copied in constructor, so don't need to here
+        return self._copy_gpindices( StabilizerZPOVM(self.nqubits, self.qubit_filter), parent )
+
+    def __str__(self):
+        s = "Stabilizer Z POVM on %d qubits and filter %s\n" % (self.nqubits,str(self.qubit_filter))
+        return s

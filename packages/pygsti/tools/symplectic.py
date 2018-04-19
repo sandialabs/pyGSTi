@@ -62,6 +62,7 @@ def symplectic_form(n,convention='standard'):
 
 def change_symplectic_form_convention(s,outconvention='standard'):
     """
+    TODO: docstring -- Parameters section needs updating at least
     Maps the input symplectic matrix between the 'standard' and 'directsum'
     symplectic form conventions. That is, if the input is a symplectic matrix
     with respect to the 'directsum' convention and outconvention ='standard' the 
@@ -351,6 +352,198 @@ def compose_cliffords(s1,p1,s2,p2):
     assert(check_valid_clifford(s,p)), "The output is not a valid Clifford! Function has failed."
     
     return s, p
+
+
+def prep_stabilizer_state(nqubits, zvals=None):
+    """ TODO: docstring: zvals can be iterable over anything True/False
+    to indicate 0/1 value of qubit """
+    n = nqubits
+    s = _np.identity(2*n,int)
+    p = _np.zeros(2*n,int)
+    if zvals:
+        for i,z in enumerate(zvals):
+            p[i] = p[i+n] = 2 if bool(z) else 0 # TODO: check this is right -- (how to update the destabilizers?)
+    return s,p
+
+def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
+    """
+    Applies a clifford in the symplectic representation to a stabilize state in the 
+    standard stabilizer representation. The output corresponds to the stabilizer
+    representation of the output state.
+    
+    Parameters
+    ----------
+    s : numpy array
+        The symplectic matrix over the integers mod 2 representing the Clifford
+    
+    p : numpy array
+        The 'phase vector' over the integers mod 4 representing the Clifford
+        
+    state_s : numpy array
+        The matrix over the integers mod 2 representing the stabilizer state
+        
+    state_p : numpy array
+        The 'phase vector' over the integers mod 4 representing the stabilizer state
+
+    Returns
+    -------
+    out_s : numpy array
+        The symplectic matrix over the integers mod 2 representing the output state
+     
+    out_p : numpy array
+        The 'phase vector' over the integers mod 4 representing the output state
+        
+    """
+    two_n = _np.shape(s)[0]; n = two_n // 2
+    assert(_np.shape(state_s) == (two_n, two_n)), "Clifford and state must be for the same number of qubits!"
+    assert(_np.shape(state_p) == (two_n,)), "Invalid stabilizer state representation"
+    assert(check_valid_clifford(s,p)), "The `s`,`p` matrix-vector pair is not a valid Clifford!"
+    #TODO: check valid stabilizer state?
+    
+    # Below we calculate the s and p for the output state using the formulas from
+    # Hostens and De Moor PRA 71, 042315 (2005).
+    out_s = _mtx.dotmod2(s,state_s)    
+    
+    u = _np.zeros((2*n,2*n),int)
+    u[n:2*n,0:n] = _np.identity(n,int)
+
+    inner = _np.dot(_np.dot(_np.transpose(s),u),s)
+    vec1 = _np.dot(_np.transpose(s1),p - _mtx.diagonal_as_vec(inner))
+    matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
+    vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s),matrix),s))
+    
+    out_p = p + vec1 + vec2
+    out_p = out_p % 4
+
+    #TODO: check for valid stabilizer state
+    #assert(check_valid_clifford(s,p)), "The output is not a valid Clifford! Function has failed."
+    
+    return out_s, out_p
+
+
+def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=False):
+    """ 
+    Computes the probabilities of +/- outcomes from measuring a 
+    Pauli operator on a stabilizer state.
+
+    Parameters
+    ----------
+    state_s : numpy array
+        The matrix over the integers mod 2 representing the stabilizer state
+        
+    state_p : numpy array
+        The 'phase vector' over the integers mod 4 representing the stabilizer state
+
+    qubit_index : int
+        The index of the qubit being measured
+
+    return_output_states : bool, optional
+        Whether the output states should be returned (see below).
+
+    Returns
+    -------
+    pminus, pplus : float
+        Probabilities of - and + outcomes.
+
+    state_s_minus, state_s_plus : numpy array
+        Matrix over the intergers mod 2 representing the output stabilizer
+        states.  Only returned when `return_output_states == True`.
+
+    state_p_minus, state_p_plus : numpy array
+        Phase vectors over the intergers mod 4 representing the output
+        stabilizer states.  Only returned when `return_output_states == True`.
+    """
+    two_n = len(state_p); n = two_n // 2
+    assert(_np.shape(state_s) == (two_n, n)), "Inconsistent stabilizier representation!"
+
+    #This algorithm follows that of PRA 70, 052328 (2004),
+    # except note:
+    # 0) columns & rows are reversed
+    # 1) that states carry arount full "mod 4"
+    # phase vectors instead of the minmal "mod 2" ones 
+    # comprised of the higher-order-bit of each "mod 4" vector.
+    # 2) that the stabilizer is held in the *first* n
+    # columns of state_s rather than the last n.
+    
+    a = qubit_index
+    # Let A be the Pauli op being measured
+    #Step1: determine if all stabilizer elements commute with Z_a
+    # which amounts to checking whether there are any 1-bits in the a-th
+    # row of state_s for the first n columns (any stabilizers that have X's
+    # or Y's for qubit a, as 00=I, 10=X, 11=Y, 01=Z)
+    for col in n:
+        if state_s[a,col] == 1:
+            p = col
+            # p is first stabilizer that anticommutes w/Z_a. Outcome is random,
+            # and we just need to update the state (if requested).
+            if return_output_states:
+                s_out = state_s.copy(); p_out = state_p.copy()
+                for i in range(two_n):
+                    if i != p and state_s[a,i] == 1:
+                        colsum(i,p,s_out,p_out,n)
+                s_out[:,p+n] = s_out[:,p]; p_out[p+n] = p_out[p] # set p-th col -> (p+n)-th col
+                s_out[:,p] = 0; s_out[a+n,p] = 1 # p-th row = I*...Z_a*...I stabilizer
+                p_out0 = p_out.copy() p_out0[p] = 0
+                p_out1 = p_out.copy() p_out1[p] = 1
+                return 0.5, 0.5, s_out,s_out, p_out0,p_out1 # Note: s is same for 0 and 1 outcomes
+            else:
+                return 0.5, 0.5
+
+    # no break ==> all commute, so outcome is deterministic, so no
+    # state update; just determine whether Z_a or -Z_a is in the stabilizer,
+    # which we do using the "anti-stabilizer" cleverness of PRA 70, 052328
+    acc_s = _np.zeros(two_n,int); acc_p = _np.zeros(1,int)
+    for i in range(n,two_n): # loop over anti-stabilizer
+        if state_s[a,i] == 1: # for elements that anti-commute w/Z_a
+            colsum_acc(acc_s,acc_p,i-n,state_s,state_p) # act w/corresponding *stabilizer* el
+    # now the high bit of acc_p holds the outcome
+    if acc_p == 0: # outcome is always zero
+        return (1.0, 0.0, state_s, state_s, state_p, state_p) \
+            if return_output_states else (1.0, 0.0)
+    else: # outcome is always 1
+        assert(acc_p == 2) # should never get 1 or 3 (low bit should always be 0)
+        return (0.0, 1.0, state_s, state_s, state_p, state_p) \
+            if return_output_states else (0.0, 1.0)
+
+    
+def colsum_g(x1,z1,x2,z2):
+    """ TODO: docstring -- see PRA """
+    if x1 == 0:
+        if z1 == 0: return 0
+        else: return x2*(1-2*z2)
+    else:
+        if z1 == 0: return z2*(2*x2-1)
+        else: return z2-x2
+    
+def colsum(i,j,s,p,n):    
+    #Note: need to divide p-vals by 2 to access high-bit
+    test = 2*(p[i]//2 + p[j]//2) + sum(
+        [colsum_g(s[k,j], s[k+n,j], s[k,i], s[k+n,i]) for k in range(n)] )
+    test = test % 4
+    assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
+    p[i] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
+
+    for k in range(n):
+        s[k,i] = s[k,j] ^ s[k,i]
+        s[k+n,i] = s[k+n,j] ^ s[k+n,i]
+        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+    return
+
+def colsum_acc(acc_s,acc_p,j,s,p):
+    #Note: need to divide p-vals by 2 to access high-bit
+    test = 2*(acc_p[0]//2 + p[j]//2) + sum(
+        [colsum_g(s[k,j], s[k+n,j], acc_s[k], acc_s[k+n]) for k in range(n)] )
+    test = test % 4
+    assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
+    acc_p[0] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
+
+    for k in range(n):
+        acc_s[k] = s[k,j] ^ acc_s[k]
+        acc_s[k+n] = s[k+n,j] ^ acc_s[k+n]
+        #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+    return
+
+    
 
 def standard_symplectic_representations(gllist=None):
     """
