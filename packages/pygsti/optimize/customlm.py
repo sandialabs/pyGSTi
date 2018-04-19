@@ -98,7 +98,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
 
+    # DB: from ..tools import matrixtools as _mt
+    # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
 
+        
     for k in range(max_iter): #outer loop
         # assume x, f, fnorm hold valid values
 
@@ -116,6 +119,8 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
         Jac = jac_fn(x)
+        # DB: from ..tools import matrixtools as _mt
+        # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
         if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
                                         + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                         Jac.nbytes/(1024.0**3)) )
