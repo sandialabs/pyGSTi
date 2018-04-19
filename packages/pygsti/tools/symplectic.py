@@ -483,8 +483,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
                         colsum(i,p,s_out,p_out,n)
                 s_out[:,p+n] = s_out[:,p]; p_out[p+n] = p_out[p] # set p-th col -> (p+n)-th col
                 s_out[:,p] = 0; s_out[a+n,p] = 1 # p-th row = I*...Z_a*...I stabilizer
-                p_out0 = p_out.copy() p_out0[p] = 0
-                p_out1 = p_out.copy() p_out1[p] = 1
+                p_out0 = p_out.copy(); p_out0[p] = 0
+                p_out1 = p_out.copy(); p_out1[p] = 1
                 return 0.5, 0.5, s_out,s_out, p_out0,p_out1 # Note: s is same for 0 and 1 outcomes
             else:
                 return 0.5, 0.5
