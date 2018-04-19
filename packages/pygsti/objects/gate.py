@@ -2990,7 +2990,7 @@ class LindbladParameterizedGateMap(LindbladBase, GateMap):
             
         if self.sparse:
             #state = _spsl.expm_multiply( self.err_gen, state) #SLOW
-            state = _mt.expm_multiply_fast(self.err_gen_prep, state[:,0])[:,None] # (N,1) -> (N,1) shape mapping
+            state = _mt.expm_multiply_fast(self.err_gen_prep, state) # (N,) -> (N,) shape mapping
         else:
             state = _np.dot(self.exp_err_gen, state)
         return state
@@ -5341,7 +5341,7 @@ class EmbeddedGateMap(GateMap):
         #  if A.nnz == 0: return state # embedded gate is identity, so entire gate is
         _fastcalc.embedded_fast_acton_sparse_spc1(A.data, A.indptr, A.indices,
                                                   mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-                                                  output_state[:,0], state[:,0],
+                                                  output_state, state,
                                                   self.noop_incrementers,
                                                   self.numBasisEls_noop_blankaction,
                                                   self.baseinds)
@@ -5358,7 +5358,7 @@ class EmbeddedGateMap(GateMap):
                 
         #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
         _fastcalc.embedded_fast_acton_sparse_spc2(self.embedded_gate.base,
-                                                  output_state[:,0], state[:,0],
+                                                  output_state, state,
                                                   self.noop_incrementers,
                                                   self.numBasisEls_noop_blankaction,
                                                   self.baseinds)
@@ -5373,7 +5373,7 @@ class EmbeddedGateMap(GateMap):
         """ Act this gate map on an input state """
         output_state = _np.zeros( state.shape, 'd')
         _fastcalc.embedded_fast_acton_sparse(self.embedded_gate.acton,
-                                             output_state[:,0], state[:,0],
+                                             output_state, state,
                                              self.noop_incrementers,
                                              self.numBasisEls_noop_blankaction,
                                              self.baseinds)
@@ -5395,7 +5395,7 @@ class EmbeddedGateMap(GateMap):
         _fastcalc.embedded_fast_acton_sparse_spc1_complex(
             A.data, A.indptr, A.indices,
             mu, m_star, s, _mt.EXPM_DEFAULT_TOL, eta,
-            output_state[:,0], state[:,0],
+            output_state, state,
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
             self.baseinds)
@@ -5413,7 +5413,7 @@ class EmbeddedGateMap(GateMap):
         #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
         _fastcalc.embedded_fast_acton_sparse_spc2_complex(
             self.embedded_gate.base,
-            output_state[:,0], state[:,0],
+            output_state, state,
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
             self.baseinds)
@@ -5429,7 +5429,7 @@ class EmbeddedGateMap(GateMap):
         output_state = _np.zeros( state.shape, complex)
         _fastcalc.embedded_fast_acton_sparse_complex(
             self.embedded_gate.acton,
-            output_state[:,0], state[:,0],
+            output_state, state,
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
             self.baseinds)
@@ -5447,7 +5447,7 @@ class EmbeddedGateMap(GateMap):
         #FAST Special Case #2 - a GateMatrix-derived gate, so one with a dense representation
         _fastcalc.embedded_fast_acton_sparse_spc2_complex(
             self.embedded_gate.base.conjugate().T,
-            output_state[:,0], state[:,0],
+            output_state, state,
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
             self.baseinds)
@@ -5463,7 +5463,7 @@ class EmbeddedGateMap(GateMap):
         output_state = _np.zeros( state.shape, complex)
         _fastcalc.embedded_fast_acton_sparse_complex(
             self.embedded_gate.adjoint_acton,
-            output_state[:,0], state[:,0],
+            output_state, state,
             self.noop_incrementers,
             self.numBasisEls_noop_blankaction,
             self.baseinds)
@@ -6037,8 +6037,10 @@ class CliffordGate(Gate):
 
 
     def acton(self, state):
-        """ Act this gate map on an input state """
-        raise NotImplementedError()
+        """ Act this gate map on an input state TODO: docstring """
+        state_s, state_p = state # should be output of StabilizerState.toarray()
+        return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
+                                                        state_s,state_p)
     
     
     def num_params(self):

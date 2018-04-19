@@ -22,6 +22,12 @@ from .label import Label as _Label
 
 _dummy_profiler = _DummyProfiler()
 
+# FUTURE: use enum (make sure it's supported in Python2.7?)
+SUPEROP  = 0
+UNITARY  = 1
+CLIFFORD = 2
+
+
 #TODO:
 # Gate -> GateMatrix
 # New "Gate" base class, new "GateMap" class
@@ -34,8 +40,7 @@ class GateMapCalc(GateCalc):
     gate set classes (e.g. ones which use entirely different -- non-gate-local
     -- parameterizations of gate matrices and SPAM vectors) access to these
     fundamental operations.
-    """
-
+    """    
     def __init__(self, dim, gates, preps, effects, paramvec):
         """
         Construct a new GateMapCalc object.
@@ -61,7 +66,7 @@ class GateMapCalc(GateCalc):
         paramvec : ndarray
             The parameter vector of the GateSet.
         """
-        self.unitary_evolution = False
+        self.evolution_type = SUPEROP 
         super(GateMapCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
@@ -77,10 +82,14 @@ class GateMapCalc(GateCalc):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
-            typ = complex if self.unitary_evolution else 'd'
-            scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
-            rho = self.preps[rholabel].toarray(scratch)
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
+            if self.evolution_type in (SUPEROP,UNITARY):  # FUTURE: use enum (make sure it's supported in Python2.7?)
+                typ = complex if self.evolution_type == UNITARY else 'd'
+                scratch = _np.empty(self.preps[rholabel].dim, typ) # allocate local scratch
+                rho = self.preps[rholabel].toarray(scratch)
+                E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
+            else: # CLIFFORD
+                rho = self.preps[rholabel].toarray(scratch)
+                E = self.effects[elabel] # just return raw effect object
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)
@@ -149,10 +158,16 @@ class GateMapCalc(GateCalc):
         """
         rho,E = self._rhoE_from_spamTuple(spamTuple)
         rho = self.propagate_state(rho, gatestring)
-        if self.unitary_evolution:
+        if self.evolution_type == UNITARY:
             p = float(abs(_np.dot(E,rho))**2)
-        else:
+        elif self.evolution_type == SUPEROP:
             p = float(_np.dot(E,rho))
+        else: # CLIFFORD
+            state_s, state_p = rho # should be a StabilizerState.toarray() "object"
+            nQubits = len(E.outcomes); assert(nQubits == len(state_p) // 2)
+            probs = [ pauli_z_measurement(state_s, state_p, i) for i in range(nQubits) ] # could cache this
+            oneQ_outcome_probs = [ probs[i][outcome] for i,outcome in enumerate(E.outcomes) ]
+            p = float(_np.product(oneQ_outcome_probs))
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -290,36 +305,53 @@ class GateMapCalc(GateCalc):
         rhoVec,EVecs = self._rhoEs_from_labels(rholabel, elabels)
         ret = _np.empty((len(evalTree),len(elabels)),'d')
 
-        #Scratch type (for holding spam/state vectors)
-        typ = complex if self.unitary_evolution else 'd'
-        
-        if scratch is None:
-            rho_cache = _np.zeros((cacheSize, dim), typ)
-        else:
-            assert(scratch.shape == (cacheSize,dim))
-            rho_cache = scratch #to avoid recomputation
+        #Get rho & rhoCache
+        if self.evolution_type in (UNITARY, SUPEROP):
+            #Scratch type (for holding spam/state vectors)
+            typ = complex if self.evolution_type == UNITARY else 'd'
+            
+            if scratch is None:
+                rho_cache = _np.zeros((cacheSize, dim), typ)
+            else:
+                assert(scratch.shape == (cacheSize,dim))
+                rho_cache = scratch #to avoid recomputation
+                
+            Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
+            rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
+        else: # CLIFFORD case
+            rho = rhoVec.toarray()
+            if scratch is None:
+                rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
+            else:
+                assert(len(scratch) == cacheSize)
+                rho_cache = scratch
+                       
 
         #comm is currently ignored
         #TODO: if evalTree is split, distribute among processors
-
-        Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
-        rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
         for i in evalTree.get_evaluation_order():
             iStart,remainder,iCache = evalTree[i]
-            if iStart is None:  init_state = rho #[:,0]
-            else:               init_state = rho_cache[iStart][:,None]
+            if iStart is None:  init_state = rho
+            else:               init_state = rho_cache[iStart] #[:,None]
 
             final_state = self.propagate_state(init_state, remainder)
-            if iCache is not None: rho_cache[iCache] = final_state[:,0] #store this state in the cache
+            if iCache is not None: rho_cache[iCache] = final_state # [:,0] #store this state in the cache
 
-            if self.unitary_evolution:
+            if self.evolution_type == UNITARY:
                 for j,E in enumerate(EVecs):
                     ret[i,j] = _np.abs(_np.vdot(E.toarray(Escratch),final_state))**2
-            else:
+            elif self.evolution_type == SUPEROP:
                 for j,E in enumerate(EVecs):
                     ret[i,j] = _np.vdot(E.toarray(Escratch),final_state)
                     #OLD (slower): _np.dot(_np.conjugate(E.toarray(Escratch)).T,final_state)
                     # FUTURE: optionally pre-compute toarray() results for speed if mem is available?
+            else: # CLIFFORD case
+                state_s, state_p = final_state # should be a StabilizerState.toarray() "object"
+                nQubits = len(state_p) // 2
+                probs = [ pauli_z_measurement(state_s, state_p, i) for i in range(nQubits) ] # could cache this
+                for j,E in enumerate(EVecs):
+                    oneQ_outcome_probs = [ probs[i][outcome] for i,outcome in enumerate(E.outcomes) ]
+                    ret[i,j] = float(_np.product(oneQ_outcome_probs))
                 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret
@@ -334,13 +366,23 @@ class GateMapCalc(GateCalc):
         dim = self.dim
         cacheSize = evalTree.cache_size()
         dpr_cache  = _np.zeros((len(evalTree), len(elabels), nDerivCols),'d')
-        typ = complex if self.unitary_evolution else 'd'
-        if scratch is None:
-            rho_cache  = _np.zeros((cacheSize, dim), typ)
-        else:
-            assert(scratch.shape == (cacheSize,dim))
-            rho_cache  = scratch
-            
+
+        # Allocate cache space if needed
+        if self.evolution_type in (UNITARY, SUPEROP):
+            typ = complex if self.evolution_type == UNITARY else 'd'
+
+            if scratch is None:
+                rho_cache  = _np.zeros((cacheSize, dim), typ)
+            else:
+                assert(scratch.shape == (cacheSize,dim))
+                rho_cache  = scratch
+        else: # CLIFFORD case
+            if scratch is None:
+                rho_cache = [None]*cacheSize # so we can store (s,p) tuples in cache
+            else:
+                assert(len(scratch) == cacheSize)
+                rho_cache = scratch
+                
         eps = 1e-7 #hardcoded?
         pCache = self._compute_pr_cache(rholabel,elabels,evalTree,comm,rho_cache)
 
@@ -384,8 +426,14 @@ class GateMapCalc(GateCalc):
         
         dim = self.dim
         cacheSize = evalTree.cache_size()
-        dpr_scratch = _np.zeros((cacheSize,dim),'d')
         hpr_cache  = _np.zeros((len(evalTree),len(elabels), nDerivCols1, nDerivCols2),'d')
+
+        # Allocate scratch space for compute_dpr_cache
+        if self.evolution_type in (UNITARY, SUPEROP):
+            typ = complex if self.evolution_type == UNITARY else 'd'
+            dpr_scratch  = _np.zeros((cacheSize, dim), typ)
+        else: # CLIFFORD case
+            dpr_scratch = [None]*cacheSize # so we can store (s,p) tuples in cache
             
         eps = 1e-4 #hardcoded?
         dpCache = self._compute_dpr_cache(rholabel,elabels,evalTree,wrtSlice2,comm,
@@ -1018,4 +1066,11 @@ class UnitaryGateMapCalc(GateMapCalc):
     def __init__(self, dim, gates, preps, effects, paramvec):
         """ TODO: docstring """
         super(UnitaryGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
-        self.unitary_evolution = True
+        self.evolution_type = UNITARY
+
+class CliffordGateMapCalc(GateMapCalc):
+    """ TODO: docstring """
+    def __init__(self, dim, gates, preps, effects, paramvec):
+        """ TODO: docstring """
+        super(CliffordGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
+        self.evolution_type = CLIFFORD

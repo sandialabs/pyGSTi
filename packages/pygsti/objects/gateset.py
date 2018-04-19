@@ -103,6 +103,15 @@ class GateSet(object):
         self.gates = _ld.OrderedMemberDict(self, default_param, gate_prefix, "gate")
         self.instruments = _ld.OrderedMemberDict(self, default_param, instrument_prefix, "instrument")
 
+        self.set_simtype(sim_type)
+        
+        self._default_gauge_group = None
+        self._paramvec = _np.zeros(0, 'd')
+        self._rebuild_paramvec()
+
+        super(GateSet, self).__init__()
+
+    def set_simtype(self, sim_type):
         #Calculator selection based on simulation type
         simtype_and_args = sim_type.split(":")
         sim_type = simtype_and_args[0]
@@ -114,15 +123,10 @@ class GateSet(object):
         elif sim_type == "termorder":  c = _gatetermcalc.GateTermCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
-        self._default_gauge_group = None
         self._calcClass = c
         self._sim_type = sim_type
         self._sim_args = simtype_and_args[1:]
         
-        self._paramvec = _np.zeros(0, 'd')
-        self._rebuild_paramvec()
-
-        super(GateSet, self).__init__()
 
     def _embedGate(self, gateTargetLabels, gateVal):
         """ TODO: docstring """

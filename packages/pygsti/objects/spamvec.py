@@ -20,6 +20,7 @@ from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
+from ..tools import symplectic as _symp
 from ..baseobjs import Basis as _Basis
 from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import gatesetmember as _gatesetmember
@@ -400,7 +401,7 @@ class DenseSPAMVec(SPAMVec):
         in `scratch` maybe used when it is not-None.
         """
         #don't use scratch since we already have memory allocated
-        return self.base
+        return self.base[:,0]
                                    
     #Access to underlying array
     def __getitem__( self, key ):
@@ -1675,11 +1676,11 @@ class TensorProdSPAMVec(SPAMVec):
         """ Fills in self._fast_kron_array based on current self.factors """
         if self.typ == "prep":
             for i,factor_dim in enumerate(self._fast_kron_factordims):
-                self._fast_kron_array[i][0:factor_dim] = self.factors[i].toarray()[:,0]
+                self._fast_kron_array[i][0:factor_dim] = self.factors[i].toarray()
         else:
             factorPOVMs = self.factors
             for i,(factor_dim,Elbl) in enumerate(zip(self._fast_kron_factordims,self.effectLbls)):
-                self._fast_kron_array[i][0:factor_dim] = factorPOVMs[i][Elbl].toarray()[:,0]
+                self._fast_kron_array[i][0:factor_dim] = factorPOVMs[i][Elbl].toarray()
 
 
     def toarray(self, scratch=None):
@@ -1698,7 +1699,7 @@ class TensorProdSPAMVec(SPAMVec):
                 _fastcalc.fast_kron_complex(scratch, self._fast_kron_array, self._fast_kron_factordims)
             else:
                 _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
-            return scratch[:,None] if scratch.ndim == 1 else scratch
+            return scratch if scratch.ndim == 1 else scratch
             
         if self.typ == "prep":
             ret = self.factors[0].toarray() # factors are just other SPAMVecs
@@ -1926,10 +1927,10 @@ class TensorProdSPAMVec(SPAMVec):
 
         if self.typ == "prep":
             # factors are just other SPAMVecs
-            s += " x ".join([_mt.mx_to_string(fct.toarray().flatten(), width=4, prec=2) for fct in self.factors])
+            s += " x ".join([_mt.mx_to_string(fct.toarray(), width=4, prec=2) for fct in self.factors])
         else:
             # factors are POVMs
-            s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].toarray().flatten(), width=4, prec=2)
+            s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].toarray(), width=4, prec=2)
                              for i,fct in enumerate(self.factors)])
         return s
 

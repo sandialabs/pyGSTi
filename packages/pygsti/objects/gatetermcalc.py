@@ -31,7 +31,7 @@ from .polynomial import FastPolynomial as _FastPolynomial
 from . import fastgatecalc as _fastgatecalc
 #except ImportError:
 #    _fastgatecalc = None
-_fastgatecalc.test_map("Hi")
+#_fastgatecalc.test_map("Hi")
 
 DEBUG_FCOUNT = 0
 
@@ -72,6 +72,7 @@ class GateTermCalc(GateCalc):
         #self.unitary_evolution = False
         self.max_order = max_order
         self.unitary_evolution = False
+        self.term_op_clifford_evolution = False
         super(GateTermCalc, self).__init__(
             dim, gates, preps, effects, paramvec)
 
