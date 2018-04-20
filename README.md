@@ -2,7 +2,7 @@
   pyGSTi 0.9 
 ********************************************************************************
 
-[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=beta)](https://travis-ci.org/pyGSTio/pyGSTi)
+[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=master)](https://travis-ci.org/pyGSTio/pyGSTi)
 
 Overview:
 --------
@@ -31,12 +31,12 @@ Here's the basic idea:
   4. pyGSTi takes the data file and outputs a "report" - currently a
      HTML web page.
 
-There are numerous [Tutorial](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Tutorials)
-and [Example](https://github.com/pyGSTio/pyGSTi/tree/beta/jupyter_notebooks/Examples)
+There are numerous [Tutorial](https://github.com/pyGSTio/pyGSTi/tree/master/jupyter_notebooks/Tutorials)
+and [Example](https://github.com/pyGSTio/pyGSTi/tree/master/jupyter_notebooks/Examples)
 ipython notebooks (especially
-[Tutorial 0](https://github.com/pyGSTio/pyGSTi/blob/beta/jupyter_notebooks/Tutorials/00%20Getting%20Started.ipynb)
+[Tutorial 0](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/Tutorials/00%20Getting%20Started.ipynb)
 ) included in this repository that demonstrate pyGSTi's
-syntax and use, as well as a [FAQ](https://github.com/pyGSTio/pyGSTi/blob/beta/jupyter_notebooks/FAQ.ipynb).
+syntax and use, as well as a [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb).
 
 
 Getting Started:
