@@ -14,6 +14,8 @@ import warnings as _warnings
 from . import gatesetmember as _gm
 from . import spamvec as _sv
 from ..tools import matrixtools as _mt
+from ..tools import basistools as _bt
+from ..tools import gatetools as _gt
 
 
 #Thoughts:
@@ -57,7 +59,7 @@ from ..tools import matrixtools as _mt
 
 #
 
-def convert(povm, toType, basis):
+def convert(povm, toType, basis, extra=None):
     """
     Convert POVM to a new type of parameterization, potentially
     creating a new object.  Raises ValueError for invalid conversions.
@@ -67,7 +69,7 @@ def convert(povm, toType, basis):
     povm : POVM
         POVM to convert
 
-    toType : {"full","TP","static"}
+    toType : {"full","TP","static","H+Sterms"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -93,6 +95,29 @@ def convert(povm, toType, basis):
             converted_effects = [ (lbl,_sv.convert(vec, "full", basis))
                                   for lbl,vec in povm.items() ]
             return TPPOVM(converted_effects)
+
+    elif toType == "H+Sterms":
+        if all([isinstance(Evec, _sv.LindbladTermSPAMVec) for Evec in povm.values()]):
+            return povm
+
+        assert(extra is not None), "Must supply H+Sterms conversion with dict of ideal pure state vectors"
+        ideal_purevecs = extra
+
+        new_effects = []
+        d2 = povm.dim
+        for lbl, Evec in povm.items():
+            #Below block is similar to spamvec convert(...) case
+            ideal_purevec = ideal_purevecs[lbl]; d = len(ideal_purevec)
+            assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
+            ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
+            ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), "std", basis)
+            errgen = _gt.spam_error_generator(Evec, ideal_spamvec, basis)
+            new_effects.append( (lbl, _sv.LindbladTermSPAMVec.from_error_generator(
+                ideal_purevec[:,0], errgen, nonham_diagonal_only=True)) )
+
+        #Always return unconstrained?? TODO FUTURE
+        return UnconstrainedPOVM( new_effects )
+
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 

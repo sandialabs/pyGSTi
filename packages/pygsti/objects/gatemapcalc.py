@@ -15,6 +15,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools.matrixtools import _fas
+from ..tools import symplectic as _symp
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .mapevaltree import MapEvalTree as _MapEvalTree
 from .gatecalc import GateCalc
@@ -88,7 +89,7 @@ class GateMapCalc(GateCalc):
                 rho = self.preps[rholabel].toarray(scratch).copy() # copy b/c use scratch again (next line)
                 E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray(scratch)))
             else: # CLIFFORD
-                rho = self.preps[rholabel].toarray(scratch)
+                rho = self.preps[rholabel].toarray()
                 E = self.effects[elabel] # just return raw effect object
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
@@ -165,7 +166,7 @@ class GateMapCalc(GateCalc):
         else: # CLIFFORD
             state_s, state_p = rho # should be a StabilizerState.toarray() "object"
             nQubits = len(E.outcomes); assert(nQubits == len(state_p) // 2)
-            probs = [ pauli_z_measurement(state_s, state_p, i) for i in range(nQubits) ] # could cache this
+            probs = [ _symp.pauli_z_measurement(state_s, state_p, i) for i in range(nQubits) ] # could cache this
             oneQ_outcome_probs = [ probs[i][outcome] for i,outcome in enumerate(E.outcomes) ]
             p = float(_np.product(oneQ_outcome_probs))
 
@@ -316,7 +317,7 @@ class GateMapCalc(GateCalc):
                 assert(scratch.shape == (cacheSize,dim))
                 rho_cache = scratch #to avoid recomputation
                 
-            Escratch = _np.empty(rho.shape[0],typ) # memory for E.toarray() if it wants it
+            Escratch = _np.empty(dim,typ) # memory for E.toarray() if it wants it
             rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
         else: # CLIFFORD case
             rho = rhoVec.toarray()
@@ -411,8 +412,9 @@ class GateMapCalc(GateCalc):
         #Now each processor has filled the relavant parts of dpr_cache,
         # so gather together:
         _mpit.gather_slices(all_slices, owners, dpr_cache,[], axes=2, comm=comm)
-        print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
-              (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
+        # DEBUG LINE USED FOR MONITORION N-QUBIT GST TESTS
+        #print("DEBUG TIME: dpr_cache(Np=%d, dim=%d, cachesize=%d, treesize=%d, napplies=%d) in %gs" % 
+        #      (self.Np, self.dim, cacheSize, len(evalTree), evalTree.get_num_applies(), _time.time()-tStart)) #DEBUG
 
         return dpr_cache
 

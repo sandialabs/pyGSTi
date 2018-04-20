@@ -793,6 +793,55 @@ def process_mx_to_unitary(superop):
         
     return U
 
+def spam_error_generator(spamvec, target_spamvec, mxBasis, typ="logGTi"):
+    """
+    Construct an error generator from a SPAM vector and it's target.
+
+    Computes the value of the error generator given by
+    `errgen = log( diag(spamvec / target_spamvec) )`, where division is
+    element-wise.  This results in a (non-unique) error generator matrix
+    `E` such that `spamvec = exp(E) * target_spamvec`.
+
+    Parameters
+    ----------
+    gate : ndarray
+      The gate matrix
+
+    target_gate : ndarray
+      The target gate matrix
+
+    mxBasis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source and destination basis, respectively.  Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    typ : {"logGTi"}
+      The type of error generator to compute.  Allowed values are:
+      
+      - "logGTi" : errgen = log( diag(spamvec / target_spamvec) )
+
+    Returns
+    -------
+    errgen : ndarray
+      The error generator.
+    """
+    # Compute error generator for rho:   rho = exp(E)rho0 => rho = A*rho0 => A = diag(rho/rho0)
+    assert(typ == "logGTi"), "Only logGTi type is supported so far"
+    
+    d2 = spamvec.dim    
+    errgen = _np.zeros((d2,d2),'d') # type assumes this is density-mx evolution
+    diags = []
+    for a,b in zip(spamvec.toarray(),target_spamvec):
+        if _np.isclose(b,0.0):
+            if _np.isclose(a,b): d = 1
+            else: raise ValueError("Cannot take spam_error_generator")
+        else:
+            d = a/b
+        diags.append(d)
+    errgen[_np.diag_indices(d2)] = diags
+    return _spl.logm(errgen)
+
+
 
 def error_generator(gate, target_gate, mxBasis, typ="logG-logT"):
     """

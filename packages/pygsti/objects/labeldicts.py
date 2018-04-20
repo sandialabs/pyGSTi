@@ -173,7 +173,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
             if self.typ == "gate":  obj = _gate.StaticGate(value)
         elif self.default_param == "clifford":
-            if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
+            if self.typ == "spamvec":  obj = _sv.StabilizerSPAMVec(len(value),zvals=value)
             if self.typ == "gate":  obj = _gate.CliffordGate(value)
         else:
             raise ValueError("Invalid default_param: %s" % self.default_param)

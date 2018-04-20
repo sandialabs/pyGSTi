@@ -59,7 +59,7 @@ class GateSet(object):
                  prep_prefix="rho", effect_prefix="E", gate_prefix="G",
                  povm_prefix="M", instrument_prefix="I", sim_type="dmmatrix"):
         """
-        Initialize a gate set.
+        Initialize a gate set. TODO: docstring -- at least add sim_type!
 
         Parameters
         ----------
@@ -119,7 +119,7 @@ class GateSet(object):
         elif sim_type == "dmmap":      c = _gatemapcalc.GateMapCalc
         elif sim_type == "svmatrix":   c = _gatematrixcalc.UnitaryGateMatrixCalc
         elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
-        elif sim_type == "clifford":   c = _gatecliffordcalc.GateCliffordCalc
+        elif sim_type == "clifford":   c = _gatemapcalc.CliffordGateMapCalc
         elif sim_type == "termorder":  c = _gatetermcalc.GateTermCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
@@ -426,37 +426,51 @@ class GateSet(object):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-    def set_all_parameterizations(self, parameterization_type):
+    def set_all_parameterizations(self, parameterization_type, extra=None):
         """
         Convert all gates and SPAM vectors to a specific parameterization
         type.
 
         Parameters
         ----------
-        parameterization_type : {"full", "TP", "CPTP", "H+S", "S", "static"}
-            The gate and SPAM vector parameterization type:
+        parameterization_type : {"full", "TP", "CPTP", "H+S",
+                                 "S", "static", "H+Sterms"}
+            The gate and SPAM vector parameterization type
 
+        extra : dict, optional
+            For `"H+Sterms"` type, this specifies a dictionary 
+            of unitary gates and pure state vectors to be used
+            as the ideal operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static'))
-        rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
-        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
-        povmtyp = rtyp
-        ityp = "TP" if typ in ("TP","CPTP","H+S","S") else typ
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static','H+Sterms'))
+
+        if typ == "H+Sterms":
+            rtyp = povmtyp = ityp = typ
+        else:
+            rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+            #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
+            povmtyp = rtyp
+            ityp = "TP" if typ in ("TP","CPTP","H+S","S") else typ
 
         basis = self.basis
+        if extra is None: extra = {}
 
         for lbl,gate in self.gates.items():
-            self.gates[lbl] = _gate.convert(gate, typ, basis)
+            self.gates[lbl] = _gate.convert(gate, typ, basis,
+                                            extra.get(lbl,None))
 
         for lbl,inst in self.instruments.items():
-            self.instruments[lbl] = _instrument.convert(inst, ityp, basis)
+            self.instruments[lbl] = _instrument.convert(inst, ityp, basis,
+                                                        extra.get(lbl,None))
             
         for lbl,vec in self.preps.items():
-            self.preps[lbl] = _sv.convert(vec, rtyp, basis)
+            self.preps[lbl] = _sv.convert(vec, rtyp, basis,
+                                          extra.get(lbl,None))
 
         for lbl,povm in self.povms.items():
-            self.povms[lbl] = _povm.convert(povm, povmtyp, basis)
+            self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
+                                            extra.get(lbl,None))
         
         if typ == 'full': 
             self.default_gauge_group = _gg.FullGaugeGroup(self.dim)
@@ -464,7 +478,7 @@ class GateSet(object):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S')
+        else: # typ in ('static','H+S','S', 'H+Sterms')
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 

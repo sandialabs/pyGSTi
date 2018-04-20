@@ -162,7 +162,7 @@ def compose(gate1, gate2, basis, parameterization="auto"):
 
 
 
-def convert(gate, toType, basis):
+def convert(gate, toType, basis, extra=None):
     """
     Convert gate to a new type of parameterization, potentially creating
     a new Gate object.  Raises ValueError for invalid conversions.
@@ -172,13 +172,17 @@ def convert(gate, toType, basis):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+Sterms"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `gate`.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+
+    extra : object, optional
+        Additional information for conversion.  An ideal unitary
+        operation in "H+Sterms" case.
 
     Returns
     -------
@@ -250,6 +254,17 @@ def convert(gate, toType, basis):
             return gate #no conversion necessary
         else:
             return StaticGate( gate )
+
+    elif toType == "H+Sterms":
+        if isinstance(gate, LindbladTermGate):
+            return gate #no conversion necessary
+
+        assert(extra is not None), "Must supply H+Sterms conversion with ideal unitary op"
+        ideal_unitary = extra
+        target_gate = _bt.change_basis( _gt.unitary_to_process_mx(ideal_unitary), 'std', basis)
+        errgen = _gt.error_generator(gate, target_gate, basis, typ='logGTi')
+        return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
+                                                     nonham_diagonal_only=True)
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
@@ -4460,7 +4475,7 @@ class ComposedGate(GateMatrix):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        typ = complex if any([np.iscomplexobj(gate) for gate in self.factorgates]) else 'd'
+        typ = complex if any([_np.iscomplexobj(gate) for gate in self.factorgates]) else 'd'
         derivMx = _np.zeros( (self.dim,self.dim, self.num_params()), typ)
         
         #Product rule to compute jacobian
@@ -4481,7 +4496,9 @@ class ComposedGate(GateMatrix):
                     post = _np.dot(gateA,post)
                 deriv = _np.einsum("ij,jka->ika", post, deriv )
 
-            derivMx[:,:,gate.gpindices] += deriv
+            factorgate_local_inds = _gatesetmember._decompose_gpindices(
+                self.gpindices, gate.gpindices)
+            derivMx[:,:,factorgate_local_inds] += deriv
 
         derivMx.shape = (self.dim**2, self.num_params())
         if wrtFilter is None:
@@ -6223,15 +6240,46 @@ class EmbeddedCliffordGate(Gate):
         self.targetLabels = targetLabels
         self.embedded_gate = gate_to_embed
         self.basisdim = _Dim(self.stateSpaceLabels.dim.blockDims)
+
+        # assert that all state space labels == qubits
+        assert(len(self.stateSpaceLabels.labels) == 1 and
+               all([ld == 2 for ld in self.stateSpaceLabels.labeldims.values()])), \
+               "All state space labels must correspond to *qubits*"
+        assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
+            "Inconsistent number of qubits in `targetLabels` and `embedded_gate`"
         
         dmDim, superOpDim, blockDims = self.basisdim
         dim = dmDim # assume "unitary evoluation"-type mode
         Gate.__init__(self, dim)
+        self._construct_symplectic() # sets self.smatrix, self.svector
 
+    def _construct_symplectic(self):
+        #Embed gate's symplectic rep in larger "full" symplectic rep
 
+        # get (qubit) labels in first (and only) tensor-product-block
+        qubitLabels = self.stateSpaceLabels.labels[0]
+        n = len(qubitLabels) # nQubits
+        ne = len(self.targetLabels) # nQubits for embedded_gate
+          
+        self.smatrix = _np.identity(2*n, int)
+        self.svector = _np.zeros(2*n, int)
+
+        for i,targetLbl in enumerate(self.targetLabels):
+            di = qubitLabels.index(targetLbl) # could cache this in __init__ for performance
+            self.svector[di] = self.embedded_gate.svector[i]
+            self.svector[di+n] = self.embedded_gate.svector[i+ne]
+            
+            for j,targetLbl2 in enumerate(self.targetLabels):
+                dj = qubitLabels.index(targetLbl2) # could cache...
+                self.smatrix[di,di] = self.embedded_gate.smatrix[i,j]
+                self.smatrix[di+n,di+n] = self.embedded_gate.smatrix[i+ne,j+ne]
+
+                
     def acton(self, state):
         """ Act this gate map on an input state """
-        raise NotImplementedError()
+        state_s, state_p = state # should be output of StabilizerState.toarray()
+        return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
+                                                        state_s,state_p)
     
     
     def num_params(self):
@@ -6274,6 +6322,7 @@ class EmbeddedCliffordGate(Gate):
         """
         assert(len(v) == self.num_params())
         self.embedded_gate.from_vector(v)
+        self._construct_symplectic()
         self.dirty = True
 
 

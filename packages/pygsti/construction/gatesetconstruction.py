@@ -1112,9 +1112,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
         POVM = _povm.UnconstrainedPOVM
         Gate = _gate.StaticGate
     elif parameterization == "clifford":
-        PrepVec = _spamvec.StaticSPAMVec
-        EVec = _spamvec.StaticSPAMVec
-        POVM = _povm.UnconstrainedPOVM
+        PrepVec = _spamvec.StabilizerSPAMVec
+        EVec = None
+        POVM = _povm.StabilizerZPOVM
         Gate = _gate.CliffordGate
         assert(sim_type == 'clifford'), "clifford parameterization only works with clifford simulation"
 
@@ -1124,13 +1124,19 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
     else:
         raise ValueError("Invalid parameterization: %s" % parameterization)
 
-    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static"
+    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford"
                           sim_type = sim_type)              # "dmmatrix", "dmmap", "svmatrix", "svmap", "clifford"
     gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
-    gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep',
-        [PrepVec(v0) for i in range(nQubits)] )
-    gs.povms['Mdefault'] = _povm.TensorProdPOVM( 
-        [ POVM([('0',EVec(v0)),('1',EVec(v1))] ) for i in range(nQubits) ] )
+
+    if parameterization == "clifford":
+        # Clifford object construction is different enough we do it separately
+        gs.preps['rho0'] = PrepVec(nQubits) # creates all0-state by default
+        gs.povms['Mdefault'] = POVM(nQubits)
+    else:
+        gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep',
+            [PrepVec(v0) for i in range(nQubits)] )
+        gs.povms['Mdefault'] = _povm.TensorProdPOVM( 
+            [ POVM([('0',EVec(v0)),('1',EVec(v1))] ) for i in range(nQubits) ] )
 
     for gateName, gate in gatedict.items():
         if not isinstance(gate, _gate.Gate):

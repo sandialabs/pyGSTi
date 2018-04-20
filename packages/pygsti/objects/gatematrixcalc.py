@@ -1611,8 +1611,8 @@ class GateMatrixCalc(GateCalc):
         assert( len(spamTuple) == 2 )
         if isinstance(spamTuple[0],_Label): # OLD _compat.isstr(spamTuple[0])
             rholabel,elabel = spamTuple
-            rho = self.preps[rholabel].toarray()
-            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()))
+            rho = self.preps[rholabel].toarray()[:,None] # This calculator uses the convention that rho has shape (N,1)
+            E   = _np.conjugate(_np.transpose(self.effects[elabel].toarray()[:,None])) # convention: E has shape (1,N)
         else:
             # a "custom" spamLabel consisting of a pair of SPAMVec (or array)
             #  objects: (prepVec, effectVec)

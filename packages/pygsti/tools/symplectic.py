@@ -408,7 +408,7 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     u[n:2*n,0:n] = _np.identity(n,int)
 
     inner = _np.dot(_np.dot(_np.transpose(s),u),s)
-    vec1 = _np.dot(_np.transpose(s1),p - _mtx.diagonal_as_vec(inner))
+    vec1 = _np.dot(_np.transpose(s),p - _mtx.diagonal_as_vec(inner))
     matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
     vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s),matrix),s))
     
@@ -454,7 +454,7 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
         stabilizer states.  Only returned when `return_output_states == True`.
     """
     two_n = len(state_p); n = two_n // 2
-    assert(_np.shape(state_s) == (two_n, n)), "Inconsistent stabilizier representation!"
+    assert(_np.shape(state_s) == (two_n, two_n)), "Inconsistent stabilizier representation!"
 
     #This algorithm follows that of PRA 70, 052328 (2004),
     # except note:
@@ -471,7 +471,7 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     # which amounts to checking whether there are any 1-bits in the a-th
     # row of state_s for the first n columns (any stabilizers that have X's
     # or Y's for qubit a, as 00=I, 10=X, 11=Y, 01=Z)
-    for col in n:
+    for col in range(n):
         if state_s[a,col] == 1:
             p = col
             # p is first stabilizer that anticommutes w/Z_a. Outcome is random,

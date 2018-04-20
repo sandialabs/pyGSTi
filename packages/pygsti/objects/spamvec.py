@@ -86,7 +86,7 @@ def optimize_spamvec(vecToOptimize, targetVec):
     #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vecToOptimize-targetVector))
 
 
-def convert(spamvec, toType, basis):
+def convert(spamvec, toType, basis, extra=None):
     """
     Convert SPAM vector to a new type of parameterization, potentially
     creating a new SPAMVec object.  Raises ValueError for invalid conversions.
@@ -96,13 +96,18 @@ def convert(spamvec, toType, basis):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","static"}
+    toType : {"full","TP","static","H+Sterms"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `spamvec`.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+
+    extra : object, optional
+        Additional information for conversion.  An ideal pure state
+        in "H+Sterms" case.
+
 
     Returns
     -------
@@ -135,6 +140,23 @@ def convert(spamvec, toType, basis):
             return spamvec #no conversion necessary
         else:
             return StaticSPAMVec( spamvec )
+
+    elif toType == "H+Sterms":
+        if isinstance(spamvec, LindbladTermSPAMVec):
+            return spamvec
+
+        assert(extra is not None), "Must supply H+Sterms conversion with ideal pure state vector"
+        ideal_purevec = extra
+
+        # Compute error generator for rho
+        d2 = spamvec.dim ; d = len(ideal_purevec)
+        assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
+        ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
+        ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
+        errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
+        
+        return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
+                                                        nonham_diagonal_only=True)
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
@@ -357,6 +379,8 @@ class SPAMVec(_gatesetmember.GateSetMember):
             vector = _np.asarray(V).copy()
         elif isinstance(V, _np.ndarray):
             vector = V.copy()
+            if len(vector.shape) == 1: # convert (N,) shape vecs to (N,1)
+                vector.shape = (vector.size,1)
         else:
             try:
                 dim = len(V) #pylint: disable=unused-variable
@@ -380,6 +404,7 @@ class SPAMVec(_gatesetmember.GateSetMember):
                 typ = 'd' if _np.all(_np.isreal(V)) else 'complex'
                 vector = _np.array(V, typ)[:,None] # make into a 2-D column vec
 
+        assert(len(vector.shape) == 2 and vector.shape[1] == 1)
         return vector
 
     
@@ -1144,6 +1169,18 @@ class ComplementSPAMVec(DenseSPAMVec):
                           "directly, as its elements depend on *other* SPAM "
                           "vectors"))
 
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this SPAM vector.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+    
+    
     def deriv_wrt_params(self, wrtFilter=None):
         """
         Construct a matrix whose columns are the derivatives of the SPAM vector
@@ -1892,7 +1929,52 @@ class TensorProdSPAMVec(SPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        raise NotImplementedError("Analytic derivatives of a TensorProdSPAMVec are not implemented yet")
+        typ = complex if self._complex else 'd'
+        derivMx = _np.zeros( (self.dim, self.num_params()), typ)
+        
+        #Product rule to compute jacobian
+        for i,fct in enumerate(self.factors): # loop over the spamvec/povm we differentiate wrt
+            vec = fct if (self.typ == "prep") else fct[self.effectLbls[i]]
+
+            if vec.num_params() == 0: continue #no contribution
+            deriv = vec.deriv_wrt_params(None) #TODO: use filter?? / make relative to this gate...
+            deriv.shape = (vec.dim,vec.num_params())
+
+            if i > 0: # factors before ith
+                if self.typ == "prep":
+                    pre = self.factors[0].toarray()
+                    for vecA in self.factors[1:i]:
+                        pre = _np.kron(pre,vecA.toarray())
+                else:
+                    pre = self.factors[0][self.effectLbls[0]].toarray()
+                    for j,fctA in enumerate(self.factors[1:i],start=1):
+                        pre = _np.kron(pre,fctA[self.effectLbls[j]].toarray())
+                deriv = _np.kron(pre[:,None], deriv) # add a dummy 1-dim to 'pre' and do kron properly...
+
+            if i+1 < len(self.factors): # factors after ith
+                if self.typ == "prep":
+                    post = self.factors[i+1].toarray()
+                    for vecA in self.factors[i+2:]:
+                        post = _np.kron(post,vecA.toarray())
+                else:
+                    post = self.factors[i+1][self.effectLbls[i+1]].toarray()
+                    for j,fctA in enumerate(self.factors[i+2:],start=i+2):
+                        post = _np.kron(post,fctA[self.effectLbls[j]].toarray())
+                deriv = _np.kron(deriv, post[:,None]) # add a dummy 1-dim to 'post' and do kron properly...
+
+            if self.typ == "prep":
+                local_inds = fct.gpindices # factor vectors hold local indices
+            else: # in effect case, POVM-factors hold global indices (b/c they're meant to be shareable)
+                local_inds = _gatesetmember._decompose_gpindices(
+                    self.gpindices, fct.gpindices)
+                
+            derivMx[:,local_inds] += deriv
+
+        derivMx.shape = (self.dim, self.num_params()) # necessary?
+        if wrtFilter is None:
+            return derivMx
+        else:
+            return _np.take( derivMx, wrtFilter, axis=1 )
 
 
     def has_nonzero_hessian(self):
@@ -2590,7 +2672,7 @@ class StabilizerSPAMVec(SPAMVec):
             If None, the all-zeros state is created.
         """
         self.smatrix, self.phasevec = _symp.prep_stabilizer_state(nqubits, zvals)
-        dim = 2**nQubits # assume "unitary evolution"-type mode?
+        dim = 2**nqubits # assume "unitary evolution"-type mode?
         SPAMVec.__init__(self, dim)
 
     @property
