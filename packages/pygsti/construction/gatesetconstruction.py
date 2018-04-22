@@ -1180,7 +1180,18 @@ def get_standard_gate_unitaries():
     # Non-idle single qubit gates
     std_unitaries['Gxpi'] = _np.array([[0.,1.],[1.,0.]],complex)
     std_unitaries['Gypi'] = _np.array([[0.,-1j],[1j,0.]],complex)
-    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)    
+    std_unitaries['Gzpi'] = _np.array([[1.,0.],[0.,-1.]],complex)
+
+    sigmax = _np.array([[0,1],[1,0]])
+    sigmay = _np.array([[0,-1.0j],[1.0j,0]])
+    sigmaz = _np.array([[1,0],[0,-1]])
+    def Ugate(exp):
+        return 1j*_np.array(_spl.expm(-1j * exp/2),complex)
+    
+    std_unitaries['Gx'] = Ugate(_np.pi/2 * sigmax)
+    std_unitaries['Gy'] = Ugate(_np.pi/2 * sigmay)
+    std_unitaries['Gz'] = Ugate(_np.pi/2 * sigmaz)
+
     
     H = (1/_np.sqrt(2))*_np.array([[1.,1.],[1.,-1.]],complex) 
     P = _np.array([[1.,0.],[0.,1j]],complex)

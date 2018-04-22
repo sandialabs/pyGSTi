@@ -6271,8 +6271,10 @@ class EmbeddedCliffordGate(Gate):
             
             for j,targetLbl2 in enumerate(self.targetLabels):
                 dj = qubitLabels.index(targetLbl2) # could cache...
-                self.smatrix[di,di] = self.embedded_gate.smatrix[i,j]
-                self.smatrix[di+n,di+n] = self.embedded_gate.smatrix[i+ne,j+ne]
+                self.smatrix[di,dj] = self.embedded_gate.smatrix[i,j]
+                self.smatrix[di+n,dj+n] = self.embedded_gate.smatrix[i+ne,j+ne]
+                self.smatrix[di,dj+n] = self.embedded_gate.smatrix[i,j+ne]
+                self.smatrix[di+n,dj] = self.embedded_gate.smatrix[i+ne,j]
 
                 
     def acton(self, state):

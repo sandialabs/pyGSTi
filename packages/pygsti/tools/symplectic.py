@@ -246,10 +246,11 @@ def check_valid_clifford(s,p):
     n = _np.shape(s)[0]//2
     u = _np.zeros((2*n,2*n),int)
     u[n:2*n,0:n] = _np.identity(n,int) 
-    vec = p + _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s),u),s)) 
+    vec = p + _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s),u),s))
     vec = vec % 2
     
     is_valid_phase_vector = _np.array_equal(vec,_np.zeros(len(p),int))
+    assert(is_valid_phase_vector)
         
     return (is_symplectic_matrix and is_valid_phase_vector)
 
@@ -358,7 +359,7 @@ def prep_stabilizer_state(nqubits, zvals=None):
     """ TODO: docstring: zvals can be iterable over anything True/False
     to indicate 0/1 value of qubit """
     n = nqubits
-    s = _np.identity(2*n,int)
+    s = _np.fliplr(_np.identity(2*n,int)) # flip b/c stab cols are *first*
     p = _np.zeros(2*n,int)
     if zvals:
         for i,z in enumerate(zvals):
@@ -408,13 +409,25 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     u[n:2*n,0:n] = _np.identity(n,int)
 
     inner = _np.dot(_np.dot(_np.transpose(s),u),s)
-    vec1 = _np.dot(_np.transpose(s),p - _mtx.diagonal_as_vec(inner))
+    vec1 = _np.dot(_np.transpose(state_s),p - _mtx.diagonal_as_vec(inner))
     matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
-    vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s),matrix),s))
+    vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(state_s),matrix),state_s))
     
     out_p = p + vec1 + vec2
     out_p = out_p % 4
 
+    #More explicitly operates on stabilizer and antistabilizer separately, but same as above
+    #out_p = _np.zeros(2*n,int)
+    #for slc in (slice(0,n),slice(n,2*n)):
+    #    ss = state_s[:,slc]
+    #    inner = _np.dot(_np.dot(_np.transpose(s),u),s)
+    #    vec1 = _np.dot(_np.transpose(ss),p - _mtx.diagonal_as_vec(inner))
+    #    matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
+    #    vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(ss),matrix),ss))
+    #
+    #    out_p[slc] = state_p[slc] + vec1 + vec2
+    #    out_p[slc] = out_p[slc] % 4
+    
     #TODO: check for valid stabilizer state
     #assert(check_valid_clifford(s,p)), "The output is not a valid Clifford! Function has failed."
     
@@ -466,6 +479,9 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     # columns of state_s rather than the last n.
     
     a = qubit_index
+    #print("DB: pauli Z_%d meas on state:" % a)
+    #print(state_s); print(state_p)
+    
     # Let A be the Pauli op being measured
     #Step1: determine if all stabilizer elements commute with Z_a
     # which amounts to checking whether there are any 1-bits in the a-th
@@ -474,6 +490,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     for col in range(n):
         if state_s[a,col] == 1:
             p = col
+            #print("Column %d anticommutes with Z_%d" % (p,a))
+            
             # p is first stabilizer that anticommutes w/Z_a. Outcome is random,
             # and we just need to update the state (if requested).
             if return_output_states:
@@ -489,13 +507,15 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
             else:
                 return 0.5, 0.5
 
+    #print("Nothing anticommutes!")
+    
     # no break ==> all commute, so outcome is deterministic, so no
     # state update; just determine whether Z_a or -Z_a is in the stabilizer,
     # which we do using the "anti-stabilizer" cleverness of PRA 70, 052328
     acc_s = _np.zeros(two_n,int); acc_p = _np.zeros(1,int)
     for i in range(n,two_n): # loop over anti-stabilizer
         if state_s[a,i] == 1: # for elements that anti-commute w/Z_a
-            colsum_acc(acc_s,acc_p,i-n,state_s,state_p) # act w/corresponding *stabilizer* el
+            colsum_acc(acc_s,acc_p,i-n,state_s,state_p,n) # act w/corresponding *stabilizer* el
     # now the high bit of acc_p holds the outcome
     if acc_p == 0: # outcome is always zero
         return (1.0, 0.0, state_s, state_s, state_p, state_p) \
@@ -529,7 +549,7 @@ def colsum(i,j,s,p,n):
         #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
     return
 
-def colsum_acc(acc_s,acc_p,j,s,p):
+def colsum_acc(acc_s,acc_p,j,s,p,n):
     #Note: need to divide p-vals by 2 to access high-bit
     test = 2*(acc_p[0]//2 + p[j]//2) + sum(
         [colsum_g(s[k,j], s[k+n,j], acc_s[k], acc_s[k+n]) for k in range(n)] )
@@ -857,7 +877,7 @@ def unitary_to_symplectic_1Q(u,flagnonclifford=True):
                     if _np.allclose(conj,pauli_ijk):
                         s[:,pauli_label] = _np.array([i,j])
                         p[pauli_label] = k
-    
+
     valid_clifford = check_valid_clifford(s,p)
     
     if flagnonclifford:
@@ -1433,7 +1453,7 @@ def symplectic_action(m, glabel, qlist, optype='row'):
             out[i+d,:] = m[j+d,:] ^ m[i+d,:]  
             # IS THIS WRONG? POSSIBLY.
         if optype == 'column':
-            print("WARNING : TIM THINGS THIS IS CURRENTLY WRONG! IT NEEDS CHECKING")
+            print("WARNING : TIM THINKS THIS IS CURRENTLY WRONG! IT NEEDS CHECKING")
             out[:,j] = m[:,j] ^ m[:,i]    
             out[:,i+d] = m[:,j+d] ^ m[:,i+d]    
                             
