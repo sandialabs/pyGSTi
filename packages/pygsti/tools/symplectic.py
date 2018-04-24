@@ -413,10 +413,10 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
     vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(state_s),matrix),state_s))
     
-    out_p = p + vec1 + vec2
+    out_p = state_p + vec1 + vec2
     out_p = out_p % 4
 
-    #More explicitly operates on stabilizer and antistabilizer separately, but same as above
+    ##More explicitly operates on stabilizer and antistabilizer separately, but same as above
     #out_p = _np.zeros(2*n,int)
     #for slc in (slice(0,n),slice(n,2*n)):
     #    ss = state_s[:,slc]
@@ -424,17 +424,15 @@ def apply_clifford_to_stabilizer_state(s,p,state_s,state_p):
     #    vec1 = _np.dot(_np.transpose(ss),p - _mtx.diagonal_as_vec(inner))
     #    matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
     #    vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(ss),matrix),ss))
-    #
     #    out_p[slc] = state_p[slc] + vec1 + vec2
     #    out_p[slc] = out_p[slc] % 4
     
     #TODO: check for valid stabilizer state
-    #assert(check_valid_clifford(s,p)), "The output is not a valid Clifford! Function has failed."
     
     return out_s, out_p
 
 
-def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=False):
+def pauli_z_measurement(state_s, state_p, qubit_index):
     """ 
     Computes the probabilities of +/- outcomes from measuring a 
     Pauli operator on a stabilizer state.
@@ -450,21 +448,18 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     qubit_index : int
         The index of the qubit being measured
 
-    return_output_states : bool, optional
-        Whether the output states should be returned (see below).
-
     Returns
     -------
     pminus, pplus : float
         Probabilities of - and + outcomes.
 
     state_s_minus, state_s_plus : numpy array
-        Matrix over the intergers mod 2 representing the output stabilizer
-        states.  Only returned when `return_output_states == True`.
+        Matrix over the integers mod 2 representing the output stabilizer
+        states.
 
     state_p_minus, state_p_plus : numpy array
-        Phase vectors over the intergers mod 4 representing the output
-        stabilizer states.  Only returned when `return_output_states == True`.
+        Phase vectors over the integers mod 4 representing the output
+        stabilizer states.
     """
     two_n = len(state_p); n = two_n // 2
     assert(_np.shape(state_s) == (two_n, two_n)), "Inconsistent stabilizier representation!"
@@ -479,8 +474,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     # columns of state_s rather than the last n.
     
     a = qubit_index
-    #print("DB: pauli Z_%d meas on state:" % a)
-    #print(state_s); print(state_p)
+    #print("DB: pauli Z_%d meas on state:" % a) #DEBUG
+    #print(state_s); print(state_p) #DEBUG
     
     # Let A be the Pauli op being measured
     #Step1: determine if all stabilizer elements commute with Z_a
@@ -490,24 +485,26 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
     for col in range(n):
         if state_s[a,col] == 1:
             p = col
-            #print("Column %d anticommutes with Z_%d" % (p,a))
+            #print("Column %d anticommutes with Z_%d" % (p,a)) #DEBUG
             
             # p is first stabilizer that anticommutes w/Z_a. Outcome is random,
             # and we just need to update the state (if requested).
-            if return_output_states:
-                s_out = state_s.copy(); p_out = state_p.copy()
-                for i in range(two_n):
-                    if i != p and state_s[a,i] == 1:
-                        colsum(i,p,s_out,p_out,n)
-                s_out[:,p+n] = s_out[:,p]; p_out[p+n] = p_out[p] # set p-th col -> (p+n)-th col
-                s_out[:,p] = 0; s_out[a+n,p] = 1 # p-th row = I*...Z_a*...I stabilizer
-                p_out0 = p_out.copy(); p_out0[p] = 0
-                p_out1 = p_out.copy(); p_out1[p] = 1
-                return 0.5, 0.5, s_out,s_out, p_out0,p_out1 # Note: s is same for 0 and 1 outcomes
-            else:
-                return 0.5, 0.5
+            s_out = state_s.copy(); p_out = state_p.copy()
+            for i in range(two_n):
+                if i != p and state_s[a,i] == 1:
+                    #print("COLSUM ",i,p) #DEBUG
+                    colsum(i,p,s_out,p_out,n)
+                    #print(s_out); print(p_out) #DEBUG
+                    #print("-----") #DEBUG
+            s_out[:,p+n] = s_out[:,p]; p_out[p+n] = p_out[p] # set p-th col -> (p+n)-th col
+            s_out[:,p] = 0; s_out[a+n,p] = 1 # p-th col = I*...Z_a*...I stabilizer
+            
+            icount = sum([ 3 if (s_out[i,p] == s_out[i+n,p] == 1) else 0 for i in range(n)]) # 11 = -iY convention
+            p_out0 = p_out.copy(); p_out0[p] = (4 - (icount % 4)) % 4 # so overall phase is 0
+            p_out1 = p_out.copy(); p_out1[p] = (p_out0[p] + 2) % 4    # so overall phase is -1
+            return 0.5, 0.5, s_out,s_out, p_out0,p_out1 # Note: s is same for 0 and 1 outcomes
 
-    #print("Nothing anticommutes!")
+    #print("Nothing anticommutes!") #DEBUG
     
     # no break ==> all commute, so outcome is deterministic, so no
     # state update; just determine whether Z_a or -Z_a is in the stabilizer,
@@ -517,32 +514,46 @@ def pauli_z_measurement(state_s, state_p, qubit_index, return_output_states=Fals
         if state_s[a,i] == 1: # for elements that anti-commute w/Z_a
             colsum_acc(acc_s,acc_p,i-n,state_s,state_p,n) # act w/corresponding *stabilizer* el
     # now the high bit of acc_p holds the outcome
-    if acc_p == 0: # outcome is always zero
-        return (1.0, 0.0, state_s, state_s, state_p, state_p) \
-            if return_output_states else (1.0, 0.0)
+    icount = acc_p[0] + sum([ 3 if (acc_s[i] == acc_s[i+n] == 1) else 0 for i in range(n)]) # 11 = -iY convention
+    icount = icount % 4
+    if icount == 0: # outcome is always zero
+        #print("Always 0!") #DEBUG
+        return (1.0, 0.0, state_s, state_s, state_p, state_p)
     else: # outcome is always 1
-        assert(acc_p == 2) # should never get 1 or 3 (low bit should always be 0)
-        return (0.0, 1.0, state_s, state_s, state_p, state_p) \
-            if return_output_states else (0.0, 1.0)
+        #print("Always 1!") #DEBUG
+        assert(icount == 2) # should never get 1 or 3 (low bit should always be 0)
+        return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
     
-def colsum_g(x1,z1,x2,z2):
-    """ TODO: docstring -- see PRA """
-    if x1 == 0:
-        if z1 == 0: return 0
-        else: return x2*(1-2*z2)
-    else:
-        if z1 == 0: return z2*(2*x2-1)
-        else: return z2-x2
+#def colsum_g(x1,z1,x2,z2):
+#    """ TODO: docstring -- see PRA -- but different b/c 11 := XZ = -iY here, but 11 := Y in PRA
+#        (and this fn calcs the power of i when paulis rep'd by x1z1 and x2z2 are multiplied)  """
+#    i2 = 3 if (x2==1 and z2==1) else 0 # "intrinsic" to qubit 2
+#    
+#    if x1 == 0:
+#        if z1 == 0: return i2 # I*<x2z2>
+#        else: # Z*<x2z2> => 00->0, 01->0, 10->1, 11->-1+3
+#            return x2*(1-2*z2)+i2
+#    else:
+#        if z1 == 0: # X*<x2z2> => 00->0, 01->-1, 10->0, 11->1+3
+#            return z2*(2*x2-1)+i2
+#        else: # -iY*<x2z2>
+#            return 3+z2-x2+i2
     
-def colsum(i,j,s,p,n):    
-    #Note: need to divide p-vals by 2 to access high-bit
-    test = 2*(p[i]//2 + p[j]//2) + sum(
-        [colsum_g(s[k,j], s[k+n,j], s[k,i], s[k+n,i]) for k in range(n)] )
-    test = test % 4
-    assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
-    p[i] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
+def colsum(i,j,s,p,n):
+    """ TODO: docstring """
+    #OLD: according to Aaronson convention (not what we use)
+    ##Note: need to divide p-vals by 2 to access high-bit
+    #test = 2*(p[i]//2 + p[j]//2) + sum(
+    #    [colsum_g(s[k,j], s[k+n,j], s[k,i], s[k+n,i]) for k in range(n)] )
+    #test = test % 4
+    #assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
+    #p[i] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
 
+    u = _np.zeros((2*n,2*n),int) # CACHE!
+    u[n:2*n,0:n] = _np.identity(n,int)    
+
+    p[i] += p[j] + 2*float(_np.dot(s[:,i].T,_np.dot(u,s[:,j])))
     for k in range(n):
         s[k,i] = s[k,j] ^ s[k,i]
         s[k+n,i] = s[k+n,j] ^ s[k+n,i]
@@ -550,12 +561,17 @@ def colsum(i,j,s,p,n):
     return
 
 def colsum_acc(acc_s,acc_p,j,s,p,n):
-    #Note: need to divide p-vals by 2 to access high-bit
-    test = 2*(acc_p[0]//2 + p[j]//2) + sum(
-        [colsum_g(s[k,j], s[k+n,j], acc_s[k], acc_s[k+n]) for k in range(n)] )
-    test = test % 4
-    assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
-    acc_p[0] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
+    ##Note: need to divide p-vals by 2 to access high-bit
+    #test = 2*(acc_p[0]//2 + p[j]//2) + sum(
+    #    [colsum_g(s[k,j], s[k+n,j], acc_s[k], acc_s[k+n]) for k in range(n)] )
+    #test = test % 4
+    #assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
+    #acc_p[0] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
+
+    u = _np.zeros((2*n,2*n),int) # CACHE!
+    u[n:2*n,0:n] = _np.identity(n,int)    
+
+    acc_p[0] += p[j] + 2*float(_np.dot(acc_s.T,_np.dot(u,s[:,j])))
 
     for k in range(n):
         acc_s[k] = s[k,j] ^ acc_s[k]

@@ -9,6 +9,7 @@ import collections as _collections
 import itertools as _itertools
 import numpy as _np
 import warnings as _warnings
+import functools as _functools
 
 #from . import labeldicts as _ld
 from . import gatesetmember as _gm
@@ -69,7 +70,7 @@ def convert(povm, toType, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    toType : {"full","TP","static","H+Sterms"}
+    toType : {"full","TP","static","H+Sterms","clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -99,24 +100,52 @@ def convert(povm, toType, basis, extra=None):
     elif toType == "H+Sterms":
         if all([isinstance(Evec, _sv.LindbladTermSPAMVec) for Evec in povm.values()]):
             return povm
-
-        assert(extra is not None), "Must supply H+Sterms conversion with dict of ideal pure state vectors"
-        ideal_purevecs = extra
+        
+        ideal_purevecs = extra if (extra is not None) else None
 
         new_effects = []
         d2 = povm.dim
         for lbl, Evec in povm.items():
             #Below block is similar to spamvec convert(...) case
-            ideal_purevec = ideal_purevecs[lbl]; d = len(ideal_purevec)
-            assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
-            ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
-            ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), "std", basis)
+            if ideal_purevecs is not None:
+                ideal_purevec = ideal_purevecs[lbl]; d = len(ideal_purevec)
+                assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
+            else:
+                dmvec = _bt.change_basis(Evec.toarray(),basis,'std')
+                ideal_purevec = _gt.dmvec_to_state(dmvec); d = len(ideal_purevec)
+            ideal_spamvec = _bt.change_basis( _gt.state_to_dmvec(ideal_purevec), "std", basis)
             errgen = _gt.spam_error_generator(Evec, ideal_spamvec, basis)
             new_effects.append( (lbl, _sv.LindbladTermSPAMVec.from_error_generator(
                 ideal_purevec[:,0], errgen, nonham_diagonal_only=True)) )
 
         #Always return unconstrained?? TODO FUTURE
         return UnconstrainedPOVM( new_effects )
+
+    elif toType == "clifford":
+        if isinstance(povm,StabilizerZPOVM):
+            return povm
+
+        #OLD
+        ##Try to figure out whether this POVM acts on states or density matrices
+        #if any([ (isinstance(Evec,DenseSPAMVec) and _np.iscomplexobj(Evec.base)) # PURE STATE?
+        #         for Evec in povm.values()]):
+        #    nqubits = int(round(_np.log2(povm.dim)))
+        #else:
+        #    nqubits = int(round(_np.log2(povm.dim))) // 2
+
+        #Assume `povm` already represents state-vec ops, since otherwise we'd
+        # need to change dimension
+        nqubits = int(round(_np.log2(povm.dim)))
+
+        #Check if `povm` happens to be a Z-basis POVM on `nqubits`
+        v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1) - eigenstates of sigma_z
+        for zvals,lbl in zip(_itertools.product(*([(0,1)]*nqubits)), povm.keys()):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+            if not _np.allclose(testvec, povm[lbl].toarray()):
+                raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
+
+        #If no errors, then return a stabilizer POVM
+        return StabilizerZPOVM(nqubits)
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
@@ -732,9 +761,9 @@ class StabilizerZPOVM(POVM):
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
         
-        iterover = [0,1]*nqubits
+        iterover = [(0,1)]*nqubits
         items = [ (''.join(map(str,outcomes)), _sv.StabilizerEffectVec(outcomes,self))
-                  for outcomes in _itertools.product(iterover) ]
+                  for outcomes in _itertools.product(*iterover) ]
         super(StabilizerZPOVM, self).__init__(dim, items)
 
     def __reduce__(self):

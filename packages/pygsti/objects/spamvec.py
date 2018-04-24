@@ -13,6 +13,8 @@ import numpy as _np
 import scipy.sparse as _sps
 import collections as _collections
 import numbers as _numbers
+import itertools as _itertools
+import functools as _functools
 
 from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
@@ -96,7 +98,7 @@ def convert(spamvec, toType, basis, extra=None):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","static","H+Sterms"}
+    toType : {"full","TP","static","H+Sterms","clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -145,8 +147,11 @@ def convert(spamvec, toType, basis, extra=None):
         if isinstance(spamvec, LindbladTermSPAMVec):
             return spamvec
 
-        assert(extra is not None), "Must supply H+Sterms conversion with ideal pure state vector"
-        ideal_purevec = extra
+        if extra is None:
+            dmvec = _bt.change_basis(spamvec.toarray(),basis,'std')
+            ideal_purevec = _gt.dmvec_to_state(dmvec)
+        else:
+            ideal_purevec = extra
 
         # Compute error generator for rho
         d2 = spamvec.dim ; d = len(ideal_purevec)
@@ -158,6 +163,28 @@ def convert(spamvec, toType, basis, extra=None):
         return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
                                                         nonham_diagonal_only=True)
 
+    elif toType == "clifford":
+        if isinstance(spamvec, StabilizerSPAMVec):
+            return spamvec #no conversion necessary
+
+        #OLD
+        #if isinstance(spamvec,DenseSPAMVec) and _np.iscomplexobj(spamvec.base): # PURE STATE?
+        #    purevec = spamvec.base
+        #else:
+        #    dmvec = _bt.change_basis(spamvec.toarray(),basis,'std')
+        #    purevec = _gt.dmvec_to_state(dmvec)
+
+        purevec = spamvec.base # assume a pure state (otherwise would need
+        purevec = purevec.flatten()               #  to change GateSet dim)
+
+        #Loop through possible pure vecs to see if `purevec` corresponds to one
+        nqubits = int(round(_np.log2(len(purevec))))
+        v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1)
+        for zvals in _itertools.product(*([(0,1)]*nqubits)):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+            if _np.allclose(testvec, purevec):
+                return StabilizerSPAMVec(nqubits, zvals)
+        raise ValueError("Could not convert pure vector to z-basis product state")
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 

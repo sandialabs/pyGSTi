@@ -42,7 +42,7 @@ class Instrument(_gm.GateSetMember, _collections.OrderedDict):
 
         Parameters
         ----------
-        gates : dict of Gate objects
+        gate_matrices : dict of Gate objects
             A dict (or list of key,value pairs) of the gates.
         """
         self._readonly = False #until init is done

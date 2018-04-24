@@ -1186,7 +1186,7 @@ def get_standard_gate_unitaries():
     sigmay = _np.array([[0,-1.0j],[1.0j,0]])
     sigmaz = _np.array([[1,0],[0,-1]])
     def Ugate(exp):
-        return 1j*_np.array(_spl.expm(-1j * exp/2),complex)
+        return _np.array(_spl.expm(-1j * exp/2),complex) # 1j prefactor?
     
     std_unitaries['Gx'] = Ugate(_np.pi/2 * sigmax)
     std_unitaries['Gy'] = Ugate(_np.pi/2 * sigmay)

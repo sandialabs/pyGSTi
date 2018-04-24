@@ -172,7 +172,7 @@ def convert(gate, toType, basis, extra=None):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+Sterms"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+Sterms", "clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -259,12 +259,31 @@ def convert(gate, toType, basis, extra=None):
         if isinstance(gate, LindbladTermGate):
             return gate #no conversion necessary
 
-        assert(extra is not None), "Must supply H+Sterms conversion with ideal unitary op"
-        ideal_unitary = extra
+        if extra is None:
+            gate_std = _bt.change_basis(gate, basis, 'std')
+            ideal_unitary = _gt.process_mx_to_unitary(gate_std)
+        else:
+            ideal_unitary = extra
+        
         target_gate = _bt.change_basis( _gt.unitary_to_process_mx(ideal_unitary), 'std', basis)
         errgen = _gt.error_generator(gate, target_gate, basis, typ='logGTi')
         return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
                                                      nonham_diagonal_only=True)
+
+    elif toType == "clifford":
+        if isinstance(gate, CliffordGate):
+            return gate #no conversion necessary
+
+        #OLD
+        #if isinstance(gate,GateMatrix) and _np.iscomplexobj(gate.base): # UNITARY GATE?
+        #    unitary = gate.base
+        #else:
+        #    gate_std = _bt.change_basis(gate, basis, 'std')
+        #    unitary = _gt.process_mx_to_unitary(gate_std)
+        
+        unitary = gate.base # assume gate represents a unitary op (otherwise
+                      #would need to change GateSet dim, which isn't allowed)
+        return CliffordGate(unitary)
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)

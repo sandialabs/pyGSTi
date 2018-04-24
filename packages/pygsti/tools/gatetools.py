@@ -721,7 +721,64 @@ def decompose_gate_matrix(gateMx):
                  'isUnitary': False,
                  'msg': "Unsupported number of qubits: %d" % nQubits }
 
+    
+def state_to_dmvec(psi):
+    """
+    Compute the vectorized density matrix which acts as the state `psi`.
 
+    This is just the outer product map |psi> => |psi><psi| with the 
+    output flattened, i.e. `dot(psi, conjugate(psi).T)`.
+
+    Parameters
+    ----------
+    psi : numpy array
+        The state vector.
+
+    Returns
+    -------
+    numpy array
+       The vectorized density matrix.
+    """
+    psi = psi.reshape((psi.size,1)) # convert to (N,1) shape if necessary
+    dm = _np.dot(psi, _np.conjugate(psi.T))
+    return dm.flatten()
+
+
+def dmvec_to_state(dmvec, tol=1e-6):
+    """
+    Compute the pure state describing the action of density matrix vector `dmvec`.
+
+    If `dmvec` represents a mixed state, ValueError is raised.
+
+    Parameters
+    ----------
+    dmvec : numpy array
+        The vectorized density matrix, assumed to be in the standard (matrix
+        unit) basis.
+
+    tol : float, optional
+        tolerance for determining whether an eigenvalue is zero.
+
+    Returns
+    -------
+    numpy array
+       The pure state, as a column vector of shape = (N,1)
+    """
+    d2 = dmvec.size; d = int(round(_np.sqrt(d2)))
+    dm = dmvec.reshape((d,d))
+    evals,evecs = _np.linalg.eig(dm)
+
+    k = None
+    for i,ev in enumerate(evals):
+        if abs(ev) > tol:
+            if k is None: k = i
+            else: raise ValueError("Cannot convert mixed dmvec to pure state!")
+    if k is None: raise ValueError("Cannot convert zero dmvec to puse state!")
+    psi = evecs[:,k] * _np.sqrt(evals[k])
+    psi.shape = (d,1)
+    return psi
+
+    
 def unitary_to_process_mx(U):
     """
     Compute the super-operator which acts on (row)-vectorized
@@ -1828,7 +1885,6 @@ def project_to_target_eigenspace(gateset, targetGateset, EPS=1e-6):
     
 
 
-#TODO: remove later? deprecate?
 def unitary_to_pauligate(U):
     """
     Get the linear operator on (vectorized) density

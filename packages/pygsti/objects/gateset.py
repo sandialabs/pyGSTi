@@ -426,6 +426,49 @@ class GateSet(object):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
+    def copy_new_action(self, new_action):
+        """ TODO: docstring """
+        cpy = GateSet()
+        basis = self.basis
+        if new_action == "unitary":
+            for lbl,gate in self.gates.items():
+                gate_std = _bt.change_basis(gate, basis, 'std')
+                unitary = _gt.process_mx_to_unitary(gate_std)
+                cpy.gates[lbl] = _gate.StaticGate(unitary)
+
+            for lbl,inst in self.instruments.items():
+                new_elems = []
+                for ilbl,elem in inst.items():
+                    elem_std = _bt.change_basis(elem, basis, 'std')
+                    unitary = _gt.process_mx_to_unitary(elem_std)
+                    new_elems.append( (ilbl,_gate.StaticGate(unitary)) )
+                cpy.instruments[lbl] = _instrument.Instrument(new_elems)
+                
+            for lbl,vec in self.preps.items():
+                dmvec = _bt.change_basis(vec.toarray(),basis,'std')
+                purevec = _gt.dmvec_to_state(dmvec)
+                cpy.preps[lbl] = _sv.StaticSPAMVec(purevec)
+    
+            for lbl,povm in self.povms.items():
+                new_evecs = []
+                for elbl,evec in povm.items():
+                    dmvec = _bt.change_basis(evec.toarray(),basis,'std')
+                    purevec = _gt.dmvec_to_state(dmvec)
+                    new_evecs.append( (elbl,_sv.StaticSPAMVec(purevec)) )
+                cpy.povms[lbl] = _povm.UnconstrainedPOVM(new_evecs)
+
+            cpy.set_simtype('svmap')
+            cpy.default_gauge_group = _gg.TrivialGaugeGroup(cpy.dim)
+            cpy._rebuild_paramvec()
+            cpy.stateSpaceLabels = self.stateSpaceLabels # TODO: copy()?
+            cpy.basis = None # _Basis('std', cpy.dim)?
+        else:
+            raise ValueError("Invalid `new_action`: %s" % new_action)
+
+        return cpy
+            
+            
+        
     def set_all_parameterizations(self, parameterization_type, extra=None):
         """
         Convert all gates and SPAM vectors to a specific parameterization
@@ -434,7 +477,7 @@ class GateSet(object):
         Parameters
         ----------
         parameterization_type : {"full", "TP", "CPTP", "H+S",
-                                 "S", "static", "H+Sterms"}
+                                 "S", "static", "H+Sterms", "clifford"}
             The gate and SPAM vector parameterization type
 
         extra : dict, optional
@@ -443,9 +486,9 @@ class GateSet(object):
             as the ideal operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static','H+Sterms'))
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static','H+Sterms','clifford'))
 
-        if typ == "H+Sterms":
+        if typ in ("H+Sterms","clifford"):
             rtyp = povmtyp = ityp = typ
         else:
             rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
