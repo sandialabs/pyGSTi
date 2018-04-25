@@ -167,14 +167,7 @@ class GateMapCalc(GateCalc):
         elif self.evolution_type == SUPEROP:
             p = float(_np.dot(E,rho))
         else: # CLIFFORD
-            state_s, state_p = rho # should be a StabilizerState.toarray() "object"
-            p = 1
-            for i,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
-                p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i) # could cache this?
-                if outcm == 0:
-                    p *= p0; state_s, state_p = ss0, sp0
-                else:
-                    p *= p1; state_s, state_p = ss1, sp1
+            p = self._stabilizer_measurement_prob(rho, E.outcomes)
 
         if _np.isnan(p):
             if len(gatestring) < 10:

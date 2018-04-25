@@ -10,6 +10,7 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from cython.operator cimport dereference as deref, preincrement as inc
+from ..tools import symplectic
 cimport numpy as np
 cimport cython
 
@@ -48,7 +49,8 @@ def test_map(s):
 #        print x.first
 #        print my_map[x]
 
-def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order):
+def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, int numEs, int max_order,
+                      int stabilizer_evo):
     #NOTE: gatestring and gate_terms use *integers* as gate labels, not Label objects, to speed
     # lookups and avoid weird string conversion stuff with Cython
     
@@ -132,7 +134,8 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
             Einds = E_indices[p[N+1]]
         
             #print("Part0 ",p)
-            pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+            pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars,
+                                 max_poly_order, stabilizer_evo, &prps) #, prps_chk)
 
             
         elif order == 1:
@@ -151,7 +154,9 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 Einds = E_indices[p[N+1]]
 
                 #print("Part1 ",p)
-                pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,
+                                     max_poly_vars, max_poly_order,
+                                     stabilizer_evo, &prps) #, prps_chk)
                 p[i] = 0
             
         elif order == 2:
@@ -170,7 +175,9 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 Einds = E_indices[p[N+1]]
 
                 #print("Part2a ",p)
-                pr_as_poly_innerloop(factor_lists,coeff_lists,Einds,max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                pr_as_poly_innerloop(factor_lists, coeff_lists,Einds,
+                                     max_poly_vars, max_poly_order,
+                                     stabilizer_evo, &prps) #, prps_chk)
                 p[i] = 0
 
             for i in range(N+2):
@@ -190,7 +197,9 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                     Einds = E_indices[p[N+1]]
 
                     #print("Part2b ",p)
-                    pr_as_poly_innerloop(factor_lists,coeff_lists,Einds, max_poly_vars, max_poly_order, &prps) #, prps_chk)
+                    pr_as_poly_innerloop(factor_lists, coeff_lists, Einds,
+                                         max_poly_vars, max_poly_order,
+                                         stabilizer_evo, &prps) #, prps_chk)
                     p[j] = 0
                 p[i] = 0
         else:
@@ -201,14 +210,15 @@ def fast_prs_as_polys(gatestring, rho_terms, gate_terms, E_terms, E_indices_py, 
                 
 
 cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
-                          int max_poly_vars, int max_poly_order, vector[ unordered_map[int, complex] ]* prps): #, prps_chk):
+                          int max_poly_vars, int max_poly_order, int stabilizer_evo,
+                          vector[ unordered_map[int, complex] ]* prps): #, prps_chk):
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef int i,j
     cdef int fastmode = 1 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
     cdef unordered_map[int, complex].iterator it1, it2, itk
     cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
-    cdef double complex scale, val, newval, pLeft, pRight
+    cdef double complex scale, val, newval, pLeft, pRight, p
     cdef vector[vector[unordered_map[int, complex]]] reduced_coeff_lists
 
     cdef int incd
@@ -282,16 +292,30 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
             # for the last index, no need to save, and need to construct
             # and apply effect vector
-            factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-            EVec = factor.post_ops[0].toarray() # TODO USE scratch here
-            for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
-                EVec = factor.post_ops[j].acton(EVec)
-            pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
+            if stabilizer_evo == 0:
+                factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+                EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+                for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
+                    EVec = factor.post_ops[j].acton(EVec)
+                pLeft = np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
+    
+                EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+                for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
+                    EVec = factor.pre_ops[j].acton(EVec)
+                pRight = np.conjugate(np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
+            else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+                factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
+                EVec = factor.post_ops[0]
+                for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
+                    rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
+                p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
+                pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
 
-            EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
-            for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
-                EVec = factor.pre_ops[j].acton(EVec)
-            pRight = np.conjugate(np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
+                EVec = factor.pre_ops[0]
+                for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
+                    rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
+                p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
+                pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
 
             result = mult_polys(coeff, factor_coeff_lists[last_index][b[last_index]],
                                max_poly_vars, max_poly_order)
@@ -528,6 +552,22 @@ cdef vector[vector[unordered_map[int, complex] ]] extract_term_coeffs(python_ter
             for k,v in poly.items(): polymap[k] = v
             ret[order][i] = polymap
     return ret
+
+cdef double stabilizer_measurement_prob(state_sp_tuple, moutcomes):
+    #Note: an abridged version from what is in GateCalc... (no qubit_filter or return_state)
+    #TODO: make this routine faster - port pauli_z_measurement to C?
+    cdef float p = 1.0
+    state_s, state_p = state_sp_tuple
+    for i,outcm in enumerate(moutcomes): 
+        p0,p1,ss0,ss1,sp0,sp1 = symplectic.pauli_z_measurement(state_s, state_p, i)
+
+        if outcm == 0:
+            p *= p0; state_s, state_p = ss0, sp0
+        else:
+            p *= p1; state_s, state_p = ss1, sp1
+    return p
+
+
 
     
 def dot(np.ndarray[double, ndim=1] f, np.ndarray[double, ndim=1] g):

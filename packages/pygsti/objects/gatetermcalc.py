@@ -17,7 +17,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import listtools as _lt
-from ..tools import symplectic as _symp
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .termevaltree import TermEvalTree as _TermEvalTree
@@ -207,8 +206,9 @@ class GateTermCalc(GateCalc):
         glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
         cgatestring = tuple( (glmap[gl] for gl in gatestring) )
         cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
-        #prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
-        #                                            E_terms, E_indices, len(Es), self.max_order) # returns list of dicts
+        prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
+                                                    E_terms, E_indices, len(Es), self.max_order,
+                                                    self.term_op_clifford_evolution) # returns list of dicts
         #return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
         #HERE DEBUG
@@ -297,37 +297,15 @@ class GateTermCalc(GateCalc):
                             for f in reversed(factors[-1].post_ops[1:]):
                                 rhoVecL = f.adjoint_acton(rhoVecL)
                             E = factors[-1].post_ops[0]
-                            
-                            #TODO: encapsulate this "complete stabilizer measurement" into a function that
-                            # can be used here and in GateMapCalc
-                            state_s, state_p = rhoVecL # should be a StabilizerState.toarray() "object"
-                            p = 1
-                            for i,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
-                                p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i) # could cache this?
-                                if outcm == 0:
-                                    p *= p0; state_s, state_p = ss0, sp0
-                                else:
-                                    p *= p1; state_s, state_p = ss1, sp1
+                            p = self._stabilizer_measurement_prob(rhoVecL, E.outcomes)
                             pLeft = _np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
-
 
                             #Same for pre_ops and rhoVecR
                             for f in reversed(factors[-1].pre_ops[1:]):
                                 rhoVecR = f.adjoint_acton(rhoVecR)
                             E = factors[-1].pre_ops[0]
-                            
-                            #TODO: encapsulate this "complete stabilizer measurement" into a function that
-                            # can be used here and in GateMapCalc
-                            state_s, state_p = rhoVecR # should be a StabilizerState.toarray() "object"
-                            p = 1
-                            for i,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
-                                p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i) # could cache this?
-                                if outcm == 0:
-                                    p *= p0; state_s, state_p = ss0, sp0
-                                else:
-                                    p *= p1; state_s, state_p = ss1, sp1
+                            p = self._stabilizer_measurement_prob(rhoVecR, E.outcomes)
                             pRight = _np.sqrt(p) # sqrt b/c pRight is just *amplitude*
-
 
                         coeff = coeff.mult_poly(factors[-1].coeff)
                         res = coeff.mult_scalar( (pLeft * pRight) )
@@ -362,16 +340,16 @@ class GateTermCalc(GateCalc):
 
         #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
 
-        ##CHECK with fast version
-        #for slow,fast in zip(prps,prps_fast):
-        #    #print("Slow: ",slow)
-        #    #print("Fast: ",fast)            
-        #    for k,v in slow.items():
-        #        if abs(v) > 1e-12:
-        #            assert(abs(fast[k]-v) < 1e-6)
-        #    for k,v in fast.items():
-        #        if abs(v) > 1e-12:
-        #            assert(abs(slow[k]-v) < 1e-6)
+        #CHECK with fast version
+        for slow,fast in zip(prps,prps_fast):
+            #print("Slow: ",slow)
+            #print("Fast: ",fast)            
+            for k,v in slow.items():
+                if abs(v) > 1e-12:
+                    assert(abs(fast[k]-v) < 1e-6)
+            for k,v in fast.items():
+                if abs(v) > 1e-12:
+                    assert(abs(slow[k]-v) < 1e-6)
         
         return prps # can be a list of polys
         
