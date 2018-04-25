@@ -355,6 +355,32 @@ def compose_cliffords(s1,p1,s2,p2):
     return s, p
 
 
+
+def symplectic_kronecker(sp_factors):
+    """ TODO: docstring: returns a single s,p symplectic rep that
+        represents the tensor/kronecker product of the gates 
+        represented by each (s,p) element of `sp_factors` -- works
+        for clifford operators AND also stabilizer states."""
+    nlist = [ len(p)//2 for s,p in sp_factors] # number of qubits per factor
+    n = sum(nlist) #total number of qubits
+            
+    sout = _np.zeros((2*n,2*n),int)
+    pout = _np.zeros(2*n,int)
+    k = 0 # current qubit index
+    for i,((s,p),nq) in enumerate(zip(sp_factors,nlist)):
+        assert(s.shape == (2*nq,2*nq))
+        sout[k:k+nq    ,k:k+nq]     = s[0:nq,0:nq]
+        sout[k:k+nq    ,n+k:n+k+nq] = s[0:nq,nq:2*nq]
+        sout[n+k:n+k+nq,k:k+nq]     = s[nq:2*nq,0:nq]
+        sout[n+k:n+k+nq,n+k:n+k+nq] = s[nq:2*nq,nq:2*nq]
+        pout[k:k+nq]                = p[0:nq]
+        pout[n+k:n+k+nq]            = p[nq:2*nq]
+        k += nq
+
+    return sout, pout
+
+
+
 def prep_stabilizer_state(nqubits, zvals=None):
     """ TODO: docstring: zvals can be iterable over anything True/False
     to indicate 0/1 value of qubit """

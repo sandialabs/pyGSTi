@@ -78,7 +78,9 @@ class GateSet(object):
             gates, POVM, and instruments respectively.  These prefixes allow
             the GateSet to determine what type of object a key corresponds to.
         """
-        assert(default_param in ('full','TP','static','clifford'))
+        assert(default_param in ('full','TP','CPTP','H+S','S','static',
+                                         'H+S terms','clifford','H+S clifford terms'))
+
         #default_e_param = "full" if default_param == "TP" else default_param
 
         #Gate dimension of this GateSet (None => unset, to be determined)
@@ -121,6 +123,7 @@ class GateSet(object):
         elif sim_type == "svmap":      c = _gatemapcalc.UnitaryGateMapCalc
         elif sim_type == "clifford":   c = _gatemapcalc.CliffordGateMapCalc
         elif sim_type == "termorder":  c = _gatetermcalc.GateTermCalc
+        elif sim_type == "ctermorder": c = _gatetermcalc.CliffordGateTermCalc
         else: raise ValueError("Invalid `sim_type` (%s)" % sim_type)
 
         self._calcClass = c
@@ -135,13 +138,15 @@ class GateSet(object):
         if self.stateSpaceLabels is None:
             raise ValueError("Must set gateset.stateSpaceLabels before adding auto-embedded gates.")
 
-        mode = "superop" if self._sim_type.startswith("dm") else "unitary"
+        mode = "superop" if (self._sim_type.startswith("dm") or self._sim_type.startswith("termorder")
+                             or self._sim_type.startswith("ctermorder")) else "unitary"
         if self._sim_type in ("svmatrix","dmmatrix"):
             return _gate.EmbeddedGate(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
-        elif self._sim_type in ("svmap","dmmap"):
+        elif self._sim_type in ("svmap","dmmap","termorder","ctermorder"):
             return _gate.EmbeddedGateMap(self.stateSpaceLabels, gateTargetLabels, gateVal, mode=mode)
         elif self._sim_type in ("clifford",):
             return _gate.EmbeddedCliffordGate(self.stateSpaceLabels, gateTargetLabels, gateVal)
+
         assert(False), "Invalid GateSet sim type == %s" % str(self._sim_type)
 
 
@@ -477,24 +482,21 @@ class GateSet(object):
         Parameters
         ----------
         parameterization_type : {"full", "TP", "CPTP", "H+S",
-                                 "S", "static", "H+Sterms", "clifford"}
+                                 "S", "static", "H+S terms", "clifford",
+                                 "H+S clifford terms"}
             The gate and SPAM vector parameterization type
 
         extra : dict, optional
-            For `"H+Sterms"` type, this specifies a dictionary 
+            For `"H+S terms"` type, this may specify a dictionary 
             of unitary gates and pure state vectors to be used
-            as the ideal operation of each gate/SPAM vector.
+            as the *ideal* operation of each gate/SPAM vector.
         """
         typ = parameterization_type
-        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static','H+Sterms','clifford'))
+        assert(parameterization_type in ('full','TP','CPTP','H+S','S','static',
+                                         'H+S terms','clifford','H+S clifford terms'))
 
-        if typ in ("H+Sterms","clifford"):
-            rtyp = povmtyp = ityp = typ
-        else:
-            rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
-            #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
-            povmtyp = rtyp
-            ityp = "TP" if typ in ("TP","CPTP","H+S","S") else typ
+        povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
+        #rtyp = "CPTP" if typ in ("H+S","S") else typ #TESTING, but CPTP spamvec still unreliable
 
         basis = self.basis
         if extra is None: extra = {}
@@ -521,7 +523,7 @@ class GateSet(object):
             self.default_gauge_group = _gg.TPGaugeGroup(self.dim)
         elif typ == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.dim, basis)
-        else: # typ in ('static','H+S','S', 'H+Sterms')
+        else: # typ in ('static','H+S','S', 'H+S terms')
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.dim)
 
 
@@ -919,7 +921,7 @@ class GateSet(object):
                 compiled_gates[k] = g
 
         kwargs = {}
-        if self._sim_type == "termorder":
+        if self._sim_type in ("termorder","ctermorder"):
             kwargs['max_order'] = int(self._sim_args[0])
             
         return self._calcClass(self._dim, compiled_gates, self.preps,

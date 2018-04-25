@@ -17,6 +17,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import listtools as _lt
+from ..tools import symplectic as _symp
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .termevaltree import TermEvalTree as _TermEvalTree
@@ -206,9 +207,9 @@ class GateTermCalc(GateCalc):
         glmap = { gl: i for i,gl in enumerate(self.gates.keys()) }
         cgatestring = tuple( (glmap[gl] for gl in gatestring) )
         cgate_terms = { glmap[gl]: val for gl,val in gate_terms.items() }
-        prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
-                                                    E_terms, E_indices, len(Es), self.max_order) # returns list of dicts
-        return [ dict_to_fastpoly(p) for p in prps_fast ] 
+        #prps_fast = _fastgatecalc.fast_prs_as_polys(cgatestring, rho_terms, cgate_terms,
+        #                                            E_terms, E_indices, len(Es), self.max_order) # returns list of dicts
+        #return [ dict_to_fastpoly(p) for p in prps_fast ] 
 
         #HERE DEBUG
         global DEBUG_FCOUNT
@@ -253,7 +254,7 @@ class GateTermCalc(GateCalc):
                                 rhoVecL = f.acton(rhoVecL)
                             leftSaved[0] = rhoVecL
 
-                            rhoVecR = factors[0].post_ops[0]
+                            rhoVecR = factors[0].post_ops[0].toarray()
                             for f in factors[0].post_ops[1:]:
                                 rhoVecR = f.acton(rhoVecR)
                             rightSaved[0] = rhoVecR
@@ -281,15 +282,52 @@ class GateTermCalc(GateCalc):
 
                         # for the last index, no need to save, and need to construct
                         # and apply effect vector
-                        EVec = factors[-1].post_ops[0].toarray() # TODO USE scratch here
-                        for f in factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
-                            EVec = f.acton(EVec)
-                        pLeft = _np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
+                        if self.term_op_clifford_evolution == False:
+                            EVec = factors[-1].post_ops[0].toarray() # TODO USE scratch here
+                            for f in factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
+                                EVec = f.acton(EVec)
+                            pLeft = _np.vdot(EVec,rhoVecL) # complex amplitudes, *not* real probabilities
+    
+                            EVec = factors[-1].pre_ops[0].toarray() # TODO USE scratch here
+                            for f in factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
+                                EVec = f.acton(EVec)
+                            pRight = _np.conjugate(_np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
+                        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+                            #TODO: compute/cache inverses ahead of time in adjoint_acton so this is *faster*!
+                            for f in reversed(factors[-1].post_ops[1:]):
+                                rhoVecL = f.adjoint_acton(rhoVecL)
+                            E = factors[-1].post_ops[0]
+                            
+                            #TODO: encapsulate this "complete stabilizer measurement" into a function that
+                            # can be used here and in GateMapCalc
+                            state_s, state_p = rhoVecL # should be a StabilizerState.toarray() "object"
+                            p = 1
+                            for i,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
+                                p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i) # could cache this?
+                                if outcm == 0:
+                                    p *= p0; state_s, state_p = ss0, sp0
+                                else:
+                                    p *= p1; state_s, state_p = ss1, sp1
+                            pLeft = _np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
 
-                        EVec = factors[-1].pre_ops[0].toarray() # TODO USE scratch here
-                        for f in factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
-                            EVec = f.acton(EVec)
-                        pRight = _np.conjugate(_np.vdot(EVec,rhoVecR)) # complex amplitudes, *not* real probabilities
+
+                            #Same for pre_ops and rhoVecR
+                            for f in reversed(factors[-1].pre_ops[1:]):
+                                rhoVecR = f.adjoint_acton(rhoVecR)
+                            E = factors[-1].pre_ops[0]
+                            
+                            #TODO: encapsulate this "complete stabilizer measurement" into a function that
+                            # can be used here and in GateMapCalc
+                            state_s, state_p = rhoVecR # should be a StabilizerState.toarray() "object"
+                            p = 1
+                            for i,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
+                                p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i) # could cache this?
+                                if outcm == 0:
+                                    p *= p0; state_s, state_p = ss0, sp0
+                                else:
+                                    p *= p1; state_s, state_p = ss1, sp1
+                            pRight = _np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+
 
                         coeff = coeff.mult_poly(factors[-1].coeff)
                         res = coeff.mult_scalar( (pLeft * pRight) )
@@ -324,16 +362,16 @@ class GateTermCalc(GateCalc):
 
         #print("DONE -> FCOUNT=",DEBUG_FCOUNT)
 
-        #CHECK with fast version
-        for slow,fast in zip(prps,prps_fast):
-            #print("Slow: ",slow)
-            #print("Fast: ",fast)            
-            for k,v in slow.items():
-                if abs(v) > 1e-12:
-                    assert(abs(fast[k]-v) < 1e-6)
-            for k,v in fast.items():
-                if abs(v) > 1e-12:
-                    assert(abs(slow[k]-v) < 1e-6)
+        ##CHECK with fast version
+        #for slow,fast in zip(prps,prps_fast):
+        #    #print("Slow: ",slow)
+        #    #print("Fast: ",fast)            
+        #    for k,v in slow.items():
+        #        if abs(v) > 1e-12:
+        #            assert(abs(fast[k]-v) < 1e-6)
+        #    for k,v in fast.items():
+        #        if abs(v) > 1e-12:
+        #            assert(abs(slow[k]-v) < 1e-6)
         
         return prps # can be a list of polys
         
@@ -391,9 +429,9 @@ class GateTermCalc(GateCalc):
         """TOD: docstring
         """
         poly = self.pr_as_poly(spamTuple, gatestring, comm=None, memLimit=None)
-        p = poly.evaluate(self.paramvec)
-        if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )        
-        return p
+        p = _np.real_if_close(poly.evaluate(self.paramvec))
+        if clipTo is not None:  p = _np.clip( p, clipTo[0], clipTo[1] )
+        return float(p)
     
 
     def dpr(self, spamTuple, gatestring, returnPr, clipTo):
@@ -1246,9 +1284,9 @@ class GateTermCalc(GateCalc):
         #                prMxToFill, deriv1MxToFill, mxToFill, clipTo)
 
 
-#class UnitaryGateMapCalc(GateMapCalc):
-#    """ TODO: docstring """
-#    def __init__(self, dim, gates, preps, effects, paramvec):
-#        """ TODO: docstring """
-#        super(UnitaryGateMapCalc,self).__init__(dim, gates, preps, effects, paramvec)
-#        self.unitary_evolution = True
+class CliffordGateTermCalc(GateTermCalc):
+    """ TODO: docstring """
+    def __init__(self, dim, gates, preps, effects, paramvec, max_order):
+        """ TODO: docstring """
+        super(CliffordGateTermCalc,self).__init__(dim, gates, preps, effects, paramvec, max_order)
+        self.term_op_clifford_evolution = True

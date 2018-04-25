@@ -20,6 +20,7 @@ from ..      import optimize as _opt
 from ..tools import matrixtools as _mt
 from ..tools import gatetools as _gt
 from ..tools import basistools as _bt
+from ..tools import listtools as _lt
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import symplectic as _symp
@@ -98,7 +99,7 @@ def convert(spamvec, toType, basis, extra=None):
     spamvec : SPAMVec
         SPAM vector to convert
 
-    toType : {"full","TP","static","H+Sterms","clifford"}
+    toType : {"full","TP","static","H+S terms","clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -108,7 +109,7 @@ def convert(spamvec, toType, basis, extra=None):
 
     extra : object, optional
         Additional information for conversion.  An ideal pure state
-        in "H+Sterms" case.
+        in "H+S terms" case.
 
 
     Returns
@@ -143,8 +144,9 @@ def convert(spamvec, toType, basis, extra=None):
         else:
             return StaticSPAMVec( spamvec )
 
-    elif toType == "H+Sterms":
-        if isinstance(spamvec, LindbladTermSPAMVec):
+    elif toType in ("H+S terms","H+S clifford terms"):
+        typ = "dense" if toType == "H+S terms" else "clifford prep"
+        if isinstance(spamvec, LindbladTermSPAMVec) and spamvec.termtype == typ:
             return spamvec
 
         if extra is None:
@@ -159,32 +161,17 @@ def convert(spamvec, toType, basis, extra=None):
         ideal_purevec = _np.array(ideal_purevec); ideal_purevec.shape = (d,1) # expect this is a dense vector
         ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
         errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
-        
         return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
-                                                        nonham_diagonal_only=True)
+                                                        nonham_diagonal_only=True, termtype=typ)
 
     elif toType == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):
             return spamvec #no conversion necessary
 
-        #OLD
-        #if isinstance(spamvec,DenseSPAMVec) and _np.iscomplexobj(spamvec.base): # PURE STATE?
-        #    purevec = spamvec.base
-        #else:
-        #    dmvec = _bt.change_basis(spamvec.toarray(),basis,'std')
-        #    purevec = _gt.dmvec_to_state(dmvec)
+        purevec = spamvec.flatten() # assume a pure state (otherwise would
+                                    # need to change GateSet dim)
+        return StabilizerSPAMVec.from_dense_purevec(purevec)
 
-        purevec = spamvec.base # assume a pure state (otherwise would need
-        purevec = purevec.flatten()               #  to change GateSet dim)
-
-        #Loop through possible pure vecs to see if `purevec` corresponds to one
-        nqubits = int(round(_np.log2(len(purevec))))
-        v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1)
-        for zvals in _itertools.product(*([(0,1)]*nqubits)):
-            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, purevec):
-                return StabilizerSPAMVec(nqubits, zvals)
-        raise ValueError("Could not convert pure vector to z-basis product state")
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
 
@@ -1694,11 +1681,18 @@ class TensorProdSPAMVec(SPAMVec):
         self.Np = sum([fct.num_params() for fct in factors])
         if typ == "effect":
             self.effectLbls = _np.array(povmEffectLbls)
-            self._complex = any([ any([_np.iscomplexobj(Evec) for Evec in fct.values()]) for fct in factors])
+            if any([ any([_np.iscomplexobj(Evec) for Evec in fct.values()]) for fct in factors]):
+                self._evotype = "statevec"
+            else: self._evotype = "densitymx"
+                
         elif typ == "prep":
             assert(povmEffectLbls is None), '`povmEffectLbls` must be None when `typ != "effects"`'
             self.effectLbls = None
-            self._complex = any([_np.iscomplexobj(v) for v in factors])
+            if any([_np.iscomplexobj(v) for v in factors]):
+                self._evotype = "statevec"
+            elif any([isinstance(v, (StabilizerSPAMVec,StabilizerEffectVec)) for v in factors]):
+                self._evotype = "stabilizer"
+            else: self._evotype = "densitymx"
                         
         else: raise ValueError("Invalid `typ` argument: %s" % typ)
         
@@ -1730,10 +1724,19 @@ class TensorProdSPAMVec(SPAMVec):
             assert(off == self.Np)
 
         #Memory for speeding up kron product in toarray()
-        max_factor_dim = max(fct.dim for fct in factors)
-        self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), complex if self._complex else 'd')
-        self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
-        self._fill_fast_kron()
+        if self._evotype in ("statevec","densitymx"): #types that require fast kronecker prods
+            max_factor_dim = max(fct.dim for fct in factors)
+            self._fast_kron_array = _np.empty( (len(factors), max_factor_dim), complex if self._evotype == "statevec" else 'd')
+            self._fast_kron_factordims = _np.array([fct.dim for fct in factors],'i')
+            try:
+                self._fill_fast_kron()
+            except NotImplementedError: # if toarray() or any other prereq isn't implemented (
+                self._fast_kron_array = None   # e.g. if factors are LindbladTermSPAMVecs
+                self._fast_kron_factordims = None
+                
+        else:
+            self._fast_kron_array = None
+            self._fast_kron_factordims = None
 
         
     def _fill_fast_kron(self):
@@ -1752,37 +1755,57 @@ class TensorProdSPAMVec(SPAMVec):
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
-        if len(self.factors) == 0: return _np.empty(0,complex if self._complex else 'd')
-        if scratch is not None and _fastcalc is not None:
-            assert(scratch.shape[0] == self.dim)
-            # use faster kron that avoids memory allocation.
-            # Note: this uses more memory b/c all self.factors.toarray() results
-            #  are present in memory at the *same* time - could add a flag to
-            #  disable fast-kron-array when memory is extra tight(?).
-            if self._complex:
-                _fastcalc.fast_kron_complex(scratch, self._fast_kron_array, self._fast_kron_factordims)
+        if self._evotype in ("statevec","densitymx"):
+            if len(self.factors) == 0: return _np.empty(0,complex if self._evotype == "statevec" else 'd')
+            if scratch is not None and _fastcalc is not None:
+                assert(scratch.shape[0] == self.dim)
+                # use faster kron that avoids memory allocation.
+                # Note: this uses more memory b/c all self.factors.toarray() results
+                #  are present in memory at the *same* time - could add a flag to
+                #  disable fast-kron-array when memory is extra tight(?).
+                if self._evotype == "statevec":
+                    _fastcalc.fast_kron_complex(scratch, self._fast_kron_array, self._fast_kron_factordims)
+                else:
+                    _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
+                return scratch if scratch.ndim == 1 else scratch
+                
+            if self.typ == "prep":
+                ret = self.factors[0].toarray() # factors are just other SPAMVecs
+                for i in range(1,len(self.factors)):
+                    ret = _np.kron(ret, self.factors[i].toarray())
             else:
-                _fastcalc.fast_kron(scratch, self._fast_kron_array, self._fast_kron_factordims)
-            return scratch if scratch.ndim == 1 else scratch
+                factorPOVMs = self.factors
+                ret = factorPOVMs[0][self.effectLbls[0]].toarray()
+                for i in range(1,len(factorPOVMs)):
+                    ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].toarray())
+    
+            # DEBUG: initial test that fast_kron works...
+            #if scratch is not None: assert(_np.linalg.norm(ret - scratch[:,None]) < 1e-6)
+            return ret            
+        else: # self._evotype == "stabilizer"
             
-        if self.typ == "prep":
-            ret = self.factors[0].toarray() # factors are just other SPAMVecs
-            for i in range(1,len(self.factors)):
-                ret = _np.kron(ret, self.factors[i].toarray())
-        else:
-            factorPOVMs = self.factors
-            ret = factorPOVMs[0][self.effectLbls[0]].toarray()
-            for i in range(1,len(factorPOVMs)):
-                ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].toarray())
+            if self.typ == "prep":
+                # => self.factors should all be StabilizerSPAMVec objs
+                #Return stabilizer-rep tuple, just like StabilizerSPAMVec
+                sp_factors = [ f.toarray() for f in self.factors ]
+                return _symp.symplectic_kronecker(sp_factors)
 
-        # DEBUG: initial test that fast_kron works...
-        #if scratch is not None: assert(_np.linalg.norm(ret - scratch[:,None]) < 1e-6)
-        
-        return ret
+            else: #self.typ == "effect", so each factor is a StabilizerEffectVec
+                raise ValueError("Cannot convert Stabilizer tensor product effect to an array!")
+                # should be using effect.outcomes property...
+
 
     @property
     def size(self):
         return self.dim
+
+    @property
+    def outcomes(self):
+        """ TODO: docstring - to mimic StabilizerEffectVec """
+        out = list(_itertools.chain(*[f.outcomes for f in self.factors]))
+        return _np.array(out, int)
+          #Note: may need to a qubit filter property here and to StabilizerEffectVec...
+        
     
     def set_value(self, vec):
         """
@@ -1857,18 +1880,26 @@ class TensorProdSPAMVec(SPAMVec):
 
     def get_order_terms(self, order):
         """ TODO: docstring """
+        from .gate import CliffordGate as _CliffordGate
         terms = []
+        fnq = [ int(round(_np.log2(f.dim)))//2 for f in self.factors ] # num of qubits per factor
+          # assumes density matrix evolution
+        
         for p in _lt.partition_into(order, len(self.factors)):
-            # create COLLAPSED factor_lists so each factor has just a single
-            # (SPAMVec) pre & post op, which can be formed into the new terms'
-            # TensorProdSPAMVec ops.
             if self.typ == "prep":
-                factor_lists = [ [t.collapse_vec() for t in self.factors[i].get_order_terms(pi)]
-                                 for i,pi in enumerate(p) ]
+                factor_lists = [self.factors[i].get_order_terms(pi) for i,pi in enumerate(p)]
             else:
                 factorPOVMs = self.factors
-                factor_lists = [ [t.collapse_vec() for t in factorPOVMs[i][Elbl].get_order_terms(pi)]
+                factor_lists = [ factorPOVMs[i][Elbl].get_order_terms(pi)
                                  for i,(pi,Elbl) in enumerate(zip(p,self.effectLbls)) ]
+
+            # When possible, create COLLAPSED factor_lists so each factor has just a single
+            # (SPAMVec) pre & post op, which can be formed into the new terms'
+            # TensorProdSPAMVec ops.
+            # - DON'T collapse stabilizer states & clifford ops - can't for POVMs
+            collapsible = bool(factor_lists[0][0].typ == "dense") # assume all terms are the same
+            if collapsible:
+                factor_lists = [ [t.collapse_vec() for t in fterms] for fterms in factor_lists]
                 
             for factors in _itertools.product(*factor_lists):
                 # create a term with a TensorProdSPAMVec - Note we always create
@@ -1879,7 +1910,27 @@ class TensorProdSPAMVec(SPAMVec):
                                                       if (f.pre_ops[0] is not None)])
                 post_op = TensorProdSPAMVec("prep", [f.post_ops[0] for f in factors
                                                        if (f.post_ops[0] is not None)])
-                terms.append( _terms.RankOneTerm(coeff, pre_op, post_op) )
+                term = _term.RankOneTerm(coeff, pre_op, post_op)
+
+                if not collapsible: # then may need to add more ops.  Assume factor ops are clifford gates
+                    def iop(nq): # identity symplectic op for missing factors
+                        return _np.identity((2*nq,2*nq),int), _np.zeros(2*nq,int)
+                    
+                    mx = max([len(f.pre_ops) for f in factors])
+                    for i in range(1,mx): # for each "layer" of additional terms
+                        ops = [ (f.pre_ops[i].smatrix,f.pre_ops[i].svector)
+                                if (i < len(f.pre_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
+                        term.pre_ops.append( _CliffordGate(
+                            symplecticrep = _symp.symplectic_kronecker(ops)))
+
+                    mx = max([len(f.post_ops) for f in factors])
+                    for i in range(1,mx): # for each "layer" of additional terms
+                        ops = [ (f.post_ops[i].smatrix,f.post_ops[i].svector)
+                                if (i < len(f.post_ops)) else iop(nq) for f,nq in zip(factors,fnq)]
+                        term.post_ops.append( _CliffordGate(
+                            symplecticrep = _symp.symplectic_kronecker(ops)))
+                
+                terms.append(term)
                     
         return terms # Cache terms in FUTURE?
 
@@ -1956,7 +2007,8 @@ class TensorProdSPAMVec(SPAMVec):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        typ = complex if self._complex else 'd'
+        assert(self._evotype in ("statevec","densitymx"))
+        typ = complex if self._evotype == "statevec" else 'd'
         derivMx = _np.zeros( (self.dim, self.num_params()), typ)
         
         #Product rule to compute jacobian
@@ -2261,7 +2313,7 @@ class LindbladTermSPAMVec(TermSPAMVec):
     #  (maybe add a termtools.py or add more helper functions to term.py?)
     @classmethod
     def from_error_generator(cls, basepurestate, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
-                             nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+                             nonham_diagonal_only=False, truncate=True, mxBasis="pp", termtype="dense"):
         # This looks like a from_errgen constructor; we want a from_rates constructor that
         # takes a dict(?) of rate coeffs (0 by default) associated with lindblad terms (ham_i terms and other_ij terms...)
         # --> add same construction methods to other lindblad gates, which currently just have "from_errgen"-type __init__ functions?
@@ -2345,14 +2397,16 @@ class LindbladTermSPAMVec(TermSPAMVec):
             print(k,":")
             print(v)
         return cls.from_lindblad_terms(basepurestate, Ltermdict, basisdict,
-                                       cptp, nonham_diagonal_only, truncate)
+                                       cptp, nonham_diagonal_only, truncate,
+                                       termtype)
 
 
 
         
     @classmethod
     def from_lindblad_terms(cls, basepurestate, Ltermdict, basisdict=None,
-                            cptp=True, nonham_diagonal_only=False, truncate=True):
+                            cptp=True, nonham_diagonal_only=False, truncate=True,
+                            termtype="dense"):
         """
         TODO: docstring
         Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
@@ -2361,7 +2415,10 @@ class LindbladTermSPAMVec(TermSPAMVec):
          -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
                  format when can assume single-letter labels.
         """
-
+        tt = "clifford" if (termtype in ("clifford prep","clifford effect")) else termtype
+          # class distinguishes between prep/effect clifford vecs, but in this function we
+          # just create gate-like terms which are just of type "clifford"
+        
         #Enumerate the basis elements used for Hamiltonian and Stochasitic
         # error terms (separately)
         hamBasisLabels = _collections.OrderedDict()  # holds index of each basis element
@@ -2401,7 +2458,7 @@ class LindbladTermSPAMVec(TermSPAMVec):
         print("DB: otherBasisLabels = ",otherBasisLabels)
 
 
-        #Create & fill parameter array
+        #Create & Fill parameter array
         params = _np.zeros(nTotalParams, 'd') # ham params, then "other"
         for termLbl,coeff in Ltermdict.items():
             termType = termLbl[0]
@@ -2483,8 +2540,8 @@ class LindbladTermSPAMVec(TermSPAMVec):
             termType = termLbl[0]
             if termType == "H": # Hamiltonian
                 k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT) )
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
                 print("DB: H term w/index %d= " % k, " len=",len(Lterms))
                 #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
                 #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
@@ -2499,9 +2556,9 @@ class LindbladTermSPAMVec(TermSPAMVec):
 
                     Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm) ) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
                 else:
                     i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
                     j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
@@ -2532,9 +2589,9 @@ class LindbladTermSPAMVec(TermSPAMVec):
 
                     base_poly = _Polynomial(polyTerms)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm) )
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm)) ) # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT ) )
+                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt) )
                     print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
                     print("  coeff: ", list(Lterms[-1].coeff.keys()) )
                     print("  coeff: ", list(Lterms[-2].coeff.keys()) )
@@ -2550,10 +2607,11 @@ class LindbladTermSPAMVec(TermSPAMVec):
             print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
             print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
             print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-        return cls(basepurestate, params, Lterms, cptp, nonham_diagonal_only)
+        return cls(basepurestate, params, Lterms, cptp, nonham_diagonal_only, termtype)
 
     
-    def __init__(self, basepurestate=None, initial_paramvals=None, Lterms=None, cptp=True, nonham_diagonal_only=False):
+    def __init__(self, basepurestate=None, initial_paramvals=None, Lterms=None,
+                 cptp=True, nonham_diagonal_only=False, termtype="dense"):
         """
         Initialize a LindbladTermGateBase object.
         TODO: docstring
@@ -2568,8 +2626,19 @@ class LindbladTermSPAMVec(TermSPAMVec):
             except:
                 # otherwise try to treat as array-like
                 basepurestate = SPAMVec.convert_to_vector(basepurestate)
-                dim = basepurestate.shape[0] 
-        
+                dim = basepurestate.shape[0]
+
+            # automatically "up-convert" gate to StabilizerSPAMVec if needed
+            if termtype == "clifford prep" and not isinstance(
+                    basepurestate, StabilizerSPAMVec):
+                basepurestate = StabilizerSPAMVec.from_dense_purevec(basepurestate)
+            elif termtype == "clifford effect" and not isinstance(
+                    basepurestate, StabilizerEffectVec):
+                #basepurestate = StabilizerEffectVec(outcomes, stabilizerZPOVM)
+                raise ValueError(("Must supply a base StabilizerEffectVec when "
+                                  " creating an 'clifford effect' LindbladTermSPAMVec"))
+                
+        self.termtype = termtype
         self.cptp = cptp
         self.nonham_diagonal_only = nonham_diagonal_only
         self.paramvals = _np.array(initial_paramvals,'d')
@@ -2616,7 +2685,7 @@ class LindbladTermSPAMVec(TermSPAMVec):
     def get_order_terms(self, order):
         if order not in self.terms:
             assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), StaticSPAMVec(self.basepurestate), StaticSPAMVec(self.basepurestate))
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.basepurestate, self.basepurestate, self.termtype)
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
             #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed - resulting in terms with just a single pre/post op, each == a pure state
             self.terms[order] = self._compose_poly_indices(loc_terms)
@@ -2676,13 +2745,25 @@ class LindbladTermSPAMVec(TermSPAMVec):
         """
         return self._copy_gpindices( LindbladTermSPAMVec(
             self.basepurestate, self.paramvals, self.Lterms, self.cptp,
-            self.nonham_diagonal_only), parent)
+            self.nonham_diagonal_only, self.termtype), parent)
 
 
 class StabilizerSPAMVec(SPAMVec):
     """
     TODO: docstring
     """
+
+    @classmethod
+    def from_dense_purevec(cls, purevec):
+        nqubits = int(round(_np.log2(len(purevec))))
+        v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1)
+        for zvals in _itertools.product(*([(0,1)]*nqubits)):
+            testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+            if _np.allclose(testvec, purevec.flat):
+                return cls(nqubits, zvals)
+        raise ValueError(("Given `purevec` must be a z-basis product state - "
+                          "cannot construct StabilizerSPAMVec"))
+
 
     def __init__(self, nqubits, zvals=None):
         """

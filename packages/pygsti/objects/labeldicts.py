@@ -70,8 +70,8 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
             The parent gate set, needed to obtain the dimension and handle
             updates to parameters.
         
-        default_param : {"TP","full"}
-            The default parameterization used when creating a `SPAMVec`-derived
+        default_param : {"TP","full",...}
+            The default parameterization used when creating an
             object from a key assignment.
 
         prefix : str
@@ -91,7 +91,7 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         # explicit insertions.  Since calling the base class __init__ will
         # call this class's __setitem__ we set parent to None for this step.
         self.parent = None # so __init__ below doesn't call _rebuild_paramvec
-        self.default_param = default_param  # "TP", "full", "static", or "clifford"
+        self.default_param = default_param  # "TP", "full", "static", "clifford",...
         self.typ = typ
 
         PrefixOrderedDict.__init__(self, prefix, items)
@@ -162,22 +162,16 @@ class OrderedMemberDict(PrefixOrderedDict, _gm.GateSetChild):
         """
         if isinstance(value, _gm.GateSetMember): return value
 
-        obj = None
-        if self.default_param == "TP":
-            if self.typ == "spamvec": obj = _sv.TPParameterizedSPAMVec(value)
-            if self.typ == "gate": obj = _gate.TPParameterizedGate(value)
-        elif self.default_param == "full":
-            if self.typ == "spamvec":  obj = _sv.FullyParameterizedSPAMVec(value)
-            if self.typ == "gate":  obj = _gate.FullyParameterizedGate(value)
-        elif self.default_param == "static":
-            if self.typ == "spamvec":  obj = _sv.StaticSPAMVec(value)
-            if self.typ == "gate":  obj = _gate.StaticGate(value)
-        elif self.default_param == "clifford":
-            if self.typ == "spamvec":  obj = _sv.StabilizerSPAMVec(len(value),zvals=value)
-            if self.typ == "gate":  obj = _gate.CliffordGate(value)
-        else:
-            raise ValueError("Invalid default_param: %s" % self.default_param)
-
+        basis = self.parent.basis if self.parent else None
+        obj = None; 
+        if self.typ == "spamvec":
+            typ = self.default_param
+            rtyp = "TP" if typ in ("CPTP","H+S","S") else typ
+            obj = _sv.StaticSPAMVec(value)
+            obj = _sv.convert(obj, rtyp, basis)
+        elif self.typ == "gate":
+            obj = _gate.StaticGate(value)
+            obj = _gate.convert(obj, self.default_param, basis)
         return obj
 
 

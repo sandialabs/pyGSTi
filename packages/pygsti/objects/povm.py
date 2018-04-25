@@ -70,7 +70,7 @@ def convert(povm, toType, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    toType : {"full","TP","static","H+Sterms","clifford"}
+    toType : {"full","TP","static","H+S terms","clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -97,27 +97,49 @@ def convert(povm, toType, basis, extra=None):
                                   for lbl,vec in povm.items() ]
             return TPPOVM(converted_effects)
 
-    elif toType == "H+Sterms":
-        if all([isinstance(Evec, _sv.LindbladTermSPAMVec) for Evec in povm.values()]):
+    elif toType in ("H+S terms","H+S clifford terms"):
+        typ = "dense" if toType == "H+S terms" else "clifford effect"
+        if all([(isinstance(Evec, _sv.LindbladTermSPAMVec) and Evec.termtype == typ)
+                for Evec in povm.values()]):
             return povm
         
         ideal_purevecs = extra if (extra is not None) else None
 
+        # Create an Unconstrained POVM with LindbladTermSPAMVecs
         new_effects = []
         d2 = povm.dim
-        for lbl, Evec in povm.items():
+
+        if toType == "H+S clifford terms":
+            nqubits = int(round(_np.log2(d2))) // 2 # assume POVM acts on density mxs
+            v = (_np.array([1,0],'d'), _np.array([0,1],'d')) # (v0,v1) - eigenstates of sigma_z
+            zvals = list(_itertools.product(*([(0,1)]*nqubits)))
+            stabilizerZPOVM = StabilizerZPOVM(nqubits) # to act as parent for StabilizerEffectVecs below
+        else:
+            zvals = [None]*len(povm) #dummy
+        
+        for (lbl,Evec),zs in zip(povm.items(),zvals):
             #Below block is similar to spamvec convert(...) case
             if ideal_purevecs is not None:
-                ideal_purevec = ideal_purevecs[lbl]; d = len(ideal_purevec)
+                ideal_purevec = _np.array(ideal_purevecs[lbl],complex); d = len(ideal_purevec)
+                ideal_purevec.shape = (d,1)
                 assert(d**2 == d2) # what about for unitary evolution?? purevec could be size "d2"
             else:
                 dmvec = _bt.change_basis(Evec.toarray(),basis,'std')
                 ideal_purevec = _gt.dmvec_to_state(dmvec); d = len(ideal_purevec)
             ideal_spamvec = _bt.change_basis( _gt.state_to_dmvec(ideal_purevec), "std", basis)
+
+            if toType == "H+S clifford terms":
+                testvec = _functools.reduce(_np.kron, [v[i] for i in zs])
+                if not _np.allclose(testvec, ideal_purevec.flat):
+                    raise ValueError("POVM ideal pure-vec does not match that of a Z-basis POVM")
+                ideal_purevec = _sv.StabilizerEffectVec(zs, stabilizerZPOVM) # for LindbladTermSPAMVec constructor
+            else:
+                ideal_purevec = ideal_purevec[:,0] # for LindbladTermSPAMVec constructor
+
             errgen = _gt.spam_error_generator(Evec, ideal_spamvec, basis)
             new_effects.append( (lbl, _sv.LindbladTermSPAMVec.from_error_generator(
-                ideal_purevec[:,0], errgen, nonham_diagonal_only=True)) )
-
+                ideal_purevec, errgen, nonham_diagonal_only=True, termtype=typ)) )
+        
         #Always return unconstrained?? TODO FUTURE
         return UnconstrainedPOVM( new_effects )
 

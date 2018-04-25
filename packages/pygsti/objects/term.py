@@ -43,16 +43,27 @@ def embed_term(term, stateSpaceLabels, targetLabels, basisdim=None):
     """ TODO docstring - converts a term's gate operators to embedded gate ops"""
     from . import gate as _gate
     mode="unitary" # not an argument currently, since there's no reason this should be "superop"
-    ret = RankOneTerm(term.coeff, None, None)
-    ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
-                    for op in term.pre_ops ]
-    ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
-                    for op in term.post_ops ]
+    ret = RankOneTerm(term.coeff, None, None, term.typ)
+    if term.typ == "dense":
+        ret.pre_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
+                        for op in term.pre_ops ]
+        ret.post_ops = [ _gate.EmbeddedGateMap(stateSpaceLabels, targetLabels, op, basisdim, mode)
+                        for op in term.post_ops ]
+        
+    elif term.typ == "clifford":
+        ret.pre_ops = [ _gate.EmbeddedCliffordGate(stateSpaceLabels, targetLabels, op)
+                        for op in term.pre_ops ]
+        ret.post_ops = [ _gate.EmbeddedCliffordGate(stateSpaceLabels, targetLabels, op)
+                        for op in term.post_ops ]
+        
+    else:
+        raise ValueError("Unrecognized term type: %s" % term.typ)
+
     return ret
 
 
 class RankOneTerm(object):
-    def __init__(self, coeff, pre_op, post_op):
+    def __init__(self, coeff, pre_op, post_op, typ="dense"):
         """ TODO docstring
         NOTE: the post_ops hold the *adjoints* of the actual post-rho-operators, so that
         evolving a bra with the post_ops can be accomplished by flipping the bra -> ket and
@@ -65,19 +76,32 @@ class RankOneTerm(object):
         self.coeff = coeff # potentially a Polynomial
         self.pre_ops = [] # list of ops to perform - in order of operation to a ket
         self.post_ops = [] # list of ops to perform - in order of operation to a bra
+        self.typ = typ
         if pre_op is not None:
             if not isinstance(pre_op,_gsm.GateSetMember):
                 try:
-                    pre_op = _gate.StaticGate(pre_op) #default to static gates
+                    if typ == "dense":
+                        pre_op = _gate.StaticGate(pre_op)
+                    elif typ == "clifford":
+                        pre_op = _gate.CliffordGate(pre_op)
+                    else: assert(False), "Invalid `typ` argument: %s" % typ
                 except ValueError: # raised when size/shape is wrong
-                    pre_op = _spamvec.StaticSPAMVec(pre_op) # ... or spam vecs
+                    if typ == "dense":
+                        pre_op = _spamvec.StaticSPAMVec(pre_op) # ... or spam vecs
+                    else: assert(False), "No default vector for typ=%s" % typ
             self.pre_ops.append(pre_op)
         if post_op is not None:
             if not isinstance(post_op,_gsm.GateSetMember):
                 try:
-                    post_op = _gate.StaticGate(post_op) #default to static gates
+                    if typ == "dense":
+                        post_op = _gate.StaticGate(post_op)
+                    elif typ == "clifford":
+                        post_op = _gate.CliffordGate(post_op)
+                    else: assert(False), "Invalid `typ` argument: %s" % typ
                 except ValueError: # raised when size/shape is wrong
-                    post_op = _spamvec.StaticSPAMVec(post_op) # ... or spam vecs
+                    if typ == "dense":
+                        post_op = _spamvec.StaticSPAMVec(post_op) # ... or spam vecs
+                    else: assert(False), "No default vector for typ=%s" % typ
             self.post_ops.append(post_op)
 
     def __mul__(self,x):
@@ -109,6 +133,8 @@ class RankOneTerm(object):
         -------
         RankOneTerm
         """
+        if self.typ != "dense":
+            raise NotImplementedError("Term collapse for types other than 'dense' are not implemented yet!")
         
         if len(self.pre_ops) >= 1:
             pre = self.pre_ops[0] #.to_matrix() FUTURE??
@@ -137,7 +163,10 @@ class RankOneTerm(object):
         -------
         RankOneTerm
         """
-        
+
+        if self.typ != "dense":
+            raise NotImplementedError("Term collapse_vec for types other than 'dense' are not implemented yet!")
+
         if len(self.pre_ops) >= 1:
             pre = self.pre_ops[0].toarray() # first op is a SPAMVec
             for B in self.pre_ops[1:]: # and the rest are Gates 
@@ -156,7 +185,7 @@ class RankOneTerm(object):
     def copy(self):
         coeff = self.coeff if isinstance(self.coeff, _numbers.Number) \
                 else self.coeff.copy()
-        copy_of_me = RankOneTerm(coeff, None, None)
+        copy_of_me = RankOneTerm(coeff, None, None, self.typ)
         copy_of_me.pre_ops = self.pre_ops[:]
         copy_of_me.post_ops = self.post_ops[:]
         return copy_of_me

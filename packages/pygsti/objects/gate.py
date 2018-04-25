@@ -172,7 +172,7 @@ def convert(gate, toType, basis, extra=None):
     gate : Gate
         Gate to convert
 
-    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+Sterms", "clifford"}
+    toType : {"full", "TP", "CPTP", "H+S", "S", "static", "GLND", "H+S terms", "clifford"}
         The type of parameterizaton to convert to.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -182,7 +182,7 @@ def convert(gate, toType, basis, extra=None):
 
     extra : object, optional
         Additional information for conversion.  An ideal unitary
-        operation in "H+Sterms" case.
+        operation in "H+S terms" case.
 
     Returns
     -------
@@ -255,8 +255,33 @@ def convert(gate, toType, basis, extra=None):
         else:
             return StaticGate( gate )
 
-    elif toType == "H+Sterms":
-        if isinstance(gate, LindbladTermGate):
+    elif toType in ("H+S terms","H+S clifford terms"):
+        typ = "dense" if toType == "H+S terms" else "clifford"
+        if isinstance(gate, LindbladTermGate) and gate.termtype == typ:
+            return gate #no conversion necessary
+
+        if extra is None:
+            gate_std = _bt.change_basis(gate, basis, 'std')
+            ideal_unitary = _gt.process_mx_to_unitary(gate_std)
+        else:
+            ideal_unitary = extra
+        
+        target_gate = _bt.change_basis( _gt.unitary_to_process_mx(ideal_unitary), 'std', basis)
+        errgen = _gt.error_generator(gate, target_gate, basis, typ='logGTi')
+        return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
+                                                     nonham_diagonal_only=True,
+                                                     termtype=typ)
+
+    elif toType == "clifford":
+        if isinstance(gate, CliffordGate):
+            return gate #no conversion necessary
+        
+        # assume gate represents a unitary op (otherwise
+        #  would need to change GateSet dim, which isn't allowed)
+        return CliffordGate(gate)
+
+    elif toType == "H+S clifford terms":
+        if isinstance(gate, LindbladTermGate) and gate.termtype == "clifford":
             return gate #no conversion necessary
 
         if extra is None:
@@ -270,20 +295,6 @@ def convert(gate, toType, basis, extra=None):
         return LindbladTermGate.from_error_generator(ideal_unitary, errgen,
                                                      nonham_diagonal_only=True)
 
-    elif toType == "clifford":
-        if isinstance(gate, CliffordGate):
-            return gate #no conversion necessary
-
-        #OLD
-        #if isinstance(gate,GateMatrix) and _np.iscomplexobj(gate.base): # UNITARY GATE?
-        #    unitary = gate.base
-        #else:
-        #    gate_std = _bt.change_basis(gate, basis, 'std')
-        #    unitary = _gt.process_mx_to_unitary(gate_std)
-        
-        unitary = gate.base # assume gate represents a unitary op (otherwise
-                      #would need to change GateSet dim, which isn't allowed)
-        return CliffordGate(unitary)
 
     else:
         raise ValueError("Invalid toType argument: %s" % toType)
@@ -6077,7 +6088,16 @@ class CliffordGate(Gate):
         state_s, state_p = state # should be output of StabilizerState.toarray()
         return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
                                                         state_s,state_p)
+
     
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        # Note: cliffords are unitary, so adjoint == inverse
+        state_s, state_p = state # should be output of StabilizerState.toarray()
+        invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
+        return _symp.apply_clifford_to_stabilizer_state(invs, invp,
+                                                        state_s,state_p)
+
     
     def num_params(self):
         """
@@ -6539,7 +6559,7 @@ class LindbladTermGate(TermGate):
 
     @classmethod
     def from_error_generator(cls, baseunitary, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
-                             nonham_diagonal_only=False, truncate=True, mxBasis="pp"):
+                             nonham_diagonal_only=False, truncate=True, mxBasis="pp", termtype="dense"):
         # This looks like a from_errgen constructor; we want a from_rates constructor that
         # takes a dict(?) of rate coeffs (0 by default) associated with lindblad terms (ham_i terms and other_ij terms...)
         # --> add same construction methods to other lindblad gates, which currently just have "from_errgen"-type __init__ functions?
@@ -6623,14 +6643,16 @@ class LindbladTermGate(TermGate):
             print(k,":")
             print(v)
         return cls.from_lindblad_terms(baseunitary, Ltermdict, basisdict,
-                                       cptp, nonham_diagonal_only, truncate)
+                                       cptp, nonham_diagonal_only, truncate,
+                                       termtype)
 
 
 
         
     @classmethod
     def from_lindblad_terms(cls, baseunitary, Ltermdict, basisdict=None,
-                            cptp=True, nonham_diagonal_only=False, truncate=True):
+                            cptp=True, nonham_diagonal_only=False,
+                            truncate=True, termtype="dense"):
         """
         TODO: docstring
         Ltermdict keys are (termType, basisLabel(s)); values are floating point coeffs (error rates)
@@ -6639,6 +6661,9 @@ class LindbladTermGate(TermGate):
          -- maybe let keys be tuples of (basisname, state_space_label) e.g. (('X','Q1'),('Y','Q4')) -- and maybe allow ('XY','Q1','Q4')
                  format when can assume single-letter labels.
         """
+        tt = termtype # shorthand - used to construct RankOneTerm objects below,
+                      # as we expect `basisdict` will contain *dense* basis
+                      # matrices (maybe change in FUTURE?)
 
         #Enumerate the basis elements used for Hamiltonian and Stochasitic
         # error terms (separately)
@@ -6761,8 +6786,8 @@ class LindbladTermGate(TermGate):
             termType = termLbl[0]
             if termType == "H": # Hamiltonian
                 k = hamBasisLabels[termLbl[1]] #index of parameter
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT) )
-                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): -1j} ), basisdict[termLbl[1]], IDENT, tt) )
+                Lterms.append( _term.RankOneTerm(_Polynomial({(k,): +1j} ), IDENT, basisdict[termLbl[1]].conjugate().T, tt) )
                 print("DB: H term w/index %d= " % k, " len=",len(Lterms))
                 #print("  coeff: ", list(Lterms[-1].coeff.keys()) )
                 #print("  coeff: ", list(Lterms[-2].coeff.keys()) )
@@ -6777,9 +6802,9 @@ class LindbladTermGate(TermGate):
 
                     Lm_dag = Lm.conjugate().T # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
                     Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm) ) )
-                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT ) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw:  1.0} ), Ln, Lm_dag, tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), IDENT, _np.dot(Ln_dag,Lm), tt) )
+                    Lterms.append( _term.RankOneTerm(_Polynomial({(k,)*pw: -0.5} ), _np.dot(Lm_dag,Ln), IDENT, tt) )
                 else:
                     i = otherBasisLabels[termLbl[1]] #index of row in "other" coefficient matrix
                     j = otherBasisLabels[termLbl[2]] #index of col in "other" coefficient matrix
@@ -6810,9 +6835,9 @@ class LindbladTermGate(TermGate):
 
                     base_poly = _Polynomial(polyTerms)
                     Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm) )
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm)) ) # adjoint(_np.dot(Lm_dag,Ln))
-                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT ) )
+                    Lterms.append( _term.RankOneTerm(1.0*base_poly, Ln, Lm, tt) )
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, IDENT, _np.dot(Ln_dag,Lm), tt) ) # adjoint(_np.dot(Lm_dag,Ln))
+                    Lterms.append( _term.RankOneTerm(-0.5*base_poly, _np.dot(Lm_dag,Ln), IDENT, tt ) )
                     print("DB: S term w/index terms= ", polyTerms, " len=",len(Lterms))
                     print("  coeff: ", list(Lterms[-1].coeff.keys()) )
                     print("  coeff: ", list(Lterms[-2].coeff.keys()) )
@@ -6828,10 +6853,11 @@ class LindbladTermGate(TermGate):
             print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
             print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
             print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-        return cls(baseunitary, params, Lterms, cptp, nonham_diagonal_only)
+        return cls(baseunitary, params, Lterms, cptp, nonham_diagonal_only, tt)
 
     
-    def __init__(self, baseunitary=None, initial_paramvals=None, Lterms=None, cptp=True, nonham_diagonal_only=False):
+    def __init__(self, baseunitary=None, initial_paramvals=None, Lterms=None,
+                 cptp=True, nonham_diagonal_only=False, termtype="dense"):
         """
         Initialize a LindbladTermGateBase object.
         TODO: docstring
@@ -6846,7 +6872,13 @@ class LindbladTermGate(TermGate):
             except:
                 baseunitary = GateMatrix.convert_to_matrix(baseunitary)
                 dim = baseunitary.shape[0] # otherwise try to treat as array
-        
+
+            # automatically "up-convert" gate to CliffordGate if needed
+            if termtype == "clifford" and not isinstance(
+                    baseunitary, (CliffordGate, EmbeddedCliffordGate)):
+                baseunitary = CliffordGate(baseunitary) 
+                
+        self.termtype = termtype
         self.cptp = cptp
         self.nonham_diagonal_only = nonham_diagonal_only
         self.paramvals = _np.array(initial_paramvals,'d')
@@ -6893,7 +6925,7 @@ class LindbladTermGate(TermGate):
     def get_order_terms(self, order):
         if order not in self.terms:
             assert(self.gpindices is not None),"LindbladTermGate must be added to a GateSet before use!"
-            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary)
+            postTerm = _term.RankOneTerm(_Polynomial({(): 1.0}), self.baseunitary, self.baseunitary, self.termtype)
             loc_terms = _term.exp_terms(self.Lterms, [order], postTerm)[order]
             #loc_terms = [ t.collapse() for t in loc_terms ] # collapse terms for speed
             self.terms[order] = self._compose_poly_indices(loc_terms)

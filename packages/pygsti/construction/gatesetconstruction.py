@@ -1084,64 +1084,81 @@ def build_alias_gateset(gs_primitives, alias_dict):
 def build_nqubit_gateset(nQubits, gatedict, availability=None,
                          parameterization='static', sim_type="dmmap",
                          on_construction_error='raise'):
-    """ TODO: docstring """
+    """ TODO: docstring - creates a gateset from scratch by embedding the *same* gate from `gatedict` 
+    as requested and creating a perfect 0-prep and z-basis POVM"""
     
     if availability is None: availability = {}
 
-    if sim_type.startswith("dm"):
+    if sim_type.startswith("dm") or sim_type.startswith("termorder") \
+       or sim_type.startswith("ctermorder"):
         basis1Q = _Basis("pp",2)
         v0 = basis_build_vector("0", basis1Q)
         v1 = basis_build_vector("1", basis1Q)
     else:
+        basis1Q = None
         v0 = _np.array([[1],[0]],complex)
         v1 = _np.array([[0],[1]],complex)
 
-    if parameterization == "full":
-        PrepVec = _spamvec.FullyParameterizedSPAMVec
-        EVec = _spamvec.FullyParameterizedSPAMVec
-        POVM = _povm.UnconstrainedPOVM
-        Gate = _gate.FullyParameterizedGate
-    elif parameterization == "TP":
-        PrepVec = _spamvec.TPParameterizedSPAMVec
-        EVec = _spamvec.FullyParameterizedSPAMVec
-        POVM = _povm.UnconstrainedPOVM
-        Gate = _gate.FullyParameterizedGate
-    elif parameterization == "static":
-        PrepVec = _spamvec.StaticSPAMVec
-        EVec = _spamvec.StaticSPAMVec
-        POVM = _povm.UnconstrainedPOVM
-        Gate = _gate.StaticGate
-    elif parameterization == "clifford":
-        PrepVec = _spamvec.StabilizerSPAMVec
-        EVec = None
-        POVM = _povm.StabilizerZPOVM
-        Gate = _gate.CliffordGate
-        assert(sim_type == 'clifford'), "clifford parameterization only works with clifford simulation"
+    #OLD - now consolidate by using X.convert(...)
+    #if parameterization == "full":
+    #    PrepVec = _spamvec.FullyParameterizedSPAMVec
+    #    EVec = _spamvec.FullyParameterizedSPAMVec
+    #    POVM = _povm.UnconstrainedPOVM
+    #    Gate = _gate.FullyParameterizedGate
+    #elif parameterization == "TP":
+    #    PrepVec = _spamvec.TPParameterizedSPAMVec
+    #    EVec = _spamvec.FullyParameterizedSPAMVec
+    #    POVM = _povm.UnconstrainedPOVM
+    #    Gate = _gate.FullyParameterizedGate
+    #elif parameterization == "static":
+    #    PrepVec = _spamvec.StaticSPAMVec
+    #    EVec = _spamvec.StaticSPAMVec
+    #    POVM = _povm.UnconstrainedPOVM
+    #    Gate = _gate.StaticGate
+    #elif parameterization == "clifford":
+    #    PrepVec = _spamvec.StabilizerSPAMVec
+    #    EVec = None
+    #    POVM = _povm.StabilizerZPOVM
+    #    Gate = _gate.CliffordGate
+    #    assert(sim_type == 'clifford'), "clifford parameterization only works with clifford simulation"
+    #
+    #    
+    #
+    ## elif parameterization == "CPTP": TODO
+    ## elif parameterization == "H+S": TODO
+    ##More??
+    #else:
+    #    raise ValueError("Invalid parameterization: %s" % parameterization)
 
-    # elif parameterization == "CPTP": TODO
-    # elif parameterization == "H+S": TODO
-    #More??
-    else:
-        raise ValueError("Invalid parameterization: %s" % parameterization)
-
-    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford"
-                          sim_type = sim_type)              # "dmmatrix", "dmmap", "svmatrix", "svmap", "clifford"
+    gs = _gateset.GateSet(default_param = parameterization, # "full", "TP" or "static", "clifford", ...
+                          sim_type = sim_type)              # "dmmatrix", "dmmap", "svmatrix", "svmap", "clifford", "termorder:X"
     gs.stateSpaceLabels = _ld.StateSpaceLabels(tuple(range(nQubits)))
+
+    #Set "sub-type" as in GateSet.set_all_parameterizations
+    typ = parameterization
+    povmtyp = rtyp = ityp = "TP" if typ in ("CPTP","H+S","S") else typ
 
     if parameterization == "clifford":
         # Clifford object construction is different enough we do it separately
-        gs.preps['rho0'] = PrepVec(nQubits) # creates all0-state by default
-        gs.povms['Mdefault'] = POVM(nQubits)
+        gs.preps['rho0'] = _spamvec.StabilizerSPAMVec(nQubits) # creates all-0 state by default
+        gs.povms['Mdefault'] = _povm.StabilizerZPOVM(nQubits)
     else:
-        gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep',
-            [PrepVec(v0) for i in range(nQubits)] )
-        gs.povms['Mdefault'] = _povm.TensorProdPOVM( 
-            [ POVM([('0',EVec(v0)),('1',EVec(v1))] ) for i in range(nQubits) ] )
+        prep_factors = []; povm_factors = []
+        for i in range(nQubits):
+            prep_factors.append(
+                _spamvec.convert(_spamvec.StaticSPAMVec(v0), rtyp, basis1Q) )
+            povm_factors.append(
+                _povm.convert(_povm.UnconstrainedPOVM( ([
+                    ('0',_spamvec.StaticSPAMVec(v0)),
+                    ('1',_spamvec.StaticSPAMVec(v1))]) ), povmtyp, basis1Q) )
+        
+        gs.preps['rho0'] = _spamvec.TensorProdSPAMVec('prep', prep_factors)
+        gs.povms['Mdefault'] = _povm.TensorProdPOVM(povm_factors)
 
     for gateName, gate in gatedict.items():
         if not isinstance(gate, _gate.Gate):
             try:
-                gate = Gate(gate)
+                gate = _gate.convert(_gate.StaticGate(gate), typ, "pp")
             except Exception as e:
                 if on_construction_error == 'warn':
                     _warnings.warn("Failed to create %s gate %s. Dropping it." %
@@ -1149,7 +1166,9 @@ def build_nqubit_gateset(nQubits, gatedict, availability=None,
                 if on_construction_error in ('warn','ignore'): continue
                 else: raise e
 
-        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if sim_type.startswith("dm") \
+        dm_evolution = sim_type.startswith("dm") or sim_type.startswith("termorder") \
+                       or sim_type.startswith("ctermorder")
+        gate_nQubits = int(round(_np.log2(gate.dim)/2)) if dm_evolution \
                        else int(round(_np.log2(gate.dim)))
         
         availList = availability.get(gateName, 'all-permutations')
@@ -1226,11 +1245,12 @@ def build_nqubit_standard_gateset(nQubits, gate_names, nonstd_gate_unitaries=Non
             
         U = nonstd_gate_unitaries.get(name, std_unitaries.get(name,None))
         if U is None: raise KeyError("'%s' gate unitary needs to be provided by `nonstd_gate_unitaries` arg" % name)
-        if sim_type in ("dmmap","dmmatrix"):
+        if sim_type in ("dmmap","dmmatrix") or sim_type.startswith("termorder") \
+           or sim_type.startswith("ctermorder"):
             gatedict[name] = _bt.change_basis(_gt.unitary_to_process_mx(U), "std", "pp")
         else: #we just store the unitaries
             gatedict[name] = U
-            
+
     return build_nqubit_gateset(nQubits,gatedict,availability,parameterization,
                                 sim_type,on_construction_error)
 
