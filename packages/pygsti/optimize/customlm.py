@@ -119,6 +119,15 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
         if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
         Jac = jac_fn(x)
+
+        ##DEBUG: use finite difference to compute jacobian
+        #eps = 1e-7
+        #Jac = _np.empty((len(f),len(x)),'d')
+        #for i in range(len(x)):
+        #    x_plus_dx = x.copy()
+        #    x_plus_dx[i] += eps
+        #    Jac[:,i] = (obj_fn(x_plus_dx)-f)/eps
+        
         # DB: from ..tools import matrixtools as _mt
         # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
         if profiler: profiler.mem_check("custom_leastsq: after jacobian:" 
@@ -196,8 +205,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
 
                 if norm_dx > (norm_x+rel_xtol)/(MACH_PRECISION**2):
                     msg = "(near-)singular linear system"; break
-                
+
                 new_f = obj_fn(new_x)
+                # DB: from ..tools import matrixtools as _mt
+                # DB: print("DB XNEW (%s)=" % str(new_x.shape)); print(new_x)
+                # DB: print("DB FNEW (%s)=" % str(new_f.shape)); print(new_f); assert(False)
+                
                 if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
                 norm_new_f = _np.dot(new_f,new_f) # _np.linalg.norm(new_f)**2
                 if not _np.isfinite(norm_new_f): # avoid infinite loop...
