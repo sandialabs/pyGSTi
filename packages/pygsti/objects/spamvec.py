@@ -1897,7 +1897,8 @@ class TensorProdSPAMVec(SPAMVec):
             # (SPAMVec) pre & post op, which can be formed into the new terms'
             # TensorProdSPAMVec ops.
             # - DON'T collapse stabilizer states & clifford ops - can't for POVMs
-            collapsible = bool(factor_lists[0][0].typ == "dense") # assume all terms are the same
+            collapsible = bool(len(factor_lists) == 0 or len(factor_lists[0]) == 0
+                               or factor_lists[0][0].typ == "dense") # assume all terms are the same
             if collapsible:
                 factor_lists = [ [t.collapse_vec() for t in fterms] for fterms in factor_lists]
                 
@@ -1914,7 +1915,7 @@ class TensorProdSPAMVec(SPAMVec):
 
                 if not collapsible: # then may need to add more ops.  Assume factor ops are clifford gates
                     def iop(nq): # identity symplectic op for missing factors
-                        return _np.identity((2*nq,2*nq),int), _np.zeros(2*nq,int)
+                        return _np.identity(2*nq,int), _np.zeros(2*nq,int)
                     
                     mx = max([len(f.pre_ops) for f in factors])
                     for i in range(1,mx): # for each "layer" of additional terms
@@ -1991,8 +1992,9 @@ class TensorProdSPAMVec(SPAMVec):
                 povm.from_vector( v[local_inds] )
 
         #No need to construct anything except fast-kron array, as
-        # - no dense matrices are stored
-        self._fill_fast_kron()
+        # no dense matrices are stored
+        if self._fast_kron_array is not None: # if it's in use...
+            self._fill_fast_kron()
 
 
     def deriv_wrt_params(self, wrtFilter=None):
@@ -2357,7 +2359,13 @@ class LindbladTermSPAMVec(TermSPAMVec):
                 return_generators=False, other_diagonal_only=nonham_diagonal_only,
                 sparse=sparse)
         print("DB: ham projections = ",hamC)
-        print("DB: sto projections = ",otherC)        
+        print("DB: sto projections = ",otherC)
+
+        # Make None => length-0 arrays so iteration code works below (when basis is None)
+        if hamC is None: hamC = _np.empty(0,'d') 
+        if otherC is None:
+            otherC = _np.empty(0,'d') if nonham_diagonal_only \
+                     else _np.empty((0,0),'d')
 
         Ltermdict = _collections.OrderedDict()
         basisdict = _collections.OrderedDict(); nextLbl = 0

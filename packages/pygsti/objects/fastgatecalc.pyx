@@ -215,7 +215,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
     #print("DB partition = ","listlens = ",[len(fl) for fl in factor_lists])
 
     cdef int i,j
-    cdef int fastmode = 1 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
+    cdef int fastmode = 0 # HARDCODED - but it has been checked that non-fast-mode agrees w/fastmode
     cdef unordered_map[int, complex].iterator it1, it2, itk
     cdef unordered_map[int, complex] result, coeff, coeff2, curCoeff
     cdef double complex scale, val, newval, pLeft, pRight, p
@@ -229,6 +229,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
 
     for i in range(nFactorLists):
         factorListLens[i] = len(factor_lists[i])
+        if factorListLens[i] == 0: return # nothing to loop over!
     
     cdef int* b = <int*>malloc(nFactorLists * sizeof(int))
     for i in range(nFactorLists): b[i] = 0
@@ -238,6 +239,7 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
     #    print "nLists = ", nFactorLists
     #    for i in range(nFactorLists):
     #        print factorListLens[i]
+    assert(nFactorLists > 0), "Number of factor lists must be > 0!"
     
     if fastmode: # filter factor_lists to matrix-compose all length-1 lists
 
@@ -382,10 +384,19 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 for j in range(len(factor.pre_ops)):
                     rhoVec = factor.pre_ops[j].acton(rhoVec)
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-            EVec = factor.post_ops[0].toarray() # TODO USE scratch here
-            for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
-                EVec = factor.post_ops[j].acton(EVec)
-            pLeft = np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
+
+            if stabilizer_evo == 0:
+                EVec = factor.post_ops[0].toarray() # TODO USE scratch here
+                for j in range(1,len(factor.post_ops)): # evaluate effect term to arrive at final EVec
+                    EVec = factor.post_ops[j].acton(EVec)
+                pLeft = np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
+            else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+                EVec = factor.post_ops[0]
+                for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
+                    rhoVec = factor.post_ops[j].adjoint_acton(rhoVec)
+                p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
+                pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+
                 
             #pRight / "post" sim
             factor = factor_lists[0][b[0]] # 0th-factor = rhoVec
@@ -397,10 +408,18 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 for j in range(len(factor.post_ops)):
                     rhoVec = factor.post_ops[j].acton(rhoVec)
             factor = factor_lists[last_index][b[last_index]] # the last factor (an Evec)
-            EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
-            for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
-                EVec = factor.pre_ops[j].acton(EVec)
-            pRight = np.conjugate(np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
+
+            if stabilizer_evo == 0:
+                EVec = factor.pre_ops[0].toarray() # TODO USE scratch here
+                for j in range(1,len(factor.pre_ops)): # evaluate effect term to arrive at final EVec
+                    EVec = factor.pre_ops[j].acton(EVec)
+                pRight = np.conjugate(np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
+            else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+                EVec = factor.pre_ops[0]
+                for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
+                    rhoVec = factor.pre_ops[j].adjoint_acton(rhoVec)
+                p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
+                pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
 
             #Add result to appropriate poly
             result = coeff  # use a reference?

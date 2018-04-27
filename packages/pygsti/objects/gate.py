@@ -3382,7 +3382,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         errgen = _gt.error_generator(gateMatrix, unitaryPostfactor, mxBasis, "logGTi")
         GateMatrix.__init__(self, self.unitary_postfactor) #sets self.dim
         LindbladBase.__init__(self, errgen, ham_basis, nonham_basis, cptp,
-                              nonham_diagonal_only, truncate, mxBasis)
+                              nonham_diagonal_only, truncate, mxBasis) # like from_error_generator
 
         assert(not self.sparse), "LindbladParameterizedGate cannot be sparse - use LindbladParameterizedGateMap"
         assert(not _np.array_equal(gateMatrix,unitaryPostfactor) or
@@ -3727,7 +3727,7 @@ class LindbladParameterizedGate(LindbladBase,GateMatrix):
         -------
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
-        """
+        """    
         if self.base_deriv is None:
             d2 = self.dim
             bsH = self.ham_basis_size
@@ -4042,6 +4042,8 @@ def _dexpSeries(X, dX):
     TERM_TOL = 1e-12
     tr = len(dX.shape) #tensor rank of dX; tr-2 == # of derivative dimensions
     assert( (tr-2) in (1,2)), "Currently, dX can only have 1 or 2 derivative dimensions"
+    #assert( len( (_np.isnan(dX)).nonzero()[0] ) == 0 ) # NaN debugging
+    #assert( len( (_np.isnan(X)).nonzero()[0] ) == 0 ) # NaN debugging
     series = last_commutant = term = dX; i=2
 
     #take d(matrix-exp) using series approximation
@@ -4053,6 +4055,10 @@ def _dexpSeries(X, dX):
             commutant = _np.einsum("ik,kjab->ijab",X,last_commutant) - \
                     _np.einsum("ikab,kj->ijab",last_commutant,X)
         term = 1/_np.math.factorial(i) * commutant
+        #if not _np.isfinite(_np.linalg.norm(term)): break # DEBUG high values -> overflow for nqubit gates
+        #if len( (_np.isnan(term)).nonzero()[0] ) > 0: # NaN debugging
+        #    #WARNING: stopping early b/c of NaNs!!! - usually caused by infs
+        #    break
         series += term #1/_np.math.factorial(i) * commutant
         last_commutant = commutant; i += 1
     return series
@@ -4490,6 +4496,7 @@ class ComposedGate(GateMatrix):
             factorgate_local_inds = _gatesetmember._decompose_gpindices(
                     self.gpindices, gate.gpindices)
             gate.from_vector( v[factorgate_local_inds] )
+        self._construct_matrix()
         self.dirty = True
 
 
@@ -5189,7 +5196,7 @@ class EmbeddedGateMap(GateMap):
             #    print("Can't use special case for some other reason (????)")
             self.acton = self._fast_acton if self.mode == "superop" \
                          else self._fast_acton_complex
-            self.acton = self._slow_adjoint_acton if self.mode == "superop" \
+            self.adjoint_acton = self._slow_adjoint_acton if self.mode == "superop" \
                          else self._fast_adjoint_acton_complex
 
     def __getstate__(self):
@@ -5895,7 +5902,6 @@ class EmbeddedGate(GateMatrix):
             Array of derivatives with shape (dimension^2, num_params)
         """
         # Note: this function exploits knowledge of EmbeddedGateMap internals!!
-
         embedded_deriv = self.embedded_map.embedded_gate.deriv_wrt_params(wrtFilter)
         derivMx = _np.zeros((self.dim**2,self.num_params()),embedded_deriv.dtype)
         M = self.embedded_map.embedded_gate.dim
@@ -6557,6 +6563,8 @@ class LindbladTermGate(TermGate):
 
     # TODO: init & basis specification; maybe breakout an OrderedTermGate base class?
 
+    
+
     @classmethod
     def from_error_generator(cls, baseunitary, errgen, ham_basis="pp", nonham_basis="pp", cptp=True,
                              nonham_diagonal_only=False, truncate=True, mxBasis="pp", termtype="dense"):
@@ -6603,7 +6611,13 @@ class LindbladTermGate(TermGate):
                 return_generators=False, other_diagonal_only=nonham_diagonal_only,
                 sparse=sparse)
         print("DB: ham projections = ",hamC)
-        print("DB: sto projections = ",otherC)        
+        print("DB: sto projections = ",otherC)
+
+        # Make None => length-0 arrays so iteration code works below (when basis is None)
+        if hamC is None: hamC = _np.empty(0,'d') 
+        if otherC is None:
+            otherC = _np.empty(0,'d') if nonham_diagonal_only \
+                     else _np.empty((0,0),'d')
 
         Ltermdict = _collections.OrderedDict()
         basisdict = _collections.OrderedDict(); nextLbl = 0
@@ -6617,7 +6631,7 @@ class LindbladTermGate(TermGate):
         
         ham_mxs = ham_basis.get_composite_matrices()
         assert(len(ham_mxs[1:]) == len(hamC))
-
+        
         for coeff, bmx in zip(hamC,ham_mxs[1:]): # skip identity
             Ltermdict[('H',nextLbl)] = coeff
             basisdict[nextLbl] = bmx

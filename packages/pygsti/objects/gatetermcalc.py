@@ -215,17 +215,17 @@ class GateTermCalc(GateCalc):
         global DEBUG_FCOUNT
         db_part_cnt = 0
         db_factor_cnt = 0
-        #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+        print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
 
         #OLD
         #pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
         #pRight = _np.empty(len(Es),complex) #lots of allocs in inner loop
 
-        fastmode = True
+        fastmode = False #HERE
         
         prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(self.max_order+1):
-            #print("DB: pr_as_poly order=",order)
+            print("DB: pr_as_poly order=",order)
             db_npartitions = 0
             for p in _lt.partition_into(order, len(gatestring)+2): # +2 for SPAM bookends
                 #factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
@@ -237,7 +237,7 @@ class GateTermCalc(GateCalc):
                 
                 if any([len(fl)==0 for fl in factor_lists]): continue
 
-                #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
+                print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
                 rhoLeft = rhoRight = rho
                 if fastmode: # filter factor_lists to matrix-compose all length-1 lists
                     leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
@@ -326,10 +326,10 @@ class GateTermCalc(GateCalc):
                         res = coeff.mult_scalar( (pLeft * pRight) )
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                        print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
                         if prps[Ei] is None:  prps[Ei]  = res
                         else:                prps[Ei] += res
-                        #print("DB running prps[",Ei,"] =",prps[Ei])
+                        print("DB running prps[",Ei,"] =",prps[Ei])
                     
                 db_nfactors = [len(l) for l in factor_lists]
                 db_totfactors = _np.product(db_nfactors)
@@ -384,10 +384,19 @@ class GateTermCalc(GateCalc):
             rhoVec = f.acton(rhoVec)
         for f in _itertools.chain(*[f.pre_ops for f in complete_factors[1:-1]]):
             rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
-        EVec = complete_factors[-1].post_ops[0].toarray() # TODO USE scratch here
-        for f in complete_factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
-            EVec = f.acton(EVec)
-        return _np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
+            
+        if self.term_op_clifford_evolution == False:
+            EVec = complete_factors[-1].post_ops[0].toarray() # TODO USE scratch here
+            for f in complete_factors[-1].post_ops[1:]: # evaluate effect term to arrive at final EVec
+                EVec = f.acton(EVec)
+            return _np.vdot(EVec,rhoVec) # complex amplitudes, *not* real probabilities
+        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+            for f in reversed(complete_factors[-1].post_ops[1:]):
+                rhoVec = f.adjoint_acton(rhoVec)
+            EVec = complete_factors[-1].post_ops[0]
+            return _np.sqrt( self._stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+                # sqrt b/c pLeft is just *amplitude*
+
     
     def unitary_sim_post(self, complete_factors, comm, memLimit):
         rhoVec = complete_factors[0].post_ops[0].toarray()
@@ -395,12 +404,21 @@ class GateTermCalc(GateCalc):
             rhoVec = f.acton(rhoVec)
         for f in _itertools.chain(*[f.post_ops for f in complete_factors[1:-1]]):
             rhoVec = f.acton(rhoVec) # LEXICOGRAPHICAL VS MATRIX ORDER
-        EVec = complete_factors[-1].pre_ops[0].toarray() # TODO USE scratch here
-        for f in complete_factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
-            EVec = f.acton(EVec)
-        return _np.conjugate(_np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
-            # conjugate(... to map what we do: "acting with adjoint ops on a ket"
-            # to what we want to return:   "acting with opt in rev order on a bra"
+            
+        if self.term_op_clifford_evolution == False:
+            EVec = complete_factors[-1].pre_ops[0].toarray() # TODO USE scratch here
+            for f in complete_factors[-1].pre_ops[1:]: # evaluate effect term to arrive at final EVec
+                EVec = f.acton(EVec)
+            return _np.conjugate(_np.vdot(EVec,rhoVec)) # complex amplitudes, *not* real probabilities
+                # conjugate(... to map what we do: "acting with adjoint ops on a ket"
+                # to what we want to return:   "acting with opt in rev order on a bra"
+        else: # CLIFFORD - can't propagate effects, but can act w/adjoint of post_ops in reverse order...
+            for f in reversed(complete_factors[-1].pre_ops[1:]):
+                rhoVec = f.adjoint_acton(rhoVec)
+            EVec = complete_factors[-1].pre_ops[0]
+            return _np.sqrt( self._stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+                # sqrt b/c pRight is just *amplitude*
+
         
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):
@@ -595,7 +613,7 @@ class GateTermCalc(GateCalc):
 #        iParamToFinal = { i: st+ii for ii,i in enumerate(my_param_indices) }
 #
 #        orig_vec = self.to_vector().copy()
-#        for i in range(self.Np): #HERE range(20): #
+#        for i in range(self.Np): # range(20): #
 #            #print("dprobs cache %d of %d" % (i,self.Np))
 #            if i in iParamToFinal:
 #                iFinal = iParamToFinal[i]

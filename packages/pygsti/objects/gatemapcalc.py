@@ -317,7 +317,8 @@ class GateMapCalc(GateCalc):
                 rho_cache = scratch #to avoid recomputation
                 
             Escratch = _np.empty(dim,typ) # memory for E.toarray() if it wants it
-            rho = rhoVec.toarray(Escratch) #rho can use same scratch space (enables fastkron)
+            rho = rhoVec.toarray(Escratch).copy() #rho can use same scratch space (enables fastkron)
+                                                  # copy b/c use Escratch again (below)
         else: # CLIFFORD case
             rho = rhoVec.toarray()
             if scratch is None:
