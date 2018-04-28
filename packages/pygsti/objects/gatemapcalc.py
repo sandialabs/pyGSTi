@@ -167,7 +167,7 @@ class GateMapCalc(GateCalc):
         elif self.evolution_type == SUPEROP:
             p = float(_np.dot(E,rho))
         else: # CLIFFORD
-            p = self._stabilizer_measurement_prob(rho, E.outcomes)
+            p = _symp.stabilizer_measurement_prob(rho, E.outcomes)
 
         if _np.isnan(p):
             if len(gatestring) < 10:

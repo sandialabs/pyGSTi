@@ -1,0 +1,527 @@
+""" Defines the StabilizerState and StabilizerFrame classes"""
+from __future__ import division, print_function, absolute_import, unicode_literals
+#*****************************************************************
+#    pyGSTi 0.9:  Copyright 2015 Sandia Corporation
+#    This Software is released under the GPL license detailed
+#    in the file "license.txt" in the top-level pyGSTi directory
+#*****************************************************************
+
+import numpy as _np
+import itertools as _itertools
+import functools as _functools
+import collections as _collections
+from ..tools import symplectic as _symp
+from ..tools import matrixmod2 as _mtx
+
+
+# TODO: docstring - for this entire module!
+class StabilizerFrame(object):
+    """ 
+    Encapsulates a stabilizer frame (linear combo of
+    stabilizer states)
+
+    Stores stabilizer elements in the first n, and
+    antistabilizer elements in the latter n *columns* of
+    the "state matrix" (to facilitate composition),
+    and phase vectors & amplitudes in parallel arrays.
+    """
+
+    @classmethod
+    def from_zvals(cls, nqubits=None, zvals=None):
+        if nqubits is None and zvals is None:
+            raise ValueError("Must specify one of `nqubits` or `zvals`")
+
+        if nqubits is None:
+            nqubits = len(zvals)
+            
+        s = _np.fliplr(_np.identity(2*nqubits,int)) # flip b/c stab cols are *first*
+        p = _np.zeros(2*nqubits,int)
+        if zvals:
+            for i,z in enumerate(zvals):
+                p[i] = p[i+n] = 2 if bool(z) else 0
+                  # TODO: check this is right -- (how/need to update the destabilizers?)
+        return cls(s,[p],[1.0])
+
+
+    def __init__(self, state_s, state_ps=None, amps=None):
+        self.n = state_s.shape[0] // 2
+        assert(state_s.shape == (2*self.n,2*self.n))
+
+        self.s = state_s
+        if state_ps is not None:
+            self.ps = [ p for p in state_ps ]
+        else:
+            self.ps = []
+
+        if amps is not None:
+            assert(len(amps) == len(self.ps)), \
+                "Number of amplitudes must match number of phase vectors!"
+            self.a = [ complex(a) for a in amps ]
+        else:
+            self.a = [ 1.0+0j for p in self.ps ] # all == 1.0 by default
+
+        n = self.n
+        self.u = _np.zeros((2*n,2*n),int) # for colsum(...)
+        self.u[n:2*n,0:n] = _np.identity(n,int)
+        
+        self.zblock_start = None # first column of Z-block, set by _rref()
+        self._rref()
+
+
+    def _colsum(self,i,j):
+        """ Col_i = Col_j * Col_i TODO: docstring """
+        n,s = self.n,self.s
+        for p in self.ps:
+            p[i] = (p[i] + p[j] + 2*float(_np.dot(s[:,i].T,_np.dot(self.u,s[:,j])))) % 4
+        for k in range(n):
+            s[k,i] = s[k,j] ^ s[k,i]
+            s[k+n,i] = s[k+n,j] ^ s[k+n,i]
+            #TODO: use _np.bitwise_xor or logical_xor here? -- keep it obvious (&slow) for now...
+        return
+
+    def _colswap(self,i,j):
+        """ Swaps Col_i & Col_j TODO: docstring """
+        temp = self.s[:,i].copy()
+        self.s[:,i] = self.s[:,j]
+        self.s[:,j] = temp
+
+        for p in self.ps:
+            p[i],p[j] = p[j],p[i]
+
+    def _rref(self):
+        """ Update self.s and self.ps to be in reduced/canonical form
+            Based on arXiv: 1210.6646v3 "Efficient Inner-product Algorithm for Stabilizer States" """
+        n = self.n
+
+        #Pass1: form X-block (of *columns*)
+        i = 0 # current *column* (to match ref, but our rep is transposed!)
+        for j in range(n): # current *row*
+            for k in range(i,n): # set k = column with X/Y in j-th position
+                if self.s[j,k] == 1: break # X or Y check
+            else: continue # no k found => next column
+            self._colswap(i,k)
+            for m in range(n):
+                if m != i and self.s[j,m] == 1: # j-th literal of column m(!=i) is X/Y
+                    self._colsum(m,i) 
+            i += 1
+            
+        self.zblock_start = i # first column of Z-block
+
+        #Pass2: form Z-block (of *columns*)
+        for j in range(n): # current *row*
+            for k in range(i,n): # set k = column with Z in j-th position
+                if (self.s[j,k],self.s[j+n,k]) == (0,1): break # Z check
+            else: continue # no k found => next column
+            self._colswap(i,k)
+            for m in range(n):
+                if m != i and self.s[j+n,m] == 1: # j-th literal of column m(!=i) is Z/Y
+                    self._colsum(m,i) 
+            i += 1
+        return
+
+    def _canonical_amplitudes(self, ip, target=None, qs_to_sample=None):
+        """ extracts one or more canonical amplitudes from the
+            ip-th stabilizer state: one if `target` is specified, 
+            otherwise a full set of values for the qubit indices in
+            `qs_to_sample` (which, if it's the empty tuple, means
+            that only one -- most convenient -- amplitude needs to be returned."""
+        self._rref() # ensure we're in reduced row echelon form
+        n = self.n
+        amplitudes = _collections.OrderedDict()
+        if qs_to_sample is not None:
+            remaining = 2**len(qs_to_sample) #number we still need to find
+            amp_samples = _np.nan * _np.ones(2**len(qs_to_sample), complex)
+              # what we'll eventually return - holds amplitudes of all
+              #  variations of qs_to_sample starting from anchor.
+        
+        debug = False # DEBUG
+        
+        # Stage1: go through Z-block columns and find an "anchor" - the first
+        # basis state that is allowed given the Z-block parity constraints.
+        # (In Z-block, cols can have only Z,I literals)
+        if debug: print("CanonicalAmps STAGE1")
+        anchor = _np.zeros(n,int) # "anchor" basis state (zvals), which gets amplitude 1.0 by definition
+        lead = n
+        for i in reversed(range(self.zblock_start,n)): #index of current generator
+            gen_p = self.ps[ip][i] #phase of generator
+            gen_p = (gen_p + 3*int(_np.dot(self.s[:,i].T,_np.dot(self.u,self.s[:,i])) )) % 4 #counts number of Y's => -i's
+            assert(gen_p in (0,2)), "Logic error: phase should be +/- only!"
+            
+            # get positions of Zs
+            zpos = []
+            for j in range(n):
+                if self.s[j+n,i] == 1: zpos.append(j)
+            #OR: zpos = [ j for j in range(n) if self.s[j+n,i] == 1 ]
+
+            # set values of anchor between zpos[0] and lead
+            # (between current leading-Z position and the last iteration's,
+            #  which marks the point at which anchor has been initialized to)
+            fixed1s = 0 # relevant number of 1s fixed by the already-initialized part of 'anchor'
+            target1s = 0 # number of 1s in target state, which we want to check for Z-block compatibility
+            zpos_to_fill = []
+            for j in zpos:
+                if j >= lead:
+                    if anchor[j] == 1: fixed1s += 1
+                else: zpos_to_fill.append(j)
+                if target is not None and target[j] == 1:
+                    target1s += 1
+            assert(len(zpos_to_fill) > 0) # structure of rref Z-block should ensure this
+            parity = gen_p//2
+            eff_parity = (parity - (fixed1s % 2)) % 2 # effective parity for zpos_to_fill
+
+            if debug: # DEBUG
+                print("  Current gen = ",i," phase = ",gen_p," zpos=",zpos," fixed1s=",fixed1s," tofill=",zpos_to_fill,
+                      " eff_parity=",eff_parity, "lead=",lead)
+                print("   -anchor: ",anchor,end='')
+
+            if target is not None and (target1s % 2) != parity:
+                return 0.0+0j # target fails this parity check -> it's amplitude == 0 (OK)
+
+            if eff_parity == 0: # even parity - fill with all 0s
+                pass # BUT already initalized to 0s, so don't need to do anything for anchor
+            else: # odd parity (= 1 or -1) - fill with all 0s except final zpos_to_fill = 1
+                anchor[zpos_to_fill[-1]] = 1 # BUT just need to fill in the final 1
+            lead = zpos_to_fill[0] # update the leading-Z index
+            if debug: print(" ==> ",anchor) #DEBUG
+
+        #Set anchor amplitude to appropriate 1.0/sqrt(2)^s 
+        # (by definition - serves as a reference pt)
+        # Note: 's' equals the minimum number of generators that are *different*
+        # between this state and the basis state we're extracting and ampl for.
+        # Since any/all comp. basis state generators can form all and only the
+        # Z-literal only (Z-block) generators 's' is simplly the number of
+        # X-block generators (= self.zblock_start).
+        s = self.zblock_start
+        anchor_amp = 1/(_np.sqrt(2.0)**s)
+        amplitudes[ tuple(anchor) ] = anchor_amp
+        
+        if qs_to_sample is not None:
+            remaining -= 1
+            nk = len(qs_to_sample)
+            anchor_indx = sum([ anchor[qs_to_sample[k]]*(2**(nk-1-k)) for k in range(nk)])
+            amp_samples[ anchor_indx ] = anchor_amp
+            #print("Anchor index = ",anchor_indx, " for anchor=",anchor, " amp_samples = ",amp_samples)
+
+
+        #STAGE 2b - for sampling a set
+        if qs_to_sample is not None:
+            #If we're trying to sample a set, check if any of the amplitudes
+            # we're looking for are zero by the Z-block checks.  That is,
+            # consider whether anchor with qs_to_sample indices updated
+            # passes or fails each check
+            for i in reversed(range(self.zblock_start,n)): #index of current generator
+                gen_p = self.ps[ip][i] #phase of generator
+                gen_p = (gen_p + 3*int(_np.dot(self.s[:,i].T,_np.dot(self.u,self.s[:,i])) )) % 4 #counts number of Y's => -i's
+                
+                zpos = []
+                for j in range(n):
+                    if self.s[j+n,i] == 1: zpos.append(j)
+    
+                inds = []
+                fixed1s = 0 # number of 1s in target state, which we want to check for Z-block compatibility
+                for j in zpos:
+                    if j in qs_to_sample:
+                        inds.append( qs_to_sample.index(j) ) # "sample" indices in parity check
+                    elif anchor[j] == 1:
+                        fixed1s += 1
+                if len(inds) > 0:
+                    parity = (gen_p//2 - (fixed1s % 2)) % 2 # effective parity
+                    for k,tup in enumerate(_itertools.product(*([[0,1]]*len(qs_to_sample)))):
+                        tup_parity = sum([tup[kk] for kk in inds]) % 2
+                        if tup_parity != parity: # parity among inds is NOT allowed => set ampl to zero
+                            if _np.isnan(amp_samples[k]): remaining -= 1
+                            amp_samples[k] = 0.0  
+
+        if debug: print("CanonicalAmps STAGE2: amps = ", list(amplitudes.items())) # DEBUG
+
+        #Check exit conditions
+        if target is not None and _np.array_equal(anchor, target):
+            return anchor_amp
+        elif qs_to_sample is not None and remaining == 0:
+            return (anchor, amp_samples)
+
+        # Stage2: move through X-block processing existing amplitudes
+        # (or processing only to move toward a target state?)
+
+        def apply_xgen(igen, pgen, zvals_to_acton, ampl):
+            result = _np.array(zvals_to_acton,int); new_amp = -ampl if (pgen//2 == 1) else ampl
+            for j in range(n): # for each element (literal) in generator
+                if self.s[j,igen] == 1: # X or Y
+                    result[j] = 1-result[j] #flip!
+                    # X => a' == a constraint on new/old amplitudes, so nothing to do
+                    # Y => a' == i*a constraint, so:
+                    if self.s[j+n,igen] == 1: # Y
+                        if result[j] == 1: new_amp *= 1j # |0> -> i|1> (but "== 1" b/c result is already flipped)
+                        else: new_amp *= -1j             # |1> -> -i|0> 
+                elif self.s[j+n,igen] == 1: # Z
+                    # Z => a' == -a constraint if basis[j] == |1> (otherwise a == a)
+                    if result[j] == 1: new_amp *= -1
+            return result, new_amp
+        
+        def get_target_ampl(tgt):
+            #DEBUG print("GETTING TARGET!!! ", tgt, " from anchor = ",anchor)
+            #DEBUG print(str(self))
+            #requires just a single pass through X-block
+            zvals = anchor.copy();  amp = anchor_amp #start with anchor state
+            lead = -1
+            for i in range(self.zblock_start): #index of current generator
+                gen_p = self.ps[ip][i] #phase of generator
+                gen_p = (gen_p + 3*int(_np.dot(self.s[:,i].T,_np.dot(self.u,self.s[:,i])) )) % 4 #counts number of Y's => -i's
+                assert(gen_p in (0,2)), "Logic error: phase should be +/- only!"
+                
+                #Get leading flipped qubit (lowest # qubit which will flip when we apply this)
+                for j in range(n):
+                    if self.s[j,i] == 1: # check for X/Y literal in qubit pos j
+                        assert(j > lead) # lead should be strictly increasing as we iterate due to rref structure
+                        lead = j; break
+                else: assert(False),"Should always break loop!"
+                #print("  Current gen = ",i," phase = ",gen_p, " lead=",lead) # DEBUG
+
+                #Check whether we should apply this generator to zvals
+                if zvals[lead] != tgt[lead]:
+                    # then applying this generator is productive - do it!
+                    zvals, amp = apply_xgen(i, gen_p, zvals, amp)
+                    #print(" --> Applying -> result=",zvals, " w/amp=",amp) # DEBUG
+                    
+                    #Check if we've found target
+                    if _np.array_equal(zvals, tgt): return amp
+            raise ValueError("Falied to find amplitude of target: ", tgt)
+                
+        if target is not None:
+            return get_target_ampl(target)
+        elif qs_to_sample is not None:
+            target = anchor.copy()
+            # print("AMP_SAMPLES = ",amp_samples) # DEBUG
+            for k,tup in enumerate(_itertools.product(*([[0,1]]*len(qs_to_sample)))):
+                if _np.isnan(amp_samples[k]):
+                    target[list(qs_to_sample)] = tup
+                    amp_samples[k] = get_target_ampl(target)
+            return (anchor, amp_samples)
+
+        
+        else: #both target and qs_to_sample are None - just get & return as
+              # many amplitudes as we can (for full state readout)
+            
+            num_ampl_added = 1 # just to kick off the loop
+            while(num_ampl_added > 0):
+                num_ampl_added = 0
+                if debug: print("Starting X-block processing loop") # DEBUG
+    
+                for i in range(self.zblock_start): #index of current generator
+                    gen_p = self.ps[ip][i] #phase of generator
+                    gen_p = (gen_p + 3*int(_np.dot(self.s[:,i].T,_np.dot(self.u,self.s[:,i])) )) % 4 #counts number of Y's => -i's
+                    assert(gen_p in (0,2)), "Logic error: phase should be +/- only!"
+        
+                    ##Get positions of qubits which will flip when we apply this
+                    ## constraint to existing amplitudes (usefult to determining if we want to apply it)
+                    #flippos = []
+                    #for j in range(n):
+                    #    if self.s[j,i] == 1: flippos.append(j) # check for X/Y literal in qubit pos j
+    
+                    if debug: print("  Current gen = ",i," phase = ",gen_p) # DEBUG
+        
+                    #Apply this generator to existing amplitudes (always)
+                    existing_amps = list(amplitudes.keys()) # do this b/c loop can mutate amplitudes
+                    for zvals in existing_amps: # for all existing amplitudes
+                        amp = amplitudes[zvals]
+                        result,new_amp = apply_xgen(i, gen_p, zvals, amp)
+                        t = tuple(result)
+                        if t not in amplitudes:
+                            amplitudes[tuple(result)] = new_amp
+                            num_ampl_added += 1
+                        #else:
+                        #    assert(_np.isclose(amplitudes[tuple(result)],new_amp)), "Inconsistency in amplitude generation"
+                            
+                        if debug:
+                            print("  -->Apply to b=",zvals, " (amp=",amp,") ==> b'=",result," (amp=",new_amp,
+                                  ") acnt=",len(amplitudes)) # DEBUG
+                            if not _np.isclose(amplitudes[tuple(result)],new_amp):
+                                print("INCONSISTENCY w/existing amp = ",amplitudes[tuple(result)])
+                        assert(_np.isclose(amplitudes[tuple(result)],new_amp)), "Inconsistency in amplitude generation"
+    
+            return list(amplitudes.items())
+
+        
+    def _canonical_amplitude(self, ip, zvals):
+        """ Return the "intrinsic" amplitude of the given comp. basis state
+            as encoded within the s,p matrices of the ip-th stabilizer state
+            (alone) """
+        return self._canonical_amplitudes(ip, target=zvals)
+
+    def _sample_amplitude(self, ip, qs_to_sample=1):
+        """ extract `count` convenient canonical amplitudes from the
+            ip-th stabilizer state """
+        return self._canonical_amplitudes(ip, qs_to_sample=qs_to_sample)
+
+
+    def _apply_clifford_to_frame(self, s, p, qubit_filter):
+        """
+        Applies a clifford in the symplectic representation to this
+        stabilize frame -- similar to `apply_clifford_to_stabilizer_state`
+        but operates on an entire *frame*
+    
+        Parameters
+        ----------
+        s : numpy array
+            The symplectic matrix over the integers mod 2 representing the Clifford
+        
+        p : numpy array
+            The 'phase vector' over the integers mod 4 representing the Clifford
+        """
+        two_n, n = self.n*2, self.n
+        assert(_symp.check_valid_clifford(s,p)), "The `s`,`p` matrix-vector pair is not a valid Clifford!"
+
+        if qubit_filter is not None:
+            s,p = _symp.embed_clifford(s,p,qubit_filter,n) # for now, just embed then act normally
+            #FUTURE: act just on the qubits we need to --> SPEEDUP!
+    
+        # Below we calculate the s and p for the output state using the formulas from
+        # Hostens and De Moor PRA 71, 042315 (2005).
+        out_s = _mtx.dotmod2(s,self.s)    
+        
+        u = _np.zeros((2*n,2*n),int)
+        u[n:2*n,0:n] = _np.identity(n,int)
+
+        inner = _np.dot(_np.dot(_np.transpose(s),u),s)
+        vec1 = _np.dot(_np.transpose(self.s),p - _mtx.diagonal_as_vec(inner))
+        matrix = 2*_mtx.strictly_upper_triangle(inner)+_mtx.diagonal_as_matrix(inner)
+        vec2 = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(self.s),matrix),self.s))
+
+        self.s = out_s # don't set this until we're done using self.s
+        for i in range(len(self.ps)):
+            self.ps[i] = (self.ps[i] + vec1 + vec2) % 4
+
+    def get_state_str(self):
+        """ Returns a string representing the full ip-th stabilizer state (w/global phase) """
+        return "\n".join([ "%s |%s>" % (str(amp),"".join(map(str,zvals)))
+                           for zvals,amp in self.extract_all_amplitudes().items()])
+
+    def extract_all_amplitudes(self):
+        """ Return a dictionary of the *full* amplitudes of each present computational basis state """
+        amps = _collections.OrderedDict()
+        for ip in range(len(self.ps)):
+            g_amp = self.a[ip] #global amplitude
+            camplitudes = self._canonical_amplitudes(ip, target=None, qs_to_sample=None)
+            for zvals,camp in camplitudes:
+                if tuple(zvals) in amps:
+                    amps[ tuple(zvals) ] += g_amp*camp
+                else:
+                    amps[ tuple(zvals) ]  = g_amp*camp
+        return amps
+
+    
+    def extract_amplitude(self, zvals):
+        """ Return the *full* amplitude of a given computational basis state """
+        ampl = 0
+        for ip,a in enumerate(self.a):
+            ampl += a * self._canonical_amplitude(ip, zvals)
+        return ampl
+
+    def clifford_update(self, smatrix, svector, Umx, qubit_filter=None):
+        """ Update this state by the action of a Clifford operation,
+            given in the usual symplectic representation. """
+        vs = (_np.array([1,0],complex), _np.array([0,1],complex)) # (v0,v1)
+
+        debug = False
+
+        #print("APPLY CLIFFORD TO FRAME")
+        #self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
+        qubits = qubit_filter if (qubit_filter is not None) else list(range(self.n)) # being acted on
+        nQ = len(qubits) #number of qubits being acted on (<= n in general)
+        sampled_amplitudes = []
+
+        #Step1: Update global amplitudes - Part A
+        if debug: print("UPDATE GLOBAL AMPS: zstart=",self.zblock_start) # DEBUG
+        for ip in range(len(self.ps)):
+            if debug: print("SAMPLE AMPLITUDES")
+            base_state, ampls = self._sample_amplitude(ip,qubits)
+            #OLD (zvals1, camp1) = bs[0]
+            #OLD assert(abs(camp1) > 1e-6)
+            if debug: print("GOT ",base_state,ampls)
+            sampled_amplitudes.append( (base_state,ampls) )
+
+        #Step2: Apply clifford to stabilizer reps in self.s, self.ps
+        if debug: print("APPLY CLIFFORD TO FRAME")
+        self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
+        self._rref()
+
+        #Step3: Update global amplitudes - Part B
+        for ip,(base_state,ampls) in enumerate(sampled_amplitudes):
+            
+            if debug: print("APPLYING U to instate =", ampls)
+            #OLD: prodstate = _functools.reduce(_np.kron, [vs[zvals1[i]] for i in qubits])
+            #OLD: instate = camp1 * prodstate
+            instate = ampls
+            outstate = _np.dot(Umx,instate) # state-vector propagation
+            if debug: print("OUTSTATE = ",outstate)
+            #TODO: sometimes need a second state & set instate to the sum?
+            # choose second state based on im/re amplitude & just run through U separately?
+
+            #Look for nonzero output component and figure out how
+            # phase *actually* changed as per state-vector propagation, then
+            # update self.a (global amplitudes) to account for this.
+            for k,comp in enumerate(outstate): # comp is complex component of output state
+                if abs(comp) > 1e-6:
+                    k_zvals = _np.array( [ int(bool(k & (2**(nQ-1-i))))
+                                           for i in range(nQ)], int) # hack to extract binary(k)
+                    zvals = _np.array(base_state,int)
+                    zvals[qubits] = k_zvals
+                    if debug: print("GETTING CANONICAL AMPLITUDE for B' = ",zvals, " actual=",comp)
+                    if debug: print(str(self))
+                    camp = self._canonical_amplitude(ip, zvals)
+                    assert(abs(camp) > 1e-6), "Canonical amplitude zero when actual isn't!!"
+                    if debug: print("GOT CANONICAL AMPLITUDE =",camp, " updating global amp w/", comp/camp)
+                    self.a[ip] *= comp / camp # "what we want" / "what stab. frame gives"
+                      # this essentially updates a "global phase adjustment factor"
+                    break # move on to next stabilizer state & global amplitude
+            else:
+                raise ValueError("Outstate was completely zero!")
+                # (this shouldn't happen if Umx is unitary!)
+                    
+
+    def measurement_probability(self, zvals, qubit_filter=None, return_state=False):
+        """ TODO: docstring - note that state_sp_tuple is modified and possibly returned
+        zvals = measurement outcomes
+        allows a subset of qubits to be measured -- len(zvals) == len(qubit_filter)
+        if qubit_filter is None, then assume *all* qubits measured and len(zvals) == nqubits
+        """
+        raise NotImplementedError("TODO LATER") # - similar to extract_amplitude?
+        #- maybe need a _canonical_probability for each ip that is essentially the 'stabilizer_measurement_prob' fn?
+
+    def __str__(self):
+        n = self.n; K = len(self.ps)
+        s = ""
+
+        # Output columns as rows of literals to conform with usual picture
+        s += "Global amplitudes = " + ", ".join(map(str,self.a)) + "\n"
+        s += "   "*K + "  " + "----"*n + "-\n"
+        
+        for i in range(n): # column index - show only stabilizer or now, not antistabilizer
+
+            # print divider before Zblock
+            if i == self.zblock_start and i > 0:
+                s += "   "*K + " |" + "----"*n + "-|\n"
+
+            # print leading signs (one per stabilizer state)
+            for p in self.ps:
+                if p[i] == 0:   s += "  +"
+                elif p[i] == 1: s += "  i"
+                elif p[i] == 2: s += "  -"
+                elif p[i] == 3: s += " -i"
+                else:  s += " ??"
+            s += " |"
+
+            # print common generator corresponding to this column
+            for j in range(n):
+                lc = (self.s[j,i],self.s[j+n,i]) # code for literal
+                if lc == (0,0):   s += "    "
+                elif lc == (0,1): s += "   Z"
+                elif lc == (1,0): s += "   X"
+                elif lc == (1,1): s += " -iY"
+                else: s += " ???"
+
+            s += " |\n"
+
+        s += "   "*K + "  " + "----"*n + "-\n"
+        return s
+    

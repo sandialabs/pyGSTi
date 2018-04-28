@@ -62,6 +62,7 @@ from .multidataset import MultiDataSet
 from .datacomparator import DataComparator
 from .compilationlibrary import CompilationLibrary
 from .processorspec import ProcessorSpec
+from .stabilizer import StabilizerFrame
 
 from .gaugegroup import FullGaugeGroup, FullGaugeGroupElement
 from .gaugegroup import TPGaugeGroup, TPGaugeGroupElement

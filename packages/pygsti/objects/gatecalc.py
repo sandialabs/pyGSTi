@@ -15,7 +15,6 @@ from ..tools import compattools as _compat
 from ..tools import slicetools as _slct
 from ..tools import basistools as _bt
 from ..tools import matrixtools as _mt
-from ..tools import symplectic as _symp
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from . import spamvec as _sv
 from . import gate as _gate
@@ -2141,29 +2140,4 @@ class GateCalc(object):
                 nSummands += Evec.dim
 
         spamVal = _np.sqrt(d / nSummands) if (nSummands > 0) else 0
-        return max(dists) + spamVal
-
-    def _stabilizer_measurement_prob(self, state_sp_tuple, moutcomes, qubit_filter=None,
-                                     return_state=False):
-        """ TODO: docstring - note that state_sp_tuple is modified and possibly returned
-        moutcomes = measurement outcomes
-        allows a subset of qubits to be measured -- len(moutcomes) == len(qubit_filter)
-        if qubit_filter is None, then assume *all* qubits measureed and len(moutcomes) == nqubits
-        """
-        state_s, state_p = state_sp_tuple # should be a StabilizerState.toarray() "object"
-        
-        p = 1
-        if qubit_filter is None: # len(moutcomes) == nQubits
-            qubit_filter = range(len(moutcomes)) 
-            
-        for i,outcm in zip(qubit_filter,moutcomes): 
-            p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i)
-            # could cache these results in a FUTURE _stabilizer_measurement_probs function?
-            if outcm == 0:
-                p *= p0; state_s, state_p = ss0, sp0
-            else:
-                p *= p1; state_s, state_p = ss1, sp1
-                
-        return (p, state_s, state_p) if return_state else p
-            
-                
+        return max(dists) + spamVal                

@@ -17,6 +17,7 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import listtools as _lt
+from ..tools import symplectic as _symp
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .termevaltree import TermEvalTree as _TermEvalTree
@@ -297,14 +298,14 @@ class GateTermCalc(GateCalc):
                             for f in reversed(factors[-1].post_ops[1:]):
                                 rhoVecL = f.adjoint_acton(rhoVecL)
                             E = factors[-1].post_ops[0]
-                            p = self._stabilizer_measurement_prob(rhoVecL, E.outcomes)
+                            p = _symp.stabilizer_measurement_prob(rhoVecL, E.outcomes)
                             pLeft = _np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
 
                             #Same for pre_ops and rhoVecR
                             for f in reversed(factors[-1].pre_ops[1:]):
                                 rhoVecR = f.adjoint_acton(rhoVecR)
                             E = factors[-1].pre_ops[0]
-                            p = self._stabilizer_measurement_prob(rhoVecR, E.outcomes)
+                            p = _symp.stabilizer_measurement_prob(rhoVecR, E.outcomes)
                             pRight = _np.sqrt(p) # sqrt b/c pRight is just *amplitude*
 
                         coeff = coeff.mult_poly(factors[-1].coeff)
@@ -394,7 +395,7 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].post_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].post_ops[0]
-            return _np.sqrt( self._stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+            return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
                 # sqrt b/c pLeft is just *amplitude*
 
     
@@ -416,7 +417,7 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].pre_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].pre_ops[0]
-            return _np.sqrt( self._stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+            return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
                 # sqrt b/c pRight is just *amplitude*
 
         

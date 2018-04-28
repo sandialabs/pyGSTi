@@ -6303,23 +6303,12 @@ class EmbeddedCliffordGate(Gate):
 
         # get (qubit) labels in first (and only) tensor-product-block
         qubitLabels = self.stateSpaceLabels.labels[0]
-        n = len(qubitLabels) # nQubits
-        ne = len(self.targetLabels) # nQubits for embedded_gate
+        qubit_inds =  [ qubitLabels.index(targetLbl) for targetLbl in self.targetLabels ]
+          # could cache this in __init__ for performance
           
-        self.smatrix = _np.identity(2*n, int)
-        self.svector = _np.zeros(2*n, int)
-
-        for i,targetLbl in enumerate(self.targetLabels):
-            di = qubitLabels.index(targetLbl) # could cache this in __init__ for performance
-            self.svector[di] = self.embedded_gate.svector[i]
-            self.svector[di+n] = self.embedded_gate.svector[i+ne]
-            
-            for j,targetLbl2 in enumerate(self.targetLabels):
-                dj = qubitLabels.index(targetLbl2) # could cache...
-                self.smatrix[di,dj] = self.embedded_gate.smatrix[i,j]
-                self.smatrix[di+n,dj+n] = self.embedded_gate.smatrix[i+ne,j+ne]
-                self.smatrix[di,dj+n] = self.embedded_gate.smatrix[i,j+ne]
-                self.smatrix[di+n,dj] = self.embedded_gate.smatrix[i+ne,j]
+        self.smatrix, self.svector = _symp.embed_clifford(self.embedded_gate.smatrix,
+                                                          self.embedded_gate.svector,
+                                                          qubit_inds,len(qubitLabels))        
 
                 
     def acton(self, state):
@@ -6552,11 +6541,6 @@ class TermGate(Gate):
     def size(self):
         return self.dim**2
 
-class EmbeddedTermGate(TermGate):
-    pass
-
-class ComposedTermGate(TermGate):
-    pass
 
 class LindbladTermGate(TermGate):
     """ A Lindblad-parameterized gate that is expandable into terms """
