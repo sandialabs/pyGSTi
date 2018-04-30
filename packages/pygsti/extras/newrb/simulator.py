@@ -3,12 +3,104 @@ from __future__ import division, print_function, absolute_import, unicode_litera
 import numpy as _np
 import copy as _copy
 import time as _time
+from ...tools import symplectic as _symp
 
 from . import sampler as _samp
 
 import matplotlib.pyplot as _plt
 from scipy.optimize import minimize as _minimize
 
+
+def sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=None,maxweight=1):
+    """
+    Todo :  
+    """
+    assert(maxweight == 1), "Only weight-1 errors currently supported!"
+    
+    #numerrors = 0
+    n = pspec.number_of_qubits
+    depth = c.depth()
+    paulivector = _np.zeros(2*n,int)
+    srep = pspec.models['clifford'].get_clifford_symplectic_reps()
+    
+    for l in range(0,depth):
+        
+        layer = c.get_circuit_layer(l)
+        s, p = _symp.clifford_layer_in_symplectic_rep(layer,n,srep_dict=srep)                
+        paulivector = _np.dot(s,paulivector) % 2  
+
+        for q in range(0,n):
+            gate = layer[q]
+            if gate.qubits[0] == q: 
+                sampledpauli = _np.zeros(2*n,int)
+                sampledvec = _np.array([list(_np.random.multinomial(1,p)) for p in pauliprobs[gate]]) 
+                sampledpauli[:n] = sampledvec[:,1] ^ sampledvec[:,2]
+                sampledpauli[n:] = sampledvec[:,2] ^ sampledvec[:,3]
+                paulivector = sampledpauli ^ paulivector
+                
+    
+    if spamprobs is not None:
+    
+        sampledpauli = _np.zeros(2*n,int)
+        for q in range(0,n):        
+            sampledvec = _np.array(_np.random.multinomial(1,spamprobs[q])) 
+            sampledpauli[q] = sampledvec[1] ^ sampledvec[2]
+            sampledpauli[q+n] = sampledvec[2] ^ sampledvec[3]
+
+        paulivector = sampledpauli ^ paulivector
+
+    return paulivector
+
+def pauli_errors_rb_simulator(pspec, pauliprobs, lengths,k, N, filename, rbtype='PRB', verbosity=0, 
+                                spamprobs=None, appenddata=False, returndata=False, improved_CNOT_compiler=True,
+                                ICC_custom_ordering=None, sampler=None, sampler_args=None, idle_name = 'Gi',
+                             iterations = 100):
+    
+    if not appenddata:
+        with open(filename,'w') as f:
+            f.write('#length Pm circuitdepth 2Qgatecount\n')
+            
+    n = pspec.number_of_qubits
+    sps = {}
+    cdepth = {}
+    ctwoqubitgatecount = {}
+    
+    for l in lengths:
+        sps[l] = []
+        cdepth[l] = []
+        ctwoqubitgatecount[l] = []
+    
+    for i in range(k):   
+        for l in lengths:
+            if rbtype == 'PRB':
+                c = _samp.sample_prb_circuit(pspec,l,iterations=iterations,improved_CNOT_compiler=improved_CNOT_compiler,
+                                           ICC_custom_ordering=ICC_custom_ordering,sampler=sampler,
+                                           sampler_args=sampler_args)
+            if rbtype == 'CRB':
+                c = _samp.sample_crb_circuit(pspec,l,algorithms=['RGGE'],iterations={u'RGGE': iterations})
+            c.replace_gatename('I',idle_name)
+            sp = 0
+            empiricalerrorprob = 0
+            empiricalcircuiterrorprobperlayer = 0
+            for j in range(N):
+                sample = sample_and_compute_effective_pauli_errors(c,pspec,pauliprobs,spamprobs=spamprobs)
+                a = sample[:n]
+                if _np.array_equal(a,_np.zeros(n,int)):
+                    sp += 1
+            sp = sp/N   
+            sps[l].append(sp)
+            cdepth[l].append(c.depth())
+            ctwoqubitgatecount[l].append(c.twoqubit_gatecount())
+            with open(filename,'a') as f:
+                f.write('{} {} {} {}\n'.format(l,sp,cdepth[l][-1],ctwoqubitgatecount[l][-1]))
+                
+    if returndata:
+        return sps
+
+
+#
+# --------- The two functions below should probably just be deleted -------- #
+#
 
 def simulate_prb_experiment(ds, mname, lengths, circuits_per_length, sampler='weights', 
                                  sampler_args = {'two_qubit_weighting' :0.5},
