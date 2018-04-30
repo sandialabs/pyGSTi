@@ -17,7 +17,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 from ..tools import compattools as _compat
 from ..tools import listtools as _lt
-from ..tools import symplectic as _symp
 from ..tools.matrixtools import _fas
 from ..baseobjs import DummyProfiler as _DummyProfiler
 from .termevaltree import TermEvalTree as _TermEvalTree
@@ -216,7 +215,7 @@ class GateTermCalc(GateCalc):
         global DEBUG_FCOUNT
         db_part_cnt = 0
         db_factor_cnt = 0
-        print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
+        #print("DB: pr_as_poly for ",str(tuple(map(str,gatestring))), " max_order=",self.max_order)
 
         #OLD
         #pLeft = _np.empty(len(Es),complex)  #preallocate space to avoid
@@ -226,7 +225,7 @@ class GateTermCalc(GateCalc):
         
         prps = [None]*len(Es)  # an array in "bulk" mode? or Polynomial in "symbolic" mode?
         for order in range(self.max_order+1):
-            print("DB: pr_as_poly order=",order)
+            #print("DB: pr_as_poly order=",order)
             db_npartitions = 0
             for p in _lt.partition_into(order, len(gatestring)+2): # +2 for SPAM bookends
                 #factor_lists = [ self.gates[glbl].get_order_terms(pi) for glbl,pi in zip(gatestring,p) ]
@@ -238,7 +237,7 @@ class GateTermCalc(GateCalc):
                 
                 if any([len(fl)==0 for fl in factor_lists]): continue
 
-                print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
+                #print("DB partition = ",p, "listlens = ",[len(fl) for fl in factor_lists])
                 rhoLeft = rhoRight = rho
                 if fastmode: # filter factor_lists to matrix-compose all length-1 lists
                     leftSaved = [None]*(len(factor_lists)-1)  # saved[i] is state after i-th
@@ -298,15 +297,13 @@ class GateTermCalc(GateCalc):
                             for f in reversed(factors[-1].post_ops[1:]):
                                 rhoVecL = f.adjoint_acton(rhoVecL)
                             E = factors[-1].post_ops[0]
-                            p = _symp.stabilizer_measurement_prob(rhoVecL, E.outcomes)
-                            pLeft = _np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+                            pLeft = rhoVecL.extract_amplitude(E.outcomes)
 
                             #Same for pre_ops and rhoVecR
                             for f in reversed(factors[-1].pre_ops[1:]):
                                 rhoVecR = f.adjoint_acton(rhoVecR)
                             E = factors[-1].pre_ops[0]
-                            p = _symp.stabilizer_measurement_prob(rhoVecR, E.outcomes)
-                            pRight = _np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+                            pRight = _np.conjugate(rhoVecR.extract_amplitude(E.outcomes))
 
                         coeff = coeff.mult_poly(factors[-1].coeff)
                         res = coeff.mult_scalar( (pLeft * pRight) )
@@ -327,10 +324,10 @@ class GateTermCalc(GateCalc):
                         res = coeff.mult_scalar( (pLeft * pRight) )
                         final_factor_indx = fi[-1]
                         Ei = Einds[final_factor_indx] #final "factor" index == E-vector index
-                        print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
+                        #print("DB: pr_as_poly     factor coeff=",coeff," pLeft=",pLeft," pRight=",pRight, "res=",res)
                         if prps[Ei] is None:  prps[Ei]  = res
                         else:                prps[Ei] += res
-                        print("DB running prps[",Ei,"] =",prps[Ei])
+                        #print("DB running prps[",Ei,"] =",prps[Ei])
                     
                 db_nfactors = [len(l) for l in factor_lists]
                 db_totfactors = _np.product(db_nfactors)
@@ -395,8 +392,8 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].post_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].post_ops[0]
-            return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
-                # sqrt b/c pLeft is just *amplitude*
+            #OLD return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+            return rhoVec.extract_amplitude(EVec.outcomes)
 
     
     def unitary_sim_post(self, complete_factors, comm, memLimit):
@@ -417,9 +414,8 @@ class GateTermCalc(GateCalc):
             for f in reversed(complete_factors[-1].pre_ops[1:]):
                 rhoVec = f.adjoint_acton(rhoVec)
             EVec = complete_factors[-1].pre_ops[0]
-            return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
-                # sqrt b/c pRight is just *amplitude*
-
+            #OLD return _np.sqrt( _symp.stabilizer_measurement_prob(rhoVec, EVec.outcomes) )
+            return _np.conjugate(rhoVec.extract_amplitude(EVec.outcomes)) # conjugate for same reason as above
         
 
     def pr(self, spamTuple, gatestring, clipTo, bScale):

@@ -167,7 +167,8 @@ class GateMapCalc(GateCalc):
         elif self.evolution_type == SUPEROP:
             p = float(_np.dot(E,rho))
         else: # CLIFFORD
-            p = _symp.stabilizer_measurement_prob(rho, E.outcomes)
+            #OLD: p = _symp.stabilizer_measurement_prob(rho, E.outcomes)
+            p = rho.measurement_probability(E.outcomes)
 
         if _np.isnan(p):
             if len(gatestring) < 10:
@@ -350,14 +351,19 @@ class GateMapCalc(GateCalc):
                 #TODO: compute using tree-like fanout, only fanning when necessary. -- at least when there are O(d=2^nQ) effects
                 state_s, state_p = final_state # should be a StabilizerState.toarray() "object"
                 for j,E in enumerate(EVecs):
-                    p = 1; ss = state_s.copy(); sp = state_p.copy()
-                    for k,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
-                        p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(ss, sp, k) # cache this (for other evecs)
-                        if outcm == 0:
-                            p *= p0; ss, sp = ss0, sp0
-                        else:
-                            p *= p1; ss, sp = ss1, sp1
-                    ret[i,j] = p
+                    #OLDER
+                    #p = 1; ss = state_s.copy(); sp = state_p.copy()
+                    #for k,outcm in enumerate(E.outcomes): # len(E.outcomes) == nQubits
+                    #    p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(ss, sp, k) # cache this (for other evecs)
+                    #    if outcm == 0:
+                    #        p *= p0; ss, sp = ss0, sp0
+                    #    else:
+                    #        p *= p1; ss, sp = ss1, sp1
+                    #OLD p = _symp.stabilizer_measurement_prob((state_s,state_p), E.outcomes)
+                    #    ret[i,j] = p
+                    ret[i,j] = rho.measurement_probability(E.outcomes)
+
+
                 
         #print("DEBUG TIME: pr_cache(dim=%d, cachesize=%d) in %gs" % (self.dim, cacheSize,_time.time()-tStart)) #DEBUG
         return ret

@@ -620,7 +620,7 @@ def stabilizer_measurement_prob(state_sp_tuple, moutcomes, qubit_filter=None,
             qubit_filter = range(len(moutcomes)) 
             
         for i,outcm in zip(qubit_filter,moutcomes): 
-            p0,p1,ss0,ss1,sp0,sp1 = _symp.pauli_z_measurement(state_s, state_p, i)
+            p0,p1,ss0,ss1,sp0,sp1 = pauli_z_measurement(state_s, state_p, i)
             # could cache these results in a FUTURE _stabilizer_measurement_probs function?
             if outcm == 0:
                 p *= p0; state_s, state_p = ss0, sp0

@@ -29,6 +29,7 @@ from ..baseobjs import ProtectedArray as _ProtectedArray
 from . import gatesetmember as _gatesetmember
 
 from . import term as _term
+from . import stabilizer as _stabilizer
 from .polynomial import Polynomial as _Polynomial
 
 
@@ -162,6 +163,7 @@ def convert(spamvec, toType, basis, extra=None):
         ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
         errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
         return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
+                                                        ham_basis=None, nonham_basis=None, #DEBUG!!!
                                                         nonham_diagonal_only=True, termtype=typ)
 
     elif toType == "clifford":
@@ -1787,8 +1789,8 @@ class TensorProdSPAMVec(SPAMVec):
             if self.typ == "prep":
                 # => self.factors should all be StabilizerSPAMVec objs
                 #Return stabilizer-rep tuple, just like StabilizerSPAMVec
-                sp_factors = [ f.toarray() for f in self.factors ]
-                return _symp.symplectic_kronecker(sp_factors)
+                sframe_factors = [ f.toarray() for f in self.factors ]
+                return _stabilizer.sframe_kronecker(sframe_factors)
 
             else: #self.typ == "effect", so each factor is a StabilizerEffectVec
                 raise ValueError("Cannot convert Stabilizer tensor product effect to an array!")
@@ -2787,7 +2789,8 @@ class StabilizerSPAMVec(SPAMVec):
             to indicate the 0/1 value of each qubit in the Z basis.
             If None, the all-zeros state is created.
         """
-        self.smatrix, self.phasevec = _symp.prep_stabilizer_state(nqubits, zvals)
+        #OLD: self.smatrix, self.phasevec = _symp.prep_stabilizer_state(nqubits, zvals)
+        self.sframe = _stabilizer.StabilizerFrame.from_zvals(nqubits,zvals)
         dim = 2**nqubits # assume "unitary evolution"-type mode?
         SPAMVec.__init__(self, dim)
 
@@ -2941,10 +2944,9 @@ class StabilizerSPAMVec(SPAMVec):
         StaticSPAMVec
             A copy of this SPAM operation.
         """
-        nQubits = len(self.phasevec) // 2
+        nQubits = self.sframe.nqubits
         ret = self._copy_gpindices( StabilizerSPAMVec(nQubits, None), parent )
-        ret.smatrix = self.smatrix.copy()
-        ret.phasevec = self.phasevec.copy()
+        ret.sframe = self.sframe.copy()
         return ret
 
     def toarray(self, scratch=None):
@@ -2952,13 +2954,13 @@ class StabilizerSPAMVec(SPAMVec):
         Return this SPAM vector as a (dense) numpy array.  The memory
         in `scratch` maybe used when it is not-None.
         """
-        return (self.smatrix,self.phasevec)  # need to concat?
+        #OLD: return (self.smatrix,self.phasevec)  # need to concat?
+        return self.sframe # a more C-native type in the future?
 
 
     def __str__(self):
-        nQubits = len(self.phasevec) // 2
-        s = "Stabilizer spam vector for %d qubits with rep:\n" % nQubits
-        s += "  " + _mt.mx_to_string(self.smatrix) + ", " + _mt.mx_to_string(self.phasevec) + "\n"
+        s = "Stabilizer spam vector for %d qubits with rep:\n" % (self.sframe.nqubits)
+        s += str(self.sframe)
         return s
 
 

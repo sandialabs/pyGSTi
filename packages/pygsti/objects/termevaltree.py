@@ -412,6 +412,13 @@ class TermEvalTree(EvalTree):
         #Otherwise compute polys
         polys = [ calc.prs_as_polys(rholabel,elabels, gstr, comm)
                   for gstr in self.generate_gatestring_list(permute=False) ]
+
+        ## DEBUG - instead of list comp above, do this to show progress & polys
+        #polys = []; lst = self.generate_gatestring_list(permute=False) 
+        #for i,gstr in enumerate(lst):
+        #    polys.append( calc.prs_as_polys(rholabel,elabels, gstr, comm) )
+        #    print("Computed %d of %d: " % (i,len(lst)), str(polys[-1]) )
+        
         ret = []
         for i,elabel in enumerate(elabels):
             if (rholabel,elabel) not in self.raw_polys:

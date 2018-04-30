@@ -6062,7 +6062,7 @@ class CliffordGate(Gate):
     A Clifford gate, represented via a symplectic
     """
     
-    def __init__(self, unitary=None, symplecticrep=None):
+    def __init__(self, unitary, symplecticrep=None):
         """
         Creates a new CliffordGate
         TODO: docstring
@@ -6072,17 +6072,17 @@ class CliffordGate(Gate):
         """
         #self.superop = superop
         self.unitary = unitary
+        assert(self.unitary is not None),"Must supply `unitary` argument!"
         
         #if self.superop is not None:
         #    assert(unitary is None and symplecticrep is None),"Only supply one argument to __init__"
         #    raise NotImplementedError("Superop -> Unitary calc not implemented yet")
-        if self.unitary is not None:
-            assert(symplecticrep is None),"Only supply one argument to __init__"
-            self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
-        elif symplecticrep is not None:
+
+        if symplecticrep is not None:
             self.smatrix, self.svector = symplecticrep
         else:
-            raise ValueError("Must supply one (and only one) argument to __init__")
+            # compute symplectic rep from unitary
+            self.smatrix, self.svector = _symp.unitary_to_symplectic(self.unitary, flagnonclifford=True)
 
         nQubits = len(self.svector) // 2
         dim = 2**nQubits # assume "unitary evolution"-type mode?
@@ -6091,18 +6091,33 @@ class CliffordGate(Gate):
 
     def acton(self, state):
         """ Act this gate map on an input state TODO: docstring """
-        state_s, state_p = state # should be output of StabilizerState.toarray()
-        return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
-                                                        state_s,state_p)
+        #OLD - when StabilizerState.toarray() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
+        #                                                state_s,state_p)
+
+        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        state = state.copy() # needed? expected?
+        state.clifford_update(self.smatrix, self.svector, self.unitary)
+        return state
 
     
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         # Note: cliffords are unitary, so adjoint == inverse
-        state_s, state_p = state # should be output of StabilizerState.toarray()
+
+        #OLD - when StabilizerState.toarray() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
+        #return _symp.apply_clifford_to_stabilizer_state(invs, invp,
+        #                                                state_s,state_p)
+
+        #Now StabilizerState.toarray() gives a StabilizerFrame obj
         invs, invp = _symp.inverse_clifford(self.smatrix, self.svector)
-        return _symp.apply_clifford_to_stabilizer_state(invs, invp,
-                                                        state_s,state_p)
+        state = state.copy() # needed? expected?
+        state.clifford_update(invs, invp, self.unitary.conjugate().T)
+        return state
+
 
     
     def num_params(self):
@@ -6292,31 +6307,56 @@ class EmbeddedCliffordGate(Gate):
                "All state space labels must correspond to *qubits*"
         assert(len(targetLabels) == len(self.embedded_gate.svector) // 2), \
             "Inconsistent number of qubits in `targetLabels` and `embedded_gate`"
+
+        # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
+        qubitLabels = self.stateSpaceLabels.labels[0] 
+        self.qubit_indices =  [ qubitLabels.index(targetLbl)
+                                for targetLbl in self.targetLabels ]
         
         dmDim, superOpDim, blockDims = self.basisdim
         dim = dmDim # assume "unitary evoluation"-type mode
         Gate.__init__(self, dim)
-        self._construct_symplectic() # sets self.smatrix, self.svector
+        #self._construct_symplectic() # sets self.smatrix, self.svector
 
-    def _construct_symplectic(self):
-        #Embed gate's symplectic rep in larger "full" symplectic rep
+    #Not needed - but could be useful -> change to "as_matrix()?"
+    #def _construct_symplectic(self):
+    #    #Embed gate's symplectic rep in larger "full" symplectic rep
+    #
+    #    # get (qubit) labels in first (and only) tensor-product-block
+    #    qubitLabels = self.stateSpaceLabels.labels[0]
+    #    qubit_inds =  [ qubitLabels.index(targetLbl) for targetLbl in self.targetLabels ]
+    #      # could cache this in __init__ for performance
+    #      
+    #    self.smatrix, self.svector = _symp.embed_clifford(self.embedded_gate.smatrix,
+    #                                                      self.embedded_gate.svector,
+    #                                                      qubit_inds,len(qubitLabels))        
 
-        # get (qubit) labels in first (and only) tensor-product-block
-        qubitLabels = self.stateSpaceLabels.labels[0]
-        qubit_inds =  [ qubitLabels.index(targetLbl) for targetLbl in self.targetLabels ]
-          # could cache this in __init__ for performance
-          
-        self.smatrix, self.svector = _symp.embed_clifford(self.embedded_gate.smatrix,
-                                                          self.embedded_gate.svector,
-                                                          qubit_inds,len(qubitLabels))        
 
-                
     def acton(self, state):
         """ Act this gate map on an input state """
-        state_s, state_p = state # should be output of StabilizerState.toarray()
-        return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
-                                                        state_s,state_p)
-    
+        #OLD - when StabilizerState.toarray() gave s,p tuple
+        #state_s, state_p = state # should be output of StabilizerState.toarray()
+        #return _symp.apply_clifford_to_stabilizer_state(self.smatrix,self.svector,
+        #                                                state_s,state_p)
+
+        #Now StabilizerState.toarray() gives a StabilizerFrame obj
+        state = state.copy() # needed? expected?    
+        state.clifford_update(self.embedded_gate.smatrix, self.embedded_gate.svector,
+                              self.embedded_gate.unitary, self.qubit_indices)
+        return state
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this gate map on an input state """
+        # Note: cliffords are unitary, so adjoint == inverse
+
+        #StabilizerState.toarray() gives a StabilizerFrame obj
+        invs, invp = _symp.inverse_clifford(self.embedded_gate.smatrix,
+                                            self.embedded_gate.svector)
+        state = state.copy() # needed? expected?
+        state.clifford_update(invs, invp, self.embedded_gate.unitary.conjugate().T,
+                              self.qubit_indices)
+        return state
+
     
     def num_params(self):
         """

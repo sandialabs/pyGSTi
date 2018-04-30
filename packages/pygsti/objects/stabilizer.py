@@ -38,7 +38,7 @@ class StabilizerFrame(object):
         p = _np.zeros(2*nqubits,int)
         if zvals:
             for i,z in enumerate(zvals):
-                p[i] = p[i+n] = 2 if bool(z) else 0
+                p[i] = p[i+nqubits] = 2 if bool(z) else 0
                   # TODO: check this is right -- (how/need to update the destabilizers?)
         return cls(s,[p],[1.0])
 
@@ -67,7 +67,15 @@ class StabilizerFrame(object):
         self.zblock_start = None # first column of Z-block, set by _rref()
         self._rref()
 
+    def copy(self):
+        return StabilizerFrame(self.s.copy(), [p.copy() for p in self.ps],
+                              self.a.copy())
 
+    @property
+    def nqubits(self):
+        """ The number of qubits in the state this frame represents """
+        return self.n # == (self.s.shape[0] // 2)
+    
     def _colsum(self,i,j):
         """ Col_i = Col_j * Col_i TODO: docstring """
         n,s = self.n,self.s
@@ -100,9 +108,11 @@ class StabilizerFrame(object):
                 if self.s[j,k] == 1: break # X or Y check
             else: continue # no k found => next column
             self._colswap(i,k)
+            self._colswap(i+n,k+n) # mirror in antistabilizer
             for m in range(n):
                 if m != i and self.s[j,m] == 1: # j-th literal of column m(!=i) is X/Y
-                    self._colsum(m,i) 
+                    self._colsum(m,i)
+                    self._colsum(i+n,m+n) # reverse-mirror in antistabilizer (preserves relations)
             i += 1
             
         self.zblock_start = i # first column of Z-block
@@ -113,9 +123,11 @@ class StabilizerFrame(object):
                 if (self.s[j,k],self.s[j+n,k]) == (0,1): break # Z check
             else: continue # no k found => next column
             self._colswap(i,k)
+            self._colswap(i+n,k+n) # mirror in antistabilizer
             for m in range(n):
                 if m != i and self.s[j+n,m] == 1: # j-th literal of column m(!=i) is Z/Y
-                    self._colsum(m,i) 
+                    self._colsum(m,i)
+                    self._colsum(i+n,m+n) # reverse-mirror in antistabilizer (preserves relations)
             i += 1
         return
 
@@ -430,6 +442,8 @@ class StabilizerFrame(object):
         nQ = len(qubits) #number of qubits being acted on (<= n in general)
         sampled_amplitudes = []
 
+        #print("APPLYING smx = "); print(smatrix); print(""); #DEBUG
+
         #Step1: Update global amplitudes - Part A
         if debug: print("UPDATE GLOBAL AMPS: zstart=",self.zblock_start) # DEBUG
         for ip in range(len(self.ps)):
@@ -442,7 +456,9 @@ class StabilizerFrame(object):
 
         #Step2: Apply clifford to stabilizer reps in self.s, self.ps
         if debug: print("APPLY CLIFFORD TO FRAME")
+        #print("PRE-APPLY:"); print(str(self)); print("") # DEBUG
         self._apply_clifford_to_frame(smatrix, svector, qubit_filter)
+        #print("PRE-REF:"); print(str(self)); print("") # DEBUG
         self._rref()
 
         #Step3: Update global amplitudes - Part B
@@ -477,30 +493,62 @@ class StabilizerFrame(object):
             else:
                 raise ValueError("Outstate was completely zero!")
                 # (this shouldn't happen if Umx is unitary!)
+            #print("POST UPDATE frame is: \n",str(self)); print("") #DEBUG
                     
 
-    def measurement_probability(self, zvals, qubit_filter=None, return_state=False):
+    def measurement_probability(self, zvals, qubit_filter=None, return_state=False, check=True):
+        # TODO: change default check=False !!!
         """ TODO: docstring - note that state_sp_tuple is modified and possibly returned
         zvals = measurement outcomes
         allows a subset of qubits to be measured -- len(zvals) == len(qubit_filter)
         if qubit_filter is None, then assume *all* qubits measured and len(zvals) == nqubits
         """
-        raise NotImplementedError("TODO LATER") # - similar to extract_amplitude?
-        #- maybe need a _canonical_probability for each ip that is essentially the 'stabilizer_measurement_prob' fn?
+
+        if qubit_filter is not None or return_state != False:
+            raise NotImplementedError("`qubit_filter` and `return_state` args are not functional yet")
+
+        # Could make this faster in the future by using anticommutator?
+        # - maybe could use a _canonical_probability for each ip that is
+        #   essentially the 'stabilizer_measurement_prob' fn? -- but need to
+        #   preserve *amplitudes* upon measuring & getting output state, which
+        #   isn't quite done in the 'pauli_z_meaurement' function.
+        amp = self.extract_amplitude(zvals)
+        p = abs(amp)**2
+
+        #2nd method using anticommutator - but we don't know how to update
+        # global phase of state here either.
+        if check:
+            p_chk = sum( [ abs(a)**2 * _symp.stabilizer_measurement_prob((self.s,p), zvals)
+                           for a,p in zip(self.a,self.ps)] )
+            if not _np.isclose(p,p_chk):
+                print("FAILURE on measuring %s for state:" % str(zvals))
+                print(str(self)) # HERE
+                print("amp => p=",p)
+                print("anticom => p=",p_chk)
+            assert(_np.isclose(p,p_chk)), \
+                "Stabilizer-frame meas. probability check failed: %g != %g" % (p,p_chk)
+        
+        return p
+
 
     def __str__(self):
+        print_anti = True
         n = self.n; K = len(self.ps)
+        nrows = 2*n if print_anti else n # number of rows
         s = ""
 
         # Output columns as rows of literals to conform with usual picture
         s += "Global amplitudes = " + ", ".join(map(str,self.a)) + "\n"
         s += "   "*K + "  " + "----"*n + "-\n"
-        
-        for i in range(n): # column index - show only stabilizer or now, not antistabilizer
+
+        for i in range(nrows): # column index - show only stabilizer or now, not antistabilizer
 
             # print divider before Zblock
-            if i == self.zblock_start and i > 0:
+            if i == self.zblock_start and 0 < i < n:
                 s += "   "*K + " |" + "----"*n + "-|\n"
+
+            if i == n: # when we print the antistabilizer
+                s += "   "*K + " |" + "===="*n + "=|\n"
 
             # print leading signs (one per stabilizer state)
             for p in self.ps:
@@ -525,3 +573,45 @@ class StabilizerFrame(object):
         s += "   "*K + "  " + "----"*n + "-\n"
         return s
     
+def sframe_kronecker(sframe_factors):
+    """
+    Computes a tensor-product StabilizerFrame from a set of factors.
+
+    Parameters
+    ----------
+    sframe_factors : list of StabilizerFrame objects
+        The factors to tensor together in the given left-to-right order.
+
+    Returns
+    -------
+    StabilizerFrame
+    """
+
+    #Similar to symplectic_kronecker
+    n = sum([sf.nqubits for sf in sframe_factors]) #total number of qubits
+
+    # (common) state matrix
+    sout = _np.zeros((2*n,2*n),int)
+    k = 0 # current qubit index
+    for sf in sframe_factors:
+        nq = sf.nqubits
+        sout[k:k+nq    ,k:k+nq]     = sf.s[0:nq,0:nq]
+        sout[k:k+nq    ,n+k:n+k+nq] = sf.s[0:nq,nq:2*nq]
+        sout[n+k:n+k+nq,k:k+nq]     = sf.s[nq:2*nq,0:nq]
+        sout[n+k:n+k+nq,n+k:n+k+nq] = sf.s[nq:2*nq,nq:2*nq]
+        k += nq
+
+    # phase vectors and amplitudes
+    ps_out = []; amps_out = []
+    inds = [range(len(sf.ps)) for sf in sframe_factors]
+    for ii in _itertools.product(*inds):
+        pout = _np.zeros(2*n,int); amp = 1.0
+        for i,sf in zip(ii,sframe_factors):
+            nq = sf.nqubits
+            pout[k:k+nq]     = sf.ps[i][0:nq]
+            pout[n+k:n+k+nq] = sf.ps[i][nq:2*nq]
+            amp *= sf.a[i]
+        ps_out.append(pout)
+        amps_out.append(amp)
+
+    return StabilizerFrame(sout, ps_out, amps_out)

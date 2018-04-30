@@ -83,7 +83,9 @@ class RankOneTerm(object):
                     if typ == "dense":
                         pre_op = _gate.StaticGate(pre_op)
                     elif typ == "clifford":
+                        print("DB: TERM CONVERTING to clifford:\n",pre_op)
                         pre_op = _gate.CliffordGate(pre_op)
+                        print("DB: RESULT = ",str(pre_op))
                     else: assert(False), "Invalid `typ` argument: %s" % typ
                 except ValueError: # raised when size/shape is wrong
                     if typ == "dense":

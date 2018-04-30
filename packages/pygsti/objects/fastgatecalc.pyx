@@ -310,14 +310,16 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 EVec = factor.post_ops[0]
                 for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
                     rhoVecL = factor.post_ops[j].adjoint_acton(rhoVecL)
-                p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
-                pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+                #OLD: p = stabilizer_measurement_prob(rhoVecL, EVec.outcomes)
+                #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+                pLeft = rhoVecL.extract_amplitude(EVec.outcomes)
 
                 EVec = factor.pre_ops[0]
                 for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
                     rhoVecR = factor.pre_ops[j].adjoint_acton(rhoVecR)
-                p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
-                pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+                #OLD: p = stabilizer_measurement_prob(rhoVecR, EVec.outcomes)
+                #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+                pRight = np.conjugate(rhoVecR.extract_amplitude(EVec.outcomes))
 
             result = mult_polys(coeff, factor_coeff_lists[last_index][b[last_index]],
                                max_poly_vars, max_poly_order)
@@ -394,8 +396,9 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 EVec = factor.post_ops[0]
                 for j in range(len(factor.post_ops)-1,0,-1): # (reversed)
                     rhoVec = factor.post_ops[j].adjoint_acton(rhoVec)
-                p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
-                pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+                #OLD: p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
+                #OLD: pLeft = np.sqrt(p) # sqrt b/c pLeft is just *amplitude*
+                pLeft = rhoVec.extract_amplitude(EVec.outcomes)
 
                 
             #pRight / "post" sim
@@ -418,8 +421,9 @@ cdef pr_as_poly_innerloop(factor_lists, factor_coeff_lists, vector[int]& Einds,
                 EVec = factor.pre_ops[0]
                 for j in range(len(factor.pre_ops)-1,0,-1): # (reversed)
                     rhoVec = factor.pre_ops[j].adjoint_acton(rhoVec)
-                p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
-                pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+                #OLD: p = stabilizer_measurement_prob(rhoVec, EVec.outcomes)
+                #OLD: pRight = np.sqrt(p) # sqrt b/c pRight is just *amplitude*
+                pRight = np.conjugate(rhoVec.extract_amplitude(EVec.outcomes))
 
             #Add result to appropriate poly
             result = coeff  # use a reference?
