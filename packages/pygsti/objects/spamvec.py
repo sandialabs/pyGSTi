@@ -163,8 +163,8 @@ def convert(spamvec, toType, basis, extra=None):
         ideal_spamvec = _bt.change_basis(_np.kron( ideal_purevec, _np.conjugate(ideal_purevec.T)).flatten(), 'std', basis)
         errgen = _gt.spam_error_generator(spamvec, ideal_spamvec, basis)
         return LindbladTermSPAMVec.from_error_generator(ideal_purevec[:,0], errgen,
-                                                        ham_basis=None, nonham_basis=None, #DEBUG!!!
                                                         nonham_diagonal_only=True, termtype=typ)
+            # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
 
     elif toType == "clifford":
         if isinstance(spamvec, StabilizerSPAMVec):

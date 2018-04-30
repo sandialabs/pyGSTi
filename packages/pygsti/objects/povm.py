@@ -138,9 +138,8 @@ def convert(povm, toType, basis, extra=None):
 
             errgen = _gt.spam_error_generator(Evec, ideal_spamvec, basis)
             new_effects.append( (lbl, _sv.LindbladTermSPAMVec.from_error_generator(
-                ideal_purevec, errgen, nonham_diagonal_only=True, termtype=typ,
-                ham_basis=None, nonham_basis=None #DEBUG!!!
-            )) )
+                ideal_purevec, errgen, nonham_diagonal_only=True, termtype=typ)) )
+            # ham_basis=None, nonham_basis=None #DEBUG - to disable spamvec parameterization
         
         #Always return unconstrained?? TODO FUTURE
         return UnconstrainedPOVM( new_effects )
